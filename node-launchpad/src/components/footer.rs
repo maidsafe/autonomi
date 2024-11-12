@@ -35,11 +35,14 @@ impl StatefulWidget for Footer {
         };
 
         let commands = vec![
-            Span::styled("[Ctrl+G] ", Style::default().fg(GHOST_WHITE)),
-            Span::styled("Manage Nodes", Style::default().fg(EUCALYPTUS)),
+            Span::styled("[+] ", Style::default().fg(GHOST_WHITE)),
+            Span::styled("Add", Style::default().fg(EUCALYPTUS)),
+            Span::styled(" ", Style::default()),
+            Span::styled("[-] ", Style::default().fg(GHOST_WHITE)),
+            Span::styled("Remove", Style::default().fg(EUCALYPTUS)),
             Span::styled(" ", Style::default()),
             Span::styled("[Ctrl+S] ", command_style),
-            Span::styled("Start Nodes", text_style),
+            Span::styled("Start/Stop Node", text_style),
             Span::styled(" ", Style::default()),
             Span::styled("[L] ", command_style),
             Span::styled("Open Logs", Style::default().fg(EUCALYPTUS)),

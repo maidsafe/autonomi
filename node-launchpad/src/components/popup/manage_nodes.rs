@@ -23,7 +23,7 @@ use crate::{
 
 use super::super::{utils::centered_rect_fixed, Component};
 
-pub const GB_PER_NODE: usize = 35;
+pub const GB_PER_NODE: usize = 1;
 pub const MB: usize = 1000 * 1000;
 pub const GB: usize = MB * 1000;
 pub const MAX_NODE_COUNT: usize = 50;

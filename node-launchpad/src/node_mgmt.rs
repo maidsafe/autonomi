@@ -19,6 +19,9 @@ pub const PORT_MIN: u32 = 1024;
 
 const NODE_ADD_MAX_RETRIES: u32 = 5;
 
+pub const FIXED_INTERVAL: u64 = 60_000;
+pub const CONNECTION_TIMEOUT_START: u64 = 120;
+
 #[derive(Debug)]
 pub enum NodeManagementTask {
     MaintainNodes {
@@ -34,6 +37,17 @@ pub enum NodeManagementTask {
     },
     UpgradeNodes {
         args: UpgradeNodesArgs,
+    },
+    AddNode {
+        action_sender: UnboundedSender<Action>,
+    },
+    RemoveNodes {
+        services: Vec<String>,
+        action_sender: UnboundedSender<Action>,
+    },
+    StartNode {
+        services: Vec<String>,
+        action_sender: UnboundedSender<Action>,
     },
 }
 
@@ -70,6 +84,17 @@ impl NodeManagement {
                             stop_nodes(services, action_sender).await;
                         }
                         NodeManagementTask::UpgradeNodes { args } => upgrade_nodes(args).await,
+                        NodeManagementTask::RemoveNodes {
+                            services,
+                            action_sender,
+                        } => remove_nodes(services, action_sender).await,
+                        NodeManagementTask::StartNode {
+                            services,
+                            action_sender,
+                        } => start_nodes(services, action_sender).await,
+                        NodeManagementTask::AddNode { .. } => {
+                            // add_node(action_sender).await
+                        }
                     }
                 }
                 // If the while loop returns, then all the LocalSpawner
@@ -248,6 +273,79 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
     }
 }
 
+async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+    if let Err(err) = ant_node_manager::cmd::node::remove(
+        false,
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while removing services {err:?}");
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::ErrorRemovingNodes {
+                raw_error: err.to_string(),
+            }),
+        );
+    } else {
+        info!("Successfully removed services {:?}", services);
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::RemovingNodesCompleted),
+        );
+    }
+}
+
+// async fn add_node(action_sender: UnboundedSender<Action>) {
+//     if let Err(err) =
+//         sn_node_manager::cmd::node::add(false, vec![], services.clone(), VerbosityLevel::Minimal)
+//             .await
+//     {
+//         error!("Error while removing services {err:?}");
+//         send_action(
+//             action_sender,
+//             Action::StatusActions(StatusActions::ErrorRemovingNodes {
+//                 raw_error: err.to_string(),
+//             }),
+//         );
+//     } else {
+//         info!("Successfully removed services {:?}", services);
+//         send_action(
+//             action_sender,
+//             Action::StatusActions(StatusActions::RemovingNodesCompleted),
+//         );
+//     }
+// }
+
+async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+    debug!("Starting node {:?}", services);
+    if let Err(err) = ant_node_manager::cmd::node::start(
+        CONNECTION_TIMEOUT_START,
+        None,
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while starting services {err:?}");
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::ErrorStartingNodes {
+                raw_error: err.to_string(),
+            }),
+        );
+    } else {
+        info!("Successfully started services {:?}", services);
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::StartNodesCompleted),
+        );
+    }
+}
+
 // --- Helper functions ---
 
 fn send_action(action_sender: UnboundedSender<Action>, action: Action) {
@@ -414,7 +512,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
     match ant_node_manager::cmd::node::maintain_n_running_nodes(
         false,
         config.auto_set_nat_flags,
-        120,
+        CONNECTION_TIMEOUT_START,
         count,
         config.data_dir_path.clone(),
         true,
@@ -487,7 +585,7 @@ async fn add_nodes(
         match ant_node_manager::cmd::node::maintain_n_running_nodes(
             false,
             config.auto_set_nat_flags,
-            120,
+            CONNECTION_TIMEOUT_START,
             config.count,
             config.data_dir_path.clone(),
             true,
