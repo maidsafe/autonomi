@@ -18,7 +18,9 @@ use crate::components::utils::open_logs;
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
 use crate::error::ErrorPopup;
-use crate::node_mgmt::{MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs};
+use crate::node_mgmt::{
+    MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs, FIXED_INTERVAL,
+};
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
 use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED};
 use crate::tui::Event;
@@ -52,7 +54,6 @@ use strum::Display;
 use throbber_widgets_tui::{self, Throbber, ThrobberState};
 use tokio::sync::mpsc::UnboundedSender;
 
-pub const FIXED_INTERVAL: u64 = 60_000;
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 /// If nat detection fails for more than 3 times, we don't want to waste time running during every node start.
 const MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION: usize = 3;
@@ -181,6 +182,19 @@ impl Status<'_> {
         Ok(status)
     }
 
+    fn update_node_service_status(
+        &mut self,
+        service_name: String,
+        status: ServiceStatus,
+    ) -> Result<()> {
+        for node_item in self.node_services.iter_mut() {
+            if node_item.service_name == service_name {
+                node_item.status = status.clone();
+            }
+        }
+        Ok(())
+    }
+
     fn update_node_items(&mut self, new_status: Option<NodeStatus>) -> Result<()> {
         // Iterate over existing node services and update their corresponding NodeItem
         if let Some(ref mut items) = self.items {
@@ -206,13 +220,13 @@ impl Status<'_> {
                             ServiceStatus::Added => NodeStatus::Added,
                             ServiceStatus::Removed => NodeStatus::Removed,
                         };
+                    }
 
-                        // Starting is not part of ServiceStatus so we do it manually
-                        if let Some(LockRegistryState::StartingNodes) = self.lock_registry {
-                            item.spinner_state.calc_next();
-                            if item.status != NodeStatus::Running {
-                                item.status = NodeStatus::Starting;
-                            }
+                    // Starting is not part of ServiceStatus so we do it manually
+                    if let Some(LockRegistryState::StartingNodes) = self.lock_registry {
+                        item.spinner_state.calc_next();
+                        if item.status != NodeStatus::Running {
+                            item.status = NodeStatus::Starting
                         }
                     }
 
@@ -405,7 +419,7 @@ impl Component for Status<'_> {
                 let _ = self.update_node_items(None);
             }
             Action::SwitchScene(scene) => match scene {
-                Scene::Status | Scene::StatusRewardsAddressPopUp => {
+                Scene::Status | Scene::StatusRewardsAddressPopUp | Scene::RemoveNodePopUp => {
                     self.active = true;
                     // make sure we're in navigation mode
                     return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
@@ -510,6 +524,13 @@ impl Component for Status<'_> {
                     }
                     debug!("Reset nodes completed");
                 }
+                StatusActions::RemovingNodesCompleted => {
+                    self.lock_registry = None;
+                    self.clear_node_items();
+                    self.load_node_registry_and_update_states()?;
+                    let _ = self.update_node_items(None);
+                    debug!("Removing nodes completed");
+                }
                 StatusActions::SuccessfullyDetectedNatStatus => {
                     debug!(
                         "Successfully detected nat status, is_nat_status_determined set to true"
@@ -584,8 +605,35 @@ impl Component for Status<'_> {
                     // Switch back to entry mode so we can handle key events
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
+                StatusActions::ErrorRemovingNodes { raw_error } => {
+                    self.error_popup = Some(ErrorPopup::new(
+                        "Error".to_string(),
+                        "Error removing node".to_string(),
+                        raw_error,
+                    ));
+                    if let Some(error_popup) = &mut self.error_popup {
+                        error_popup.show();
+                    }
+                    // Switch back to entry mode so we can handle key events
+                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                }
+                StatusActions::ErrorStartingNodes { raw_error } => {
+                    self.error_popup = Some(ErrorPopup::new(
+                        "Error".to_string(),
+                        "Error starting node. Please try again.".to_string(),
+                        raw_error,
+                    ));
+                    if let Some(error_popup) = &mut self.error_popup {
+                        error_popup.show();
+                    }
+                    // Switch back to entry mode so we can handle key events
+                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                }
                 StatusActions::TriggerManageNodes => {
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp)));
+                }
+                StatusActions::TriggerRemoveNode => {
+                    return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
                 }
                 StatusActions::PreviousTableItem => {
                     if let Some(items) = &mut self.items {
@@ -595,6 +643,49 @@ impl Component for Status<'_> {
                 StatusActions::NextTableItem => {
                     if let Some(items) = &mut self.items {
                         items.next();
+                    }
+                }
+                StatusActions::StartStopNode => {
+                    debug!("Start/Stop node");
+
+                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
+                    {
+                        if self.lock_registry.is_some() {
+                            error!(
+                                "Registry is locked ({:?}) Cannot star/stop nodes now.",
+                                self.lock_registry
+                            );
+                            return Ok(None);
+                        }
+
+                        let service_name = vec![node.name.clone()];
+                        let action_sender = self.get_actions_sender()?;
+
+                        if node.status == NodeStatus::Stopped || node.status == NodeStatus::Added {
+                            debug!("Starting Node {:?}", node.name);
+
+                            self.lock_registry = Some(LockRegistryState::StartingNodes);
+
+                            self.node_management
+                                .send_task(NodeManagementTask::StartNode {
+                                    services: service_name,
+                                    action_sender,
+                                })?;
+                        } else if node.status == NodeStatus::Running {
+                            debug!("Stopping Node {:?}", node.name);
+
+                            self.lock_registry = Some(LockRegistryState::StoppingNodes);
+
+                            self.node_management
+                                .send_task(NodeManagementTask::StopNodes {
+                                    services: service_name,
+                                    action_sender,
+                                })?;
+                        } else {
+                            debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
+                        }
+                    } else {
+                        debug!("Got action to Start/Stop node but no node was selected.");
                     }
                 }
                 StatusActions::StartNodes => {
@@ -674,6 +765,35 @@ impl Component for Status<'_> {
                             services: running_nodes,
                             action_sender,
                         })?;
+                }
+                StatusActions::AddNode => {
+                    //TODO: Validations regarding adding nodes. Space available.
+                }
+                StatusActions::RemoveNodes => {
+                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
+                    {
+                        debug!("Got action to remove node");
+                        if self.lock_registry.is_some() {
+                            error!(
+                                "Registry is locked ({:?}) Cannot remove nodes now.",
+                                self.lock_registry
+                            );
+                            return Ok(None);
+                        }
+
+                        let action_sender = self.get_actions_sender()?;
+                        info!("Removing Node {:?}", node.name);
+
+                        let service_name = vec![node.name.clone()];
+
+                        self.node_management
+                            .send_task(NodeManagementTask::RemoveNodes {
+                                services: service_name,
+                                action_sender,
+                            })?;
+                    } else {
+                        debug!("Got action to Remove node but no node was selected.");
+                    }
                 }
                 StatusActions::TriggerRewardsAddress => {
                     if self.rewards_address.is_empty() {
@@ -928,9 +1048,12 @@ impl Component for Status<'_> {
             if items.items.is_empty() || self.rewards_address.is_empty() {
                 let line1 = Line::from(vec![
                     Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled("[Ctrl+G] ", Style::default().fg(GHOST_WHITE).bold()),
+                    Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
                     Span::styled("to Add and ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled("Start Nodes ", Style::default().fg(GHOST_WHITE).bold()),
+                    Span::styled(
+                        "Start your first node ",
+                        Style::default().fg(GHOST_WHITE).bold(),
+                    ),
                     Span::styled("on this device", Style::default().fg(LIGHT_PERIWINKLE)),
                 ]);
 
