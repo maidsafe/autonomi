@@ -8,9 +8,11 @@
 
 use super::footer::NodesToStart;
 use super::header::SelectedMenuItem;
+use super::popup::manage_nodes::GB;
 use super::utils::centered_rect_fixed;
 use super::{footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE, Component, Frame};
 use crate::action::OptionsActions;
+use crate::components::popup::manage_nodes::MAX_NODE_COUNT;
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::components::utils::open_logs;
 use crate::config::get_launchpad_nodes_data_dir_path;
@@ -22,6 +24,7 @@ use crate::node_mgmt::{
 };
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
 use crate::style::{clear_area, COOL_GREY, INDIGO, SIZZLING_RED};
+use crate::system::{get_available_space_b, get_drive_name};
 use crate::tui::Event;
 use crate::upnp::UpnpSupport;
 use crate::{
@@ -105,6 +108,8 @@ pub struct Status<'a> {
     port_from: Option<u32>,
     // Port to
     port_to: Option<u32>,
+    storage_mountpoint: PathBuf,
+    available_disk_space_gb: usize,
     error_popup: Option<ErrorPopup>,
 }
 
@@ -118,6 +123,7 @@ pub struct StatusConfig {
     pub init_peers_config: InitialPeersConfig,
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
+    pub storage_mountpoint: PathBuf,
     pub rewards_address: String,
 }
 
@@ -145,6 +151,8 @@ impl Status<'_> {
             port_from: config.port_from,
             port_to: config.port_to,
             error_popup: None,
+            storage_mountpoint: config.storage_mountpoint.clone(),
+            available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
         };
 
         // Nodes registry
@@ -830,7 +838,43 @@ impl Component for Status<'_> {
                 }
                 StatusActions::AddNode => {
                     debug!("Got action to Add node");
-                    //TODO: Validations regarding adding nodes. Space available, amount of nodes
+
+                    // Validations - Available space
+                    if GB_PER_NODE > self.available_disk_space_gb {
+                        self.error_popup = Some(ErrorPopup::new(
+                        "Cannot Add Node".to_string(),
+                        format!("\nEach Node requires {}GB of available space.", GB_PER_NODE),
+                        format!("{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.", get_drive_name(&self.storage_mountpoint)?, self.available_disk_space_gb),
+                    ));
+                        if let Some(error_popup) = &mut self.error_popup {
+                            error_popup.show();
+                        }
+                        // Switch back to entry mode so we can handle key events
+                        return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                    }
+
+                    // Validations - Amount of nodes
+                    let amount_of_nodes = if let Some(ref items) = self.items {
+                        items.items.len()
+                    } else {
+                        0
+                    };
+
+                    if amount_of_nodes + 1 > MAX_NODE_COUNT {
+                        self.error_popup = Some(ErrorPopup::new(
+                            "Cannot Add Node".to_string(),
+                            format!(
+                                "There are not enough ports available in your\ncustom port range to start another node ({}).",
+                                MAX_NODE_COUNT
+                            ),
+                            "\nVisit autonomi.com/support/port-error for help".to_string(),
+                        ));
+                        if let Some(error_popup) = &mut self.error_popup {
+                            error_popup.show();
+                        }
+                        // Switch back to entry mode so we can handle key events
+                        return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                    }
 
                     if self.rewards_address.is_empty() {
                         info!("Rewards address is not set. Ask for input.");
@@ -968,6 +1012,10 @@ impl Component for Status<'_> {
                         start_nodes_after_reset: false,
                         action_sender,
                     })?;
+            }
+            Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
+                self.storage_mountpoint.clone_from(&mountpoint);
+                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
             }
             _ => {}
         }
