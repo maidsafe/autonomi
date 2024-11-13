@@ -8,10 +8,8 @@
 
 use super::footer::NodesToStart;
 use super::header::SelectedMenuItem;
-use super::{
-    footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE, utils::centered_rect_fixed,
-    Component, Frame,
-};
+use super::utils::centered_rect_fixed;
+use super::{footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE, Component, Frame};
 use crate::action::OptionsActions;
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::components::utils::open_logs;
@@ -20,9 +18,10 @@ use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
 use crate::error::ErrorPopup;
 use crate::node_mgmt::{
     MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs, FIXED_INTERVAL,
+    NODES_ALL,
 };
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED};
+use crate::style::{clear_area, COOL_GREY, INDIGO, SIZZLING_RED};
 use crate::tui::Event;
 use crate::upnp::UpnpSupport;
 use crate::{
@@ -30,9 +29,7 @@ use crate::{
     config::Config,
     mode::{InputMode, Scene},
     node_stats::NodeStats,
-    style::{
-        clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE,
-    },
+    style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE},
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_node_manager::add_services::config::PortRange;
@@ -50,7 +47,6 @@ use std::{
     time::{Duration, Instant},
     vec,
 };
-use strum::Display;
 use throbber_widgets_tui::{self, Throbber, ThrobberState};
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -95,9 +91,6 @@ pub struct Status<'a> {
     nodes_to_start: usize,
     // Rewards address
     rewards_address: String,
-    // Currently the node registry file does not support concurrent actions and thus can lead to
-    // inconsistent state. Another solution would be to have a file lock/db.
-    lock_registry: Option<LockRegistryState>,
     // Peers to pass into nodes for startup
     init_peers_config: InitialPeersConfig,
     // If path is provided, we don't fetch the binary from the network
@@ -113,14 +106,6 @@ pub struct Status<'a> {
     // Port to
     port_to: Option<u32>,
     error_popup: Option<ErrorPopup>,
-}
-
-#[derive(Clone, Display, Debug)]
-pub enum LockRegistryState {
-    StartingNodes,
-    StoppingNodes,
-    ResettingNodes,
-    UpdatingNodes,
 }
 
 pub struct StatusConfig {
@@ -152,7 +137,6 @@ impl Status<'_> {
             node_management: NodeManagement::new()?,
             items: None,
             nodes_to_start: config.allocated_disk_space,
-            lock_registry: None,
             rewards_address: config.rewards_address,
             antnode_path: config.antnode_path,
             data_dir_path: config.data_dir_path,
@@ -182,14 +166,37 @@ impl Status<'_> {
         Ok(status)
     }
 
-    fn update_node_service_status(
-        &mut self,
-        service_name: String,
-        status: ServiceStatus,
-    ) -> Result<()> {
-        for node_item in self.node_services.iter_mut() {
-            if node_item.service_name == service_name {
-                node_item.status = status.clone();
+    fn set_lock(&mut self, service_name: &str, locked: bool) {
+        if let Some(ref mut items) = self.items {
+            for item in &mut items.items {
+                if item.name == *service_name {
+                    item.locked = locked;
+                }
+            }
+        }
+    }
+
+    // FIXME: Can be used if NodeItem implements Copy. Dependencies cannot.
+    fn _lock_service(&mut self, service_name: &str) {
+        self.set_lock(service_name, true);
+    }
+
+    fn unlock_service(&mut self, service_name: &str) {
+        self.set_lock(service_name, false);
+    }
+
+    /// Updates the NodeStatus of a specific item in the items list based on its service name.
+    ///
+    /// # Arguments
+    ///
+    /// * `service_name` - The name of the service to update.
+    /// * `status` - The new status to assign to the item.
+    fn update_item(&mut self, service_name: String, status: NodeStatus) -> Result<()> {
+        if let Some(ref mut items) = self.items {
+            for item in &mut items.items {
+                if item.name == service_name {
+                    item.status = status;
+                }
             }
         }
         Ok(())
@@ -207,7 +214,9 @@ impl Status<'_> {
                 {
                     if let Some(status) = new_status {
                         item.status = status;
-                    } else if item.status == NodeStatus::Updating {
+                    } else if item.status == NodeStatus::Updating
+                        || item.status == NodeStatus::Starting
+                    {
                         item.spinner_state.calc_next();
                     } else if new_status != Some(NodeStatus::Updating) {
                         // Update status based on current node status
@@ -220,14 +229,6 @@ impl Status<'_> {
                             ServiceStatus::Added => NodeStatus::Added,
                             ServiceStatus::Removed => NodeStatus::Removed,
                         };
-                    }
-
-                    // Starting is not part of ServiceStatus so we do it manually
-                    if let Some(LockRegistryState::StartingNodes) = self.lock_registry {
-                        item.spinner_state.calc_next();
-                        if item.status != NodeStatus::Running {
-                            item.status = NodeStatus::Starting
-                        }
                     }
 
                     // Update peers count
@@ -265,6 +266,7 @@ impl Status<'_> {
                         peers: 0,
                         connections: 0,
                         mode: NodeConnectionMode::from(node_item),
+                        locked: false,
                         status: NodeStatus::Added, // Set initial status as Added
                         failure: node_item.get_critical_failure(),
                         spinner: Throbber::default(),
@@ -300,6 +302,7 @@ impl Status<'_> {
                         records: 0,
                         peers: 0,
                         connections: 0,
+                        locked: false,
                         mode: NodeConnectionMode::from(node_item),
                         status,
                         failure: node_item.get_critical_failure(),
@@ -358,6 +361,17 @@ impl Status<'_> {
         self.connection_mode == ConnectionMode::Automatic
             && !self.is_nat_status_determined
             && self.error_while_running_nat_detection < MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION
+    }
+
+    fn nodes_starting(&self) -> bool {
+        if let Some(items) = &self.items {
+            items
+                .items
+                .iter()
+                .any(|item| item.status == NodeStatus::Starting)
+        } else {
+            false
+        }
     }
 
     fn get_running_nodes(&self) -> Vec<String> {
@@ -445,8 +459,6 @@ impl Component for Status<'_> {
                 self.rewards_address = rewards_address;
 
                 if we_have_nodes && has_changed {
-                    debug!("Setting lock_registry to ResettingNodes");
-                    self.lock_registry = Some(LockRegistryState::ResettingNodes);
                     info!("Resetting antnode services because the Rewards Address was reset.");
                     let action_sender = self.get_actions_sender()?;
                     self.node_management
@@ -457,8 +469,6 @@ impl Component for Status<'_> {
                 }
             }
             Action::StoreStorageDrive(ref drive_mountpoint, ref _drive_name) => {
-                debug!("Setting lock_registry to ResettingNodes");
-                self.lock_registry = Some(LockRegistryState::ResettingNodes);
                 info!("Resetting antnode services because the Storage Drive was changed.");
                 let action_sender = self.get_actions_sender()?;
                 self.node_management
@@ -470,8 +480,6 @@ impl Component for Status<'_> {
                     get_launchpad_nodes_data_dir_path(&drive_mountpoint.to_path_buf(), false)?;
             }
             Action::StoreConnectionMode(connection_mode) => {
-                debug!("Setting lock_registry to ResettingNodes");
-                self.lock_registry = Some(LockRegistryState::ResettingNodes);
                 self.connection_mode = connection_mode;
                 info!("Resetting antnode services because the Connection Mode range was changed.");
                 let action_sender = self.get_actions_sender()?;
@@ -482,8 +490,6 @@ impl Component for Status<'_> {
                     })?;
             }
             Action::StorePortRange(port_from, port_range) => {
-                debug!("Setting lock_registry to ResettingNodes");
-                self.lock_registry = Some(LockRegistryState::ResettingNodes);
                 self.port_from = Some(port_from);
                 self.port_to = Some(port_range);
                 info!("Resetting antnode services because the Port Range was changed.");
@@ -502,19 +508,33 @@ impl Component for Status<'_> {
                 StatusActions::NodesStatsObtained(stats) => {
                     self.node_stats = stats;
                 }
-                StatusActions::StartNodesCompleted | StatusActions::StopNodesCompleted => {
-                    self.lock_registry = None;
+                StatusActions::StartNodesCompleted { service_name } => {
+                    if service_name == *NODES_ALL {
+                        if let Some(items) = &self.items {
+                            let items_clone = items.clone();
+                            for item in &items_clone.items {
+                                self.unlock_service(item.name.as_str());
+                                self.update_item(item.name.clone(), NodeStatus::Running)?;
+                            }
+                        }
+                    } else {
+                        self.unlock_service(service_name.as_str());
+                        self.update_item(service_name, NodeStatus::Running)?;
+                    }
+                    self.load_node_registry_and_update_states()?;
+                }
+                StatusActions::StopNodesCompleted { service_name } => {
+                    self.unlock_service(service_name.as_str());
+                    self.update_item(service_name, NodeStatus::Stopped)?;
                     self.load_node_registry_and_update_states()?;
                 }
                 StatusActions::UpdateNodesCompleted => {
-                    self.lock_registry = None;
                     self.clear_node_items();
                     self.load_node_registry_and_update_states()?;
                     let _ = self.update_node_items(None);
                     debug!("Update nodes completed");
                 }
                 StatusActions::ResetNodesCompleted { trigger_start_node } => {
-                    self.lock_registry = None;
                     self.load_node_registry_and_update_states()?;
                     self.clear_node_items();
 
@@ -524,9 +544,15 @@ impl Component for Status<'_> {
                     }
                     debug!("Reset nodes completed");
                 }
-                StatusActions::RemovingNodesCompleted => {
-                    self.lock_registry = None;
-                    self.clear_node_items();
+                StatusActions::AddNodesCompleted { service_name } => {
+                    self.unlock_service(service_name.as_str());
+                    self.update_item(service_name.clone(), NodeStatus::Stopped)?;
+                    self.load_node_registry_and_update_states()?;
+                    debug!("Adding {:?} completed", service_name.clone());
+                }
+                StatusActions::RemoveNodesCompleted { service_name } => {
+                    self.unlock_service(service_name.as_str());
+                    self.update_item(service_name, NodeStatus::Removed)?;
                     self.load_node_registry_and_update_states()?;
                     let _ = self.update_node_items(None);
                     debug!("Removing nodes completed");
@@ -569,7 +595,13 @@ impl Component for Status<'_> {
                     // Switch back to entry mode so we can handle key events
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
-                StatusActions::ErrorStoppingNodes { raw_error } => {
+                StatusActions::ErrorStoppingNodes {
+                    services,
+                    raw_error,
+                } => {
+                    for service_name in services {
+                        self.unlock_service(service_name.as_str());
+                    }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
                         "Error stopping nodes".to_string(),
@@ -605,7 +637,25 @@ impl Component for Status<'_> {
                     // Switch back to entry mode so we can handle key events
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
-                StatusActions::ErrorRemovingNodes { raw_error } => {
+                StatusActions::ErrorAddingNodes { raw_error } => {
+                    self.error_popup = Some(ErrorPopup::new(
+                        "Error".to_string(),
+                        "Error adding node".to_string(),
+                        raw_error,
+                    ));
+                    if let Some(error_popup) = &mut self.error_popup {
+                        error_popup.show();
+                    }
+                    // Switch back to entry mode so we can handle key events
+                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                }
+                StatusActions::ErrorRemovingNodes {
+                    services,
+                    raw_error,
+                } => {
+                    for service_name in services {
+                        self.unlock_service(service_name.as_str());
+                    }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
                         "Error removing node".to_string(),
@@ -617,7 +667,13 @@ impl Component for Status<'_> {
                     // Switch back to entry mode so we can handle key events
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
-                StatusActions::ErrorStartingNodes { raw_error } => {
+                StatusActions::ErrorStartingNodes {
+                    services,
+                    raw_error,
+                } => {
+                    for service_name in services {
+                        self.unlock_service(service_name.as_str());
+                    }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
                         "Error starting node. Please try again.".to_string(),
@@ -648,44 +704,58 @@ impl Component for Status<'_> {
                 StatusActions::StartStopNode => {
                     debug!("Start/Stop node");
 
+                    // Check if a node is selected
                     if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
                     {
-                        if self.lock_registry.is_some() {
-                            error!(
-                                "Registry is locked ({:?}) Cannot star/stop nodes now.",
-                                self.lock_registry
-                            );
+                        let node_index = self
+                            .items
+                            .as_ref()
+                            .unwrap()
+                            .items
+                            .iter()
+                            .position(|item| item.name == node.name)
+                            .unwrap();
+                        let action_sender = self.get_actions_sender()?;
+                        let node = &mut self.items.as_mut().unwrap().items[node_index];
+
+                        if node.status == NodeStatus::Removed {
+                            debug!("Node is removed. Cannot be started.");
                             return Ok(None);
                         }
 
+                        if node.locked {
+                            debug!("Node still performing operation");
+                            return Ok(None);
+                        }
+                        node.locked = true; // Lock the node before starting or stopping
+
                         let service_name = vec![node.name.clone()];
-                        let action_sender = self.get_actions_sender()?;
 
-                        if node.status == NodeStatus::Stopped || node.status == NodeStatus::Added {
-                            debug!("Starting Node {:?}", node.name);
-
-                            self.lock_registry = Some(LockRegistryState::StartingNodes);
-
-                            self.node_management
-                                .send_task(NodeManagementTask::StartNode {
-                                    services: service_name,
-                                    action_sender,
-                                })?;
-                        } else if node.status == NodeStatus::Running {
-                            debug!("Stopping Node {:?}", node.name);
-
-                            self.lock_registry = Some(LockRegistryState::StoppingNodes);
-
-                            self.node_management
-                                .send_task(NodeManagementTask::StopNodes {
-                                    services: service_name,
-                                    action_sender,
-                                })?;
-                        } else {
-                            debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
+                        match node.status {
+                            NodeStatus::Stopped | NodeStatus::Added => {
+                                debug!("Starting Node {:?}", node.name);
+                                self.node_management
+                                    .send_task(NodeManagementTask::StartNode {
+                                        services: service_name,
+                                        action_sender,
+                                    })?;
+                                node.status = NodeStatus::Starting;
+                            }
+                            NodeStatus::Running => {
+                                debug!("Stopping Node {:?}", node.name);
+                                self.node_management
+                                    .send_task(NodeManagementTask::StopNodes {
+                                        services: service_name,
+                                        action_sender,
+                                    })?;
+                            }
+                            _ => {
+                                debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
+                            }
                         }
                     } else {
                         debug!("Got action to Start/Stop node but no node was selected.");
+                        return Ok(None);
                     }
                 }
                 StatusActions::StartNodes => {
@@ -705,16 +775,17 @@ impl Component for Status<'_> {
                         )));
                     }
 
-                    if self.lock_registry.is_some() {
-                        error!(
-                            "Registry is locked ({:?}) Cannot Start nodes now.",
-                            self.lock_registry
-                        );
-                        return Ok(None);
+                    // Set status and locking
+                    if let Some(ref mut items) = self.items {
+                        for item in &mut items.items {
+                            if item.status == NodeStatus::Added
+                                || item.status == NodeStatus::Stopped
+                            {
+                                item.status = NodeStatus::Starting;
+                                item.locked = true;
+                            }
+                        }
                     }
-
-                    debug!("Setting lock_registry to StartingNodes");
-                    self.lock_registry = Some(LockRegistryState::StartingNodes);
 
                     let port_range = PortRange::Range(
                         self.port_from.unwrap_or(PORT_MIN) as u16,
@@ -746,17 +817,8 @@ impl Component for Status<'_> {
                 }
                 StatusActions::StopNodes => {
                     debug!("Got action to stop nodes");
-                    if self.lock_registry.is_some() {
-                        error!(
-                            "Registry is locked ({:?}) Cannot Stop nodes now.",
-                            self.lock_registry
-                        );
-                        return Ok(None);
-                    }
 
                     let running_nodes = self.get_running_nodes();
-                    debug!("Setting lock_registry to StoppingNodes");
-                    self.lock_registry = Some(LockRegistryState::StoppingNodes);
                     let action_sender = self.get_actions_sender()?;
                     info!("Stopping node service: {running_nodes:?}");
 
@@ -767,33 +829,92 @@ impl Component for Status<'_> {
                         })?;
                 }
                 StatusActions::AddNode => {
-                    //TODO: Validations regarding adding nodes. Space available.
+                    debug!("Got action to Add node");
+                    //TODO: Validations regarding adding nodes. Space available, amount of nodes
+
+                    if self.rewards_address.is_empty() {
+                        info!("Rewards address is not set. Ask for input.");
+                        return Ok(Some(Action::StatusActions(
+                            StatusActions::TriggerRewardsAddress,
+                        )));
+                    }
+
+                    if self.nodes_to_start == 0 {
+                        info!("Nodes to start not set. Ask for input.");
+                        return Ok(Some(Action::StatusActions(
+                            StatusActions::TriggerManageNodes,
+                        )));
+                    }
+
+                    let port_range = PortRange::Range(
+                        self.port_from.unwrap_or(PORT_MIN) as u16,
+                        self.port_to.unwrap_or(PORT_MAX) as u16,
+                    );
+
+                    let action_sender = self.get_actions_sender()?;
+
+                    let add_node_args = MaintainNodesArgs {
+                        action_sender: action_sender.clone(),
+                        antnode_path: self.antnode_path.clone(),
+                        connection_mode: self.connection_mode,
+                        count: 1,
+                        data_dir_path: Some(self.data_dir_path.clone()),
+                        network_id: self.network_id,
+                        owner: self.rewards_address.clone(),
+                        peers_args: self.peers_args.clone(),
+                        port_range: Some(port_range),
+                        rewards_address: self.rewards_address.clone(),
+                        run_nat_detection: self.should_we_run_nat_detection(),
+                    };
+
+                    self.node_management
+                        .send_task(NodeManagementTask::AddNode {
+                            args: add_node_args,
+                        })?;
                 }
                 StatusActions::RemoveNodes => {
-                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
+                    debug!("Got action to remove node");
+                    // Check if a node is selected
+                    if self
+                        .items
+                        .as_ref()
+                        .and_then(|items| items.selected_item())
+                        .is_none()
                     {
-                        debug!("Got action to remove node");
-                        if self.lock_registry.is_some() {
-                            error!(
-                                "Registry is locked ({:?}) Cannot remove nodes now.",
-                                self.lock_registry
-                            );
-                            return Ok(None);
-                        }
-
-                        let action_sender = self.get_actions_sender()?;
-                        info!("Removing Node {:?}", node.name);
-
-                        let service_name = vec![node.name.clone()];
-
-                        self.node_management
-                            .send_task(NodeManagementTask::RemoveNodes {
-                                services: service_name,
-                                action_sender,
-                            })?;
-                    } else {
-                        debug!("Got action to Remove node but no node was selected.");
+                        debug!("Got action to Start/Stop node but no node was selected.");
+                        return Ok(None);
                     }
+
+                    let node_index =
+                        self.items
+                            .as_ref()
+                            .and_then(|items| {
+                                items.items.iter().position(|item| {
+                                    item.name == items.selected_item().unwrap().name
+                                })
+                            })
+                            .unwrap();
+
+                    let action_sender = self.get_actions_sender()?;
+
+                    let node = &mut self.items.as_mut().unwrap().items[node_index];
+
+                    if node.locked {
+                        debug!("Node still performing operation");
+                        return Ok(None);
+                    } else {
+                        // Lock the node before starting or stopping
+                        node.locked = true;
+                    }
+
+                    let service_name = vec![node.name.clone()];
+
+                    // Send the task to remove the node
+                    self.node_management
+                        .send_task(NodeManagementTask::RemoveNodes {
+                            services: service_name,
+                            action_sender,
+                        })?;
                 }
                 StatusActions::TriggerRewardsAddress => {
                     if self.rewards_address.is_empty() {
@@ -815,17 +936,6 @@ impl Component for Status<'_> {
             Action::OptionsActions(OptionsActions::UpdateNodes) => {
                 debug!("Got action to Update Nodes");
                 self.load_node_registry_and_update_states()?;
-                if self.lock_registry.is_some() {
-                    error!(
-                        "Registry is locked ({:?}) Cannot Update nodes now. Stop them first.",
-                        self.lock_registry
-                    );
-                    return Ok(None);
-                } else {
-                    debug!("Lock registry ({:?})", self.lock_registry);
-                };
-                debug!("Setting lock_registry to UpdatingNodes");
-                self.lock_registry = Some(LockRegistryState::UpdatingNodes);
                 let action_sender = self.get_actions_sender()?;
                 info!("Got action to update nodes");
                 let _ = self.update_node_items(Some(NodeStatus::Updating));
@@ -851,16 +961,6 @@ impl Component for Status<'_> {
             }
             Action::OptionsActions(OptionsActions::ResetNodes) => {
                 debug!("Got action to reset nodes");
-                if self.lock_registry.is_some() {
-                    error!(
-                        "Registry is locked ({:?}) Cannot Reset nodes now.",
-                        self.lock_registry
-                    );
-                    return Ok(None);
-                }
-
-                debug!("Setting lock_registry to ResettingNodes");
-                self.lock_registry = Some(LockRegistryState::ResettingNodes);
                 let action_sender = self.get_actions_sender()?;
                 info!("Got action to reset nodes");
                 self.node_management
@@ -1090,7 +1190,14 @@ impl Component for Status<'_> {
                     .title(Line::from(vec![
                         Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
                         Span::styled(
-                            format!(" ({}) ", self.nodes_to_start),
+                            format!(
+                                " ({}) ",
+                                if let Some(ref items) = self.items {
+                                    items.items.len()
+                                } else {
+                                    0
+                                }
+                            ),
                             Style::default().fg(LIGHT_PERIWINKLE),
                         ),
                     ]))
@@ -1188,78 +1295,48 @@ impl Component for Status<'_> {
             }
         }
 
-        // Status Popup
-        if let Some(registry_state) = &self.lock_registry {
-            let popup_text = match registry_state {
-                LockRegistryState::StartingNodes => {
-                    if self.should_we_run_nat_detection() {
-                        vec![
-                            Line::raw("Starting nodes..."),
-                            Line::raw(""),
-                            Line::raw(""),
-                            Line::raw("Please wait, performing initial NAT detection"),
-                            Line::raw("This may take a couple minutes."),
-                        ]
-                    } else {
-                        // We avoid rendering the popup as we have status lines now
-                        return Ok(());
-                    }
-                }
-                LockRegistryState::StoppingNodes => {
-                    vec![
-                        Line::raw(""),
-                        Line::raw(""),
-                        Line::raw(""),
-                        Line::raw("Stopping nodes..."),
-                    ]
-                }
-                LockRegistryState::ResettingNodes => {
-                    vec![
-                        Line::raw(""),
-                        Line::raw(""),
-                        Line::raw(""),
-                        Line::raw("Resetting nodes..."),
-                    ]
-                }
-                LockRegistryState::UpdatingNodes => {
-                    return Ok(());
-                }
-            };
-            if !popup_text.is_empty() {
-                let popup_area = centered_rect_fixed(50, 12, area);
-                clear_area(f, popup_area);
+        if self.nodes_starting() && self.should_we_run_nat_detection() {
+            let popup_text = vec![
+                Line::raw("Starting nodes..."),
+                Line::raw(""),
+                Line::raw(""),
+                Line::raw("Please wait, performing initial NAT detection"),
+                Line::raw("This may take a couple minutes."),
+            ];
 
-                let popup_border = Paragraph::new("").block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(" Manage Nodes ")
-                        .bold()
-                        .title_style(Style::new().fg(VIVID_SKY_BLUE))
-                        .padding(Padding::uniform(2))
-                        .border_style(Style::new().fg(GHOST_WHITE)),
-                );
+            let popup_area = centered_rect_fixed(50, 12, area);
+            clear_area(f, popup_area);
 
-                let centred_area = Layout::new(
-                    Direction::Vertical,
-                    vec![
-                        // border
-                        Constraint::Length(2),
-                        // our text goes here
-                        Constraint::Min(5),
-                        // border
-                        Constraint::Length(1),
-                    ],
-                )
-                .split(popup_area);
-                let text = Paragraph::new(popup_text)
-                    .block(Block::default().padding(Padding::horizontal(2)))
-                    .wrap(Wrap { trim: false })
-                    .alignment(Alignment::Center)
-                    .fg(EUCALYPTUS);
-                f.render_widget(text, centred_area[1]);
+            let popup_border = Paragraph::new("").block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Manage Nodes ")
+                    .bold()
+                    .title_style(Style::new().fg(VIVID_SKY_BLUE))
+                    .padding(Padding::uniform(2))
+                    .border_style(Style::new().fg(GHOST_WHITE)),
+            );
 
-                f.render_widget(popup_border, popup_area);
-            }
+            let centred_area = Layout::new(
+                Direction::Vertical,
+                vec![
+                    // border
+                    Constraint::Length(2),
+                    // our text goes here
+                    Constraint::Min(5),
+                    // border
+                    Constraint::Length(1),
+                ],
+            )
+            .split(popup_area);
+            let text = Paragraph::new(popup_text)
+                .block(Block::default().padding(Padding::horizontal(2)))
+                .wrap(Wrap { trim: false })
+                .alignment(Alignment::Center)
+                .fg(EUCALYPTUS);
+            f.render_widget(text, centred_area[1]);
+
+            f.render_widget(popup_border, popup_area);
         }
 
         Ok(())
@@ -1366,6 +1443,7 @@ pub struct NodeItem<'a> {
     records: usize,
     peers: usize,
     connections: usize,
+    locked: bool, // Semaphore for being able to change status
     mode: NodeConnectionMode,
     status: NodeStatus,
     failure: Option<(chrono::DateTime<chrono::Utc>, String)>,
