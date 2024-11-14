@@ -446,7 +446,7 @@ impl Component for Status<'_> {
                     // make sure we're in navigation mode
                     return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
                 }
-                Scene::ManageNodesPopUp => self.active = true,
+                Scene::ManageNodesPopUp { .. } => self.active = true,
                 _ => self.active = false,
             },
             Action::StoreNodesToStart(count) => {
@@ -537,12 +537,24 @@ impl Component for Status<'_> {
                     self.load_node_registry_and_update_states()?;
                 }
                 StatusActions::UpdateNodesCompleted => {
+                    if let Some(items) = &self.items {
+                        let items_clone = items.clone();
+                        for item in &items_clone.items {
+                            self.unlock_service(item.name.as_str());
+                        }
+                    }
                     self.clear_node_items();
                     self.load_node_registry_and_update_states()?;
                     let _ = self.update_node_items(None);
                     debug!("Update nodes completed");
                 }
                 StatusActions::ResetNodesCompleted { trigger_start_node } => {
+                    if let Some(items) = &self.items {
+                        let items_clone = items.clone();
+                        for item in &items_clone.items {
+                            self.unlock_service(item.name.as_str());
+                        }
+                    }
                     self.load_node_registry_and_update_states()?;
                     self.clear_node_items();
 
@@ -622,6 +634,12 @@ impl Component for Status<'_> {
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
                 StatusActions::ErrorUpdatingNodes { raw_error } => {
+                    if let Some(items) = &self.items {
+                        let items_clone = items.clone();
+                        for item in &items_clone.items {
+                            self.unlock_service(item.name.as_str());
+                        }
+                    }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
                         "Error upgrading nodes".to_string(),
@@ -694,10 +712,23 @@ impl Component for Status<'_> {
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
                 StatusActions::TriggerManageNodes => {
-                    return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp)));
+                    let mut amount_of_nodes = 0;
+                    if let Some(items) = &mut self.items {
+                        amount_of_nodes = items.items.len();
+                    }
+
+                    return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
+                        amount_of_nodes,
+                    })));
                 }
                 StatusActions::TriggerRemoveNode => {
-                    return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
+                    if let Some(_node) = self.items.as_ref().and_then(|items| items.selected_item())
+                    {
+                        return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)));
+                    } else {
+                        debug!("No items to be removed");
+                        return Ok(None);
+                    }
                 }
                 StatusActions::PreviousTableItem => {
                     if let Some(items) = &mut self.items {
@@ -1435,10 +1466,14 @@ impl<T> StatefulTable<T> {
     fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.items.len() - 1 {
-                    0
+                if !self.items.is_empty() {
+                    if i >= self.items.len() - 1 {
+                        0
+                    } else {
+                        i + 1
+                    }
                 } else {
-                    i + 1
+                    0
                 }
             }
             None => self.last_selected.unwrap_or(0),
@@ -1450,10 +1485,14 @@ impl<T> StatefulTable<T> {
     fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i == 0 {
-                    self.items.len() - 1
+                if !self.items.is_empty() {
+                    if i == 0 {
+                        self.items.len() - 1
+                    } else {
+                        i - 1
+                    }
                 } else {
-                    i - 1
+                    0
                 }
             }
             None => self.last_selected.unwrap_or(0),

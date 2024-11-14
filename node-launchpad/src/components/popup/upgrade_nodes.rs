@@ -19,15 +19,15 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 
 pub struct UpgradeNodesPopUp {
-    nodes_to_start: usize,
+    amount_of_nodes: usize,
     /// Whether the component is active right now, capturing keystrokes + draw things.
     active: bool,
 }
 
 impl UpgradeNodesPopUp {
-    pub fn new(nodes_to_start: usize) -> Self {
+    pub fn new(amount_of_nodes: usize) -> Self {
         Self {
-            nodes_to_start,
+            amount_of_nodes,
             active: false,
         }
     }
@@ -68,10 +68,6 @@ impl Component for UpgradeNodesPopUp {
                     None
                 }
             },
-            Action::StoreNodesToStart(ref nodes_to_start) => {
-                self.nodes_to_start = *nodes_to_start;
-                None
-            }
             _ => None,
         };
         Ok(send_back)
@@ -114,9 +110,9 @@ impl Component for UpgradeNodesPopUp {
             Direction::Vertical,
             [
                 // for the text
-                Constraint::Length(9),
+                Constraint::Length(10),
                 // gap
-                Constraint::Length(4),
+                Constraint::Length(3),
                 // for the buttons
                 Constraint::Length(1),
             ],
@@ -139,10 +135,14 @@ impl Component for UpgradeNodesPopUp {
             Line::from(Span::styled(
                 format!(
                     "Upgrade time ~ {:.1?} mins ({:?} nodes * {:?} secs)",
-                    self.nodes_to_start * (node_mgmt::FIXED_INTERVAL / 1_000) as usize / 60,
-                    self.nodes_to_start,
+                    self.amount_of_nodes * (node_mgmt::FIXED_INTERVAL / 1_000) as usize / 60,
+                    self.amount_of_nodes,
                     node_mgmt::FIXED_INTERVAL / 1_000,
                 ),
+                Style::default().fg(LIGHT_PERIWINKLE),
+            )),
+            Line::from(Span::styled(
+                "plus, new binary download time.",
                 Style::default().fg(LIGHT_PERIWINKLE),
             )),
             Line::from(Span::styled("\n\n", Style::default())),
