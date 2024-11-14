@@ -129,7 +129,7 @@ impl App {
         let change_connection_mode = ChangeConnectionModePopUp::new(connection_mode)?;
         let port_range = PortRangePopUp::new(connection_mode, port_from, port_to);
         let rewards_address = RewardsAddress::new(app_data.discord_username.clone());
-        let upgrade_nodes = UpgradeNodesPopUp::new(app_data.nodes_to_start);
+        let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
 
         Ok(Self {

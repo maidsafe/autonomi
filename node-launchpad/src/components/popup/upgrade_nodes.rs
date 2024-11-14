@@ -19,17 +19,19 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 
 pub struct UpgradeNodesPopUp {
-    amount_of_nodes: usize,
     /// Whether the component is active right now, capturing keystrokes + draw things.
     active: bool,
 }
 
 impl UpgradeNodesPopUp {
-    pub fn new(amount_of_nodes: usize) -> Self {
-        Self {
-            amount_of_nodes,
-            active: false,
-        }
+    pub fn new() -> Self {
+        Self { active: false }
+    }
+}
+
+impl Default for UpgradeNodesPopUp {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -134,9 +136,7 @@ impl Component for UpgradeNodesPopUp {
             )),
             Line::from(Span::styled(
                 format!(
-                    "Upgrade time ~ {:.1?} mins ({:?} nodes * {:?} secs)",
-                    self.amount_of_nodes * (node_mgmt::FIXED_INTERVAL / 1_000) as usize / 60,
-                    self.amount_of_nodes,
+                    "Upgrade time is {:.1?} seconds per node",
                     node_mgmt::FIXED_INTERVAL / 1_000,
                 ),
                 Style::default().fg(LIGHT_PERIWINKLE),
