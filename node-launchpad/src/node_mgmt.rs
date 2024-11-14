@@ -760,9 +760,8 @@ async fn add_nodes(
             action_sender.clone(),
             Action::StatusActions(StatusActions::ErrorScalingUpNodes {
                 raw_error: format!(
-                    "When trying run a node, we reached the maximum amount of retries ({}).\n\
-                    Could this be a firewall blocking nodes starting?\n\
-                    Or ports on your router already in use?",
+                    "When trying to start a node, we reached the maximum amount of retries ({}).\n\
+                    Could this be a firewall blocking nodes starting or ports on your router already in use?",
                     NODE_ADD_MAX_RETRIES
                 ),
             }),
