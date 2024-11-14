@@ -1316,19 +1316,31 @@ impl Component for Status<'_> {
 
         // ==== Footer =====
 
+        let selected = self
+            .items
+            .as_ref()
+            .and_then(|items| items.selected_item())
+            .is_some();
+
         let footer = Footer::default();
         let footer_state = if let Some(ref items) = self.items {
-            if !items.items.is_empty() || self.rewards_address.is_empty() {
+            if !items.items.is_empty() || !self.rewards_address.is_empty() {
                 if !self.get_running_nodes().is_empty() {
-                    &mut NodesToStart::Running
+                    if selected {
+                        &mut NodesToStart::RunningSelected
+                    } else {
+                        &mut NodesToStart::Running
+                    }
+                } else if selected {
+                    &mut NodesToStart::NotRunningSelected
                 } else {
-                    &mut NodesToStart::Configured
+                    &mut NodesToStart::NotRunning
                 }
             } else {
-                &mut NodesToStart::NotConfigured
+                &mut NodesToStart::NotRunning
             }
         } else {
-            &mut NodesToStart::NotConfigured
+            &mut NodesToStart::NotRunning
         };
         f.render_stateful_widget(footer, layout[3], footer_state);
 
