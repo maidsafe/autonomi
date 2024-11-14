@@ -250,12 +250,30 @@ pub struct UpgradeNodesArgs {
 }
 
 async fn upgrade_nodes(args: UpgradeNodesArgs) {
+    // First we stop the Nodes
+    if let Err(err) = ant_node_manager::cmd::node::stop(
+        None,
+        vec![],
+        args.service_names.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while stopping services {err:?}");
+        send_action(
+            args.action_sender.clone(),
+            Action::StatusActions(StatusActions::ErrorUpdatingNodes {
+                raw_error: err.to_string(),
+            }),
+        );
+    }
+
     if let Err(err) = ant_node_manager::cmd::node::upgrade(
-        args.connection_timeout_s,
+        0, // will be overwrite by FIXED_INTERVAL
         args.do_not_start,
         args.custom_bin_path,
         args.force,
-        args.fixed_interval,
+        Some(FIXED_INTERVAL),
         args.peer_ids,
         args.provided_env_variables,
         args.service_names,

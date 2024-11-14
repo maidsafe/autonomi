@@ -165,7 +165,11 @@ impl Component for ManageNodes {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
             Action::SwitchScene(scene) => match scene {
-                Scene::ManageNodesPopUp => {
+                Scene::ManageNodesPopUp { amount_of_nodes } => {
+                    self.nodes_to_start_input = self
+                        .nodes_to_start_input
+                        .clone()
+                        .with_value(amount_of_nodes.to_string());
                     self.active = true;
                     self.old_value = self.nodes_to_start_input.value().to_string();
                     // set to entry input mode as we want to handle everything within our handle_key_events

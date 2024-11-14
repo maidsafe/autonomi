@@ -374,7 +374,7 @@ impl Component for Options {
                 | Scene::ChangePortsPopUp { .. }
                 | Scene::OptionsRewardsAddressPopUp
                 | Scene::ResetNodesPopUp
-                | Scene::UpgradeNodesPopUp => {
+                | Scene::UpgradeNodesPopUp { .. } => {
                     self.active = true;
                     // make sure we're in navigation mode
                     return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
