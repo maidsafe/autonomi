@@ -300,6 +300,21 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
 }
 
 async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+    // First we stop the nodes
+    if let Err(err) =
+        ant_node_manager::cmd::node::stop(None, vec![], services.clone(), VerbosityLevel::Minimal)
+            .await
+    {
+        error!("Error while stopping services {err:?}");
+        send_action(
+            action_sender.clone(),
+            Action::StatusActions(StatusActions::ErrorRemovingNodes {
+                services: services.clone(),
+                raw_error: err.to_string(),
+            }),
+        );
+    }
+
     if let Err(err) = ant_node_manager::cmd::node::remove(
         false,
         vec![],
