@@ -285,7 +285,7 @@ impl Component for ManageNodes {
         let help = Paragraph::new(vec![
             Line::raw(format!(
                 "Note: Each node will use a small amount of CPU Memory and Network Bandwidth. \
-                 We recommend starting no more than 5 at a time (max {MAX_NODE_COUNT} nodes)."
+                 We recommend starting no more than 2 at a time (max {MAX_NODE_COUNT} nodes)."
             )),
             Line::raw(""),
             Line::raw("▲▼ to change the number of nodes to start."),
