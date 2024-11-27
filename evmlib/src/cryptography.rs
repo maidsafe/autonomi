@@ -37,6 +37,7 @@ pub fn sign_message(evm_secret_key_str: &str, message: &[u8]) -> Result<Vec<u8>,
 
     let message_hash = to_eth_signed_message_hash(message);
     let (signature, _) = sign_message_recoverable(&signer.into_credential(), message_hash)?;
+    debug!("Message signed with evm scret key successfully");
     Ok(signature.to_vec())
 }
 

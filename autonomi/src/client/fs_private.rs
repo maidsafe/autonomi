@@ -36,8 +36,10 @@ impl Client {
         let data = self.private_data_get(data_access).await?;
         if let Some(parent) = to_dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
+            debug!("Created parent directories for {to_dest:?}");
         }
-        tokio::fs::write(to_dest, data).await?;
+        tokio::fs::write(to_dest.clone(), data).await?;
+        debug!("Downloaded private file to {to_dest:?}");
         Ok(())
     }
 
@@ -52,6 +54,7 @@ impl Client {
             self.private_file_download(addr.clone(), to_dest.join(path))
                 .await?;
         }
+        debug!("Downloaded private directory to {to_dest:?}");
         Ok(())
     }
 
@@ -129,6 +132,7 @@ impl Client {
         let data = tokio::fs::read(path).await?;
         let data = Bytes::from(data);
         let addr = self.private_data_put(data, wallet.into()).await?;
+        debug!("Private file uploaded to the network successfully");
         Ok(addr)
     }
 }

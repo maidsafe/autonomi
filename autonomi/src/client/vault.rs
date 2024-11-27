@@ -67,6 +67,7 @@ impl Client {
         let pad = self.get_vault_from_network(secret_key).await?;
 
         let data = pad.decrypt_data(secret_key)?;
+        debug!("Data is successfully fetched and decrypted");
         Ok((data, pad.data_encoding()))
     }
 
@@ -138,6 +139,7 @@ impl Client {
                 return Err(e)?;
             }
         };
+        debug!("Fetched vault scratchpad successfully");
 
         Ok(pad)
     }
@@ -158,7 +160,7 @@ impl Client {
                 .map(|quote| quote.2.cost.as_atto())
                 .sum::<Amount>(),
         );
-
+        debug!("Cost for the new vault is successfully computed");
         Ok(total_cost)
     }
 

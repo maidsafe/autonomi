@@ -101,7 +101,7 @@ impl Register {
         if let Some(value) = initial_value {
             register.write_atop(&value, &owner)?;
         }
-
+        debug!("Instantiated a new register");
         Ok(register)
     }
 
@@ -170,7 +170,7 @@ impl Client {
                 return Err(RegisterError::Write(err));
             }
         }
-
+        debug!("Fetched register from network");
         Ok(Register {
             signed_reg,
             crdt_reg,
@@ -222,7 +222,7 @@ impl Client {
                     register.address()
                 )
             })?;
-
+        debug!("Register value is updated on the network");
         Ok(())
     }
 
@@ -249,7 +249,7 @@ impl Client {
                 .map(|quote| quote.2.cost.as_atto())
                 .sum::<Amount>(),
         );
-
+        debug!("Register cost is successfully computed");
         Ok(total_cost)
     }
 
@@ -273,8 +273,11 @@ impl Client {
         let pk = owner.public_key();
         let permissions = Permissions::new_with([pk]);
 
-        self.register_create_with_permissions(value, name, owner, permissions, wallet)
-            .await
+        let reg_created = self
+            .register_create_with_permissions(value, name, owner, permissions, wallet)
+            .await;
+        debug!("Register created successfully");
+        reg_created
     }
 
     /// Creates a new Register with a name and an initial value and uploads it to the network.

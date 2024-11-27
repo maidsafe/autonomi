@@ -55,7 +55,7 @@ impl Client {
             data_map.0.address()
         );
         let data = self.fetch_from_data_map_chunk(data_map.0.value()).await?;
-
+        debug!("Successfully fetched private data");
         Ok(data)
     }
 

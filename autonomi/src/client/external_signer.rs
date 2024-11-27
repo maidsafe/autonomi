@@ -29,7 +29,7 @@ impl Client {
         let cost_map = self.get_store_quotes(content_addrs).await?;
         let (quote_payments, free_chunks) = extract_quote_payments(&cost_map);
         let quotes = cost_map_to_quotes(cost_map);
-
+        debug!("Got the quotes for data chunks from the network");
         Ok((quotes, quote_payments, free_chunks))
     }
 }

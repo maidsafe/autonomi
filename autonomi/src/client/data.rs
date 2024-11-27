@@ -130,7 +130,7 @@ impl Client {
         let data = self
             .fetch_from_data_map_chunk(data_map_chunk.value())
             .await?;
-
+        debug!("Successfully fetched a blob of data from the network");
         Ok(data)
     }
 
@@ -176,6 +176,7 @@ impl Client {
                         .await
                         .inspect_err(|err| error!("Error uploading chunk {address:?} :{err:?}"))
                 });
+                debug!("Finished preparing upload tasks");
             } else {
                 debug!("Chunk at {address:?} was already paid for so skipping");
             }
@@ -205,6 +206,7 @@ impl Client {
                 record_count,
                 tokens_spent,
             };
+            debug!("Sending upload summary: {:?}", summary);
             if let Err(err) = channel.send(ClientEvent::UploadComplete(summary)).await {
                 error!("Failed to send client event: {err:?}");
             }
@@ -218,7 +220,7 @@ impl Client {
         info!("Getting chunk: {addr:?}");
 
         let key = NetworkAddress::from_chunk_address(ChunkAddress::new(addr)).to_record_key();
-
+        debug!("Converted chunk address to network record key: {:?}", key);
         let get_cfg = GetRecordCfg {
             get_quorum: Quorum::One,
             retry_strategy: None,
@@ -226,18 +228,25 @@ impl Client {
             expected_holders: HashSet::new(),
             is_register: false,
         };
+        debug!("GetRecordCfg created: {:?}", get_cfg);
 
         let record = self
             .network
             .get_record_from_network(key, &get_cfg)
             .await
             .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?;
+        debug!("Record fetched from network: {:?}", record);
         let header = RecordHeader::from_record(&record)?;
-
+        debug!("Record header created: {:?}", header);
         if let RecordKind::Chunk = header.kind {
             let chunk: Chunk = try_deserialize_record(&record)?;
+            debug!("Chunk deserialized successfully: {:?}", chunk);
             Ok(chunk)
         } else {
+            error!(
+                "Record kind mismatch: expected Chunk, got {:?}",
+                header.kind
+            );
             Err(NetworkError::RecordKindMismatch(RecordKind::Chunk).into())
         }
     }
@@ -271,6 +280,7 @@ impl Client {
                 .map(|quote| quote.2.cost.as_atto())
                 .sum::<Amount>(),
         );
+        debug!("Total cost calculated: {:?}", total_cost);
         Ok(total_cost)
     }
 }

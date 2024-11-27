@@ -93,6 +93,7 @@ impl Archive {
             .as_secs();
         meta.modified = now;
         self.map.insert(new_path.to_path_buf(), (data_addr, meta));
+        debug!("File renamed successfully in the archive");
         Ok(())
     }
 
@@ -100,6 +101,7 @@ impl Archive {
     /// Note that this does not upload the archive to the network
     pub fn add_file(&mut self, path: PathBuf, data_addr: DataAddr, meta: Metadata) {
         self.map.insert(path, (data_addr, meta));
+        debug!("Added file successfully to the archive");
     }
 
     /// List all files in the archive
@@ -148,6 +150,7 @@ impl Client {
     /// Fetch an archive from the network
     pub async fn archive_get(&self, addr: ArchiveAddr) -> Result<Archive, GetError> {
         let data = self.data_get(addr).await?;
+        debug!("Fetched archive from network");
         Ok(Archive::from_bytes(data)?)
     }
 
@@ -160,7 +163,9 @@ impl Client {
         let bytes = archive
             .into_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
-        self.data_put(bytes, wallet.into()).await
+        let result_archive = self.data_put(bytes, wallet.into()).await;
+        debug!("Uploaded archive to network");
+        result_archive
     }
 
     /// Get the cost to upload an archive
@@ -168,6 +173,8 @@ impl Client {
         let bytes = archive
             .into_bytes()
             .map_err(|e| CostError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
-        self.data_cost(bytes).await
+        let result_cost = self.data_cost(bytes).await;
+        debug!("Got cost to upload archive");
+        result_cost
     }
 }

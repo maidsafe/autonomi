@@ -13,6 +13,7 @@ use crate::client::Client;
 use bytes::Bytes;
 use sn_evm::EvmWallet;
 use sn_networking::target_arch::{Duration, SystemTime};
+// use tracing_subscriber::field::debug;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -89,8 +90,10 @@ impl Client {
         let data = self.data_get(data_addr).await?;
         if let Some(parent) = to_dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
+            debug!("Created parent directories for {to_dest:?}");
         }
-        tokio::fs::write(to_dest, data).await?;
+        tokio::fs::write(to_dest.clone(), data).await?;
+        debug!("Downloaded file to {to_dest:?}");
         Ok(())
     }
 
@@ -104,6 +107,7 @@ impl Client {
         for (path, addr, _meta) in archive.iter() {
             self.file_download(*addr, to_dest.join(path)).await?;
         }
+        debug!("Downloaded directory to {to_dest:?}");
         Ok(())
     }
 
@@ -169,13 +173,14 @@ impl Client {
         path: PathBuf,
         wallet: &EvmWallet,
     ) -> Result<DataAddr, UploadError> {
-        info!("Uploading file: {path:?}");
+        info!("Uploadings file: {path:?}");
         #[cfg(feature = "loud")]
-        println!("Uploading file: {path:?}");
+        println!("Uploadings file: {path:?}");
 
         let data = tokio::fs::read(path).await?;
         let data = Bytes::from(data);
         let addr = self.data_put(data, wallet.into()).await?;
+        debug!("Uploaded file successfully");
         Ok(addr)
     }
 
@@ -217,6 +222,7 @@ impl Client {
         let archive_cost = self.data_cost(Bytes::from(root_serialized)).await?;
 
         total_cost += archive_cost.as_atto();
+        debug!("Total cost has been computed successfully {:?}", total_cost);
         Ok(total_cost.into())
     }
 }
@@ -240,6 +246,8 @@ pub(crate) fn metadata_from_entry(entry: &walkdir::DirEntry) -> Metadata {
         }
     };
 
+    debug!("Processing the metadata for the entry");
+
     let unix_time = |property: &'static str, time: std::io::Result<SystemTime>| {
         time.inspect_err(|err| {
             tracing::warn!(
@@ -260,7 +268,7 @@ pub(crate) fn metadata_from_entry(entry: &walkdir::DirEntry) -> Metadata {
     };
     let created = unix_time("created", fs_metadata.created());
     let modified = unix_time("modified", fs_metadata.modified());
-
+    debug!("successfully computed the metadata for the entry");
     Metadata {
         uploaded: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)

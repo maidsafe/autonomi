@@ -33,7 +33,9 @@ pub fn approve_to_spend_tokens_calldata(
 ) -> (Calldata, Address) {
     let provider = http_provider(network.rpc_url().clone());
     let network_token = NetworkToken::new(*network.payment_token_address(), provider);
-    network_token.approve_calldata(spender, value)
+    let ret_value = network_token.approve_calldata(spender, value);
+    debug!("spend tokens calldata is approved");
+    ret_value
 }
 
 /// Transfer payment tokens from the supplied wallet to an address.
@@ -87,10 +89,12 @@ pub fn pay_for_quotes_calldata<T: IntoIterator<Item = QuotePayment>>(
         calldata_map.insert(calldata, quote_hashes);
     }
 
-    Ok(PayForQuotesCalldataReturnType {
+    let return_value = Ok(PayForQuotesCalldataReturnType {
         batched_calldata_map: calldata_map,
         to: *data_payments.contract.address(),
         approve_spender,
         approve_amount,
-    })
+    });
+    debug!("pay for quotes calldata is approved");
+    return_value
 }

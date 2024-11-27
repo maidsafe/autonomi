@@ -98,7 +98,7 @@ impl Client {
         let local = !peers.iter().any(multiaddr_is_global);
 
         let (network, event_receiver) = build_client_and_run_swarm(local);
-
+        debug!("Client is built and swarm driver initiated");
         // Spawn task to dial to the given peers
         let network_clone = network.clone();
         let peers = peers.to_vec();
@@ -115,7 +115,7 @@ impl Client {
         sn_networking::target_arch::spawn(handle_event_receiver(event_receiver, sender));
 
         receiver.await.expect("sender should not close")?;
-
+        debug!("Client is connected to the Network");
         Ok(Self {
             network,
             client_event_sender: Arc::new(None),
@@ -127,6 +127,7 @@ impl Client {
         let (client_event_sender, client_event_receiver) =
             tokio::sync::mpsc::channel(CLIENT_EVENT_CHANNEL_SIZE);
         self.client_event_sender = Arc::new(Some(client_event_sender));
+        debug!("All events to the clients are enabled");
         client_event_receiver
     }
 }
@@ -140,7 +141,7 @@ fn build_client_and_run_swarm(local: bool) -> (Network, mpsc::Receiver<NetworkEv
         network_builder.build_client().expect("mdns to succeed");
 
     let _swarm_driver = sn_networking::target_arch::spawn(swarm_driver.run());
-
+    debug!("Network, event_reciever and swarm driver are built and initiated");
     (network, event_receiver)
 }
 

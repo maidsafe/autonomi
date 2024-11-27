@@ -37,7 +37,7 @@ impl Testnet {
         let data_payments =
             deploy_data_payments_contract(&rpc_url, &anvil, *network_token.contract.address())
                 .await;
-
+        debug!("Instantiated a testnet");
         Testnet {
             anvil,
             rpc_url,
@@ -80,7 +80,7 @@ pub fn start_node() -> (AnvilInstance, Url) {
         .expect("Could not spawn Anvil node");
 
     let url = Url::parse(&format!("http://{host}:{port}")).expect("Failed to parse URL");
-
+    debug!("Started Anvil node at {url}");
     (anvil, url)
 }
 
@@ -113,7 +113,10 @@ pub async fn deploy_network_token_contract(
         .on_http(rpc_url.clone());
 
     // Deploy the contract.
-    NetworkToken::deploy(provider).await
+    let deployed = NetworkToken::deploy(provider).await;
+    let address = *deployed.contract.address();
+    debug!("Deployed network token contract at {address}");
+    deployed
 }
 
 pub async fn deploy_data_payments_contract(
@@ -146,5 +149,8 @@ pub async fn deploy_data_payments_contract(
         .on_http(rpc_url.clone());
 
     // Deploy the contract.
-    DataPaymentsHandler::deploy(provider, token_address).await
+    let deployed = DataPaymentsHandler::deploy(provider, token_address).await;
+    let address = *deployed.contract.address();
+    debug!("Deployed data payments contract at {address}");
+    deployed
 }

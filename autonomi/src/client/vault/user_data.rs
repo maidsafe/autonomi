@@ -132,6 +132,8 @@ impl Client {
             ))
         })?;
 
+        debug!("Got the user data from the vault");
+
         Ok(vault)
     }
 
@@ -154,6 +156,7 @@ impl Client {
                 *USER_DATA_VAULT_CONTENT_IDENTIFIER,
             )
             .await?;
+        debug!("the user data is updated to the vault");
         Ok(total_cost)
     }
 }

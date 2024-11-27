@@ -31,26 +31,32 @@ const VAULT_SECRET_KEY_SEED: &[u8] = b"Massive Array of Internet Disks Secure Ac
 /// The EVM secret key is used to sign a message and the signature is hashed to derive the vault secret key
 /// Being able to derive the vault secret key from the EVM secret key allows users to only keep track of one key: the EVM secret key
 pub fn derive_vault_key(evm_sk_hex: &str) -> Result<VaultSecretKey, VaultKeyError> {
+    debug!("Attempting to fetch Secret key for the vault");
     let signature = sn_evm::cryptography::sign_message(evm_sk_hex, VAULT_SECRET_KEY_SEED)
         .map_err(VaultKeyError::FailedToSignMessage)?;
 
     let blst_key = derive_secret_key_from_seed(&signature)?;
     let vault_sk = blst_to_blsttc(&blst_key)?;
+    debug!("Secret key is fetched for the vault");
     Ok(vault_sk)
 }
 
 /// Convert a blst secret key to a blsttc secret key and pray that endianness is the same
 pub(crate) fn blst_to_blsttc(sk: &BlstSecretKey) -> Result<bls::SecretKey, VaultKeyError> {
+    debug!("Attempting to convert blst secret key to blsttc sk");
     let sk_bytes = sk.to_bytes();
     let sk = bls::SecretKey::from_bytes(sk_bytes).map_err(VaultKeyError::BlsConversionError)?;
+    debug!("Conversion to blsttc sk is successful");
     Ok(sk)
 }
 
 pub(crate) fn derive_secret_key_from_seed(seed: &[u8]) -> Result<BlstSecretKey, VaultKeyError> {
+    debug!("Attempting to derive secret key from the seed");
     let mut hasher = Sha256::new();
     hasher.update(seed);
     let hashed_seed = hasher.finalize();
     let sk =
         BlstSecretKey::key_gen(&hashed_seed, &[]).map_err(|_| VaultKeyError::KeyGenerationError)?;
+    debug!("Secret Key is successfully derived from the seed");
     Ok(sk)
 }

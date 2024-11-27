@@ -56,6 +56,7 @@ impl PrivateArchive {
             .as_secs();
         meta.modified = now;
         self.map.insert(new_path.to_path_buf(), (data_addr, meta));
+        debug!("File renamed successfully in the archive");
         Ok(())
     }
 
@@ -63,6 +64,7 @@ impl PrivateArchive {
     /// Note that this does not upload the archive to the network
     pub fn add_file(&mut self, path: PathBuf, data_map: PrivateDataAccess, meta: Metadata) {
         self.map.insert(path, (data_map, meta));
+        debug!("Added file successfully to the archive");
     }
 
     /// List all files in the archive
@@ -117,6 +119,7 @@ impl Client {
         addr: PrivateArchiveAccess,
     ) -> Result<PrivateArchive, GetError> {
         let data = self.private_data_get(addr).await?;
+        debug!("Private archive successfully fetched from the network");
         Ok(PrivateArchive::from_bytes(data)?)
     }
 
@@ -129,6 +132,8 @@ impl Client {
         let bytes = archive
             .into_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
-        self.private_data_put(bytes, payment_option).await
+        let private_archive_access_result = self.private_data_put(bytes, payment_option).await;
+        debug!("Private archive successfully uploaded to the network");
+        private_archive_access_result
     }
 }

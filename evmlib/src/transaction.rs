@@ -45,6 +45,7 @@ pub async fn get_transaction_receipt_by_hash(
         .get_transaction_receipt(transaction_hash)
         .await
         .inspect_err(|err| error!("Error getting transaction receipt for transaction_hash: {transaction_hash:?} : {err:?}", ))?;
+    debug!("Transaction receipt for {transaction_hash:?} : {maybe_receipt:?}",);
     Ok(maybe_receipt)
 }
 
@@ -57,6 +58,7 @@ async fn get_block_by_number(network: &Network, block_number: u64) -> Result<Opt
         .get_block_by_number(BlockNumberOrTag::Number(block_number), true)
         .await
         .inspect_err(|err| error!("Error getting block by number for {block_number} : {err:?}",))?;
+    debug!("Block for {block_number} : {block:?}",);
     Ok(block)
 }
 
@@ -69,6 +71,7 @@ async fn get_transaction_logs(network: &Network, filter: Filter) -> Result<Vec<L
         .get_logs(&filter)
         .await
         .inspect_err(|err| error!("Error getting logs for filter: {filter:?} : {err:?}"))?;
+    debug!("Transaction logs is fetched");
     Ok(logs)
 }
 
