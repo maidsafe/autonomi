@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "autonomi",
     "autonomi-cli",
+    "bootstrap_cache",
     "evmlib",
     "evm_testnet",
     "sn_build_info",

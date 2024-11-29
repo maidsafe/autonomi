@@ -11,6 +11,7 @@ repository = "https://github.com/maidsafe/safe_network"
 version = "0.5.7"
 
 [features]
+default = ["network-contacts"]
 local = []
 network-contacts = ["sn_protocol"]
 websockets = []

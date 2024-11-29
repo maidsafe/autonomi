@@ -37,7 +37,6 @@ sn_node_manager/.vagrant
 uv.lock
 *.so
 *.pyc
-
-*.pyc
 *.swp
 
+/vendor/
