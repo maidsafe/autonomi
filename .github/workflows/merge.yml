@@ -567,6 +567,27 @@ jobs:
           time ./target/release/autonomi --log-output-dest=data-dir file upload random_1GB.bin
           ./target/release/autonomi --log-output-dest=data-dir vault sync
           rm -rf random*.bin
+
+        env:
+          SN_LOG: "v"
+        timeout-minutes: 15
+
+      - name: Time profiling for Different files
+        if: matrix.os != 'windows-latest'
+        run: |
+          set -e
+          mkdir test_directory_vault
+          cd test_directory_vault
+          for dir in {1..5}; do
+            mkdir subdir_$dir
+            for file in {1..100}; do
+              dd if=/dev/zero of=subdir_$dir/file_$file.bin bs=100M count=1
+            done
+          done
+          cd ../
+          time ./target/release/autonomi --log-output-dest=data-dir file upload test_directory_vault
+          ./target/release/autonomi --log-output-dest=data-dir vault sync
+          rm -rf test_directory_vault
           rm -rf ${{ matrix.safe_path }}/autonomi          
         env:
           SN_LOG: "v"
