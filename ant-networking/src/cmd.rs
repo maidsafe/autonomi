@@ -58,8 +58,12 @@ pub enum NodeIssue {
 
 /// Commands to send to the Swarm
 pub enum LocalSwarmCmd {
-    /// Get a map where each key is the ilog2 distance of that Kbucket and each value is a vector of peers in that
-    /// bucket.
+    /// Get a list of all peers in local RT, with correspondent Multiaddr info attached as well.
+    GetPeersWithMultiaddr {
+        sender: oneshot::Sender<Vec<(PeerId, Vec<Multiaddr>)>>,
+    },
+    /// Get a map where each key is the ilog2 distance of that Kbucket
+    /// and each value is a vector of peers in that bucket.
     GetKBuckets {
         sender: oneshot::Sender<BTreeMap<u32, Vec<PeerId>>>,
     },
@@ -252,6 +256,9 @@ impl Debug for LocalSwarmCmd {
             }
             LocalSwarmCmd::GetAllLocalRecordAddresses { .. } => {
                 write!(f, "LocalSwarmCmd::GetAllLocalRecordAddresses")
+            }
+            LocalSwarmCmd::GetPeersWithMultiaddr { .. } => {
+                write!(f, "LocalSwarmCmd::GetPeersWithMultiaddr")
             }
             LocalSwarmCmd::GetKBuckets { .. } => {
                 write!(f, "LocalSwarmCmd::GetKBuckets")
@@ -794,6 +801,23 @@ impl SwarmDriver {
                     }
                 }
                 let _ = sender.send(ilog2_kbuckets);
+            }
+            LocalSwarmCmd::GetPeersWithMultiaddr { sender } => {
+                cmd_string = "GetPeersWithMultiAddr";
+                let mut result: Vec<(PeerId, Vec<Multiaddr>)> = vec![];
+                for kbucket in self.swarm.behaviour_mut().kademlia.kbuckets() {
+                    let peers_in_kbucket = kbucket
+                        .iter()
+                        .map(|peer_entry| {
+                            (
+                                peer_entry.node.key.into_preimage(),
+                                peer_entry.node.value.clone().into_vec(),
+                            )
+                        })
+                        .collect::<Vec<(PeerId, Vec<Multiaddr>)>>();
+                    result.extend(peers_in_kbucket);
+                }
+                let _ = sender.send(result);
             }
             LocalSwarmCmd::GetCloseGroupLocalPeers { key, sender } => {
                 cmd_string = "GetCloseGroupLocalPeers";
