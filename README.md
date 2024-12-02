@@ -361,30 +361,6 @@ Node successfully received the request to try to update in 7s
 
 NOTE: it is preferable to use the node manager to control the node rather than RPC commands.
 
-Listening to royalty payment events:
-
-```
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 transfers
-Listening to transfer notifications... (press Ctrl+C to exit)
-
-New transfer notification received for PublicKey(0c54..5952), containing 1 cash note/s.
-CashNote received with UniquePubkey(PublicKey(19ee..1580)), value: 0.000000001
-
-New transfer notification received for PublicKey(0c54..5952), containing 1 cash note/s.
-CashNote received with UniquePubkey(PublicKey(19ee..1580)), value: 0.000000001
-```
-
-The `transfers` command can provide a path for royalty payment cash notes:
-
-```
-$ cargo run --release --bin antnode_rpc_client -- 127.0.0.1:34416 transfers ./royalties-cash-notes
-Listening to transfer notifications... (press Ctrl+C to exit)
-Writing cash notes to: ./royalties-cash-notes
-```
-
-Each received cash note is written to a file in the directory above, under another directory
-corresponding to the public address of the recipient.
-
 ### Tear Down
 
 When you're finished experimenting, tear down the network:

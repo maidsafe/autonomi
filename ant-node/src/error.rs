@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_evm::AttoTokens;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
 use thiserror::Error;
 
@@ -30,12 +29,6 @@ pub enum Error {
 
     #[error("Failed to parse NodeEvent")]
     NodeEventParsingFailed,
-
-    #[error("Failed to send a cmd to the node: {0}")]
-    NodeCmdFailed(String),
-
-    #[error("Overflow occurred while adding values")]
-    NumericOverflow,
 
     // ---------- Record Errors
     #[error("Record was not stored as no payment supplied: {0:?}")]
@@ -61,26 +54,6 @@ pub enum Error {
     InvalidQuoteSignature,
     #[error("The payment quote expired for {0:?}")]
     QuoteExpired(NetworkAddress),
-    /// Payment proof received has no inputs
-    #[error(
-        "Payment proof received with record:{0:?}. No payment for our node in its transaction"
-    )]
-    NoPaymentToOurNode(PrettyPrintRecordKey<'static>),
-    /// Missing network royalties payment
-    #[error("Missing network royalties payment in proof received with record: {0:?}.")]
-    NoNetworkRoyaltiesPayment(PrettyPrintRecordKey<'static>),
-    /// The amount paid by payment proof is not the required for the received content
-    #[error("The amount paid by payment proof is not the required for the received content, paid {paid}, expected {expected}")]
-    PaymentProofInsufficientAmount {
-        paid: AttoTokens,
-        expected: AttoTokens,
-    },
-    #[error("A payment we received contains cash notes already confirmed to be spent")]
-    ReusedPayment,
-
-    // ---------- Initialize Errors
-    #[error("Failed to generate a reward key")]
-    FailedToGenerateRewardKey,
 
     // ---------- Miscellaneous Errors
     #[error("Failed to obtain node's current port")]
@@ -88,12 +61,6 @@ pub enum Error {
     /// The request is invalid or the arguments of the function are invalid
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
-    /// Error occurred in an async thread
-    #[error("Error occured in async thread: {0}")]
-    JoinErrorInAsyncThread(String),
-
     #[error("EVM Network error: {0}")]
     EvmNetwork(String),
-    #[error("Invalid quote timestamp: {0}")]
-    InvalidQuoteTimestamp(String),
 }

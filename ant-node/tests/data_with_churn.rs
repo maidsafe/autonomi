@@ -121,7 +121,7 @@ async fn data_availability_during_churn() -> Result<()> {
     // Shared bucket where we keep track of content created/stored on the network
     let content = ContentList::default();
 
-    // Spawn a task to create Registers and CashNotes at random locations,
+    // Spawn a task to create Registers at random locations,
     // at a higher frequency than the churning events
     let create_register_handle = if !chunks_only {
         let register_wallet = transfer_to_new_wallet(&main_wallet, TOKENS_TO_TRANSFER).await?;
