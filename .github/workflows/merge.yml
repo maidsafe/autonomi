@@ -1147,17 +1147,6 @@ jobs:
   #       continue-on-error: true
   #       if: always()
 
-  # - name: Cleanup prior faucet and cashnotes
-  #   run: |
-  #     ls -l /home/runner/.local/share
-  #     ls -l /home/runner/.local/share/safe
-  #     rm -rf /home/runner/.local/share/safe/test_faucet
-  #     rm -rf /home/runner/.local/share/safe/test_genesis
-  #     rm -rf /home/runner/.local/share/safe/autonomi
-  #   env:
-  #     SN_LOG: "all"
-  #   timeout-minutes: 5
-
   # - name: Create a new wallet
   #   run: ~/safe --log-output-dest=data-dir wallet create --no-password
   #   env:

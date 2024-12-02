@@ -11,7 +11,7 @@ use crate::{storage::RecordType, NetworkAddress};
 pub use ant_evm::PaymentQuote;
 use serde::{Deserialize, Serialize};
 
-/// Data and CashNote cmds - recording transactions or creating, updating, and removing data.
+/// Ant protocol cmds
 ///
 /// See the [`protocol`] module documentation for more details of the types supported by the Safe
 /// Network, and their semantics.
