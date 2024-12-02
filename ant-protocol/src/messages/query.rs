@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{messages::Nonce, NetworkAddress};
+use libp2p::kad::{KBucketDistance as Distance, U256};
 use serde::{Deserialize, Serialize};
 
 /// Data queries - retrieving data and inspecting their structure.
@@ -65,6 +66,18 @@ pub enum Query {
     },
     /// Queries close_group peers whether the target peer is a bad_node
     CheckNodeInProblem(NetworkAddress),
+    /// Query the the peers in range to the target address, from the receiver's perspective.
+    /// In case none of the parameters provided, returns nothing.
+    /// In case both of the parameters provided, `range` is preferred to be replied.
+    GetClosestPeers {
+        key: NetworkAddress,
+        // Shall be greater than K_VALUE, otherwise can use libp2p function directly
+        num_of_peers: Option<usize>,
+        // Defines the range that replied peers shall be within
+        range: Option<[u8; 32]>,
+        // For future econ usage,
+        sign_result: bool,
+    },
 }
 
 impl Query {
@@ -77,7 +90,8 @@ impl Query {
             Query::GetStoreCost { key, .. }
             | Query::GetReplicatedRecord { key, .. }
             | Query::GetRegisterRecord { key, .. }
-            | Query::GetChunkExistenceProof { key, .. } => key.clone(),
+            | Query::GetChunkExistenceProof { key, .. }
+            | Query::GetClosestPeers { key, .. } => key.clone(),
         }
     }
 }
@@ -110,6 +124,18 @@ impl std::fmt::Display for Query {
             }
             Query::CheckNodeInProblem(address) => {
                 write!(f, "Query::CheckNodeInProblem({address:?})")
+            }
+            Query::GetClosestPeers {
+                key,
+                num_of_peers,
+                range,
+                sign_result,
+            } => {
+                let distance = range.as_ref().map(|value| Distance(U256::from(value)));
+                write!(
+                    f,
+                    "Query::GetClosestPeers({key:?} {num_of_peers:?} {distance:?} {sign_result})"
+                )
             }
         }
     }

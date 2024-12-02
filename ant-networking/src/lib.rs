@@ -242,8 +242,18 @@ impl Network {
             .await
     }
 
-    /// Returns a map where each key is the ilog2 distance of that Kbucket and each value is a vector of peers in that
-    /// bucket.
+    /// Returns a list of peers in local RT and their correspondent Multiaddr.
+    /// Does not include self
+    pub async fn get_local_peers_with_multiaddr(&self) -> Result<Vec<(PeerId, Vec<Multiaddr>)>> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_local_swarm_cmd(LocalSwarmCmd::GetPeersWithMultiaddr { sender });
+        receiver
+            .await
+            .map_err(|_e| NetworkError::InternalMsgChannelDropped)
+    }
+
+    /// Returns a map where each key is the ilog2 distance of that Kbucket
+    /// and each value is a vector of peers in that bucket.
     /// Does not include self
     pub async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
         let (sender, receiver) = oneshot::channel();

@@ -24,7 +24,11 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, Multiaddr, PeerId};
+use libp2p::{
+    identity::Keypair,
+    kad::{KBucketDistance as Distance, U256},
+    Multiaddr, PeerId,
+};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -674,8 +678,81 @@ impl Node {
                     is_in_trouble,
                 }
             }
+            Query::GetClosestPeers {
+                key,
+                num_of_peers,
+                range,
+                sign_result,
+            } => {
+                debug!(
+                    "Got GetClosestPeers targeting {key:?} with {num_of_peers:?} peers or {range:?} range, signature {sign_result} required."
+                );
+                Self::respond_get_closest_peers(network, key, num_of_peers, range, sign_result)
+                    .await
+            }
         };
         Response::Query(resp)
+    }
+
+    async fn respond_get_closest_peers(
+        network: &Network,
+        target: NetworkAddress,
+        num_of_peers: Option<usize>,
+        range: Option<[u8; 32]>,
+        sign_result: bool,
+    ) -> QueryResponse {
+        let local_peers = network.get_local_peers_with_multiaddr().await;
+
+        let peers: Vec<(NetworkAddress, Vec<Multiaddr>)> = if let Ok(peer_addrs) = local_peers {
+            match (num_of_peers, range) {
+                (_, Some(value)) => {
+                    let distance = Distance(U256::from(value));
+                    peer_addrs
+                        .iter()
+                        .filter_map(|(peer_id, multi_addrs)| {
+                            let addr = NetworkAddress::from_peer(*peer_id);
+                            if target.distance(&addr) <= distance {
+                                Some((addr, multi_addrs.clone()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                }
+                (Some(num_of_peers), _) => {
+                    let mut result: Vec<(NetworkAddress, Vec<Multiaddr>)> = peer_addrs
+                        .iter()
+                        .map(|(peer_id, multi_addrs)| {
+                            let addr = NetworkAddress::from_peer(*peer_id);
+                            (addr, multi_addrs.clone())
+                        })
+                        .collect();
+                    result.sort_by_key(|(addr, _multi_addrs)| target.distance(addr));
+                    result.into_iter().take(num_of_peers).collect()
+                }
+                (None, None) => vec![],
+            }
+        } else {
+            vec![]
+        };
+
+        let signature = if sign_result {
+            let mut bytes = rmp_serde::to_vec(&target).unwrap_or_default();
+            bytes.extend_from_slice(&rmp_serde::to_vec(&peers).unwrap_or_default());
+            if let Ok(sig) = network.sign(&bytes) {
+                Some(sig)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        QueryResponse::GetClosestPeers {
+            target,
+            peers,
+            signature,
+        }
     }
 
     // Nodes only check ChunkProof each other, to avoid `multi-version` issue

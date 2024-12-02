@@ -12,6 +12,7 @@ use super::ChunkProof;
 use ant_evm::{PaymentQuote, RewardsAddress};
 use bytes::Bytes;
 use core::fmt;
+use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -59,6 +60,20 @@ pub enum QueryResponse {
     ///
     /// [`GetChunkExistenceProof`]: crate::messages::Query::GetChunkExistenceProof
     GetChunkExistenceProof(Vec<(NetworkAddress, Result<ChunkProof>)>),
+    // ===== GetClosestPeers =====
+    //
+    /// Response to [`GetClosestPeers`]
+    ///
+    /// [`GetClosestPeers`]: crate::messages::Query::GetClosestPeers
+    GetClosestPeers {
+        // The target address that the original request is about.
+        target: NetworkAddress,
+        // `Multiaddr` is required to allow the requester to dial the peer
+        // Note: the list doesn't contain the node that being queried.
+        peers: Vec<(NetworkAddress, Vec<Multiaddr>)>,
+        // Signature of signing the above (if requested), for future economic model usage.
+        signature: Option<Vec<u8>>,
+    },
 }
 
 // Debug implementation for QueryResponse, to avoid printing Vec<u8>
@@ -116,6 +131,13 @@ impl Debug for QueryResponse {
             QueryResponse::GetChunkExistenceProof(proofs) => {
                 let addresses: Vec<_> = proofs.iter().map(|(addr, _)| addr.clone()).collect();
                 write!(f, "GetChunkExistenceProof(checked chunks: {addresses:?})")
+            }
+            QueryResponse::GetClosestPeers { target, peers, .. } => {
+                let addresses: Vec<_> = peers.iter().map(|(addr, _)| addr.clone()).collect();
+                write!(
+                    f,
+                    "GetClosestPeers target {target:?} close peers {addresses:?}"
+                )
             }
         }
     }
