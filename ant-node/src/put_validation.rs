@@ -45,7 +45,7 @@ impl Node {
                 // if we already have the data we can return early
                 if already_exists {
                     // if we're receiving this chunk PUT again, and we have been paid,
-                    // we eagery retry replicaiton as it seems like other nodes are having trouble
+                    // we eagerly retry replicaiton as it seems like other nodes are having trouble
                     // did not manage to get this chunk as yet
                     self.replicate_valid_fresh_record(record_key, RecordType::Chunk);
 
@@ -111,25 +111,34 @@ impl Node {
                 // Finally before we store, lets bail for any payment issues
                 payment_res?;
 
-                // Writing chunk to disk takes time, hence try to execute it first.
+                // Writing records to disk takes time, hence try to execute it first.
                 // So that when the replicate target asking for the copy,
                 // the node can have a higher chance to respond.
                 let store_scratchpad_result = self
                     .validate_and_store_scratchpad_record(scratchpad, record_key.clone(), true)
                     .await;
 
-                if store_scratchpad_result.is_ok() {
-                    Marker::ValidScratchpadRecordPutFromClient(&PrettyPrintRecordKey::from(
-                        &record_key,
-                    ))
-                    .log();
-                    self.replicate_valid_fresh_record(record_key.clone(), RecordType::Scratchpad);
+                match store_scratchpad_result {
+                    // if we're receiving this scratchpad PUT again, and we have been paid,
+                    // we eagerly retry replicaiton as it seems like other nodes are having trouble
+                    // did not manage to get this scratchpad as yet.
+                    Ok(_) | Err(Error::IgnoringOutdatedScratchpadPut) => {
+                        Marker::ValidScratchpadRecordPutFromClient(&PrettyPrintRecordKey::from(
+                            &record_key,
+                        ))
+                        .log();
+                        self.replicate_valid_fresh_record(
+                            record_key.clone(),
+                            RecordType::Scratchpad,
+                        );
 
-                    // Notify replication_fetcher to mark the attempt as completed.
-                    // Send the notification earlier to avoid it got skipped due to:
-                    // the record becomes stored during the fetch because of other interleaved process.
-                    self.network()
-                        .notify_fetch_completed(record_key, RecordType::Scratchpad);
+                        // Notify replication_fetcher to mark the attempt as completed.
+                        // Send the notification earlier to avoid it got skipped due to:
+                        // the record becomes stored during the fetch because of other interleaved process.
+                        self.network()
+                            .notify_fetch_completed(record_key, RecordType::Scratchpad);
+                    }
+                    Err(_) => {}
                 }
 
                 store_scratchpad_result
