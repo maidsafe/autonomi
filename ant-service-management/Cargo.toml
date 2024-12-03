@@ -15,7 +15,7 @@ ant-logging = { path = "../ant-logging", version = "0.2.40" }
 ant-protocol = { path = "../ant-protocol", version = "0.17.15", features = ["rpc"] }
 async-trait = "0.1"
 dirs-next = "2.0.0"
-libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "kad_0.46.2", features = ["kad"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "master", features = ["kad"] }
 libp2p-identity = { version = "0.2.7", features = ["rand"] }
 prost = { version = "0.9" }
 serde = { version = "1.0", features = ["derive"] }

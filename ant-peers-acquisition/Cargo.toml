@@ -18,7 +18,7 @@ websockets = []
 ant-protocol = { path = "../ant-protocol", version = "0.17.15", optional = true}
 clap = { version = "4.2.1", features = ["derive", "env"] }
 lazy_static = "~1.4.0"
-libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "kad_0.46.2", features = [] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "master", features = [] }
 rand = "0.8.5"
 reqwest = { version="0.12.2", default-features=false, features = ["rustls-tls"] }
 thiserror = "1.0.23"
