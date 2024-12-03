@@ -41,6 +41,10 @@ impl Client {
         match payment_option {
             PaymentOption::Wallet(wallet) => {
                 let (receipt, _) = self.pay(content_addrs, &wallet).await?;
+                debug!(
+                    "Paid for content addresses with wallet and the receipt is {:?}",
+                    receipt
+                );
                 Ok(receipt)
             }
             PaymentOption::Receipt(receipt) => Ok(receipt),

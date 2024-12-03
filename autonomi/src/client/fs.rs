@@ -89,8 +89,10 @@ impl Client {
         let data = self.data_get(data_addr).await?;
         if let Some(parent) = to_dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
+            debug!("Created parent directories {parent:?} for {to_dest:?}");
         }
-        tokio::fs::write(to_dest, data).await?;
+        tokio::fs::write(to_dest.clone(), data).await?;
+        debug!("Downloaded file to {to_dest:?} from the network address {data_addr:?}");
         Ok(())
     }
 
@@ -101,9 +103,15 @@ impl Client {
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
         let archive = self.archive_get(archive_addr).await?;
+        debug!("Downloaded archive for the directory from the network at {archive_addr:?}");
         for (path, addr, _meta) in archive.iter() {
             self.file_download(*addr, to_dest.join(path)).await?;
         }
+        debug!(
+            "All files in the directory downloaded to {:?} from the network address {:?}",
+            to_dest.parent(),
+            archive_addr
+        );
         Ok(())
     }
 
@@ -159,6 +167,7 @@ impl Client {
         info!("Complete archive upload completed in {:?}", start.elapsed());
         #[cfg(feature = "loud")]
         println!("Upload completed in {:?}", start.elapsed());
+        debug!("Directory uploaded to the network at {arch_addr:?}");
         Ok(arch_addr)
     }
 
@@ -173,9 +182,10 @@ impl Client {
         #[cfg(feature = "loud")]
         println!("Uploading file: {path:?}");
 
-        let data = tokio::fs::read(path).await?;
+        let data = tokio::fs::read(path.clone()).await?;
         let data = Bytes::from(data);
         let addr = self.data_put(data, wallet.into()).await?;
+        debug!("File {path:?} uploaded to the network at {addr:?}");
         Ok(addr)
     }
 
@@ -217,6 +227,7 @@ impl Client {
         let archive_cost = self.data_cost(Bytes::from(root_serialized)).await?;
 
         total_cost += archive_cost.as_atto();
+        debug!("Total cost for the directory: {total_cost:?}");
         Ok(total_cost.into())
     }
 }

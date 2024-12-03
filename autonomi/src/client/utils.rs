@@ -34,6 +34,10 @@ use crate::self_encryption::DataMapLevel;
 impl Client {
     /// Fetch and decrypt all chunks in the data map.
     pub(crate) async fn fetch_from_data_map(&self, data_map: &DataMap) -> Result<Bytes, GetError> {
+        debug!(
+            "Fetching encrypted data chunks from data map {:?}",
+            data_map
+        );
         let mut download_tasks = vec![];
         for info in data_map.infos() {
             download_tasks.push(async move {
@@ -53,7 +57,7 @@ impl Client {
                 }
             });
         }
-
+        debug!("Successfully fetched all the encrypted chunks");
         let encrypted_chunks =
             process_tasks_with_max_concurrency(download_tasks, *CHUNK_DOWNLOAD_BATCH_SIZE)
                 .await
@@ -64,7 +68,7 @@ impl Client {
             error!("Error decrypting encrypted_chunks: {e:?}");
             GetError::Decryption(crate::self_encryption::Error::SelfEncryption(e))
         })?;
-
+        debug!("Successfully decrypted all the chunks");
         Ok(data)
     }
 
@@ -153,7 +157,9 @@ impl Client {
             use_put_record_to: Some(vec![storing_node]),
             verification,
         };
-        Ok(self.network.put_record(record, &put_cfg).await?)
+        let payment_upload = Ok(self.network.put_record(record, &put_cfg).await?);
+        debug!("Successfully stored chunk: {chunk:?} to {:?}", storing_node);
+        payment_upload
     }
 
     /// Pay for the chunks and get the proof of payment.

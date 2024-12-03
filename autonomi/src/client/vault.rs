@@ -63,10 +63,11 @@ impl Client {
         &self,
         secret_key: &VaultSecretKey,
     ) -> Result<(Bytes, VaultContentType), VaultError> {
-        info!("Fetching and decrypting vault");
+        info!("Fetching and decrypting vault...");
         let pad = self.get_vault_from_network(secret_key).await?;
 
         let data = pad.decrypt_data(secret_key)?;
+        debug!("vault data is successfully fetched and decrypted");
         Ok((data, pad.data_encoding()))
     }
 
