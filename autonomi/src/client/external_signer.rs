@@ -30,6 +30,10 @@ impl Client {
         let (quote_payments, free_chunks) = extract_quote_payments(&cost_map);
         let quotes = cost_map_to_quotes(cost_map);
 
+        debug!(
+            "Got the quotes , quote_payments and freechunks from the network {:?}",
+            (quotes.clone(), quote_payments.clone(), free_chunks.clone())
+        );
         Ok((quotes, quote_payments, free_chunks))
     }
 }

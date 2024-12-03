@@ -96,7 +96,11 @@ impl Register {
         if let Some(value) = initial_value {
             register.write_atop(&value, &owner)?;
         }
-
+        debug!(
+            "Created register {:?} with address: {:?}",
+            register,
+            register.address()
+        );
         Ok(register)
     }
 
@@ -166,10 +170,12 @@ impl Client {
             }
         }
 
-        Ok(Register {
+        let register = Register {
             signed_reg,
             crdt_reg,
-        })
+        };
+        debug!("Fetched register {register:?} from the address: {address} in the network");
+        Ok(register)
     }
 
     /// Updates a Register on the network with a new value. This will overwrite existing value(s).
@@ -217,7 +223,11 @@ impl Client {
                     register.address()
                 )
             })?;
-
+        debug!(
+            "Updated register {:?} with new value {:?}",
+            register.address(),
+            new_value
+        );
         Ok(())
     }
 
@@ -244,7 +254,7 @@ impl Client {
                 .map(|quote| quote.2.cost.as_atto())
                 .sum::<Amount>(),
         );
-
+        debug!("Calculated the cost to create register with name: {name} is {total_cost}");
         Ok(total_cost)
     }
 

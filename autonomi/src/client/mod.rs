@@ -115,6 +115,7 @@ impl Client {
         ant_networking::target_arch::spawn(handle_event_receiver(event_receiver, sender));
 
         receiver.await.expect("sender should not close")?;
+        debug!("Client is connected to the network");
 
         Ok(Self {
             network,
@@ -127,6 +128,8 @@ impl Client {
         let (client_event_sender, client_event_receiver) =
             tokio::sync::mpsc::channel(CLIENT_EVENT_CHANNEL_SIZE);
         self.client_event_sender = Arc::new(Some(client_event_sender));
+        debug!("All events to the clients are enabled");
+
         client_event_receiver
     }
 }
@@ -140,6 +143,7 @@ fn build_client_and_run_swarm(local: bool) -> (Network, mpsc::Receiver<NetworkEv
         network_builder.build_client().expect("mdns to succeed");
 
     let _swarm_driver = ant_networking::target_arch::spawn(swarm_driver.run());
+    debug!("Client swarm driver is running");
 
     (network, event_receiver)
 }
