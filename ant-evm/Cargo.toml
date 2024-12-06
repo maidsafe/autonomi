@@ -19,7 +19,7 @@ custom_debug = "~0.6.1"
 evmlib = { path = "../evmlib", version = "0.1.4" }
 hex = "~0.4.3"
 lazy_static = "~1.4.0"
-libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "kad_0.46.2", features = ["identify", "kad"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "master", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }
 ring = "0.17.8"
 rmp-serde = "1.1.1"

@@ -14,7 +14,7 @@ bytes = { version = "1.0.1", features = ["serde"] }
 color-eyre = "~0.6.2"
 dirs-next = "~2.0.0"
 evmlib = { path = "../evmlib", version = "0.1.4" }
-libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "kad_0.46.2", features = ["identify", "kad"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "master", features = ["identify", "kad"] }
 rand = "0.8.5"
 serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0"

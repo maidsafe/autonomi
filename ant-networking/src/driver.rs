@@ -239,6 +239,12 @@ pub enum VerificationKind {
     },
 }
 
+impl From<std::convert::Infallible> for NodeEvent {
+    fn from(_: std::convert::Infallible) -> Self {
+        panic!("NodeBehaviour is not Infallible!")
+    }
+}
+
 /// The behaviors are polled in the order they are defined.
 /// The first struct member is polled until it returns Poll::Pending before moving on to later members.
 /// Prioritize the behaviors related to connection handling.
@@ -638,11 +644,10 @@ impl NetworkBuilder {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR.to_string();
         info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_version: {identify_version:?}");
         let identify = {
-            let mut cfg =
-                libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
-                    .with_agent_version(identify_version);
-            // Enlength the identify interval from default 5 mins to 1 hour.
-            cfg.interval = RESEND_IDENTIFY_INVERVAL;
+            let cfg = libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
+                .with_agent_version(identify_version)
+                // Enlength the identify interval from default 5 mins to 1 hour.
+                .with_interval(RESEND_IDENTIFY_INVERVAL);
             libp2p::identify::Behaviour::new(cfg)
         };
 

@@ -27,7 +27,7 @@ dirs-next = "~2.0.0"
 exponential-backoff = "2.0.0"
 hex = "~0.4.3"
 lazy_static = "1.4.0"
-libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "kad_0.46.2", features = ["identify", "kad"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "master", features = ["identify", "kad"] }
 # # watch out updating this, protoc compiler needs to be installed on all build systems
 # # arm builds + musl are very problematic
 # prost and tonic are needed for the RPC server messages, not the underlying protocol
