@@ -30,12 +30,12 @@ pub mod wasm;
 // private module with utility functions
 mod utils;
 
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore};
+use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, PeersArgs};
 pub use ant_evm::Amount;
 
 use ant_networking::{interval, multiaddr_is_global, Network, NetworkBuilder, NetworkEvent};
 use ant_protocol::{version::IDENTIFY_PROTOCOL_STR, CLOSE_GROUP_SIZE};
-use libp2p::{identity::Keypair, Multiaddr};
+use libp2p::{identity::Keypair, multiaddr::Protocol, Multiaddr};
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 
@@ -77,6 +77,37 @@ pub enum ConnectError {
 }
 
 impl Client {
+    pub async fn init() -> Result<Self, ant_bootstrap::Error> {
+        // Get list of peers for bootstrapping to the network.
+        let peers = match PeersArgs::default().get_addrs(None).await {
+            Ok(peers) => peers,
+            Err(e) => return Err(e),
+        };
+
+        let (network, _event_receiver) = build_client_and_run_swarm(true);
+
+        let peers_len = peers.len();
+        // Add peers to the routing table.
+        let peers_with_p2p: Vec<_> = peers
+            .into_iter()
+            .filter_map(|addr| {
+                addr.iter().find_map(|p| match p {
+                    Protocol::P2p(id) => Some((id, addr.clone())),
+                    _ => None,
+                })
+            })
+            .collect();
+        if peers_with_p2p.len() < peers_len {
+            tracing::warn!("Some bootstrap addresses have no peer ID, skipping them");
+        }
+        let _ = network.add_peer_addresses(peers_with_p2p).await;
+
+        Ok(Self {
+            network,
+            client_event_sender: Arc::new(None),
+        })
+    }
+
     /// Connect to the network.
     ///
     /// This will timeout after [`CONNECT_TIMEOUT_SECS`] secs.

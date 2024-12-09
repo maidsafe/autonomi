@@ -159,6 +159,15 @@ pub enum NetworkSwarmCmd {
         addr: Multiaddr,
         sender: oneshot::Sender<Result<()>>,
     },
+
+    /// Adds a peer address to the routing table.
+    ///
+    /// See [`libp2p::kad::Behaviour::add_address`] for more details.
+    AddPeerAddresses {
+        addresses: Vec<(PeerId, Multiaddr)>,
+        sender: oneshot::Sender<()>,
+    },
+
     // Get closest peers from the network
     GetClosestPeersToAddressFromNetwork {
         key: NetworkAddress,
@@ -321,6 +330,12 @@ impl Debug for NetworkSwarmCmd {
         match self {
             NetworkSwarmCmd::Dial { addr, .. } => {
                 write!(f, "NetworkSwarmCmd::Dial {{ addr: {addr:?} }}")
+            }
+            NetworkSwarmCmd::AddPeerAddresses { addresses, .. } => {
+                write!(
+                    f,
+                    "NetworkSwarmCmd::AddPeerAddresses {{ addresses: {addresses:?} }}"
+                )
             }
             NetworkSwarmCmd::GetNetworkRecord { key, cfg, .. } => {
                 write!(
@@ -488,6 +503,15 @@ impl SwarmDriver {
                     Err(e) => sender.send(Err(e.into())),
                 };
             }
+
+            NetworkSwarmCmd::AddPeerAddresses { addresses, sender } => {
+                cmd_string = "AddPeerAddresses";
+                for (peer, addr) in addresses {
+                    let _update = self.swarm.behaviour_mut().kademlia.add_address(&peer, addr);
+                }
+                let _ = sender.send(());
+            }
+
             NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork { key, sender } => {
                 cmd_string = "GetClosestPeersToAddressFromNetwork";
                 let query_id = self
