@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::Client;
+use autonomi::{client::ClientConfig, Client};
 use eyre::Result;
 use test_utils::{evm::get_funded_wallet, gen_random_data};
 
@@ -15,7 +15,11 @@ use test_utils::{evm::get_funded_wallet, gen_random_data};
 async fn put() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("put", false);
 
-    let client = Client::init().await?;
+    let client = Client::init_with_config(ClientConfig {
+        local: true,
+        ..Default::default()
+    })
+    .await?;
     let wallet = get_funded_wallet();
     let data = gen_random_data(1024 * 1024 * 10);
 

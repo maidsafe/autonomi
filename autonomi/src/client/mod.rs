@@ -65,6 +65,17 @@ pub struct Client {
     pub(crate) client_event_sender: Arc<Option<mpsc::Sender<ClientEvent>>>,
 }
 
+/// Configuration for [`Client::init_with_config`].
+#[derive(Debug, Clone, Default)]
+pub struct ClientConfig {
+    /// Whether we're expected to connect to a local network.
+    pub local: bool,
+    /// List of peers to connect to.
+    ///
+    /// If not provided, the client will use the default bootstrap peers.
+    pub peers: Option<Vec<Multiaddr>>,
+}
+
 /// Error returned by [`Client::connect`].
 #[derive(Debug, thiserror::Error)]
 pub enum ConnectError {
@@ -78,13 +89,25 @@ pub enum ConnectError {
 
 impl Client {
     pub async fn init() -> Result<Self, ant_bootstrap::Error> {
-        // Get list of peers for bootstrapping to the network.
-        let peers = match PeersArgs::default().get_addrs(None).await {
-            Ok(peers) => peers,
-            Err(e) => return Err(e),
+        Self::init_with_config(ClientConfig::default()).await
+    }
+
+    pub async fn init_with_config(config: ClientConfig) -> Result<Self, ant_bootstrap::Error> {
+        let (network, _event_receiver) = build_client_and_run_swarm(config.local);
+
+        let peers_args = PeersArgs {
+            disable_mainnet_contacts: config.local,
+            ..Default::default()
         };
 
-        let (network, _event_receiver) = build_client_and_run_swarm(true);
+        let peers = if let Some(peers) = config.peers {
+            peers
+        } else {
+            match peers_args.get_addrs(None).await {
+                Ok(peers) => peers,
+                Err(e) => return Err(e),
+            }
+        };
 
         let peers_len = peers.len();
         // Add peers to the routing table.
