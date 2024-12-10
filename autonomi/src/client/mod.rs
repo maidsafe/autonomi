@@ -123,6 +123,7 @@ impl Client {
         if peers_with_p2p.len() < peers_len {
             tracing::warn!("Some bootstrap addresses have no peer ID, skipping them");
         }
+        println!("TESTING: peers_with_p2p: {peers_with_p2p:?}");
         let _ = network.add_peer_addresses(peers_with_p2p).await;
 
         Ok(Self {
