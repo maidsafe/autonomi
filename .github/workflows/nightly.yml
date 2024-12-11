@@ -36,7 +36,7 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: start
           enable-evm-testnet: true
@@ -211,7 +211,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: stop
           log_file_prefix: safe_test_logs_e2e
@@ -319,7 +319,7 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: start
           enable-evm-testnet: true
@@ -338,7 +338,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: stop
           log_file_prefix: safe_test_logs_churn
@@ -472,7 +472,7 @@ jobs:
         timeout-minutes: 30
 
       - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: start
           enable-evm-testnet: true
@@ -501,7 +501,7 @@ jobs:
 
       - name: Stop the local network and upload logs
         if: always()
-        uses: maidsafe/ant-local-testnet-action@main
+        uses: maidsafe/ant-local-testnet-action@feat-addrs-logs
         with:
           action: stop
           log_file_prefix: safe_test_logs_data_location
