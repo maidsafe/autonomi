@@ -15,7 +15,7 @@ use autonomi::{get_evm_network_from_env, RewardsAddress, Wallet};
 use const_hex::traits::FromHex;
 use prettytable::{Cell, Row, Table};
 use std::ffi::OsString;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -137,7 +137,15 @@ pub(crate) fn select_wallet_address() -> Result<String, Error> {
         0 => {
             let secret_key =
                 get_secret_key_from_env().map_err(|_| Error::NoWalletsFoundAndNoSecretKeysInEnv)?;
-            Ok(secret_key)
+            let network = get_evm_network_from_env().expect("Could not load EVM network from environment");
+            let wallet = Wallet::new_from_private_key(network, &secret_key).expect("Could not initialize wallet");
+            let public_key = wallet.address().to_string();
+            let wallet_directory = get_client_wallet_dir_path()?;
+            let file_path = std::path::Path::new(&wallet_directory).join(&public_key);
+            let mut file = std::fs::File::create(&file_path).expect("Could not create file on disk");
+            file.write_all(secret_key.as_bytes()).expect("Could not write secret key to file");
+
+            Ok(public_key)
         }
         1 => Ok(filter_wallet_file_extension(&wallet_files[0])),
         _ => get_wallet_selection(wallet_files),
