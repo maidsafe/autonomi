@@ -79,8 +79,14 @@ pub struct PeersArgs {
 }
 
 impl PeersArgs {
-    /// Get bootstrap peers sorted by the failure rate. The peer with the lowest failure rate will be
-    /// the first in the list.
+    /// Get bootstrap peers sorted by the failure rate.
+    /// The peer with the lowest failure rate will be the first in the list.
+    ///
+    /// Order of precedence:
+    /// 1. Addresses from arguments
+    /// 2. Addresses from environment variable `ANT_PEERS`
+    /// 3. Addresses from cache
+    /// 4. Addresses from network contacts URL
     pub async fn get_addrs(
         &self,
         config: Option<BootstrapCacheConfig>,
@@ -94,8 +100,14 @@ impl PeersArgs {
             .collect())
     }
 
-    /// Get bootstrap peers sorted by the failure rate. The peer with the lowest failure rate will be
-    /// the first in the list.
+    /// Get bootstrap peers sorted by the failure rate.
+    /// The peer with the lowest failure rate will be the first in the list.
+    ///
+    /// Order of precedence:
+    /// 1. Addresses from arguments
+    /// 2. Addresses from environment variable `ANT_PEERS`
+    /// 3. Addresses from cache
+    /// 4. Addresses from network contacts URL
     pub async fn get_bootstrap_addr(
         &self,
         config: Option<BootstrapCacheConfig>,
@@ -107,13 +119,20 @@ impl PeersArgs {
             return Ok(vec![]);
         }
 
+        let mut bootstrap_addresses = vec![];
+
+        // Read from ANT_PEERS environment variable if present
+        bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
+
+        if !bootstrap_addresses.is_empty() {
+            return Ok(bootstrap_addresses);
+        }
+
         // If local mode is enabled, return empty store (will use mDNS)
         if self.local || cfg!(feature = "local") {
             info!("Local mode enabled, using only local discovery.");
             return Ok(vec![]);
         }
-
-        let mut bootstrap_addresses = vec![];
 
         // Add addrs from arguments if present
         for addr in &self.addrs {
@@ -124,8 +143,6 @@ impl PeersArgs {
                 warn!("Invalid multiaddress format from arguments: {addr}");
             }
         }
-        // Read from ANT_PEERS environment variable if present
-        bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
 
         if let Some(count) = count {
             if bootstrap_addresses.len() >= count {

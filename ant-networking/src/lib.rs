@@ -221,6 +221,15 @@ impl Network {
         receiver.await?
     }
 
+    /// Adds a peer address to the routing table.
+    ///
+    /// See [`libp2p::kad::Behaviour::add_address`] for more details.
+    pub async fn add_peer_addresses(&self, addresses: Vec<(PeerId, Multiaddr)>) -> Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_network_swarm_cmd(NetworkSwarmCmd::AddPeerAddresses { addresses, sender });
+        Ok(receiver.await?)
+    }
+
     /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
     /// Excludes the client's `PeerId` while calculating the closest peers.
     pub async fn client_get_all_close_peers_in_range_or_close_group(
