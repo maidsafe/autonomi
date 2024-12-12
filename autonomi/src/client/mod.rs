@@ -103,7 +103,7 @@ impl Client {
         let peers = if let Some(peers) = config.peers {
             peers
         } else {
-            match peers_args.get_addrs(None).await {
+            match peers_args.get_addrs(None, None).await {
                 Ok(peers) => peers,
                 Err(e) => return Err(e),
             }

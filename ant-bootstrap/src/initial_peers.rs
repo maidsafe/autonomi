@@ -121,16 +121,10 @@ impl PeersArgs {
 
         let mut bootstrap_addresses = vec![];
 
-        // Read from `ANT_PEERS` environment variable if present
-        if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
-            for addr_str in addrs.split(',') {
-                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
-                    info!("Adding addr from environment variable: {addr}");
-                    bootstrap_addresses.push(BootstrapAddr::new(addr));
-                } else {
-                    warn!("Invalid multiaddress format from environment variable: {addr_str}");
-                }
-            }
+        // Read from ANT_PEERS environment variable if present
+        bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
+
+        if !bootstrap_addresses.is_empty() {
             return Ok(bootstrap_addresses);
         }
 
@@ -149,9 +143,6 @@ impl PeersArgs {
                 warn!("Invalid multiaddress format from arguments: {addr}");
             }
         }
-
-        // Read from ANT_PEERS environment variable if present
-        bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
 
         if let Some(count) = count {
             if bootstrap_addresses.len() >= count {
