@@ -358,6 +358,19 @@ impl SwarmDriver {
             } => {
                 event_string = "incoming";
                 debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+                // Client/Node that got peer inserted into RT manually then dial,
+                // will cause the peer receive such IncomingConnection Event
+                // Only node shall hit such situation, and currently from client only
+                // The peer_id is unknown, hence don't know whether dialed or not.
+                if !self.is_client {
+                    if let Err(err) = self.swarm.dial(
+                        DialOpts::unknown_peer_id()
+                            .address(send_back_addr.clone())
+                            .build(),
+                    ) {
+                        warn!(?send_back_addr, "dialing error: {err:?}");
+                    }
+                }
             }
             SwarmEvent::ConnectionEstablished {
                 peer_id,
