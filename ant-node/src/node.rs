@@ -596,7 +596,7 @@ impl Node {
                 };
 
                 match maybe_quoting_metrics {
-                    Ok((quoting_metrics, is_already_stored)) => {
+                    Ok(Some((quoting_metrics, is_already_stored))) => {
                         if is_already_stored {
                             QueryResponse::GetStoreQuote {
                                 quote: Err(ProtocolError::RecordExists(
@@ -616,6 +616,14 @@ impl Node {
                                 peer_address: NetworkAddress::from_peer(self_id),
                                 storage_proofs,
                             }
+                        }
+                    }
+                    Ok(None) => {
+                        error!("Quoting metrics not found for {key:?}. This might be because we are using a ClientRecordStore??. This should not happen");
+                        QueryResponse::GetStoreQuote {
+                            quote: Err(ProtocolError::GetStoreQuoteFailed),
+                            peer_address: NetworkAddress::from_peer(self_id),
+                            storage_proofs,
                         }
                     }
                     Err(err) => {

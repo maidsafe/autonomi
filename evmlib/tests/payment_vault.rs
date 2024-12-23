@@ -122,7 +122,14 @@ async fn test_proxy_reachable() {
     let payment_vault = PaymentVaultHandler::new(*network.data_payments_address(), provider);
 
     let amount = payment_vault
-        .get_quote(vec![QuotingMetrics::default()])
+        .get_quote(vec![QuotingMetrics {
+            close_records_stored: 0,
+            max_records: 0,
+            received_payment_count: 0,
+            live_time: 0,
+            network_density: None,
+            network_size: None,
+        }])
         .await
         .unwrap();
 
@@ -156,7 +163,15 @@ async fn test_verify_payment() {
     let payment_verifications: Vec<_> = quote_payments
         .into_iter()
         .map(|v| interface::IPaymentVault::PaymentVerification {
-            metrics: QuotingMetrics::default().into(),
+            metrics: QuotingMetrics {
+                close_records_stored: 0,
+                max_records: 0,
+                received_payment_count: 0,
+                live_time: 0,
+                network_density: None,
+                network_size: None,
+            }
+            .into(),
             rewardsAddress: v.1,
             quoteHash: v.0,
         })
