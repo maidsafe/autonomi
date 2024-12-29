@@ -2,6 +2,7 @@ use crate::common::{Address, Amount, Calldata, TxHash};
 use crate::contract::payment_vault::error::Error;
 use crate::contract::payment_vault::interface::IPaymentVault;
 use crate::contract::payment_vault::interface::IPaymentVault::IPaymentVaultInstance;
+use crate::TX_TIMEOUT;
 use alloy::network::{Network, TransactionBuilder};
 use alloy::providers::Provider;
 use alloy::transports::Transport;
@@ -59,13 +60,20 @@ where
             .with_to(to)
             .with_input(calldata);
 
-        let tx_hash = self
+        let pending_tx_builder = self
             .contract
             .provider()
             .send_transaction(transaction_request)
-            .await?
-            .watch()
-            .await?;
+            .await
+            .inspect_err(|err| error!("Error to send_transaction during pay_for_quotes: {err:?}"))?
+            .with_timeout(Some(TX_TIMEOUT));
+
+        let pending_tx_hash = pending_tx_builder.tx_hash();
+        debug!("pay_for_quotes is pending with tx hash: {pending_tx_hash}");
+
+        let tx_hash = pending_tx_builder.watch().await.inspect_err(|err| {
+            error!("Error to watch transaction during pay_for_quotes: {err:?}")
+        })?;
 
         Ok(tx_hash)
     }

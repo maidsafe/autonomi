@@ -12,7 +12,7 @@ use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::{network_token, payment_vault};
 use crate::utils::http_provider;
-use crate::Network;
+use crate::{Network, TX_TIMEOUT};
 use alloy::hex::ToHexExt;
 use alloy::network::{Ethereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy::providers::fillers::{
@@ -262,7 +262,20 @@ pub async fn transfer_gas_tokens(
         .with_to(receiver)
         .with_value(amount);
 
-    let tx_hash = provider.send_transaction(tx).await?.watch().await?;
+    let pending_tx_builder = provider
+        .send_transaction(tx)
+        .await
+        .inspect_err(|err| {
+            error!("Error to send_transaction during transfer_gas_tokens: {err}");
+        })?
+        .with_timeout(Some(TX_TIMEOUT));
+    let pending_tx_hash = *pending_tx_builder.tx_hash();
+    debug!("The transfer of gas tokens is pending with tx_hash: {pending_tx_hash}");
+
+    let tx_hash = pending_tx_builder.watch().await.inspect_err(|err| {
+        error!("Error watching transfer_gas_tokens tx with hash {pending_tx_hash}: {err}")
+    })?;
+    debug!("Transfer of gas tokens with tx_hash: {tx_hash} is successful");
 
     Ok(tx_hash)
 }

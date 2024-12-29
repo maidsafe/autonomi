@@ -52,6 +52,9 @@ const ARBITRUM_ONE_DATA_PAYMENTS_ADDRESS: Address =
 const ARBITRUM_SEPOLIA_DATA_PAYMENTS_ADDRESS: Address =
     address!("993C7739f50899A997fEF20860554b8a28113634");
 
+/// Timeout for transactions
+const TX_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CustomNetwork {
