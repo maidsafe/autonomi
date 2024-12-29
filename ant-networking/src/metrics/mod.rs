@@ -12,6 +12,8 @@ pub mod service;
 #[cfg(feature = "upnp")]
 mod upnp;
 
+use std::sync::atomic::AtomicU64;
+
 use crate::MetricsRegistries;
 use crate::{log_markers::Marker, target_arch::sleep};
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
@@ -62,8 +64,8 @@ pub(crate) struct NetworkMetricsRecorder {
     shunned_by_old_close_group: Gauge,
 
     // system info
-    process_memory_used_mb: Gauge,
-    process_cpu_usage_percentage: Gauge,
+    process_memory_used_mb: Gauge<f64, AtomicU64>,
+    process_cpu_usage_percentage: Gauge<f64, AtomicU64>,
 
     // helpers
     bad_nodes_notifier: tokio::sync::mpsc::Sender<BadNodeMetricsMsg>,
@@ -134,14 +136,14 @@ impl NetworkMetricsRecorder {
             upnp_events.clone(),
         );
 
-        let process_memory_used_mb = Gauge::default();
+        let process_memory_used_mb = Gauge::<f64, AtomicU64>::default();
         sub_registry.register(
             "process_memory_used_mb",
             "Memory used by the process in MegaBytes",
             process_memory_used_mb.clone(),
         );
 
-        let process_cpu_usage_percentage = Gauge::default();
+        let process_cpu_usage_percentage = Gauge::<f64, AtomicU64>::default();
         sub_registry.register(
             "process_cpu_usage_percentage",
             "The percentage of CPU used by the process. Value is from 0-100",
@@ -253,12 +255,14 @@ impl NetworkMetricsRecorder {
                 if let (Some(process), Some(core_count)) =
                     (system.process(pid), physical_core_count)
                 {
-                    let mem_used = process.memory() / TO_MB;
-                    let _ = process_memory_used_mb.set(mem_used as i64);
-
+                    let mem_used =
+                        ((process.memory() as f64 / TO_MB as f64) * 10000.0).round() / 10000.0;
+                    let _ = process_memory_used_mb.set(mem_used);
                     // divide by core_count to get value between 0-100
-                    let cpu_usage = process.cpu_usage() / core_count as f32;
-                    let _ = process_cpu_usage_percentage.set(cpu_usage as i64);
+                    let cpu_usage = ((process.cpu_usage() as f64 / core_count as f64) * 10000.0)
+                        .round()
+                        / 10000.0;
+                    let _ = process_cpu_usage_percentage.set(cpu_usage);
                 }
                 sleep(UPDATE_INTERVAL).await;
             }
