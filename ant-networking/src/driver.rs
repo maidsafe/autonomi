@@ -671,6 +671,7 @@ impl NetworkBuilder {
                 circuit_src_rate_limiters: vec![], // No extra rate limiting for now
                 // We should at least be able to relay packets with chunks etc.
                 max_circuit_bytes: MAX_PACKET_SIZE as u64,
+                max_circuit_duration: CONNECTION_KEEP_ALIVE_TIMEOUT,
                 ..Default::default()
             };
             libp2p::relay::Behaviour::new(peer_id, relay_server_cfg)
