@@ -82,14 +82,22 @@ impl NetworkDiscovery {
     }
 
     /// Returns one random candidate per bucket. Also tries to refresh the candidate list.
-    /// Todo: Limit the candidates to return. Favor the closest buckets.
-    pub(crate) fn candidates(&mut self) -> Vec<&NetworkAddress> {
+    /// Set the farthest_bucket to get candidates that are closer than or equal to the farthest_bucket.
+    pub(crate) fn candidates(&mut self, farthest_bucket: Option<u32>) -> Vec<&NetworkAddress> {
         self.try_refresh_candidates();
 
         let mut rng = thread_rng();
         let mut op = Vec::with_capacity(self.candidates.len());
 
-        let candidates = self.candidates.values().filter_map(|candidates| {
+        let candidates = self.candidates.iter().filter_map(|(ilog2, candidates)| {
+            if let Some(farthest_bucket) = farthest_bucket {
+                if *ilog2 > farthest_bucket {
+                    debug!(
+                        "Skipping candidates for ilog2: {ilog2} as it is greater than farthest_bucket: {farthest_bucket}"
+                    );
+                    return None;
+                }
+            }
             // get a random index each time
             let random_index = rng.gen::<usize>() % candidates.len();
             candidates.get(random_index)

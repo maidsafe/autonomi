@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{driver::PendingGetClosestType, SwarmDriver};
+use libp2p::kad::K_VALUE;
 use rand::{rngs::OsRng, Rng};
 use tokio::time::Duration;
 
@@ -25,7 +26,7 @@ const NETWORK_DISCOVER_CONNECTED_PEERS_STEP: u32 = 5;
 const LAST_PEER_ADDED_TIME_LIMIT: Duration = Duration::from_secs(180);
 
 /// A minimum interval to prevent network discovery got triggered too often
-const LAST_NETWORK_DISCOVER_TRIGGERED_TIME_LIMIT: Duration = Duration::from_secs(30);
+const LAST_NETWORK_DISCOVER_TRIGGERED_TIME_LIMIT: Duration = Duration::from_secs(90);
 
 /// The network discovery interval to use if we haven't added any new peers in a while.
 const NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S: u64 = 600;
@@ -50,8 +51,30 @@ impl SwarmDriver {
 
     pub(crate) fn trigger_network_discovery(&mut self) {
         let now = Instant::now();
+
+        // Find the farthest bucket that is not full. This is used to skip refreshing the RT of farthest full buckets.
+        let mut farthest_unfilled_bucket = 0;
+        for kbucket in self.swarm.behaviour_mut().kademlia.kbuckets() {
+            let Some(ilog2) = kbucket.range().0.ilog2() else {
+                continue;
+            };
+            if kbucket.num_entries() < K_VALUE.get() && ilog2 > farthest_unfilled_bucket {
+                farthest_unfilled_bucket = ilog2;
+            }
+        }
+        let farthest_unfilled_bucket = if farthest_unfilled_bucket == 0 {
+            None
+        } else {
+            Some(farthest_unfilled_bucket)
+        };
+
+        let addrs = self.network_discovery.candidates(farthest_unfilled_bucket);
+        info!(
+            "Triggering network discovery with {} candidates. Farthest non full bucket: {farthest_unfilled_bucket:?}",
+            addrs.len()
+        );
         // Fetches the candidates and also generates new candidates
-        for addr in self.network_discovery.candidates() {
+        for addr in addrs {
             // The query_id is tracked here. This is to update the candidate list of network_discovery with the newly
             // found closest peers. It may fill up the candidate list of closer buckets which are harder to generate.
             let query_id = self
