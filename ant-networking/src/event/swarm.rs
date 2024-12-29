@@ -550,7 +550,7 @@ impl SwarmDriver {
                 error,
             } => {
                 event_string = "Incoming ConnErr";
-                // Only log as ERROR if the the connection is not adjacent to an already established connection id from
+                // Only log as ERROR if the connection is not adjacent to an already established connection id from
                 // the same IP address.
                 //
                 // If a peer contains multiple transports/listen addrs, we might try to open multiple connections,

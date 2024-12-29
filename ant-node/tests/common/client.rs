@@ -52,7 +52,7 @@ pub async fn get_client_and_funded_wallet() -> (Client, Wallet) {
 }
 
 /// Get the node count
-/// If SN_INVENTORY flag is passed, the node count is obtained from the the droplet
+/// If SN_INVENTORY flag is passed, the node count is obtained from the droplet
 /// else return the local node count
 pub fn get_node_count() -> usize {
     match DeploymentInventory::load() {
