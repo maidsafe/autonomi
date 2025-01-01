@@ -105,6 +105,18 @@ impl SwarmDriver {
                     libp2p::relay::Event::ReservationTimedOut { src_peer_id } => {
                         self.connected_relay_clients.remove(&src_peer_id);
                     }
+                    libp2p::relay::Event::CircuitReqAccepted { .. } => {
+                        #[cfg(feature = "open-metrics")]
+                        if let Some(metrics_recorder) = &self.metrics_recorder {
+                            metrics_recorder.open_relayed_circuit_connections.inc();
+                        }
+                    }
+                    libp2p::relay::Event::CircuitClosed { .. } => {
+                        #[cfg(feature = "open-metrics")]
+                        if let Some(metrics_recorder) = &self.metrics_recorder {
+                            metrics_recorder.open_relayed_circuit_connections.dec();
+                        }
+                    }
                     _ => {}
                 }
             }

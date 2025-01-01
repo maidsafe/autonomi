@@ -42,6 +42,7 @@ pub(crate) struct NetworkMetricsRecorder {
     pub(crate) connected_peers: Gauge,
     pub(crate) estimated_network_size: Gauge,
     pub(crate) open_connections: Gauge,
+    pub(crate) open_relayed_circuit_connections: Gauge,
     pub(crate) peers_in_routing_table: Gauge,
     pub(crate) records_stored: Gauge,
 
@@ -97,6 +98,12 @@ impl NetworkMetricsRecorder {
             "estimated_network_size",
             "The estimated number of nodes in the network calculated by the peers in our RT",
             estimated_network_size.clone(),
+        );
+        let open_relayed_circuit_connections = Gauge::default();
+        sub_registry.register(
+            "open_relayed_circuit_connections",
+            "The number of active circuit connections that we are relaying between peers",
+            open_relayed_circuit_connections.clone(),
         );
         let open_connections = Gauge::default();
         sub_registry.register(
@@ -214,6 +221,7 @@ impl NetworkMetricsRecorder {
             estimated_network_size,
             connected_peers,
             open_connections,
+            open_relayed_circuit_connections,
             peers_in_routing_table,
             relevant_records,
             max_records,
