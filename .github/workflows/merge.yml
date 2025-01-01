@@ -378,6 +378,91 @@ jobs:
           ANT_LOG: "v"
         timeout-minutes: 2
 
+      - name: validate help Output format
+        shell: bash
+        run: |
+          set -e
+          ./target/release/ant --help 2>&1 | tee help_output
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 2
+
+      - name: test file cost command
+        shell: bash
+        run: |
+          set -e
+          touch cost-estimate-file.txt
+          dd if=/dev/urandom of=cost-estimate-file.txt bs=1M count=1 status=none
+          ./target/release/ant --log-output-dest data-dir file cost cost-estimate-file.txt
+          ./target/release/ant --log-output-dest data-dir file cost --timeout 10 cost-estimate-file.txt
+          # ./target/release/ant --log-output-dest data-dir file cost --no-verify cost-estimate-file.txt
+
+          rm -rf cost-estimate-file.txt
+          mkdir test_cost_estimate_directory
+          cd test_cost_estimate_directory
+
+          for dir in {1..5}; do
+            mkdir subdir_$dir
+            for file in {1..10}; do
+              dd if=/dev/zero of=subdir_$dir/file_$file.bin bs=10M count=1
+            done
+          done
+          cd ../
+          # ./target/release/ant --log-output-dest data-dir file cost --timeout 10 test_cost_estimate_directory | grep "Error" # it is not possible to estimate this in 10 seconds
+          ./target/release/ant --log-output-dest data-dir file cost test_cost_estimate_directory
+          # ./target/release/ant --log-output-dest data-dir file cost --no-verify test_cost_estimate_directory
+
+          rm -rf test_cost_estimate_directory
+          rm -rf cost-estimate-file.txt
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 25
+
+      - name: test file upload and download command
+        shell: bash
+        run: |
+          set -e
+          touch upload-file.txt
+          echo "Hello world" > upload-file.txt
+          FILE_ADDR=`./target/release/ant --log-output-dest data-dir file upload upload-file.txt | grep "At address" | grep -oE '[0-9]+'`
+          ./target/release/ant --log-output-dest data-dir file download $FILE_ADDR download-file.txt
+          [ "$(md5sum upload-file.txt | awk '{print $1}')" = "$(md5sum download-file.txt | awk '{print $1}')" ] && echo "Files are identical." || { echo "Files are different."; exit 1; }
+
+          FILE_ADDR=`./target/release/ant --log-output-dest data-dir file upload --timeout 10 upload-file.txt | grep "At address" | grep -oE '[0-9]+'`
+          ./target/release/antr --log-output-dest data-dir file download $FILE_ADDR download-file.txt
+          [ "$(md5sum upload-file.txt | awk '{print $1}')" = "$(md5sum download-file.txt | awk '{print $1}')" ] && echo "Files are identical." || { echo "Files are different."; exit 1; }
+
+          # FILE_ADDR='./target/release/antr --log-output-dest data-dir file upload --no-verify upload-file.txt | grep "At address" | grep -oE '[0-9]+''
+          # ./target/release/ant --log-output-dest data-dir file download $FILE_ADDR download-file.txt
+          # [ "$(md5sum upload-file.txt | awk '{print $1}')" = "$(md5sum download-file.txt | awk '{print $1}')" ] && echo "Files are identical." || { echo "Files are different."; exit 1; }
+
+          mkdir test_upload_directory
+          cd test_upload_directory
+
+          for dir in {1..5}; do
+            mkdir subdir_$dir
+            for file in {1..10}; do
+              dd if=/dev/zero of=subdir_$dir/file_$file.bin bs=10M count=1
+            done
+          done
+          cd ../
+          mkdir test_download_directory
+          FILE_ADDR=`./target/release/ant --log-output-dest data-dir file upload test_upload_directory | grep "At address" | grep -oE '[0-9]+'`
+          ./target/release/ant --log-output-dest data-dir file download $FILE_ADDR test_download_directory
+          diff -r test_upload_directory test_download_directory/test_upload_directory
+
+          rm -rf test_download_directory/test_download_directory
+
+          # FILE_ADDR=`./target/release/ant --log-output-dest data-dir file upload --no-verify test_upload_directory | grep "At address" | grep -oE '[0-9]+'`
+          # ./target/release/ant --log-output-dest data-dir file download $FILE_ADDR test_download_directory
+          # diff -r test_upload_directory test_download_directory/test_upload_directory
+
+          rm -rf test_upload_directory test_download_directory
+          rm -rf upload-file.txt
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 2
+
       - name: create local user file
         run: echo random > random.txt
         env:
