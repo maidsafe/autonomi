@@ -46,7 +46,7 @@ struct ShunnedByCloseGroup {
     old_new_group_shunned_list: HashSet<PeerId>,
 }
 
-/// A struct to record the the number of reports against our node across different time frames.
+/// A struct to record the number of reports against our node across different time frames.
 struct ShunnedCountAcrossTimeFrames {
     metric: Family<TimeFrame, Gauge>,
     shunned_report_tracker: Vec<ShunnedReportTracker>,

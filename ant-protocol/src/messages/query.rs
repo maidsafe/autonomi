@@ -66,7 +66,7 @@ pub enum Query {
     },
     /// Queries close_group peers whether the target peer is a bad_node
     CheckNodeInProblem(NetworkAddress),
-    /// Query the the peers in range to the target address, from the receiver's perspective.
+    /// Query the peers in range to the target address, from the receiver's perspective.
     /// In case none of the parameters provided, returns nothing.
     /// In case both of the parameters provided, `range` is preferred to be replied.
     GetClosestPeers {
