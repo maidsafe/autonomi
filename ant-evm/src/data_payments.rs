@@ -10,7 +10,6 @@ use crate::EvmError;
 use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
     quoting_metrics::QuotingMetrics,
-    utils::dummy_address,
 };
 use libp2p::{identity::PublicKey, PeerId};
 use serde::{Deserialize, Serialize};
@@ -135,18 +134,6 @@ pub struct PaymentQuote {
 }
 
 impl PaymentQuote {
-    /// create an empty PaymentQuote
-    pub fn zero() -> Self {
-        Self {
-            content: Default::default(),
-            timestamp: SystemTime::now(),
-            quoting_metrics: Default::default(),
-            rewards_address: dummy_address(),
-            pub_key: vec![],
-            signature: vec![],
-        }
-    }
-
     pub fn hash(&self) -> QuoteHash {
         let mut bytes = self.bytes_for_sig();
         bytes.extend_from_slice(self.pub_key.as_slice());
@@ -233,11 +220,21 @@ impl PaymentQuote {
     }
 
     /// test utility to create a dummy quote
+    #[cfg(test)]
     pub fn test_dummy(xorname: XorName) -> Self {
+        use evmlib::utils::dummy_address;
+
         Self {
             content: xorname,
             timestamp: SystemTime::now(),
-            quoting_metrics: Default::default(),
+            quoting_metrics: QuotingMetrics {
+                close_records_stored: 0,
+                max_records: 0,
+                received_payment_count: 0,
+                live_time: 0,
+                network_density: None,
+                network_size: None,
+            },
             pub_key: vec![],
             signature: vec![],
             rewards_address: dummy_address(),
@@ -329,9 +326,9 @@ mod tests {
 
     #[test]
     fn test_is_newer_than() {
-        let old_quote = PaymentQuote::zero();
+        let old_quote = PaymentQuote::test_dummy(Default::default());
         sleep(Duration::from_millis(100));
-        let new_quote = PaymentQuote::zero();
+        let new_quote = PaymentQuote::test_dummy(Default::default());
         assert!(new_quote.is_newer_than(&old_quote));
         assert!(!old_quote.is_newer_than(&new_quote));
     }
@@ -343,7 +340,7 @@ mod tests {
 
         let false_peer = PeerId::random();
 
-        let mut quote = PaymentQuote::zero();
+        let mut quote = PaymentQuote::test_dummy(Default::default());
         let bytes = quote.bytes_for_sig();
         let signature = if let Ok(sig) = keypair.sign(&bytes) {
             sig
@@ -374,9 +371,9 @@ mod tests {
 
     #[test]
     fn test_historical_verify() {
-        let mut old_quote = PaymentQuote::zero();
+        let mut old_quote = PaymentQuote::test_dummy(Default::default());
         sleep(Duration::from_millis(100));
-        let mut new_quote = PaymentQuote::zero();
+        let mut new_quote = PaymentQuote::test_dummy(Default::default());
 
         // historical_verify will swap quotes to compare based on timeline automatically
         assert!(new_quote.historical_verify(&old_quote));

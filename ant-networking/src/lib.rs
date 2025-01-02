@@ -810,7 +810,7 @@ impl Network {
     pub async fn get_local_quoting_metrics(
         &self,
         key: RecordKey,
-    ) -> Result<(QuotingMetrics, bool)> {
+    ) -> Result<Option<(QuotingMetrics, bool)>> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetLocalQuotingMetrics { key, sender });
 
