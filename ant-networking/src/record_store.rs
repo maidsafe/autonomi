@@ -687,17 +687,18 @@ impl NodeRecordStore {
         spawn(async move {
             let key = r.key.clone();
             if let Some(bytes) = Self::prepare_record_bytes(r, encryption_details) {
-                let cmd = match fs::write(&file_path, bytes) {
+                let cmd = match fs::write(&file_path, bytes)
+                    .and_then(|_| fs::File::open(&file_path).and_then(|f| f.sync_all()))
+                {
                     Ok(_) => {
                         // vdash metric (if modified please notify at https://github.com/happybeing/vdash/issues):
                         info!("Wrote record {record_key2:?} to disk! filename: {filename}");
-
                         LocalSwarmCmd::AddLocalRecordAsStored { key, record_type }
                     }
                     Err(err) => {
                         error!(
-                        "Error writing record {record_key2:?} filename: {filename}, error: {err:?}"
-                    );
+                            "Error writing/syncing record {record_key2:?} filename: {filename}, error: {err:?}"
+                        );
                         LocalSwarmCmd::RemoveFailedLocalRecord { key }
                     }
                 };
@@ -1057,11 +1058,14 @@ mod tests {
 
     async fn testing_thread(r: ArbitraryRecord) {
         let r = r.0;
+        let self_id = PeerId::random();
+
+        // Create channels with proper receivers
         let (network_event_sender, mut network_event_receiver) = mpsc::channel(1);
-        let (swarm_cmd_sender, _) = mpsc::channel(1);
+        let (swarm_cmd_sender, mut swarm_cmd_receiver) = mpsc::channel(1);
 
         let mut store = NodeRecordStore::with_config(
-            PeerId::random(),
+            self_id,
             Default::default(),
             network_event_sender,
             swarm_cmd_sender,
