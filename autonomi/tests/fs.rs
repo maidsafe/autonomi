@@ -6,8 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-#![cfg(feature = "fs")]
-
 use ant_logging::LogBuilder;
 use autonomi::Client;
 use eyre::Result;
@@ -20,7 +18,7 @@ use tokio::time::sleep;
 use walkdir::WalkDir;
 
 // With a local evm network, and local network, run:
-// EVM_NETWORK=local cargo test --features="fs,local" --package autonomi --test file
+// EVM_NETWORK=local cargo test --features="local" --package autonomi --test fs
 #[tokio::test]
 async fn dir_upload_download() -> Result<()> {
     let _log_appender_guard =
@@ -76,7 +74,6 @@ fn compute_dir_sha256(dir: &str) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-#[cfg(feature = "vault")]
 #[tokio::test]
 async fn file_into_vault() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("file", false);

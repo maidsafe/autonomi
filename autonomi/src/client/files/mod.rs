@@ -1,16 +1,10 @@
-#[cfg(feature = "fs")]
 use std::path::{Path, PathBuf};
 
 pub mod archive;
 pub mod archive_public;
-#[cfg(feature = "fs")]
-#[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
 pub mod fs;
-#[cfg(feature = "fs")]
-#[cfg_attr(docsrs, doc(cfg(feature = "fs")))]
 pub mod fs_public;
 
-#[cfg(feature = "fs")]
 pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(
     abs_file_pah: &Path,
     abs_folder_path: &Path,

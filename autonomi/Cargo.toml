@@ -15,22 +15,16 @@ crate-type = ["cdylib", "rlib"]
 
 [[example]]
 name = "data_and_archive"
-required-features = ["full"]
 
 [[example]]
 name = "put_and_dir_upload"
-required-features = ["full"]
 
 [features]
-default = ["vault"]
+default = []
 external-signer = ["ant-evm/external-signer"]
 extension-module = ["pyo3/extension-module"]
-fs = ["tokio/fs"]
-full = ["vault", "fs"]
 local = ["ant-networking/local", "ant-evm/local"]
 loud = []
-registers = []
-vault = []
 
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.1.1" }
@@ -55,7 +49,7 @@ self_encryption = "~0.30.0"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 sha2 = "0.10.6"
 thiserror = "1.0.23"
-tokio = { version = "1.35.0", features = ["sync"] }
+tokio = { version = "1.35.0", features = ["sync", "fs"] }
 tracing = { version = "~0.1.26" }
 walkdir = "2.5.0"
 xor_name = "5.0.0"

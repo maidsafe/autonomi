@@ -29,9 +29,6 @@ ant-build-info = { path = "../ant-build-info", version = "0.1.21" }
 ant-logging = { path = "../ant-logging", version = "0.2.42" }
 ant-protocol = { path = "../ant-protocol", version = "0.3.1" }
 autonomi = { path = "../autonomi", version = "0.3.1", features = [
-    "fs",
-    "vault",
-    "registers",
     "loud",
 ] }
 clap = { version = "4.2.1", features = ["derive"] }
@@ -60,7 +57,7 @@ tracing = { version = "~0.1.26" }
 walkdir = "2.5.0"
 
 [dev-dependencies]
-autonomi = { path = "../autonomi", version = "0.3.1", features = ["fs"]}
+autonomi = { path = "../autonomi", version = "0.3.1"}
 criterion = "0.5.1"
 eyre = "0.6.8"
 rand = { version = "~0.8.5", features = ["small_rng"] }

@@ -92,7 +92,7 @@ ant-protocol = { path = "../ant-protocol", version = "0.3.1", features = [
 ] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.1.6" }
-autonomi = { path = "../autonomi", version = "0.3.1", features = ["registers"] }
+autonomi = { path = "../autonomi", version = "0.3.1" }
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }

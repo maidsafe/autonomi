@@ -125,11 +125,11 @@ jobs:
 
       - name: Run autonomi tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --features full,local --lib
+        run: cargo test --release --package autonomi --features local --lib
 
       - name: Run autonomi doc tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --features full,local --doc
+        run: cargo test --release --package autonomi --features local --doc
 
       - name: Run bootstrap tests
         timeout-minutes: 25

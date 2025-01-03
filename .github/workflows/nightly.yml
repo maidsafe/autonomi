@@ -246,7 +246,7 @@ jobs:
 
       - name: Run autonomi tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --lib --features="full,fs"
+        run: cargo test --release --package autonomi --lib --features="full"
 
       - name: Run bootstrap tests
         timeout-minutes: 25
