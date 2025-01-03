@@ -640,7 +640,7 @@ impl Node {
     ) -> Result<()> {
         let key = address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
-        debug!("Validating record payment for {pretty_key}");
+        info!("Validating record payment for {pretty_key}");
 
         // check if the quote is valid
         let self_peer_id = self.network().peer_id();
@@ -665,6 +665,7 @@ impl Node {
         let mut payees = payment.payees();
         payees.retain(|peer_id| !closest_k_peers.contains(peer_id));
         if !payees.is_empty() {
+            info!("Payment quote has out-of-range payees {payees:?}");
             return Err(Error::InvalidRequest(format!(
                 "Payment quote has out-of-range payees {payees:?}"
             )));
@@ -678,10 +679,12 @@ impl Node {
         // check if payment is valid on chain
         let payments_to_verify = payment.digest();
         debug!("Verifying payment for record {pretty_key}");
-        let reward_amount =
+        let verify_data_payment_result =
             verify_data_payment(self.evm_network(), owned_payment_quotes, payments_to_verify)
                 .await
-                .map_err(|e| Error::EvmNetwork(format!("Failed to verify chunk payment: {e}")))?;
+                .map_err(|e| Error::EvmNetwork(format!("Failed to verify chunk payment: {e}")));
+        info!("Data payemnt of record {pretty_key} verification result is {verify_data_payment_result:?}.");
+        let reward_amount = verify_data_payment_result?;
         debug!("Payment of {reward_amount:?} is valid for record {pretty_key}");
 
         // Notify `record_store` that the node received a payment.

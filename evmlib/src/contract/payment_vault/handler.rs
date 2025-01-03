@@ -36,6 +36,8 @@ where
         let metrics: Vec<_> = metrics.into_iter().map(|v| v.into()).collect();
         let mut amounts = self.contract.getQuote(metrics.clone()).call().await?.prices;
 
+        info!("Fetched amounts are {amounts:?}, for the quiting_metris of {metrics:?}");
+
         // FIXME: temporary logic until the smart contract gets updated
         if amounts.len() == 1 {
             let value = amounts[0];
