@@ -73,7 +73,7 @@ To run the tests, we can run a local network:
 
 3. Then run the tests with the `local` feature and pass the EVM params again:
     ```sh
-    EVM_NETWORK=local cargo test --features local --package autonomi
+    EVM_NETWORK=local cargo test --package autonomi
     ```
 
 ### Using a live testnet or mainnet
@@ -89,7 +89,7 @@ cargo run --bin antctl --features local -- local run --build --clean --rewards-a
 2. Then pass the private key of the wallet, and ensure it has enough gas and payment tokens on the network (in this case Arbitrum One):
 
 ```sh
-EVM_NETWORK=arbitrum-one EVM_PRIVATE_KEY=<PRIVATE_KEY> cargo test --package autonomi --features local
+EVM_NETWORK=arbitrum-one EVM_PRIVATE_KEY=<PRIVATE_KEY> cargo test --package autonomi
 ```
 
 ## Using funds from the Deployer Wallet

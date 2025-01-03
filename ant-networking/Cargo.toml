@@ -11,7 +11,6 @@ version = "0.3.1"
 
 [features]
 default = []
-local = ["libp2p/mdns"]
 loud = []
 open-metrics = ["libp2p/metrics", "prometheus-client", "hyper", "sysinfo"]
 upnp = ["libp2p/upnp"]
@@ -39,6 +38,7 @@ itertools = "~0.12.1"
 libp2p = { version = "0.54.1", features = [
     "tokio",
     "dns",
+    "mdns",
     "kad",
     "macros",
     "request-response",

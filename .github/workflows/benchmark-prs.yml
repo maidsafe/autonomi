@@ -43,7 +43,7 @@ jobs:
       # it will be better to execute bench test with `local`,
       # to make the measurement results reflect speed improvement or regression more accurately.
       - name: Build binaries
-        run: cargo build --release --features local --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant
         timeout-minutes: 30
 
       - name: Start a local network
@@ -169,7 +169,7 @@ jobs:
       #   # Criterion outputs the actual bench results to stderr "2>&1 tee output.txt" takes stderr,
       #   # passes to tee which displays it in the terminal and writes to output.txt
       #   run: |
-      #     cargo criterion --features=local --message-format=json 2>&1 -p sn_cli | tee -a output.txt
+      #     cargo criterion --message-format=json 2>&1 -p sn_cli | tee -a output.txt
       #     cat output.txt | rg benchmark-complete | jq -s 'map({
       #     name: (.id | split("/"))[-1],
       #     unit: "MiB/s",

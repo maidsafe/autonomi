@@ -9,7 +9,6 @@ repository = "https://github.com/maidsafe/safe_network"
 version = "0.1.6"
 
 [features]
-local = []
 external-signer = []
 
 [dependencies]

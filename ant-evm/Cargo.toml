@@ -10,7 +10,6 @@ repository = "https://github.com/maidsafe/autonomi"
 version = "0.1.6"
 
 [features]
-local = ["evmlib/local"]
 external-signer = ["evmlib/external-signer"]
 test-utils = []
 

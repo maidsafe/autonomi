@@ -21,11 +21,7 @@ pub mod pointer;
 #[cfg(feature = "external-signer")]
 #[cfg_attr(docsrs, doc(cfg(feature = "external-signer")))]
 pub mod external_signer;
-#[cfg(feature = "registers")]
-#[cfg_attr(docsrs, doc(cfg(feature = "registers")))]
 pub mod registers;
-#[cfg(feature = "vault")]
-#[cfg_attr(docsrs, doc(cfg(feature = "vault")))]
 pub mod vault;
 
 // private module with utility functions
@@ -71,7 +67,7 @@ pub struct Client {
 }
 
 /// Configuration for [`Client::init_with_config`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ClientConfig {
     /// Whether we're expected to connect to a local network.
     ///
@@ -82,18 +78,6 @@ pub struct ClientConfig {
     ///
     /// If not provided, the client will use the default bootstrap peers.
     pub peers: Option<Vec<Multiaddr>>,
-}
-
-impl Default for ClientConfig {
-    fn default() -> Self {
-        Self {
-            #[cfg(feature = "local")]
-            local: true,
-            #[cfg(not(feature = "local"))]
-            local: false,
-            peers: None,
-        }
-    }
 }
 
 /// Error returned by [`Client::init`].

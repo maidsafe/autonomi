@@ -164,7 +164,7 @@ impl TestnetData {
         );
         std::fs::write(&csv_path, csv).expect("Could not write to evm_testnet_data.csv file");
         println!("EVM testnet data saved to: {csv_path:?}");
-        println!("When running the Node or CLI with --feature=local, it will automatically use this network by loading the EVM Network's info from the CSV file.");
+        println!("When running the Node or CLI in local mode, it will automatically use this network by loading the EVM Network's info from the CSV file.");
         println!();
     }
 

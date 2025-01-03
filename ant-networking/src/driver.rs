@@ -44,7 +44,6 @@ use ant_protocol::{
 use ant_registers::SignedRegister;
 use futures::future::Either;
 use futures::StreamExt;
-#[cfg(feature = "local")]
 use libp2p::mdns;
 use libp2p::{core::muxing::StreamMuxerBox, relay};
 use libp2p::{
@@ -254,7 +253,7 @@ pub(super) struct NodeBehaviour {
     pub(super) blocklist:
         libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
     pub(super) identify: libp2p::identify::Behaviour,
-    #[cfg(feature = "local")]
+    /// mDNS behaviour to use in local mode
     pub(super) mdns: mdns::tokio::Behaviour,
     #[cfg(feature = "upnp")]
     pub(super) upnp: libp2p::swarm::behaviour::toggle::Toggle<libp2p::upnp::tokio::Behaviour>,
@@ -620,7 +619,6 @@ impl NetworkBuilder {
             }
         };
 
-        #[cfg(feature = "local")]
         let mdns_config = mdns::Config {
             // lower query interval to speed up peer discovery
             // this increases traffic, but means we no longer have clients unable to connect
@@ -629,7 +627,6 @@ impl NetworkBuilder {
             ..Default::default()
         };
 
-        #[cfg(feature = "local")]
         let mdns = mdns::tokio::Behaviour::new(mdns_config, peer_id)?;
 
         let agent_version = if is_client {
@@ -684,7 +681,6 @@ impl NetworkBuilder {
             request_response,
             kademlia,
             identify,
-            #[cfg(feature = "local")]
             mdns,
         };
 

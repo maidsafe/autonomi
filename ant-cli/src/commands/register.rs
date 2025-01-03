@@ -8,13 +8,13 @@
 
 #![allow(deprecated)]
 
+use crate::network::NetworkPeers;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::registers::RegisterAddress;
 use autonomi::client::registers::RegisterPermissions;
 use autonomi::client::registers::RegisterSecretKey;
 use autonomi::Client;
-use autonomi::Multiaddr;
 use color_eyre::eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -39,7 +39,7 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn cost(name: &str, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn cost(name: &str, peers: NetworkPeers) -> Result<()> {
     let register_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
     let client = crate::actions::connect_to_network(peers).await?;
@@ -53,7 +53,7 @@ pub async fn cost(name: &str, peers: Vec<Multiaddr>) -> Result<()> {
     Ok(())
 }
 
-pub async fn create(name: &str, value: &str, public: bool, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn create(name: &str, value: &str, public: bool, peers: NetworkPeers) -> Result<()> {
     let wallet = load_wallet()?;
     let register_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
@@ -119,7 +119,7 @@ pub async fn create(name: &str, value: &str, public: bool, peers: Vec<Multiaddr>
     Ok(())
 }
 
-pub async fn edit(address: String, name: bool, value: &str, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn edit(address: String, name: bool, value: &str, peers: NetworkPeers) -> Result<()> {
     let register_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
     let client = crate::actions::connect_to_network(peers).await?;
@@ -157,7 +157,7 @@ pub async fn edit(address: String, name: bool, value: &str, peers: Vec<Multiaddr
     Ok(())
 }
 
-pub async fn get(address: String, name: bool, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn get(address: String, name: bool, peers: NetworkPeers) -> Result<()> {
     let register_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
     let client = crate::actions::connect_to_network(peers).await?;

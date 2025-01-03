@@ -215,7 +215,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             VaultCmd::Cost => vault::cost(peers.await?).await,
             VaultCmd::Create => vault::create(peers.await?).await,
             VaultCmd::Load => vault::load(peers.await?).await,
-            VaultCmd::Sync { force } => vault::sync(peers.await?, force).await,
+            VaultCmd::Sync { force } => vault::sync(force, peers.await?).await,
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {

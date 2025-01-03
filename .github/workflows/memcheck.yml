@@ -36,7 +36,7 @@ jobs:
         run: sudo apt-get install -y ripgrep
 
       - name: Build binaries
-        run: cargo build --release --features local --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant
         timeout-minutes: 30
 
       - name: Start a local network

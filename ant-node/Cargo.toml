@@ -16,12 +16,6 @@ path = "src/bin/antnode/main.rs"
 [features]
 default = ["metrics", "upnp", "open-metrics"]
 extension-module = ["pyo3/extension-module"]
-local = [
-    "ant-networking/local",
-    "ant-evm/local",
-    "ant-bootstrap/local",
-    "ant-logging/process-metrics",
-]
 loud = ["ant-networking/loud"] # loud mode: print important messages to console
 metrics = []
 nightly = []
@@ -92,7 +86,7 @@ ant-protocol = { path = "../ant-protocol", version = "0.3.1", features = [
 ] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.1.6" }
-autonomi = { path = "../autonomi", version = "0.3.1", features = ["registers"] }
+autonomi = { path = "../autonomi", version = "0.3.1" }
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }

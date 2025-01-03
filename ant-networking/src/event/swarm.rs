@@ -11,7 +11,6 @@ use crate::{
     relay_manager::is_a_relayed_peer, time::Instant, NetworkEvent, Result, SwarmDriver,
 };
 use ant_protocol::version::{IDENTIFY_NODE_VERSION_STR, IDENTIFY_PROTOCOL_STR};
-#[cfg(feature = "local")]
 use libp2p::mdns;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
@@ -287,26 +286,28 @@ impl SwarmDriver {
                     libp2p::identify::Event::Error { .. } => debug!("identify: {iden:?}"),
                 }
             }
-            #[cfg(feature = "local")]
             SwarmEvent::Behaviour(NodeEvent::Mdns(mdns_event)) => {
                 event_string = "mdns";
-                match *mdns_event {
-                    mdns::Event::Discovered(list) => {
-                        if self.local {
-                            for (peer_id, addr) in list {
-                                // The multiaddr does not contain the peer ID, so add it.
-                                let addr = addr.with(Protocol::P2p(peer_id));
+                // mDNS is only relevant in local mode
+                if self.local {
+                    match *mdns_event {
+                        mdns::Event::Discovered(list) => {
+                            if self.local {
+                                for (peer_id, addr) in list {
+                                    // The multiaddr does not contain the peer ID, so add it.
+                                    let addr = addr.with(Protocol::P2p(peer_id));
 
-                                info!(%addr, "mDNS node discovered and dialing");
+                                    info!(%addr, "mDNS node discovered and dialing");
 
-                                if let Err(err) = self.dial(addr.clone()) {
-                                    warn!(%addr, "mDNS node dial error: {err:?}");
+                                    if let Err(err) = self.dial(addr.clone()) {
+                                        warn!(%addr, "mDNS node dial error: {err:?}");
+                                    }
                                 }
                             }
                         }
-                    }
-                    mdns::Event::Expired(peer) => {
-                        debug!("mdns peer {peer:?} expired");
+                        mdns::Event::Expired(peer) => {
+                            debug!("mdns peer {peer:?} expired");
+                        }
                     }
                 }
             }

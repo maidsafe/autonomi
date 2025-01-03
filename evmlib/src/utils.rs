@@ -93,15 +93,11 @@ pub fn get_evm_network_from_env() -> Result<Network, Error> {
     })
     .collect::<Result<Vec<String>, Error>>();
 
-    let mut use_local_evm = std::env::var("EVM_NETWORK")
+    let use_local_evm = std::env::var("EVM_NETWORK")
         .map(|v| v == "local")
         .unwrap_or(false);
     if use_local_evm {
         info!("Using local EVM network as EVM_NETWORK is set to 'local'");
-    }
-    if cfg!(feature = "local") {
-        use_local_evm = true;
-        info!("Using local EVM network as 'local' feature flag is enabled");
     }
 
     let use_arbitrum_one = std::env::var("EVM_NETWORK")
@@ -136,7 +132,7 @@ pub fn get_evm_network_from_env() -> Result<Network, Error> {
 }
 
 /// Get the `Network::Custom` from the local EVM testnet CSV file
-fn local_evm_network_from_csv() -> Result<Network, Error> {
+pub fn local_evm_network_from_csv() -> Result<Network, Error> {
     // load the csv
     let csv_path = get_evm_testnet_csv_path()?;
 

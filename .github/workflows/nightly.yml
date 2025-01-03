@@ -32,7 +32,7 @@ jobs:
         continue-on-error: true
 
       - name: Build binaries
-        run: cargo build --release --features local --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant
         timeout-minutes: 30
 
       - name: Start a local network
@@ -246,7 +246,7 @@ jobs:
 
       - name: Run autonomi tests
         timeout-minutes: 25
-        run: cargo test --release --package autonomi --lib --features="full,fs"
+        run: cargo test --release --package autonomi --lib --features="full"
 
       - name: Run bootstrap tests
         timeout-minutes: 25
@@ -311,11 +311,11 @@ jobs:
         continue-on-error: true
 
       - name: Build binaries
-        run: cargo build --release --features local --bin antnode
+        run: cargo build --release --bin antnode
         timeout-minutes: 30
 
       - name: Build churn tests
-        run: cargo test --release -p ant-node --features=local --test data_with_churn --no-run
+        run: cargo test --release -p ant-node --test data_with_churn --no-run
         env:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
@@ -332,7 +332,7 @@ jobs:
           build: true
 
       - name: Chunks data integrity during nodes churn (during 10min) (in theory)
-        run: cargo test --release -p ant-node --features=local --test data_with_churn -- --nocapture
+        run: cargo test --release -p ant-node --test data_with_churn -- --nocapture
         env:
           TEST_DURATION_MINS: 60
           TEST_CHURN_CYCLES: 6
@@ -464,11 +464,11 @@ jobs:
         continue-on-error: true
 
       - name: Build binaries
-        run: cargo build --release --features local --bin antnode
+        run: cargo build --release --bin antnode
         timeout-minutes: 30
 
       - name: Build data location and routing table tests
-        run: cargo test --release -p ant-node --features=local --test verify_data_location --test verify_routing_table --no-run
+        run: cargo test --release -p ant-node --test verify_data_location --test verify_routing_table --no-run
         env:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
@@ -485,20 +485,20 @@ jobs:
           build: true
 
       - name: Verify the Routing table of the nodes
-        run: cargo test --release -p ant-node --features=local --test verify_routing_table -- --nocapture
+        run: cargo test --release -p ant-node --test verify_routing_table -- --nocapture
         env:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 5
 
       - name: Verify the location of the data on the network
-        run: cargo test --release -p ant-node --features=local --test verify_data_location -- --nocapture
+        run: cargo test --release -p ant-node --test verify_data_location -- --nocapture
         env:
           ANT_LOG: "all"
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 90
 
       - name: Verify the routing tables of the nodes
-        run: cargo test --release -p ant-node --features=local --test verify_routing_table -- --nocapture
+        run: cargo test --release -p ant-node --test verify_routing_table -- --nocapture
         env:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 5

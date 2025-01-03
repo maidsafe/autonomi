@@ -199,7 +199,7 @@ impl BootstrapCacheStore {
         }
 
         // If local mode is enabled, return empty store (will use mDNS)
-        if peers_arg.local || cfg!(feature = "local") {
+        if peers_arg.local {
             info!("Setting config to not write to cache, as 'local' mode is enabled");
             store.config.disable_cache_writing = true;
         }

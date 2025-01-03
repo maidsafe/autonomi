@@ -117,7 +117,7 @@ impl PeersArgs {
         }
 
         // If local mode is enabled, return empty store (will use mDNS)
-        if self.local || cfg!(feature = "local") {
+        if self.local {
             info!("Local mode enabled, using only local discovery.");
             return Ok(vec![]);
         }

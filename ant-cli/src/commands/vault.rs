@@ -6,13 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::network::NetworkPeers;
 use crate::wallet::load_wallet;
-use autonomi::Multiaddr;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 
-pub async fn cost(peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn cost(peers: NetworkPeers) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
@@ -27,7 +27,7 @@ pub async fn cost(peers: Vec<Multiaddr>) -> Result<()> {
     Ok(())
 }
 
-pub async fn create(peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn create(peers: NetworkPeers) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
     let wallet = load_wallet()?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
@@ -55,7 +55,7 @@ pub async fn create(peers: Vec<Multiaddr>) -> Result<()> {
     Ok(())
 }
 
-pub async fn sync(peers: Vec<Multiaddr>, force: bool) -> Result<()> {
+pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
     let wallet = load_wallet()?;
@@ -89,7 +89,7 @@ pub async fn sync(peers: Vec<Multiaddr>, force: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn load(peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn load(peers: NetworkPeers) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 

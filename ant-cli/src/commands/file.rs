@@ -6,16 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::network::NetworkPeers;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::address::addr_to_str;
-use autonomi::Multiaddr;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 use std::path::PathBuf;
 
-pub async fn cost(file: &str, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn cost(file: &str, peers: NetworkPeers) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
 
     println!("Getting upload cost...");
@@ -31,7 +31,7 @@ pub async fn cost(file: &str, peers: Vec<Multiaddr>) -> Result<()> {
     Ok(())
 }
 
-pub async fn upload(file: &str, public: bool, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn upload(file: &str, public: bool, peers: NetworkPeers) -> Result<()> {
     let wallet = load_wallet()?;
     let mut client = crate::actions::connect_to_network(peers).await?;
     let event_receiver = client.enable_client_events();
@@ -101,7 +101,7 @@ pub async fn upload(file: &str, public: bool, peers: Vec<Multiaddr>) -> Result<(
     Ok(())
 }
 
-pub async fn download(addr: &str, dest_path: &str, peers: Vec<Multiaddr>) -> Result<()> {
+pub async fn download(addr: &str, dest_path: &str, peers: NetworkPeers) -> Result<()> {
     let mut client = crate::actions::connect_to_network(peers).await?;
     crate::actions::download(addr, dest_path, &mut client).await
 }

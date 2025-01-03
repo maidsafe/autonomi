@@ -131,7 +131,7 @@ To upload a file or a directory, you need to set the `SECRET_KEY` environment va
 > When running a local network, you can use the `SECRET_KEY` printed by the `evm-testnet` command [step 2](#2-run-a-local-evm-node) as it has all the money.
 
 ```bash
-SECRET_KEY=<YOUR_EVM_SECRET_KEY> cargo run --bin ant --features local -- file upload <path>
+SECRET_KEY=<YOUR_EVM_SECRET_KEY> cargo run --bin ant -- --local file upload <path>
 ```
 
 The output will print out the address at which the content was uploaded.
@@ -139,7 +139,7 @@ The output will print out the address at which the content was uploaded.
 Now to download the files again:
 
 ```bash
-cargo run --bin ant --features local -- file download <addr> <dest_path>
+cargo run --bin ant -- --local file download <addr> <dest_path>
 ```
 
 ### Registers
@@ -150,7 +150,7 @@ their use by two users to exchange text messages in a crude chat application.
 In the first terminal, using the registers example, Alice creates a register:
 
 ```
-cargo run --example registers --features=local -- --user alice --reg-nickname myregister
+cargo run --example registers -- --local --user alice --reg-nickname myregister
 ```
 
 Alice can now write a message to the register and see anything written by anyone else. For example
@@ -193,7 +193,7 @@ message Alice has written, and he can write back by running this command with th
 from Alice. (Note that the command should all be on one line):
 
 ```
-cargo run --example registers --features=local -- --user bob --reg-address 50f4c9d55aa1f4fc19149a86e023cd189e509519788b4ad8625a1ce62932d1938cf4242e029cada768e7af0123a98c25973804d84ad397ca65cb89d6580d04ff07e5b196ea86f882b925be6ade06fc8d
+cargo run --example registers -- --local --user bob --reg-address 50f4c9d55aa1f4fc19149a86e023cd189e509519788b4ad8625a1ce62932d1938cf4242e029cada768e7af0123a98c25973804d84ad397ca65cb89d6580d04ff07e5b196ea86f882b925be6ade06fc8d
 ```
 
 After retrieving the register and displaying the message from Alice, Bob can reply and at any time,
@@ -220,7 +220,7 @@ A second example, `register_inspect` allows you to view its structure and conten
 the above example you again provide the address of the register. For example:
 
 ```
-cargo run --example register_inspect --features=local -- --reg-address 50f4c9d55aa1f4fc19149a86e023cd189e509519788b4ad8625a1ce62932d1938cf4242e029cada768e7af0123a98c25973804d84ad397ca65cb89d6580d04ff07e5b196ea86f882b925be6ade06fc8d
+cargo run --example register_inspect -- --local --reg-address 50f4c9d55aa1f4fc19149a86e023cd189e509519788b4ad8625a1ce62932d1938cf4242e029cada768e7af0123a98c25973804d84ad397ca65cb89d6580d04ff07e5b196ea86f882b925be6ade06fc8d
 ```
 
 After printing a summary of the register, this example will display

@@ -19,7 +19,7 @@ pub use evmlib::cryptography;
 #[cfg(feature = "external-signer")]
 pub use evmlib::external_signer;
 pub use evmlib::utils;
-pub use evmlib::utils::get_evm_network_from_env;
+pub use evmlib::utils::{get_evm_network_from_env, local_evm_network_from_csv};
 pub use evmlib::utils::{DATA_PAYMENTS_ADDRESS, PAYMENT_TOKEN_ADDRESS, RPC_URL};
 pub use evmlib::wallet::Error as EvmWalletError;
 pub use evmlib::wallet::Wallet as EvmWallet;
