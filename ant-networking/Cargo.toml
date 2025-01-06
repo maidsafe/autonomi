@@ -40,6 +40,7 @@ hyper = { version = "0.14", features = [
 itertools = "~0.12.1"
 lazy_static = "~1.4.0"
 libp2p = { version = "0.54.1", features = [
+    "dcutr",
     "tokio",
     "dns",
     "kad",
