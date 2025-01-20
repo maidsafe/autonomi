@@ -575,15 +575,19 @@ impl SwarmDriver {
                 // giving time for ConnectionEstablished to be hopefully processed.
                 // And since we don't do anything critical with this event, the order and time of processing is
                 // not critical.
-                if self.should_we_log_incoming_connection_error(connection_id, &send_back_addr) {
+                if self.is_incoming_connection_error_valid(connection_id, &send_back_addr) {
                     error!("IncomingConnectionError from local_addr:?{local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
+
+                    // This is best approximation that we can do to prevent harmless errors from affecting the external
+                    // address health.
+                    if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
+                        external_addr_manager
+                            .on_incoming_connection_error(local_addr.clone(), &mut self.swarm);
+                    }
                 } else {
                     debug!("IncomingConnectionError from local_addr:?{local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
                 }
-                if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
-                    external_addr_manager
-                        .on_incoming_connection_error(local_addr.clone(), &mut self.swarm);
-                }
+
                 let _ = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
             }
@@ -787,7 +791,7 @@ impl SwarmDriver {
     }
 
     // Do not log IncomingConnectionError if the ConnectionId is adjacent to an already established connection.
-    fn should_we_log_incoming_connection_error(&self, id: ConnectionId, addr: &Multiaddr) -> bool {
+    fn is_incoming_connection_error_valid(&self, id: ConnectionId, addr: &Multiaddr) -> bool {
         let Ok(id) = format!("{id}").parse::<usize>() else {
             return true;
         };
