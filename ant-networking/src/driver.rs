@@ -702,6 +702,14 @@ impl NetworkBuilder {
         // Enable relay manager for nodes behind home network
         let relay_manager = if !is_client && self.is_behind_home_network {
             let relay_manager = RelayManager::new(peer_id);
+            #[cfg(feature = "open-metrics")]
+            let mut relay_manager = relay_manager;
+            #[cfg(feature = "open-metrics")]
+            if let Some(metrics_recorder) = &metrics_recorder {
+                relay_manager.set_reservation_health_metrics(
+                    metrics_recorder.relay_reservation_health.clone(),
+                );
+            }
             Some(relay_manager)
         } else {
             info!("Relay manager is disabled for this node.");

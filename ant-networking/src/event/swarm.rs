@@ -7,10 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    event::NodeEvent, multiaddr_get_ip, multiaddr_is_global, multiaddr_strip_p2p,
-    relay_manager::is_a_relayed_peer, target_arch::Instant, NetworkEvent, Result, SwarmDriver,
+    event::NodeEvent, multiaddr_get_ip, target_arch::Instant, NetworkEvent, Result, SwarmDriver,
 };
-use ant_protocol::version::{IDENTIFY_NODE_VERSION_STR, IDENTIFY_PROTOCOL_STR};
+use itertools::Itertools;
 #[cfg(feature = "local")]
 use libp2p::mdns;
 #[cfg(feature = "open-metrics")]
@@ -19,13 +18,9 @@ use libp2p::{
     core::ConnectedPoint,
     kad::K_VALUE,
     multiaddr::Protocol,
-    swarm::{
-        dial_opts::{DialOpts, PeerCondition},
-        ConnectionId, DialError, SwarmEvent,
-    },
+    swarm::{ConnectionId, DialError, SwarmEvent},
     Multiaddr, PeerId, TransportError,
 };
-use std::collections::HashSet;
 use tokio::time::Duration;
 
 impl SwarmDriver {
@@ -64,12 +59,21 @@ impl SwarmDriver {
                 info!(?event, "relay client event");
 
                 if let libp2p::relay::client::Event::ReservationReqAccepted {
-                    relay_peer_id, ..
+                    relay_peer_id,
+                    renewal,
+                    ..
                 } = *event
                 {
-                    if let Some(relay_manager) = self.relay_manager.as_mut() {
-                        relay_manager
-                            .on_successful_reservation_by_client(&relay_peer_id, &mut self.swarm);
+                    if !renewal {
+                        if let Some(relay_manager) = self.relay_manager.as_mut() {
+                            relay_manager.on_successful_reservation_by_client(
+                                &relay_peer_id,
+                                &mut self.swarm,
+                                &self.live_connected_peers,
+                            );
+                        }
+                    } else {
+                        info!("Relay reservation was renewed with {relay_peer_id:?}");
                     }
                 }
             }
@@ -112,184 +116,14 @@ impl SwarmDriver {
                     _ => {}
                 }
             }
-            SwarmEvent::Behaviour(NodeEvent::Identify(iden)) => {
+            SwarmEvent::Behaviour(NodeEvent::Identify(event)) => {
                 // Record the Identify event for metrics if the feature is enabled.
                 #[cfg(feature = "open-metrics")]
                 if let Some(metrics_recorder) = &self.metrics_recorder {
-                    metrics_recorder.record(&(*iden));
+                    metrics_recorder.record(&(*event));
                 }
                 event_string = "identify";
-
-                match *iden {
-                    libp2p::identify::Event::Received {
-                        peer_id,
-                        info,
-                        connection_id,
-                    } => {
-                        debug!(conn_id=%connection_id, %peer_id, ?info, "identify: received info");
-
-                        let our_identify_protocol = IDENTIFY_PROTOCOL_STR.read().expect("IDENTIFY_PROTOCOL_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
-
-                        if info.protocol_version != our_identify_protocol {
-                            warn!(?info.protocol_version, "identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}");
-
-                            self.send_event(NetworkEvent::PeerWithUnsupportedProtocol {
-                                our_protocol: our_identify_protocol,
-                                their_protocol: info.protocol_version,
-                            });
-                            // Block the peer from any further communication.
-                            self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
-                            if let Some(dead_peer) =
-                                self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id)
-                            {
-                                error!("Clearing out a protocol mistmatch peer from RT. Something went wrong, we should not have added this peer to RT: {peer_id:?}");
-                                self.update_on_peer_removal(*dead_peer.node.key.preimage());
-                            }
-
-                            return Ok(());
-                        }
-
-                        let our_agent_version = IDENTIFY_NODE_VERSION_STR.read().expect("IDENTIFY_NODE_VERSION_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
-                        // if client, return.
-                        if info.agent_version != our_agent_version {
-                            return Ok(());
-                        }
-
-                        let has_dialed = self.dialed_peers.contains(&peer_id);
-
-                        // If we're not in local mode, only add globally reachable addresses.
-                        // Strip the `/p2p/...` part of the multiaddresses.
-                        // Collect into a HashSet directly to avoid multiple allocations and handle deduplication.
-                        let mut addrs: HashSet<Multiaddr> = match self.local {
-                            true => info
-                                .listen_addrs
-                                .into_iter()
-                                .map(|addr| multiaddr_strip_p2p(&addr))
-                                .collect(),
-                            false => info
-                                .listen_addrs
-                                .into_iter()
-                                .filter(multiaddr_is_global)
-                                .map(|addr| multiaddr_strip_p2p(&addr))
-                                .collect(),
-                        };
-
-                        let has_relayed = is_a_relayed_peer(&addrs);
-
-                        let is_bootstrap_peer = self
-                            .bootstrap_peers
-                            .iter()
-                            .any(|(_ilog2, peers)| peers.contains(&peer_id));
-
-                        // Do not use an `already relayed` peer as `potential relay candidate`.
-                        if !has_relayed && !is_bootstrap_peer {
-                            if let Some(relay_manager) = self.relay_manager.as_mut() {
-                                debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
-                                relay_manager.add_potential_candidates(
-                                    &peer_id,
-                                    &addrs,
-                                    &info.protocols,
-                                );
-                            }
-                        }
-
-                        // When received an identify from un-dialed peer, try to dial it
-                        // The dial shall trigger the same identify to be sent again and confirm
-                        // peer is external accessible, hence safe to be added into RT.
-                        if !self.local && !has_dialed {
-                            // Only need to dial back for not fulfilled kbucket
-                            let (kbucket_full, already_present_in_rt, ilog2) =
-                                if let Some(kbucket) =
-                                    self.swarm.behaviour_mut().kademlia.kbucket(peer_id)
-                                {
-                                    let ilog2 = kbucket.range().0.ilog2();
-                                    let num_peers = kbucket.num_entries();
-                                    let is_bucket_full = num_peers >= K_VALUE.into();
-
-                                    // check if peer_id is already a part of RT
-                                    let already_present_in_rt = kbucket
-                                        .iter()
-                                        .any(|entry| entry.node.key.preimage() == &peer_id);
-
-                                    // // If the bucket contains any of a bootstrap node,
-                                    // // consider the bucket is not full and dial back
-                                    // // so that the bootstrap nodes can be replaced.
-                                    // if is_bucket_full {
-                                    //     if let Some(peers) = self.bootstrap_peers.get(&ilog2) {
-                                    //         if kbucket.iter().any(|entry| {
-                                    //             peers.contains(entry.node.key.preimage())
-                                    //         }) {
-                                    //             is_bucket_full = false;
-                                    //         }
-                                    //     }
-                                    // }
-
-                                    (is_bucket_full, already_present_in_rt, ilog2)
-                                } else {
-                                    return Ok(());
-                                };
-
-                            if kbucket_full {
-                                debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
-                                return Ok(());
-                            } else if already_present_in_rt {
-                                debug!("received identify for {peer_id:?} that is already part of the RT. Not dialing {peer_id:?} on {addrs:?}");
-                                return Ok(());
-                            }
-
-                            info!(%peer_id, ?addrs, "received identify info from undialed peer for not full kbucket {ilog2:?}, dial back to confirm external accessible");
-                            if let Err(err) = self.swarm.dial(
-                                DialOpts::peer_id(peer_id)
-                                    .condition(PeerCondition::NotDialing)
-                                    .addresses(addrs.iter().cloned().collect())
-                                    .build(),
-                            ) {
-                                warn!(%peer_id, ?addrs, "dialing error: {err:?}");
-                            }
-
-                            trace!(
-                                "SwarmEvent handled in {:?}: {event_string:?}",
-                                start.elapsed()
-                            );
-                            return Ok(());
-                        }
-
-                        // If we are not local, we care only for peers that we dialed and thus are reachable.
-                        if self.local || has_dialed {
-                            // A bad node cannot establish a connection with us. So we can add it to the RT directly.
-
-                            // With the new bootstrap cache, the workload is distributed,
-                            // hence no longer need to replace bootstrap nodes for workload share.
-                            // self.remove_bootstrap_from_full(peer_id);
-
-                            // Avoid have `direct link format` addrs co-exists with `relay` addr
-                            if has_relayed {
-                                addrs.retain(|multiaddr| {
-                                    multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit))
-                                });
-                            }
-
-                            debug!(%peer_id, ?addrs, "identify: attempting to add addresses to routing table");
-
-                            // Attempt to add the addresses to the routing table.
-                            for multiaddr in addrs {
-                                let _routing_update = self
-                                    .swarm
-                                    .behaviour_mut()
-                                    .kademlia
-                                    .add_address(&peer_id, multiaddr);
-                            }
-                        }
-                        trace!(
-                            "SwarmEvent handled in {:?}: {event_string:?}",
-                            start.elapsed()
-                        );
-                    }
-                    // Log the other Identify events.
-                    libp2p::identify::Event::Sent { .. } => debug!("identify: {iden:?}"),
-                    libp2p::identify::Event::Pushed { .. } => debug!("identify: {iden:?}"),
-                    libp2p::identify::Event::Error { .. } => debug!("identify: {iden:?}"),
-                }
+                self.handle_identify_event(*event);
             }
             #[cfg(feature = "local")]
             SwarmEvent::Behaviour(NodeEvent::Mdns(mdns_event)) => {
@@ -345,6 +179,13 @@ impl SwarmDriver {
                     }
                 }
 
+                if tracing::level_enabled!(tracing::Level::DEBUG) {
+                    let all_external_addresses = self.swarm.external_addresses().collect_vec();
+                    let all_listeners = self.swarm.listeners().collect_vec();
+                    debug!("All our listeners: {all_listeners:?}");
+                    debug!("All our external addresses: {all_external_addresses:?}");
+                }
+
                 self.send_event(NetworkEvent::NewListenAddr(address.clone()));
             }
             SwarmEvent::ListenerClosed {
@@ -365,6 +206,14 @@ impl SwarmDriver {
             } => {
                 event_string = "incoming";
                 debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+                #[cfg(feature = "open-metrics")]
+                if let Some(relay_manager) = self.relay_manager.as_mut() {
+                    relay_manager.on_incoming_connection(
+                        &connection_id,
+                        &local_addr,
+                        &send_back_addr,
+                    );
+                }
             }
             SwarmEvent::ConnectionEstablished {
                 peer_id,
@@ -381,6 +230,10 @@ impl SwarmDriver {
                         external_addr_manager
                             .on_established_incoming_connection(local_addr.clone());
                     }
+                }
+                #[cfg(feature = "open-metrics")]
+                if let Some(relay_manager) = self.relay_manager.as_mut() {
+                    relay_manager.on_connection_established(&peer_id, &connection_id);
                 }
 
                 let _ = self.live_connected_peers.insert(
@@ -583,6 +436,10 @@ impl SwarmDriver {
                 if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
                     external_addr_manager
                         .on_incoming_connection_error(local_addr.clone(), &mut self.swarm);
+                }
+                #[cfg(feature = "open-metrics")]
+                if let Some(relay_manager) = self.relay_manager.as_mut() {
+                    relay_manager.on_incomming_connection_error(&send_back_addr, &connection_id);
                 }
                 let _ = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();

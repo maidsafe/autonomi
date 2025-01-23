@@ -155,7 +155,11 @@ impl Client {
             verification,
         };
         let payment_upload = Ok(self.network.put_record(record, &put_cfg).await?);
-        debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}");
+
+        match &payment_upload {
+            Ok(_) => debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}"),
+            Err(err) => error!("Failed to store chunk: {chunk:?} to {storing_nodes:?}: {err:?}"),
+        }
         payment_upload
     }
 
