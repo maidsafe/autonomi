@@ -10,13 +10,15 @@ use crate::network::NetworkPeers;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::address::addr_to_str;
+use autonomi::client::config::ClientOperationConfig;
+use autonomi::ResponseQuorum;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 use std::path::PathBuf;
 
 pub async fn cost(file: &str, peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+    let client = crate::actions::connect_to_network(peers, Default::default()).await?;
 
     println!("Getting upload cost...");
     info!("Calculating cost for file: {file}");
@@ -31,9 +33,19 @@ pub async fn cost(file: &str, peers: NetworkPeers) -> Result<()> {
     Ok(())
 }
 
-pub async fn upload(file: &str, public: bool, peers: NetworkPeers) -> Result<()> {
-    let mut client = crate::actions::connect_to_network(peers).await?;
-    let wallet = load_wallet(&client.evm_network)?;
+pub async fn upload(
+    file: &str,
+    public: bool,
+    peers: NetworkPeers,
+    verification_quorum: Option<ResponseQuorum>,
+) -> Result<()> {
+    let mut client_operation_config = ClientOperationConfig::default();
+    if let Some(verification_quorum) = verification_quorum {
+        client_operation_config.chunk_verification_quorum(verification_quorum);
+    }
+    let mut client = crate::actions::connect_to_network(peers, client_operation_config).await?;
+
+    let wallet = load_wallet(client.get_evm_network())?;
     let event_receiver = client.enable_client_events();
     let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
 
@@ -105,8 +117,18 @@ pub async fn upload(file: &str, public: bool, peers: NetworkPeers) -> Result<()>
     Ok(())
 }
 
-pub async fn download(addr: &str, dest_path: &str, peers: NetworkPeers) -> Result<()> {
-    let mut client = crate::actions::connect_to_network(peers).await?;
+pub async fn download(
+    addr: &str,
+    dest_path: &str,
+    peers: NetworkPeers,
+    read_quorum: Option<ResponseQuorum>,
+) -> Result<()> {
+    let mut client_operation_config = ClientOperationConfig::default();
+    if let Some(read_quorum) = read_quorum {
+        client_operation_config.chunk_read_quorum(read_quorum);
+    }
+    let mut client = crate::actions::connect_to_network(peers, client_operation_config).await?;
+
     crate::actions::download(addr, dest_path, &mut client).await
 }
 

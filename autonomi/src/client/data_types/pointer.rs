@@ -12,16 +12,15 @@ use crate::client::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_networking::{GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, VerificationKind};
+use ant_networking::{
+    GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind,
+};
 use ant_protocol::{
-    storage::{
-        try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind,
-        RetryStrategy,
-    },
+    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
 };
 use bls::{PublicKey, SecretKey};
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 use tracing::{debug, error, trace};
 
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
@@ -55,8 +54,11 @@ impl Client {
         let key = NetworkAddress::from_pointer_address(address).to_record_key();
         debug!("Fetching pointer from network at: {key:?}");
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            get_quorum: self.operation_config.pointer_operation_config.read_quorum,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .read_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
@@ -148,15 +150,24 @@ impl Client {
         };
 
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .pointer_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .write_retry_strategy,
             verification: Some((VerificationKind::Crdt, get_cfg)),
             use_put_record_to: payees,
         };
@@ -244,14 +255,23 @@ impl Client {
             expires: None,
         };
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .pointer_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .write_retry_strategy,
             verification: Some((VerificationKind::Crdt, get_cfg)),
             use_put_record_to: None,
         };

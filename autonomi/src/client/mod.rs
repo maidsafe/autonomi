@@ -15,6 +15,8 @@
 /// - Pointer
 /// - Scratchpad
 pub mod data_types;
+use config::ClientConfig;
+use config::ClientOperationConfig;
 pub use data_types::chunk;
 pub use data_types::graph;
 pub use data_types::pointer;
@@ -28,6 +30,7 @@ pub use high_level::files;
 pub use high_level::vault;
 
 pub mod address;
+pub mod config;
 pub mod key_derivation;
 pub mod payment;
 pub mod quote;
@@ -80,34 +83,13 @@ pub struct Client {
     pub(crate) network: Network,
     pub(crate) client_event_sender: Arc<Option<mpsc::Sender<ClientEvent>>>,
     /// The EVM network to use for the client.
-    pub evm_network: EvmNetwork,
+    evm_network: Arc<EvmNetwork>,
+    /// The configuration for operations on the client.
+    ///
+    /// This will be shared across all clones of the client.
+    operation_config: Arc<ClientOperationConfig>,
     // Shutdown signal for the `SwarmDriver` task
     _shutdown_tx: watch::Sender<bool>,
-}
-
-/// Configuration for [`Client::init_with_config`].
-#[derive(Debug, Clone, Default)]
-pub struct ClientConfig {
-    /// Whether we're expected to connect to a local network.
-    pub local: bool,
-
-    /// List of peers to connect to.
-    ///
-    /// If not provided, the client will use the default bootstrap peers.
-    pub peers: Option<Vec<Multiaddr>>,
-
-    /// EVM network to use for quotations and payments.
-    pub evm_network: EvmNetwork,
-}
-
-impl ClientConfig {
-    fn local(peers: Option<Vec<Multiaddr>>) -> Self {
-        Self {
-            local: true,
-            peers,
-            evm_network: EvmNetwork::new(true).unwrap_or_default(),
-        }
-    }
 }
 
 /// Error returned by [`Client::init`].
@@ -200,6 +182,7 @@ impl Client {
             local,
             peers: Some(peers),
             evm_network: EvmNetwork::new(local).unwrap_or_default(),
+            operation_config: Default::default(),
         })
         .await
     }
@@ -252,7 +235,8 @@ impl Client {
         Ok(Self {
             network,
             client_event_sender: Arc::new(None),
-            evm_network: config.evm_network,
+            evm_network: Arc::new(config.evm_network),
+            operation_config: Arc::new(config.operation_config),
             _shutdown_tx: shutdown_tx,
         })
     }
@@ -265,6 +249,10 @@ impl Client {
         debug!("All events to the clients are enabled");
 
         client_event_receiver
+    }
+
+    pub fn get_evm_network(&self) -> &EvmNetwork {
+        &self.evm_network
     }
 }
 

@@ -12,6 +12,7 @@ extern crate tracing;
 mod bootstrap;
 mod circular_vec;
 mod cmd;
+mod config;
 mod driver;
 mod error;
 mod event;
@@ -35,9 +36,8 @@ use xor_name::XorName;
 // re-export arch dependent deps for use in the crate, or above
 pub use self::{
     cmd::{NodeIssue, SwarmLocalState},
-    driver::{
-        GetRecordCfg, NetworkBuilder, PutRecordCfg, SwarmDriver, VerificationKind, MAX_PACKET_SIZE,
-    },
+    config::{GetRecordCfg, PutRecordCfg, ResponseQuorum, RetryStrategy, VerificationKind},
+    driver::{NetworkBuilder, SwarmDriver, MAX_PACKET_SIZE},
     error::{GetRecordError, NetworkError},
     event::{MsgResponder, NetworkEvent},
     graph::get_graph_entry_from_record,
@@ -52,13 +52,13 @@ use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::{
     error::Error as ProtocolError,
     messages::{ChunkProof, Nonce, Query, QueryResponse, Request, Response},
-    storage::{DataTypes, Pointer, RetryStrategy, Scratchpad, ValidationType},
+    storage::{DataTypes, Pointer, Scratchpad, ValidationType},
     NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
 use futures::future::select_all;
 use libp2p::{
     identity::Keypair,
-    kad::{KBucketDistance, KBucketKey, Quorum, Record, RecordKey},
+    kad::{KBucketDistance, KBucketKey, Record, RecordKey},
     multiaddr::Protocol,
     request_response::OutboundFailure,
     Multiaddr, PeerId,
@@ -289,15 +289,13 @@ impl Network {
         chunk_address: NetworkAddress,
         nonce: Nonce,
         expected_proof: ChunkProof,
-        quorum: Quorum,
-        retry_strategy: Option<RetryStrategy>,
+        quorum: ResponseQuorum,
+        retry_strategy: RetryStrategy,
     ) -> Result<()> {
-        let total_attempts = retry_strategy
-            .map(|strategy| strategy.attempts())
-            .unwrap_or(1);
+        let total_attempts = retry_strategy.attempts();
 
         let pretty_key = PrettyPrintRecordKey::from(&chunk_address.to_record_key()).into_owned();
-        let expected_n_verified = get_quorum_value(&quorum);
+        let expected_n_verified = quorum.get_value();
 
         let mut close_nodes = Vec::new();
         let mut retry_attempts = 0;
@@ -497,11 +495,7 @@ impl Network {
         cfg: &GetRecordCfg,
     ) -> Result<Record> {
         let pretty_key = PrettyPrintRecordKey::from(&key);
-        let mut backoff = cfg
-            .retry_strategy
-            .unwrap_or(RetryStrategy::None)
-            .backoff()
-            .into_iter();
+        let mut backoff = cfg.retry_strategy.backoff().into_iter();
 
         loop {
             info!("Getting record from network of {pretty_key:?}. with cfg {cfg:?}",);
@@ -779,11 +773,7 @@ impl Network {
     /// If verify is on, we retry.
     pub async fn put_record(&self, record: Record, cfg: &PutRecordCfg) -> Result<()> {
         let pretty_key = PrettyPrintRecordKey::from(&record.key);
-        let mut backoff = cfg
-            .retry_strategy
-            .unwrap_or(RetryStrategy::None)
-            .backoff()
-            .into_iter();
+        let mut backoff = cfg.retry_strategy.backoff().into_iter();
 
         loop {
             info!(
@@ -1135,16 +1125,6 @@ impl Network {
 
         debug!("Received all responses for {req:?}");
         responses
-    }
-}
-
-/// Get the value of the provided Quorum
-pub fn get_quorum_value(quorum: &Quorum) -> usize {
-    match quorum {
-        Quorum::Majority => close_group_majority(),
-        Quorum::All => CLOSE_GROUP_SIZE,
-        Quorum::N(v) => v.get(),
-        Quorum::One => 1,
     }
 }
 

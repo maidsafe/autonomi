@@ -22,7 +22,6 @@ color-eyre = "0.6.3"
 crdts = { version = "7.3", default-features = false, features = ["merkle"] }
 custom_debug = "~0.6.1"
 dirs-next = "~2.0.0"
-exponential-backoff = "2.0.0"
 hex = "~0.4.3"
 lazy_static = "1.4.0"
 libp2p = { version = "0.54.1", features = ["identify", "kad"] }

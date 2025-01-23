@@ -13,7 +13,7 @@ use color_eyre::eyre::Result;
 use color_eyre::Section;
 
 pub async fn cost(peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+    let client = crate::actions::connect_to_network(peers, Default::default()).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Getting cost to create a new vault...");
@@ -28,8 +28,8 @@ pub async fn cost(peers: NetworkPeers) -> Result<()> {
 }
 
 pub async fn create(peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
-    let wallet = load_wallet(&client.evm_network)?;
+    let client = crate::actions::connect_to_network(peers, Default::default()).await?;
+    let wallet = load_wallet(client.get_evm_network())?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Retrieving local user data...");
@@ -56,9 +56,9 @@ pub async fn create(peers: NetworkPeers) -> Result<()> {
 }
 
 pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+    let client = crate::actions::connect_to_network(peers, Default::default()).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
-    let wallet = load_wallet(&client.evm_network)?;
+    let wallet = load_wallet(client.get_evm_network())?;
 
     println!("Fetching vault from network...");
     let net_user_data = client
@@ -90,7 +90,7 @@ pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
 }
 
 pub async fn load(peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+    let client = crate::actions::connect_to_network(peers, Default::default()).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Retrieving vault from network...");

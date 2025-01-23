@@ -104,7 +104,7 @@ impl Client {
         wallet: &EvmWallet,
     ) -> Result<(Receipt, AlreadyPaidAddressesCount), PayError> {
         // Check if the wallet uses the same network as the client
-        if wallet.network() != &self.evm_network {
+        if wallet.network() != self.get_evm_network() {
             return Err(PayError::EvmWalletNetworkMismatch);
         }
 

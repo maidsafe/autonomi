@@ -3,12 +3,12 @@
 
 use crate::{NodeBuilder, RunningNode};
 use ant_evm::{EvmNetwork, RewardsAddress};
-use ant_networking::PutRecordCfg;
+use ant_networking::{PutRecordCfg, ResponseQuorum};
 use ant_protocol::{node::get_antnode_root_dir, storage::ChunkAddress, NetworkAddress};
 use const_hex::FromHex;
 use libp2p::{
     identity::{Keypair, PeerId},
-    kad::{Quorum, Record as KadRecord},
+    kad::Record as KadRecord,
     Multiaddr,
 };
 use pyo3::{exceptions::PyRuntimeError, exceptions::PyValueError, prelude::*, types::PyModule};
@@ -263,8 +263,8 @@ impl AntNode {
                         expires: None,
                     };
                     let cfg = PutRecordCfg {
-                        put_quorum: Quorum::One,
-                        retry_strategy: None,
+                        put_quorum: ResponseQuorum::One,
+                        retry_strategy: Default::default(),
                         use_put_record_to: None,
                         verification: None,
                     };

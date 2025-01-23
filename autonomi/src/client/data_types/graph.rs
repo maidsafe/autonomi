@@ -14,13 +14,14 @@ use crate::client::ClientEvent;
 use crate::client::UploadSummary;
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
+use ant_networking::ResponseQuorum;
 use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, VerificationKind};
 use ant_protocol::{
-    storage::{try_serialize_record, DataTypes, RecordKind, RetryStrategy},
+    storage::{try_serialize_record, DataTypes, RecordKind},
     NetworkAddress,
 };
 use bls::PublicKey;
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 
 pub use ant_protocol::storage::GraphEntry;
 pub use ant_protocol::storage::GraphEntryAddress;
@@ -54,7 +55,16 @@ impl Client {
         &self,
         address: GraphEntryAddress,
     ) -> Result<GraphEntry, GraphError> {
-        let graph_entries = self.network.get_graph_entry(address).await?;
+        let get_cfg = GetRecordCfg {
+            get_quorum: self.operation_config.graph_operation_config.read_quorum,
+            retry_strategy: self
+                .operation_config
+                .graph_operation_config
+                .read_retry_strategy,
+            target_record: None,
+            expected_holders: Default::default(),
+        };
+        let graph_entries = self.network.get_graph_entry(address, get_cfg).await?;
         match &graph_entries[..] {
             [entry] => Ok(entry.clone()),
             multiple => Err(GraphError::Fork(multiple.to_vec())),
@@ -108,14 +118,23 @@ impl Client {
             expires: None,
         };
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .graph_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .graph_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .graph_operation_config
+                .write_retry_strategy,
             use_put_record_to: Some(payees),
             verification: Some((VerificationKind::Crdt, get_cfg)),
         };
