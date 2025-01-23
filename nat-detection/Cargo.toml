@@ -24,7 +24,7 @@ clap = { version = "4.5.4", features = ["derive"] }
 clap-verbosity-flag = "2.2.0"
 color-eyre = { version = "0.6", default-features = false }
 futures = "~0.3.13"
-libp2p = { version = "0.54.1", features = [
+libp2p = { version = "0.55.0", features = [
     "tokio",
     "tcp",
     "noise",

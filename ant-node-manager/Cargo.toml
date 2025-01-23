@@ -42,7 +42,7 @@ colored = "2.0.4"
 color-eyre = "0.6.3"
 dirs-next = "2.0.0"
 indicatif = { version = "0.17.5", features = ["tokio"] }
-libp2p = { version = "0.54.1", features = [] }
+libp2p = { version = "0.55.0", features = [] }
 libp2p-identity = { version = "0.2.7", features = ["rand"] }
 prost = { version = "0.9" }
 rand = "0.8.5"
