@@ -24,6 +24,7 @@ async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.2" }
 bytes = { version = "1.0.1", features = ["serde"] }
 custom_debug = "~0.6.1"
+exponential-backoff = "2.0.0"
 futures = "~0.3.13"
 hex = "~0.4.3"
 hkdf = "0.12"

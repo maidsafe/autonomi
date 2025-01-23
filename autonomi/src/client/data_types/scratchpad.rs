@@ -10,13 +10,15 @@ use crate::client::payment::PaymentOption;
 use crate::client::PutError;
 use crate::{client::quote::CostError, Client};
 use ant_evm::{Amount, AttoTokens};
-use ant_networking::{GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, VerificationKind};
-use ant_protocol::storage::{try_serialize_record, RecordKind, RetryStrategy};
+use ant_networking::{
+    GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind,
+};
+use ant_protocol::storage::{try_serialize_record, RecordKind};
 use ant_protocol::{
     storage::{try_deserialize_record, DataTypes, ScratchpadAddress},
     NetworkAddress,
 };
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 use std::collections::HashSet;
 
 pub use ant_protocol::storage::Scratchpad;
@@ -45,8 +47,14 @@ impl Client {
         let scratch_key = network_address.to_record_key();
 
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: None,
+            get_quorum: self
+                .operation_config
+                .scratchpad_operation_config
+                .read_quorum,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .read_retry_strategy,
             target_record: None,
             expected_holders: HashSet::new(),
         };
@@ -180,14 +188,23 @@ impl Client {
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            put_quorum: ResponseQuorum::Majority,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .write_retry_strategy,
             use_put_record_to: None,
             verification: Some((
                 VerificationKind::Crdt,
                 GetRecordCfg {
-                    get_quorum: Quorum::Majority,
-                    retry_strategy: None,
+                    get_quorum: self
+                        .operation_config
+                        .scratchpad_operation_config
+                        .verification_quorum,
+                    retry_strategy: self
+                        .operation_config
+                        .scratchpad_operation_config
+                        .verification_retry_strategy,
                     target_record: None,
                     expected_holders: HashSet::new(),
                 },
@@ -216,14 +233,23 @@ impl Client {
         let scratch_key = scratch_address.to_record_key();
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            put_quorum: ResponseQuorum::Majority,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .write_retry_strategy,
             use_put_record_to: None,
             verification: Some((
                 VerificationKind::Crdt,
                 GetRecordCfg {
-                    get_quorum: Quorum::Majority,
-                    retry_strategy: None,
+                    get_quorum: self
+                        .operation_config
+                        .scratchpad_operation_config
+                        .verification_quorum,
+                    retry_strategy: self
+                        .operation_config
+                        .scratchpad_operation_config
+                        .verification_retry_strategy,
                     target_record: None,
                     expected_holders: HashSet::new(),
                 },

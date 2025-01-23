@@ -6,24 +6,24 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{driver::GetRecordCfg, Network, NetworkError, Result};
+use crate::config::GetRecordCfg;
+use crate::{Network, NetworkError, Result};
 use ant_protocol::storage::{DataTypes, GraphEntry, GraphEntryAddress};
 use ant_protocol::{
-    storage::{try_deserialize_record, RecordHeader, RecordKind, RetryStrategy},
+    storage::{try_deserialize_record, RecordHeader, RecordKind},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 
 impl Network {
     /// Gets GraphEntry at GraphEntryAddress from the Network.
-    pub async fn get_graph_entry(&self, address: GraphEntryAddress) -> Result<Vec<GraphEntry>> {
+    pub async fn get_graph_entry(
+        &self,
+        address: GraphEntryAddress,
+        get_cfg: GetRecordCfg,
+    ) -> Result<Vec<GraphEntry>> {
         let key = NetworkAddress::from_graph_entry_address(address).to_record_key();
-        let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::All,
-            retry_strategy: Some(RetryStrategy::Quick),
-            target_record: None,
-            expected_holders: Default::default(),
-        };
+
         let record = self.get_record_from_network(key.clone(), &get_cfg).await?;
         debug!(
             "Got record from the network, {:?}",
