@@ -1,12 +1,12 @@
 use crate::client::{payment::PayError, quote::CostError, Client};
 use ant_evm::{Amount, AttoTokens, EvmWallet, EvmWalletError};
-use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, VerificationKind};
+use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind};
 use ant_protocol::{
-    storage::{try_serialize_record, DataTypes, PointerAddress, RecordKind, RetryStrategy},
+    storage::{try_serialize_record, DataTypes, PointerAddress, RecordKind},
     NetworkAddress,
 };
 use bls::SecretKey;
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 use tracing::{debug, error, trace};
 
 pub use ant_protocol::storage::Pointer;
@@ -34,6 +34,7 @@ pub enum PointerError {
 impl Client {
     /// Get a pointer from the network
     pub async fn pointer_get(&self, address: PointerAddress) -> Result<Pointer, PointerError> {
+        todo!("update to newer version");
         let key = NetworkAddress::from_pointer_address(address).to_record_key();
         let record = self.network.get_local_record(&key).await?;
 
@@ -94,15 +95,24 @@ impl Client {
         };
 
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .pointer_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .pointer_operation_config
+                .write_retry_strategy,
             verification: Some((VerificationKind::Crdt, get_cfg)),
             use_put_record_to: Some(payees),
         };

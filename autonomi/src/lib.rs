@@ -81,10 +81,14 @@ pub use libp2p::Multiaddr;
 
 #[doc(inline)]
 pub use client::{
-    data_types::chunk::Chunk, data_types::graph::GraphEntry, data_types::pointer::Pointer,
-    data_types::scratchpad::Scratchpad, files::archive_private::PrivateArchive,
-    files::archive_public::PublicArchive, files::Metadata, Client, ClientConfig,
+    config::ClientConfig, data_types::chunk::Chunk, data_types::graph::GraphEntry,
+    data_types::pointer::Pointer, data_types::scratchpad::Scratchpad,
+    files::archive_private::PrivateArchive, files::archive_public::PublicArchive, files::Metadata,
+    Client,
 };
+
+// Re-exports of configs from ant_networking
+pub use ant_networking::{ResponseQuorum, RetryStrategy};
 
 #[cfg(feature = "extension-module")]
 mod python;

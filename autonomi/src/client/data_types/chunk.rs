@@ -6,37 +6,34 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{
-    collections::HashSet,
-    hash::{DefaultHasher, Hash, Hasher},
-    num::NonZero,
-    sync::LazyLock,
-};
-
-use ant_evm::ProofOfPayment;
-use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, VerificationKind};
-use ant_protocol::{
-    messages::ChunkProof,
-    storage::{
-        try_deserialize_record, try_serialize_record, ChunkAddress, DataTypes, RecordHeader,
-        RecordKind, RetryStrategy,
-    },
-    NetworkAddress,
-};
-use bytes::Bytes;
-use libp2p::kad::{Quorum, Record};
-use rand::{thread_rng, Rng};
-use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
-use serde::{Deserialize, Serialize};
-use xor_name::XorName;
-
-pub use ant_protocol::storage::Chunk;
-
 use crate::{
     client::{payment::Receipt, utils::process_tasks_with_max_concurrency, GetError, PutError},
     self_encryption::DataMapLevel,
     Client,
 };
+use ant_evm::ProofOfPayment;
+use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind};
+use ant_protocol::{
+    messages::ChunkProof,
+    storage::{
+        try_deserialize_record, try_serialize_record, ChunkAddress, DataTypes, RecordHeader,
+        RecordKind,
+    },
+    NetworkAddress,
+};
+use bytes::Bytes;
+use libp2p::kad::Record;
+use rand::{thread_rng, Rng};
+use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashSet,
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::LazyLock,
+};
+use xor_name::XorName;
+
+pub use ant_protocol::storage::Chunk;
 
 /// Number of retries to upload chunks.
 pub(crate) const RETRY_ATTEMPTS: usize = 3;
@@ -119,8 +116,11 @@ impl Client {
         let key = NetworkAddress::from_chunk_address(ChunkAddress::new(addr)).to_record_key();
         debug!("Fetching chunk from network at: {key:?}");
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::One,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            get_quorum: self.operation_config.chunk_operation_config.read_quorum,
+            retry_strategy: self
+                .operation_config
+                .chunk_operation_config
+                .read_retry_strategy,
             target_record: None,
             expected_holders: HashSet::new(),
         };
@@ -235,8 +235,14 @@ impl Client {
 
         let verification = {
             let verification_cfg = GetRecordCfg {
-                get_quorum: Quorum::N(NonZero::new(2).expect("2 is non-zero")),
-                retry_strategy: Some(RetryStrategy::Balanced),
+                get_quorum: self
+                    .operation_config
+                    .chunk_operation_config
+                    .verification_quorum,
+                retry_strategy: self
+                    .operation_config
+                    .chunk_operation_config
+                    .verification_retry_strategy,
                 target_record: None,
                 expected_holders: Default::default(),
             };
@@ -260,8 +266,11 @@ impl Client {
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::One,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            put_quorum: ResponseQuorum::One,
+            retry_strategy: self
+                .operation_config
+                .chunk_operation_config
+                .write_retry_strategy,
             use_put_record_to: Some(storing_nodes.clone()),
             verification,
         };
@@ -284,7 +293,6 @@ impl Client {
                 DataMapLevel::First(map) => map,
                 DataMapLevel::Additional(map) => map,
             };
-
             let data = self.fetch_from_data_map(data_map).await?;
 
             match &data_map_level {
