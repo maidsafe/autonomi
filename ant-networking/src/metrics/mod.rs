@@ -355,3 +355,9 @@ impl<T> Recorder<libp2p::swarm::SwarmEvent<T>> for NetworkMetricsRecorder {
         self.libp2p_metrics.record(event);
     }
 }
+
+impl Recorder<libp2p::dcutr::Event> for NetworkMetricsRecorder {
+    fn record(&self, event: &libp2p::dcutr::Event) {
+        self.libp2p_metrics.record(event)
+    }
+}

@@ -46,12 +46,15 @@ use futures::future::Either;
 use futures::StreamExt;
 #[cfg(feature = "local")]
 use libp2p::mdns;
-use libp2p::{core::muxing::StreamMuxerBox, relay};
 use libp2p::{
+    allow_block_list,
+    core::muxing::StreamMuxerBox,
     identity::Keypair,
     kad::{self, QueryId, Quorum, Record, RecordKey, K_VALUE},
     multiaddr::Protocol,
+    relay,
     request_response::{self, Config as RequestResponseConfig, OutboundRequestId, ProtocolSupport},
+    swarm::behaviour::toggle,
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
         ConnectionId, DialError, NetworkBehaviour, StreamProtocol, Swarm,
@@ -251,15 +254,15 @@ impl From<std::convert::Infallible> for NodeEvent {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "NodeEvent")]
 pub(super) struct NodeBehaviour {
-    pub(super) blocklist:
-        libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
+    pub(super) blocklist: allow_block_list::Behaviour<allow_block_list::BlockedPeers>,
     pub(super) identify: libp2p::identify::Behaviour,
     #[cfg(feature = "local")]
     pub(super) mdns: mdns::tokio::Behaviour,
     #[cfg(feature = "upnp")]
-    pub(super) upnp: libp2p::swarm::behaviour::toggle::Toggle<libp2p::upnp::tokio::Behaviour>,
+    pub(super) upnp: toggle::Toggle<libp2p::upnp::tokio::Behaviour>,
     pub(super) relay_client: libp2p::relay::client::Behaviour,
-    pub(super) relay_server: libp2p::relay::Behaviour,
+    pub(super) relay_server: toggle::Toggle<libp2p::relay::Behaviour>,
+    pub(super) dcutr: toggle::Toggle<libp2p::dcutr::Behaviour>,
     pub(super) kademlia: kad::Behaviour<UnifiedRecordStore>,
     pub(super) request_response: request_response::cbor::Behaviour<Request, Response>,
 }
@@ -661,7 +664,14 @@ impl NetworkBuilder {
         }
         .into(); // Into `Toggle<T>`
 
-        let relay_server = {
+        let dcutr = if !is_client && self.is_behind_home_network {
+            Some(libp2p::dcutr::Behaviour::new(peer_id))
+        } else {
+            None
+        }
+        .into(); // Into `Toggle<T>`
+
+        let relay_server = if !is_client && !self.is_behind_home_network {
             let relay_server_cfg = relay::Config {
                 max_reservations: 128,             // Amount of peers we are relaying for
                 max_circuits: 1024, // The total amount of relayed connections at any given moment.
@@ -671,16 +681,20 @@ impl NetworkBuilder {
                 max_circuit_bytes: MAX_PACKET_SIZE as u64,
                 ..Default::default()
             };
-            libp2p::relay::Behaviour::new(peer_id, relay_server_cfg)
-        };
+            Some(libp2p::relay::Behaviour::new(peer_id, relay_server_cfg))
+        } else {
+            None
+        }
+        .into(); // Into `Toggle<T>`
 
         let behaviour = NodeBehaviour {
-            blocklist: libp2p::allow_block_list::Behaviour::default(),
+            blocklist: allow_block_list::Behaviour::default(),
             relay_client: relay_behaviour,
             relay_server,
             #[cfg(feature = "upnp")]
             upnp,
             request_response,
+            dcutr,
             kademlia,
             identify,
             #[cfg(feature = "local")]

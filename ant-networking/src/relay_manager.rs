@@ -203,7 +203,7 @@ impl RelayManager {
 
     fn does_it_support_relay_server_protocol(protocols: &Vec<StreamProtocol>) -> bool {
         for stream_protocol in protocols {
-            if *stream_protocol == "/libp2p/circuit/relay/0.2.0/stop" {
+            if *stream_protocol == "/libp2p/circuit/relay/0.2.0/hop" {
                 return true;
             }
         }
