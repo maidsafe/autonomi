@@ -27,7 +27,7 @@ use crate::{
     Client,
 };
 
-use super::Metadata;
+use super::{Metadata, MetadataVersioned};
 
 /// The address of a public archive on the network. Points to an [`PublicArchive`].
 pub type ArchiveAddr = XorName;
@@ -36,7 +36,17 @@ pub type ArchiveAddr = XorName;
 /// to the network, of which the addresses are stored in this archive.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PublicArchive {
-    map: BTreeMap<PathBuf, (DataAddr, Metadata)>,
+    map: BTreeMap<PathBuf, (DataAddr, MetadataVersioned)>,
+}
+
+/// This type essentially adds a `version` field to the serialized `PublicArchive` data.
+/// E.g. in JSON format: `{ "version": 0, "map": <xxx> }`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+#[serde(tag = "version")]
+pub enum PublicArchiveVersioned {
+    #[serde(rename = "0")]
+    V0(PublicArchive),
 }
 
 impl PublicArchive {
@@ -68,7 +78,8 @@ impl PublicArchive {
     /// Add a file to a local archive
     /// Note that this does not upload the archive to the network
     pub fn add_file(&mut self, path: PathBuf, data_addr: DataAddr, meta: Metadata) {
-        self.map.insert(path.clone(), (data_addr, meta));
+        self.map
+            .insert(path.clone(), (data_addr, MetadataVersioned::V0(meta)));
         debug!("Added a new file to the archive, path: {:?}", path);
     }
 
@@ -76,7 +87,7 @@ impl PublicArchive {
     pub fn files(&self) -> Vec<(PathBuf, Metadata)> {
         self.map
             .iter()
-            .map(|(path, (_, meta))| (path.clone(), meta.clone()))
+            .map(|(path, (_, meta))| (path.clone(), meta.clone().into()))
             .collect()
     }
 
@@ -88,26 +99,35 @@ impl PublicArchive {
     /// Iterate over the archive items
     /// Returns an iterator over (PathBuf, DataAddr, Metadata)
     pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &DataAddr, &Metadata)> {
-        self.map
-            .iter()
-            .map(|(path, (addr, meta))| (path, addr, meta))
+        self.map.iter().map(|(path, (addr, meta))| {
+            (
+                path,
+                addr,
+                match meta {
+                    MetadataVersioned::V0(meta) => meta,
+                },
+            )
+        })
     }
 
     /// Get the underlying map
-    pub fn map(&self) -> &BTreeMap<PathBuf, (DataAddr, Metadata)> {
+    pub fn map(&self) -> &BTreeMap<PathBuf, (DataAddr, MetadataVersioned)> {
         &self.map
     }
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PublicArchive, rmp_serde::decode::Error> {
-        let root: PublicArchive = rmp_serde::from_slice(&data[..])?;
+        let root: PublicArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
+        let PublicArchiveVersioned::V0(root) = root;
 
         Ok(root)
     }
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
-        let root_serialized = rmp_serde::to_vec(&self)?;
+        let versioned = PublicArchiveVersioned::V0(self.clone());
+        let root_serialized = rmp_serde::to_vec(&versioned)?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)

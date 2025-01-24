@@ -39,6 +39,50 @@ pub struct Metadata {
     pub modified: u64,
     /// File size in bytes
     pub size: u64,
+
+    /// Optional extra metadata with undefined structure, e.g. JSON.
+    pub extra: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+#[serde(tag = "version")]
+pub enum MetadataVersioned {
+    #[serde(rename = "0")]
+    V0(Metadata),
+}
+
+// Allows us to do access currently only possible `Metadata` struct (V0) conveniently:
+// ```rust
+// let metadata = MetadataVersioned::V0(Metadata::new_with_size(123));
+// let size = metadata.size; // Access the only possible (currently) `Metadata` (V0) struct
+// ```
+impl std::ops::Deref for MetadataVersioned {
+    type Target = Metadata;
+
+    fn deref(&self) -> &Self::Target {
+        let MetadataVersioned::V0(v0) = &self;
+        v0
+    }
+}
+impl std::ops::DerefMut for MetadataVersioned {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        let MetadataVersioned::V0(v0) = self;
+        v0
+    }
+}
+
+impl From<Metadata> for MetadataVersioned {
+    fn from(value: Metadata) -> Self {
+        MetadataVersioned::V0(value)
+    }
+}
+// Again for convenience. When we add a `V1` we could implement an migration/upgrade path here:
+// E.g. we could upgrade `V0` to `V1`, returning our latest/current `V1`.
+impl From<MetadataVersioned> for Metadata {
+    fn from(MetadataVersioned::V0(value): MetadataVersioned) -> Self {
+        value
+    }
 }
 
 impl Metadata {
@@ -53,6 +97,7 @@ impl Metadata {
             created: now,
             modified: now,
             size,
+            extra: None,
         }
     }
 }

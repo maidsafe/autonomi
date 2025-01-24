@@ -23,7 +23,7 @@ use crate::{
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
-use super::Metadata;
+use super::{Metadata, MetadataVersioned};
 
 /// Private archive data map, allowing access to the [`PrivateArchive`] data.
 pub type PrivateArchiveAccess = DataMapChunk;
@@ -33,7 +33,17 @@ pub type PrivateArchiveAccess = DataMapChunk;
 /// The data maps are stored within this structure instead of uploading them to the network, keeping the data private.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PrivateArchive {
-    map: BTreeMap<PathBuf, (DataMapChunk, Metadata)>,
+    map: BTreeMap<PathBuf, (DataMapChunk, MetadataVersioned)>,
+}
+
+/// This type essentially adds a `version` field to the serialized `PrivateArchive` data.
+/// E.g. in JSON format: `{ "version": 0, "map": <xxx> }`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+#[serde(tag = "version")]
+pub enum PrivateArchiveVersioned {
+    #[serde(rename = "0")]
+    V0(PrivateArchive),
 }
 
 impl PrivateArchive {
@@ -65,7 +75,8 @@ impl PrivateArchive {
     /// Add a file to a local archive
     /// Note that this does not upload the archive to the network
     pub fn add_file(&mut self, path: PathBuf, data_map: DataMapChunk, meta: Metadata) {
-        self.map.insert(path.clone(), (data_map, meta));
+        self.map
+            .insert(path.clone(), (data_map, MetadataVersioned::V0(meta)));
         debug!("Added a new file to the archive, path: {:?}", path);
     }
 
@@ -73,7 +84,7 @@ impl PrivateArchive {
     pub fn files(&self) -> Vec<(PathBuf, Metadata)> {
         self.map
             .iter()
-            .map(|(path, (_, meta))| (path.clone(), meta.clone()))
+            .map(|(path, (_, meta))| (path.clone(), meta.clone().into()))
             .collect()
     }
 
@@ -89,26 +100,35 @@ impl PrivateArchive {
     ///
     /// Returns an iterator over ([`PathBuf`], [`DataMapChunk`], [`Metadata`])
     pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &DataMapChunk, &Metadata)> {
-        self.map
-            .iter()
-            .map(|(path, (data_map, meta))| (path, data_map, meta))
+        self.map.iter().map(|(path, (data_map, meta))| {
+            (
+                path,
+                data_map,
+                match meta {
+                    MetadataVersioned::V0(meta) => meta,
+                },
+            )
+        })
     }
 
     /// Get the underlying map
-    pub fn map(&self) -> &BTreeMap<PathBuf, (DataMapChunk, Metadata)> {
+    pub fn map(&self) -> &BTreeMap<PathBuf, (DataMapChunk, MetadataVersioned)> {
         &self.map
     }
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PrivateArchive, rmp_serde::decode::Error> {
-        let root: PrivateArchive = rmp_serde::from_slice(&data[..])?;
+        let root: PrivateArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
+        let PrivateArchiveVersioned::V0(root) = root;
 
         Ok(root)
     }
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
-        let root_serialized = rmp_serde::to_vec(&self)?;
+        let versioned = PrivateArchiveVersioned::V0(self.clone());
+        let root_serialized = rmp_serde::to_vec(&versioned)?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)
@@ -144,5 +164,16 @@ impl Client {
         let result = self.data_put(bytes, payment_option).await;
         debug!("Uploaded private archive {archive:?} to the network and address is {result:?}");
         result
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn backwards_compatibility() {
+        let archive = super::PrivateArchive::new();
+        let bytes = archive.to_bytes().unwrap();
+        let archive2 = super::PrivateArchive::from_bytes(bytes).unwrap();
+        assert_eq!(archive, archive2);
     }
 }
