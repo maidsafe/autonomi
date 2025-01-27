@@ -49,9 +49,16 @@ pub(super) enum NodeEvent {
     #[cfg(feature = "local")]
     Mdns(Box<mdns::Event>),
     Identify(Box<libp2p::identify::Event>),
+    Dcutr(Box<libp2p::dcutr::Event>),
     RelayClient(Box<libp2p::relay::client::Event>),
     RelayServer(Box<libp2p::relay::Event>),
     Void(void::Void),
+}
+
+impl From<libp2p::dcutr::Event> for NodeEvent {
+    fn from(event: libp2p::dcutr::Event) -> Self {
+        NodeEvent::Dcutr(Box::new(event))
+    }
 }
 
 #[cfg(feature = "upnp")]
