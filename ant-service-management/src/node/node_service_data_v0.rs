@@ -51,7 +51,7 @@ pub(super) struct NodeServiceDataV0 {
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_name: String,
     pub status: ServiceStatus,
     #[serde(default = "default_upnp")]

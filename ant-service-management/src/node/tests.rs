@@ -16,11 +16,7 @@ use crate::ServiceStatus;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use libp2p::{Multiaddr, PeerId};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{net::Ipv4Addr, path::PathBuf, str::FromStr};
 
 fn create_test_v1_struct() -> NodeServiceDataV1 {
     NodeServiceDataV1 {
@@ -60,7 +56,7 @@ fn create_test_v1_struct() -> NodeServiceDataV1 {
             relay: true,
             rewards_address: RewardsAddress::from_str("0x1234567890123456789012345678901234567890").unwrap(),
             reward_balance: Some(AttoTokens::from_u128(1000000000000000000u128)),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            rpc_socket_addr: None,
             service_name: "safenode-1".to_string(),
             status: ServiceStatus::Running,
             user: Some("safe_user".to_string()),
