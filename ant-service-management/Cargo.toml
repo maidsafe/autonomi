@@ -30,6 +30,11 @@ tonic = { version = "0.6.2" }
 tracing = { version = "~0.1.26" }
 tracing-core = "0.1.30"
 chrono = "0.4.39"
+prometheus-parse = "0.2.5"
+regex = "1.11.0"
+reqwest = { version = "0.12.2", default-features = false, features = [
+    "rustls-tls-manual-roots",
+] }
 
 [build-dependencies]
 # watch out updating this, protoc compiler needs to be installed on all build systems

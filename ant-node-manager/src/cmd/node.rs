@@ -15,6 +15,7 @@ use crate::{
         config::{AddNodeServiceOptions, PortRange},
     },
     config::{self, is_running_as_root},
+    error::Error,
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
 };
@@ -24,7 +25,7 @@ use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
-    rpc::RpcClient,
+    metric::MetricClient,
     NodeRegistry, NodeService, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
 };
 use color_eyre::{eyre::eyre, Help, Result};
@@ -54,8 +55,6 @@ pub async fn add(
     node_port: Option<PortRange>,
     mut init_peers_config: InitialPeersConfig,
     rewards_address: RewardsAddress,
-    rpc_address: Option<Ipv4Addr>,
-    rpc_port: Option<PortRange>,
     src_path: Option<PathBuf>,
     no_upnp: bool,
     url: Option<String>,
@@ -132,8 +131,6 @@ pub async fn add(
         node_port,
         init_peers_config,
         rewards_address,
-        rpc_address,
-        rpc_port,
         antnode_src_path,
         antnode_dir_path: service_data_dir_path.clone(),
         service_data_dir_path,
@@ -183,9 +180,9 @@ pub async fn balance(
 
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
-        // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
+        let metrics_port: u16 = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(node, Box::new(metric_client)); // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
         println!("{}: {}", service.service_data.service_name, 0,);
     }
     Ok(())
@@ -225,8 +222,10 @@ pub async fn remove(
     let mut failed_services = Vec::new();
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(node, Box::new(metric_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         match service_manager.remove(keep_directories).await {
@@ -312,10 +311,9 @@ pub async fn start(
     let mut failed_services = Vec::new();
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-
-        let service = NodeService::new(node, Box::new(rpc_client));
-
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(node, Box::new(metric_client));
         // set dynamic startup delay if fixed_interval is not set
         let service = if fixed_interval.is_none() {
             service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
@@ -408,8 +406,9 @@ pub async fn stop(
     let mut failed_services = Vec::new();
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(node, Box::new(metric_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
 
@@ -522,9 +521,9 @@ pub async fn upgrade(
             target_version: target_version.clone(),
         };
         let service_name = node.service_name.clone();
-
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(node, Box::new(metric_client));
         // set dynamic startup delay if fixed_interval is not set
         let service = if fixed_interval.is_none() {
             service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
@@ -602,8 +601,6 @@ pub async fn maintain_n_running_nodes(
     node_port: Option<PortRange>,
     peers_args: InitialPeersConfig,
     rewards_address: RewardsAddress,
-    rpc_address: Option<Ipv4Addr>,
-    rpc_port: Option<PortRange>,
     src_path: Option<PathBuf>,
     url: Option<String>,
     no_upnp: bool,
@@ -706,8 +703,6 @@ pub async fn maintain_n_running_nodes(
                         Some(PortRange::Single(port)),
                         peers_args.clone(),
                         rewards_address,
-                        rpc_address,
-                        rpc_port.clone(),
                         src_path.clone(),
                         no_upnp,
                         url.clone(),

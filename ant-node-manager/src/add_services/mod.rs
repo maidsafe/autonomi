@@ -31,7 +31,7 @@ use colored::Colorize;
 use service_manager::ServiceInstallCtx;
 use std::{
     ffi::OsString,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
 };
 
 /// Install antnode as a service.
@@ -73,11 +73,6 @@ pub async fn add_node(
         check_port_availability(port_option, &node_registry.nodes)?;
     }
 
-    if let Some(port_option) = &options.rpc_port {
-        port_option.validate(options.count.unwrap_or(1))?;
-        check_port_availability(port_option, &node_registry.nodes)?;
-    }
-
     let antnode_file_name = options
         .antnode_src_path
         .file_name()
@@ -104,27 +99,13 @@ pub async fn add_node(
     let mut node_number = current_node_count + 1;
     let mut node_port = get_start_port_if_applicable(options.node_port);
     let mut metrics_port = get_start_port_if_applicable(options.metrics_port);
-    let mut rpc_port = get_start_port_if_applicable(options.rpc_port);
 
     while node_number <= target_node_count {
         trace!("Adding node with node_number {node_number}");
-        let rpc_free_port = if let Some(port) = rpc_port {
-            port
-        } else {
-            service_control.get_available_port()?
-        };
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
-        } else if options.enable_metrics_server {
+        } else {
             Some(service_control.get_available_port()?)
-        } else {
-            None
-        };
-
-        let rpc_socket_addr = if let Some(addr) = options.rpc_address {
-            SocketAddr::new(IpAddr::V4(addr), rpc_free_port)
-        } else {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port)
         };
 
         let service_name = format!("antnode{node_number}");
@@ -205,7 +186,6 @@ pub async fn add_node(
             node_port,
             init_peers_config: options.init_peers_config.clone(),
             rewards_address: options.rewards_address,
-            rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
             upnp: !options.no_upnp,
@@ -220,7 +200,6 @@ pub async fn add_node(
                     service_antnode_path.to_string_lossy().into_owned(),
                     service_data_dir_path.to_string_lossy().into_owned(),
                     service_log_dir_path.to_string_lossy().into_owned(),
-                    rpc_socket_addr,
                 ));
 
                 node_registry.nodes.push(NodeServiceData {
@@ -242,7 +221,7 @@ pub async fn add_node(
                     number: node_number,
                     rewards_address: options.rewards_address,
                     reward_balance: None,
-                    rpc_socket_addr,
+                    rpc_socket_addr: None,
                     peer_id: None,
                     peers_args: options.init_peers_config.clone(),
                     pid: None,
@@ -266,7 +245,6 @@ pub async fn add_node(
         node_number += 1;
         node_port = increment_port_option(node_port);
         metrics_port = increment_port_option(metrics_port);
-        rpc_port = increment_port_option(rpc_port);
     }
 
     if options.delete_antnode_src {
@@ -287,7 +265,6 @@ pub async fn add_node(
             println!("    - Antnode path: {}", install.1);
             println!("    - Data path: {}", install.2);
             println!("    - Log path: {}", install.3);
-            println!("    - RPC port: {}", install.4);
         }
         println!("[!] Note: newly added services have not been started");
     }

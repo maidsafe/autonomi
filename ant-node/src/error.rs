@@ -86,4 +86,6 @@ pub enum Error {
     InvalidRequest(String),
     #[error("EVM Network error: {0}")]
     EvmNetwork(String),
+    #[error("Not able to open the file for Listeners with option")]
+    InvalidListenerFileOperation,
 }

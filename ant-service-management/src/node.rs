@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::{
+    error::Result, metric::MetricActions, ServiceStateActions, ServiceStatus, UpgradeOptions,
+};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -25,7 +27,7 @@ use std::{
 
 pub struct NodeService<'a> {
     pub service_data: &'a mut NodeServiceData,
-    pub rpc_actions: Box<dyn RpcActions + Send>,
+    pub metric_actions: Box<dyn MetricActions + Send>,
     /// Used to enable dynamic startup delay based on the time it takes for a node to connect to the network.
     pub connection_timeout: Option<Duration>,
 }
@@ -33,10 +35,10 @@ pub struct NodeService<'a> {
 impl<'a> NodeService<'a> {
     pub fn new(
         service_data: &'a mut NodeServiceData,
-        rpc_actions: Box<dyn RpcActions + Send>,
+        metric_actions: Box<dyn MetricActions + Send>,
     ) -> NodeService<'a> {
         NodeService {
-            rpc_actions,
+            metric_actions,
             service_data,
             connection_timeout: None,
         }
@@ -58,9 +60,8 @@ impl ServiceStateActions for NodeService<'_> {
 
     fn build_upgrade_install_context(&self, options: UpgradeOptions) -> Result<ServiceInstallCtx> {
         let label: ServiceLabel = self.service_data.service_name.parse()?;
+
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(self.service_data.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(
                 self.service_data
@@ -177,18 +178,18 @@ impl ServiceStateActions for NodeService<'_> {
                     "Performing dynamic startup delay for {}",
                     self.service_data.service_name
                 );
-                self.rpc_actions
+                self.metric_actions
                     .is_node_connected_to_network(connection_timeout)
                     .await?;
             }
 
             let node_info = self
-                .rpc_actions
+                .metric_actions
                 .node_info()
                 .await
                 .inspect_err(|err| error!("Error obtaining node_info via RPC: {err:?}"))?;
             let network_info = self
-                .rpc_actions
+                .metric_actions
                 .network_info()
                 .await
                 .inspect_err(|err| error!("Error obtaining network_info via RPC: {err:?}"))?;
@@ -300,7 +301,7 @@ pub struct NodeServiceData {
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_name: String,
     pub status: ServiceStatus,
     #[serde(default = "default_upnp")]
