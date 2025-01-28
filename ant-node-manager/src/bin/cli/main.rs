@@ -699,7 +699,7 @@ pub enum LocalSubCmd {
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
-        #[clap(long, default_value_t = 200)]
+        #[clap(long, default_value_t = 250)]
         interval: u64,
         /// Specify the logging format.
         ///
@@ -798,7 +798,7 @@ pub enum LocalSubCmd {
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
-        #[clap(long, default_value_t = 200)]
+        #[clap(long, default_value_t = 250)]
         interval: u64,
         /// Specify the logging format.
         ///
