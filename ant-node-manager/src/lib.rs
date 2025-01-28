@@ -39,9 +39,10 @@ impl From<u8> for VerbosityLevel {
 }
 
 use crate::error::{Error, Result};
+use ant_service_management::metric::MetricClient;
 use ant_service_management::rpc::RpcActions;
 use ant_service_management::{
-    control::ServiceControl, error::Error as ServiceError, rpc::RpcClient, NodeRegistry,
+    control::ServiceControl, error::Error as ServiceError, NodeRegistry,
     NodeService, NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions,
     UpgradeResult,
 };
@@ -550,16 +551,15 @@ pub async fn refresh_node_registry(
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
         node.reward_balance = None;
 
-        let mut rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        rpc_client.set_max_attempts(1);
-        let mut service = NodeService::new(node, Box::new(rpc_client.clone()));
+        let metric_client = MetricClient::new(node.metrics_port.unwrap_or(0));
+        let mut service = NodeService::new(node, Box::new(metric_client.clone()));
 
         if is_local_network {
             // For a local network, retrieving the process by its path does not work, because the
             // paths are not unique: they are all launched from the same binary. Instead we will
             // just determine whether the node is running by connecting to its RPC service. We
             // only need to distinguish between `RUNNING` and `STOPPED` for a local network.
-            match rpc_client.node_info().await {
+            match metric_client.node_info().await {
                 Ok(info) => {
                     let pid = info.pid;
                     debug!(

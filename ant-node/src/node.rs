@@ -26,6 +26,7 @@ use ant_protocol::{
     storage::ValidationType,
     NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
+use ant_service_management::metric::{write_network_metrics_to_file,NetworkInfoMetrics};
 use bytes::Bytes;
 use itertools::Itertools;
 use libp2p::{identity::Keypair, kad::U256, Multiaddr, PeerId};
@@ -215,6 +216,22 @@ impl NodeBuilder {
             root_dir_path: self.root_dir,
             rewards_address: self.evm_address,
         };
+
+        // Run the node
+        let runing_node_metrics = running_node.clone();
+        let _return_value = tokio::spawn(async move {
+                sleep(Duration::from_millis(200)).await;
+                let state = runing_node_metrics.get_swarm_local_state().await.expect("Failed to get swarm local state");
+                let connected_peers = state.connected_peers.iter().map(|p| p.to_string()).collect();
+                let listeners = state.listeners.iter().map(|m| m.to_string()).collect();
+                let network_info = NetworkInfoMetrics::new(connected_peers, listeners);
+
+                write_network_metrics_to_file(
+                    runing_node_metrics.root_dir_path.clone(),
+                    network_info,
+                    runing_node_metrics.network.peer_id().to_string()
+                );
+        });
 
         Ok(running_node)
     }
