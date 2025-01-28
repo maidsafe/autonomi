@@ -12,12 +12,7 @@ use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
 use color_eyre::{eyre::eyre, Result};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{
-    ffi::OsString,
-    net::{Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{ffi::OsString, net::Ipv4Addr, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub enum PortRange {
@@ -89,7 +84,6 @@ pub struct InstallNodeServiceCtxBuilder {
     pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
     pub relay: bool,
-    pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
 }
 
@@ -97,8 +91,6 @@ impl InstallNodeServiceCtxBuilder {
     pub fn build(self) -> Result<ServiceInstallCtx> {
         let label: ServiceLabel = self.name.parse()?;
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(self.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(self.data_dir_path.to_string_lossy().to_string()),
             OsString::from("--log-output-dest"),
@@ -197,8 +189,6 @@ pub struct AddNodeServiceOptions {
     pub no_upnp: bool,
     pub relay: bool,
     pub rewards_address: RewardsAddress,
-    pub rpc_address: Option<Ipv4Addr>,
-    pub rpc_port: Option<PortRange>,
     pub service_data_dir_path: PathBuf,
     pub service_log_dir_path: PathBuf,
     pub user: Option<String>,
@@ -310,7 +300,7 @@ pub struct AddDaemonServiceOptions {
 mod tests {
     use super::*;
     use ant_evm::{CustomNetwork, RewardsAddress};
-    use std::net::{IpAddr, Ipv4Addr};
+    use std::net::Ipv4Addr;
 
     fn create_default_builder() -> InstallNodeServiceCtxBuilder {
         InstallNodeServiceCtxBuilder {
@@ -333,7 +323,6 @@ mod tests {
             init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
             no_upnp: false,
         }
@@ -369,7 +358,6 @@ mod tests {
             init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
@@ -406,7 +394,6 @@ mod tests {
             init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
@@ -425,8 +412,6 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
@@ -457,8 +442,6 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
@@ -507,8 +490,6 @@ mod tests {
         let result = builder.build().unwrap();
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
