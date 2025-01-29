@@ -100,14 +100,12 @@ async fn main() -> Result<()> {
     let opt = Opt::parse();
 
     if opt.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi Node RPC Client",
-                env!("CARGO_PKG_VERSION"),
-                None
-            )
-        );
+        ant_build_info::get_version_info(
+            "Autonomi Node RPC Client",
+            env!("CARGO_PKG_VERSION"),
+            None,
+        )
+        .pretty_print();
     }
 
     if opt.crate_version {

@@ -7,7 +7,98 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use chrono::Utc;
-use tracing::debug;
+use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "nightly")]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VersionInfo {
+    pub app_name: String,
+    pub nightly_version: String,
+    pub network_version: Option<String>,
+    pub git_branch: String,
+    pub git_sha: String,
+}
+
+#[cfg(not(feature = "nightly"))]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VersionInfo {
+    pub app_name: String,
+    pub crate_version: String,
+    pub network_version: Option<String>,
+    pub package_info: String,
+    pub git_branch: String,
+    pub git_sha: String,
+    pub build_date: String,
+}
+
+impl VersionInfo {
+    pub fn pretty_print(&self) {
+        println!("{self}");
+    }
+}
+
+#[cfg(not(feature = "nightly"))]
+pub fn get_version_info(
+    app_name: &str,
+    crate_version: &str,
+    protocol_version: Option<&str>,
+) -> VersionInfo {
+    VersionInfo {
+        app_name: app_name.to_string(),
+        crate_version: crate_version.to_string(),
+        network_version: protocol_version.map(|version| version.to_string()),
+        package_info: package_version(),
+        git_branch: git_branch().to_string(),
+        git_sha: git_sha().to_string(),
+        build_date: build_date().to_string(),
+    }
+}
+
+#[cfg(feature = "nightly")]
+pub fn get_version_info(
+    app_name: &str,
+    _crate_version: &str,
+    protocol_version: Option<&str>,
+) -> VersionInfo {
+    VersionInfo {
+        app_name: app_name.to_string(),
+        nightly_version: nightly_version(),
+        network_version: protocol_version.map(|version| version.to_string()),
+        git_branch: git_branch().to_string(),
+        git_sha: git_sha().to_string(),
+    }
+}
+
+#[cfg(not(feature = "nightly"))]
+impl std::fmt::Display for VersionInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} v{}", self.app_name, self.crate_version)?;
+        if let Some(version) = &self.network_version {
+            writeln!(f, "Network version: {version}")?;
+        }
+        writeln!(f, "Package version: {}", self.package_info)?;
+        writeln!(
+            f,
+            "\nGit info: {} / {} / {}",
+            self.git_branch, self.git_sha, self.build_date
+        )
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl std::fmt::Display for VersionInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -- Nightly Release {}",
+            self.app_name, self.nightly_version
+        )?;
+        if let Some(version) = &self.network_version {
+            writeln!(f, "Network version: {version}")?;
+        }
+        writeln!(f, "Git info: {} / {}", self.git_branch, self.git_sha)
+    }
+}
 
 /// Git information separated by slashes: `<sha> / <branch> / <describe>`
 pub const fn git_info() -> &'static str {
@@ -41,11 +132,6 @@ pub fn nightly_version() -> String {
     now.format("%Y.%m.%d").to_string()
 }
 
-/// Git information for nightly builds: `<date> / <branch> / <sha>`
-pub fn nightly_git_info() -> String {
-    format!("{} / {} / {}", nightly_version(), git_branch(), git_sha(),)
-}
-
 pub fn package_version() -> String {
     format!(
         "{}.{}.{}.{}",
@@ -56,55 +142,6 @@ pub fn package_version() -> String {
     )
 }
 
-pub fn full_version_info(
-    app_name: &str,
-    crate_version: &str,
-    protocol_version: Option<&str>,
-) -> String {
-    let mut info = format!("{app_name} v{crate_version}");
-
-    if let Some(version) = protocol_version {
-        info.push_str(&format!("\nNetwork version: {version}"));
-    }
-
-    info.push_str(&format!(
-        "\nPackage version: {}\nGit info: {}",
-        package_version(),
-        git_info()
-    ));
-
-    info
-}
-
-pub fn full_nightly_version_info(app_name: &str, protocol_version: Option<&str>) -> String {
-    let mut info = format!("{app_name} -- Nightly Release {}", nightly_version(),);
-    if let Some(version) = protocol_version {
-        info.push_str(&format!("\nNetwork version: {version}"));
-    }
-    info.push_str(&format!("\nGit info: {} / {}", git_branch(), git_sha(),));
-    info
-}
-
-pub fn version_string(
-    app_name: &str,
-    crate_version: &str,
-    protocol_version: Option<&str>,
-) -> String {
-    if cfg!(feature = "nightly") {
-        full_nightly_version_info(app_name, protocol_version)
-    } else {
-        full_version_info(app_name, crate_version, protocol_version)
-    }
-}
-
-pub fn log_version_info(crate_version: &str, protocol_version: &str) {
-    if cfg!(feature = "nightly") {
-        debug!("nightly build info: {}", nightly_git_info());
-        debug!("network version: {protocol_version}");
-    } else {
-        debug!("version: {crate_version}");
-        debug!("network version: {protocol_version}");
-        debug!("package version: {}", package_version());
-        debug!("git info: {}", git_info());
-    }
+pub fn build_date() -> String {
+    env!("VERGEN_BUILD_DATE").to_string()
 }

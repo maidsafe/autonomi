@@ -799,6 +799,7 @@ name = "ant-build-info"
 version = "0.1.23"
 dependencies = [
  "chrono",
+ "serde",
  "tracing",
  "vergen",
 ]

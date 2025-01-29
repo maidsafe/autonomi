@@ -224,14 +224,12 @@ fn main() -> Result<()> {
         .read()
         .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR");
     if opt.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi Node",
-                env!("CARGO_PKG_VERSION"),
-                Some(&identify_protocol_str)
-            )
-        );
+        ant_build_info::get_version_info(
+            "Autonomi Node",
+            env!("CARGO_PKG_VERSION"),
+            Some(&identify_protocol_str),
+        )
+        .pretty_print();
         return Ok(());
     }
 
@@ -290,7 +288,14 @@ fn main() -> Result<()> {
     );
     info!("\n{}\n{}", msg, "=".repeat(msg.len()));
 
-    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
+    debug!(
+        "{:?}",
+        ant_build_info::get_version_info(
+            "Ant Node",
+            env!("CARGO_PKG_VERSION"),
+            Some(&identify_protocol_str)
+        )
+    );
     debug!(
         "antnode built with git version: {}",
         ant_build_info::git_info()

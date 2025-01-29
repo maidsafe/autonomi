@@ -82,14 +82,8 @@ async fn main() -> Result<()> {
     let opt = Opt::parse();
 
     if opt.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi NAT Detection",
-                env!("CARGO_PKG_VERSION"),
-                None
-            )
-        );
+        ant_build_info::get_version_info("Autonomi NAT Detection", env!("CARGO_PKG_VERSION"), None)
+            .pretty_print();
         return Ok(());
     }
 

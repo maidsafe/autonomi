@@ -29,6 +29,7 @@ use ant_logging::metrics::init_metrics;
 use ant_logging::{LogBuilder, LogFormat, ReloadHandle, WorkerGuard};
 use ant_protocol::version;
 use opt::Opt;
+use serde_json::json;
 use tracing::Level;
 
 #[tokio::main]
@@ -45,30 +46,54 @@ async fn main() -> Result<()> {
         .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
         .clone();
     if opt.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi Client",
-                env!("CARGO_PKG_VERSION"),
-                Some(&identify_protocol_str)
-            )
+        let version_info = ant_build_info::get_version_info(
+            "Autonomi Client",
+            env!("CARGO_PKG_VERSION"),
+            Some(&identify_protocol_str),
         );
+        if opt.json {
+            eprintln!("{}", serde_json::to_string_pretty(&version_info)?);
+        } else {
+            eprintln!("{version_info}");
+        }
+
         return Ok(());
     }
 
     if opt.crate_version {
-        println!("Crate version: {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        let crate_version = env!("CARGO_PKG_VERSION");
+        if opt.json {
+            let json_value = json!({
+                "crate_version": crate_version,
+            });
+            eprintln!("{}", serde_json::to_string_pretty(&json_value)?);
+        } else {
+            eprintln!("Crate version: {}", env!("CARGO_PKG_VERSION"));
+        }
     }
 
     if opt.protocol_version {
-        println!("Network version: {identify_protocol_str}");
+        if opt.json {
+            let json_value = json!({
+                "protocol_version": identify_protocol_str,
+            });
+            eprintln!("{}", serde_json::to_string_pretty(&json_value)?);
+        } else {
+            eprintln!("Protocol version: {identify_protocol_str}");
+        }
         return Ok(());
     }
 
     #[cfg(not(feature = "nightly"))]
     if opt.package_version {
-        println!("Package version: {}", ant_build_info::package_version());
+        if opt.json {
+            let json_value = json!({
+                "package_version": ant_build_info::package_version(),
+            });
+            eprintln!("{}", serde_json::to_string_pretty(&json_value)?);
+        } else {
+            eprintln!("Package version: {}", ant_build_info::package_version());
+        }
         return Ok(());
     }
 
