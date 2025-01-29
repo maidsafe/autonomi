@@ -310,23 +310,23 @@ async fn handle_event_receiver(
                                 protocols,
                                 IDENTIFY_PROTOCOL_STR.read().expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR. A call to set_network_id performed. This should not happen").clone(),
                             )))
-                            .expect("receiver should not close");
+                            .expect("Could not send TimedOutWithIncompatibleProtocol, receiver should not close");
                     } else {
                         sender
                             .send(Err(ConnectError::TimedOut))
-                            .expect("receiver should not close");
+                            .expect("Could not send TimedOut, receiver should not close");
                     }
                 }
             }
             event = event_receiver.recv() => {
-                let event = event.expect("receiver should not close");
+                let event = event.expect("Could not receiver Network event, receiver should not close");
                 match event {
                     NetworkEvent::PeerAdded(_peer_id, peers_len) => {
                         tracing::trace!("Peer added: {peers_len} in routing table");
 
                         if peers_len >= CLOSE_GROUP_SIZE {
                             if let Some(sender) = sender.take() {
-                                sender.send(Ok(())).expect("receiver should not close");
+                                sender.send(Ok(())).expect("Could not send OK(()), receiver should not close");
                             }
                         }
                     }
