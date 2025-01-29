@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::client::event::ClientEvent;
 use crate::client::payment::{PayError, PaymentOption};
 use crate::{client::quote::CostError, Client};
 use crate::{Amount, AttoTokens};
@@ -63,6 +64,28 @@ impl Client {
     /// Get Scratchpad from the Network
     /// It is stored at the owner's public key
     pub async fn scratchpad_get(
+        &self,
+        address: &ScratchpadAddress,
+    ) -> Result<Scratchpad, ScratchpadError> {
+        let result = self.scratchpad_get_inner(address).await;
+
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let xor_name = address.xorname();
+            let event = if result.is_ok() {
+                ClientEvent::DownloadSucceeded(xor_name)
+            } else {
+                ClientEvent::DownloadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn scratchpad_get_inner(
         &self,
         address: &ScratchpadAddress,
     ) -> Result<Scratchpad, ScratchpadError> {
@@ -148,6 +171,28 @@ impl Client {
 
     /// Manually store a scratchpad on the network
     pub async fn scratchpad_put(
+        &self,
+        scratchpad: Scratchpad,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        let xor_name = scratchpad.address().xorname();
+        let result = self.scratchpad_put_inner(scratchpad, payment_option).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn scratchpad_put_inner(
         &self,
         scratchpad: Scratchpad,
         payment_option: PaymentOption,
@@ -256,6 +301,32 @@ impl Client {
         initial_data: &Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        let xor_name = ScratchpadAddress::new(owner.public_key()).xorname();
+        let result = self
+            .scratchpad_create_inner(owner, content_type, initial_data, payment_option)
+            .await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn scratchpad_create_inner(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        initial_data: &Bytes,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
         let address = ScratchpadAddress::new(owner.public_key());
         let already_exists = match self.scratchpad_get(&address).await {
             Ok(_) => true,
@@ -274,13 +345,38 @@ impl Client {
 
         let counter = 0;
         let scratchpad = Scratchpad::new(owner, content_type, initial_data, counter);
-        self.scratchpad_put(scratchpad, payment_option).await
+        self.scratchpad_put_inner(scratchpad, payment_option).await
     }
 
     /// Update an existing scratchpad to the network
     /// This operation is free but requires the scratchpad to be already created on the network
     /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable
     pub async fn scratchpad_update(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        data: &Bytes,
+    ) -> Result<(), ScratchpadError> {
+        let xor_name = ScratchpadAddress::new(owner.public_key()).xorname();
+        let result = self
+            .scratchpad_update_inner(owner, content_type, data)
+            .await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn scratchpad_update_inner(
         &self,
         owner: &SecretKey,
         content_type: u64,

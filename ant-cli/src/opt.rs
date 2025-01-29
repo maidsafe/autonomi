@@ -31,6 +31,10 @@ pub(crate) struct Opt {
     #[clap(long)]
     pub crate_version: bool,
 
+    /// Print the output in JSON format.
+    #[clap(long)]
+    pub json: bool,
+
     /// Specify the logging format.
     ///
     /// Valid values are "default" or "json".

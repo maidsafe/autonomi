@@ -107,6 +107,10 @@ pub use client::{
 
     data_types::scratchpad::ScratchpadAddress,
 
+    // Events
+    event::ClientEvent,
+    event::PaymentSummary,
+
     // Files
     files::archive_private::PrivateArchive,
     files::archive_public::PublicArchive,

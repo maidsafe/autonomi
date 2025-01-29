@@ -11,7 +11,7 @@ use bytes::Bytes;
 
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
+use crate::client::{GetError, PutError};
 use crate::{chunk::ChunkAddress, self_encryption::encrypt, Client};
 use ant_evm::{Amount, AttoTokens};
 
@@ -53,7 +53,7 @@ impl Client {
 
         // Pay for all chunks + data map chunk
         info!("Paying for {} addresses", xor_names.len());
-        let (receipt, skipped_payments) = self
+        let (receipt, _skipped_payments) = self
             .pay_for_content_addrs(DataTypes::Chunk, xor_names.into_iter(), payment_option)
             .await
             .inspect_err(|err| error!("Error paying for data: {err:?}"))?;
@@ -79,25 +79,6 @@ impl Client {
                 last_chunk_fail.1
             );
             return Err(last_chunk_fail.1);
-        }
-
-        let record_count = (chunks.len() + 1) - skipped_payments;
-
-        // Reporting
-        if let Some(channel) = self.client_event_sender.as_ref() {
-            let tokens_spent = receipt
-                .values()
-                .map(|(_proof, price)| price.as_atto())
-                .sum::<Amount>();
-
-            let summary = UploadSummary {
-                records_paid: record_count,
-                records_already_paid: skipped_payments,
-                tokens_spent,
-            };
-            if let Err(err) = channel.send(ClientEvent::UploadComplete(summary)).await {
-                error!("Failed to send client event: {err:?}");
-            }
         }
 
         Ok(map_xor_name)

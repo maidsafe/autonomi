@@ -11,7 +11,6 @@ use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::Client;
 use crate::client::ClientEvent;
-use crate::client::UploadSummary;
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_networking::ResponseQuorum;
@@ -55,6 +54,28 @@ impl Client {
         &self,
         address: GraphEntryAddress,
     ) -> Result<GraphEntry, GraphError> {
+        let result = self.graph_entry_get_inner(address).await;
+
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let xor_name = address.xorname();
+            let event = if result.is_ok() {
+                ClientEvent::DownloadSucceeded(*xor_name)
+            } else {
+                ClientEvent::DownloadFailed(*xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn graph_entry_get_inner(
+        &self,
+        address: GraphEntryAddress,
+    ) -> Result<GraphEntry, GraphError> {
         let get_cfg = GetRecordCfg {
             get_quorum: self.operation_config.graph_operation_config.read_quorum,
             retry_strategy: self
@@ -77,12 +98,34 @@ impl Client {
         entry: GraphEntry,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, GraphEntryAddress), GraphError> {
+        let xor_name = *entry.address().xorname();
+        let result = self.graph_entry_put_inner(entry, payment_option).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn graph_entry_put_inner(
+        &self,
+        entry: GraphEntry,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, GraphEntryAddress), GraphError> {
         let address = entry.address();
 
         // pay for the graph entry
         let xor_name = address.xorname();
         debug!("Paying for graph entry at address: {address:?}");
-        let (payment_proofs, skipped_payments) = self
+        let (payment_proofs, _skipped_payments) = self
             .pay_for_content_addrs(
                 DataTypes::GraphEntry,
                 std::iter::once((*xor_name, entry.size())),
@@ -147,18 +190,6 @@ impl Client {
             .inspect_err(|err| {
                 error!("Failed to put record - GraphEntry {address:?} to the network: {err}")
             })?;
-
-        // send client event
-        if let Some(channel) = self.client_event_sender.as_ref() {
-            let summary = UploadSummary {
-                records_paid: 1usize.saturating_sub(skipped_payments),
-                records_already_paid: skipped_payments,
-                tokens_spent: price.as_atto(),
-            };
-            if let Err(err) = channel.send(ClientEvent::UploadComplete(summary)).await {
-                error!("Failed to send client event: {err}");
-            }
-        }
 
         Ok((total_cost, address))
     }

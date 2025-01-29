@@ -9,7 +9,7 @@
 use crate::{
     client::{payment::Receipt, utils::process_tasks_with_max_concurrency, GetError, PutError},
     self_encryption::DataMapLevel,
-    Client,
+    Client, ClientEvent,
 };
 use ant_evm::ProofOfPayment;
 use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind};
@@ -104,6 +104,24 @@ fn hash_to_short_string(input: &str) -> String {
 impl Client {
     /// Get a chunk from the network.
     pub async fn chunk_get(&self, addr: ChunkAddress) -> Result<Chunk, GetError> {
+        let result = self.chunk_get_inner(addr).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let xor_name = addr.xorname();
+            let event = if result.is_ok() {
+                ClientEvent::DownloadSucceeded(*xor_name)
+            } else {
+                ClientEvent::DownloadFailed(*xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn chunk_get_inner(&self, addr: ChunkAddress) -> Result<Chunk, GetError> {
         info!("Getting chunk: {addr:?}");
 
         let key = NetworkAddress::from_chunk_address(addr).to_record_key();
@@ -123,6 +141,7 @@ impl Client {
             .get_record_from_network(key, &get_cfg)
             .await
             .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?;
+
         let header = RecordHeader::from_record(&record)?;
 
         if let Ok(true) = RecordHeader::is_record_of_type_chunk(&record) {
@@ -202,6 +221,27 @@ impl Client {
         chunk: &Chunk,
         payment: ProofOfPayment,
     ) -> Result<ChunkAddress, PutError> {
+        let result = self.chunk_upload_with_payment_inner(chunk, payment).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let xorname = *chunk.name();
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xorname)
+            } else {
+                ClientEvent::UploadFailed(xorname)
+            };
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn chunk_upload_with_payment_inner(
+        &self,
+        chunk: &Chunk,
+        payment: ProofOfPayment,
+    ) -> Result<ChunkAddress, PutError> {
         let storing_nodes = payment.payees();
 
         if storing_nodes.is_empty() {
@@ -268,6 +308,7 @@ impl Client {
             verification,
         };
         self.network.put_record(record, &put_cfg).await?;
+
         debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}");
         Ok(*chunk.address())
     }

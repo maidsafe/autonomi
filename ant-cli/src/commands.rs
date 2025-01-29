@@ -48,6 +48,8 @@ pub enum FileCmd {
     Upload {
         /// The file to upload.
         file: String,
+        /// Print the output in JSON format.
+        json: bool,
         /// Upload the file as public. Everyone can see public data on the Network.
         #[arg(short, long)]
         public: bool,
@@ -61,6 +63,8 @@ pub enum FileCmd {
         addr: String,
         /// The destination file path.
         dest_file: String,
+        /// Print the output in JSON format.
+        json: bool,
         /// Optionally specify the quorum for the verification of the download.
         read_quorum: Option<ResponseQuorum>,
     },
@@ -134,14 +138,16 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             FileCmd::Cost { file } => file::cost(&file, peers.await?).await,
             FileCmd::Upload {
                 file,
+                json,
                 public,
                 verification_quorum,
-            } => file::upload(&file, public, peers.await?, verification_quorum).await,
+            } => file::upload(&file, public, peers.await?, verification_quorum, json).await,
             FileCmd::Download {
                 addr,
                 dest_file,
+                json,
                 read_quorum,
-            } => file::download(&addr, &dest_file, peers.await?, read_quorum).await,
+            } => file::download(&addr, &dest_file, peers.await?, read_quorum, json).await,
             FileCmd::List => file::list(),
         },
         Some(SubCmd::Vault { command }) => match command {

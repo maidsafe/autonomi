@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::client::{
+    event::ClientEvent,
     payment::{PayError, PaymentOption},
     quote::CostError,
     Client,
@@ -51,6 +52,24 @@ pub enum PointerError {
 impl Client {
     /// Get a pointer from the network
     pub async fn pointer_get(&self, address: PointerAddress) -> Result<Pointer, PointerError> {
+        let result = self.pointer_get_inner(address).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let xor_name = address.xorname();
+            let event = if result.is_ok() {
+                ClientEvent::DownloadSucceeded(*xor_name)
+            } else {
+                ClientEvent::DownloadFailed(*xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn pointer_get_inner(&self, address: PointerAddress) -> Result<Pointer, PointerError> {
         let key = NetworkAddress::from_pointer_address(address).to_record_key();
         debug!("Fetching pointer from network at: {key:?}");
         let get_cfg = GetRecordCfg {
@@ -68,6 +87,7 @@ impl Client {
             .get_record_from_network(key.clone(), &get_cfg)
             .await
             .inspect_err(|err| error!("Error fetching pointer: {err:?}"))?;
+
         let header = RecordHeader::from_record(&record).map_err(|err| {
             PointerError::Corrupt(format!(
                 "Failed to parse record header for pointer at {key:?}: {err:?}"
@@ -92,6 +112,28 @@ impl Client {
 
     /// Manually store a pointer on the network
     pub async fn pointer_put(
+        &self,
+        pointer: Pointer,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, PointerAddress), PointerError> {
+        let xor_name = *pointer.network_address().xorname();
+        let result = self.pointer_put_inner(pointer, payment_option).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn pointer_put_inner(
         &self,
         pointer: Pointer,
         payment_option: PaymentOption,
@@ -216,6 +258,29 @@ impl Client {
     /// The pointer needs to be created first with [`Client::pointer_put`]
     /// This operation is free as the pointer was already paid for at creation
     pub async fn pointer_update(
+        &self,
+        owner: &SecretKey,
+        target: PointerTarget,
+    ) -> Result<(), PointerError> {
+        let xor_name = *PointerAddress::from_owner(owner.public_key()).xorname();
+
+        let result = self.pointer_update_inner(owner, target).await;
+        // Reporting
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if result.is_ok() {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+        result
+    }
+
+    async fn pointer_update_inner(
         &self,
         owner: &SecretKey,
         target: PointerTarget,
