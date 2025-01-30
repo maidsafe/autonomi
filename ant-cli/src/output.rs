@@ -8,17 +8,27 @@
 
 use autonomi::{client::Amount, ClientEvent};
 use serde::Serialize;
+use serde::Serializer;
 use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Default)]
 pub(crate) struct TaskSummary {
     pub(crate) records_paid: usize,
     pub(crate) records_already_paid: usize,
+    #[serde(serialize_with = "serialize_amount_as_string")]
     pub(crate) tokens_spent: Amount,
     pub(crate) records_uploaded: usize,
     pub(crate) records_upload_failed: usize,
     pub(crate) records_downloaded: usize,
     pub(crate) records_download_failed: usize,
+}
+
+// Custom serializer function
+fn serialize_amount_as_string<S>(amount: &Amount, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&amount.to_string())
 }
 
 /// Collects task summary from the event receiver.
@@ -107,17 +117,23 @@ pub(crate) struct FileDownloadOutput {
 
 impl FileUploadOutput {
     pub(crate) fn print(&self) {
-        // get summary
-        if let Some(local_addr) = &self.uploaded_address {
-            if self.task_summary.records_paid == 0 {
-                println!("All chunks already exist on the network.");
-            } else {
-                println!("Successfully uploaded: {}", self.file);
-                println!("At address: {local_addr}");
-                info!(
-                    "Successfully uploaded: {} at address: {local_addr}",
-                    self.file
-                );
+        info!("Upload completed: {self:?}");
+
+        if self.exit_code != 0 {
+            println!("Failed to upload file.");
+            println!(
+                "Number of chunks paid for: {}",
+                self.task_summary.records_paid
+            );
+            println!("Cost: {} AttoTokens", self.task_summary.tokens_spent);
+        } else if self.task_summary.records_paid == 0 {
+            println!("All chunks already exist on the network.");
+        } else {
+            println!("Successfully uploaded: {}", self.file);
+            if let Some(local_addr) = &self.uploaded_address {
+                {
+                    println!("At address: {local_addr}");
+                }
                 println!(
                     "Number of chunks uploaded: {}",
                     self.task_summary.records_paid
@@ -128,19 +144,6 @@ impl FileUploadOutput {
                 );
                 println!("Total cost: {} AttoTokens", self.task_summary.tokens_spent);
             }
-
-            info!(
-                "Summary for upload of file {} at {local_addr:?}: {:?}",
-                self.file, self.task_summary
-            );
-        } else {
-            println!("Failed to upload file.");
-            println!(
-                "Number of chunks paid for: {}",
-                self.task_summary.records_paid
-            );
-            println!("Cost: {} AttoTokens", self.task_summary.tokens_spent);
-            info!("Failed to upload file.");
         }
     }
 
@@ -154,21 +157,9 @@ impl FileUploadOutput {
 
 impl FileDownloadOutput {
     pub(crate) fn print(&self) {
-        if self.failed_files.is_empty() {
-            if self.public {
-                info!("Successfully downloaded data at: {}", self.addr);
-                println!("Successfully downloaded data at: {}", self.addr);
-            } else {
-                info!(
-                    "Successfully downloaded private data with local address: {}",
-                    self.addr
-                );
-                println!(
-                    "Successfully downloaded private data with local address: {}",
-                    self.addr
-                );
-            }
-        } else {
+        info!("Download completed: {self:?}");
+
+        if self.exit_code != 0 {
             let err_no = self.failed_files.len();
             if self.public {
                 println!("{err_no} errors while downloading data at: {}", self.addr);
@@ -177,17 +168,25 @@ impl FileDownloadOutput {
                     "Errors while downloading data at {}: {:#?}",
                     self.addr, self.failed_files
                 );
+            } else if err_no == 0 {
+                println!(
+                    "Failed to download private data with local address: {}",
+                    self.addr
+                );
             } else {
                 println!(
                     "{err_no} errors while downloading private data with local address: {}",
                     self.addr
                 );
                 println!("{:#?}", self.failed_files);
-                error!(
-                    "Errors while downloading private data with local address {}: {:#?}",
-                    self.addr, self.failed_files
-                );
             }
+        } else if self.public {
+            println!("Successfully downloaded data at: {}", self.addr);
+        } else {
+            println!(
+                "Successfully downloaded private data with local address: {}",
+                self.addr
+            );
         }
     }
 

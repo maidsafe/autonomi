@@ -108,9 +108,6 @@ async fn download_private(
     let mut last_error = None;
 
     for (path, access, _meta) in archive.iter() {
-        if let Some(ref progress_bar) = progress_bar {
-            progress_bar.println(format!("Fetching file: {path:?}..."));
-        }
         let bytes = match client.data_get(access.clone()).await {
             Ok(bytes) => bytes,
             Err(e) => {
@@ -165,9 +162,6 @@ async fn download_public(
     let mut last_error = None;
 
     for (path, addr, _meta) in archive.iter() {
-        if let Some(ref progress_bar) = progress_bar {
-            progress_bar.println(format!("Fetching file: {path:?}..."));
-        }
         let bytes = match client.data_get_public(*addr).await {
             Ok(bytes) => bytes,
             Err(e) => {

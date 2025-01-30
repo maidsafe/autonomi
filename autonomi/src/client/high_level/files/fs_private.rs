@@ -102,8 +102,6 @@ impl Client {
             }
         }
 
-        #[cfg(feature = "loud")]
-        println!("Upload completed in {:?}", start.elapsed());
         Ok(archive)
     }
 
@@ -128,8 +126,6 @@ impl Client {
         wallet: &EvmWallet,
     ) -> Result<DataMapChunk, UploadError> {
         info!("Uploading file: {path:?}");
-        #[cfg(feature = "loud")]
-        println!("Uploading file: {path:?}");
 
         let data = tokio::fs::read(path).await?;
         let data = Bytes::from(data);

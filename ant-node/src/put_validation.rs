@@ -693,16 +693,6 @@ impl Node {
         // vdash metric (if modified please notify at https://github.com/happybeing/vdash/issues):
         info!("Total payment of {reward_amount:?} atto tokens accepted for record {pretty_key}");
 
-        // loud mode: print a celebratory message to console
-        #[cfg(feature = "loud")]
-        {
-            println!("🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟   RECEIVED REWARD   🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟");
-            println!(
-                "Total payment of {reward_amount:?} atto tokens accepted for record {pretty_key}"
-            );
-            println!("🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟🌟");
-        }
-
         Ok(())
     }
 

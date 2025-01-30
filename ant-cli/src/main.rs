@@ -126,6 +126,7 @@ fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGua
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(opt.log_output_dest.clone());
     log_builder.format(opt.log_format.unwrap_or(LogFormat::Default));
+    log_builder.print_updates_to_stdout(!opt.json);
     let guards = log_builder.initialize()?;
     Ok(guards)
 }
