@@ -226,7 +226,7 @@ impl NodeBuilder {
                 let listeners = state.listeners.iter().map(|m| m.to_string()).collect();
                 let network_info = NetworkInfoMetrics::new(connected_peers, listeners);
 
-                write_network_metrics_to_file(
+                let _ = write_network_metrics_to_file(
                     runing_node_metrics.root_dir_path.clone(),
                     network_info,
                     runing_node_metrics.network.peer_id().to_string()
