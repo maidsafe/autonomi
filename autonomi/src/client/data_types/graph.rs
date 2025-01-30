@@ -10,7 +10,6 @@ use crate::client::payment::PayError;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::Client;
-use crate::client::ClientEvent;
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_networking::ResponseQuorum;
@@ -56,19 +55,9 @@ impl Client {
     ) -> Result<GraphEntry, GraphError> {
         let result = self.graph_entry_get_inner(address).await;
 
-        // Reporting
-        if let Some(channel) = self.client_event_sender.as_ref() {
-            let xor_name = address.xorname();
-            let event = if result.is_ok() {
-                ClientEvent::DownloadSucceeded(*xor_name)
-            } else {
-                ClientEvent::DownloadFailed(*xor_name)
-            };
+        self.emit_download_event(*address.xorname(), result.is_ok())
+            .await;
 
-            if let Err(err) = channel.send(event).await {
-                error!("Failed to send client event: {err:?}");
-            }
-        }
         result
     }
 
@@ -100,18 +89,8 @@ impl Client {
     ) -> Result<(AttoTokens, GraphEntryAddress), GraphError> {
         let xor_name = *entry.address().xorname();
         let result = self.graph_entry_put_inner(entry, payment_option).await;
-        // Reporting
-        if let Some(channel) = self.client_event_sender.as_ref() {
-            let event = if result.is_ok() {
-                ClientEvent::UploadSucceeded(xor_name)
-            } else {
-                ClientEvent::UploadFailed(xor_name)
-            };
+        self.emit_upload_event(xor_name, result.is_ok()).await;
 
-            if let Err(err) = channel.send(event).await {
-                error!("Failed to send client event: {err:?}");
-            }
-        }
         result
     }
 

@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::Client;
 use ant_evm::Amount;
 use serde::Serialize;
 use xor_name::XorName;
@@ -38,4 +39,36 @@ pub struct PaymentSummary {
     pub records_paid: usize,
     /// Records that were already present on the network. No payment were made for these.
     pub records_already_paid: usize,
+}
+
+impl Client {
+    /// Emit a client Download event based on the success of the operation.
+    pub(crate) async fn emit_download_event(&self, xor_name: XorName, success: bool) {
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if success {
+                ClientEvent::DownloadSucceeded(xor_name)
+            } else {
+                ClientEvent::DownloadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+    }
+
+    /// Emit a client Upload event based on the success of the operation.
+    pub(crate) async fn emit_upload_event(&self, xor_name: XorName, success: bool) {
+        if let Some(channel) = self.client_event_sender.as_ref() {
+            let event = if success {
+                ClientEvent::UploadSucceeded(xor_name)
+            } else {
+                ClientEvent::UploadFailed(xor_name)
+            };
+
+            if let Err(err) = channel.send(event).await {
+                error!("Failed to send client event: {err:?}");
+            }
+        }
+    }
 }
