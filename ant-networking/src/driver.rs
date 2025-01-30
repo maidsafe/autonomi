@@ -45,7 +45,7 @@ use futures::StreamExt;
 use libp2p::{core::muxing::StreamMuxerBox, relay, swarm::behaviour::toggle::Toggle};
 use libp2p::{
     identity::Keypair,
-    kad::{self, KBucketDistance as Distance, QueryId, Quorum, Record, RecordKey, K_VALUE},
+    kad::{self, KBucketDistance as Distance, QueryId, Quorum, Record, RecordKey, K_VALUE, U256},
     multiaddr::Protocol,
     request_response::{self, Config as RequestResponseConfig, OutboundRequestId, ProtocolSupport},
     swarm::{

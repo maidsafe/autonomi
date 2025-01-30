@@ -708,7 +708,7 @@ mod tests {
             let distance = key.distance(&self_address);
             if distance <= distance_range {
                 in_range_keys += 1;
-            } else if distance - distance_range < distance_range {
+            } else if distance.0 - distance_range.0 < distance_range.0 {
                 closest_k_peers_include_self.sort_by_key(|addr| key.distance(addr));
                 let closest_group: HashSet<_> = closest_k_peers_include_self
                     .iter()

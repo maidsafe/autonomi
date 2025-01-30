@@ -10,7 +10,10 @@
 use crate::error::{NetworkError, Result};
 use crate::record_store::{ClientRecordStore, NodeRecordStore};
 use ant_evm::QuotingMetrics;
-use ant_protocol::{storage::ValidationType, NetworkAddress};
+use ant_protocol::{
+    storage::{DataTypes, ValidationType},
+    NetworkAddress,
+};
 use libp2p::kad::{
     store::RecordStore, KBucketDistance as Distance, ProviderRecord, Record, RecordKey,
 };
