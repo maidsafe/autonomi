@@ -39,6 +39,9 @@ pub struct Metadata {
     pub modified: u64,
     /// File size in bytes
     pub size: u64,
+
+    /// Optional extra metadata with undefined structure, e.g. JSON.
+    pub extra: Option<String>,
 }
 
 impl Metadata {
@@ -53,6 +56,7 @@ impl Metadata {
             created: now,
             modified: now,
             size,
+            extra: None,
         }
     }
 }

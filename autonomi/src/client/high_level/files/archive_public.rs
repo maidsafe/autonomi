@@ -39,6 +39,14 @@ pub struct PublicArchive {
     map: BTreeMap<PathBuf, (DataAddr, Metadata)>,
 }
 
+/// This type essentially wraps archive in version marker. E.g. in JSON format:
+/// `{ "V0": { "map": <xxx> } }`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PublicArchiveVersioned {
+    V0(PublicArchive),
+}
+
 impl PublicArchive {
     /// Create a new emtpy local archive
     /// Note that this does not upload the archive to the network
@@ -100,14 +108,17 @@ impl PublicArchive {
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PublicArchive, rmp_serde::decode::Error> {
-        let root: PublicArchive = rmp_serde::from_slice(&data[..])?;
+        let root: PublicArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
+        let PublicArchiveVersioned::V0(root) = root;
 
         Ok(root)
     }
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
-        let root_serialized = rmp_serde::to_vec(&self)?;
+        let versioned = PublicArchiveVersioned::V0(self.clone());
+        let root_serialized = rmp_serde::to_vec_named(&versioned)?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)
@@ -180,5 +191,95 @@ impl Client {
         let result = self.data_cost(bytes).await;
         debug!("Calculated the cost to upload archive {archive:?} is {result:?}");
         result
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn compatibility() {
+        // In the future we'll have an extra variant.
+        #[derive(Serialize, Deserialize)]
+        #[non_exhaustive]
+        pub enum FuturePublicArchiveVersioned {
+            V0(PublicArchive),
+            V1(PublicArchive),
+            #[serde(other)]
+            Unsupported,
+        }
+
+        let mut arch = PublicArchive::new();
+        arch.add_file(
+            PathBuf::from_str("hello_world").unwrap(),
+            DataAddr::random(&mut rand::thread_rng()),
+            Metadata::new_with_size(1),
+        );
+        let arch_serialized = arch.to_bytes().unwrap();
+
+        // Create archive, forward compatible (still the same V0 version).
+        let future_arch = FuturePublicArchiveVersioned::V0(arch.clone());
+        let future_arch_serialized = rmp_serde::to_vec_named(&future_arch).unwrap();
+
+        // Let's see if we can deserialize a (forward compatible) archive arriving to us from the future
+        let _ = PublicArchive::from_bytes(Bytes::from(future_arch_serialized)).unwrap();
+
+        // Let's see if we can deserialize an old archive from the future
+        let _: FuturePublicArchiveVersioned = rmp_serde::from_slice(&arch_serialized[..]).unwrap();
+
+        // Now we break forward compatibility by introducing a new version not supported by the old code.
+        let future_arch = FuturePublicArchiveVersioned::V1(arch.clone());
+        let future_arch_serialized = rmp_serde::to_vec_named(&future_arch).unwrap();
+        // The old archive will not be able to decode this.
+        assert!(PublicArchive::from_bytes(Bytes::from(future_arch_serialized)).is_err());
+
+        // Now we prove backwards compatibility. Our old V0 archive will still be decoded by our new archive wrapper as V0.
+        let versioned_arch = PublicArchiveVersioned::V0(arch.clone()); // 'Old' archive wrapper
+        let versioned_arch_serialized = rmp_serde::to_vec_named(&versioned_arch).unwrap();
+        let _: FuturePublicArchiveVersioned = // Into 'new' wrapper
+            rmp_serde::from_slice(&versioned_arch_serialized[..]).unwrap();
+    }
+
+    #[test]
+    fn forward_compatibility() {
+        // What we do here is we create a new `Metadata` and use that in the `Archive` structs.
+
+        /// A version `1.1` which is non-breaking (`1.0` is forward compatible with `1.1`).
+        #[derive(Debug, Default, Serialize, Deserialize)]
+        pub struct MetadataV1p1 {
+            created: u64,
+            modified: u64,
+            size: u64,
+            extra: Option<String>,
+            accessed: Option<u64>, // Added field
+        }
+        #[derive(Debug, Default, Serialize, Deserialize)]
+        pub struct PublicArchiveV1p1 {
+            map: BTreeMap<PathBuf, (DataAddr, MetadataV1p1)>,
+        }
+        #[derive(Debug, Serialize, Deserialize)]
+        pub enum PublicArchiveVersionedV1p1 {
+            V0(PublicArchiveV1p1),
+        }
+
+        let mut arch_p1 = PublicArchiveV1p1::default();
+        arch_p1.map.insert(
+            PathBuf::from_str("hello_world").unwrap(),
+            (
+                DataAddr::random(&mut rand::thread_rng()),
+                MetadataV1p1 {
+                    accessed: Some(1),
+                    ..Default::default()
+                },
+            ),
+        );
+        let arch_p1_ser =
+            rmp_serde::to_vec_named(&PublicArchiveVersionedV1p1::V0(arch_p1)).unwrap();
+
+        // Our old data structure should be forward compatible with the new one.
+        assert!(PublicArchive::from_bytes(Bytes::from(arch_p1_ser)).is_ok());
     }
 }

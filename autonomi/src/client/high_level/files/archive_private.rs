@@ -36,6 +36,14 @@ pub struct PrivateArchive {
     map: BTreeMap<PathBuf, (DataMapChunk, Metadata)>,
 }
 
+/// This type essentially wraps archive in version marker. E.g. in JSON format:
+/// `{ "V0": { "map": <xxx> } }`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum PrivateArchiveVersioned {
+    V0(PrivateArchive),
+}
+
 impl PrivateArchive {
     /// Create a new emtpy local archive
     /// Note that this does not upload the archive to the network
@@ -101,14 +109,17 @@ impl PrivateArchive {
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PrivateArchive, rmp_serde::decode::Error> {
-        let root: PrivateArchive = rmp_serde::from_slice(&data[..])?;
+        let root: PrivateArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
+        let PrivateArchiveVersioned::V0(root) = root;
 
         Ok(root)
     }
 
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
-        let root_serialized = rmp_serde::to_vec(&self)?;
+        let versioned = PrivateArchiveVersioned::V0(self.clone());
+        let root_serialized = rmp_serde::to_vec_named(&versioned)?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)

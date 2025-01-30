@@ -197,6 +197,7 @@ pub(crate) fn metadata_from_entry(entry: &walkdir::DirEntry) -> Metadata {
                 created: 0,
                 modified: 0,
                 size: 0,
+                extra: None,
             };
         }
     };
@@ -226,5 +227,6 @@ pub(crate) fn metadata_from_entry(entry: &walkdir::DirEntry) -> Metadata {
         created,
         modified,
         size: fs_metadata.len(),
+        extra: None,
     }
 }
