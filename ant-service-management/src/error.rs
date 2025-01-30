@@ -52,6 +52,14 @@ pub enum Error {
     ServiceUserAccountCreationFailed,
     #[error("Could not obtain user's data directory")]
     UserDataDirectoryNotObtainable,
+    #[error("Could not connect to the metric service at port {0}")]
+    MetricServiceConnectionError(String),
+    #[error("Could not process the metric service inforesponse")]
+    MetricServiceInfoResponseError,
+    #[error("Could not process the metrics from nodeInfo '{0}'")]
+    MetricServiceNodeInfoError(String),
+    #[error("Could not process the metrics from NetworkInfo '{0}'")]
+    MetricServiceNetworkInfoError(String),
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
 }

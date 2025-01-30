@@ -270,21 +270,20 @@ pub async fn run_network(
             service_control.get_available_port()?
         };
         let metrics_free_port = if let Some(port) = metrics_port {
-            Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
-        } else {
-            None
+            port
+        } else  {
+            service_control.get_available_port()?
         };
+
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
-        let metric_client = MetricClient::new(metrics_free_port.unwrap());
+        let metric_client = MetricClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: true,
-                metrics_port: metrics_free_port,
+                metrics_port: Some(metrics_free_port),
                 node_port,
                 interval: options.interval,
                 log_format: options.log_format,
@@ -316,22 +315,21 @@ pub async fn run_network(
             service_control.get_available_port()?
         };
         let metrics_free_port = if let Some(port) = metrics_port {
-            Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
-        } else {
-            None
+            port
+        } else  {
+            service_control.get_available_port()?
         };
+
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
 
-        let metric_client = MetricClient::new(metrics_free_port.unwrap());
+        let metric_client = MetricClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: false,
-                metrics_port: metrics_free_port,
+                metrics_port: Some(metrics_free_port),
                 node_port,
                 interval: options.interval,
                 log_format: options.log_format,
@@ -474,7 +472,7 @@ async fn validate_network(node_registry: &mut NodeRegistry, peers: Vec<Multiaddr
     all_peers.extend(additional_peers);
 
     for node in node_registry.nodes.iter() {
-        let metric_client = MetricClient::new(node.metrics_port.unwrap());
+        let metric_client = MetricClient::new(node.metrics_port.ok_or_eyre("Metrics port not set")?);
         let net_info = metric_client.network_info().await?;
         let peers = net_info.connected_peers;
         let peer_id = node.peer_id.ok_or_eyre("The PeerId was not set")?;

@@ -115,12 +115,9 @@ pub async fn add_node(
         };
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
         } else {
-            None
+            Some(service_control.get_available_port()?)
         };
-
         let rpc_socket_addr = if let Some(addr) = options.rpc_address {
             SocketAddr::new(IpAddr::V4(addr), rpc_free_port)
         } else {

@@ -550,8 +550,10 @@ pub async fn refresh_node_registry(
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
         node.reward_balance = None;
+        let metrics_port = node.metrics_port
+                                    .ok_or(Error::MetricPortEmpty)?;
 
-        let metric_client = MetricClient::new(node.metrics_port.unwrap_or(0));
+        let metric_client = MetricClient::new(metrics_port);
         let mut service = NodeService::new(node, Box::new(metric_client.clone()));
 
         if is_local_network {
