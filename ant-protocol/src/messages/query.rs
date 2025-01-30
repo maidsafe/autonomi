@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{messages::Nonce, NetworkAddress};
-use ant_evm::U256;
+use libp2p::kad::U256;
 use serde::{Deserialize, Serialize};
 
 /// Data queries - retrieving data and inspecting their structure.
@@ -125,7 +125,7 @@ impl std::fmt::Display for Query {
                 range,
                 sign_result,
             } => {
-                let distance = range.as_ref().map(|value| U256::from_be_slice(value));
+                let distance = range.as_ref().map(|value| U256::from_big_endian(value));
                 write!(
                     f,
                     "Query::GetClosestPeers({key:?} {num_of_peers:?} {distance:?} {sign_result})"

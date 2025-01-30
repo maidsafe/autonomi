@@ -9,9 +9,7 @@
 
 use crate::time::spawn;
 use crate::{event::NetworkEvent, time::Instant, CLOSE_GROUP_SIZE};
-use ant_evm::U256;
 use ant_protocol::{
-    convert_distance_to_u256,
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
@@ -47,7 +45,7 @@ pub(crate) struct ReplicationFetcher {
     on_going_fetches: HashMap<(RecordKey, ValidationType), (PeerId, ReplicationTimeout)>,
     event_sender: mpsc::Sender<NetworkEvent>,
     /// Distance range that the incoming key shall be fetched
-    distance_range: Option<U256>,
+    distance_range: Option<Distance>,
     /// Restrict fetch range to closer than this value
     /// used when the node is full, but we still have "close" data coming in
     /// that is _not_ closer than our farthest max record
@@ -77,7 +75,7 @@ impl ReplicationFetcher {
     }
 
     /// Set the distance range.
-    pub(crate) fn set_replication_distance_range(&mut self, distance_range: U256) {
+    pub(crate) fn set_replication_distance_range(&mut self, distance_range: Distance) {
         self.distance_range = Some(distance_range);
     }
 
@@ -463,14 +461,14 @@ impl ReplicationFetcher {
         // Filter out those out_of_range ones among the incoming_keys.
         if let Some(ref distance_range) = self.distance_range {
             new_incoming_keys.retain(|(addr, _record_type)| {
-                let distance = convert_distance_to_u256(&self_address.distance(addr));
+                let distance = &self_address.distance(addr);
                 debug!(
                     "Distance to target {addr:?} is {distance:?}, against range {distance_range:?}"
                 );
-                let mut is_in_range = distance <= *distance_range;
+                let mut is_in_range = distance <= distance_range;
                 // For middle-range records, they could be farther than distance_range,
                 // but still supposed to be held by the closest group to us.
-                if !is_in_range && distance - *distance_range < *distance_range {
+                if !is_in_range && distance.0 - distance_range.0 < distance_range.0 {
                     closest_k_peers.sort_by_key(|key| key.distance(addr));
                     let closest_group: HashSet<_> = closest_k_peers.iter().take(CLOSE_GROUP_SIZE).collect();
                     if closest_group.contains(&self_address) {
@@ -599,7 +597,7 @@ impl ReplicationFetcher {
 mod tests {
     use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
     use crate::CLOSE_GROUP_SIZE;
-    use ant_protocol::{convert_distance_to_u256, storage::ValidationType, NetworkAddress};
+    use ant_protocol::{storage::ValidationType, NetworkAddress};
     use eyre::Result;
     use libp2p::{kad::RecordKey, PeerId};
     use std::{
@@ -692,8 +690,7 @@ mod tests {
         // Set distance range
         let distance_target = NetworkAddress::from_peer(PeerId::random());
         let distance_range = self_address.distance(&distance_target);
-        let distance_range_256 = convert_distance_to_u256(&distance_range);
-        replication_fetcher.set_replication_distance_range(distance_range_256);
+        replication_fetcher.set_replication_distance_range(distance_range);
 
         let mut closest_k_peers = vec![];
         (0..19).for_each(|_| {
@@ -709,10 +706,9 @@ mod tests {
             let key = NetworkAddress::from_record_key(&RecordKey::from(random_data));
 
             let distance = key.distance(&self_address);
-            let distance_256 = convert_distance_to_u256(&distance);
             if distance <= distance_range {
                 in_range_keys += 1;
-            } else if distance_256 - distance_range_256 < distance_range_256 {
+            } else if distance.0 - distance_range.0 < distance_range.0 {
                 closest_k_peers_include_self.sort_by_key(|addr| key.distance(addr));
                 let closest_group: HashSet<_> = closest_k_peers_include_self
                     .iter()

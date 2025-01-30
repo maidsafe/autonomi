@@ -37,14 +37,12 @@ use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress};
 /// Re-export of Bytes used throughout the protocol
 pub use bytes::Bytes;
 
-use ant_evm::U256;
 use libp2p::{
     kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey},
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::str::FromStr;
 use std::{
     borrow::Cow,
     fmt::{self, Debug, Display, Formatter, Write},
@@ -66,18 +64,6 @@ pub fn get_port_from_multiaddr(multi_addr: &Multiaddr) -> Option<u16> {
         }
     }
     None
-}
-
-// This conversion shall no longer be required once updated to the latest libp2p.
-// Which can has the direct access to the Distance private field of U256.
-pub fn convert_distance_to_u256(distance: &Distance) -> U256 {
-    let addr_str = format!("{distance:?}");
-    let numeric_part = addr_str
-        .trim_start_matches("Distance(")
-        .trim_end_matches(")")
-        .to_string();
-    let distance_value = U256::from_str(&numeric_part);
-    distance_value.unwrap_or(U256::ZERO)
 }
 
 /// This is the address in the network by which proximity/distance
