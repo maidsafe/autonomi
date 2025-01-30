@@ -1,6 +1,7 @@
 from autonomi_client import Client, Wallet, PaymentOption
+import asyncio
 
-def main():
+async def main():
     # Initialize a wallet with a private key
     # This should be a valid Ethereum private key (64 hex chars without '0x' prefix)
     private_key = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
@@ -9,23 +10,18 @@ def main():
     print(f"Wallet balance: {wallet.balance()}")
 
     # Connect to the network
-    # These should be valid multiaddresses of network nodes
-    peers = [
-        "/ip4/127.0.0.1/tcp/12000",
-        "/ip4/127.0.0.1/tcp/12001"
-    ]
-    client = Client.connect(peers)
+    client = await Client.init()
 
     # Create payment option using the wallet
     payment = PaymentOption.wallet(wallet)
 
     # Upload some data
     data = b"Hello, Safe Network!"
-    addr = client.data_put_public(data, payment)
+    addr = await client.data_put_public(data, payment)
     print(f"Data uploaded to address: {addr}")
 
     # Download the data back
-    downloaded = client.data_get_public(addr)
+    downloaded = await client.data_get_public(addr)
     print(f"Downloaded data: {downloaded.decode()}")
 
     # You can also upload files
@@ -34,5 +30,5 @@ def main():
         file_addr = client.data_put_public(file_data, payment)
         print(f"File uploaded to address: {file_addr}")
 
-if __name__ == "__main__":
-    main() 
+
+asyncio.run(main())

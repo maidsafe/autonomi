@@ -16,6 +16,7 @@ use ant_protocol::storage::{
 use bls::{PublicKey as RustPublicKey, SecretKey as RustSecretKey};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3_async_runtimes::tokio::future_into_py;
 use xor_name::XorName;
 
 #[pyclass(name = "Client")]
@@ -26,23 +27,13 @@ pub(crate) struct Client {
 #[pymethods]
 impl Client {
     #[staticmethod]
-    fn connect(peers: Vec<String>) -> PyResult<Self> {
-        let rt = tokio::runtime::Runtime::new().expect("Could not start tokio runtime");
-        let peers = peers
-            .into_iter()
-            .map(|addr| addr.parse())
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| {
-                pyo3::exceptions::PyValueError::new_err(format!("Invalid multiaddr: {e}"))
-            })?;
-
-        let client = rt
-            .block_on(RustClient::init_with_peers(peers))
-            .map_err(|e| {
-                pyo3::exceptions::PyValueError::new_err(format!("Failed to connect: {e}"))
-            })?;
-
-        Ok(Self { inner: client })
+    fn init(py: Python) -> PyResult<Bound<PyAny>> {
+        future_into_py(py, async {
+            match RustClient::init().await {
+                Ok(client) => Ok(Client { inner: client }),
+                Err(e) => Err(PyValueError::new_err(format!("Failed to connect: {e}"))),
+            }
+        })
     }
 
     fn data_put(&self, data: Vec<u8>, payment: &PaymentOption) -> PyResult<PyDataMapChunk> {
@@ -69,31 +60,39 @@ impl Client {
         Ok(data.to_vec())
     }
 
-    fn data_put_public(&self, data: Vec<u8>, payment: &PaymentOption) -> PyResult<String> {
-        let rt = tokio::runtime::Runtime::new().expect("Could not start tokio runtime");
-        let addr = rt
-            .block_on(
-                self.inner
-                    .data_put_public(bytes::Bytes::from(data), payment.inner.clone()),
-            )
-            .map_err(|e| {
-                pyo3::exceptions::PyValueError::new_err(format!("Failed to put data: {e}"))
-            })?;
-
-        Ok(crate::client::address::addr_to_str(addr))
+    fn data_put_public<'a>(
+        &self,
+        py: Python<'a>,
+        data: Vec<u8>,
+        payment: &PaymentOption,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let this = self.inner.clone();
+        let payment = payment.inner.clone();
+        future_into_py(py, async move {
+            match this
+                .data_put_public(bytes::Bytes::from(data), payment)
+                .await
+            {
+                Ok(addr) => Ok(crate::client::address::addr_to_str(addr)),
+                Err(e) => Err(PyValueError::new_err(format!(
+                    "Failed to put data: {:?}",
+                    eyre::Report::from(e)
+                ))),
+            }
+        })
     }
 
-    fn data_get_public(&self, addr: &str) -> PyResult<Vec<u8>> {
-        let rt = tokio::runtime::Runtime::new().expect("Could not start tokio runtime");
+    fn data_get_public<'a>(&self, py: Python<'a>, addr: &str) -> PyResult<Bound<'a, PyAny>> {
+        let this = self.inner.clone();
         let addr = crate::client::address::str_to_addr(addr).map_err(|e| {
             pyo3::exceptions::PyValueError::new_err(format!("Invalid address: {e}"))
         })?;
-
-        let data = rt.block_on(self.inner.data_get_public(addr)).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!("Failed to get data: {e}"))
-        })?;
-
-        Ok(data.to_vec())
+        future_into_py(py, async move {
+            match this.data_get_public(addr).await {
+                Ok(data) => Ok(data.to_vec()),
+                Err(e) => Err(PyValueError::new_err(format!("Failed to put data: {e}"))),
+            }
+        })
     }
 
     fn vault_cost(&self, key: &PyVaultSecretKey) -> PyResult<String> {
@@ -613,7 +612,7 @@ fn encrypt(data: Vec<u8>) -> PyResult<(Vec<u8>, Vec<Vec<u8>>)> {
 
 #[pymodule]
 #[pyo3(name = "autonomi_client")]
-fn autonomi_client_module(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Client>()?;
     m.add_class::<Wallet>()?;
     m.add_class::<PaymentOption>()?;
