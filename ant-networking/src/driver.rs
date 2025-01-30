@@ -589,7 +589,8 @@ impl NetworkBuilder {
             let cfg = libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
                 .with_agent_version(agent_version)
                 // Enlength the identify interval from default 5 mins to 1 hour.
-                .with_interval(RESEND_IDENTIFY_INVERVAL);
+                .with_interval(RESEND_IDENTIFY_INVERVAL)
+                .with_hide_listen_addrs(true);
             libp2p::identify::Behaviour::new(cfg)
         };
 
