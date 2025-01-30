@@ -16,9 +16,8 @@ use aes_gcm_siv::{
     aead::{Aead, KeyInit},
     Aes256GcmSiv, Key as AesKey, Nonce,
 };
-use ant_evm::{QuotingMetrics, U256};
+use ant_evm::QuotingMetrics;
 use ant_protocol::{
-    convert_distance_to_u256,
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
@@ -140,7 +139,7 @@ pub struct NodeRecordStore {
     /// Main records store remains unchanged for compatibility
     records: HashMap<Key, (NetworkAddress, ValidationType, DataTypes)>,
     /// Additional index organizing records by distance
-    records_by_distance: BTreeMap<U256, Key>,
+    records_by_distance: BTreeMap<Distance, Key>,
     /// FIFO simple cache of records to reduce read times
     records_cache: RecordCache,
     /// Send network events to the node layer.
@@ -150,7 +149,7 @@ pub struct NodeRecordStore {
     /// ilog2 distance range of responsible records
     /// AKA: how many buckets of data do we consider "close"
     /// None means accept all records.
-    responsible_distance_range: Option<U256>,
+    responsible_distance_range: Option<Distance>,
     #[cfg(feature = "open-metrics")]
     /// Used to report the number of records held by the store to the metrics server.
     record_count_metric: Option<Gauge>,
@@ -373,10 +372,10 @@ impl NodeRecordStore {
         let local_address = NetworkAddress::from_peer(local_id);
 
         // Initialize records_by_distance
-        let mut records_by_distance: BTreeMap<U256, Key> = BTreeMap::new();
+        let mut records_by_distance: BTreeMap<Distance, Key> = BTreeMap::new();
         for (key, (addr, _record_type, _data_type)) in records.iter() {
-            let distance = convert_distance_to_u256(&local_address.distance(addr));
-            let _ = records_by_distance.insert(distance, key.clone());
+            let distance = &local_address.distance(addr);
+            let _ = records_by_distance.insert(*distance, key.clone());
         }
 
         let cache_size = config.records_cache_size;
@@ -412,7 +411,7 @@ impl NodeRecordStore {
     }
 
     /// Returns the current distance ilog2 (aka bucket) range of CLOSE_GROUP nodes.
-    pub fn get_responsible_distance_range(&self) -> Option<U256> {
+    pub fn get_responsible_distance_range(&self) -> Option<Distance> {
         self.responsible_distance_range
     }
 
@@ -616,14 +615,13 @@ impl NodeRecordStore {
     ) {
         let addr = NetworkAddress::from_record_key(&key);
         let distance = self.local_address.distance(&addr);
-        let distance_u256 = convert_distance_to_u256(&distance);
 
         // Update main records store
         self.records
             .insert(key.clone(), (addr.clone(), validate_type, data_type));
 
         // Update bucket index
-        let _ = self.records_by_distance.insert(distance_u256, key.clone());
+        let _ = self.records_by_distance.insert(distance, key.clone());
 
         // Update farthest record if needed (unchanged)
         if let Some((_farthest_record, farthest_record_distance)) = self.farthest_record.clone() {
@@ -769,7 +767,7 @@ impl NodeRecordStore {
             let relevant_records = self.get_records_within_distance_range(distance_range);
 
             // The `responsible_range` is the network density
-            quoting_metrics.network_density = Some(distance_range.to_be_bytes());
+            quoting_metrics.network_density = Some(distance_range.0.to_big_endian());
 
             quoting_metrics.close_records_stored = relevant_records;
         } else {
@@ -792,7 +790,7 @@ impl NodeRecordStore {
     }
 
     /// Calculate how many records are stored within a distance range
-    pub fn get_records_within_distance_range(&self, range: U256) -> usize {
+    pub fn get_records_within_distance_range(&self, range: Distance) -> usize {
         let within_range = self
             .records_by_distance
             .range(..range)
@@ -805,7 +803,7 @@ impl NodeRecordStore {
     }
 
     /// Setup the distance range.
-    pub(crate) fn set_responsible_distance_range(&mut self, responsible_distance: U256) {
+    pub(crate) fn set_responsible_distance_range(&mut self, responsible_distance: Distance) {
         self.responsible_distance_range = Some(responsible_distance);
     }
 
@@ -914,7 +912,7 @@ impl RecordStore for NodeRecordStore {
     fn remove(&mut self, k: &Key) {
         // Remove from main store
         if let Some((addr, _, _)) = self.records.remove(k) {
-            let distance = convert_distance_to_u256(&self.local_address.distance(&addr));
+            let distance = self.local_address.distance(&addr);
             let _ = self.records_by_distance.remove(&distance);
         }
 
@@ -1015,7 +1013,6 @@ mod tests {
     use bls::SecretKey;
     use xor_name::XorName;
 
-    use ant_protocol::convert_distance_to_u256;
     use ant_protocol::storage::{
         try_deserialize_record, try_serialize_record, Chunk, ChunkAddress, DataTypes, Scratchpad,
     };
@@ -1594,12 +1591,12 @@ mod tests {
                 .wrap_err("Could not parse record store key")?,
         );
         // get the distance to this record from our local key
-        let distance = convert_distance_to_u256(&self_address.distance(&halfway_record_address));
+        let distance = &self_address.distance(&halfway_record_address);
 
         // must be plus one bucket from the halfway record
-        store.set_responsible_distance_range(distance);
+        store.set_responsible_distance_range(*distance);
 
-        let records_in_range = store.get_records_within_distance_range(distance);
+        let records_in_range = store.get_records_within_distance_range(*distance);
 
         // check that the number of records returned is larger than half our records
         // (ie, that we cover _at least_ all the records within our distance range)

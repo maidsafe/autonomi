@@ -18,7 +18,7 @@ custom_debug = "~0.6.1"
 evmlib = { path = "../evmlib", version = "0.1.8" }
 hex = "~0.4.3"
 lazy_static = "1.4.0"
-libp2p = { version = "0.54.1", features = ["identify", "kad"] }
+libp2p = { version = "0.55.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }
 ring = "0.17.8"
 rmp-serde = "1.1.1"

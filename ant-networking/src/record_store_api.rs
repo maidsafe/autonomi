@@ -9,12 +9,14 @@
 
 use crate::error::{NetworkError, Result};
 use crate::record_store::{ClientRecordStore, NodeRecordStore};
-use ant_evm::{QuotingMetrics, U256};
+use ant_evm::QuotingMetrics;
 use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress,
 };
-use libp2p::kad::{store::RecordStore, ProviderRecord, Record, RecordKey};
+use libp2p::kad::{
+    store::RecordStore, KBucketDistance as Distance, ProviderRecord, Record, RecordKey,
+};
 use std::{borrow::Cow, collections::HashMap};
 
 pub enum UnifiedRecordStore {
@@ -157,7 +159,7 @@ impl UnifiedRecordStore {
         }
     }
 
-    pub(crate) fn get_farthest_replication_distance(&self) -> Result<Option<U256>> {
+    pub(crate) fn get_farthest_replication_distance(&self) -> Result<Option<Distance>> {
         match self {
             Self::Client(_) => {
                 error!(
@@ -169,7 +171,7 @@ impl UnifiedRecordStore {
         }
     }
 
-    pub(crate) fn set_distance_range(&mut self, distance: U256) {
+    pub(crate) fn set_distance_range(&mut self, distance: Distance) {
         match self {
             Self::Client(_) => {
                 error!("Calling set_distance_range at Client. This should not happen");

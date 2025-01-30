@@ -24,7 +24,7 @@ impl SwarmDriver {
         event: request_response::Event<Request, Response>,
     ) -> Result<(), NetworkError> {
         match event {
-            request_response::Event::Message { message, peer } => match message {
+            request_response::Event::Message { message, peer, .. } => match message {
                 Message::Request {
                     request,
                     channel,
@@ -139,6 +139,7 @@ impl SwarmDriver {
                 request_id,
                 error,
                 peer,
+                ..
             } => {
                 if let Some(sender) = self.pending_requests.remove(&request_id) {
                     match sender {
@@ -161,10 +162,13 @@ impl SwarmDriver {
                 peer,
                 request_id,
                 error,
+                ..
             } => {
                 warn!("RequestResponse: InboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}");
             }
-            request_response::Event::ResponseSent { peer, request_id } => {
+            request_response::Event::ResponseSent {
+                peer, request_id, ..
+            } => {
                 debug!("ResponseSent for request_id: {request_id:?} and peer: {peer:?}");
             }
         }
