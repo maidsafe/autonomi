@@ -8,7 +8,7 @@
 
 use crate::{error::Result, node::Node};
 use ant_evm::ProofOfPayment;
-use ant_networking::{GetRecordCfg, Network};
+use ant_networking::{GetRecordCfg, Network, ResponseQuorum};
 use ant_protocol::storage::DataTypes;
 use ant_protocol::{
     messages::{Cmd, Query, QueryResponse, Request, Response},
@@ -16,7 +16,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::{
-    kad::{Quorum, Record, RecordKey},
+    kad::{Record, RecordKey},
     PeerId,
 };
 use tokio::task::spawn;
@@ -73,8 +73,8 @@ impl Node {
                         "Can not fetch record {pretty_key:?} from node {holder:?}, fetching from the network"
                     );
                     let get_cfg = GetRecordCfg {
-                        get_quorum: Quorum::One,
-                        retry_strategy: None,
+                        get_quorum: ResponseQuorum::One,
+                        retry_strategy: Default::default(),
                         target_record: None,
                         expected_holders: Default::default(),
                     };

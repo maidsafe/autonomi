@@ -15,6 +15,8 @@
 /// - Pointer
 /// - Scratchpad
 pub mod data_types;
+use config::ClientConfig;
+use config::ClientOperationConfig;
 pub use data_types::chunk;
 pub use data_types::graph;
 pub use data_types::pointer;
@@ -23,11 +25,14 @@ pub use data_types::scratchpad;
 /// High-level types built on top of the basic Network data types.
 /// Includes data, files and personnal data vaults
 mod high_level;
+use event::ClientEvent;
 pub use high_level::data;
 pub use high_level::files;
 pub use high_level::vault;
 
 pub mod address;
+pub mod config;
+pub mod event;
 pub mod key_derivation;
 pub mod payment;
 pub mod quote;
@@ -80,34 +85,13 @@ pub struct Client {
     pub(crate) network: Network,
     pub(crate) client_event_sender: Arc<Option<mpsc::Sender<ClientEvent>>>,
     /// The EVM network to use for the client.
-    pub evm_network: EvmNetwork,
+    evm_network: Arc<EvmNetwork>,
+    /// The configuration for operations on the client.
+    ///
+    /// This will be shared across all clones of the client.
+    operation_config: Arc<ClientOperationConfig>,
     // Shutdown signal for the `SwarmDriver` task
     _shutdown_tx: watch::Sender<bool>,
-}
-
-/// Configuration for [`Client::init_with_config`].
-#[derive(Debug, Clone, Default)]
-pub struct ClientConfig {
-    /// Whether we're expected to connect to a local network.
-    pub local: bool,
-
-    /// List of peers to connect to.
-    ///
-    /// If not provided, the client will use the default bootstrap peers.
-    pub peers: Option<Vec<Multiaddr>>,
-
-    /// EVM network to use for quotations and payments.
-    pub evm_network: EvmNetwork,
-}
-
-impl ClientConfig {
-    fn local(peers: Option<Vec<Multiaddr>>) -> Self {
-        Self {
-            local: true,
-            peers,
-            evm_network: EvmNetwork::new(true).unwrap_or_default(),
-        }
-    }
 }
 
 /// Error returned by [`Client::init`].
@@ -200,6 +184,7 @@ impl Client {
             local,
             peers: Some(peers),
             evm_network: EvmNetwork::new(local).unwrap_or_default(),
+            operation_config: Default::default(),
         })
         .await
     }
@@ -252,7 +237,8 @@ impl Client {
         Ok(Self {
             network,
             client_event_sender: Arc::new(None),
-            evm_network: config.evm_network,
+            evm_network: Arc::new(config.evm_network),
+            operation_config: Arc::new(config.operation_config),
             _shutdown_tx: shutdown_tx,
         })
     }
@@ -265,6 +251,10 @@ impl Client {
         debug!("All events to the clients are enabled");
 
         client_event_receiver
+    }
+
+    pub fn get_evm_network(&self) -> &EvmNetwork {
+        &self.evm_network
     }
 }
 
@@ -320,23 +310,23 @@ async fn handle_event_receiver(
                                 protocols,
                                 IDENTIFY_PROTOCOL_STR.read().expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR. A call to set_network_id performed. This should not happen").clone(),
                             )))
-                            .expect("receiver should not close");
+                            .expect("Could not send TimedOutWithIncompatibleProtocol, receiver should not close");
                     } else {
                         sender
                             .send(Err(ConnectError::TimedOut))
-                            .expect("receiver should not close");
+                            .expect("Could not send TimedOut, receiver should not close");
                     }
                 }
             }
             event = event_receiver.recv() => {
-                let event = event.expect("receiver should not close");
+                let event = event.expect("Could not receiver Network event, receiver should not close");
                 match event {
                     NetworkEvent::PeerAdded(_peer_id, peers_len) => {
                         tracing::trace!("Peer added: {peers_len} in routing table");
 
                         if peers_len >= CLOSE_GROUP_SIZE {
                             if let Some(sender) = sender.take() {
-                                sender.send(Ok(())).expect("receiver should not close");
+                                sender.send(Ok(())).expect("Could not send OK(()), receiver should not close");
                             }
                         }
                     }
@@ -354,21 +344,4 @@ async fn handle_event_receiver(
     }
 
     // TODO: Handle closing of network events sender
-}
-
-/// Events that can be broadcasted by the client.
-#[derive(Debug, Clone)]
-pub enum ClientEvent {
-    UploadComplete(UploadSummary),
-}
-
-/// Summary of an upload operation.
-#[derive(Debug, Clone)]
-pub struct UploadSummary {
-    /// Records that were uploaded to the network
-    pub records_paid: usize,
-    /// Records that were already paid for so were not re-uploaded
-    pub records_already_paid: usize,
-    /// Total cost of the upload
-    pub tokens_spent: Amount,
 }

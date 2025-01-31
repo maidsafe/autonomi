@@ -10,6 +10,7 @@ use crate::{
     bootstrap::{ContinuousNetworkDiscover, NETWORK_DISCOVER_INTERVAL},
     circular_vec::CircularVec,
     cmd::{LocalSwarmCmd, NetworkSwarmCmd},
+    config::GetRecordCfg,
     error::{NetworkError, Result},
     event::{NetworkEvent, NodeEvent},
     external_address::ExternalAddressManager,
@@ -21,8 +22,7 @@ use crate::{
     record_store_api::UnifiedRecordStore,
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    time::Interval,
-    time::{interval, spawn, Instant},
+    time::{interval, spawn, Instant, Interval},
     transport, GetRecordError, Network, NodeIssue, CLOSE_GROUP_SIZE,
 };
 #[cfg(feature = "open-metrics")]
@@ -33,20 +33,19 @@ use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::{PaymentQuote, U256};
 use ant_protocol::{
     convert_distance_to_u256,
-    messages::{ChunkProof, Nonce, Request, Response},
-    storage::RetryStrategy,
+    messages::{Request, Response},
     version::{
         get_network_id, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
         IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR,
     },
-    NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey,
+    NetworkAddress, PrettyPrintKBucketKey,
 };
 use futures::future::Either;
 use futures::StreamExt;
 use libp2p::{core::muxing::StreamMuxerBox, relay, swarm::behaviour::toggle::Toggle};
 use libp2p::{
     identity::Keypair,
-    kad::{self, QueryId, Quorum, Record, RecordKey, K_VALUE},
+    kad::{self, QueryId, Record, RecordKey, K_VALUE},
     multiaddr::Protocol,
     request_response::{self, Config as RequestResponseConfig, OutboundRequestId, ProtocolSupport},
     swarm::{
@@ -136,80 +135,6 @@ const REPLICATION_FACTOR: NonZeroUsize = match NonZeroUsize::new(CLOSE_GROUP_SIZ
     Some(v) => v,
     None => panic!("CLOSE_GROUP_SIZE should not be zero"),
 };
-
-/// The various settings to apply to when fetching a record from network
-#[derive(Clone)]
-pub struct GetRecordCfg {
-    /// The query will result in an error if we get records less than the provided Quorum
-    pub get_quorum: Quorum,
-    /// If enabled, the provided `RetryStrategy` is used to retry if a GET attempt fails.
-    pub retry_strategy: Option<RetryStrategy>,
-    /// Only return if we fetch the provided record.
-    pub target_record: Option<Record>,
-    /// Logs if the record was not fetched from the provided set of peers.
-    pub expected_holders: HashSet<PeerId>,
-}
-
-impl GetRecordCfg {
-    pub fn does_target_match(&self, record: &Record) -> bool {
-        if let Some(ref target_record) = self.target_record {
-            target_record == record
-        } else {
-            // Not have target_record to check with
-            true
-        }
-    }
-}
-
-impl Debug for GetRecordCfg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut f = f.debug_struct("GetRecordCfg");
-        f.field("get_quorum", &self.get_quorum)
-            .field("retry_strategy", &self.retry_strategy);
-
-        match &self.target_record {
-            Some(record) => {
-                let pretty_key = PrettyPrintRecordKey::from(&record.key);
-                f.field("target_record", &pretty_key);
-            }
-            None => {
-                f.field("target_record", &"None");
-            }
-        };
-
-        f.field("expected_holders", &self.expected_holders).finish()
-    }
-}
-
-/// The various settings related to writing a record to the network.
-#[derive(Debug, Clone)]
-pub struct PutRecordCfg {
-    /// The quorum used by KAD PUT. KAD still sends out the request to all the peers set by the `replication_factor`, it
-    /// just makes sure that we get atleast `n` successful responses defined by the Quorum.
-    /// Our nodes currently send `Ok()` response for every KAD PUT. Thus this field does not do anything atm.
-    pub put_quorum: Quorum,
-    /// If enabled, the provided `RetryStrategy` is used to retry if a PUT attempt fails.
-    pub retry_strategy: Option<RetryStrategy>,
-    /// Use the `kad::put_record_to` to PUT the record only to the specified peers. If this option is set to None, we
-    /// will be using `kad::put_record` which would PUT the record to all the closest members of the record.
-    pub use_put_record_to: Option<Vec<PeerId>>,
-    /// Enables verification after writing. The VerificationKind is used to determine the method to use.
-    pub verification: Option<(VerificationKind, GetRecordCfg)>,
-}
-
-/// The methods in which verification on a PUT can be carried out.
-#[derive(Debug, Clone)]
-pub enum VerificationKind {
-    /// Uses the default KAD GET to perform verification.
-    Network,
-    /// Uses the default KAD GET to perform verification, but don't error out on split records
-    Crdt,
-    /// Uses the hash based verification for chunks.
-    ChunkProof {
-        expected_proof: ChunkProof,
-        nonce: Nonce,
-    },
-}
 
 impl From<std::convert::Infallible> for NodeEvent {
     fn from(_: std::convert::Infallible) -> Self {

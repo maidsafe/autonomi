@@ -141,14 +141,12 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     if args.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi Node Manager RPC Daemon",
-                env!("CARGO_PKG_VERSION"),
-                None
-            )
-        );
+        ant_build_info::get_version_info(
+            "Autonomi Node Manager RPC Daemon",
+            env!("CARGO_PKG_VERSION"),
+            None,
+        )
+        .pretty_print();
         return Ok(());
     }
 

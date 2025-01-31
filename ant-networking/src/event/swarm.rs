@@ -435,11 +435,6 @@ impl SwarmDriver {
                             match err {
                                 TransportError::MultiaddrNotSupported(addr) => {
                                     warn!("Multiaddr not supported : {addr:?}");
-                                    #[cfg(feature = "loud")]
-                                    {
-                                        println!("Multiaddr not supported : {addr:?}");
-                                        println!("If this was your bootstrap peer, restart your node with a supported multiaddr");
-                                    }
                                     // if we can't dial a peer on a given address, we should remove it from the routing table
                                     there_is_a_serious_issue = true
                                 }

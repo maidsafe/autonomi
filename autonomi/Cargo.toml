@@ -23,7 +23,6 @@ name = "put_and_dir_upload"
 default = []
 external-signer = ["ant-evm/external-signer"]
 extension-module = ["pyo3/extension-module"]
-loud = []
 
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.1.4" }

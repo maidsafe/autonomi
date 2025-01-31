@@ -22,4 +22,5 @@ workspace = true
 
 [dependencies]
 chrono = "0.4"
+serde = { version = "1.0.133", features = ["derive"] }
 tracing = { version = "~0.1.26" }

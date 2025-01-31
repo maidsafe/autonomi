@@ -6,33 +6,27 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{
-    collections::HashSet,
-    hash::{DefaultHasher, Hash, Hasher},
-    num::NonZero,
-    sync::LazyLock,
-};
-
-use ant_evm::ProofOfPayment;
-use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, VerificationKind};
-use ant_protocol::{
-    messages::ChunkProof,
-    storage::{
-        try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind,
-        RetryStrategy,
-    },
-    NetworkAddress,
-};
-use bytes::Bytes;
-use libp2p::kad::{Quorum, Record};
-use rand::{thread_rng, Rng};
-use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
-use serde::{Deserialize, Serialize};
-
 use crate::{
     client::{payment::Receipt, utils::process_tasks_with_max_concurrency, GetError, PutError},
     self_encryption::DataMapLevel,
     Client,
+};
+use ant_evm::ProofOfPayment;
+use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind};
+use ant_protocol::{
+    messages::ChunkProof,
+    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
+    NetworkAddress,
+};
+use bytes::Bytes;
+use libp2p::kad::Record;
+use rand::{thread_rng, Rng};
+use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::HashSet,
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::LazyLock,
 };
 
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
@@ -110,13 +104,24 @@ fn hash_to_short_string(input: &str) -> String {
 impl Client {
     /// Get a chunk from the network.
     pub async fn chunk_get(&self, addr: ChunkAddress) -> Result<Chunk, GetError> {
+        let result = self.chunk_get_inner(addr).await;
+        self.emit_download_event(*addr.xorname(), result.is_ok())
+            .await;
+
+        result
+    }
+
+    async fn chunk_get_inner(&self, addr: ChunkAddress) -> Result<Chunk, GetError> {
         info!("Getting chunk: {addr:?}");
 
         let key = NetworkAddress::from_chunk_address(addr).to_record_key();
         debug!("Fetching chunk from network at: {key:?}");
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::One,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            get_quorum: self.operation_config.chunk_operation_config.read_quorum,
+            retry_strategy: self
+                .operation_config
+                .chunk_operation_config
+                .read_retry_strategy,
             target_record: None,
             expected_holders: HashSet::new(),
         };
@@ -126,6 +131,7 @@ impl Client {
             .get_record_from_network(key, &get_cfg)
             .await
             .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?;
+
         let header = RecordHeader::from_record(&record)?;
 
         if let Ok(true) = RecordHeader::is_record_of_type_chunk(&record) {
@@ -205,6 +211,17 @@ impl Client {
         chunk: &Chunk,
         payment: ProofOfPayment,
     ) -> Result<ChunkAddress, PutError> {
+        let result = self.chunk_upload_with_payment_inner(chunk, payment).await;
+        self.emit_upload_event(*chunk.name(), result.is_ok()).await;
+
+        result
+    }
+
+    async fn chunk_upload_with_payment_inner(
+        &self,
+        chunk: &Chunk,
+        payment: ProofOfPayment,
+    ) -> Result<ChunkAddress, PutError> {
         let storing_nodes = payment.payees();
 
         if storing_nodes.is_empty() {
@@ -231,8 +248,14 @@ impl Client {
 
         let verification = {
             let verification_cfg = GetRecordCfg {
-                get_quorum: Quorum::N(NonZero::new(2).expect("2 is non-zero")),
-                retry_strategy: Some(RetryStrategy::Balanced),
+                get_quorum: self
+                    .operation_config
+                    .chunk_operation_config
+                    .verification_quorum,
+                retry_strategy: self
+                    .operation_config
+                    .chunk_operation_config
+                    .verification_retry_strategy,
                 target_record: None,
                 expected_holders: Default::default(),
             };
@@ -256,12 +279,16 @@ impl Client {
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::One,
-            retry_strategy: Some(RetryStrategy::Balanced),
+            put_quorum: ResponseQuorum::One,
+            retry_strategy: self
+                .operation_config
+                .chunk_operation_config
+                .write_retry_strategy,
             use_put_record_to: Some(storing_nodes.clone()),
             verification,
         };
         self.network.put_record(record, &put_cfg).await?;
+
         debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}");
         Ok(*chunk.address())
     }
@@ -280,7 +307,6 @@ impl Client {
                 DataMapLevel::First(map) => map,
                 DataMapLevel::Additional(map) => map,
             };
-
             let data = self.fetch_from_data_map(data_map).await?;
 
             match &data_map_level {

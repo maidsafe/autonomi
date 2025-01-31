@@ -27,7 +27,7 @@ ant-bootstrap = { path = "../ant-bootstrap", version = "0.1.4" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.23" }
 ant-logging = { path = "../ant-logging", version = "0.2.45" }
 ant-protocol = { path = "../ant-protocol", version = "0.3.3" }
-autonomi = { path = "../autonomi", version = "0.3.5", features = [ "loud" ] }
+autonomi = { path = "../autonomi", version = "0.3.5" }
 clap = { version = "4.2.1", features = ["derive"] }
 color-eyre = "0.6.3"
 const-hex = "1.13.1"

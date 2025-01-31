@@ -6,13 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_evm::Amount;
 use ant_protocol::storage::DataTypes;
 use bytes::Bytes;
 
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::payment::PaymentOption;
-use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
+use crate::client::{GetError, PutError};
 use crate::{self_encryption::encrypt, Client};
 
 impl Client {
@@ -76,7 +75,7 @@ impl Client {
             .map(|chunk| (*chunk.name(), chunk.serialised_size()))
             .collect();
         info!("Paying for {} addresses", xor_names.len());
-        let (receipt, skipped_payments) = self
+        let (receipt, _skipped_payments) = self
             .pay_for_content_addrs(DataTypes::Chunk, xor_names.into_iter(), payment_option)
             .await
             .inspect_err(|err| error!("Error paying for data: {err:?}"))?;
@@ -96,25 +95,6 @@ impl Client {
                 last_chunk_fail.1
             );
             return Err(last_chunk_fail.1);
-        }
-
-        let record_count = chunks.len().saturating_sub(skipped_payments);
-
-        // Reporting
-        if let Some(channel) = self.client_event_sender.as_ref() {
-            let tokens_spent = receipt
-                .values()
-                .map(|(_, cost)| cost.as_atto())
-                .sum::<Amount>();
-
-            let summary = UploadSummary {
-                records_paid: record_count,
-                records_already_paid: skipped_payments,
-                tokens_spent,
-            };
-            if let Err(err) = channel.send(ClientEvent::UploadComplete(summary)).await {
-                error!("Failed to send client event: {err:?}");
-            }
         }
 
         Ok(DataMapChunk(data_map_chunk))

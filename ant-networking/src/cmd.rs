@@ -7,11 +7,13 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
+    config::GetRecordCfg,
     driver::{PendingGetClosestType, SwarmDriver},
     error::{NetworkError, Result},
     event::TerminateNodeReason,
     log_markers::Marker,
-    multiaddr_pop_p2p, GetRecordCfg, GetRecordError, MsgResponder, NetworkEvent, CLOSE_GROUP_SIZE,
+    multiaddr_pop_p2p, GetRecordError, MsgResponder, NetworkEvent, ResponseQuorum,
+    CLOSE_GROUP_SIZE,
 };
 use ant_evm::{PaymentQuote, QuotingMetrics, U256};
 use ant_protocol::{
@@ -23,7 +25,7 @@ use ant_protocol::{
 use libp2p::{
     kad::{
         store::{Error as StoreError, RecordStore},
-        KBucketDistance as Distance, Quorum, Record, RecordKey, K_VALUE,
+        KBucketDistance as Distance, Record, RecordKey, K_VALUE,
     },
     Multiaddr, PeerId,
 };
@@ -206,14 +208,14 @@ pub enum NetworkSwarmCmd {
     PutRecord {
         record: Record,
         sender: oneshot::Sender<Result<()>>,
-        quorum: Quorum,
+        quorum: ResponseQuorum,
     },
     /// Put record to specific node
     PutRecordTo {
         peers: Vec<PeerId>,
         record: Record,
         sender: oneshot::Sender<Result<()>>,
-        quorum: Quorum,
+        quorum: ResponseQuorum,
     },
 }
 
@@ -456,7 +458,7 @@ impl SwarmDriver {
                     .swarm
                     .behaviour_mut()
                     .kademlia
-                    .put_record(record, quorum)
+                    .put_record(record, quorum.get_kad_quorum())
                 {
                     Ok(request_id) => {
                         debug!("Sent record {record_key:?} to network. Request id: {request_id:?} to network");
@@ -488,7 +490,7 @@ impl SwarmDriver {
                 let request_id = self.swarm.behaviour_mut().kademlia.put_record_to(
                     record,
                     peers.into_iter(),
-                    quorum,
+                    quorum.get_kad_quorum(),
                 );
                 debug!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
 

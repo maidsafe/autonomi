@@ -161,12 +161,6 @@ impl Client {
             .to_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
 
-        #[cfg(feature = "loud")]
-        println!(
-            "Uploading public archive referencing {} files",
-            archive.map().len()
-        );
-
         let result = self.data_put_public(bytes, wallet.into()).await;
         debug!("Uploaded archive {archive:?} to the network and the address is {result:?}");
         result

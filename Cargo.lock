@@ -799,6 +799,7 @@ name = "ant-build-info"
 version = "0.1.23"
 dependencies = [
  "chrono",
+ "serde",
  "tracing",
  "vergen",
 ]
@@ -909,6 +910,7 @@ dependencies = [
  "blsttc",
  "bytes",
  "custom_debug",
+ "exponential-backoff",
  "eyre",
  "futures",
  "hex",
@@ -1070,7 +1072,6 @@ dependencies = [
  "crdts",
  "custom_debug",
  "dirs-next",
- "exponential-backoff",
  "hex",
  "lazy_static",
  "libp2p",

@@ -103,14 +103,13 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
 
     if args.version {
-        println!(
-            "{}",
-            ant_build_info::version_string(
-                "Autonomi Node Launchpad",
-                env!("CARGO_PKG_VERSION"),
-                None
-            )
-        );
+        ant_build_info::get_version_info(
+            "Autonomi Node Launchpad",
+            env!("CARGO_PKG_VERSION"),
+            None,
+        )
+        .pretty_print();
+
         return Ok(());
     }
 

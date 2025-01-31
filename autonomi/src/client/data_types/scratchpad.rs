@@ -9,13 +9,15 @@
 use crate::client::payment::{PayError, PaymentOption};
 use crate::{client::quote::CostError, Client};
 use crate::{Amount, AttoTokens};
-use ant_networking::{GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, VerificationKind};
-use ant_protocol::storage::{try_serialize_record, RecordKind, RetryStrategy};
+use ant_networking::{
+    GetRecordCfg, GetRecordError, NetworkError, PutRecordCfg, ResponseQuorum, VerificationKind,
+};
+use ant_protocol::storage::{try_serialize_record, RecordKind};
 use ant_protocol::{
     storage::{try_deserialize_record, DataTypes},
     NetworkAddress,
 };
-use libp2p::kad::{Quorum, Record};
+use libp2p::kad::Record;
 use std::collections::HashSet;
 
 pub use crate::Bytes;
@@ -64,13 +66,31 @@ impl Client {
         &self,
         address: &ScratchpadAddress,
     ) -> Result<Scratchpad, ScratchpadError> {
+        let result = self.scratchpad_get_inner(address).await;
+
+        self.emit_download_event(address.xorname(), result.is_ok())
+            .await;
+
+        result
+    }
+
+    async fn scratchpad_get_inner(
+        &self,
+        address: &ScratchpadAddress,
+    ) -> Result<Scratchpad, ScratchpadError> {
         let network_address = NetworkAddress::from_scratchpad_address(*address);
         info!("Fetching scratchpad from network at {network_address:?}",);
         let scratch_key = network_address.to_record_key();
 
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: None,
+            get_quorum: self
+                .operation_config
+                .scratchpad_operation_config
+                .read_quorum,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .read_retry_strategy,
             target_record: None,
             expected_holders: HashSet::new(),
         };
@@ -144,6 +164,18 @@ impl Client {
         scratchpad: Scratchpad,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        let xor_name = scratchpad.address().xorname();
+        let result = self.scratchpad_put_inner(scratchpad, payment_option).await;
+        self.emit_upload_event(xor_name, result.is_ok()).await;
+
+        result
+    }
+
+    async fn scratchpad_put_inner(
+        &self,
+        scratchpad: Scratchpad,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
         let address = scratchpad.address();
         Self::scratchpad_verify(&scratchpad)?;
 
@@ -202,15 +234,24 @@ impl Client {
         };
 
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .scratchpad_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
 
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .write_retry_strategy,
             verification: Some((VerificationKind::Crdt, get_cfg)),
             use_put_record_to: payees,
         };
@@ -239,6 +280,22 @@ impl Client {
         initial_data: &Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        let xor_name = ScratchpadAddress::new(owner.public_key()).xorname();
+        let result = self
+            .scratchpad_create_inner(owner, content_type, initial_data, payment_option)
+            .await;
+        self.emit_upload_event(xor_name, result.is_ok()).await;
+
+        result
+    }
+
+    async fn scratchpad_create_inner(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        initial_data: &Bytes,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
         let address = ScratchpadAddress::new(owner.public_key());
         let already_exists = match self.scratchpad_get(&address).await {
             Ok(_) => true,
@@ -257,13 +314,28 @@ impl Client {
 
         let counter = 0;
         let scratchpad = Scratchpad::new(owner, content_type, initial_data, counter);
-        self.scratchpad_put(scratchpad, payment_option).await
+        self.scratchpad_put_inner(scratchpad, payment_option).await
     }
 
     /// Update an existing scratchpad to the network
     /// This operation is free but requires the scratchpad to be already created on the network
     /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable
     pub async fn scratchpad_update(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        data: &Bytes,
+    ) -> Result<(), ScratchpadError> {
+        let xor_name = ScratchpadAddress::new(owner.public_key()).xorname();
+        let result = self
+            .scratchpad_update_inner(owner, content_type, data)
+            .await;
+        self.emit_upload_event(xor_name, result.is_ok()).await;
+
+        result
+    }
+
+    async fn scratchpad_update_inner(
         &self,
         owner: &SecretKey,
         content_type: u64,
@@ -307,14 +379,24 @@ impl Client {
             expires: None,
         };
         let get_cfg = GetRecordCfg {
-            get_quorum: Quorum::Majority,
-            retry_strategy: Some(RetryStrategy::default()),
+            get_quorum: self
+                .operation_config
+                .scratchpad_operation_config
+                .verification_quorum,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .verification_retry_strategy,
             target_record: None,
             expected_holders: Default::default(),
         };
+
         let put_cfg = PutRecordCfg {
-            put_quorum: Quorum::All,
-            retry_strategy: None,
+            put_quorum: ResponseQuorum::All,
+            retry_strategy: self
+                .operation_config
+                .scratchpad_operation_config
+                .write_retry_strategy,
             verification: Some((VerificationKind::Crdt, get_cfg)),
             use_put_record_to: None,
         };

@@ -242,9 +242,6 @@ impl SwarmDriver {
         let n_peers = self.peers_in_rt;
         info!("New peer added to routing table: {added_peer:?}, now we have #{n_peers} connected peers");
 
-        #[cfg(feature = "loud")]
-        println!("New peer added to routing table: {added_peer:?}, now we have #{n_peers} connected peers");
-
         if let Some(bootstrap_cache) = &mut self.bootstrap_cache {
             for addr in addresses.iter() {
                 bootstrap_cache.add_addr(addr.clone());
@@ -366,8 +363,6 @@ impl SwarmDriver {
         }
 
         info!("kBucketTable has {index:?} kbuckets {total_peers:?} peers, {kbucket_table_stats:?}, estimated network size: {estimated_network_size:?}");
-        #[cfg(feature = "loud")]
-        println!("Estimated network size: {estimated_network_size:?}");
     }
 
     /// Estimate the number of nodes in the network
