@@ -21,6 +21,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::kad::{Record, RecordKey};
+use libp2p::PeerId;
 use xor_name::XorName;
 
 impl Node {
@@ -623,8 +624,9 @@ impl Node {
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
         debug!("Validating record payment for {pretty_key}");
 
-        // check if the quote is valid
         let self_peer_id = self.network().peer_id();
+
+        // check if the quote is valid
         if !payment.verify_for(self_peer_id) {
             warn!("Payment is not valid for record {pretty_key}");
             return Err(Error::InvalidRequest(format!(
@@ -648,14 +650,23 @@ impl Node {
             )));
         }
 
-        // verify the claimed payees are all known to us within the certain range.
-        let closest_k_peers = self.network().get_closest_k_value_local_peers().await?;
-        let mut payees = payment.payees();
-        payees.retain(|peer_id| !closest_k_peers.contains(peer_id));
-        if !payees.is_empty() {
+        // verify the claimed payees are indeed within range.
+        let closest_peers_to_address = self
+            .network()
+            .client_get_all_close_peers_in_range_or_close_group(address)
+            .await?;
+        let payees_out_of_range: Vec<PeerId> = payment
+            .payees()
+            .into_iter()
+            .filter(|peer_id| {
+                peer_id != &self_peer_id && !closest_peers_to_address.contains(peer_id)
+            })
+            .collect();
+        if !payees_out_of_range.is_empty() {
             warn!("Payment quote has out-of-range payees for record {pretty_key}");
+            warn!("Payees out of range: {payees_out_of_range:?}");
             return Err(Error::InvalidRequest(format!(
-                "Payment quote has out-of-range payees {payees:?}"
+                "Payment quote has out-of-range payees for record {pretty_key}"
             )));
         }
 
