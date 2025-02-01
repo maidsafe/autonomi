@@ -651,20 +651,19 @@ impl Node {
         }
 
         // verify the claimed payees are indeed within range.
-        let closest_peers_to_address = self
-            .network()
-            .client_get_all_close_peers_in_range_or_close_group(address)
-            .await?;
+        let closest_peers_to_address = self.network().node_get_closest_peers(address).await?;
         let payees_out_of_range: Vec<PeerId> = payment
             .payees()
             .into_iter()
-            .filter(|peer_id| {
-                peer_id != &self_peer_id && !closest_peers_to_address.contains(peer_id)
-            })
+            .filter(|peer_id| !closest_peers_to_address.contains(peer_id))
             .collect();
         if !payees_out_of_range.is_empty() {
             warn!("Payment quote has out-of-range payees for record {pretty_key}");
             warn!("Payees out of range: {payees_out_of_range:?}");
+            debug!(
+                "Amount of closest peers found: {}",
+                closest_peers_to_address.len()
+            );
             return Err(Error::InvalidRequest(format!(
                 "Payment quote has out-of-range payees for record {pretty_key}"
             )));
