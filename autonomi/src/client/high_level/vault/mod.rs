@@ -9,16 +9,22 @@
 pub mod key;
 pub mod user_data;
 
-use ant_protocol::storage::ScratchpadAddress;
 pub use key::{derive_vault_key, VaultSecretKey};
 pub use user_data::UserData;
 
 use crate::client::data_types::scratchpad::ScratchpadError;
+use crate::client::key_derivation::{DerivationIndex, MainSecretKey};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::Client;
-use ant_evm::AttoTokens;
+use crate::graph::GraphError;
+use ant_evm::{AttoTokens, U256};
+use ant_networking::{GetRecordError, NetworkError};
+use ant_protocol::storage::{
+    GraphContent, GraphEntry, GraphEntryAddress, Scratchpad, ScratchpadAddress,
+};
 use ant_protocol::Bytes;
+use bls::PublicKey;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use tracing::info;
 
@@ -29,7 +35,18 @@ use tracing::info;
 /// The value 0 is reserved for tests
 pub type VaultContentType = u64;
 
-/// For custom apps using Scratchpad, this function converts an app identifier or name to a [`VaultContentType`]
+/// Defines the max size of content can be written into per ScratchPad
+const MAX_CONTENT_PER_SCRATCHPAD: usize = Scratchpad::MAX_SIZE - 1024;
+
+/// Defines the max number of Scratchpads that one GraphEntry can point to
+/// The current value is assuming GraphEntry max_size to be 100KB.
+const NUM_OF_SCRATCHPADS_PER_GRAPHENTRY: usize = 1_000;
+
+/// Hard coded derivation index for the Vault's root GraphEntry.
+/// Derive the Vault's main secret/public key by it to get the root GraphEntry owner/address
+const VAULT_HEAD_DERIVATION_INDEX: [u8; 32] = [0; 32];
+
+/// For custom apps using Vault, this function converts an app identifier or name to a [`VaultContentType`]
 pub fn app_name_to_vault_content_type<T: Hash>(s: T) -> VaultContentType {
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);
@@ -38,8 +55,10 @@ pub fn app_name_to_vault_content_type<T: Hash>(s: T) -> VaultContentType {
 
 #[derive(Debug, thiserror::Error)]
 pub enum VaultError {
-    #[error("Vault error: {0}")]
+    #[error("Vault Scratchpad related error: {0}")]
     Scratchpad(#[from] ScratchpadError),
+    #[error("Vault GraphEntry related error: {0}")]
+    GraphEntry(#[from] GraphError),
     #[error("Protocol: {0}")]
     Protocol(#[from] ant_protocol::Error),
 }
@@ -52,24 +71,71 @@ impl Client {
         secret_key: &VaultSecretKey,
     ) -> Result<(Bytes, VaultContentType), VaultError> {
         info!("Fetching and decrypting vault...");
-        let public_key = secret_key.public_key();
-        let pad = self.scratchpad_get_from_public_key(&public_key).await?;
+        let main_secret_key = MainSecretKey::new(secret_key.clone());
+        let public_key = main_secret_key
+            .derive_key(&DerivationIndex::from_bytes(VAULT_HEAD_DERIVATION_INDEX))
+            .public_key();
 
-        let data = pad.decrypt_data(secret_key)?;
+        let mut cur_graph_entry_addr = GraphEntryAddress::from_owner(public_key.into());
+        let mut decrypted_full_text = vec![];
+        let mut content_type = 0;
+        let mut has_end_reached = false;
+
+        while !has_end_reached {
+            let graph_entry = self.graph_entry_get(cur_graph_entry_addr).await?;
+
+            // The first descendant is reserved for `expand GraphEntry`.
+            cur_graph_entry_addr = GraphEntryAddress::from_owner(graph_entry.descendants[0].0);
+
+            let scratchpad_addresses = graph_entry.descendants[1..].to_vec();
+            let (decrypt_data, cur_content_type, is_end_reached) = self
+                .fetch_scratchpads_of_one_graph_entry_and_decrypt(
+                    &main_secret_key,
+                    scratchpad_addresses,
+                )
+                .await?;
+            decrypted_full_text.push(decrypt_data);
+            content_type = cur_content_type;
+            has_end_reached = is_end_reached;
+        }
+
         debug!("vault data is successfully fetched and decrypted");
-        Ok((data, pad.data_encoding()))
+        Ok((Bytes::from(decrypted_full_text.concat()), content_type))
     }
 
     /// Get the cost of creating a new vault
-    pub async fn vault_cost(&self, owner: &VaultSecretKey) -> Result<AttoTokens, CostError> {
+    /// A quick estimation of cost: m * graph_entry_cost + n * scratchpad_cost
+    pub async fn vault_cost(
+        &self,
+        owner: &VaultSecretKey,
+        max_size: u64,
+    ) -> Result<AttoTokens, CostError> {
         info!("Getting cost for vault");
-        self.scratchpad_cost(&owner.public_key()).await
+        let public_key = MainSecretKey::new(owner.clone())
+            .derive_key(&DerivationIndex::from_bytes(VAULT_HEAD_DERIVATION_INDEX))
+            .public_key();
+        let graph_entry_cost = self.graph_entry_cost(&public_key.into()).await?;
+        if graph_entry_cost.is_zero() {
+            // Has been created, assuming all Scratchpads have been created and paid
+            Ok(graph_entry_cost)
+        } else {
+            let scratchpad_cost = self.scratchpad_cost(&public_key.into()).await?;
+
+            let num_of_scratchpads = max_size / MAX_CONTENT_PER_SCRATCHPAD as u64 + 1;
+            let num_of_graph_entry =
+                num_of_scratchpads / NUM_OF_SCRATCHPADS_PER_GRAPHENTRY as u64 + 1;
+
+            let total_cost = U256::from(num_of_graph_entry) * graph_entry_cost.as_atto()
+                + U256::from(num_of_scratchpads) * scratchpad_cost.as_atto();
+            Ok(AttoTokens::from_atto(total_cost))
+        }
     }
 
     /// Put data into the client's VaultPacket
     ///
-    /// Pays for a new VaultPacket if none yet created for the client.
-    /// Provide the bytes to be written to the vault and the content type of those bytes.
+    /// Dynamically expand the Vault's capacity with uploading un-created GraphEntry.
+    /// Un-created Scratchpad will be uploaded as well if necessary.
+    ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
     pub async fn write_bytes_to_vault(
         &self,
@@ -78,21 +144,203 @@ impl Client {
         secret_key: &VaultSecretKey,
         content_type: VaultContentType,
     ) -> Result<AttoTokens, VaultError> {
-        let scratch_address = ScratchpadAddress::new(secret_key.public_key());
-        info!("Writing to vault at {scratch_address:?}");
+        info!("Writing {} bytes to vault ...", data.len());
+        let mut total_cost = AttoTokens::zero();
+        let main_secret_key = MainSecretKey::new(secret_key.clone());
 
-        match self
-            .scratchpad_update(secret_key, content_type, &data)
-            .await
-        {
-            Ok(()) => Ok(AttoTokens::zero()),
-            Err(ScratchpadError::CannotUpdateNewScratchpad) => {
-                let (price, _) = self
-                    .scratchpad_create(secret_key, content_type, &data, payment_option)
-                    .await?;
-                Ok(price)
+        // scratchpad_derivations ordered by the collection order
+        let (mut cur_free_graphentry_derivation, mut scratchpad_derivations) = self
+            .current_capacity(
+                &main_secret_key,
+                DerivationIndex::from_bytes(VAULT_HEAD_DERIVATION_INDEX),
+            )
+            .await?;
+
+        let content_chunks = chunk_bytes(data);
+
+        info!(
+            "Current capacity is {}, meanwhile requiring {}",
+            scratchpad_derivations.len(),
+            content_chunks.len()
+        );
+
+        // claim more capacity if short of.
+        // Note: as the Scratchpad is `created on use`, hence during the `claim stage`,
+        //       NUM_OF_SCRATCHPADS_PER_GRAPHENTRY to be claimed in one newly created GraphEntry.
+        while scratchpad_derivations.len() < content_chunks.len() {
+            let (new_free_graphentry_derivation, new_scratchpad_derivations, grap_cost) = self
+                .expand_capacity(
+                    &main_secret_key,
+                    &cur_free_graphentry_derivation,
+                    payment_option.clone(),
+                )
+                .await?;
+            cur_free_graphentry_derivation = new_free_graphentry_derivation;
+            scratchpad_derivations.extend(&new_scratchpad_derivations);
+            total_cost = AttoTokens::from_atto(total_cost.as_atto() + grap_cost.as_atto());
+        }
+
+        for (i, content) in content_chunks.into_iter().enumerate() {
+            let sp_secret_key = main_secret_key
+                .derive_key(&DerivationIndex::from_bytes(scratchpad_derivations[i].1));
+            match self
+                .scratchpad_update(&sp_secret_key.clone().into(), content_type, &content)
+                .await
+            {
+                Ok(()) => continue,
+                Err(ScratchpadError::CannotUpdateNewScratchpad) => {
+                    let (price, addr) = self
+                        .scratchpad_create(
+                            &sp_secret_key.into(),
+                            content_type,
+                            &content,
+                            payment_option.clone(),
+                        )
+                        .await?;
+                    info!("Created Scratchpad at {addr:?} with cost of {price:?}");
+                    total_cost = AttoTokens::from_atto(total_cost.as_atto() + price.as_atto());
+                }
+                Err(err) => return Err(err.into()),
             }
-            Err(err) => Err(err.into()),
+        }
+
+        Ok(total_cost)
+    }
+
+    // Expand the capacity, i.e. upload one GraphEntry
+    // The returned value is:
+    //   * cur_free_graphentry_derivation: the output[0] of the tail of the linked GraphEntry
+    //   * scratchpad_derivations: ordered by the creating order
+    //   * graph_cost: cost paid to upload the GraphEntry
+    async fn expand_capacity(
+        &self,
+        main_secret_key: &MainSecretKey,
+        cur_graphentry_derivation: &DerivationIndex,
+        payment_option: PaymentOption,
+    ) -> Result<(DerivationIndex, Vec<(PublicKey, GraphContent)>, AttoTokens), VaultError> {
+        let own_secret_key = main_secret_key.derive_key(cur_graphentry_derivation);
+
+        // For Vault, doesn't need the backward poining. i.e. one-direction link shall be enough.
+        let parents = vec![];
+        // For Vault, doesn't need this field to be populated.
+        let initial_value = [0u8; 32];
+
+        // Poining to the next GraphEntry
+        let new_graphentry_derivation = DerivationIndex::random(&mut rand::thread_rng());
+        let public_key: PublicKey = main_secret_key
+            .derive_key(&new_graphentry_derivation)
+            .public_key()
+            .into();
+        let mut descendants = vec![(public_key, new_graphentry_derivation.into_bytes())];
+
+        // Pointing to other future Scrachpads
+        descendants.extend((0..NUM_OF_SCRATCHPADS_PER_GRAPHENTRY).map(|_| {
+            let derivation_index = DerivationIndex::random(&mut rand::thread_rng());
+            let public_key: PublicKey = main_secret_key
+                .derive_key(&derivation_index)
+                .public_key()
+                .into();
+            (public_key, derivation_index.into_bytes())
+        }));
+
+        let graph_entry = GraphEntry::new(
+            &own_secret_key.into(),
+            parents,
+            initial_value,
+            descendants.clone(),
+        );
+
+        // Upload the GraphEntry
+        let (graph_cost, _addr) = self.graph_entry_put(graph_entry, payment_option).await?;
+
+        let scratchpad_derivations = descendants.split_off(1);
+        Ok((
+            new_graphentry_derivation,
+            scratchpad_derivations,
+            graph_cost,
+        ))
+    }
+
+    // Collectes the current claimed capacity (i.e. the uploaded `GrapthEntry`s)
+    // The returned value is:
+    //   * cur_free_graphentry_derivation: i.e. the root if no graph_entry uploaded,
+    //       otherwise, the first un-used one (the output[0] of the tail of the linked GraphEntry)
+    //   * scratchpad_derivations: ordered by the collection order
+    async fn current_capacity(
+        &self,
+        main_secret_key: &MainSecretKey,
+        mut cur_free_graphentry_derivation: DerivationIndex,
+    ) -> Result<(DerivationIndex, Vec<(PublicKey, GraphContent)>), VaultError> {
+        let mut scratchpad_derivations = vec![];
+        loop {
+            let public_key = main_secret_key
+                .derive_key(&cur_free_graphentry_derivation)
+                .public_key();
+            let cur_graph_entry_addr = GraphEntryAddress::from_owner(public_key.into());
+
+            match self.graph_entry_get(cur_graph_entry_addr).await {
+                Ok(entry) => {
+                    cur_free_graphentry_derivation =
+                        DerivationIndex::from_bytes(entry.descendants[0].1);
+                    scratchpad_derivations.extend(&entry.descendants[1..]);
+                }
+                Err(GraphError::Network(NetworkError::GetRecordError(
+                    GetRecordError::RecordNotFound,
+                ))) => {
+                    // GraphEntry not existed, return the current snapshot.
+                    info!(
+                        "vault capacity is successfully fetched, with {} scratchpads",
+                        scratchpad_derivations.len()
+                    );
+                    return Ok((cur_free_graphentry_derivation, scratchpad_derivations));
+                }
+                Err(err) => {
+                    return Err(err.into());
+                }
+            }
         }
     }
+
+    async fn fetch_scratchpads_of_one_graph_entry_and_decrypt(
+        &self,
+        main_secret_key: &MainSecretKey,
+        scratchpad_addresses: Vec<(PublicKey, [u8; 32])>,
+    ) -> Result<(Bytes, VaultContentType, bool), VaultError> {
+        let mut decrypted_full_text = vec![];
+        let mut content_type = 0;
+        let mut has_end_reached = false;
+        // Any non-max-sized ScratchPad indicates the end-of-vault-content.
+        for (pub_key, derive_bytes) in scratchpad_addresses {
+            let addr = ScratchpadAddress::new(pub_key);
+            let secret_key = main_secret_key.derive_key(&DerivationIndex::from_bytes(derive_bytes));
+
+            let sp = self.scratchpad_get(&addr).await?;
+            content_type = sp.data_encoding();
+            let decrypt_data = sp.decrypt_data(&secret_key.into())?;
+            decrypted_full_text.push(decrypt_data);
+            if sp.encrypted_data().len() < MAX_CONTENT_PER_SCRATCHPAD {
+                has_end_reached = true;
+                break;
+            }
+        }
+
+        Ok((
+            Bytes::from(decrypted_full_text.concat()),
+            content_type,
+            has_end_reached,
+        ))
+    }
+}
+
+fn chunk_bytes(input: Bytes) -> Vec<Bytes> {
+    let mut chunks = Vec::new();
+    let mut offset = 0;
+
+    while offset < input.len() {
+        let end = (offset + MAX_CONTENT_PER_SCRATCHPAD).min(input.len());
+        chunks.push(input.slice(offset..end));
+        offset = end;
+    }
+
+    chunks
 }

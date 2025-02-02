@@ -67,7 +67,11 @@ pub enum FileCmd {
 #[derive(Subcommand, Debug)]
 pub enum VaultCmd {
     /// Estimate cost to create a vault.
-    Cost,
+    Cost {
+        /// Expected max_size of a vault, only for cost estimation.
+        #[clap(default_value = "3145728")]
+        expected_max_size: u64,
+    },
 
     /// Create a vault at a deterministic address based on your `SECRET_KEY`.
     /// Pushing an encrypted backup of your local user data to the network
@@ -134,7 +138,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             FileCmd::List => file::list(),
         },
         Some(SubCmd::Vault { command }) => match command {
-            VaultCmd::Cost => vault::cost(peers.await?).await,
+            VaultCmd::Cost { expected_max_size } => {
+                vault::cost(peers.await?, expected_max_size).await
+            }
             VaultCmd::Create => vault::create(peers.await?).await,
             VaultCmd::Load => vault::load(peers.await?).await,
             VaultCmd::Sync { force } => vault::sync(force, peers.await?).await,
