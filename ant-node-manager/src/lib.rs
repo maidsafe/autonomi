@@ -437,6 +437,9 @@ pub async fn status_report(
             println!("Bin path: {}", daemon.daemon_path.to_string_lossy());
         }
 
+
+
+
         if let Some(faucet) = &node_registry.faucet {
             print_banner(&format!(
                 "{} - {}",
@@ -459,7 +462,7 @@ pub async fn status_report(
             .collect::<Vec<&NodeServiceData>>();
         for node in nodes {
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
-            let connected_peers = node
+                let connected_peers = node
                 .connected_peers
                 .clone()
                 .map_or("-".to_string(), |p| p.len().to_string());
