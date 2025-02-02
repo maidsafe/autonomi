@@ -96,10 +96,10 @@ impl Client {
         Ok(data.to_vec())
     }
 
-    fn vault_cost(&self, key: &PyVaultSecretKey) -> PyResult<String> {
+    fn vault_cost(&self, key: &PyVaultSecretKey, max_expected_size: u64) -> PyResult<String> {
         let rt = tokio::runtime::Runtime::new().expect("Could not start tokio runtime");
         let cost = rt
-            .block_on(self.inner.vault_cost(&key.inner))
+            .block_on(self.inner.vault_cost(&key.inner, max_expected_size))
             .map_err(|e| {
                 pyo3::exceptions::PyValueError::new_err(format!("Failed to get vault cost: {e}"))
             })?;

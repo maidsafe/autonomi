@@ -12,15 +12,15 @@ use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 
-pub async fn cost(peers: NetworkPeers) -> Result<()> {
+pub async fn cost(peers: NetworkPeers, expected_max_size: u64) -> Result<()> {
     let client = crate::actions::connect_to_network(peers).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Getting cost to create a new vault...");
-    let total_cost = client.vault_cost(&vault_sk).await?;
+    let total_cost = client.vault_cost(&vault_sk, expected_max_size).await?;
 
     if total_cost.is_zero() {
-        println!("Vault already exists, modifying an existing vault is free");
+        println!("Vault already exists, modifying an existing vault is partially free, unless need to expand capacity.");
     } else {
         println!("Cost to create a new vault: {total_cost} AttoTokens");
     }
