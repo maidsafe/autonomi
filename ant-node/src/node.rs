@@ -9,6 +9,7 @@
 use super::{
     error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker, NodeEvent,
 };
+use crate::error::Error;
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
 use crate::RunningNode;
@@ -27,6 +28,7 @@ use ant_protocol::{
     storage::ValidationType,
     NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
+// use autonomi::client::address;
 use bytes::Bytes;
 use itertools::Itertools;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
@@ -35,6 +37,7 @@ use rand::{
     rngs::{OsRng, StdRng},
     thread_rng, Rng, SeedableRng,
 };
+use std::io::{BufRead, Write};
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -68,7 +71,7 @@ const UNRELEVANT_RECORDS_CLEANUP_INTERVAL: Duration = Duration::from_secs(3600);
 /// Highest score to achieve from each metric sub-sector during StorageChallenge.
 const HIGHEST_SCORE: usize = 100;
 
-/// Any nodes bearing a score below this shall be considered as bad.
+/// Any n   odes bearing a score below this shall be considered as bad.
 /// Max is to be 100 * 100
 const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 5000;
 
@@ -197,6 +200,7 @@ impl NodeBuilder {
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
             evm_network: self.evm_network,
+            root_dir: self.root_dir.clone(),
         };
 
         let node = Node {
@@ -217,6 +221,7 @@ impl NodeBuilder {
             rewards_address: self.evm_address,
         };
 
+        // Run the node
         Ok(running_node)
     }
 }
@@ -240,6 +245,7 @@ struct NodeInner {
     metrics_recorder: Option<NodeMetricsRecorder>,
     reward_address: RewardsAddress,
     evm_network: EvmNetwork,
+    root_dir: PathBuf,
 }
 
 impl Node {
@@ -256,6 +262,10 @@ impl Node {
     /// Returns the instance of Network
     pub(crate) fn network(&self) -> &Network {
         &self.inner.network
+    }
+
+    pub(crate) fn get_root_dir(&self) -> &PathBuf {
+        &self.inner.root_dir
     }
 
     #[cfg(feature = "open-metrics")]
@@ -434,7 +444,7 @@ impl Node {
     fn handle_network_event(&self, event: NetworkEvent, peers_connected: &Arc<AtomicUsize>) {
         let start = Instant::now();
         let event_string = format!("{event:?}");
-        let event_header;
+        let mut event_header = "UnknownEvent";
         debug!("Handling NetworkEvent {event_string:?}");
 
         match event {
@@ -475,13 +485,52 @@ impl Node {
                 event_header = "NewListenAddr";
                 let network = self.network().clone();
                 let peers = self.initial_peers().clone();
+                let peer_id = self.network().peer_id().clone();
+                let root_dir_nw_info = self
+                                        .get_root_dir()
+                                        .clone()
+                                        .join("network_info")
+                                        .join(format!("listeners_{}", peer_id));
+
+                let path = std::path::Path::new(&root_dir_nw_info);
+
+                if !path.exists() {
+                    println!("File does not exist. Creating it now...");
+                    match std::fs::File::create(&root_dir_nw_info) {
+                        Ok(_) => println!("File created successfully: {:?}", root_dir_nw_info),
+                        Err(e) => eprintln!("Failed to create file: {}", e),
+                    }
+                }
+
                 let _handle = spawn(async move {
                     for addr in peers {
+                        if !contains_string(&root_dir_nw_info, &addr.to_string()) {
+                            _ = append_to_file(&root_dir_nw_info, &addr.clone().to_string());
+                        }
                         if let Err(err) = network.dial(addr.clone()).await {
                             tracing::error!("Failed to dial {addr}: {err:?}");
                         };
                     }
                 });
+            }
+            NetworkEvent::ClosedListenAddr(address ) => {
+                let peer_id = self.network().peer_id().clone();
+                let root_dir_nw_info = self
+                                        .get_root_dir()
+                                        .clone()
+                                        .join("network_info")
+                                        .join(format!("listeners_{}", peer_id));
+                let path = std::path::Path::new(&root_dir_nw_info);
+
+                if path.exists() {
+                    let _handle = spawn(async move {
+                        for addr in address {
+                            if contains_string(&root_dir_nw_info, &addr.to_string()) {
+                                _ = remove_from_file(&root_dir_nw_info, &addr.clone().to_string());
+                            }
+                        }
+                    });
+                }
             }
             NetworkEvent::ResponseReceived { res } => {
                 event_header = "ResponseReceived";
@@ -1091,6 +1140,53 @@ fn challenge_score_scheme(
         HIGHEST_SCORE,
         HIGHEST_SCORE * correct_answers / expected_proofs.len(),
     )
+}
+
+fn contains_string(file_path: &PathBuf, search_str: &str) -> bool {
+    match std::fs::read_to_string(file_path) {
+        Ok(contents) => contents.contains(search_str),
+        Err(e) => {
+            eprintln!("Failed to read file: {}", e);
+            false
+        }
+    }
+}
+
+fn append_to_file(file_path: &PathBuf, new_str: &str) -> Result<()> {
+    let mut file = std::fs::OpenOptions::new()
+                                    .write(true)
+                                    .append(true)
+                                    .create(true)
+                                    .open(file_path)
+                                    .map_err(|_| Error::InvalidListenerFileOperation)?;
+    if let Err(e) = file.write_all(format!("{}\n", new_str).as_bytes()) {
+        eprintln!("Failed to write to file: {}", e);
+    }
+    Ok(())
+}
+
+fn remove_from_file(file_path: &PathBuf, new_str: &str) -> Result<()> {
+    // Read all lines from the file
+    let file = std::fs::File::open(file_path).map_err(|_| Error::InvalidListenerFileOperation)?;
+    let reader = std::io::BufReader::new(file);
+
+    let lines: Vec<String> = reader
+                            .lines()
+                            .filter_map(|line| line.ok()) // Handle errors while reading
+                            .filter(|line| !line.contains(new_str)) // Remove lines containing the keyword
+                            .collect();
+
+    // Write back the filtered content
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(file_path).map_err(|_| Error::InvalidListenerFileOperation)?;
+
+    for line in lines {
+        writeln!(file, "{}", line).map_err(|_| Error::InvalidListenerFileOperation)?; // Write each line with a newline
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

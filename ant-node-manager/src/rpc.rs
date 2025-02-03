@@ -7,13 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, ServiceManager,
-    VerbosityLevel,
+    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, error::Error, ServiceManager, VerbosityLevel
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
-    rpc::RpcClient,
-    NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
+    metric::MetricClient,
+    NodeRegistry, NodeService, NodeServiceData, ServiceStatus
 };
 use color_eyre::{
     eyre::{eyre, OptionExt},
@@ -37,8 +36,10 @@ pub async fn restart_node_service(
         })?;
     let current_node_clone = current_node_mut.clone();
 
-    let rpc_client = RpcClient::from_socket_addr(current_node_mut.rpc_socket_addr);
-    let service = NodeService::new(current_node_mut, Box::new(rpc_client));
+    let metrics_port = current_node_mut.metrics_port.ok_or(Error::MetricPortEmpty)?;
+    let metric_client = MetricClient::new(metrics_port);
+    let service = NodeService::new(current_node_mut, Box::new(metric_client));
+
     let mut service_manager = ServiceManager::new(
         service,
         Box::new(ServiceController {}),
@@ -235,8 +236,10 @@ pub async fn restart_node_service(
             version: current_node_clone.version.clone(),
         };
 
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(&mut node, Box::new(rpc_client));
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+        let metric_client = MetricClient::new(metrics_port);
+        let service = NodeService::new(&mut node, Box::new(metric_client));
+
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(ServiceController {}),
