@@ -128,6 +128,33 @@ impl Client {
         Ok(pad)
     }
 
+    /// Check if a scratchpad exists on the network
+    pub async fn scratchpad_check_existance(
+        &self,
+        address: &ScratchpadAddress,
+    ) -> Result<bool, ScratchpadError> {
+        let key = NetworkAddress::from_scratchpad_address(*address).to_record_key();
+        debug!("Checking scratchpad existance at: {key:?}");
+        let get_cfg = GetRecordCfg {
+            get_quorum: Quorum::Majority,
+            retry_strategy: Some(RetryStrategy::None),
+            target_record: None,
+            expected_holders: Default::default(),
+        };
+
+        match self
+            .network
+            .get_record_from_network(key.clone(), &get_cfg)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. })) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => Ok(false),
+            Err(err) => Err(ScratchpadError::Network(err))
+                .inspect_err(|err| error!("Error checking scratchpad existance: {err:?}")),
+        }
+    }
+
     /// Verify a scratchpad
     pub fn scratchpad_verify(scratchpad: &Scratchpad) -> Result<(), ScratchpadError> {
         if !scratchpad.verify_signature() {
@@ -241,17 +268,7 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
         let address = ScratchpadAddress::new(owner.public_key());
-        let already_exists = match self.scratchpad_get(&address).await {
-            Ok(_) => true,
-            Err(ScratchpadError::Network(NetworkError::GetRecordError(
-                GetRecordError::SplitRecord { .. },
-            ))) => true,
-            Err(ScratchpadError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            ))) => false,
-            Err(err) => return Err(err),
-        };
-
+        let already_exists = self.scratchpad_check_existance(&address).await?;
         if already_exists {
             return Err(ScratchpadError::ScratchpadAlreadyExists(address));
         }

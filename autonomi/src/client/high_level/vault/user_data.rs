@@ -13,6 +13,7 @@ use crate::client::high_level::files::archive_public::ArchiveAddr;
 use crate::client::payment::PaymentOption;
 use crate::client::Client;
 use crate::client::GetError;
+use crate::register::RegisterAddress;
 use ant_evm::AttoTokens;
 use ant_protocol::Bytes;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,8 @@ pub struct UserData {
     pub file_archives: HashMap<ArchiveAddr, String>,
     /// Owned private file archives, along with their names (can be empty)
     pub private_file_archives: HashMap<PrivateArchiveAccess, String>,
+    /// Owned register addresses, along with their names (can be empty)
+    pub register_addresses: HashMap<RegisterAddress, String>,
 }
 
 /// Errors that can occur during the get operation.
@@ -53,6 +56,11 @@ impl UserData {
     /// Create a new empty UserData
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Add a register. Returning `Option::Some` with the old name if the register was already in the set.
+    pub fn add_register(&mut self, register: RegisterAddress, name: String) -> Option<String> {
+        self.register_addresses.insert(register, name)
     }
 
     /// Add an archive. Returning `Option::Some` with the old name if the archive was already in the set.

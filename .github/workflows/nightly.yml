@@ -111,6 +111,98 @@ jobs:
           ANT_LOG: "v"
         timeout-minutes: 5
 
+      - name: Generate register signing key
+        run: ./target/release/ant --log-output-dest=data-dir register generate-key
+
+      - name: Create register (writeable by owner)
+        run: ./target/release/ant --log-output-dest=data-dir register create baobao 123 > ./register_create_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: parse register address (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          REGISTER_ADDRESS=$(rg "Register created at address: ([0-9a-f]*)" -o -r '$1' ./register_create_output)
+          echo "REGISTER_ADDRESS=$REGISTER_ADDRESS" >> $GITHUB_ENV
+        shell: bash
+
+      - name: parse register address (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $REGISTER_ADDRESS = rg "Register created at address: ([0-9a-f]*)" -o -r '$1' ./register_create_output
+          echo "REGISTER_ADDRESS=$REGISTER_ADDRESS" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Get register
+        run: ./target/release/ant --log-output-dest=data-dir register get ${{ env.REGISTER_ADDRESS }}
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Edit register
+        run: ./target/release/ant --log-output-dest=data-dir register edit ${{ env.REGISTER_ADDRESS }} 456
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Get register (after edit)
+        run: ./target/release/ant --log-output-dest=data-dir register get ${{ env.REGISTER_ADDRESS }}
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Create Register
+        run: ./target/release/ant --log-output-dest=data-dir register create bao 111 > ./register2_create_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: parse register address (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          REGISTER2_ADDRESS=$(rg "Register created at address: ([0-9a-f]*)" -o -r '$1' ./register2_create_output)
+          echo "REGISTER2_ADDRESS=$REGISTER2_ADDRESS" >> $GITHUB_ENV
+        shell: bash
+
+      - name: parse register address (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $REGISTER2_ADDRESS = rg "Register created at address: ([0-9a-f]*)" -o -r '$1' ./register2_create_output
+          echo "REGISTER2_ADDRESS=$REGISTER2_ADDRESS" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Get Register (current key is the owner)
+        run: ./target/release/ant --log-output-dest=data-dir register get ${{ env.REGISTER2_ADDRESS }}
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Edit Register (current key is the owner)
+        run: ./target/release/ant --log-output-dest=data-dir register edit ${{ env.REGISTER2_ADDRESS }} 222
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Delete current register signing key
+        shell: bash
+        run: rm -rf ${{ matrix.autonomi_path }}/autonomi
+
+      - name: Generate new register signing key
+        run: ./target/release/ant --log-output-dest=data-dir register generate-key
+
+      - name: Get Register (new signing key is not the owner)
+        run: ./target/release/ant --log-output-dest=data-dir register get ${{ env.REGISTER2_ADDRESS }}
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 2
+
+      - name: Get Register (new signing key is not the owner)
+        run: ./target/release/ant --log-output-dest=data-dir register get ${{ env.REGISTER2_ADDRESS }}
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 2
+
       - name: Stop the local network and upload logs
         if: always()
         uses: maidsafe/ant-local-testnet-action@main

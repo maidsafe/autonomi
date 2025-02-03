@@ -13,7 +13,6 @@ use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::Client;
 use crate::AttoTokens;
-use crate::{PublicKey, SecretKey};
 use ant_networking::{GetRecordError, NetworkError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -21,6 +20,7 @@ use xor_name::XorName;
 
 mod history;
 
+pub use crate::{PublicKey, SecretKey};
 pub use history::RegisterHistory;
 
 /// A Register is addressed at a [`RegisterAddress`] which is in fact the owner's [`PublicKey`].
@@ -49,6 +49,23 @@ impl RegisterAddress {
     /// To underlying graph representation
     pub fn to_underlying_graph_root(&self) -> GraphEntryAddress {
         GraphEntryAddress::from_owner(self.owner)
+    }
+
+    /// Convert a register address to a hex string
+    pub fn to_hex(&self) -> String {
+        self.owner.to_hex()
+    }
+
+    /// Convert a hex string to a register address
+    pub fn from_hex(hex: &str) -> Result<Self, bls::Error> {
+        let owner = PublicKey::from_hex(hex)?;
+        Ok(Self { owner })
+    }
+}
+
+impl std::fmt::Display for RegisterAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 
@@ -139,7 +156,6 @@ impl Client {
         let (pointer_cost, _pointer_addr) = self
             .pointer_create(&pointer_key, target, payment_option.clone())
             .await?;
-
         let total_cost = graph_cost
             .checked_add(pointer_cost)
             .ok_or(RegisterError::InvalidCost)?;

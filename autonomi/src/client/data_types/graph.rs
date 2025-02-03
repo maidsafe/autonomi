@@ -15,6 +15,7 @@ use crate::client::UploadSummary;
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_networking::get_graph_entry_from_record;
+use ant_networking::GetRecordError;
 use ant_networking::{GetRecordCfg, NetworkError, PutRecordCfg, VerificationKind};
 use ant_protocol::PrettyPrintRecordKey;
 use ant_protocol::{
@@ -75,6 +76,33 @@ impl Client {
         match &graph_entries[..] {
             [entry] => Ok(entry.clone()),
             multiple => Err(GraphError::Fork(multiple.to_vec())),
+        }
+    }
+
+    /// Check if a graph_entry exists on the network
+    pub async fn graph_entry_check_existance(
+        &self,
+        address: &GraphEntryAddress,
+    ) -> Result<bool, GraphError> {
+        let key = NetworkAddress::from_graph_entry_address(*address).to_record_key();
+        debug!("Checking graph_entry existance at: {key:?}");
+        let get_cfg = GetRecordCfg {
+            get_quorum: Quorum::Majority,
+            retry_strategy: Some(RetryStrategy::None),
+            target_record: None,
+            expected_holders: Default::default(),
+        };
+
+        match self
+            .network
+            .get_record_from_network(key.clone(), &get_cfg)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. })) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => Ok(false),
+            Err(err) => Err(GraphError::Network(err))
+                .inspect_err(|err| error!("Error checking graph_entry existance: {err:?}")),
         }
     }
 

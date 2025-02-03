@@ -90,6 +90,33 @@ impl Client {
         Ok(pointer)
     }
 
+    /// Check if a pointer exists on the network
+    pub async fn pointer_check_existance(
+        &self,
+        address: &PointerAddress,
+    ) -> Result<bool, PointerError> {
+        let key = NetworkAddress::from_pointer_address(*address).to_record_key();
+        debug!("Checking pointer existance at: {key:?}");
+        let get_cfg = GetRecordCfg {
+            get_quorum: Quorum::Majority,
+            retry_strategy: Some(RetryStrategy::None),
+            target_record: None,
+            expected_holders: Default::default(),
+        };
+
+        match self
+            .network
+            .get_record_from_network(key.clone(), &get_cfg)
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. })) => Ok(true),
+            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => Ok(false),
+            Err(err) => Err(PointerError::Network(err))
+                .inspect_err(|err| error!("Error checking pointer existance: {err:?}")),
+        }
+    }
+
     /// Verify a pointer
     pub fn pointer_verify(pointer: &Pointer) -> Result<(), PointerError> {
         if !pointer.verify_signature() {
@@ -192,17 +219,7 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
         let address = PointerAddress::from_owner(owner.public_key());
-        let already_exists = match self.pointer_get(address).await {
-            Ok(_) => true,
-            Err(PointerError::Network(NetworkError::GetRecordError(
-                GetRecordError::SplitRecord { .. },
-            ))) => true,
-            Err(PointerError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            ))) => false,
-            Err(err) => return Err(err),
-        };
-
+        let already_exists = self.pointer_check_existance(&address).await?;
         if already_exists {
             return Err(PointerError::PointerAlreadyExists(address));
         }

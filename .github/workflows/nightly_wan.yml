@@ -90,6 +90,30 @@ jobs:
           ANT_LOG: "all"
         timeout-minutes: 2
 
+      - name: Start a client to create a register
+        run: |
+          set -e
+          cargo run --bin safe --release -- --log-output-dest=data-dir register create -n baobao
+        env:
+          ANT_LOG: "all"
+        timeout-minutes: 2
+
+      - name: Start a client to get a register
+        run: |
+          set -e
+          cargo run --bin safe --release -- --log-output-dest=data-dir register get -n baobao
+        env:
+          ANT_LOG: "all"
+        timeout-minutes: 2
+
+      - name: Start a client to edit a register
+        run: |
+          set -e
+          cargo run --bin safe --release -- --log-output-dest=data-dir register edit -n baobao wood
+        env:
+          ANT_LOG: "all"
+        timeout-minutes: 2
+
       # - name: Fetch network logs
       #   uses: maidsafe/sn-testnet-control-action/fetch-logs@main
       #   with:

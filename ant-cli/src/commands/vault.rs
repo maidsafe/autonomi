@@ -36,7 +36,7 @@ pub async fn create(peers: NetworkPeers) -> Result<()> {
     let local_user_data = crate::user_data::get_local_user_data()?;
     let file_archives_len = local_user_data.file_archives.len();
     let private_file_archives_len = local_user_data.private_file_archives.len();
-
+    let registers_len = local_user_data.register_addresses.len();
     println!("Pushing to network vault...");
     let total_cost = client
         .put_user_data_to_vault(&vault_sk, wallet.into(), local_user_data)
@@ -52,6 +52,7 @@ pub async fn create(peers: NetworkPeers) -> Result<()> {
     println!("Vault contains:");
     println!("{file_archives_len} public file archive(s)");
     println!("{private_file_archives_len} private file archive(s)");
+    println!("{registers_len} register(s)");
     Ok(())
 }
 
@@ -60,16 +61,15 @@ pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
     let vault_sk = crate::keys::get_vault_secret_key()?;
     let wallet = load_wallet(&client.evm_network)?;
 
-    println!("Fetching vault from network...");
-    let net_user_data = client
-        .get_user_data_from_vault(&vault_sk)
-        .await
-        .wrap_err("Failed to fetch vault from network")
-        .with_suggestion(|| "Make sure you have already created a vault on the network")?;
-
     if force {
         println!("The force flag was provided, overwriting user data in the vault with local user data...");
     } else {
+        println!("Fetching vault from network...");
+        let net_user_data = client
+            .get_user_data_from_vault(&vault_sk)
+            .await
+            .wrap_err("Failed to fetch vault from network")
+            .with_suggestion(|| "Make sure you have already created a vault on the network")?;
         println!("Syncing vault with local user data...");
         crate::user_data::write_local_user_data(&net_user_data)?;
     }
@@ -78,14 +78,17 @@ pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
     let local_user_data = crate::user_data::get_local_user_data()?;
     let file_archives_len = local_user_data.file_archives.len();
     let private_file_archives_len = local_user_data.private_file_archives.len();
+    let registers_len = local_user_data.register_addresses.len();
     client
         .put_user_data_to_vault(&vault_sk, wallet.into(), local_user_data)
-        .await?;
+        .await
+        .with_suggestion(|| "Make sure you have already created a vault on the network")?;
 
     println!("✅ Successfully synced vault");
     println!("Vault contains:");
     println!("{file_archives_len} public file archive(s)");
     println!("{private_file_archives_len} private file archive(s)");
+    println!("{registers_len} register(s)");
     Ok(())
 }
 
@@ -104,5 +107,6 @@ pub async fn load(peers: NetworkPeers) -> Result<()> {
         "{} private file archive(s)",
         user_data.private_file_archives.len()
     );
+    println!("{} register(s)", user_data.register_addresses.len());
     Ok(())
 }
