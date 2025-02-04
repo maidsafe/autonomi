@@ -4,7 +4,6 @@ use libp2p::PeerId;
 use crate::rpc::{RpcActions, NodeInfo, NetworkInfo, RecordAddress};
 use tokio::time::Duration;
 use std::path::PathBuf;
-use std::io::Write;
 use crate::error::{Result,Error};
 
 // const MAX_CONNECTION_RETRY_ATTEMPTS: u8 = 5;
@@ -46,25 +45,6 @@ impl NetworkInfoMetrics {
             listeners: listeners_id,
         }
     }
-}
-
-pub fn write_network_metrics_to_file(root_dir: PathBuf, network_info: NetworkInfoMetrics, peer_id: String) -> Result<()>{
-    let network_info_dir_path = root_dir.join("network_info");
-
-    std::fs::create_dir_all(&network_info_dir_path)?;
-
-    let connected_peers_path = network_info_dir_path.join(format!("connected_peers_{}", peer_id));
-    let mut file = std::fs::File::create(&connected_peers_path)?;
-    for peer in network_info.connected_peers.iter() {
-        writeln!(file, "{}", peer)?;
-    }
-
-    let listeners_path = network_info_dir_path.join(format!("listeners_{}", peer_id));
-    let mut file = std::fs::File::create(&listeners_path)?;
-    for listeners in network_info.listeners.iter() {
-        writeln!(file, "{}", listeners)?;
-    }
-    Ok(())
 }
 
 pub fn read_network_metrics_from_file(root_dir: PathBuf, peer_id: String) -> NetworkInfoMetrics {
