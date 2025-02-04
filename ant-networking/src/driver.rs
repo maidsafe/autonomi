@@ -172,6 +172,7 @@ pub struct NetworkBuilder {
     metrics_server_port: Option<u16>,
     request_timeout: Option<Duration>,
     upnp: bool,
+    root_dir: Option<PathBuf>,
 }
 
 impl NetworkBuilder {
@@ -189,6 +190,7 @@ impl NetworkBuilder {
             metrics_server_port: None,
             request_timeout: None,
             upnp: false,
+            root_dir: None,
         }
     }
 
@@ -229,6 +231,10 @@ impl NetworkBuilder {
         self.upnp = upnp;
     }
 
+    pub fn set_root_dir(&mut self, root_dir: PathBuf) {
+        self.root_dir = Some(root_dir);
+    }
+
     /// Creates a new `SwarmDriver` instance, along with a `Network` handle
     /// for sending commands and an `mpsc::Receiver<NetworkEvent>` for receiving
     /// network events. It initializes the swarm, sets up the transport, and
@@ -243,7 +249,7 @@ impl NetworkBuilder {
     ///
     /// Returns an error if there is a problem initializing the mDNS behaviour.
     pub fn build_node(
-        self,
+        mut self,
         root_dir: PathBuf,
     ) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
         let bootstrap_interval = rand::thread_rng().gen_range(
@@ -315,9 +321,9 @@ impl NetworkBuilder {
 
         let listen_addr = self.listen_addr;
         let upnp = self.upnp;
-
+        self.set_root_dir(root_dir.clone());
         let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp, Some(root_dir.clone()));
+            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -350,7 +356,7 @@ impl NetworkBuilder {
             .set_replication_factor(REPLICATION_FACTOR);
 
         let (network, net_event_recv, driver) =
-            self.build(kad_cfg, None, true, ProtocolSupport::Outbound, false, None);
+            self.build(kad_cfg, None, true, ProtocolSupport::Outbound, false);
 
         (network, net_event_recv, driver)
     }
@@ -363,7 +369,6 @@ impl NetworkBuilder {
         is_client: bool,
         req_res_protocol: ProtocolSupport,
         upnp: bool,
-        root_dir: Option<PathBuf>
     ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
@@ -458,7 +463,7 @@ impl NetworkBuilder {
                 Info::new(vec![("bin_version".to_string(), env!("CARGO_PKG_VERSION").to_string())]),
             );
 
-            if let Some(root_dir) = root_dir.clone() {
+            if let Some(root_dir) = self.root_dir.clone() {
                 metadata_extended_sub_reg.register(
                     "data_dir",
                     "Root directory of the node",
@@ -466,7 +471,7 @@ impl NetworkBuilder {
                 );
             }
 
-            if let Some(log_dir) = root_dir {
+            if let Some(log_dir) = self.root_dir.clone() {
                 let log_dir = log_dir.join("logs");
                 metadata_extended_sub_reg.register(
                     "log_dir",
