@@ -1,4 +1,4 @@
-use ant_protocol::CLOSE_GROUP_SIZE;
+// use ant_protocol::CLOSE_GROUP_SIZE;
 use async_trait::async_trait;
 use libp2p::PeerId;
 use crate::rpc::{RpcActions, NodeInfo, NetworkInfo, RecordAddress};
@@ -8,7 +8,7 @@ use std::io::Write;
 use crate::error::{Result,Error};
 
 // const MAX_CONNECTION_RETRY_ATTEMPTS: u8 = 5;
-const CONNECTION_RETRY_DELAY_SEC: Duration = Duration::from_secs(1);
+//const CONNECTION_RETRY_DELAY_SEC: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 pub struct NodeInfoMetrics {
@@ -103,20 +103,20 @@ impl MetricClient {
     }
 
     pub async fn get_endpoint_metrics(&self, endpoint_name: &str) -> Result<prometheus_parse::Scrape> {
-            debug!(
-                "Attempting connection to collect {} metrics from {}...",
-                endpoint_name,
-                self.endpoint_port
-            );
+        debug!(
+            "Attempting connection to collect {} metrics from {}...",
+            endpoint_name,
+            self.endpoint_port
+        );
 
-            let body = reqwest::get(&format!("http://localhost:{}/{endpoint_name}", self.endpoint_port))
-            .await.map_err(|_| Error::MetricServiceConnectionError(self.endpoint_port.clone()))?
-            .text()
-            .await.map_err(|_| Error::MetricServiceInfoResponseError)?;
-            let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
-            let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
+        let body = reqwest::get(&format!("http://localhost:{}/{endpoint_name}", self.endpoint_port))
+        .await.map_err(|_| Error::MetricServiceConnectionError(self.endpoint_port.clone()))?
+        .text()
+        .await.map_err(|_| Error::MetricServiceInfoResponseError)?;
+        let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
+        let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
 
-            Ok(all_metrics)
+        Ok(all_metrics)
     }
 
     pub fn get_node_info_from_metadata_extended(&self ,scrape: &prometheus_parse::Scrape, node_info: &mut NodeInfoMetrics) -> Result<()>{
@@ -234,43 +234,45 @@ impl RpcActions for MetricClient {
         Ok(())
     }
 
-    async fn is_node_connected_to_network(&self, timeout: Duration) -> Result<()> {
-            let max_attempts = std::cmp::max(1, timeout.as_secs() / CONNECTION_RETRY_DELAY_SEC.as_secs());
-    trace!(
-        "Metric conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
-        CONNECTION_RETRY_DELAY_SEC
-    );
-    let mut attempts = 0;
-    loop {
-        debug!(
-            "Attempting connection to node metric endpoint at {}...",
-            self.endpoint_port
-        );
+    async fn is_node_connected_to_network(&self, _timeout: Duration) -> Result<()> {
+    // This is causing 5 mins delay during starting the node,
+    // need to debug and fix without this, nodes are starting normally
+    //         let max_attempts = std::cmp::max(1, timeout.as_secs() / CONNECTION_RETRY_DELAY_SEC.as_secs());
+    // trace!(
+    //     "Metric conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
+    //     CONNECTION_RETRY_DELAY_SEC
+    // );
+    // let mut attempts = 0;
+    // loop {
+    //     debug!(
+    //         "Attempting connection to node metric endpoint at {}...",
+    //         self.endpoint_port
+    //     );
 
-        let scrape = self.get_endpoint_metrics("metrics").await?;
+    //     let scrape = self.get_endpoint_metrics("metrics").await?;
 
-        if let Ok(peer_num) = self.get_connected_peer_num_from_metrics(&scrape) {
-            debug!("Connection to metric service successful");
-                if peer_num  as usize > CLOSE_GROUP_SIZE {
-                    return Ok(());
-                } else {
-                    error!(
-                        "Node does not have enough peers connected yet. Retrying {attempts}/{max_attempts}",
-                    );
-                }
-        } else {
-            error!(
-                "Could not connect to RPC endpoint {:?}. Retrying {attempts}/{max_attempts}",
-                self.endpoint_port,
-            );
-        }
-
-        attempts += 1;
-        tokio::time::sleep(CONNECTION_RETRY_DELAY_SEC).await;
-            if attempts >= max_attempts {
-                return Err(Error::MetricServiceConnectionError(self.endpoint_port.clone()));
-            }
-        }
+    //     if let Ok(peer_num) = self.get_connected_peer_num_from_metrics(&scrape) {
+    //         debug!("Connection to metric service successful");
+    //             if peer_num  as usize > CLOSE_GROUP_SIZE {
+    //                 return Ok(());
+    //             } else {
+    //                 error!(
+    //                     "Node does not have enough peers connected yet. Retrying {attempts}/{max_attempts}",
+    //                 );
+    //             }
+    //     } else {
+    //         error!(
+    //             "Could not connect to Metric endpoint {:?}. Retrying {attempts}/{max_attempts}",
+    //             self.endpoint_port,
+    //         );
+    //     }
+    //     attempts += 1;
+    //     tokio::time::sleep(CONNECTION_RETRY_DELAY_SEC).await;
+    //         if attempts >= max_attempts {
+    //             return Err(Error::MetricServiceConnectionError(self.endpoint_port.clone()));
+    //         }
+    //     }
+        Ok(())
     }
 
     async fn update_log_level(&self, _log_levels: String) -> Result<()> {

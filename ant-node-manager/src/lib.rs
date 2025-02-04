@@ -452,8 +452,10 @@ pub async fn status_report(
         }
     } else {
         println!(
-            "{:<18} {:<52} {:<7} {:>15}",
-            "Service Name", "Peer ID", "Status", "Connected Peers"
+            "{:<18} {:<52} {:<7}",
+            // {:>15}",
+            "Service Name", "Peer ID", "Status",
+            //"Connected Peers"
         );
         let nodes = node_registry
             .nodes
