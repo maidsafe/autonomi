@@ -39,8 +39,7 @@ impl From<u8> for VerbosityLevel {
 }
 
 use crate::error::{Error, Result};
-use ant_service_management::metric::MetricClient;
-use ant_service_management::rpc::RpcActions;
+use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
     control::ServiceControl, error::Error as ServiceError, NodeRegistry,
     NodeService, NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions,

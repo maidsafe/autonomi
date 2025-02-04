@@ -14,10 +14,9 @@ use crate::helpers::{
 use ant_bootstrap::PeersArgs;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
-use ant_service_management::metric::MetricClient;
+use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
     control::ServiceControl,
-    rpc::RpcActions,
     NodeRegistry, NodeServiceData, ServiceStatus,
 };
 use color_eyre::eyre::OptionExt;
@@ -382,7 +381,7 @@ pub struct RunNodeOptions {
 pub async fn run_node(
     run_options: RunNodeOptions,
     launcher: &dyn Launcher,
-    metric_client: &dyn RpcActions,
+    metric_client: &dyn MetricActions,
 ) -> Result<NodeServiceData> {
     info!("Launching node {}...", run_options.number);
     println!("Launching node {}...", run_options.number);

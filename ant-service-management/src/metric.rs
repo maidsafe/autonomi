@@ -1,7 +1,7 @@
 // use ant_protocol::CLOSE_GROUP_SIZE;
 use async_trait::async_trait;
 use libp2p::PeerId;
-use crate::rpc::{RpcActions, NodeInfo, NetworkInfo, RecordAddress};
+use crate::rpc::{NodeInfo, NetworkInfo};
 use tokio::time::Duration;
 use std::path::PathBuf;
 use crate::error::{Result,Error};
@@ -9,6 +9,12 @@ use crate::error::{Result,Error};
 // const MAX_CONNECTION_RETRY_ATTEMPTS: u8 = 5;
 //const CONNECTION_RETRY_DELAY_SEC: Duration = Duration::from_secs(1);
 
+#[async_trait]
+pub trait MetricActions: Sync {
+    async fn node_info(&self) -> Result<NodeInfo>;
+    async fn network_info(&self) -> Result<NetworkInfo>;
+    async fn is_node_connected_to_network(&self, timeout: Duration) -> Result<()>;
+}
 #[derive(Debug, Clone)]
 pub struct NodeInfoMetrics {
     peer_id: PeerId,
@@ -158,7 +164,7 @@ impl MetricClient {
 }
 
 #[async_trait]
-impl RpcActions for MetricClient {
+impl MetricActions for MetricClient {
     async fn node_info(&self) -> Result<NodeInfo> {
         let scrape = self.get_endpoint_metrics("metadata_extended").await?;
         let mut node_info = NodeInfoMetrics::default();
@@ -202,21 +208,10 @@ impl RpcActions for MetricClient {
         })
     }
 
-    async fn record_addresses(&self) -> Result<Vec<RecordAddress>> {
-        Ok(vec![])
-    }
-
-    async fn node_restart(&self, _delay_millis: u64, _retain_peer_id: bool) -> Result<()> {
-        Ok(())
-    }
-
-    async fn node_stop(&self, _delay_millis: u64) -> Result<()> {
-        Ok(())
-    }
-
     async fn is_node_connected_to_network(&self, _timeout: Duration) -> Result<()> {
-    // This is causing 5 mins delay during starting the node,
-    // need to debug and fix without this, nodes are starting normally
+    // Todo: This is causing 5 mins delay during starting the node,
+    // Todo: metrics server starts way later than the rpc server in node, need to refactor it further.
+
     //         let max_attempts = std::cmp::max(1, timeout.as_secs() / CONNECTION_RETRY_DELAY_SEC.as_secs());
     // trace!(
     //     "Metric conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
@@ -252,14 +247,6 @@ impl RpcActions for MetricClient {
     //             return Err(Error::MetricServiceConnectionError(self.endpoint_port.clone()));
     //         }
     //     }
-        Ok(())
-    }
-
-    async fn update_log_level(&self, _log_levels: String) -> Result<()> {
-        Ok(())
-    }
-
-    async fn node_update(&self, _delay_millis: u64) -> Result<()> {
         Ok(())
     }
 }
