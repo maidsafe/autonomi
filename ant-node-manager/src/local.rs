@@ -501,8 +501,8 @@ mod tests {
     use super::*;
     use ant_evm::utils::dummy_address;
     use ant_service_management::{
-        error::Result as RpcResult,
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
+        error::Result as MetricResult,
+        rpc::{NetworkInfo, NodeInfo},
     };
     use async_trait::async_trait;
     use libp2p_identity::PeerId;
@@ -511,24 +511,19 @@ mod tests {
     use std::str::FromStr;
 
     mock! {
-        pub RpcClient {}
+        pub MetricClient {}
         #[async_trait]
-        impl RpcActions for RpcClient {
-            async fn node_info(&self) -> RpcResult<NodeInfo>;
-            async fn network_info(&self) -> RpcResult<NetworkInfo>;
-            async fn record_addresses(&self) -> RpcResult<Vec<RecordAddress>>;
-            async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> RpcResult<()>;
-            async fn node_stop(&self, delay_millis: u64) -> RpcResult<()>;
-            async fn node_update(&self, delay_millis: u64) -> RpcResult<()>;
-            async fn is_node_connected_to_network(&self, timeout: std::time::Duration) -> RpcResult<()>;
-            async fn update_log_level(&self, log_levels: String) -> RpcResult<()>;
+        impl MetricActions for MetricClient {
+            async fn node_info(&self) -> MetricResult<NodeInfo>;
+            async fn network_info(&self) -> MetricResult<NetworkInfo>;
+            async fn is_node_connected_to_network(&self, timeout: std::time::Duration) -> MetricResult<()>;
         }
     }
 
     #[tokio::test]
     async fn run_node_should_launch_the_genesis_node() -> Result<()> {
         let mut mock_launcher = MockLauncher::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
         let rewards_address = dummy_address();
 
         let peer_id = PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?;
@@ -556,7 +551,7 @@ mod tests {
             .times(1)
             .returning(|| PathBuf::from("/usr/local/bin/antnode"));
 
-        mock_rpc_client
+        mock_metric_client
             .expect_node_info()
             .times(1)
             .returning(move || {
@@ -570,7 +565,7 @@ mod tests {
                     wallet_balance: 0,
                 })
             });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(move || {
@@ -594,7 +589,7 @@ mod tests {
                 version: "0.100.12".to_string(),
             },
             &mock_launcher,
-            &mock_rpc_client,
+            &mock_metric_client,
         )
         .await?;
 
