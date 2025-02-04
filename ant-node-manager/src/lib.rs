@@ -662,7 +662,7 @@ mod tests {
     use ant_service_management::{
         error::{Error as ServiceControlError, Result as ServiceControlResult},
         node::{NodeService, NodeServiceData},
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
+        rpc::{NetworkInfo, NodeInfo},
         UpgradeOptions, UpgradeResult,
     };
     use assert_fs::prelude::*;
@@ -682,17 +682,12 @@ mod tests {
     };
 
     mock! {
-        pub RpcClient {}
+        pub MetricClient {}
         #[async_trait]
-        impl RpcActions for RpcClient {
+        impl MetricActions for MetricClient {
             async fn node_info(&self) -> ServiceControlResult<NodeInfo>;
             async fn network_info(&self) -> ServiceControlResult<NetworkInfo>;
-            async fn record_addresses(&self) -> ServiceControlResult<Vec<RecordAddress>>;
-            async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> ServiceControlResult<()>;
-            async fn node_stop(&self, delay_millis: u64) -> ServiceControlResult<()>;
-            async fn node_update(&self, delay_millis: u64) -> ServiceControlResult<()>;
             async fn is_node_connected_to_network(&self, timeout: std::time::Duration) -> ServiceControlResult<()>;
-            async fn update_log_level(&self, log_levels: String) -> ServiceControlResult<()>;
         }
     }
 
@@ -713,7 +708,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_newly_installed_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -731,7 +726,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 1000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -742,7 +737,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -794,7 +789,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -828,7 +823,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_stopped_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -846,7 +841,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 1000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -857,7 +852,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -909,7 +904,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -937,7 +932,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_not_attempt_to_start_a_running_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_get_process_pid()
@@ -987,7 +982,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1015,7 +1010,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_service_marked_as_running_but_had_since_stopped() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_get_process_pid()
@@ -1042,7 +1037,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 1000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -1053,7 +1048,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1105,7 +1100,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1194,7 +1189,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1216,7 +1211,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_user_mode_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -1234,7 +1229,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 1000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -1245,7 +1240,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1295,7 +1290,7 @@ mod tests {
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1311,7 +1306,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_use_dynamic_startup_delay_if_set() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -1328,11 +1323,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
-        mock_rpc_client
+        mock_metric_client
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 1000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -1343,7 +1338,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1395,7 +1390,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client))
             .with_connection_timeout(Duration::from_secs(
                 DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
             ));
@@ -1467,7 +1462,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1527,7 +1522,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1589,7 +1584,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1650,7 +1645,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1726,7 +1721,7 @@ mod tests {
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1759,7 +1754,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -1802,7 +1797,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -1813,7 +1808,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1865,7 +1860,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1921,7 +1916,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mock_service_control = MockServiceControl::new();
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_metric_client = MockMetricClient::new();
 
         let mut service_data = NodeServiceData {
             auto_restart: false,
@@ -1965,7 +1960,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2004,7 +1999,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2047,7 +2042,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -2058,7 +2053,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2110,7 +2105,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2167,7 +2162,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2204,7 +2199,7 @@ mod tests {
             .with(eq(3000))
             .times(0)
             .returning(|_| ());
-        mock_rpc_client.expect_node_info().times(0).returning(|| {
+        mock_metric_client.expect_node_info().times(0).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -2215,7 +2210,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(0)
             .returning(|| {
@@ -2267,7 +2262,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2419,7 +2414,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -2466,7 +2461,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2509,7 +2504,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -2520,7 +2515,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2572,7 +2567,7 @@ mod tests {
             user_mode: true,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2629,7 +2624,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2695,7 +2690,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -2706,7 +2701,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2758,7 +2753,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2797,7 +2792,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2866,7 +2861,7 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -2877,7 +2872,7 @@ mod tests {
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2932,7 +2927,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2976,7 +2971,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3043,7 +3038,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3054,7 +3049,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3098,7 +3093,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3137,7 +3132,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3203,7 +3198,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3214,7 +3209,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3266,7 +3261,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3305,7 +3300,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3372,7 +3367,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3383,7 +3378,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3438,7 +3433,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3485,7 +3480,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3551,7 +3546,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3562,7 +3557,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3614,7 +3609,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3659,7 +3654,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3725,7 +3720,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3736,7 +3731,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3788,7 +3783,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3827,7 +3822,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3894,7 +3889,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -3905,7 +3900,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3959,7 +3954,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4007,7 +4002,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4073,7 +4068,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4084,7 +4079,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4128,7 +4123,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4167,7 +4162,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4234,7 +4229,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4245,7 +4240,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4289,7 +4284,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4332,7 +4327,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4398,7 +4393,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4409,7 +4404,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4453,7 +4448,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4492,7 +4487,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4559,7 +4554,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4570,7 +4565,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4614,7 +4609,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4656,7 +4651,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4723,7 +4718,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4734,7 +4729,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4778,7 +4773,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4817,7 +4812,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4884,7 +4879,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -4895,7 +4890,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4939,7 +4934,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4981,7 +4976,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5048,7 +5043,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5059,7 +5054,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5103,7 +5098,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5142,7 +5137,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5209,7 +5204,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5220,7 +5215,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5264,7 +5259,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5306,7 +5301,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5373,7 +5368,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5384,7 +5379,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5428,7 +5423,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5470,7 +5465,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5535,7 +5530,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5546,7 +5541,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5590,7 +5585,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5629,7 +5624,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5700,7 +5695,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5711,7 +5706,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5764,7 +5759,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5803,7 +5798,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5874,7 +5869,7 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -5885,7 +5880,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5938,7 +5933,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5977,7 +5972,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -6042,11 +6037,11 @@ network_id: None,
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
-        mock_rpc_client
+        mock_metric_client
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
+        mock_metric_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
                 pid: 2000,
                 peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
@@ -6057,7 +6052,7 @@ network_id: None,
                 wallet_balance: 0,
             })
         });
-        mock_rpc_client
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -6101,7 +6096,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client))
             .with_connection_timeout(Duration::from_secs(
                 DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
             ));
@@ -6183,7 +6178,7 @@ network_id: None,
             user: Some("ant".to_string()),
             user_mode: false,
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6253,7 +6248,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6336,7 +6331,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6412,7 +6407,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6488,7 +6483,7 @@ network_id: None,
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
