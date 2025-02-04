@@ -315,6 +315,7 @@ impl NetworkBuilder {
 
         let listen_addr = self.listen_addr;
         let upnp = self.upnp;
+
         let (network, events_receiver, mut swarm_driver) =
             self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp, Some(root_dir.clone()));
 

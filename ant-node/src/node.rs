@@ -70,7 +70,7 @@ const UNRELEVANT_RECORDS_CLEANUP_INTERVAL: Duration = Duration::from_secs(3600);
 /// Highest score to achieve from each metric sub-sector during StorageChallenge.
 const HIGHEST_SCORE: usize = 100;
 
-/// Any n   odes bearing a score below this shall be considered as bad.
+/// Any nodes bearing a score below this shall be considered as bad.
 /// Max is to be 100 * 100
 const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 3000;
 
@@ -220,7 +220,6 @@ impl NodeBuilder {
             rewards_address: self.evm_address,
         };
 
-        // Run the node
         Ok(running_node)
     }
 }

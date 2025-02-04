@@ -71,7 +71,6 @@ impl MetricService {
         Arc::clone(&self.metadata_extended)
     }
 
-
     fn respond_with_metrics(&mut self) -> Result<Response<String>> {
         let mut response: Response<String> = Response::default();
 
