@@ -493,7 +493,14 @@ impl Node {
                 let path = std::path::Path::new(&root_dir_nw_info);
 
                 if !path.exists() {
-                    println!("File does not exist. Creating it now...");
+                    info!("File {:?} does not exist. Creating it now...", root_dir_nw_info);
+                    if let Some(parent) = std::path::Path::new(path).parent() {
+                        match std::fs::create_dir_all(parent) {
+                            Ok(_) => println!("Directory created successfully: {:?}", parent),
+                            Err(e) => eprintln!("Failed to create directory: {}", e),
+                        }
+                    }
+
                     match std::fs::File::create(&root_dir_nw_info) {
                         Ok(_) => println!("File created successfully: {:?}", root_dir_nw_info),
                         Err(e) => eprintln!("Failed to create file: {}", e),

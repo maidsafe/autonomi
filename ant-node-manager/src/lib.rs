@@ -412,12 +412,12 @@ pub async fn status_report(
             println!("Data path: {}", node.data_dir_path.to_string_lossy());
             println!("Log path: {}", node.log_dir_path.to_string_lossy());
             println!("Bin path: {}", node.antnode_path.to_string_lossy());
-            println!(
-                "Connected peers: {}",
-                node.connected_peers
-                    .as_ref()
-                    .map_or("-".to_string(), |p| p.len().to_string())
-            );
+            // println!(
+            //     "Connected peers is: {}",
+            //     node.connected_peers
+            //         .as_ref()
+            //         .map_or("-".to_string(), |p| p.len().to_string())
+            // );
             println!(
                 "Reward balance: {}",
                 node.reward_balance
@@ -462,16 +462,17 @@ pub async fn status_report(
             .collect::<Vec<&NodeServiceData>>();
         for node in nodes {
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
-                let connected_peers = node
+                let _connected_peers = node
                 .connected_peers
                 .clone()
                 .map_or("-".to_string(), |p| p.len().to_string());
             println!(
-                "{:<18} {:<52} {:<7} {:>15}",
+                "{:<18} {:<52} {:<7}",
+                // {:>15}",
                 node.service_name,
                 peer_id,
                 format_status(&node.status),
-                connected_peers
+                //connected_peers
             );
         }
         if let Some(daemon) = &node_registry.daemon {
