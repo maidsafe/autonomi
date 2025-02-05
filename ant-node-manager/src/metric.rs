@@ -113,8 +113,8 @@ pub async fn restart_node_service(
         create_owned_dir(
             log_dir_path.clone(),
             current_node_clone.user.as_ref().ok_or_else(|| {
-                error!("The user must be set in the RPC context");
-                eyre!("The user must be set in the RPC context")
+                error!("The user must be set in the Metric context");
+                eyre!("The user must be set in the Metric context")
             })?,
         )
         .map_err(|err| {
@@ -133,7 +133,7 @@ pub async fn restart_node_service(
             current_node_clone
                 .user
                 .as_ref()
-                .ok_or_else(|| eyre!("The user must be set in the RPC context"))?,
+                .ok_or_else(|| eyre!("The user must be set in the Metric context"))?,
         )
         .map_err(|err| {
             eyre!(
@@ -159,7 +159,7 @@ pub async fn restart_node_service(
                 current_node_clone
                     .user
                     .as_ref()
-                    .ok_or_else(|| eyre!("The user must be set in the RPC context"))?,
+                    .ok_or_else(|| eyre!("The user must be set in the Metric context"))?,
             )
             .map_err(|err| {
                 eyre!(

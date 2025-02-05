@@ -10,7 +10,7 @@
 extern crate tracing;
 
 use ant_logging::LogBuilder;
-use ant_node_manager::{config::get_node_registry_path, rpc, DAEMON_DEFAULT_PORT};
+use ant_node_manager::{config::get_node_registry_path, metric, DAEMON_DEFAULT_PORT};
 use ant_service_management::{
     antctl_proto::{
         ant_ctl_server::{AntCtl, AntCtlServer},
@@ -123,7 +123,7 @@ impl AntCtlDaemon {
         peer_id: PeerId,
         retain_peer_id: bool,
     ) -> Result<()> {
-        let res = rpc::restart_node_service(&mut node_registry, peer_id, retain_peer_id).await;
+        let res = metric::restart_node_service(&mut node_registry, peer_id, retain_peer_id).await;
 
         // make sure to save the state even if the above fn fails.
         node_registry.save()?;

@@ -502,7 +502,7 @@ mod tests {
     use ant_evm::utils::dummy_address;
     use ant_service_management::{
         error::Result as MetricResult,
-        rpc::{NetworkInfo, NodeInfo},
+        metric::{NetworkInfo, NodeInfo},
     };
     use async_trait::async_trait;
     use libp2p_identity::PeerId;

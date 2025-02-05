@@ -15,8 +15,7 @@ pub mod config;
 pub mod error;
 pub mod helpers;
 pub mod local;
-pub mod rpc;
-pub mod rpc_client;
+pub mod metric;
 
 pub const DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S: u64 = 300;
 
@@ -662,7 +661,7 @@ mod tests {
     use ant_service_management::{
         error::{Error as ServiceControlError, Result as ServiceControlResult},
         node::{NodeService, NodeServiceData},
-        rpc::{NetworkInfo, NodeInfo},
+        metric::{NetworkInfo, NodeInfo},
         UpgradeOptions, UpgradeResult,
     };
     use assert_fs::prelude::*;
