@@ -1,13 +1,29 @@
 // use ant_protocol::CLOSE_GROUP_SIZE;
 use async_trait::async_trait;
-use libp2p::PeerId;
-use crate::rpc::{NodeInfo, NetworkInfo};
+use libp2p::{PeerId, Multiaddr};
 use tokio::time::Duration;
 use std::path::PathBuf;
 use crate::error::{Result,Error};
 
 // const MAX_CONNECTION_RETRY_ATTEMPTS: u8 = 5;
 //const CONNECTION_RETRY_DELAY_SEC: Duration = Duration::from_secs(1);
+
+#[derive(Debug, Clone)]
+pub struct NodeInfo {
+    pub pid: u32,
+    pub peer_id: PeerId,
+    pub log_path: PathBuf,
+    pub data_path: PathBuf,
+    pub version: String,
+    pub uptime: Duration,
+    pub wallet_balance: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct NetworkInfo {
+    pub connected_peers: Vec<PeerId>,
+    pub listeners: Vec<Multiaddr>,
+}
 
 #[async_trait]
 pub trait MetricActions: Sync {
