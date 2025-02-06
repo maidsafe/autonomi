@@ -412,7 +412,7 @@ impl Network {
 
         // consider data to be already paid for if 1/2 of the close nodes already have it
         let mut peer_already_have_it = 0;
-        let enough_peers_already_have_it = close_nodes.len() / 2;
+        let enough_peers_already_have_it = CLOSE_GROUP_SIZE / 2 + 1;
 
         let mut peers_returned_error = 0;
 
@@ -1082,7 +1082,7 @@ impl Network {
             );
         }
 
-        let expanded_close_group = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
+        let expanded_close_group = CLOSE_GROUP_SIZE * 2;
         let closest_peers = sort_peers_by_address(&closest_peers, key, expanded_close_group)?;
         Ok(closest_peers.into_iter().cloned().collect())
     }
