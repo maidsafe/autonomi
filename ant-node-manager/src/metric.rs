@@ -80,7 +80,6 @@ pub async fn restart_node_service(
             node_port: current_node_clone.get_antnode_port(),
             peers_args: current_node_clone.peers_args.clone(),
             rewards_address: current_node_clone.rewards_address,
-            rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
             upnp: current_node_clone.upnp,
         }
@@ -195,7 +194,6 @@ pub async fn restart_node_service(
             node_port: None,
             peers_args: current_node_clone.peers_args.clone(),
             rewards_address: current_node_clone.rewards_address,
-            rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),
             service_user: current_node_clone.user.clone(),
             upnp: current_node_clone.upnp,

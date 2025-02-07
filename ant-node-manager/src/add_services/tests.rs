@@ -144,7 +144,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         node_port: None,
         peers_args: peers_args.clone(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -530,7 +529,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_ip: None,
         node_port: None,
         peers_args: PeersArgs::default(),
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -579,7 +577,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode2")
@@ -627,7 +624,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode3")
@@ -808,7 +804,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -993,7 +988,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode2")
@@ -1882,7 +1876,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
     };
 
     let mut seq = Sequence::new();
-
     mock_service_control
         .expect_get_available_port()
         .times(1)
@@ -2495,7 +2488,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         node_port: Some(custom_port),
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4665,7 +4657,6 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4791,7 +4782,6 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4917,7 +4907,6 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5658,7 +5647,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5786,7 +5774,6 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5914,7 +5901,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -6039,7 +6025,6 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")

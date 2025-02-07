@@ -202,7 +202,6 @@ pub async fn add_node(
             node_port,
             peers_args: options.peers_args.clone(),
             rewards_address: options.rewards_address,
-            rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
             upnp: options.upnp,
