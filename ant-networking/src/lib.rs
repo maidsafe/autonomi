@@ -226,7 +226,8 @@ impl Network {
         &self,
         key: &NetworkAddress,
     ) -> Result<Vec<PeerId>> {
-        self.get_all_close_peers_in_range_or_close_group(key, true)
+        let expanded_close_group = CLOSE_GROUP_SIZE * 2;
+        self.get_all_close_peers_in_range(key, true, expanded_close_group)
             .await
     }
 
@@ -234,7 +235,8 @@ impl Network {
     ///
     /// Includes our node's `PeerId` while calculating the closest peers.
     pub async fn node_get_closest_peers(&self, key: &NetworkAddress) -> Result<Vec<PeerId>> {
-        self.get_all_close_peers_in_range_or_close_group(key, false)
+        let expanded_close_group = CLOSE_GROUP_SIZE * 2 + 4; // Add a small margin
+        self.get_all_close_peers_in_range(key, false, expanded_close_group)
             .await
     }
 
@@ -412,7 +414,7 @@ impl Network {
 
         // consider data to be already paid for if 1/2 of the close nodes already have it
         let mut peer_already_have_it = 0;
-        let enough_peers_already_have_it = close_nodes.len() / 2;
+        let enough_peers_already_have_it = CLOSE_GROUP_SIZE / 2 + 1;
 
         let mut peers_returned_error = 0;
 
@@ -1038,10 +1040,11 @@ impl Network {
     /// If `client` is false, then include `self` among the `closest_peers`
     ///
     /// If less than CLOSE_GROUP_SIZE peers are found, it will return all the peers.
-    pub async fn get_all_close_peers_in_range_or_close_group(
+    pub async fn get_all_close_peers_in_range(
         &self,
         key: &NetworkAddress,
         client: bool,
+        peers_amount: usize,
     ) -> Result<Vec<PeerId>> {
         let pretty_key = PrettyPrintKBucketKey(key.as_kbucket_key());
         debug!("Getting the all closest peers in range of {pretty_key:?}");
@@ -1082,8 +1085,7 @@ impl Network {
             );
         }
 
-        let expanded_close_group = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
-        let closest_peers = sort_peers_by_address(&closest_peers, key, expanded_close_group)?;
+        let closest_peers = sort_peers_by_address(&closest_peers, key, peers_amount)?;
         Ok(closest_peers.into_iter().cloned().collect())
     }
 
