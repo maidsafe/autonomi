@@ -993,7 +993,7 @@ impl SwarmDriver {
     pub(crate) fn record_node_issue(&mut self, peer_id: PeerId, issue: NodeIssue) {
         info!("Peer {peer_id:?} is reported as having issue {issue:?}");
         let (issue_vec, is_bad) = self.bad_nodes.entry(peer_id).or_default();
-        let mut new_bad_behaviour = None;
+        let mut _new_bad_behaviour = None;
         let mut is_connection_issue = false;
 
         // If being considered as bad already, skip certain operations
@@ -1033,7 +1033,7 @@ impl SwarmDriver {
                     } else {
                         *is_bad = true;
                     }
-                    new_bad_behaviour = Some(issue.clone());
+                    _new_bad_behaviour = Some(issue.clone());
                     info!("Peer {peer_id:?} accumulated {issue_counts} times of issue {issue:?}. Consider it as a bad node now.");
                     // Once a bad behaviour detected, no point to continue
                     break;
@@ -1049,53 +1049,56 @@ impl SwarmDriver {
             if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
                 self.update_on_peer_removal(*dead_peer.node.key.preimage());
             }
-            return;
+            // TODO: re-enable once confirmed with upscale test
+            // return;
         }
 
-        if *is_bad {
-            info!("Evicting bad peer {peer_id:?} from RT.");
-            if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
-                self.update_on_peer_removal(*dead_peer.node.key.preimage());
-            }
+        // Disable disconnection and blocking which are not because of the connection issue.
+        // TODO: re-enable once confirmed with upscale test
+        // if *is_bad {
+        //     info!("Evicting bad peer {peer_id:?} from RT.");
+        //     if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
+        //         self.update_on_peer_removal(*dead_peer.node.key.preimage());
+        //     }
 
-            if let Some(bad_behaviour) = new_bad_behaviour {
-                // inform the bad node about it and add to the blocklist after that (not for connection issues)
-                self.record_metrics(Marker::PeerConsideredAsBad { bad_peer: &peer_id });
+        //     if let Some(bad_behaviour) = new_bad_behaviour {
+        //         // inform the bad node about it and add to the blocklist after that (not for connection issues)
+        //         self.record_metrics(Marker::PeerConsideredAsBad { bad_peer: &peer_id });
 
-                warn!("Peer {peer_id:?} is considered as bad due to {bad_behaviour:?}. Informing the peer and adding to blocklist.");
-                // response handling
-                let (tx, rx) = oneshot::channel();
-                let local_swarm_cmd_sender = self.local_cmd_sender.clone();
-                tokio::spawn(async move {
-                    match rx.await {
-                        Ok(result) => {
-                            debug!("Got response for Cmd::PeerConsideredAsBad from {peer_id:?} {result:?}");
-                            if let Err(err) = local_swarm_cmd_sender
-                                .send(LocalSwarmCmd::AddPeerToBlockList { peer_id })
-                                .await
-                            {
-                                error!("SwarmDriver failed to send LocalSwarmCmd: {err}");
-                            }
-                        }
-                        Err(err) => {
-                            error!("Failed to get response from one shot channel for Cmd::PeerConsideredAsBad : {err:?}");
-                        }
-                    }
-                });
+        //         warn!("Peer {peer_id:?} is considered as bad due to {bad_behaviour:?}. Informing the peer and adding to blocklist.");
+        //         // response handling
+        //         let (tx, rx) = oneshot::channel();
+        //         let local_swarm_cmd_sender = self.local_cmd_sender.clone();
+        //         tokio::spawn(async move {
+        //             match rx.await {
+        //                 Ok(result) => {
+        //                     debug!("Got response for Cmd::PeerConsideredAsBad from {peer_id:?} {result:?}");
+        //                     if let Err(err) = local_swarm_cmd_sender
+        //                         .send(LocalSwarmCmd::AddPeerToBlockList { peer_id })
+        //                         .await
+        //                     {
+        //                         error!("SwarmDriver failed to send LocalSwarmCmd: {err}");
+        //                     }
+        //                 }
+        //                 Err(err) => {
+        //                     error!("Failed to get response from one shot channel for Cmd::PeerConsideredAsBad : {err:?}");
+        //                 }
+        //             }
+        //         });
 
-                // request
-                let request = Request::Cmd(Cmd::PeerConsideredAsBad {
-                    detected_by: NetworkAddress::from_peer(self.self_peer_id),
-                    bad_peer: NetworkAddress::from_peer(peer_id),
-                    bad_behaviour: bad_behaviour.to_string(),
-                });
-                self.queue_network_swarm_cmd(NetworkSwarmCmd::SendRequest {
-                    req: request,
-                    peer: peer_id,
-                    sender: Some(tx),
-                });
-            }
-        }
+        //         // request
+        //         let request = Request::Cmd(Cmd::PeerConsideredAsBad {
+        //             detected_by: NetworkAddress::from_peer(self.self_peer_id),
+        //             bad_peer: NetworkAddress::from_peer(peer_id),
+        //             bad_behaviour: bad_behaviour.to_string(),
+        //         });
+        //         self.queue_network_swarm_cmd(NetworkSwarmCmd::SendRequest {
+        //             req: request,
+        //             peer: peer_id,
+        //             sender: Some(tx),
+        //         });
+        //     }
+        // }
     }
 
     fn verify_peer_quote(&mut self, peer_id: PeerId, quote: PaymentQuote) {

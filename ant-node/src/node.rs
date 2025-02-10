@@ -69,7 +69,7 @@ const HIGHEST_SCORE: usize = 100;
 
 /// Any nodes bearing a score below this shall be considered as bad.
 /// Max is to be 100 * 100
-const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 3000;
+const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 1000;
 
 /// in ms, expecting average StorageChallenge complete time to be around 250ms.
 const TIME_STEP: usize = 20;

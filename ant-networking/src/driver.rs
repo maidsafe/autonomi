@@ -699,6 +699,7 @@ pub struct SwarmDriver {
     pub(crate) metrics_recorder: Option<NetworkMetricsRecorder>,
 
     network_cmd_sender: mpsc::Sender<NetworkSwarmCmd>,
+    #[allow(dead_code)]
     pub(crate) local_cmd_sender: mpsc::Sender<LocalSwarmCmd>,
     local_cmd_receiver: mpsc::Receiver<LocalSwarmCmd>,
     network_cmd_receiver: mpsc::Receiver<NetworkSwarmCmd>,

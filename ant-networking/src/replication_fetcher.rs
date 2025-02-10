@@ -21,7 +21,7 @@ use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
 use tokio::{sync::mpsc, time::Duration};
 
 // Max parallel fetches that can be undertaken at the same time.
-const MAX_PARALLEL_FETCH: usize = K_VALUE.get();
+const MAX_PARALLEL_FETCH: usize = K_VALUE.get() / 2;
 
 // The duration after which a peer will be considered failed to fetch data from,
 // if no response got from that peer.
@@ -495,20 +495,22 @@ impl ReplicationFetcher {
     //   * Some(true)  : peer is trustworthy
     //   * Some(false) : peer is not trustworthy
     //   * None        : not having enough know to tell
-    fn is_peer_trustworthy(&self, holder: &PeerId) -> Option<bool> {
-        if let Some((scores, _last_seen)) = self.peers_scores.get(holder) {
-            if scores.len() > 1 {
-                let is_healthy = scores.iter().filter(|is_health| **is_health).count() > 1;
-                if !is_healthy {
-                    info!("Peer {holder:?} is not a trustworthy replication source, as bearing scores of {scores:?}");
-                }
-                Some(is_healthy)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+    fn is_peer_trustworthy(&self, _holder: &PeerId) -> Option<bool> {
+        // TODO: re-enable once confirmed with upscaled test
+        Some(true)
+        // if let Some((scores, _last_seen)) = self.peers_scores.get(holder) {
+        //     if scores.len() > 1 {
+        //         let is_healthy = scores.iter().filter(|is_health| **is_health).count() >= 1;
+        //         if !is_healthy {
+        //             info!("Peer {holder:?} is not a trustworthy replication source, as bearing scores of {scores:?}");
+        //         }
+        //         Some(is_healthy)
+        //     } else {
+        //         None
+        //     }
+        // } else {
+        //     None
+        // }
     }
 
     // Just remove outdated entries in `on_going_fetch`, indicates a failure to fetch from network.

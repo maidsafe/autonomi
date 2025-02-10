@@ -22,6 +22,7 @@ pub enum Marker<'a> {
     /// Quoting metrics
     QuotingMetrics { quoting_metrics: &'a QuotingMetrics },
     /// The peer has been considered as bad
+    #[allow(dead_code)]
     PeerConsideredAsBad { bad_peer: &'a PeerId },
     /// We have been flagged as a bad node by a peer.
     FlaggedAsBadNode { flagged_by: &'a PeerId },
