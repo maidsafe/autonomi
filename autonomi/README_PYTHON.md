@@ -6,12 +6,28 @@ The Autonomi client library provides Python bindings for easy integration with P
 
 We recommend using `uv` for Python environment management:
 
-```bash
-uv venv
-uv pip install autonomi-client
-```
+Make sure you have installed:
+- `Python`
+- `uv`
 
 ## Quick Start
+
+```bash
+# make sure you are in the autonomi directory
+cd autonomi/
+
+# make a virtual environment
+uv venv
+source .venv/bin/activate
+uv sync
+maturin develop --uv
+
+# Then you can test with pytest
+pytest tests/python/test_bindings.py
+
+# or you can run the examples or your own scripts!
+python python/examples/autonomi_pointers.py 
+```
 
 ```python
 from autonomi_client import Client, Wallet, PaymentOption

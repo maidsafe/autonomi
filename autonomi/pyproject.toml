@@ -9,8 +9,8 @@ description = "Autonomi client API"
 authors = [{ name = "MaidSafe Developers", email = "dev@maidsafe.net" }]
 dependencies = [
     "maturin>=1.7.4",
- "pip>=24.0",
- "pytest>=8.3.4",
+    "pip>=24.0",
+    "pytest>=8.3.4",
 ]
 readme = "README_PYTHON.md"
 requires-python = ">=3.8"
