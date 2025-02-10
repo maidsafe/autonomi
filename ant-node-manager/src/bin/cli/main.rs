@@ -201,22 +201,6 @@ pub enum SubCmd {
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
-        /// Specify an Ipv4Addr for the node's RPC server to run on.
-        ///
-        /// Useful if you want to expose the RPC server pubilcly. Ports are assigned automatically.
-        ///
-        /// If not set, the RPC server is run locally.
-        #[clap(long)]
-        rpc_address: Option<Ipv4Addr>,
-        /// Specify a port for the RPC service(s).
-        ///
-        /// If not used, ports will be selected at random.
-        ///
-        /// If multiple services are being added and this argument is used, you must specify a
-        /// range. For example, '12000-12004'. The length of the range must match the number of
-        /// services, which in this case would be 5. The range must also go from lower to higher.
-        #[clap(long, value_parser = PortRange::parse)]
-        rpc_port: Option<PortRange>,
         /// Try to use UPnP to open a port in the home router and allow incoming connections.
         ///
         /// This requires a antnode binary built with the 'upnp' feature.
@@ -457,7 +441,6 @@ pub enum SubCmd {
     },
 }
 
-/// Manage the RPC service.
 #[derive(Subcommand, Debug)]
 pub enum DaemonSubCmd {
     /// Add a daemon service for issuing commands via RPC.
@@ -747,15 +730,6 @@ pub enum LocalSubCmd {
         node_version: Option<String>,
         #[command(flatten)]
         peers: PeersArgs,
-        /// Specify a port for the RPC service(s).
-        ///
-        /// If not used, ports will be selected at random.
-        ///
-        /// If multiple services are being added and this argument is used, you must specify a
-        /// range. For example, '12000-12004'. The length of the range must match the number of
-        /// services, which in this case would be 5. The range must also go from lower to higher.
-        #[clap(long, value_parser = PortRange::parse)]
-        rpc_port: Option<PortRange>,
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
@@ -844,15 +818,6 @@ pub enum LocalSubCmd {
         /// The version and path arguments are mutually exclusive.
         #[clap(long, conflicts_with = "build")]
         node_version: Option<String>,
-        /// Specify a port for the RPC service(s).
-        ///
-        /// If not used, ports will be selected at random.
-        ///
-        /// If multiple services are being added and this argument is used, you must specify a
-        /// range. For example, '12000-12004'. The length of the range must match the number of
-        /// services, which in this case would be 5. The range must also go from lower to higher.
-        #[clap(long, value_parser = PortRange::parse)]
-        rpc_port: Option<PortRange>,
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
@@ -944,8 +909,6 @@ async fn main() -> Result<()> {
             path,
             peers,
             rewards_address,
-            rpc_address,
-            rpc_port,
             url,
             upnp,
             user,
@@ -970,8 +933,6 @@ async fn main() -> Result<()> {
                 node_port,
                 peers,
                 rewards_address,
-                rpc_address,
-                rpc_port,
                 path,
                 upnp,
                 url,
@@ -1048,7 +1009,6 @@ async fn main() -> Result<()> {
                 node_version,
                 log_format,
                 peers,
-                rpc_port,
                 rewards_address,
                 evm_network,
                 skip_validation: _,
@@ -1069,7 +1029,6 @@ async fn main() -> Result<()> {
                     node_version,
                     log_format,
                     peers,
-                    rpc_port,
                     rewards_address,
                     evm_network,
                     true,
@@ -1089,7 +1048,6 @@ async fn main() -> Result<()> {
                 node_path,
                 node_port,
                 node_version,
-                rpc_port,
                 rewards_address,
                 evm_network,
                 skip_validation: _,
@@ -1110,7 +1068,6 @@ async fn main() -> Result<()> {
                     node_port,
                     node_version,
                     log_format,
-                    rpc_port,
                     rewards_address,
                     evm_network,
                     true,

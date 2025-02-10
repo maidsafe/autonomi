@@ -26,7 +26,6 @@ use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 #[cfg(test)]
 use mockall::automock;
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     process::{Command, Stdio},
     str::FromStr,
@@ -43,7 +42,6 @@ pub trait Launcher {
         log_format: Option<LogFormat>,
         metrics_port: Option<u16>,
         node_port: Option<u16>,
-        rpc_socket_addr: SocketAddr,
         rewards_address: RewardsAddress,
         evm_network: Option<EvmNetwork>,
     ) -> Result<()>;
@@ -66,7 +64,6 @@ impl Launcher for LocalSafeLauncher {
         log_format: Option<LogFormat>,
         metrics_port: Option<u16>,
         node_port: Option<u16>,
-        rpc_socket_addr: SocketAddr,
         rewards_address: RewardsAddress,
         evm_network: Option<EvmNetwork>,
     ) -> Result<()> {
@@ -92,8 +89,6 @@ impl Launcher for LocalSafeLauncher {
         }
 
         args.push("--local".to_string());
-        args.push("--rpc".to_string());
-        args.push(rpc_socket_addr.to_string());
 
         args.push("--rewards-address".to_string());
         args.push(rewards_address.to_string());
@@ -212,7 +207,6 @@ pub struct LocalNetworkOptions {
     pub node_port: Option<PortRange>,
     pub node_count: u16,
     pub peers: Option<Vec<Multiaddr>>,
-    pub rpc_port: Option<PortRange>,
     pub skip_validation: bool,
     pub log_format: Option<LogFormat>,
     pub rewards_address: RewardsAddress,
@@ -237,18 +231,12 @@ pub async fn run_network(
         check_port_availability(port_range, &node_registry.nodes)?;
     }
 
-    if let Some(port_range) = &options.rpc_port {
-        port_range.validate(options.node_count)?;
-        check_port_availability(port_range, &node_registry.nodes)?;
-    }
-
     let launcher = LocalSafeLauncher {
         antnode_bin_path: options.antnode_bin_path.to_path_buf(),
     };
 
     let mut node_port = get_start_port_if_applicable(options.node_port);
     let mut metrics_port = get_start_port_if_applicable(options.metrics_port);
-    let mut rpc_port = get_start_port_if_applicable(options.rpc_port);
 
     // Start the bootstrap node if it doesnt exist.
     let (bootstrap_peers, start) = if options.join {
@@ -263,19 +251,12 @@ pub async fn run_network(
             (peer, 1)
         }
     } else {
-        let rpc_free_port = if let Some(port) = rpc_port {
-            port
-        } else {
-            service_control.get_available_port()?
-        };
         let metrics_free_port = if let Some(port) = metrics_port {
             port
         } else  {
             service_control.get_available_port()?
         };
 
-        let rpc_socket_addr =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
         let metric_client = MetricClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.len() as u16) + 1;
@@ -287,7 +268,6 @@ pub async fn run_network(
                 interval: options.interval,
                 log_format: options.log_format,
                 number,
-                rpc_socket_addr,
                 rewards_address: options.rewards_address,
                 evm_network: options.evm_network.clone(),
                 version: get_bin_version(&launcher.get_antnode_path())?,
@@ -302,25 +282,16 @@ pub async fn run_network(
             .ok_or_eyre("The listen address was not set")?;
         node_port = increment_port_option(node_port);
         metrics_port = increment_port_option(metrics_port);
-        rpc_port = increment_port_option(rpc_port);
         (bootstrap_peers, 2)
     };
     node_registry.save()?;
 
     for _ in start..=options.node_count {
-        let rpc_free_port = if let Some(port) = rpc_port {
-            port
-        } else {
-            service_control.get_available_port()?
-        };
         let metrics_free_port = if let Some(port) = metrics_port {
             port
         } else  {
             service_control.get_available_port()?
         };
-
-        let rpc_socket_addr =
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
 
         let metric_client = MetricClient::new(metrics_free_port);
 
@@ -333,7 +304,6 @@ pub async fn run_network(
                 interval: options.interval,
                 log_format: options.log_format,
                 number,
-                rpc_socket_addr,
                 rewards_address: options.rewards_address,
                 evm_network: options.evm_network.clone(),
                 version: get_bin_version(&launcher.get_antnode_path())?,
@@ -352,7 +322,6 @@ pub async fn run_network(
 
         node_port = increment_port_option(node_port);
         metrics_port = increment_port_option(metrics_port);
-        rpc_port = increment_port_option(rpc_port);
     }
 
     if !options.skip_validation {
@@ -372,7 +341,6 @@ pub struct RunNodeOptions {
     pub metrics_port: Option<u16>,
     pub node_port: Option<u16>,
     pub number: u16,
-    pub rpc_socket_addr: SocketAddr,
     pub rewards_address: RewardsAddress,
     pub evm_network: Option<EvmNetwork>,
     pub version: String,
@@ -390,7 +358,6 @@ pub async fn run_node(
         run_options.log_format,
         run_options.metrics_port,
         run_options.node_port,
-        run_options.rpc_socket_addr,
         run_options.rewards_address,
         run_options.evm_network.clone(),
     )?;
@@ -436,7 +403,7 @@ pub async fn run_node(
         pid: Some(node_info.pid),
         rewards_address: run_options.rewards_address,
         reward_balance: None,
-        rpc_socket_addr: run_options.rpc_socket_addr,
+        rpc_socket_addr: None,
         status: ServiceStatus::Running,
         service_name: format!("antnode-local{}", run_options.number),
         upnp: false,
@@ -527,7 +494,6 @@ mod tests {
         let rewards_address = dummy_address();
 
         let peer_id = PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?;
-        let rpc_socket_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 13000);
         mock_launcher
             .expect_launch_node()
             .with(
@@ -535,12 +501,11 @@ mod tests {
                 eq(None),
                 eq(None),
                 eq(None),
-                eq(rpc_socket_addr),
                 eq(rewards_address),
                 eq(None),
             )
             .times(1)
-            .returning(|_, _, _, _, _, _, _| Ok(()));
+            .returning(|_, _, _, _, _, _| Ok(()));
         mock_launcher
             .expect_wait()
             .with(eq(100))
@@ -583,7 +548,6 @@ mod tests {
                 metrics_port: None,
                 node_port: None,
                 number: 1,
-                rpc_socket_addr,
                 rewards_address,
                 evm_network: None,
                 version: "0.100.12".to_string(),
@@ -606,7 +570,6 @@ mod tests {
         );
         assert_eq!(node.number, 1);
         assert_eq!(node.pid, Some(1000));
-        assert_eq!(node.rpc_socket_addr, rpc_socket_addr);
         assert_eq!(node.status, ServiceStatus::Running);
         assert_eq!(node.antnode_path, PathBuf::from("/usr/local/bin/antnode"));
 

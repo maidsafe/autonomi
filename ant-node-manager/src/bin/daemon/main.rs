@@ -41,7 +41,7 @@ struct Args {
     #[cfg(not(feature = "nightly"))]
     #[clap(long)]
     pub package_version: bool,
-    /// Specify a port for the daemon to listen for RPCs. It defaults to 12500 if not set.
+    /// Specify a port for the daemon to listen. It defaults to 12500 if not set.
     #[clap(long, default_value_t = DAEMON_DEFAULT_PORT)]
     port: u16,
     /// Print version information.
