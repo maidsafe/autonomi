@@ -58,9 +58,8 @@ impl ServiceStateActions for NodeService<'_> {
 
     fn build_upgrade_install_context(&self, options: UpgradeOptions) -> Result<ServiceInstallCtx> {
         let label: ServiceLabel = self.service_data.service_name.parse()?;
+
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(self.service_data.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(
                 self.service_data
@@ -71,6 +70,11 @@ impl ServiceStateActions for NodeService<'_> {
             OsString::from("--log-output-dest"),
             OsString::from(self.service_data.log_dir_path.to_string_lossy().to_string()),
         ];
+
+        if let Some(socket_addr) = self.service_data.rpc_socket_addr {
+            args.push(OsString::from("--rpc"));
+            args.push(OsString::from(socket_addr.to_string()));
+        }
 
         push_arguments_from_peers_args(&self.service_data.peers_args, &mut args);
         if let Some(log_fmt) = self.service_data.log_format {
@@ -299,7 +303,7 @@ pub struct NodeServiceData {
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_name: String,
     pub status: ServiceStatus,
     #[serde(default = "default_upnp")]

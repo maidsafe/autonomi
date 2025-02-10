@@ -187,8 +187,6 @@ pub struct AddNodeServiceOptions {
     pub node_port: Option<PortRange>,
     pub peers_args: PeersArgs,
     pub rewards_address: RewardsAddress,
-    pub rpc_address: Option<Ipv4Addr>,
-    pub rpc_port: Option<PortRange>,
     pub service_data_dir_path: PathBuf,
     pub service_log_dir_path: PathBuf,
     pub upnp: bool,
@@ -408,8 +406,6 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
@@ -440,8 +436,6 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
@@ -489,8 +483,6 @@ mod tests {
         let result = builder.build().unwrap();
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
