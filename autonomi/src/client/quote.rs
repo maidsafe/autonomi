@@ -80,11 +80,14 @@ pub enum CostError {
 }
 
 impl Client {
-    pub async fn get_store_quotes(
+    /// Get raw quotes from nodes.
+    /// These quotes do not include actual record prices.
+    /// You will likely want to use `get_store_quotes` instead.
+    pub async fn get_raw_quotes(
         &self,
         data_type: DataTypes,
         content_addrs: impl Iterator<Item = (XorName, usize)>,
-    ) -> Result<StoreQuote, CostError> {
+    ) -> Vec<Result<(XorName, Vec<(PeerId, PaymentQuote)>), CostError>> {
         let futures: Vec<_> = content_addrs
             .into_iter()
             .map(|(content_addr, data_size)| {
@@ -97,9 +100,15 @@ impl Client {
             })
             .collect();
 
-        let raw_quotes_per_addr =
-            process_tasks_with_max_concurrency(futures, *FILE_UPLOAD_BATCH_SIZE).await;
+        process_tasks_with_max_concurrency(futures, *FILE_UPLOAD_BATCH_SIZE).await
+    }
 
+    pub async fn get_store_quotes(
+        &self,
+        data_type: DataTypes,
+        content_addrs: impl Iterator<Item = (XorName, usize)>,
+    ) -> Result<StoreQuote, CostError> {
+        let raw_quotes_per_addr = self.get_raw_quotes(data_type, content_addrs).await;
         let mut all_quotes = Vec::new();
 
         for result in raw_quotes_per_addr {

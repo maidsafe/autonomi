@@ -34,6 +34,11 @@ pub type PrivateArchiveAccess = DataMapChunk;
 /// The data maps are stored within this structure instead of uploading them to the network, keeping the data private.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PrivateArchive {
+    ///           Path of the file in the directory
+    ///           |         DataMap of the chunks of this file
+    ///           |         |             Metadata of the file
+    ///           |         |             |
+    ///           V         V             V
     map: BTreeMap<PathBuf, (DataMapChunk, Metadata)>,
 }
 

@@ -2,6 +2,7 @@ use std::{path::PathBuf, str::FromStr, sync::Arc};
 
 use crate::{
     client::{
+        address::addr_to_str,
         chunk::DataMapChunk,
         payment::PaymentOption,
         vault::{UserData, VaultSecretKey},
@@ -132,7 +133,7 @@ impl PyClient {
                 .chunk_put(&chunk, payment)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to put chunk: {e}")))?;
-            Ok((cost.to_string(), PyChunkAddress::from(addr)))
+            Ok((cost.to_string(), PyChunkAddress { inner: addr }))
         })
     }
 
@@ -140,14 +141,13 @@ impl PyClient {
     fn graph_entry_get<'a>(
         &self,
         py: Python<'a>,
-        #[pyo3(from_py_with = "str_to_addr")] addr: XorName,
+        addr: PyGraphEntryAddress,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let addr = GraphEntryAddress(addr);
 
         future_into_py(py, async move {
             let entry = client
-                .graph_entry_get(&addr)
+                .graph_entry_get(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get graph entry: {e}")))?;
             Ok(PyGraphEntry { inner: entry })
@@ -158,14 +158,13 @@ impl PyClient {
     fn graph_entry_check_existance<'a>(
         &self,
         py: Python<'a>,
-        #[pyo3(from_py_with = "str_to_addr")] addr: XorName,
+        addr: PyGraphEntryAddress,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let addr = GraphEntryAddress(addr);
 
         future_into_py(py, async move {
             let exists = client
-                .graph_entry_check_existance(&addr)
+                .graph_entry_check_existance(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get graph entry: {e}")))?;
             Ok(exists)
@@ -494,7 +493,7 @@ impl PyClient {
 
     /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
     /// The data maps of these (private) files are not uploaded but returned within the PrivateArchive return type.
-    fn dir_upload<'a>(
+    fn dir_content_upload<'a>(
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
@@ -504,7 +503,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_upload(dir_path, &wallet.inner)
+                .dir_content_upload(dir_path, &wallet.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPrivateArchive { inner: archive }))
@@ -535,7 +534,7 @@ impl PyClient {
     /// Same as `dir_upload` but also uploads the archive (privately) to the network.
     ///
     /// Returns the data map allowing the private archive to be downloaded from the network.
-    fn dir_and_archive_upload<'a>(
+    fn dir_upload<'a>(
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
@@ -545,7 +544,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, data_map) = client
-                .dir_and_archive_upload(dir_path, &wallet.inner)
+                .dir_upload(dir_path, &wallet.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyDataMapChunk { inner: data_map }))
@@ -642,7 +641,7 @@ impl PyClient {
 
     /// Upload a directory as a public archive to the network.
     /// Returns the network address where the archive is stored.
-    fn dir_and_archive_upload_public<'a>(
+    fn dir_upload_public<'a>(
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
@@ -653,7 +652,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, addr) = client
-                .dir_and_archive_upload_public(dir_path, &wallet)
+                .dir_upload_public(dir_path, &wallet)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), crate::client::address::addr_to_str(addr)))
@@ -685,7 +684,7 @@ impl PyClient {
     /// The data maps of these files are uploaded on the network, making the individual files publicly available.
     ///
     /// This returns, but does not upload (!),the `PublicArchive` containing the data maps of the uploaded files.
-    fn dir_upload_public<'a>(
+    fn dir_content_upload_public<'a>(
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
@@ -695,7 +694,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_upload_public(dir_path, &wallet.inner)
+                .dir_content_upload_public(dir_path, &wallet.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPublicArchive { inner: archive }))
@@ -995,6 +994,7 @@ impl PyClient {
                 .pointer_put(pointer, payment)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to put pointer: {e}")))?;
+
             Ok(PyPointerAddress { inner: addr })
         })
     }
@@ -1063,8 +1063,8 @@ impl PyClient {
 
 /// A network address where a pointer is stored.
 /// The address is derived from the owner's public key.
-#[pyclass(name = "PointerAddress")]
-#[derive(Debug, Clone)]
+#[pyclass(name = "PointerAddress", eq, ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PyPointerAddress {
     inner: PointerAddress,
 }
@@ -1072,24 +1072,33 @@ pub struct PyPointerAddress {
 #[pymethods]
 impl PyPointerAddress {
     /// Initialise pointer address from hex string.
-    #[staticmethod]
-    pub fn from_hex(hex: String) -> PyResult<Self> {
-        let bytes = hex::decode(hex)
-            .map_err(|e| PyValueError::new_err(format!("`hex` not a valid hex string: {e}")))?;
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| PyValueError::new_err("`hex` invalid: must be 32 bytes"))?;
-
+    #[new]
+    fn new(#[pyo3(from_py_with = "str_to_addr")] addr: XorName) -> PyResult<Self> {
         Ok(Self {
-            inner: PointerAddress::new(XorName(bytes)),
+            inner: PointerAddress::new(addr),
+        })
+    }
+
+    /// Instantiate address which is derived from owner's unique public key.
+    #[staticmethod]
+    fn from_owner(public_key: PyPublicKey) -> PyResult<Self> {
+        Ok(Self {
+            inner: PointerAddress::from_owner(public_key.inner),
         })
     }
 
     /// Returns the hex string representation of the pointer address.
     #[getter]
-    pub fn hex(&self) -> String {
-        let bytes: [u8; 32] = self.inner.xorname().0;
-        hex::encode(bytes)
+    fn hex(&self) -> String {
+        self.inner.to_hex()
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.hex())
+    }
+
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!("PointerAddress('{}')", self.hex()))
     }
 }
 
@@ -1123,8 +1132,7 @@ impl PyPointer {
     /// Returns the hex string representation of the pointer's target.
     #[getter]
     fn hex(&self) -> String {
-        let bytes: [u8; 32] = self.inner.xorname().0;
-        hex::encode(bytes)
+        addr_to_str(self.inner.xorname())
     }
 
     /// Returns the target that this pointer points to.
@@ -1149,25 +1157,36 @@ pub struct PyPointerTarget {
 
 #[pymethods]
 impl PyPointerTarget {
-    /// Initialize a pointer target from a chunk address hex string.
+    /// Initialize a pointer targeting a chunk.
     #[staticmethod]
-    fn from_hex(hex: &str) -> PyResult<Self> {
-        let bytes = hex::decode(hex)
-            .map_err(|e| PyValueError::new_err(format!("`hex` not a valid hex string: {e}")))?;
-        let bytes: [u8; 32] = bytes
-            .try_into()
-            .map_err(|_| PyValueError::new_err("`hex` invalid: must be 32 bytes"))?;
-
+    fn new_chunk(addr: PyChunkAddress) -> PyResult<Self> {
         Ok(Self {
-            inner: PointerTarget::ChunkAddress(ChunkAddress::new(XorName(bytes))),
+            inner: PointerTarget::ChunkAddress(addr.inner),
         })
     }
 
-    /// Returns the hex string representation of this pointer address.
-    #[getter]
-    fn hex(&self) -> String {
-        let bytes: [u8; 32] = self.inner.xorname().0;
-        hex::encode(bytes)
+    /// Initialize a pointer targeting a graph entry.
+    #[staticmethod]
+    fn new_graph_entry(addr: PyGraphEntryAddress) -> PyResult<Self> {
+        Ok(Self {
+            inner: PointerTarget::GraphEntryAddress(addr.inner),
+        })
+    }
+
+    /// Initialize a pointer targeting another pointer.
+    #[staticmethod]
+    fn new_pointer(addr: PyPointerAddress) -> PyResult<Self> {
+        Ok(Self {
+            inner: PointerTarget::PointerAddress(addr.inner),
+        })
+    }
+
+    /// Initialize a pointer targeting a scratchpad.
+    #[staticmethod]
+    fn new_scratchpad(addr: PyScratchpadAddress) -> PyResult<Self> {
+        Ok(Self {
+            inner: PointerTarget::ScratchpadAddress(addr.inner),
+        })
     }
 
     #[getter]
@@ -1177,12 +1196,10 @@ impl PyPointerTarget {
         }
     }
 
-    /// Creates a pointer target from a chunk address.
-    #[staticmethod]
-    fn from_chunk_address(addr: &PyChunkAddress) -> Self {
-        Self {
-            inner: PointerTarget::ChunkAddress(addr.inner),
-        }
+    /// Returns the hex string representation of this pointer address.
+    #[getter]
+    fn hex(&self) -> String {
+        addr_to_str(self.inner.xorname())
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -1191,27 +1208,15 @@ impl PyPointerTarget {
 }
 
 /// An address of a chunk of data on the network. Used to locate and retrieve data chunks.
-#[pyclass(name = "ChunkAddress")]
-#[derive(Debug, Clone)]
+#[pyclass(name = "ChunkAddress", eq, ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PyChunkAddress {
     inner: ChunkAddress,
 }
 
-impl From<ChunkAddress> for PyChunkAddress {
-    fn from(addr: ChunkAddress) -> Self {
-        Self { inner: addr }
-    }
-}
-
-impl From<PyChunkAddress> for ChunkAddress {
-    fn from(addr: PyChunkAddress) -> Self {
-        addr.inner
-    }
-}
-
 #[pymethods]
 impl PyChunkAddress {
-    /// Creates a new chunk address from a string representation.
+    /// Creates a new chunk address from a hex string.
     #[new]
     fn new(#[pyo3(from_py_with = "str_to_addr")] addr: XorName) -> PyResult<Self> {
         Ok(Self {
@@ -1219,28 +1224,25 @@ impl PyChunkAddress {
         })
     }
 
-    #[getter]
-    fn hex(&self) -> String {
-        let bytes: [u8; 32] = self.inner.xorname().0;
-        hex::encode(bytes)
+    /// Generate a chunk address for the given content (for content-addressable-storage).
+    #[staticmethod]
+    fn from_content(data: Vec<u8>) -> PyResult<Self> {
+        Ok(Self {
+            inner: ChunkAddress::new(XorName::from_content(&data[..])),
+        })
     }
 
-    /// Creates a chunk address from a hex string representation.
+    /// Generate a random chunk address.
     #[staticmethod]
-    fn from_chunk_address(addr: &str) -> PyResult<Self> {
-        let bytes =
-            hex::decode(addr).map_err(|e| PyValueError::new_err(format!("`addr` invalid: {e}")))?;
-
-        if bytes.len() != 32 {
-            return Err(PyValueError::new_err("`addr` invalid: must be 32 bytes"));
-        }
-
-        let mut xorname = [0u8; 32];
-        xorname.copy_from_slice(&bytes);
-
+    fn random() -> PyResult<Self> {
         Ok(Self {
-            inner: ChunkAddress::new(XorName(xorname)),
+            inner: ChunkAddress::new(XorName::random(&mut rand::thread_rng())),
         })
+    }
+
+    #[getter]
+    fn hex(&self) -> String {
+        addr_to_str(*self.inner.xorname())
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -1248,7 +1250,84 @@ impl PyChunkAddress {
     }
 
     fn __repr__(&self) -> PyResult<String> {
-        Ok(format!("ChunkAddress({})", self.hex()))
+        Ok(format!("ChunkAddress('{}')", self.hex()))
+    }
+}
+
+/// Address of a GraphEntry, is derived from the owner's unique public key.
+#[pyclass(name = "GraphEntryAddress", eq, ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PyGraphEntryAddress {
+    inner: GraphEntryAddress,
+}
+
+#[pymethods]
+impl PyGraphEntryAddress {
+    /// Create graph entry address pointing to a specific XOR name.
+    #[new]
+    fn new(#[pyo3(from_py_with = "str_to_addr")] addr: XorName) -> PyResult<Self> {
+        Ok(Self {
+            inner: GraphEntryAddress::new(addr),
+        })
+    }
+
+    /// Instantiate address which is derived from owner's unique public key.
+    #[staticmethod]
+    fn from_owner(public_key: PyPublicKey) -> PyResult<Self> {
+        Ok(Self {
+            inner: GraphEntryAddress::from_owner(public_key.inner),
+        })
+    }
+
+    #[getter]
+    fn hex(&self) -> String {
+        self.inner.to_hex()
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.hex())
+    }
+
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!("GraphEntryAddress('{}')", self.hex()))
+    }
+}
+
+/// Address of a GraphEntry, is derived from the owner's unique public key.
+#[pyclass(name = "ScratchpadAddress", eq, ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
+pub struct PyScratchpadAddress {
+    inner: ScratchpadAddress,
+}
+
+#[pymethods]
+impl PyScratchpadAddress {
+    /// Construct a new ScratchpadAddress given an owner.
+    #[new]
+    fn new(public_key: PyPublicKey) -> PyResult<Self> {
+        Ok(Self {
+            inner: ScratchpadAddress::new(public_key.inner),
+        })
+    }
+
+    /// Return the owner public key.
+    pub fn owner(&self) -> PyPublicKey {
+        PyPublicKey {
+            inner: *self.inner.owner(),
+        }
+    }
+
+    #[getter]
+    fn hex(&self) -> String {
+        self.inner.to_hex()
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.hex())
+    }
+
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!("ScratchpadAddress('{}')", self.hex()))
     }
 }
 
@@ -1275,6 +1354,14 @@ impl PyWallet {
         Ok(Self { inner: wallet })
     }
 
+    /// Convenience function that creates a new Wallet with a random EthereumWallet.
+    #[staticmethod]
+    fn new_with_random_wallet(network: PyNetwork) -> Self {
+        Self {
+            inner: Wallet::new_with_random_wallet(network.inner),
+        }
+    }
+
     /// Creates a new wallet from a private key string with a specified network.
     #[staticmethod]
     fn new_from_private_key(network: PyNetwork, private_key: &str) -> PyResult<Self> {
@@ -1286,7 +1373,14 @@ impl PyWallet {
 
     /// Returns a string representation of the wallet's address.
     fn address(&self) -> String {
-        format!("{:?}", self.inner.address())
+        self.inner.address().to_string()
+    }
+
+    /// Returns the `Network` of this wallet.
+    fn network(&self) -> PyNetwork {
+        PyNetwork {
+            inner: self.inner.network().clone(),
+        }
     }
 
     /// Returns the raw balance of payment tokens in the wallet.
@@ -1313,6 +1407,12 @@ impl PyWallet {
                 ))),
             }
         })
+    }
+
+    /// Returns a random private key string.
+    #[staticmethod]
+    pub fn random_private_key() -> String {
+        Wallet::random_private_key()
     }
 }
 
@@ -1382,9 +1482,9 @@ pub struct PyPublicKey {
 
 #[pymethods]
 impl PyPublicKey {
-    /// Creates a new random public key by generating a random secret key.
-    #[new]
-    fn new() -> PyResult<Self> {
+    /// Creates a random public key by generating a random secret key.
+    #[staticmethod]
+    fn random() -> PyResult<Self> {
         let secret = SecretKey::random();
         Ok(Self {
             inner: secret.public_key(),
@@ -1518,8 +1618,8 @@ fn encrypt(data: Vec<u8>) -> PyResult<(Vec<u8>, Vec<Vec<u8>>)> {
     Ok((data_map_bytes, chunks_bytes))
 }
 
-#[pyclass(name = "Network")]
-#[derive(Debug, Clone)]
+#[pyclass(name = "Network", eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PyNetwork {
     inner: Network,
 }
@@ -1840,6 +1940,11 @@ impl PyClientConfig {
     // fn strategy() { }
 }
 
+#[pyfunction]
+fn random_xor() -> String {
+    addr_to_str(XorName::random(&mut rand::thread_rng()))
+}
+
 #[pymodule]
 #[pyo3(name = "autonomi_client")]
 fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -1850,9 +1955,11 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyUserData>()?;
     m.add_class::<PyDataMapChunk>()?;
     m.add_class::<PyPointer>()?;
-    m.add_class::<PyPointerAddress>()?;
-    m.add_class::<PyPointerTarget>()?;
     m.add_class::<PyChunkAddress>()?;
+    m.add_class::<PyGraphEntryAddress>()?;
+    m.add_class::<PyPointerAddress>()?;
+    m.add_class::<PyScratchpadAddress>()?;
+    m.add_class::<PyPointerTarget>()?;
     m.add_class::<PySecretKey>()?;
     m.add_class::<PyPublicKey>()?;
     m.add_class::<PyNetwork>()?;
@@ -1864,6 +1971,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRegisterHistory>()?;
     m.add_class::<PyClientConfig>()?;
     m.add_function(wrap_pyfunction!(encrypt, m)?)?;
+    m.add_function(wrap_pyfunction!(random_xor, m)?)?;
     Ok(())
 }
 

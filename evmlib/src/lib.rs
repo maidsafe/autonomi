@@ -103,6 +103,19 @@ impl std::fmt::Display for Network {
     }
 }
 
+impl std::str::FromStr for Network {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "evm-arbitrum-one" => Ok(Network::ArbitrumOne),
+            "evm-arbitrum-sepolia" => Ok(Network::ArbitrumSepolia),
+            "evm-arbitrum-sepolia-test" => Ok(Network::ArbitrumSepoliaTest),
+            _ => Err(()),
+        }
+    }
+}
+
 impl Network {
     pub fn new(local: bool) -> Result<Self, utils::Error> {
         get_evm_network(local).inspect_err(|err| {

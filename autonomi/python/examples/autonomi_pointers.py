@@ -20,11 +20,11 @@ async def main():
 
     # First, let's upload some data that we want to point to
     target_data = b"Hello, I'm the target data!"
-    target_addr = await client.data_put_public(target_data, PaymentOption.wallet(wallet))
+    [cost, target_addr] = await client.data_put_public(target_data, PaymentOption.wallet(wallet))
     print(f"Target data uploaded to: {target_addr}")
 
     # Create a pointer target from the address
-    target = PointerTarget.from_chunk_address(ChunkAddress(target_addr))
+    target = PointerTarget.new_chunk(ChunkAddress(target_addr))
     
     # Create owner key pair
     key = SecretKey()

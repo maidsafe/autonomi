@@ -31,6 +31,8 @@ ant [OPTIONS] <COMMAND>
 - `register get [--name] <address>`
 - `register list`
 
+[Reference : Register](#register-operations)
+
 ### Vault
 - `vault cost`
 - `vault create`
@@ -88,7 +90,7 @@ echo 'export PATH=$PATH:/path/to/your/binary' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Reference
+## Options
 
 ### Specify the logging output destination.
 ```
@@ -130,6 +132,7 @@ This value is expressed in seconds.
 ```  
 This may increase operation speed, but offers no guarantees that operations were successful.
 
+## Reference
 
 ### File Operations
 
@@ -173,6 +176,70 @@ Expected values:
 file list
 ```
 Lists all files (both public and private) in a vault.
+
+
+### Register Operations
+
+#### Generate a key for a register
+```
+register generate-key [--overwrite]
+```
+Generate a new register key
+
+The following flag can be applied:
+`--overwrite` (Optional) Adding this flag will overwrite any existing key, and result in loss of access to any existing registers created using that key
+
+
+#### Get a cost estimate for storing a register on the network
+```
+register cost <name>
+```
+Gets a cost estimate for storing a register on the network.
+This returns both the storage costs and gas fees.
+
+#### Create a new register and upload to the network
+```
+register create <name> <value>
+```
+Create a new register with the given name and value.
+Note: that anyone with the register address can read its value.
+
+Expected values: 
+- `<name>`: The name of the register
+- `<value>`: The value to store in the register
+
+#### Edit an existing register
+```
+register edit [--name] <address> <value>
+```
+Edit an existing register
+
+Expected values: 
+- `<address>`: The address of the register to edit
+- `<value>`: The new value to store in the register
+
+The following flag can be applied:
+`--name`:bool (Optional) Adding this flag will use the name of the register instead of the address
+Note: that only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+
+#### Get a register
+```
+register get [--name] <address>
+```
+Get a register from the network
+
+Expected values: 
+- `<address>`: The address of the register
+
+The following flag can be applied:
+`--name`:bool (Optional) Adding this flag will use the name of the register instead of the address
+Note: that only the owner of the register can use this shorthand as the address can be generated from the name and register key.
+
+#### List registers
+```
+register list
+```
+List local registers
 
 
 ### Vault Operations

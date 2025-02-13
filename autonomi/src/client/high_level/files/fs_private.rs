@@ -58,9 +58,11 @@ impl Client {
         Ok(())
     }
 
-    /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
+    /// Upload the content of all files in a directory to the network.
+    /// The directory is recursively walked and each file is uploaded to the network.
+    ///
     /// The data maps of these (private) files are not uploaded but returned within the [`PrivateArchive`] return type.
-    pub async fn dir_upload(
+    pub async fn dir_content_upload(
         &self,
         dir_path: PathBuf,
         wallet: &Wallet,
@@ -224,15 +226,15 @@ impl Client {
         Ok((total_cost, private_archive))
     }
 
-    /// Same as [`Client::dir_upload`] but also uploads the archive (privately) to the network.
+    /// Same as [`Client::dir_content_upload`] but also uploads the archive (privately) to the network.
     ///
     /// Returns the [`PrivateArchiveAccess`] allowing the private archive to be downloaded from the network.
-    pub async fn dir_and_archive_upload(
+    pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
         wallet: &Wallet,
     ) -> Result<(AttoTokens, PrivateArchiveAccess), UploadError> {
-        let (cost1, archive) = self.dir_upload(dir_path, wallet).await?;
+        let (cost1, archive) = self.dir_content_upload(dir_path, wallet).await?;
         let (cost2, archive_addr) = self.archive_put(&archive, wallet.into()).await?;
         let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
             error!("Total cost overflowed: {cost1:?} + {cost2:?}");
@@ -241,9 +243,9 @@ impl Client {
         Ok((total_cost, archive_addr))
     }
 
-    /// Upload a private file to the network.
+    /// Upload the content ofa private file to the network.
     /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns [`DataMapChunk`] (pointing to the datamap)
-    pub async fn file_upload(
+    pub async fn file_content_upload(
         &self,
         path: PathBuf,
         wallet: &Wallet,

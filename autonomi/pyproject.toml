@@ -7,7 +7,7 @@ name = "autonomi-client"
 dynamic = ["version"]
 description = "Autonomi client API"
 authors = [{ name = "MaidSafe Developers", email = "dev@maidsafe.net" }]
-dependencies = ["maturin>=1.7.4", "pip>=24.0"]
+dependencies = ["maturin>=1.7.4", "pip>=24.0", "pytest>=8.3.4"]
 readme = "README_PYTHON.md"
 requires-python = ">=3.8"
 license = { text = "GPL-3.0" }
@@ -42,8 +42,13 @@ sdist-include = [
     "python/**/*",
     "pyproject.toml",
     "Cargo.toml",
+    "../ant-*/**/*",
+    "../test-utils/**/*",
+    "../evmlib/**/*",
+    "../Cargo.toml",
 ]
 workspace = false
+profile = "release"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]

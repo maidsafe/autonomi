@@ -1,9 +1,7 @@
 name: Build and Publish Python Node Package
 
 on:
-  push:
-    tags:
-      - 'ant-node-v*'
+  workflow_dispatch:
 
 # Add top-level permissions block
 permissions:
