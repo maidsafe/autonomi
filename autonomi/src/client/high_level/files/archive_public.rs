@@ -36,6 +36,11 @@ pub type ArchiveAddr = XorName;
 /// to the network, of which the addresses are stored in this archive.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct PublicArchive {
+    ///           Path of the file in the directory
+    ///           |         Data address of the content of the file (points to a DataMap)
+    ///           |         |         Metadata of the file
+    ///           |         |         |
+    ///           V         V         V
     map: BTreeMap<PathBuf, (DataAddr, Metadata)>,
 }
 
