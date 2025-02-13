@@ -144,7 +144,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         node_port: None,
         peers_args: peers_args.clone(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -177,8 +176,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             node_ip: None,
             node_port: None,
             peers_args,
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -217,10 +214,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
     assert_eq!(node_registry.nodes[0].service_name, "antnode1");
     assert_eq!(node_registry.nodes[0].user, Some(get_username()));
     assert_eq!(node_registry.nodes[0].number, 1);
-    assert_eq!(
-        node_registry.nodes[0].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081)
-    );
     assert_eq!(
         node_registry.nodes[0].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode1")
@@ -305,7 +298,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             status: ServiceStatus::Added,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
@@ -326,8 +319,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let custom_rpc_address = Ipv4Addr::new(127, 0, 0, 1);
-
     let result = add_node(
         AddNodeServiceOptions {
             auto_restart: false,
@@ -345,8 +336,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             node_ip: None,
             node_port: None,
             peers_args,
-            rpc_address: Some(custom_rpc_address),
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -434,8 +423,6 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             node_ip: None,
             node_port: None,
             peers_args,
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -530,7 +517,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_ip: None,
         node_port: None,
         peers_args: PeersArgs::default(),
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -579,7 +565,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode2")
@@ -627,7 +612,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode3")
@@ -661,8 +645,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -697,7 +679,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
     assert_eq!(node_registry.nodes[0].number, 1);
     assert_eq!(
         node_registry.nodes[0].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081)
+        None
     );
     assert_eq!(
         node_registry.nodes[0].log_dir_path,
@@ -713,10 +695,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
     assert_eq!(node_registry.nodes[1].user, Some(get_username()));
     assert_eq!(node_registry.nodes[1].number, 2);
     assert_eq!(
-        node_registry.nodes[1].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083)
-    );
-    assert_eq!(
         node_registry.nodes[1].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode2")
     );
@@ -729,10 +707,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
     assert_eq!(node_registry.nodes[2].service_name, "antnode3");
     assert_eq!(node_registry.nodes[2].user, Some(get_username()));
     assert_eq!(node_registry.nodes[2].number, 3);
-    assert_eq!(
-        node_registry.nodes[2].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085)
-    );
     assert_eq!(
         node_registry.nodes[2].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode3")
@@ -808,7 +782,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -841,8 +814,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -881,10 +852,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
     assert_eq!(node_registry.nodes[0].service_name, "antnode1");
     assert_eq!(node_registry.nodes[0].user, Some(get_username()));
     assert_eq!(node_registry.nodes[0].number, 1);
-    assert_eq!(
-        node_registry.nodes[0].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001)
-    );
     assert_eq!(
         node_registry.nodes[0].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode1")
@@ -942,7 +909,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -993,7 +960,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode2")
@@ -1027,8 +993,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
             antnode_dir_path: temp_dir.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1060,11 +1024,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
     assert_eq!(node_registry.nodes[1].version, latest_version);
     assert_eq!(node_registry.nodes[1].service_name, "antnode2");
     assert_eq!(node_registry.nodes[1].user, Some(get_username()));
-    assert_eq!(node_registry.nodes[1].number, 2);
-    assert_eq!(
-        node_registry.nodes[1].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083)
-    );
     assert_eq!(
         node_registry.nodes[1].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode2")
@@ -1128,8 +1087,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1190,8 +1147,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1282,8 +1237,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1346,8 +1299,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1435,8 +1386,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1497,8 +1446,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1589,8 +1536,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1652,8 +1597,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1744,8 +1687,6 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1806,8 +1747,6 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -1882,7 +1821,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
     };
 
     let mut seq = Sequence::new();
-
     mock_service_control
         .expect_get_available_port()
         .times(1)
@@ -1895,8 +1833,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1957,8 +1893,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2046,8 +1980,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2109,8 +2041,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             node_ip: None,
             node_port: None,
             peers_args: peers_args.clone(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2191,8 +2121,6 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2254,8 +2182,6 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: Default::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2334,8 +2260,6 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2397,8 +2321,6 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             node_ip: Some(custom_ip),
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2495,7 +2417,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         node_port: Some(custom_port),
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -2529,8 +2450,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             node_ip: None,
             node_port: Some(PortRange::Single(custom_port)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2607,8 +2526,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15000"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2665,8 +2582,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2723,8 +2638,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15002"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2786,8 +2699,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2867,7 +2778,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -2905,8 +2816,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             node_ip: None,
             node_port: Some(PortRange::Single(12000)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -2984,7 +2893,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -3022,8 +2931,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3100,8 +3007,6 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
             antnode_dir_path: temp_dir.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3183,8 +3088,6 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             node_ip: None,
             node_port: Some(PortRange::Single(12000)),
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3265,8 +3168,6 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3328,8 +3229,6 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3402,8 +3301,6 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3465,8 +3362,6 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3540,8 +3435,6 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3603,8 +3496,6 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3676,8 +3567,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15000"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3734,8 +3623,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3792,8 +3679,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15002"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3855,8 +3740,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -3933,7 +3816,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -3971,8 +3854,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4051,7 +3932,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -4089,8 +3970,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4161,8 +4040,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20000"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -4212,8 +4089,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20001"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -4263,8 +4138,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20002"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -4324,8 +4197,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: Some(PortRange::Range(20000, 20002)),
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4357,18 +4228,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
     node_data_dir.assert(predicate::path::is_dir());
     node_logs_dir.assert(predicate::path::is_dir());
     assert_eq!(node_registry.nodes.len(), 3);
-    assert_eq!(
-        node_registry.nodes[0].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000)
-    );
-    assert_eq!(
-        node_registry.nodes[1].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20001)
-    );
-    assert_eq!(
-        node_registry.nodes[2].rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20002)
-    );
     Ok(())
 }
 
@@ -4413,7 +4272,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -4451,8 +4310,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: Some(PortRange::Single(8081)),
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4531,7 +4388,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -4569,8 +4426,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: Some(PortRange::Range(8081, 8082)),
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4665,7 +4520,6 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4698,8 +4552,6 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4791,7 +4643,6 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4824,8 +4675,6 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4917,7 +4766,6 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4950,8 +4798,6 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -5036,8 +4882,6 @@ async fn add_node_should_return_an_error_if_nat_status_is_none_but_auto_set_nat_
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -5658,7 +5502,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5692,8 +5535,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -5786,7 +5627,6 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5820,8 +5660,6 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -5914,7 +5752,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -5948,8 +5785,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -6039,7 +5874,6 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
         node_port: None,
         peers_args: PeersArgs::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -6073,8 +5907,6 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -6145,8 +5977,6 @@ async fn add_node_should_auto_restart() -> Result<()> {
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -6207,8 +6037,6 @@ async fn add_node_should_auto_restart() -> Result<()> {
             node_ip: None,
             node_port: None,
             peers_args: PeersArgs::default(),
-            rpc_address: None,
-            rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),

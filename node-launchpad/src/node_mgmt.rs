@@ -431,8 +431,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         None, // We don't care about the port, as we are scaling down
         config.peers_args.clone(),
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
-        None,
-        None,
         config.antnode_path.clone(),
         None,
         config.upnp,
@@ -504,8 +502,6 @@ async fn add_nodes(
             port_range,
             config.peers_args.clone(),
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
-            None,
-            None,
             config.antnode_path.clone(),
             None,
             config.upnp,
