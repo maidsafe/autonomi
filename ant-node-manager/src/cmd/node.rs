@@ -476,10 +476,12 @@ pub async fn upgrade(
     )
     .await?;
 
-    debug!(
-        "listen addresses for nodes[0]: {:?}",
-        node_registry.nodes[0].listen_addr
-    );
+    if let Some(node) = node_registry.nodes.get(0) {
+        debug!("listen addresses for nodes[0]: {:?}", node.listen_addr);
+    } else {
+        debug!("There are no nodes currently added or active");
+    }
+
     if !use_force {
         let node_versions = node_registry
             .nodes
