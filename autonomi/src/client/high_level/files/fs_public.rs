@@ -57,12 +57,13 @@ impl Client {
         Ok(())
     }
 
-    /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
+    /// Upload the content of all files in a directory to the network.
+    /// The directory is recursively walked and each file is uploaded to the network.
     ///
     /// The data maps of these files are uploaded on the network, making the individual files publicly available.
     ///
     /// This returns, but does not upload (!),the [`PublicArchive`] containing the data maps of the uploaded files.
-    pub async fn dir_upload_public(
+    pub async fn dir_content_upload_public(
         &self,
         dir_path: PathBuf,
         wallet: &Wallet,
@@ -238,15 +239,15 @@ impl Client {
         Ok((total_cost, public_archive))
     }
 
-    /// Same as [`Client::dir_upload_public`] but also uploads the archive to the network.
+    /// Same as [`Client::dir_content_upload_public`] but also uploads the archive to the network.
     ///
     /// Returns the [`ArchiveAddr`] of the uploaded archive.
-    pub async fn dir_and_archive_upload_public(
+    pub async fn dir_upload_public(
         &self,
         dir_path: PathBuf,
         wallet: &Wallet,
     ) -> Result<(AttoTokens, ArchiveAddr), UploadError> {
-        let (cost1, archive) = self.dir_upload_public(dir_path, wallet).await?;
+        let (cost1, archive) = self.dir_content_upload_public(dir_path, wallet).await?;
         let (cost2, archive_addr) = self.archive_put_public(&archive, wallet).await?;
         let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
             error!("Total cost overflowed: {cost1:?} + {cost2:?}");
@@ -255,9 +256,9 @@ impl Client {
         Ok((total_cost, archive_addr))
     }
 
-    /// Upload a file to the network.
+    /// Upload the content of a file to the network.
     /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns DataAddr (pointing to the datamap)
-    pub async fn file_upload_public(
+    pub async fn file_content_upload_public(
         &self,
         path: PathBuf,
         wallet: &Wallet,
