@@ -16,12 +16,13 @@ use crate::action::OptionsActions;
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::components::utils::open_logs;
 use crate::config::get_launchpad_nodes_data_dir_path;
-use crate::connection_mode::ConnectionMode;
+use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
 use crate::error::ErrorPopup;
 use crate::node_mgmt::{MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs};
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{COOL_GREY, INDIGO};
+use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED};
 use crate::tui::Event;
+use crate::upnp::UpnpSupport;
 use crate::{
     action::{Action, StatusActions},
     config::Config,
@@ -65,6 +66,7 @@ const MBPS_WIDTH: usize = 13;
 const RECORDS_WIDTH: usize = 4;
 const PEERS_WIDTH: usize = 5;
 const CONNS_WIDTH: usize = 5;
+const MODE_WIDTH: usize = 7;
 const STATUS_WIDTH: usize = 8;
 const SPINNER_WIDTH: usize = 1;
 
@@ -102,6 +104,8 @@ pub struct Status<'a> {
     data_dir_path: PathBuf,
     // Connection mode
     connection_mode: ConnectionMode,
+    // UPnP support
+    upnp_support: UpnpSupport,
     // Port from
     port_from: Option<u32>,
     // Port to
@@ -121,6 +125,7 @@ pub struct StatusConfig {
     pub allocated_disk_space: usize,
     pub antnode_path: Option<PathBuf>,
     pub connection_mode: ConnectionMode,
+    pub upnp_support: UpnpSupport,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub peers_args: PeersArgs,
@@ -150,6 +155,7 @@ impl Status<'_> {
             antnode_path: config.antnode_path,
             data_dir_path: config.data_dir_path,
             connection_mode: config.connection_mode,
+            upnp_support: config.upnp_support,
             port_from: config.port_from,
             port_to: config.port_to,
             error_popup: None,
@@ -243,6 +249,7 @@ impl Status<'_> {
                         records: 0,
                         peers: 0,
                         connections: 0,
+                        mode: NodeConnectionMode::from(node_item),
                         status: NodeStatus::Added, // Set initial status as Added
                         spinner: Throbber::default(),
                         spinner_state: ThrobberState::default(),
@@ -277,6 +284,7 @@ impl Status<'_> {
                         records: 0,
                         peers: 0,
                         connections: 0,
+                        mode: NodeConnectionMode::from(node_item),
                         status,
                         spinner: Throbber::default(),
                         spinner_state: ThrobberState::default(),
@@ -468,6 +476,10 @@ impl Component for Status<'_> {
                         start_nodes_after_reset: false,
                         action_sender,
                     })?;
+            }
+            Action::SetUpnpSupport(ref upnp_support) => {
+                debug!("Setting UPnP support: {upnp_support:?}");
+                self.upnp_support = upnp_support.clone();
             }
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::NodesStatsObtained(stats) => {
@@ -798,19 +810,54 @@ impl Component for Status<'_> {
         ]);
 
         let connection_mode_string = match self.connection_mode {
-            ConnectionMode::HomeNetwork => "Home Network",
-            ConnectionMode::UPnP => "UPnP",
-            ConnectionMode::CustomPorts => &format!(
+            ConnectionMode::HomeNetwork => "Home Network".to_string(),
+            ConnectionMode::UPnP => "UPnP".to_string(),
+            ConnectionMode::CustomPorts => format!(
                 "Custom Ports  {}-{}",
                 self.port_from.unwrap_or(PORT_MIN),
                 self.port_to.unwrap_or(PORT_MIN + PORT_ALLOCATION)
             ),
-            ConnectionMode::Automatic => "Automatic",
+            ConnectionMode::Automatic => "Automatic".to_string(),
         };
+
+        let mut connection_mode_line = vec![Span::styled(
+            connection_mode_string,
+            Style::default().fg(GHOST_WHITE),
+        )];
+
+        if matches!(
+            self.connection_mode,
+            ConnectionMode::Automatic | ConnectionMode::UPnP
+        ) {
+            connection_mode_line.push(Span::styled(" (", Style::default().fg(GHOST_WHITE)));
+
+            if self.connection_mode == ConnectionMode::Automatic {
+                connection_mode_line.push(Span::styled("UPnP: ", Style::default().fg(GHOST_WHITE)));
+            }
+
+            let span = match self.upnp_support {
+                UpnpSupport::Supported => {
+                    Span::styled("supported", Style::default().fg(EUCALYPTUS))
+                }
+                UpnpSupport::Unsupported => {
+                    Span::styled("disabled / unsupported", Style::default().fg(SIZZLING_RED))
+                }
+                UpnpSupport::Loading => {
+                    Span::styled("loading..", Style::default().fg(LIGHT_PERIWINKLE))
+                }
+                UpnpSupport::Unknown => {
+                    Span::styled("unknown", Style::default().fg(LIGHT_PERIWINKLE))
+                }
+            };
+
+            connection_mode_line.push(span);
+
+            connection_mode_line.push(Span::styled(")", Style::default().fg(GHOST_WHITE)));
+        }
 
         let connection_mode_row = Row::new(vec![
             Cell::new("Connection".to_string()).fg(GHOST_WHITE),
-            Cell::new(connection_mode_string).fg(LIGHT_PERIWINKLE),
+            Cell::new(Line::from(connection_mode_line)),
         ]);
 
         let stats_rows = vec![storage_allocated_row, memory_use_row, connection_mode_row];
@@ -939,6 +986,7 @@ impl Component for Status<'_> {
                     Constraint::Min(RECORDS_WIDTH as u16),
                     Constraint::Min(PEERS_WIDTH as u16),
                     Constraint::Min(CONNS_WIDTH as u16),
+                    Constraint::Min(MODE_WIDTH as u16),
                     Constraint::Min(STATUS_WIDTH as u16),
                     Constraint::Max(SPINNER_WIDTH as u16),
                 ];
@@ -956,6 +1004,7 @@ impl Component for Status<'_> {
                     Cell::new("Recs").fg(COOL_GREY),
                     Cell::new("Peers").fg(COOL_GREY),
                     Cell::new("Conns").fg(COOL_GREY),
+                    Cell::new("Mode").fg(COOL_GREY),
                     Cell::new("Status").fg(COOL_GREY),
                     Cell::new(" ").fg(COOL_GREY), // Spinner
                 ])
@@ -1189,6 +1238,7 @@ pub struct NodeItem<'a> {
     records: usize,
     peers: usize,
     connections: usize,
+    mode: NodeConnectionMode,
     status: NodeStatus,
     spinner: Throbber<'a>,
     spinner_state: ThrobberState,
@@ -1290,6 +1340,7 @@ impl NodeItem<'_> {
                 " ".repeat(CONNS_WIDTH.saturating_sub(self.connections.to_string().len())),
                 self.connections.to_string()
             ),
+            self.mode.to_string(),
             self.status.to_string(),
         ];
         let throbber_area = Rect::new(area.width - 3, area.y + 2 + index as u16, 1, 1);

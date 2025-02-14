@@ -1,7 +1,8 @@
 use std::fmt::{Display, Formatter, Result};
 
+use ant_service_management::NodeServiceData;
 use serde::{Deserialize, Serialize};
-use strum::EnumIter;
+use strum::{Display, EnumIter};
 
 #[derive(Clone, Copy, Debug, Default, EnumIter, Eq, Hash, PartialEq)]
 pub enum ConnectionMode {
@@ -53,5 +54,25 @@ impl Serialize for ConnectionMode {
             ConnectionMode::Automatic => "Automatic",
         };
         serializer.serialize_str(s)
+    }
+}
+
+#[derive(Default, Debug, Clone, Serialize, Display)]
+pub enum NodeConnectionMode {
+    UPnP,
+    Relay,
+    Manual,
+    #[default]
+    Unknown,
+}
+
+impl From<&NodeServiceData> for NodeConnectionMode {
+    fn from(nsd: &NodeServiceData) -> Self {
+        match (nsd.upnp, nsd.home_network) {
+            (true, false) => Self::UPnP,
+            (false, true) => Self::Relay,
+            (false, false) => Self::Manual,
+            _ => Self::Unknown,
+        }
     }
 }
