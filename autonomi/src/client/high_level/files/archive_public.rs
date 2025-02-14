@@ -13,7 +13,7 @@ use std::{
 
 use ant_networking::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use crate::{AttoTokens, Wallet};
+use crate::{client::payment::PaymentOption, AttoTokens};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use xor_name::XorName;
@@ -157,21 +157,23 @@ impl Client {
     ///
     /// ```no_run
     /// # use autonomi::{Client, client::{data::DataAddr, files::{Metadata, archive_public::{PublicArchive, ArchiveAddr}}}};
+    /// # use autonomi::client::payment::PaymentOption;
     /// # use std::path::PathBuf;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = Client::init().await?;
     /// # let wallet = todo!();
+    /// # let payment = PaymentOption::Wallet(wallet);
     /// let mut archive = PublicArchive::new();
     /// archive.add_file(PathBuf::from("file.txt"), DataAddr::random(&mut rand::thread_rng()), Metadata::new_with_size(0));
-    /// let (cost, address) = client.archive_put_public(&archive, &wallet).await?;
+    /// let (cost, address) = client.archive_put_public(&archive, payment).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn archive_put_public(
         &self,
         archive: &PublicArchive,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ArchiveAddr), PutError> {
         let bytes = archive
             .to_bytes()
@@ -183,7 +185,7 @@ impl Client {
             archive.map().len()
         );
 
-        let result = self.data_put_public(bytes, wallet.into()).await;
+        let result = self.data_put_public(bytes, payment_option).await;
         debug!("Uploaded archive {archive:?} to the network and the address is {result:?}");
         result
     }

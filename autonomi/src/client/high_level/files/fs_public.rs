@@ -11,10 +11,11 @@ use super::{DownloadError, FileCostError, Metadata, UploadError};
 use crate::client::high_level::files::{
     get_relative_file_path_from_abs_file_and_folder_path, FILE_UPLOAD_BATCH_SIZE,
 };
+use crate::client::payment::PaymentOption;
 use crate::client::{high_level::data::DataAddr, utils::process_tasks_with_max_concurrency};
 use crate::client::{Client, PutError};
 use crate::self_encryption::encrypt;
-use crate::{Amount, AttoTokens, Wallet};
+use crate::{Amount, AttoTokens};
 use ant_networking::time::{Duration, SystemTime};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
@@ -66,7 +67,7 @@ impl Client {
     pub async fn dir_content_upload_public(
         &self,
         dir_path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PublicArchive), UploadError> {
         info!("Uploading directory: {dir_path:?}");
         let start = tokio::time::Instant::now();
@@ -162,7 +163,7 @@ impl Client {
             .pay_for_content_addrs(
                 DataTypes::Chunk,
                 combined_xor_names.into_iter(),
-                wallet.into(),
+                payment_option,
             )
             .await
             .inspect_err(|err| error!("Error paying for data: {err:?}"))
@@ -245,10 +246,12 @@ impl Client {
     pub async fn dir_upload_public(
         &self,
         dir_path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ArchiveAddr), UploadError> {
-        let (cost1, archive) = self.dir_content_upload_public(dir_path, wallet).await?;
-        let (cost2, archive_addr) = self.archive_put_public(&archive, wallet).await?;
+        let (cost1, archive) = self
+            .dir_content_upload_public(dir_path, payment_option.clone())
+            .await?;
+        let (cost2, archive_addr) = self.archive_put_public(&archive, payment_option).await?;
         let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
             error!("Total cost overflowed: {cost1:?} + {cost2:?}");
             cost1
@@ -261,7 +264,7 @@ impl Client {
     pub async fn file_content_upload_public(
         &self,
         path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddr), UploadError> {
         info!("Uploading file: {path:?}");
         #[cfg(feature = "loud")]
@@ -269,7 +272,7 @@ impl Client {
 
         let data = tokio::fs::read(path.clone()).await?;
         let data = Bytes::from(data);
-        let (cost, addr) = self.data_put_public(data, wallet.into()).await?;
+        let (cost, addr) = self.data_put_public(data, payment_option).await?;
         debug!("File {path:?} uploaded to the network at {addr:?}");
         Ok((cost, addr))
     }
