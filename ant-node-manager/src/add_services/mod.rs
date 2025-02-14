@@ -31,7 +31,7 @@ use colored::Colorize;
 use service_manager::ServiceInstallCtx;
 use std::{
     ffi::OsString,
-    net::{IpAddr,SocketAddr},
+    net::{IpAddr, SocketAddr},
 };
 
 /// Install antnode as a service.

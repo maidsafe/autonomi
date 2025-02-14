@@ -16,8 +16,7 @@ use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
-    control::ServiceControl,
-    NodeRegistry, NodeServiceData, ServiceStatus,
+    control::ServiceControl, NodeRegistry, NodeServiceData, ServiceStatus,
 };
 use color_eyre::eyre::OptionExt;
 use color_eyre::{eyre::eyre, Result};
@@ -253,7 +252,7 @@ pub async fn run_network(
     } else {
         let metrics_free_port = if let Some(port) = metrics_port {
             port
-        } else  {
+        } else {
             service_control.get_available_port()?
         };
 
@@ -289,7 +288,7 @@ pub async fn run_network(
     for _ in start..=options.node_count {
         let metrics_free_port = if let Some(port) = metrics_port {
             port
-        } else  {
+        } else {
             service_control.get_available_port()?
         };
 
@@ -438,7 +437,8 @@ async fn validate_network(node_registry: &mut NodeRegistry, peers: Vec<Multiaddr
     all_peers.extend(additional_peers);
 
     for node in node_registry.nodes.iter() {
-        let metric_client = MetricClient::new(node.metrics_port.ok_or_eyre("Metrics port not set")?);
+        let metric_client =
+            MetricClient::new(node.metrics_port.ok_or_eyre("Metrics port not set")?);
         let net_info = metric_client.network_info().await?;
         let peers = net_info.connected_peers;
         let peer_id = node.peer_id.ok_or_eyre("The PeerId was not set")?;

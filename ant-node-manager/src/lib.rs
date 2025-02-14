@@ -40,9 +40,8 @@ impl From<u8> for VerbosityLevel {
 use crate::error::{Error, Result};
 use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
-    control::ServiceControl, error::Error as ServiceError, NodeRegistry,
-    NodeService, NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions,
-    UpgradeResult,
+    control::ServiceControl, error::Error as ServiceError, NodeRegistry, NodeService,
+    NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
 };
 use colored::Colorize;
 use semver::Version;
@@ -434,9 +433,6 @@ pub async fn status_report(
             println!("Bin path: {}", daemon.daemon_path.to_string_lossy());
         }
 
-
-
-
         if let Some(faucet) = &node_registry.faucet {
             print_banner(&format!(
                 "{} - {}",
@@ -451,7 +447,9 @@ pub async fn status_report(
         println!(
             "{:<18} {:<52} {:<7}",
             // {:>15}",
-            "Service Name", "Peer ID", "Status",
+            "Service Name",
+            "Peer ID",
+            "Status",
             //"Connected Peers"
         );
         let nodes = node_registry
@@ -461,7 +459,7 @@ pub async fn status_report(
             .collect::<Vec<&NodeServiceData>>();
         for node in nodes {
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
-                let _connected_peers = node
+            let _connected_peers = node
                 .connected_peers
                 .clone()
                 .map_or("-".to_string(), |p| p.len().to_string());
@@ -553,8 +551,7 @@ pub async fn refresh_node_registry(
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
         node.reward_balance = None;
-        let metrics_port = node.metrics_port
-                                    .ok_or(Error::MetricPortEmpty)?;
+        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
 
         let metric_client = MetricClient::new(metrics_port);
         let mut service = NodeService::new(node, Box::new(metric_client.clone()));
@@ -659,8 +656,8 @@ mod tests {
     use ant_logging::LogFormat;
     use ant_service_management::{
         error::{Error as ServiceControlError, Result as ServiceControlResult},
-        node::{NodeService, NodeServiceData},
         metric::{NetworkInfo, NodeInfo},
+        node::{NodeService, NodeServiceData},
         UpgradeOptions, UpgradeResult,
     };
     use assert_fs::prelude::*;
@@ -724,17 +721,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -839,17 +841,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -1035,17 +1042,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -1227,17 +1239,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -1325,17 +1342,22 @@ mod tests {
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -1795,17 +1817,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -2040,17 +2067,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -2197,17 +2229,22 @@ mod tests {
             .with(eq(3000))
             .times(0)
             .returning(|_| ());
-        mock_metric_client.expect_node_info().times(0).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(0)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(0)
@@ -2502,17 +2539,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -2686,17 +2728,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -2855,17 +2902,22 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3030,17 +3082,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3188,17 +3245,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3355,17 +3417,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3532,17 +3599,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3704,17 +3776,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -3871,17 +3948,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4048,17 +4130,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4207,17 +4294,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4369,17 +4461,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4528,17 +4625,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4690,17 +4792,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -4849,17 +4956,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5011,17 +5123,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5170,17 +5287,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5332,17 +5454,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5406,10 +5533,7 @@ network_id: None,
             })
             .await?;
 
-        assert_eq!(
-            service_manager.service.service_data.rpc_socket_addr,
-            None
-        );
+        assert_eq!(service_manager.service.service_data.rpc_socket_addr, None);
 
         Ok(())
     }
@@ -5492,17 +5616,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5655,17 +5784,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5827,17 +5961,22 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)
@@ -5997,17 +6136,22 @@ network_id: None,
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_metric_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
         mock_metric_client
             .expect_network_info()
             .times(1)

@@ -482,27 +482,30 @@ impl Node {
                 event_header = "NewListenAddr";
                 let network = self.network().clone();
                 let peers = self.initial_peers().clone();
-                let peer_id = self.network().peer_id().clone();
+                let peer_id = self.network().peer_id();
                 let root_dir_nw_info = self
-                                        .get_root_dir()
-                                        .clone()
-                                        .join("network_info")
-                                        .join(format!("listeners_{}", peer_id));
+                    .get_root_dir()
+                    .clone()
+                    .join("network_info")
+                    .join(format!("listeners_{peer_id}"));
 
                 let path = std::path::Path::new(&root_dir_nw_info);
 
                 if !path.exists() {
-                    info!("File {:?} does not exist. Creating it now...", root_dir_nw_info);
+                    info!(
+                        "File {:?} does not exist. Creating it now...",
+                        root_dir_nw_info
+                    );
                     if let Some(parent) = std::path::Path::new(path).parent() {
                         match std::fs::create_dir_all(parent) {
                             Ok(_) => info!("Directory created successfully: {:?}", parent),
-                            Err(e) => eprintln!("Failed to create directory: {}", e),
+                            Err(e) => eprintln!("Failed to create directory: {e}"),
                         }
                     }
 
                     match std::fs::File::create(&root_dir_nw_info) {
                         Ok(_) => info!("File created successfully: {:?}", root_dir_nw_info),
-                        Err(e) => eprintln!("Failed to create file: {}", e),
+                        Err(e) => eprintln!("Failed to create file: {e}"),
                     }
                 }
 
@@ -517,13 +520,13 @@ impl Node {
                     }
                 });
             }
-            NetworkEvent::ClosedListenAddr(address ) => {
-                let peer_id = self.network().peer_id().clone();
+            NetworkEvent::ClosedListenAddr(address) => {
+                let peer_id = self.network().peer_id();
                 let root_dir_nw_info = self
-                                        .get_root_dir()
-                                        .clone()
-                                        .join("network_info")
-                                        .join(format!("listeners_{}", peer_id));
+                    .get_root_dir()
+                    .clone()
+                    .join("network_info")
+                    .join(format!("listeners_{peer_id}"));
                 let path = std::path::Path::new(&root_dir_nw_info);
 
                 if path.exists() {
@@ -1141,7 +1144,7 @@ fn contains_string(file_path: &PathBuf, search_str: &str) -> bool {
     match std::fs::read_to_string(file_path) {
         Ok(contents) => contents.contains(search_str),
         Err(e) => {
-            eprintln!("Failed to read file: {}", e);
+            eprintln!("Failed to read file: {e}");
             false
         }
     }
@@ -1149,13 +1152,12 @@ fn contains_string(file_path: &PathBuf, search_str: &str) -> bool {
 
 fn append_to_file(file_path: &PathBuf, new_str: &str) -> Result<()> {
     let mut file = std::fs::OpenOptions::new()
-                                    .write(true)
-                                    .append(true)
-                                    .create(true)
-                                    .open(file_path)
-                                    .map_err(|_| Error::InvalidListenerFileOperation)?;
-    if let Err(e) = file.write_all(format!("{}\n", new_str).as_bytes()) {
-        eprintln!("Failed to write to file: {}", e);
+        .append(true)
+        .create(true)
+        .open(file_path)
+        .map_err(|_| Error::InvalidListenerFileOperation)?;
+    if let Err(e) = file.write_all(format!("{new_str}\n").as_bytes()) {
+        eprintln!("Failed to write to file: {e}");
     }
     Ok(())
 }
@@ -1166,19 +1168,21 @@ fn remove_from_file(file_path: &PathBuf, new_str: &str) -> Result<()> {
     let reader = std::io::BufReader::new(file);
 
     let lines: Vec<String> = reader
-                            .lines()
-                            .filter_map(|line| line.ok()) // Handle errors while reading
-                            .filter(|line| !line.contains(new_str)) // Remove lines containing the keyword
-                            .collect();
+        .lines()
+        .map_while(Result::ok) // Handle errors while reading
+        .filter(|line| !line.contains(new_str)) // Remove lines containing the keyword
+        .collect();
 
     // Write back the filtered content
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .truncate(true)
-        .open(file_path).map_err(|_| Error::InvalidListenerFileOperation)?;
+        .open(file_path)
+        .map_err(|_| Error::InvalidListenerFileOperation)?;
 
     for line in lines {
-        writeln!(file, "{}", line).map_err(|_| Error::InvalidListenerFileOperation)?; // Write each line with a newline
+        writeln!(file, "{line}").map_err(|_| Error::InvalidListenerFileOperation)?;
+        // Write each line with a newline
     }
 
     Ok(())

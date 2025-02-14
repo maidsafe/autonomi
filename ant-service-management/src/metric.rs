@@ -1,9 +1,9 @@
 // use ant_protocol::CLOSE_GROUP_SIZE;
+use crate::error::{Error, Result};
 use async_trait::async_trait;
-use libp2p::{PeerId, Multiaddr};
-use tokio::time::Duration;
+use libp2p::{Multiaddr, PeerId};
 use std::path::PathBuf;
-use crate::error::{Result,Error};
+use tokio::time::Duration;
 
 // const MAX_CONNECTION_RETRY_ATTEMPTS: u8 = 5;
 //const CONNECTION_RETRY_DELAY_SEC: Duration = Duration::from_secs(1);
@@ -77,7 +77,7 @@ pub fn read_network_metrics_from_file(root_dir: PathBuf, peer_id: String) -> Net
     let mut connected_peers = Vec::new();
     if std::path::Path::new(&connected_peers_path).exists() {
         match std::fs::read_to_string(&connected_peers_path) {
-            Ok(contents) => connected_peers =  contents.lines().map(|s| s.to_string()).collect(),
+            Ok(contents) => connected_peers = contents.lines().map(|s| s.to_string()).collect(),
             Err(e) => eprintln!("Failed to read the connected peers file: {}", e),
         }
     }
@@ -85,7 +85,7 @@ pub fn read_network_metrics_from_file(root_dir: PathBuf, peer_id: String) -> Net
     let mut listeners = Vec::new();
     if std::path::Path::new(&listeners_path).exists() {
         match std::fs::read_to_string(&listeners_path) {
-            Ok(contents) => listeners =  contents.lines().map(|s| s.to_string()).collect(),
+            Ok(contents) => listeners = contents.lines().map(|s| s.to_string()).collect(),
             Err(e) => eprintln!("Failed to read the listeners file: {}", e),
         }
     }
@@ -104,24 +104,35 @@ impl MetricClient {
         }
     }
 
-    pub async fn get_endpoint_metrics(&self, endpoint_name: &str) -> Result<prometheus_parse::Scrape> {
+    pub async fn get_endpoint_metrics(
+        &self,
+        endpoint_name: &str,
+    ) -> Result<prometheus_parse::Scrape> {
         debug!(
             "Attempting connection to collect {} metrics from {}...",
-            endpoint_name,
-            self.endpoint_port
+            endpoint_name, self.endpoint_port
         );
 
-        let body = reqwest::get(&format!("http://localhost:{}/{endpoint_name}", self.endpoint_port))
-        .await.map_err(|_| Error::MetricServiceConnectionError(self.endpoint_port.clone()))?
+        let body = reqwest::get(&format!(
+            "http://localhost:{}/{endpoint_name}",
+            self.endpoint_port
+        ))
+        .await
+        .map_err(|_| Error::MetricServiceConnectionError(self.endpoint_port.clone()))?
         .text()
-        .await.map_err(|_| Error::MetricServiceInfoResponseError)?;
+        .await
+        .map_err(|_| Error::MetricServiceInfoResponseError)?;
         let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
         let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
 
         Ok(all_metrics)
     }
 
-    pub fn get_node_info_from_metadata_extended(&self ,scrape: &prometheus_parse::Scrape, node_info: &mut NodeInfoMetrics) -> Result<()>{
+    pub fn get_node_info_from_metadata_extended(
+        &self,
+        scrape: &prometheus_parse::Scrape,
+        node_info: &mut NodeInfoMetrics,
+    ) -> Result<()> {
         for sample in scrape.samples.iter() {
             for (key, value) in sample.labels.iter() {
                 match key.as_str() {
@@ -137,7 +148,11 @@ impl MetricClient {
         Ok(())
     }
 
-    pub fn get_node_info_from_metrics(&self, scrape: &prometheus_parse::Scrape, node_info: &mut NodeInfoMetrics) {
+    pub fn get_node_info_from_metrics(
+        &self,
+        scrape: &prometheus_parse::Scrape,
+        node_info: &mut NodeInfoMetrics,
+    ) {
         for sample in scrape.samples.iter() {
             if sample.metric == "ant_node_current_reward_wallet_balance" {
                 // Attos
@@ -162,7 +177,10 @@ impl MetricClient {
         }
     }
 
-    pub fn get_connected_peer_num_from_metrics(&self, scrape: &prometheus_parse::Scrape) -> Result<u64> {
+    pub fn get_connected_peer_num_from_metrics(
+        &self,
+        scrape: &prometheus_parse::Scrape,
+    ) -> Result<u64> {
         for sample in scrape.samples.iter() {
             if sample.metric == "ant_node_connected_peers" {
                 match sample.value {
@@ -188,7 +206,7 @@ impl MetricActions for MetricClient {
         let scrape = self.get_endpoint_metrics("metrics").await?;
         self.get_node_info_from_metrics(&scrape, &mut node_info);
 
-        Ok(NodeInfo{
+        Ok(NodeInfo {
             peer_id: node_info.peer_id,
             pid: node_info.pid,
             version: node_info.bin_version,
@@ -204,65 +222,66 @@ impl MetricActions for MetricClient {
         let mut node_info = NodeInfoMetrics::default();
         let _ = self.get_node_info_from_metadata_extended(&scrape, &mut node_info);
 
-        let network_info_metrics = read_network_metrics_from_file(node_info.root_dir, node_info.peer_id.to_string());
+        let network_info_metrics =
+            read_network_metrics_from_file(node_info.root_dir, node_info.peer_id.to_string());
 
         let connected_peers_ = network_info_metrics
-                                                .connected_peers
-                                                .into_iter()
-                                                .filter_map(|s| s.parse().ok()) // Ignores errors
-                                                .collect();
+            .connected_peers
+            .into_iter()
+            .filter_map(|s| s.parse().ok()) // Ignores errors
+            .collect();
 
         let listeners_ = network_info_metrics
-                                                .listeners
-                                                .into_iter()
-                                                .filter_map(|s| s.parse().ok()) // Ignores errors
-                                                .collect();
+            .listeners
+            .into_iter()
+            .filter_map(|s| s.parse().ok()) // Ignores errors
+            .collect();
 
         Ok(NetworkInfo {
             connected_peers: connected_peers_,
-            listeners: listeners_ ,
+            listeners: listeners_,
         })
     }
 
     async fn is_node_connected_to_network(&self, _timeout: Duration) -> Result<()> {
-    // Todo: This is causing 5 mins delay during starting the node,
-    // Todo: metrics server starts way later than the rpc server in node, need to refactor it further.
+        // Todo: This is causing 5 mins delay during starting the node,
+        // Todo: metrics server starts way later than the rpc server in node, need to refactor it further.
 
-    //         let max_attempts = std::cmp::max(1, timeout.as_secs() / CONNECTION_RETRY_DELAY_SEC.as_secs());
-    // trace!(
-    //     "Metric conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
-    //     CONNECTION_RETRY_DELAY_SEC
-    // );
-    // let mut attempts = 0;
-    // loop {
-    //     debug!(
-    //         "Attempting connection to node metric endpoint at {}...",
-    //         self.endpoint_port
-    //     );
+        //         let max_attempts = std::cmp::max(1, timeout.as_secs() / CONNECTION_RETRY_DELAY_SEC.as_secs());
+        // trace!(
+        //     "Metric conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
+        //     CONNECTION_RETRY_DELAY_SEC
+        // );
+        // let mut attempts = 0;
+        // loop {
+        //     debug!(
+        //         "Attempting connection to node metric endpoint at {}...",
+        //         self.endpoint_port
+        //     );
 
-    //     let scrape = self.get_endpoint_metrics("metrics").await?;
+        //     let scrape = self.get_endpoint_metrics("metrics").await?;
 
-    //     if let Ok(peer_num) = self.get_connected_peer_num_from_metrics(&scrape) {
-    //         debug!("Connection to metric service successful");
-    //             if peer_num  as usize > CLOSE_GROUP_SIZE {
-    //                 return Ok(());
-    //             } else {
-    //                 error!(
-    //                     "Node does not have enough peers connected yet. Retrying {attempts}/{max_attempts}",
-    //                 );
-    //             }
-    //     } else {
-    //         error!(
-    //             "Could not connect to Metric endpoint {:?}. Retrying {attempts}/{max_attempts}",
-    //             self.endpoint_port,
-    //         );
-    //     }
-    //     attempts += 1;
-    //     tokio::time::sleep(CONNECTION_RETRY_DELAY_SEC).await;
-    //         if attempts >= max_attempts {
-    //             return Err(Error::MetricServiceConnectionError(self.endpoint_port.clone()));
-    //         }
-    //     }
+        //     if let Ok(peer_num) = self.get_connected_peer_num_from_metrics(&scrape) {
+        //         debug!("Connection to metric service successful");
+        //             if peer_num  as usize > CLOSE_GROUP_SIZE {
+        //                 return Ok(());
+        //             } else {
+        //                 error!(
+        //                     "Node does not have enough peers connected yet. Retrying {attempts}/{max_attempts}",
+        //                 );
+        //             }
+        //     } else {
+        //         error!(
+        //             "Could not connect to Metric endpoint {:?}. Retrying {attempts}/{max_attempts}",
+        //             self.endpoint_port,
+        //         );
+        //     }
+        //     attempts += 1;
+        //     tokio::time::sleep(CONNECTION_RETRY_DELAY_SEC).await;
+        //         if attempts >= max_attempts {
+        //             return Err(Error::MetricServiceConnectionError(self.endpoint_port.clone()));
+        //         }
+        //     }
         Ok(())
     }
 }

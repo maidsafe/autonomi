@@ -7,12 +7,13 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, error::Error, ServiceManager, VerbosityLevel
+    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, error::Error,
+    ServiceManager, VerbosityLevel,
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
     metric::MetricClient,
-    NodeRegistry, NodeService, NodeServiceData, ServiceStatus
+    NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
 };
 use color_eyre::{
     eyre::{eyre, OptionExt},
@@ -36,7 +37,9 @@ pub async fn restart_node_service(
         })?;
     let current_node_clone = current_node_mut.clone();
 
-    let metrics_port = current_node_mut.metrics_port.ok_or(Error::MetricPortEmpty)?;
+    let metrics_port = current_node_mut
+        .metrics_port
+        .ok_or(Error::MetricPortEmpty)?;
     let metric_client = MetricClient::new(metrics_port);
     let service = NodeService::new(current_node_mut, Box::new(metric_client));
 

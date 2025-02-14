@@ -677,10 +677,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
     assert_eq!(node_registry.nodes[0].service_name, "antnode1");
     assert_eq!(node_registry.nodes[0].user, Some(get_username()));
     assert_eq!(node_registry.nodes[0].number, 1);
-    assert_eq!(
-        node_registry.nodes[0].rpc_socket_addr,
-        None
-    );
+    assert_eq!(node_registry.nodes[0].rpc_socket_addr, None);
     assert_eq!(
         node_registry.nodes[0].log_dir_path,
         node_logs_dir.to_path_buf().join("antnode1")
@@ -3582,7 +3579,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
     let mut seq = Sequence::new();
-    let control_ctx= ServiceInstallCtx {
+    let control_ctx = ServiceInstallCtx {
         args: vec![
             OsString::from("--root-dir"),
             OsString::from(

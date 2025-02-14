@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{error::Result, metric::MetricActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::{
+    error::Result, metric::MetricActions, ServiceStateActions, ServiceStatus, UpgradeOptions,
+};
 use ant_bootstrap::PeersArgs;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;

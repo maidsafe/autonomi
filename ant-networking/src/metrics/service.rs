@@ -229,8 +229,7 @@ impl Service<Request<Body>> for MetricService {
                 Ok(resp) => resp,
                 Err(_) => self.respond_with_500_server_error(),
             }
-        }
-        else {
+        } else {
             self.respond_with_404_not_found()
         };
         Box::pin(async { Ok(resp) })
@@ -250,7 +249,7 @@ impl MakeMetricService {
             standard_registry: Arc::new(Mutex::new(registries.standard_metrics)),
             extended_registry: Arc::new(Mutex::new(registries.extended_metrics)),
             metadata: Arc::new(Mutex::new(registries.metadata)),
-            metadata_extended: Arc::new(Mutex::new(registries.metadata_extended))
+            metadata_extended: Arc::new(Mutex::new(registries.metadata_extended)),
         }
     }
 }

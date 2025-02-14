@@ -189,7 +189,7 @@ impl Debug for NetworkEvent {
             NetworkEvent::NewListenAddr(addr) => {
                 write!(f, "NetworkEvent::NewListenAddr({addr:?})")
             }
-            NetworkEvent::ClosedListenAddr(addr ) => {
+            NetworkEvent::ClosedListenAddr(addr) => {
                 write!(f, "NetworkEvent::ClosedListenAddr({addr:?})")
             }
             NetworkEvent::UnverifiedRecord(record) => {

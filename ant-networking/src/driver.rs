@@ -316,8 +316,14 @@ impl NetworkBuilder {
         let listen_addr = self.listen_addr;
         let upnp = self.upnp;
 
-        let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp, Some(root_dir.clone()));
+        let (network, events_receiver, mut swarm_driver) = self.build(
+            kad_cfg,
+            Some(store_cfg),
+            false,
+            ProtocolSupport::Full,
+            upnp,
+            Some(root_dir.clone()),
+        );
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -455,14 +461,20 @@ impl NetworkBuilder {
             metadata_extended_sub_reg.register(
                 "bin_version",
                 "Package version of the node",
-                Info::new(vec![("bin_version".to_string(), env!("CARGO_PKG_VERSION").to_string())]),
+                Info::new(vec![(
+                    "bin_version".to_string(),
+                    env!("CARGO_PKG_VERSION").to_string(),
+                )]),
             );
 
             if let Some(root_dir) = root_dir.clone() {
                 metadata_extended_sub_reg.register(
                     "data_dir",
                     "Root directory of the node",
-                    Info::new(vec![("root_dir".to_string(), root_dir.clone().to_string_lossy().to_string())]),
+                    Info::new(vec![(
+                        "root_dir".to_string(),
+                        root_dir.clone().to_string_lossy().to_string(),
+                    )]),
                 );
             }
 
@@ -471,7 +483,10 @@ impl NetworkBuilder {
                 metadata_extended_sub_reg.register(
                     "log_dir",
                     "Root directory of the node",
-                    Info::new(vec![("log_dir".to_string(), log_dir.clone().to_string_lossy().to_string())]),
+                    Info::new(vec![(
+                        "log_dir".to_string(),
+                        log_dir.clone().to_string_lossy().to_string(),
+                    )]),
                 );
             }
 

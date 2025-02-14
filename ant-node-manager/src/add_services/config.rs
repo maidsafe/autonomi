@@ -12,12 +12,7 @@ use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_peers_args;
 use color_eyre::{eyre::eyre, Result};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{
-    ffi::OsString,
-    net::Ipv4Addr,
-    path::PathBuf,
-    str::FromStr,
-};
+use std::{ffi::OsString, net::Ipv4Addr, path::PathBuf, str::FromStr};
 
 #[derive(Clone, Debug)]
 pub enum PortRange {

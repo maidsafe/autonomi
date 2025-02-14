@@ -11,9 +11,9 @@ pub mod control;
 pub mod daemon;
 pub mod error;
 pub mod faucet;
+pub mod metric;
 pub mod node;
 pub mod rpc;
-pub mod metric;
 
 #[macro_use]
 extern crate tracing;
