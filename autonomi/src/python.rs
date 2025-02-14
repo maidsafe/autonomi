@@ -422,13 +422,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         archive: PyPublicArchive,
-        wallet: PyWallet,
+        payment: PyPaymentOption,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let (cost, addr) = client
-                .archive_put_public(&archive.inner, &wallet.inner)
+                .archive_put_public(&archive.inner, payment.inner)
                 .await
                 .map_err(|e| {
                     PyRuntimeError::new_err(format!("Failed to put public archive: {e}"))
@@ -497,13 +497,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        wallet: PyWallet,
+        payment: PyPaymentOption,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_content_upload(dir_path, &wallet.inner)
+                .dir_content_upload(dir_path, payment.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPrivateArchive { inner: archive }))
@@ -538,13 +538,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        wallet: PyWallet,
+        payment: PyPaymentOption,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let (cost, data_map) = client
-                .dir_upload(dir_path, &wallet.inner)
+                .dir_upload(dir_path, payment.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyDataMapChunk { inner: data_map }))
@@ -645,14 +645,14 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        wallet: &PyWallet,
+        payment: &PyPaymentOption,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let wallet = wallet.inner.clone();
+        let payment = payment.inner.clone();
 
         future_into_py(py, async move {
             let (cost, addr) = client
-                .dir_upload_public(dir_path, &wallet)
+                .dir_upload_public(dir_path, payment)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), crate::client::address::addr_to_str(addr)))
@@ -688,13 +688,13 @@ impl PyClient {
         &self,
         py: Python<'a>,
         dir_path: PathBuf,
-        wallet: PyWallet,
+        payment: PyPaymentOption,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_content_upload_public(dir_path, &wallet.inner)
+                .dir_content_upload_public(dir_path, payment.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPublicArchive { inner: archive }))
