@@ -10,6 +10,7 @@ use crate::network::NetworkPeers;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::address::addr_to_str;
+use autonomi::client::payment::PaymentOption;
 use autonomi::ClientOperatingStrategy;
 use autonomi::ResponseQuorum;
 use color_eyre::eyre::Context;
@@ -46,6 +47,7 @@ pub async fn upload(
     let mut client = crate::actions::connect_to_network_with_config(peers, config).await?;
 
     let wallet = load_wallet(client.evm_network())?;
+    let payment = PaymentOption::Wallet(wallet);
     let event_receiver = client.enable_client_events();
     let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
 
@@ -65,14 +67,14 @@ pub async fn upload(
     let local_addr;
     let archive = if public {
         let (_cost, xor_name) = client
-            .dir_and_archive_upload_public(dir_path, &wallet)
+            .dir_upload_public(dir_path, payment.clone())
             .await
             .wrap_err("Failed to upload file")?;
         local_addr = addr_to_str(xor_name);
         local_addr.clone()
     } else {
         let (_cost, private_data_access) = client
-            .dir_and_archive_upload(dir_path, &wallet)
+            .dir_upload(dir_path, payment)
             .await
             .wrap_err("Failed to upload dir and archive")?;
 
