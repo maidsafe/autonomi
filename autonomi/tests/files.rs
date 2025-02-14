@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::client::payment::PaymentOption;
 use autonomi::Client;
 use eyre::Result;
 use serial_test::serial;
@@ -30,7 +31,7 @@ async fn dir_upload_download() -> Result<()> {
     let wallet = get_funded_wallet();
 
     let (_cost, addr) = client
-        .dir_and_archive_upload_public("tests/file/test_dir".into(), &wallet)
+        .dir_upload_public("tests/file/test_dir".into(), wallet.into())
         .await?;
 
     sleep(Duration::from_secs(10)).await;
@@ -86,7 +87,7 @@ async fn file_into_vault() -> Result<()> {
     let client_sk = bls::SecretKey::random();
 
     let (_cost, addr) = client
-        .dir_and_archive_upload_public("tests/file/test_dir".into(), &wallet)
+        .dir_upload_public("tests/file/test_dir".into(), wallet.clone().into())
         .await?;
     sleep(Duration::from_secs(2)).await;
 
@@ -107,6 +108,71 @@ async fn file_into_vault() -> Result<()> {
     assert_eq!(
         archive, ap_archive_fetched,
         "archive fetched should match archive put"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn file_advanced_use() -> Result<()> {
+    let _log_appender_guard =
+        LogBuilder::init_single_threaded_tokio_test("file_advanced_use", false);
+
+    let client = Client::init_local().await?;
+    let wallet = get_funded_wallet();
+    let payment_option = PaymentOption::Wallet(wallet);
+
+    // upload a directory
+    let (cost, mut archive) = client
+        .dir_content_upload("tests/file/test_dir/dir_a".into(), payment_option.clone())
+        .await?;
+    println!("cost to upload private directory: {cost:?}");
+    println!("archive: {archive:#?}");
+
+    // upload an additional file separately
+    let (cost, file_datamap) = client
+        .file_content_upload(
+            "tests/file/test_dir/example_file_b".into(),
+            payment_option.clone(),
+        )
+        .await?;
+    println!("cost to upload additional file: {cost:?}");
+
+    // add that file to the archive with custom metadata
+    let custom_metadata = autonomi::client::files::Metadata {
+        created: 42,
+        modified: 84,
+        size: 126,
+        extra: Some("custom metadata".to_string()),
+    };
+    archive.add_file("example_file_b".into(), file_datamap, custom_metadata);
+
+    // upload an additional file separately
+    let (cost, file_datamap) = client
+        .file_content_upload(
+            "tests/file/test_dir/example_file_a".into(),
+            payment_option.clone(),
+        )
+        .await?;
+    println!("cost to upload additional file: {cost:?}");
+
+    // add that file to the archive with custom metadata
+    let custom_metadata = autonomi::client::files::Metadata::new_with_size(126);
+    archive.add_file("example_file_a".into(), file_datamap, custom_metadata);
+
+    // upload the archive
+    let (cost, archive_datamap) = client.archive_put(&archive, payment_option.clone()).await?;
+    println!("cost to upload archive: {cost:?}");
+
+    // download the entire directory
+    let dest = "tests/file/test_dir_fetched2";
+    client.dir_download(&archive_datamap, dest.into()).await?;
+
+    // compare the two directories
+    assert_eq!(
+        compute_dir_sha256("tests/file/test_dir")?,
+        compute_dir_sha256(dest)?,
     );
 
     Ok(())

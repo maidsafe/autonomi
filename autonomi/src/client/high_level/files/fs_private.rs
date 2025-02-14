@@ -18,10 +18,11 @@ use super::archive_private::{PrivateArchive, PrivateArchiveAccess};
 use super::{get_relative_file_path_from_abs_file_and_folder_path, FILE_UPLOAD_BATCH_SIZE};
 use super::{DownloadError, UploadError};
 
+use crate::client::payment::PaymentOption;
 use crate::client::PutError;
 use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
 use crate::self_encryption::encrypt;
-use crate::{AttoTokens, Client, Wallet};
+use crate::{AttoTokens, Client};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::path::PathBuf;
@@ -58,12 +59,14 @@ impl Client {
         Ok(())
     }
 
-    /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
+    /// Upload the content of all files in a directory to the network.
+    /// The directory is recursively walked and each file is uploaded to the network.
+    ///
     /// The data maps of these (private) files are not uploaded but returned within the [`PrivateArchive`] return type.
-    pub async fn dir_upload(
+    pub async fn dir_content_upload(
         &self,
         dir_path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PrivateArchive), UploadError> {
         info!("Uploading directory as private: {dir_path:?}");
         let start = tokio::time::Instant::now();
@@ -155,7 +158,7 @@ impl Client {
             .pay_for_content_addrs(
                 DataTypes::Chunk,
                 combined_xor_names.into_iter(),
-                wallet.into(),
+                payment_option,
             )
             .await
             .inspect_err(|err| error!("Error paying for data: {err:?}"))
@@ -224,16 +227,18 @@ impl Client {
         Ok((total_cost, private_archive))
     }
 
-    /// Same as [`Client::dir_upload`] but also uploads the archive (privately) to the network.
+    /// Same as [`Client::dir_content_upload`] but also uploads the archive (privately) to the network.
     ///
     /// Returns the [`PrivateArchiveAccess`] allowing the private archive to be downloaded from the network.
-    pub async fn dir_and_archive_upload(
+    pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PrivateArchiveAccess), UploadError> {
-        let (cost1, archive) = self.dir_upload(dir_path, wallet).await?;
-        let (cost2, archive_addr) = self.archive_put(&archive, wallet.into()).await?;
+        let (cost1, archive) = self
+            .dir_content_upload(dir_path, payment_option.clone())
+            .await?;
+        let (cost2, archive_addr) = self.archive_put(&archive, payment_option).await?;
         let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
             error!("Total cost overflowed: {cost1:?} + {cost2:?}");
             cost1
@@ -241,12 +246,12 @@ impl Client {
         Ok((total_cost, archive_addr))
     }
 
-    /// Upload a private file to the network.
+    /// Upload the content of a private file to the network.
     /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns [`DataMapChunk`] (pointing to the datamap)
-    pub async fn file_upload(
+    pub async fn file_content_upload(
         &self,
         path: PathBuf,
-        wallet: &Wallet,
+        payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), UploadError> {
         info!("Uploading file: {path:?}");
         #[cfg(feature = "loud")]
@@ -254,7 +259,7 @@ impl Client {
 
         let data = tokio::fs::read(path).await?;
         let data = Bytes::from(data);
-        let (total_cost, addr) = self.data_put(data, wallet.into()).await?;
+        let (total_cost, addr) = self.data_put(data, payment_option).await?;
         debug!("Uploaded file successfully in the privateAchive: {addr:?}");
         Ok((total_cost, addr))
     }
