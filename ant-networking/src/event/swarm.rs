@@ -107,9 +107,11 @@ impl SwarmDriver {
                         renewed: _,
                     } => {
                         self.connected_relay_clients.insert(src_peer_id);
+                        info!("Relay reservation accepted from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
                     }
                     libp2p::relay::Event::ReservationTimedOut { src_peer_id } => {
                         self.connected_relay_clients.remove(&src_peer_id);
+                        info!("Relay reservation timed out from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
                     }
                     _ => {}
                 }
@@ -264,6 +266,14 @@ impl SwarmDriver {
                 event_string = "ConnectionClosed";
                 debug!(%peer_id, ?connection_id, ?cause, num_established, "ConnectionClosed: {}", endpoint_str(&endpoint));
                 let _ = self.live_connected_peers.remove(&connection_id);
+
+                if num_established == 0 && self.connected_relay_clients.remove(&peer_id) {
+                    info!(
+                        "Relay client has been disconnected: {peer_id:?}. Relay client count: {}",
+                        self.connected_relay_clients.len()
+                    );
+                }
+
                 self.record_connection_metrics();
             }
             SwarmEvent::OutgoingConnectionError {
