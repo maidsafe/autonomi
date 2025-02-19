@@ -35,6 +35,10 @@ pub static FILE_UPLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 });
 
 /// Metadata for a file in an archive. Time values are UNIX timestamps.
+///
+/// The recommended way to create a new [`Metadata`] is to use [`Metadata::new_with_size`].
+///
+/// The [`Metadata::default`] method creates a new [`Metadata`] with 0 as size and the current time for created and modified.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Metadata {
     /// File creation time on local file system. See [`std::fs::Metadata::created`] for details per OS.
@@ -46,6 +50,12 @@ pub struct Metadata {
 
     /// Optional extra metadata with undefined structure, e.g. JSON.
     pub extra: Option<String>,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Self::new_with_size(0)
+    }
 }
 
 impl Metadata {
