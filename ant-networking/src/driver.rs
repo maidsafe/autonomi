@@ -841,24 +841,20 @@ impl SwarmDriver {
                 }
                 _ = set_farthest_record_interval.tick() => {
                     if !self.is_client {
-                        let (
-                            _index,
-                            _total_peers,
-                            peers_in_non_full_buckets,
-                            num_of_full_buckets,
-                            _kbucket_table_stats,
-                        ) = self.kbuckets_status();
-                        let estimated_network_size =
-                            Self::estimate_network_size(peers_in_non_full_buckets, num_of_full_buckets);
-                        if estimated_network_size <= CLOSE_GROUP_SIZE {
-                            info!("Not enough estimated network size {estimated_network_size}, with {peers_in_non_full_buckets} peers_in_non_full_buckets and {num_of_full_buckets}num_of_full_buckets.");
+                        let kbucket_status = self.get_kbuckets_status();
+                        self.update_on_kbucket_status(&kbucket_status);
+                        if kbucket_status.estimated_network_size <= CLOSE_GROUP_SIZE {
+                            info!("Not enough estimated network size {}, with {} peers_in_non_full_buckets and {} num_of_full_buckets.",
+                            kbucket_status.estimated_network_size,
+                            kbucket_status.peers_in_non_full_buckets,
+                            kbucket_status.num_of_full_buckets);
                             continue;
                         }
                         // The entire Distance space is U256
                         // (U256::MAX is 115792089237316195423570985008687907853269984665640564039457584007913129639935)
                         // The network density (average distance among nodes) can be estimated as:
                         //     network_density = entire_U256_space / estimated_network_size
-                        let density = U256::MAX / U256::from(estimated_network_size);
+                        let density = U256::MAX / U256::from(kbucket_status.estimated_network_size);
                         let density_distance = density * U256::from(CLOSE_GROUP_SIZE);
 
                         // Use distance to close peer to avoid the situation that

@@ -37,8 +37,29 @@ use std::{
 };
 use tokio::sync::oneshot;
 
-// (total_buckets, total_peers, peers_in_non_full_buckets, num_of_full_buckets, kbucket_table_stats)
-type KBucketStatus = (usize, usize, usize, usize, Vec<(usize, usize, u32)>);
+#[derive(Debug, Clone)]
+pub(crate) struct KBucketStatus {
+    pub(crate) total_buckets: usize,
+    pub(crate) total_peers: usize,
+    pub(crate) peers_in_non_full_buckets: usize,
+    pub(crate) num_of_full_buckets: usize,
+    pub(crate) kbucket_table_stats: Vec<(usize, usize, u32)>,
+    pub(crate) estimated_network_size: usize,
+}
+
+impl KBucketStatus {
+    pub(crate) fn log(&self) {
+        info!(
+            "kBucketTable has {:?} kbuckets {:?} peers, {:?}, estimated network size: {:?}",
+            self.total_buckets,
+            self.total_peers,
+            self.kbucket_table_stats,
+            self.estimated_network_size
+        );
+        #[cfg(feature = "loud")]
+        println!("Estimated network size: {:?}", self.estimated_network_size);
+    }
+}
 
 /// NodeEvent enum
 #[derive(CustomDebug)]
@@ -239,12 +260,21 @@ impl SwarmDriver {
 
     /// Update state on addition of a peer to the routing table.
     pub(crate) fn update_on_peer_addition(&mut self, added_peer: PeerId, addresses: Addresses) {
-        self.peers_in_rt = self.peers_in_rt.saturating_add(1);
-        let n_peers = self.peers_in_rt;
-        info!("New peer added to routing table: {added_peer:?}, now we have #{n_peers} connected peers");
+        let kbucket_status = self.get_kbuckets_status();
+        self.update_on_kbucket_status(&kbucket_status);
+
+        let distance = NetworkAddress::from_peer(self.self_peer_id)
+            .distance(&NetworkAddress::from_peer(added_peer));
+        info!("New peer added to routing table: {added_peer:?}. We now have #{} connected peers. It has a {:?} distance to us.", 
+        self.peers_in_rt, distance.ilog2());
 
         #[cfg(feature = "loud")]
-        println!("New peer added to routing table: {added_peer:?}, now we have #{n_peers} connected peers");
+        println!(
+            "New peer added to routing table: {added_peer:?}, now we have #{} connected peers",
+            self.peers_in_rt
+        );
+
+        kbucket_status.log();
 
         if let Some(bootstrap_cache) = &mut self.bootstrap_cache {
             for addr in addresses.iter() {
@@ -252,52 +282,42 @@ impl SwarmDriver {
             }
         }
 
-        self.log_kbuckets(&added_peer);
         self.send_event(NetworkEvent::PeerAdded(added_peer, self.peers_in_rt));
 
         #[cfg(feature = "open-metrics")]
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
         }
-
-        #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
-            metrics_recorder
-                .peers_in_routing_table
-                .set(self.peers_in_rt as i64);
-        }
     }
 
     /// Update state on removal of a peer from the routing table.
     pub(crate) fn update_on_peer_removal(&mut self, removed_peer: PeerId) {
-        self.peers_in_rt = self.peers_in_rt.saturating_sub(1);
+        let kbucket_status = self.get_kbuckets_status();
+        self.update_on_kbucket_status(&kbucket_status);
 
         // ensure we disconnect bad peer
         // err result just means no connections were open
         let _result = self.swarm.disconnect_peer_id(removed_peer);
 
+        let distance = NetworkAddress::from_peer(self.self_peer_id)
+            .distance(&NetworkAddress::from_peer(removed_peer));
         info!(
-            "Peer removed from routing table: {removed_peer:?}, now we have #{} connected peers",
-            self.peers_in_rt
+            "Peer removed from routing table: {removed_peer:?}. We now have #{} connected peers. It has a {:?} distance to us.",
+            self.peers_in_rt, distance.ilog2()
         );
-        self.log_kbuckets(&removed_peer);
+
         self.send_event(NetworkEvent::PeerRemoved(removed_peer, self.peers_in_rt));
+
+        kbucket_status.log();
 
         #[cfg(feature = "open-metrics")]
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
         }
-
-        #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
-            metrics_recorder
-                .peers_in_routing_table
-                .set(self.peers_in_rt as i64);
-        }
     }
 
-    /// Collect kbuckets status
-    pub(crate) fn kbuckets_status(&mut self) -> KBucketStatus {
+    /// Get the status of the kbucket table.
+    pub(crate) fn get_kbuckets_status(&mut self) -> KBucketStatus {
         let mut kbucket_table_stats = vec![];
         let mut index = 0;
         let mut total_peers = 0;
@@ -324,51 +344,37 @@ impl SwarmDriver {
             }
             index += 1;
         }
-        (
-            index,
-            total_peers,
-            peers_in_non_full_buckets,
-            num_of_full_buckets,
-            kbucket_table_stats,
-        )
-    }
-
-    /// Logs the kbuckets also records the bucket info.
-    pub(crate) fn log_kbuckets(&mut self, peer: &PeerId) {
-        let distance = NetworkAddress::from_peer(self.self_peer_id)
-            .distance(&NetworkAddress::from_peer(*peer));
-        info!("Peer {peer:?} has a {:?} distance to us", distance.ilog2());
-
-        let (
-            index,
-            total_peers,
-            peers_in_non_full_buckets,
-            num_of_full_buckets,
-            kbucket_table_stats,
-        ) = self.kbuckets_status();
 
         let estimated_network_size =
             Self::estimate_network_size(peers_in_non_full_buckets, num_of_full_buckets);
+
+        KBucketStatus {
+            total_buckets: index,
+            total_peers,
+            peers_in_non_full_buckets,
+            num_of_full_buckets,
+            kbucket_table_stats,
+            estimated_network_size,
+        }
+    }
+
+    /// Update SwarmDriver field & also record metrics based on the newly calculated kbucket status.
+    pub(crate) fn update_on_kbucket_status(&mut self, status: &KBucketStatus) {
+        self.peers_in_rt = status.total_peers;
         #[cfg(feature = "open-metrics")]
         if let Some(metrics_recorder) = &self.metrics_recorder {
+            metrics_recorder
+                .peers_in_routing_table
+                .set(status.total_peers as i64);
+
+            let estimated_network_size = Self::estimate_network_size(
+                status.peers_in_non_full_buckets,
+                status.num_of_full_buckets,
+            );
             let _ = metrics_recorder
                 .estimated_network_size
                 .set(estimated_network_size as i64);
         }
-
-        // Just to warn if our tracking goes out of sync with libp2p. Can happen if someone forgets to call
-        // update_on_peer_addition or update_on_peer_removal when adding or removing a peer.
-        // Only log every 10th peer to avoid spamming the logs.
-        if total_peers % 10 == 0 && total_peers != self.peers_in_rt {
-            warn!(
-                "Total peers in routing table: {}, but kbucket table has {total_peers} peers",
-                self.peers_in_rt
-            );
-        }
-
-        info!("kBucketTable has {index:?} kbuckets {total_peers:?} peers, {kbucket_table_stats:?}, estimated network size: {estimated_network_size:?}");
-        #[cfg(feature = "loud")]
-        println!("Estimated network size: {estimated_network_size:?}");
     }
 
     /// Estimate the number of nodes in the network

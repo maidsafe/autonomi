@@ -626,15 +626,8 @@ impl SwarmDriver {
                 sender,
             } => {
                 cmd_string = "GetLocalQuotingMetrics";
-                let (
-                    _index,
-                    _total_peers,
-                    peers_in_non_full_buckets,
-                    num_of_full_buckets,
-                    _kbucket_table_stats,
-                ) = self.kbuckets_status();
-                let estimated_network_size =
-                    Self::estimate_network_size(peers_in_non_full_buckets, num_of_full_buckets);
+                let kbucket_status = self.get_kbuckets_status();
+                self.update_on_kbucket_status(&kbucket_status);
                 let (quoting_metrics, is_already_stored) = match self
                     .swarm
                     .behaviour_mut()
@@ -644,7 +637,7 @@ impl SwarmDriver {
                         &key,
                         data_type,
                         data_size,
-                        Some(estimated_network_size as u64),
+                        Some(kbucket_status.estimated_network_size as u64),
                     ) {
                     Ok(res) => res,
                     Err(err) => {
