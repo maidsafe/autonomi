@@ -41,10 +41,8 @@ const RESERVATION_SCORE_ROLLING_WINDOW: usize = 100;
 #[cfg(feature = "open-metrics")]
 type ConnectionsFromPeer = Vec<(PeerId, ConnectionId, SystemTime, Option<bool>)>;
 
-pub(crate) fn is_a_relayed_peer(addrs: &HashSet<Multiaddr>) -> bool {
-    addrs
-        .iter()
-        .any(|multiaddr| multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit)))
+pub(crate) fn is_a_relayed_peer<'a>(mut addrs: impl Iterator<Item = &'a Multiaddr>) -> bool {
+    addrs.any(|multiaddr| multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit)))
 }
 
 /// Manage the relay servers that a private node is connected to.

@@ -88,7 +88,7 @@ impl SwarmDriver {
                 .collect(),
         };
 
-        let is_relayed_peer = is_a_relayed_peer(&addrs);
+        let is_relayed_peer = is_a_relayed_peer(addrs.iter());
 
         let is_bootstrap_peer = self
             .bootstrap_peers

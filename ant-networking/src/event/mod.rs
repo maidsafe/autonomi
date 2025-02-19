@@ -11,7 +11,7 @@ mod kad;
 mod request_response;
 mod swarm;
 
-use crate::{driver::SwarmDriver, error::Result};
+use crate::{driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer};
 use core::fmt;
 use custom_debug::Debug as CustomDebug;
 use libp2p::{
@@ -255,16 +255,24 @@ impl SwarmDriver {
         self.log_kbuckets(&added_peer);
         self.send_event(NetworkEvent::PeerAdded(added_peer, self.peers_in_rt));
 
-        #[cfg(feature = "open-metrics")]
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
         }
 
         #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
+        if let Some(metrics_recorder) = self.metrics_recorder.as_mut() {
             metrics_recorder
                 .peers_in_routing_table
                 .set(self.peers_in_rt as i64);
+
+            if is_a_relayed_peer(addresses.iter()) {
+                let is_newly_inserted = metrics_recorder.relay_peers_tracker.insert(added_peer);
+                if is_newly_inserted {
+                    metrics_recorder
+                        .relay_peers_in_routing_table
+                        .set(metrics_recorder.relay_peers_tracker.len() as i64);
+                }
+            }
         }
     }
 
@@ -289,10 +297,16 @@ impl SwarmDriver {
         }
 
         #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
+        if let Some(metrics_recorder) = self.metrics_recorder.as_mut() {
             metrics_recorder
                 .peers_in_routing_table
                 .set(self.peers_in_rt as i64);
+
+            if metrics_recorder.relay_peers_tracker.remove(&removed_peer) {
+                metrics_recorder
+                    .relay_peers_in_routing_table
+                    .set(metrics_recorder.relay_peers_tracker.len() as i64);
+            }
         }
     }
 

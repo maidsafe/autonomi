@@ -12,6 +12,7 @@ mod relay_client;
 pub mod service;
 mod upnp;
 
+use std::collections::HashSet;
 use std::sync::atomic::AtomicU64;
 
 use crate::MetricsRegistries;
@@ -45,6 +46,7 @@ pub(crate) struct NetworkMetricsRecorder {
     pub(crate) estimated_network_size: Gauge,
     pub(crate) open_connections: Gauge,
     pub(crate) peers_in_routing_table: Gauge,
+    pub(crate) relay_peers_in_routing_table: Gauge,
     pub(crate) records_stored: Gauge,
     pub(crate) relay_reservation_health: Gauge<f64, AtomicU64>,
 
@@ -67,6 +69,10 @@ pub(crate) struct NetworkMetricsRecorder {
     // system info
     process_memory_used_mb: Gauge<f64, AtomicU64>,
     process_cpu_usage_percentage: Gauge<f64, AtomicU64>,
+
+    // trackers
+    // The set of relay peers in our RT
+    pub(crate) relay_peers_tracker: HashSet<PeerId>,
 
     // helpers
     bad_nodes_notifier: tokio::sync::mpsc::Sender<BadNodeMetricsMsg>,
@@ -118,6 +124,13 @@ impl NetworkMetricsRecorder {
             "peers_in_routing_table",
             "The total number of peers in our routing table",
             peers_in_routing_table.clone(),
+        );
+
+        let relay_peers_in_routing_table = Gauge::default();
+        sub_registry.register(
+            "relay_peers_in_routing_table",
+            "The total number of relay peers in our routing table",
+            relay_peers_in_routing_table.clone(),
         );
 
         let shunned_count = Counter::default();
@@ -230,6 +243,7 @@ impl NetworkMetricsRecorder {
             open_connections,
             relay_reservation_health,
             peers_in_routing_table,
+            relay_peers_in_routing_table,
             relevant_records,
             max_records,
             received_payment_count,
@@ -244,6 +258,7 @@ impl NetworkMetricsRecorder {
             process_memory_used_mb,
             process_cpu_usage_percentage,
 
+            relay_peers_tracker: Default::default(),
             bad_nodes_notifier,
         };
 
