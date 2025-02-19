@@ -19,7 +19,7 @@ const ADDR_EXPIRY_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 
 const MAX_PEERS: usize = 1500;
 
 /// Maximum number of addresses to store for a Peer
-const MAX_ADDRS_PER_PEER: usize = 6;
+const MAX_ADDRS_PER_PEER: usize = 3;
 
 // Min time until we save the bootstrap cache to disk. 5 mins
 const MIN_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);

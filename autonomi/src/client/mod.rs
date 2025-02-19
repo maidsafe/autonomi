@@ -208,7 +208,7 @@ impl Client {
             ..Default::default()
         };
 
-        let peers = match peers_args.get_addrs(None, None).await {
+        let peers = match peers_args.get_bootstrap_addr(None, None).await {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };

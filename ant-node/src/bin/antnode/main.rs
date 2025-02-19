@@ -280,7 +280,7 @@ fn main() -> Result<()> {
         bootstrap_cache.write()?;
     } else {
         // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk(true)?;
+        bootstrap_cache.sync_and_flush_to_disk()?;
     }
 
     let msg = format!(
@@ -308,7 +308,7 @@ fn main() -> Result<()> {
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
-    let initial_peers = rt.block_on(opt.peers.get_addrs(None, Some(100)))?;
+    let initial_peers = rt.block_on(opt.peers.get_bootstrap_addr(None, Some(100)))?;
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,

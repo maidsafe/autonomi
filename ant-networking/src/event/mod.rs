@@ -283,6 +283,10 @@ impl SwarmDriver {
         self.log_kbuckets(&removed_peer);
         self.send_event(NetworkEvent::PeerRemoved(removed_peer, self.peers_in_rt));
 
+        if let Some(bootstrap_cache) = &mut self.bootstrap_cache {
+            bootstrap_cache.remove_peer(&removed_peer);
+        }
+
         #[cfg(feature = "open-metrics")]
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
