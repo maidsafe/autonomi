@@ -128,6 +128,13 @@ impl PublicArchive {
 
         Ok(root_serialized)
     }
+
+    /// Merge with another archive
+    ///
+    /// Note that if there are duplicate entries for the same filename, the files from the other archive will be the ones that are kept.
+    pub fn merge(&mut self, other: &PublicArchive) {
+        self.map.extend(other.map.clone());
+    }
 }
 
 impl Client {
