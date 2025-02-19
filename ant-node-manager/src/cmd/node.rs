@@ -109,7 +109,9 @@ pub async fn add(
 
     debug!("Parsing peers from PeersArgs");
 
-    peers_args.addrs.extend(PeersArgs::read_addr_from_env());
+    peers_args
+        .addrs
+        .extend(PeersArgs::read_bootstrap_addr_from_env());
     peers_args.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {
