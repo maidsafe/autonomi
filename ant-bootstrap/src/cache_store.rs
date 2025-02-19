@@ -6,94 +6,100 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    craft_valid_multiaddr, multiaddr_get_peer_id, BootstrapAddr, BootstrapAddresses,
-    BootstrapCacheConfig, Error, InitialPeersConfig, Result,
-};
+use crate::{craft_valid_multiaddr, BootstrapCacheConfig, Error, InitialPeersConfig, Result};
 use atomic_write_file::AtomicWriteFile;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::VecDeque,
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::PathBuf,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheData {
-    pub peers: std::collections::HashMap<PeerId, BootstrapAddresses>,
+    pub peers: VecDeque<(PeerId, VecDeque<Multiaddr>)>,
     pub last_updated: SystemTime,
     pub network_version: String,
 }
 
 impl CacheData {
-    pub fn insert(&mut self, peer_id: PeerId, bootstrap_addr: BootstrapAddr) {
-        match self.peers.entry(peer_id) {
-            Entry::Occupied(mut occupied_entry) => {
-                occupied_entry.get_mut().insert_addr(&bootstrap_addr);
-            }
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(BootstrapAddresses(vec![bootstrap_addr]));
-            }
-        }
-    }
-
     /// Sync the self cache with another cache. This would just add the 'other' state to self.
-    pub fn sync(&mut self, other: &CacheData) {
-        for (peer, other_addresses_state) in other.peers.iter() {
-            let bootstrap_addresses = self
-                .peers
-                .entry(*peer)
-                .or_insert(other_addresses_state.clone());
+    pub fn sync(&mut self, other: &CacheData, max_addrs_per_peer: usize, max_peers: usize) {
+        for (other_peer, other_addrs) in other.peers.iter() {
+            if other_addrs.is_empty() {
+                continue;
+            }
+            for (peer, addrs) in self.peers.iter_mut() {
+                if peer == other_peer {
+                    for addr in other_addrs.iter() {
+                        if !addrs.contains(addr) {
+                            addrs.push_back(addr.clone());
+                        }
+                    }
+                    while addrs.len() > max_addrs_per_peer {
+                        addrs.pop_front();
+                    }
+                    break;
+                }
+            }
 
-            trace!("Syncing {peer:?} from other with addrs count: {:?}. Our in memory state count: {:?}", other_addresses_state.0.len(), bootstrap_addresses.0.len());
+            self.peers.push_back((*other_peer, other_addrs.clone()));
 
-            bootstrap_addresses.sync(other_addresses_state);
+            while self.peers.len() > max_peers {
+                self.peers.pop_front();
+            }
         }
 
         self.last_updated = SystemTime::now();
     }
 
-    /// Remove the oldest peers until we're under the max_peers limit
-    pub fn try_remove_oldest_peers(&mut self, cfg: &BootstrapCacheConfig) {
-        if self.peers.len() > cfg.max_peers {
-            let mut peer_last_seen_map = HashMap::new();
-            for (peer, addrs) in self.peers.iter() {
-                let mut latest_seen = Duration::from_secs(u64::MAX);
-                for addr in addrs.0.iter() {
-                    if let Ok(elapsed) = addr.last_seen.elapsed() {
-                        trace!("Time elapsed for {addr:?} is {elapsed:?}");
-                        if elapsed < latest_seen {
-                            trace!("Updating latest_seen to {elapsed:?}");
-                            latest_seen = elapsed;
-                        }
-                    }
-                }
-                trace!("Last seen for {peer:?} is {latest_seen:?}");
-                peer_last_seen_map.insert(*peer, latest_seen);
-            }
-
-            while self.peers.len() > cfg.max_peers {
-                // find the peer with the largest last_seen
-                if let Some((&oldest_peer, last_seen)) = peer_last_seen_map
-                    .iter()
-                    .max_by_key(|(_, last_seen)| **last_seen)
-                {
-                    debug!("Found the oldest peer to remove: {oldest_peer:?} with last_seen of {last_seen:?}");
-                    self.peers.remove(&oldest_peer);
-                    peer_last_seen_map.remove(&oldest_peer);
+    /// Add a peer to the cache data
+    pub fn add_peer<'a>(
+        &mut self,
+        peer_id: PeerId,
+        addrs: impl Iterator<Item = &'a Multiaddr>,
+        max_addrs_per_peer: usize,
+        max_peers: usize,
+    ) {
+        if let Some((_, present_addrs)) = self.peers.iter_mut().find(|(id, _)| id == &peer_id) {
+            for addr in addrs {
+                if !present_addrs.contains(addr) {
+                    present_addrs.push_back(addr.clone());
                 }
             }
+            while present_addrs.len() > max_addrs_per_peer {
+                present_addrs.pop_front();
+            }
+        } else {
+            self.peers.push_back((
+                peer_id,
+                addrs
+                    .into_iter()
+                    .take(max_addrs_per_peer)
+                    .cloned()
+                    .collect(),
+            ));
         }
+
+        while self.peers.len() > max_peers {
+            self.peers.pop_front();
+        }
+    }
+
+    pub fn get_all_addrs(&self) -> impl Iterator<Item = &Multiaddr> {
+        self.peers
+            .iter()
+            .flat_map(|(_, bootstrap_addresses)| bootstrap_addresses.iter().next())
     }
 }
 
 impl Default for CacheData {
     fn default() -> Self {
         Self {
-            peers: std::collections::HashMap::new(),
+            peers: Default::default(),
             last_updated: SystemTime::now(),
             network_version: crate::get_network_version(),
         }
@@ -189,7 +195,9 @@ impl BootstrapCacheStore {
             Error::FailedToParseCacheData
         })?;
 
-        data.try_remove_oldest_peers(cfg);
+        while data.peers.len() > cfg.max_peers {
+            data.peers.pop_front();
+        }
 
         Ok(data)
     }
@@ -198,43 +206,12 @@ impl BootstrapCacheStore {
         self.data.peers.len()
     }
 
-    pub fn get_all_addrs(&self) -> impl Iterator<Item = &BootstrapAddr> {
-        self.data
-            .peers
-            .values()
-            .flat_map(|bootstrap_addresses| bootstrap_addresses.0.iter())
+    pub fn get_all_addrs(&self) -> impl Iterator<Item = &Multiaddr> {
+        self.data.get_all_addrs()
     }
 
-    /// Get a list containing single addr per peer. We use the least faulty addr for each peer.
-    /// This list is sorted by the failure rate of the addr.
-    pub fn get_sorted_addrs(&self) -> impl Iterator<Item = &Multiaddr> {
-        let mut addrs = self
-            .data
-            .peers
-            .values()
-            .flat_map(|bootstrap_addresses| bootstrap_addresses.get_least_faulty())
-            .collect::<Vec<_>>();
-
-        addrs.sort_by_key(|addr| addr.failure_rate() as u64);
-
-        addrs.into_iter().map(|addr| &addr.addr)
-    }
-
-    /// Update the status of an addr in the cache. The peer must be added to the cache first.
-    pub fn update_addr_status(&mut self, addr: &Multiaddr, success: bool) {
-        if let Some(peer_id) = multiaddr_get_peer_id(addr) {
-            debug!("Updating addr status: {addr} (success: {success})");
-            if let Some(bootstrap_addresses) = self.data.peers.get_mut(&peer_id) {
-                bootstrap_addresses.update_addr_status(addr, success);
-            } else {
-                debug!("Peer not found in cache to update: {addr}");
-            }
-        }
-    }
-
-    /// Add a set of addresses to the cache.
+    /// Add an address to the cache
     pub fn add_addr(&mut self, addr: Multiaddr) {
-        debug!("Trying to add new addr: {addr}");
         let Some(addr) = craft_valid_multiaddr(&addr, false) else {
             return;
         };
@@ -242,53 +219,27 @@ impl BootstrapCacheStore {
             Some(Protocol::P2p(id)) => id,
             _ => return,
         };
-
         if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
-            debug!("Not adding relay address to the cache: {addr}");
             return;
         }
 
-        // Check if we already have this peer
-        if let Some(bootstrap_addrs) = self.data.peers.get_mut(&peer_id) {
-            if let Some(bootstrap_addr) = bootstrap_addrs.get_addr_mut(&addr) {
-                debug!("Updating existing peer's last_seen {addr}");
-                bootstrap_addr.last_seen = SystemTime::now();
-                return;
-            } else {
-                let mut bootstrap_addr = BootstrapAddr::new(addr.clone());
-                bootstrap_addr.success_count = 1;
-                bootstrap_addrs.insert_addr(&bootstrap_addr);
-            }
-        } else {
-            let mut bootstrap_addr = BootstrapAddr::new(addr.clone());
-            bootstrap_addr.success_count = 1;
-            self.data
-                .peers
-                .insert(peer_id, BootstrapAddresses(vec![bootstrap_addr]));
-        }
+        debug!("Adding addr to bootstrap cache: {addr}");
 
-        debug!("Added new peer {addr:?}, performing cleanup of old addrs");
-        self.try_remove_oldest_peers();
+        self.data.add_peer(
+            peer_id,
+            [addr].iter(),
+            self.config.max_addrs_per_peer,
+            self.config.max_peers,
+        );
     }
 
-    /// Remove a single address for a peer.
-    pub fn remove_addr(&mut self, addr: &Multiaddr) {
-        if let Some(peer_id) = multiaddr_get_peer_id(addr) {
-            if let Some(bootstrap_addresses) = self.data.peers.get_mut(&peer_id) {
-                bootstrap_addresses.remove_addr(addr);
-            } else {
-                debug!("Peer {peer_id:?} not found in the cache. Not removing addr: {addr:?}")
-            }
-        } else {
-            debug!("Could not obtain PeerId for {addr:?}, not removing addr from cache.");
-        }
-    }
-
-    pub fn try_remove_oldest_peers(&mut self) {
-        self.data.try_remove_oldest_peers(&self.config);
+    /// Remove a peer from the cache. This does not update the cache on disk.
+    pub fn remove_peer(&mut self, peer_id: &PeerId) {
+        self.data.peers.retain(|(id, _)| id != peer_id);
     }
 
     /// Flush the cache to disk after syncing with the CacheData from the file.
+    /// Do not perform cleanup when `data` is fetched from the network. The SystemTime might not be accurate.
     pub fn sync_and_flush_to_disk(&mut self) -> Result<()> {
         if self.config.disable_cache_writing {
             info!("Cache writing is disabled, skipping sync to disk");
@@ -301,12 +252,14 @@ impl BootstrapCacheStore {
         );
 
         if let Ok(data_from_file) = Self::load_cache_data(&self.config) {
-            self.data.sync(&data_from_file);
+            self.data.sync(
+                &data_from_file,
+                self.config.max_addrs_per_peer,
+                self.config.max_peers,
+            );
         } else {
             warn!("Failed to load cache data from file, overwriting with new data");
         }
-
-        self.data.try_remove_oldest_peers(&self.config);
 
         self.write().inspect_err(|e| {
             error!("Failed to save cache to disk: {e}");

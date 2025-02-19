@@ -54,10 +54,7 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
         // Without limiting the code to 1 address it will fetch peers from the production network.
         let bootstrap_addresses = args.get_bootstrap_addr(None, Some(1)).await?;
         assert_eq!(bootstrap_addresses.len(), 1, "Should have one peer");
-        assert_eq!(
-            bootstrap_addresses[0].addr, addr,
-            "Address format should match"
-        );
+        assert_eq!(bootstrap_addresses[0], addr, "Address format should match");
     }
 
     Ok(())
@@ -98,7 +95,7 @@ async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>
 
     // Verify address formats
     for addr in addrs {
-        let addr_str = addr.addr.to_string();
+        let addr_str = addr.to_string();
         assert!(addr_str.contains("/ip4/"), "Should have IPv4 address");
         assert!(addr_str.contains("/udp/"), "Should have UDP port");
         assert!(addr_str.contains("/quic-v1/"), "Should have QUIC protocol");

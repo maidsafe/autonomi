@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{cache_store::CacheData, craft_valid_multiaddr_from_str, BootstrapAddr, Error, Result};
+use crate::{cache_store::CacheData, craft_valid_multiaddr_from_str, Error, Result};
 use futures::stream::{self, StreamExt};
 use libp2p::Multiaddr;
 use reqwest::Client;
@@ -104,13 +104,8 @@ impl ContactsFetcher {
     }
 
     /// Fetch the list of bootstrap addresses from all configured endpoints
-    pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<BootstrapAddr>> {
-        Ok(self
-            .fetch_addrs()
-            .await?
-            .into_iter()
-            .map(BootstrapAddr::new)
-            .collect())
+    pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<Multiaddr>> {
+        Ok(self.fetch_addrs().await?.into_iter().collect())
     }
 
     /// Fetch the list of multiaddrs from all configured endpoints
@@ -239,26 +234,20 @@ impl ContactsFetcher {
     /// Try to parse a response from an endpoint
     fn try_parse_response(response: &str, ignore_peer_id: bool) -> Result<Vec<Multiaddr>> {
         match serde_json::from_str::<CacheData>(response) {
-            Ok(json_endpoints) => {
+            Ok(cache_data) => {
                 info!(
                     "Successfully parsed JSON response with {} peers",
-                    json_endpoints.peers.len()
+                    cache_data.peers.len()
                 );
                 let our_network_version = crate::get_network_version();
 
-                if json_endpoints.network_version != our_network_version {
+                if cache_data.network_version != our_network_version {
                     warn!(
-                        "Network version mismatch. Expected: {our_network_version}, got: {}. Skipping.", json_endpoints.network_version
+                        "Network version mismatch. Expected: {our_network_version}, got: {}. Skipping.", cache_data.network_version
                     );
                     return Ok(vec![]);
                 }
-                let bootstrap_addresses = json_endpoints
-                    .peers
-                    .into_iter()
-                    .filter_map(|(_, addresses)| {
-                        addresses.get_least_faulty().map(|addr| addr.addr.clone())
-                    })
-                    .collect::<Vec<_>>();
+                let bootstrap_addresses = cache_data.get_all_addrs().cloned().collect::<Vec<_>>();
 
                 info!(
                     "Successfully parsed {} valid peers from JSON",
@@ -270,10 +259,16 @@ impl ContactsFetcher {
                 info!("Attempting to parse response as plain text");
                 // Try parsing as plain text with one multiaddr per line
                 // example of contacts file exists in resources/network-contacts-examples
+
                 let bootstrap_addresses = response
                     .split('\n')
                     .filter_map(|str| craft_valid_multiaddr_from_str(str, ignore_peer_id))
                     .collect::<Vec<_>>();
+
+                if bootstrap_addresses.is_empty() {
+                    warn!("Failed to parse response as plain text");
+                    return Err(Error::FailedToParseCacheData);
+                }
 
                 info!(
                     "Successfully parsed {} valid bootstrap addrs from plain text",
@@ -321,8 +316,8 @@ mod tests {
             "/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
-        assert!(addrs.iter().any(|p| p.addr == addr1));
-        assert!(addrs.iter().any(|p| p.addr == addr2));
+        assert!(addrs.iter().any(|p| p == &addr1));
+        assert!(addrs.iter().any(|p| p == &addr2));
     }
 
     #[tokio::test]
@@ -359,7 +354,7 @@ mod tests {
             "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
-        assert_eq!(addrs[0].addr, addr);
+        assert_eq!(addrs[0], addr);
     }
 
     #[tokio::test]
@@ -384,7 +379,7 @@ mod tests {
             "/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
-        assert_eq!(addrs[0].addr, valid_addr);
+        assert_eq!(addrs[0], valid_addr);
     }
 
     #[tokio::test]
@@ -409,7 +404,7 @@ mod tests {
             "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
-        assert_eq!(addrs[0].addr, addr);
+        assert_eq!(addrs[0], addr);
     }
 
     #[tokio::test]

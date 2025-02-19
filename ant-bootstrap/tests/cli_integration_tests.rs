@@ -37,7 +37,7 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), None).await?;
+    let addrs = args.get_bootstrap_addr(Some(config), None).await?;
 
     assert!(addrs.is_empty(), "First node should have no addrs");
 
@@ -62,7 +62,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(None, Some(1)).await?;
+    let addrs = args.get_bootstrap_addr(None, Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have one addr");
     assert_eq!(addrs[0], peer_addr, "Should have the correct address");
@@ -96,7 +96,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), Some(2)).await?;
+    let addrs = args.get_bootstrap_addr(Some(config), Some(2)).await?;
     assert_eq!(
         addrs.len(),
         2,
@@ -128,7 +128,7 @@ async fn test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), Some(1)).await?;
+    let addrs = args.get_bootstrap_addr(Some(config), Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have exactly one test network peer");
     assert_eq!(

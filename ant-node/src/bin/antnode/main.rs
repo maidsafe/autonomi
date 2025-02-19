@@ -306,7 +306,7 @@ fn main() -> Result<()> {
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
-    let initial_peers = rt.block_on(opt.peers.get_addrs(None, Some(100)))?;
+    let initial_peers = rt.block_on(opt.peers.get_bootstrap_addr(None, Some(100)))?;
     info!("Initial peers len: {:?}", initial_peers.len());
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
