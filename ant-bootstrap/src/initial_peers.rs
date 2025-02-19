@@ -10,7 +10,7 @@ use crate::{
     config::cache_file_name,
     craft_valid_multiaddr, craft_valid_multiaddr_from_str,
     error::{Error, Result},
-    BootstrapAddr, BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
+    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
 };
 use ant_protocol::version::{get_network_id, ALPHANET_ID, MAINNET_ID};
 use clap::Args;
@@ -74,30 +74,12 @@ pub struct InitialPeersConfig {
 }
 
 impl InitialPeersConfig {
-    /// Get bootstrap peers sorted by the failure rate.
-    ///
-    /// The peer with the lowest failure rate will be the first in the list.
-    pub async fn get_addrs(
-        &self,
-        config: Option<BootstrapCacheConfig>,
-        count: Option<usize>,
-    ) -> Result<Vec<Multiaddr>> {
-        Ok(self
-            .get_bootstrap_addr(config, count)
-            .await?
-            .into_iter()
-            .map(|addr| addr.addr)
-            .collect())
-    }
-
-    /// Get bootstrap peers sorted by the failure rate.
-    ///
-    /// The peer with the lowest failure rate will be the first in the list.
+    /// Get bootstrap peers
     pub async fn get_bootstrap_addr(
         &self,
         config: Option<BootstrapCacheConfig>,
         count: Option<usize>,
-    ) -> Result<Vec<BootstrapAddr>> {
+    ) -> Result<Vec<Multiaddr>> {
         // If this is the first node, return an empty list
         if self.first {
             info!("First node in network, no initial bootstrap peers");
@@ -121,7 +103,7 @@ impl InitialPeersConfig {
         for addr in &self.addrs {
             if let Some(addr) = craft_valid_multiaddr(addr, false) {
                 info!("Adding addr from arguments: {addr}");
-                bootstrap_addresses.push(BootstrapAddr::new(addr));
+                bootstrap_addresses.push(addr);
             } else {
                 warn!("Invalid multiaddress format from arguments: {addr}");
             }
@@ -129,7 +111,6 @@ impl InitialPeersConfig {
 
         if let Some(count) = count {
             if bootstrap_addresses.len() >= count {
-                bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                 bootstrap_addresses.truncate(count);
                 info!(
                     "Found {} bootstrap addresses. Returning early.",
@@ -150,19 +131,15 @@ impl InitialPeersConfig {
                 if let Some(file_path) = self.get_bootstrap_cache_path()? {
                     cfg.cache_file_path = file_path;
                 }
-                info!("Loading bootstrap addresses from cache");
+                info!(
+                    "Loading bootstrap addresses from cache at: {:?}",
+                    cfg.cache_file_path
+                );
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
-                    let from_cache = data.peers.into_iter().filter_map(|(_, addrs)| {
-                        addrs
-                            .0
-                            .into_iter()
-                            .min_by_key(|addr| addr.failure_rate() as u64)
-                    });
-                    bootstrap_addresses.extend(from_cache);
+                    bootstrap_addresses.extend(data.get_all_addrs().cloned());
 
                     if let Some(count) = count {
                         if bootstrap_addresses.len() >= count {
-                            bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                             bootstrap_addresses.truncate(count);
                             info!(
                                 "Found {} bootstrap addresses. Returning early.",
@@ -197,7 +174,6 @@ impl InitialPeersConfig {
 
             if let Some(count) = count {
                 if bootstrap_addresses.len() >= count {
-                    bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                     bootstrap_addresses.truncate(count);
                     info!(
                         "Found {} bootstrap addresses. Returning early.",
@@ -227,7 +203,6 @@ impl InitialPeersConfig {
         }
 
         if !bootstrap_addresses.is_empty() {
-            bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
             if let Some(count) = count {
                 bootstrap_addresses.truncate(count);
             }
@@ -242,21 +217,14 @@ impl InitialPeersConfig {
         }
     }
 
-    pub fn read_addr_from_env() -> Vec<Multiaddr> {
-        Self::read_bootstrap_addr_from_env()
-            .into_iter()
-            .map(|addr| addr.addr)
-            .collect()
-    }
-
-    pub fn read_bootstrap_addr_from_env() -> Vec<BootstrapAddr> {
+    pub fn read_bootstrap_addr_from_env() -> Vec<Multiaddr> {
         let mut bootstrap_addresses = Vec::new();
         // Read from ANT_PEERS environment variable if present
         if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
             for addr_str in addrs.split(',') {
                 if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
                     info!("Adding addr from environment variable: {addr}");
-                    bootstrap_addresses.push(BootstrapAddr::new(addr));
+                    bootstrap_addresses.push(addr);
                 } else {
                     warn!("Invalid multiaddress format from environment variable: {addr_str}");
                 }

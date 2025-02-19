@@ -30,9 +30,8 @@ async fn test_cache_store_operations() -> Result<(), Box<dyn std::error::Error>>
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
             .parse()?;
     cache_store.add_addr(addr.clone());
-    cache_store.update_addr_status(&addr, true);
 
-    let addrs = cache_store.get_sorted_addrs().collect::<Vec<_>>();
+    let addrs = cache_store.get_all_addrs().collect::<Vec<_>>();
     assert!(!addrs.is_empty(), "Cache should contain the added peer");
     assert!(
         addrs.contains(&(&addr)),
@@ -69,12 +68,12 @@ async fn test_cache_max_peers() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(addrs.len(), 2, "Cache should respect max_peers limit");
 
     // Get the addresses of the peers we have
-    let peer_addrs: Vec<_> = addrs.iter().map(|p| p.addr.to_string()).collect();
+    let peer_addrs: Vec<_> = addrs.iter().map(|p| p.to_string()).collect();
     tracing::debug!("Final peers: {:?}", peer_addrs);
 
     // We should have the two most recently added peers (addresses[1] and addresses[2])
     for addr in addrs {
-        let addr_str = addr.addr.to_string();
+        let addr_str = addr.to_string();
         assert!(
             addresses[1..].iter().any(|a| a.to_string() == addr_str),
             "Should have one of the two most recent peers, got {addr_str}"

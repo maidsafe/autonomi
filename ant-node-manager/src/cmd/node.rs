@@ -116,7 +116,7 @@ pub async fn add(
 
     init_peers_config
         .addrs
-        .extend(InitialPeersConfig::read_addr_from_env());
+        .extend(InitialPeersConfig::read_bootstrap_addr_from_env());
     init_peers_config.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {

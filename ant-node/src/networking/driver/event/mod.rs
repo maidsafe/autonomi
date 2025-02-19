@@ -205,6 +205,10 @@ impl SwarmDriver {
 
         self.send_event(NetworkEvent::PeerRemoved(removed_peer, self.peers_in_rt));
 
+        if let Some(bootstrap_cache) = &mut self.bootstrap_cache {
+            bootstrap_cache.remove_peer(&removed_peer);
+        }
+
         kbucket_status.log();
 
         #[cfg(feature = "open-metrics")]
