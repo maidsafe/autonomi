@@ -296,4 +296,37 @@ mod test {
         // Our old data structure should be forward compatible with the new one.
         assert!(PublicArchive::from_bytes(Bytes::from(arch_p1_ser)).is_ok());
     }
+
+    #[test]
+    fn test_archive_merge() {
+        let mut arch = PublicArchive::new();
+        let file1 = PathBuf::from_str("file1").unwrap();
+        let file2 = PathBuf::from_str("file2").unwrap();
+        arch.add_file(
+            file1.clone(),
+            DataAddr::random(&mut rand::thread_rng()),
+            Metadata::new_with_size(1),
+        );
+        let mut other_arch = PublicArchive::new();
+        other_arch.add_file(
+            file2.clone(),
+            DataAddr::random(&mut rand::thread_rng()),
+            Metadata::new_with_size(2),
+        );
+        arch.merge(&other_arch);
+        assert_eq!(arch.map().len(), 2);
+        assert_eq!(arch.map().get(&file1).unwrap().1.size, 1);
+        assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+
+        let mut arch_with_duplicate = PublicArchive::new();
+        arch_with_duplicate.add_file(
+            file1.clone(),
+            DataAddr::random(&mut rand::thread_rng()),
+            Metadata::new_with_size(5),
+        );
+        arch.merge(&arch_with_duplicate);
+        assert_eq!(arch.map().len(), 2);
+        assert_eq!(arch.map().get(&file1).unwrap().1.size, 5);
+        assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+    }
 }

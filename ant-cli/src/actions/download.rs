@@ -42,6 +42,7 @@ pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<()
     Err(eyre!("Failed to parse data address {addr}"))
             .with_suggestion(|| "Public addresses look like this: 0037cfa13eae4393841cbc00c3a33cade0f98b8c1f20826e5c51f8269e7b09d7")
             .with_suggestion(|| "Private addresses look like this: 1358645341480028172")
+            .with_suggestion(|| "You can also use a hex encoded DataMap directly here")
             .with_suggestion(|| "Try the `file list` command to get addresses you have access to")
 }
 
@@ -100,7 +101,7 @@ async fn download_public(
     let archive = match client.archive_get_public(&address).await {
         Ok(archive) => archive,
         Err(GetError::Deserialization(_)) => {
-            info!("Failed to deserialize Public Archive from address, trying to fetch data assuming it is a single file instead");
+            info!("Failed to deserialize Public Archive from address {addr}, trying to fetch data assuming it is a single file instead");
             return download_public_single_file(addr, address, dest_path, client)
                 .await
                 .wrap_err("Failed to fetch public file from address");

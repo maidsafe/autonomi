@@ -169,3 +169,42 @@ impl Client {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_private_archive_merge() {
+        let mut arch = PrivateArchive::new();
+        let file1 = PathBuf::from_str("file1").unwrap();
+        let file2 = PathBuf::from_str("file2").unwrap();
+        arch.add_file(
+            file1.clone(),
+            DataMapChunk::from_hex("1111").unwrap(),
+            Metadata::new_with_size(1),
+        );
+        let mut other_arch = PrivateArchive::new();
+        other_arch.add_file(
+            file2.clone(),
+            DataMapChunk::from_hex("AAAA").unwrap(),
+            Metadata::new_with_size(2),
+        );
+        arch.merge(&other_arch);
+        assert_eq!(arch.map().len(), 2);
+        assert_eq!(arch.map().get(&file1).unwrap().1.size, 1);
+        assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+
+        let mut arch_with_duplicate = PrivateArchive::new();
+        arch_with_duplicate.add_file(
+            file1.clone(),
+            DataMapChunk::from_hex("BBBB").unwrap(),
+            Metadata::new_with_size(5),
+        );
+        arch.merge(&arch_with_duplicate);
+        assert_eq!(arch.map().len(), 2);
+        assert_eq!(arch.map().get(&file1).unwrap().1.size, 5);
+        assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+    }
+}
