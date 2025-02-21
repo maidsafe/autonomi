@@ -30,27 +30,27 @@ python python/examples/autonomi_pointers.py
 ```
 
 ```python
-from autonomi_client import Client, Wallet, PaymentOption
+from autonomi_client import *Client, Wallet, PaymentOption*
 
-# Initialize wallet with private key
-wallet = Wallet("your_private_key_here")
+# Initialize a wallet with a private key
+wallet = Wallet.new_from_private_key(Network(True), "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
 print(f"Wallet address: {wallet.address()}")
-print(f"Balance: {wallet.balance()}")
+print(f"Wallet balance: {await wallet.balance()}")
 
-# Connect to network
-client = Client.connect(["/ip4/127.0.0.1/tcp/12000"])
+# Connect to the network
+client = await Client.init()
 
-# Create payment option
+# Create payment option using the wallet
 payment = PaymentOption.wallet(wallet)
 
-# Upload data
+# Upload some data
 data = b"Hello, Safe Network!"
-addr = client.data_put_public(data, payment)
-print(f"Data uploaded to: {addr}")
+[cost, addr] = await client.data_put_public(data, payment)
+print(f"Data uploaded to address: {addr}")
 
-# Download data
-retrieved = client.data_get_public(addr)
-print(f"Retrieved: {retrieved.decode()}")
+# Download the data back
+downloaded = await client.data_get_public(addr)
+print(f"Downloaded data: {downloaded.decode()}")
 ```
 
 ## API Reference
