@@ -1,16 +1,16 @@
-from autonomi_client import Client, Wallet, PaymentOption
+from autonomi_client import Client, Network, Wallet, PaymentOption
 import asyncio
 
 async def main():
+    # Connect to the network
+    client = await Client.init_local()
+
     # Initialize a wallet with a private key
     # This should be a valid Ethereum private key (64 hex chars without '0x' prefix)
     private_key = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
     wallet = Wallet(private_key)
     print(f"Wallet address: {wallet.address()}")
     print(f"Wallet balance: {wallet.balance()}")
-
-    # Connect to the network
-    client = await Client.init()
 
     # Create payment option using the wallet
     payment = PaymentOption.wallet(wallet)

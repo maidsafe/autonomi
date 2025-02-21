@@ -227,14 +227,16 @@ impl PyClient {
     }
 
     /// Get Scratchpad from the Network using the scratpad address in hex string format.
-    fn scratchpad_get<'a>(&self, py: Python<'a>, addr: String) -> PyResult<Bound<'a, PyAny>> {
+    fn scratchpad_get<'a>(
+        &self,
+        py: Python<'a>,
+        addr: PyScratchpadAddress,
+    ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let addr = ScratchpadAddress::from_hex(&addr)
-            .map_err(|e| PyValueError::new_err(format!("Failed to parse address: {e}")))?;
 
         future_into_py(py, async move {
             let scratchpad = client
-                .scratchpad_get(&addr)
+                .scratchpad_get(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
 
@@ -246,15 +248,13 @@ impl PyClient {
     fn scratchpad_check_existance<'a>(
         &self,
         py: Python<'a>,
-        addr: String,
+        addr: PyScratchpadAddress,
     ) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
-        let addr = ScratchpadAddress::from_hex(&addr)
-            .map_err(|e| PyValueError::new_err(format!("Failed to parse address: {e}")))?;
 
         future_into_py(py, async move {
             let exists = client
-                .scratchpad_check_existance(&addr)
+                .scratchpad_check_existance(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
 
@@ -278,7 +278,7 @@ impl PyClient {
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to put scratchpad: {e}")))?;
 
-            Ok((cost.to_string(), addr.to_hex()))
+            Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
     }
 
@@ -1806,17 +1806,82 @@ impl PyPrivateArchive {
 /// The protocol only ensures that the graph entry is immutable once uploaded and that the signature is valid and matches the owner.
 ///
 /// For convenience it is advised to make use of BLS key derivation to create multiple graph entries from a single key.
-#[pyclass(name = "GraphEntry")]
-#[derive(Debug, Clone)]
+#[pyclass(name = "GraphEntry", eq, ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PyGraphEntry {
     inner: GraphEntry,
 }
 
+#[pymethods]
+impl PyGraphEntry {
+    /// Create a new graph entry, signing it with the provided secret key.
+    #[new]
+    fn new(
+        owner: PySecretKey,
+        parents: Vec<PyPublicKey>,
+        content: [u8; 32],
+        descendants: Vec<(PyPublicKey, [u8; 32])>,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            inner: GraphEntry::new(
+                &owner.inner,
+                parents.into_iter().map(|p| p.inner).collect(),
+                content,
+                descendants.into_iter().map(|p| (p.0.inner, p.1)).collect(),
+            ),
+        })
+    }
+
+    /// Returns the network address where this entry is stored.
+    pub fn address(&self) -> PyGraphEntryAddress {
+        PyGraphEntryAddress {
+            inner: self.inner.address(),
+        }
+    }
+}
+
 /// Scratchpad, a mutable space for encrypted data on the Network
-#[pyclass(name = "Scratchpad")]
-#[derive(Debug, Clone)]
+#[pyclass(name = "Scratchpad", eq, ord)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct PyScratchpad {
     inner: Scratchpad,
+}
+
+#[pymethods]
+impl PyScratchpad {
+    /// Creates a new instance of Scratchpad. Encrypts the data, and signs all the elements.
+    #[new]
+    fn new(
+        owner: PySecretKey,
+        data_encoding: u64,
+        unencrypted_data: Vec<u8>,
+        counter: u64,
+    ) -> PyResult<Self> {
+        Ok(Self {
+            inner: Scratchpad::new(
+                &owner.inner,
+                data_encoding,
+                &Bytes::from(unencrypted_data),
+                counter,
+            ),
+        })
+    }
+
+    /// Returns the address of the scratchpad.
+    pub fn address(&self) -> PyScratchpadAddress {
+        PyScratchpadAddress {
+            inner: *self.inner.address(),
+        }
+    }
+
+    /// Returns the encrypted_data, decrypted via the passed SecretKey
+    pub fn decrypt_data(&self, sk: PySecretKey) -> PyResult<Vec<u8>> {
+        let data = self
+            .inner
+            .decrypt_data(&sk.inner)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(data.to_vec())
+    }
 }
 
 /// A handle to the register history
@@ -1874,7 +1939,7 @@ pub struct PyClientConfig {
 
 #[pymethods]
 impl PyClientConfig {
-    #[staticmethod]
+    #[new]
     fn new() -> Self {
         Self {
             inner: ClientConfig::default(),
