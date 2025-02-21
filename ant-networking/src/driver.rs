@@ -82,6 +82,10 @@ pub(crate) const RELAY_MANAGER_RESERVATION_INTERVAL: Duration = Duration::from_s
 
 const KAD_STREAM_PROTOCOL_ID: StreamProtocol = StreamProtocol::new("/autonomi/kad/1.0.0");
 
+/// The maximum percentage of the cpu usage that the process is allowed to use before new inbound and
+/// outbound connections are denied.
+const MAX_CPU_USE_PERCENT_BEFORE_DENY: f32 = 50.0;
+
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
     /// The network discovery method is present at the networking layer
@@ -148,6 +152,7 @@ impl From<std::convert::Infallible> for NodeEvent {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "NodeEvent")]
 pub(super) struct NodeBehaviour {
+    pub(super) cpu_connection_limits: crate::connection_limits::Behaviour,
     pub(super) blocklist:
         libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
     pub(super) identify: libp2p::identify::Behaviour,
@@ -539,7 +544,12 @@ impl NetworkBuilder {
             libp2p::relay::Behaviour::new(peer_id, relay_server_cfg)
         };
 
+        let cpu_connection_limits = crate::connection_limits::Behaviour::with_max_percentage(
+            MAX_CPU_USE_PERCENT_BEFORE_DENY,
+        );
+
         let behaviour = NodeBehaviour {
+            cpu_connection_limits,
             blocklist: libp2p::allow_block_list::Behaviour::default(),
             relay_client: relay_behaviour,
             relay_server,

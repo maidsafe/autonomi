@@ -13,6 +13,7 @@ mod bootstrap;
 mod circular_vec;
 mod cmd;
 mod config;
+mod connection_limits;
 mod driver;
 mod error;
 mod event;
