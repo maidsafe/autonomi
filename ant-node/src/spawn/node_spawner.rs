@@ -152,17 +152,14 @@ async fn spawn_node(
 
     let mut node_builder = NodeBuilder::new(
         keypair,
+        initial_peers,
         rewards_address,
         evm_network,
         socket_addr,
-        local,
         root_dir,
-        upnp,
     );
-
-    if !initial_peers.is_empty() {
-        node_builder.initial_peers(initial_peers);
-    }
+    node_builder.local(local);
+    node_builder.upnp(upnp);
 
     let running_node = node_builder.build_and_run()?;
 

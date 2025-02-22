@@ -199,29 +199,19 @@ impl Client {
     /// # }
     /// ```
     pub async fn init_with_config(config: ClientConfig) -> Result<Self, ConnectError> {
-        let (shutdown_tx, network, event_receiver) = build_client_and_run_swarm(config.local);
-
         let peers_args = PeersArgs {
             disable_mainnet_contacts: config.local,
             addrs: config.peers.unwrap_or_default(),
             local: config.local,
             ..Default::default()
         };
-
-        let peers = match peers_args.get_addrs(None, None).await {
+        let initial_peers = match peers_args.get_addrs(None, None).await {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };
 
-        let network_clone = network.clone();
-        let peers = peers.to_vec();
-        let _handle = ant_networking::time::spawn(async move {
-            for addr in peers {
-                if let Err(err) = network_clone.dial(addr.clone()).await {
-                    error!("Failed to dial addr={addr} with err: {err:?}");
-                };
-            }
-        });
+        let (shutdown_tx, network, event_receiver) =
+            build_client_and_run_swarm(config.local, initial_peers);
 
         // Wait until we have added a few peers to our routing table.
         let (sender, receiver) = futures::channel::oneshot::channel();
@@ -259,8 +249,10 @@ impl Client {
 
 fn build_client_and_run_swarm(
     local: bool,
+    initial_peers: Vec<Multiaddr>,
 ) -> (watch::Sender<bool>, Network, mpsc::Receiver<NetworkEvent>) {
-    let mut network_builder = NetworkBuilder::new(Keypair::generate_ed25519(), local);
+    let mut network_builder =
+        NetworkBuilder::new(Keypair::generate_ed25519(), local, initial_peers);
 
     if let Ok(mut config) = BootstrapCacheConfig::default_config(local) {
         if local {

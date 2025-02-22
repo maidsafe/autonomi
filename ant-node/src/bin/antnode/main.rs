@@ -312,14 +312,14 @@ fn main() -> Result<()> {
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,
+            initial_peers,
             rewards_address,
             evm_network,
             node_socket_addr,
-            opt.peers.local,
             root_dir,
-            opt.upnp,
         );
-        node_builder.initial_peers(initial_peers);
+        node_builder.local(opt.peers.local);
+        node_builder.upnp(opt.upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
         node_builder.is_behind_home_network(opt.home_network);
         #[cfg(feature = "open-metrics")]

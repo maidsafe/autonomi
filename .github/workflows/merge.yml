@@ -152,13 +152,17 @@ jobs:
         timeout-minutes: 5
         run: cargo test --release --package ant-networking --features="open-metrics" can_store_after_restart
 
-      - name: Run network tests
-        timeout-minutes: 25
-        run: cargo test --release --package ant-networking --features="open-metrics" -- --skip can_store_after_restart
+      # Same set of tests shall be executed with `encrypt-records` flag enabled.
+      # With now changed to `always carry out encryption`, no need to re-run the same set again.
+      # Re-enable the following block once default behaviour changed.
+      #
+      # - name: Run network tests
+      #   timeout-minutes: 25
+      #   run: cargo test --release --package ant-networking --features="open-metrics, encrypt-records" -- --skip can_store_after_restart
 
-      - name: Run network tests
-        timeout-minutes: 5
-        run: cargo test --release --package ant-networking --features="open-metrics" can_store_after_restart
+      # - name: Run network tests
+      #   timeout-minutes: 5
+      #   run: cargo test --release --package ant-networking --features="open-metrics, encrypt-records" can_store_after_restart
 
       - name: Run protocol tests
         timeout-minutes: 25

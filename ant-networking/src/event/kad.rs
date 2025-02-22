@@ -249,7 +249,7 @@ impl SwarmDriver {
                     self.update_on_peer_addition(peer, addresses);
 
                     // This should only happen once
-                    if self.bootstrap.notify_new_peer() {
+                    if self.network_discovery.notify_new_peer() {
                         info!("Performing the first bootstrap");
                         self.trigger_network_discovery();
                     }

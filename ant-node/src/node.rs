@@ -101,27 +101,31 @@ impl NodeBuilder {
     /// or fetched from the bootstrap cache set using `bootstrap_cache` method.
     pub fn new(
         identity_keypair: Keypair,
+        initial_peers: Vec<Multiaddr>,
         evm_address: RewardsAddress,
         evm_network: EvmNetwork,
         addr: SocketAddr,
-        local: bool,
         root_dir: PathBuf,
-        upnp: bool,
     ) -> Self {
         Self {
             bootstrap_cache: None,
-            initial_peers: vec![],
+            initial_peers,
             identity_keypair,
             evm_address,
             evm_network,
             addr,
-            local,
+            local: false,
             root_dir,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
             is_behind_home_network: false,
-            upnp,
+            upnp: false,
         }
+    }
+
+    /// Set the flag to indicate if the node is running in local mode
+    pub fn local(&mut self, local: bool) {
+        self.local = local;
     }
 
     #[cfg(feature = "open-metrics")]
@@ -135,14 +139,14 @@ impl NodeBuilder {
         self.bootstrap_cache = Some(cache);
     }
 
-    /// Set the initial peers to dial at startup.
-    pub fn initial_peers(&mut self, peers: Vec<Multiaddr>) {
-        self.initial_peers = peers;
-    }
-
     /// Set the flag to indicate if the node is behind a home network
     pub fn is_behind_home_network(&mut self, is_behind_home_network: bool) {
         self.is_behind_home_network = is_behind_home_network;
+    }
+
+    /// Set the flag to enable UPnP for the node
+    pub fn upnp(&mut self, upnp: bool) {
+        self.upnp = upnp;
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,
@@ -158,7 +162,8 @@ impl NodeBuilder {
     ///
     /// Returns an error if there is a problem initializing the `SwarmDriver`.
     pub fn build_and_run(self) -> Result<RunningNode> {
-        let mut network_builder = NetworkBuilder::new(self.identity_keypair, self.local);
+        let mut network_builder =
+            NetworkBuilder::new(self.identity_keypair, self.local, self.initial_peers);
 
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if self.metrics_server_port.is_some() {
@@ -191,7 +196,6 @@ impl NodeBuilder {
         let node = NodeInner {
             network: network.clone(),
             events_channel: node_events_channel.clone(),
-            initial_peers: self.initial_peers,
             reward_address: self.evm_address,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
@@ -232,8 +236,6 @@ pub(crate) struct Node {
 /// the Arc from the interface.
 struct NodeInner {
     events_channel: NodeEventsChannel,
-    // Peers that are dialed at startup of node.
-    initial_peers: Vec<Multiaddr>,
     network: Network,
     #[cfg(feature = "open-metrics")]
     metrics_recorder: Option<NodeMetricsRecorder>,
@@ -245,11 +247,6 @@ impl Node {
     /// Returns the NodeEventsChannel
     pub(crate) fn events_channel(&self) -> &NodeEventsChannel {
         &self.inner.events_channel
-    }
-
-    /// Returns the initial peers that the node will dial at startup
-    pub(crate) fn initial_peers(&self) -> &Vec<Multiaddr> {
-        &self.inner.initial_peers
     }
 
     /// Returns the instance of Network
@@ -471,15 +468,6 @@ impl Node {
             }
             NetworkEvent::NewListenAddr(_) => {
                 event_header = "NewListenAddr";
-                let network = self.network().clone();
-                let peers = self.initial_peers().clone();
-                let _handle = spawn(async move {
-                    for addr in peers {
-                        if let Err(err) = network.dial(addr.clone()).await {
-                            tracing::error!("Failed to dial {addr}: {err:?}");
-                        };
-                    }
-                });
             }
             NetworkEvent::ResponseReceived { res } => {
                 event_header = "ResponseReceived";

@@ -6,183 +6,247 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{driver::PendingGetClosestType, SwarmDriver};
-use libp2p::kad::K_VALUE;
-use rand::{rngs::OsRng, Rng};
-use tokio::time::Duration;
+use crate::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
+use libp2p::{
+    core::ConnectedPoint,
+    swarm::{
+        dial_opts::{DialOpts, PeerCondition},
+        DialError,
+    },
+    Multiaddr, PeerId, Swarm,
+};
+use rand::seq::SliceRandom;
+use std::collections::{HashSet, VecDeque};
 
-use crate::time::{interval, Instant, Interval};
+/// The max number of concurrent dials to be made during the initial bootstrap process.
+const CONCURRENT_DIALS: usize = 3;
 
-/// The default interval at which NetworkDiscovery is triggered.
-/// The interval is increased as more peers are added to the routing table.
-pub(crate) const NETWORK_DISCOVER_INTERVAL: Duration = Duration::from_secs(10);
+/// The max number of peers to be added to the routing table before stopping the initial bootstrap process.
+const MAX_PEERS_BEFORE_TERMINATION: usize = 5;
 
-/// Every NETWORK_DISCOVER_CONNECTED_PEERS_STEP connected peer,
-/// we step up the NETWORK_DISCOVER_INTERVAL to slow down process.
-const NETWORK_DISCOVER_CONNECTED_PEERS_STEP: u32 = 5;
-
-/// Slow down the process if the previously added peer has been before LAST_PEER_ADDED_TIME_LIMIT.
-/// This is to make sure we don't flood the network with `FindNode` msgs.
-const LAST_PEER_ADDED_TIME_LIMIT: Duration = Duration::from_secs(180);
-
-/// A minimum interval to prevent network discovery got triggered too often
-const LAST_NETWORK_DISCOVER_TRIGGERED_TIME_LIMIT: Duration = Duration::from_secs(90);
-
-/// The network discovery interval to use if we haven't added any new peers in a while.
-const NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S: u64 = 600;
-
-impl SwarmDriver {
-    /// This functions triggers network discovery based on when the last peer was added to the RT
-    /// and the number of peers in RT. The function also returns a new interval that is proportional
-    /// to the number of peers in RT, so more peers in RT, the longer the interval.
-    pub(crate) async fn run_network_discover_continuously(
-        &mut self,
-        current_interval: Duration,
-    ) -> Option<Interval> {
-        let (should_discover, new_interval) = self
-            .bootstrap
-            .should_we_discover(self.peers_in_rt as u32, current_interval)
-            .await;
-        if should_discover {
-            self.trigger_network_discovery();
-        }
-        new_interval
-    }
-
-    pub(crate) fn trigger_network_discovery(&mut self) {
-        let now = Instant::now();
-
-        // Find the farthest bucket that is not full. This is used to skip refreshing the RT of farthest full buckets.
-        let mut first_filled_bucket = 0;
-        // unfilled kbuckets will not be returned, hence the value shall be:
-        //   * first_filled_kbucket.ilog2() - 1
-        for kbucket in self.swarm.behaviour_mut().kademlia.kbuckets() {
-            let Some(ilog2) = kbucket.range().0.ilog2() else {
-                continue;
-            };
-            if kbucket.num_entries() >= K_VALUE.get() {
-                first_filled_bucket = ilog2;
-                break;
-            }
-        }
-        let farthest_unfilled_bucket = if first_filled_bucket == 0 {
-            None
-        } else {
-            Some(first_filled_bucket - 1)
-        };
-
-        let addrs = self.network_discovery.candidates(farthest_unfilled_bucket);
-        info!(
-            "Triggering network discovery with {} candidates. Farthest non full bucket: {farthest_unfilled_bucket:?}",
-            addrs.len()
-        );
-        // Fetches the candidates and also generates new candidates
-        for addr in addrs {
-            // The query_id is tracked here. This is to update the candidate list of network_discovery with the newly
-            // found closest peers. It may fill up the candidate list of closer buckets which are harder to generate.
-            let query_id = self
-                .swarm
-                .behaviour_mut()
-                .kademlia
-                .get_closest_peers(addr.as_bytes());
-            let _ = self.pending_get_closest_peers.insert(
-                query_id,
-                (PendingGetClosestType::NetworkDiscovery, Default::default()),
-            );
-        }
-
-        self.bootstrap.initiated();
-        debug!("Trigger network discovery took {:?}", now.elapsed());
-    }
+pub(crate) struct InitialBootstrap {
+    initial_addrs: VecDeque<Multiaddr>,
+    ongoing_dials: HashSet<Multiaddr>,
+    bootstrap_completed: bool,
+    /// This tracker is used by other components to avoid overloading the initial peers.
+    initial_bootstrap_peer_ids: HashSet<PeerId>,
 }
 
-/// Tracks and helps with the continuous kad::bootstrapping process
-pub(crate) struct ContinuousNetworkDiscover {
-    initial_bootstrap_done: bool,
-    last_peer_added_instant: Instant,
-    last_network_discover_triggered: Option<Instant>,
-}
-
-impl ContinuousNetworkDiscover {
-    pub(crate) fn new() -> Self {
-        Self {
-            initial_bootstrap_done: false,
-            last_peer_added_instant: Instant::now(),
-            last_network_discover_triggered: None,
-        }
-    }
-
-    /// The Kademlia Bootstrap request has been sent successfully.
-    pub(crate) fn initiated(&mut self) {
-        self.last_network_discover_triggered = Some(Instant::now());
-    }
-
-    /// Notify about a newly added peer to the RT. This will help with slowing down the process.
-    /// Returns `true` if we have to perform the initial bootstrapping.
-    pub(crate) fn notify_new_peer(&mut self) -> bool {
-        self.last_peer_added_instant = Instant::now();
-        // true to kick off the initial bootstrapping.
-        // `run_network_discover_continuously` might kick of so soon that we might
-        // not have a single peer in the RT and we'd not perform any network discovery for a while.
-        if !self.initial_bootstrap_done {
-            self.initial_bootstrap_done = true;
+impl InitialBootstrap {
+    pub(crate) fn new(mut initial_addrs: Vec<Multiaddr>) -> Self {
+        let bootstrap_completed = if initial_addrs.is_empty() {
+            info!("No initial addresses provided for bootstrap. Initial bootstrap process will not be triggered.");
             true
         } else {
+            let mut rng = rand::thread_rng();
+            initial_addrs.shuffle(&mut rng);
             false
+        };
+
+        let initial_bootstrap_peer_ids =
+            initial_addrs.iter().filter_map(multiaddr_get_p2p).collect();
+
+        Self {
+            initial_addrs: initial_addrs.into(),
+            ongoing_dials: Default::default(),
+            bootstrap_completed,
+            initial_bootstrap_peer_ids,
         }
     }
 
-    /// Returns `true` if we should carry out the Kademlia Bootstrap process immediately.
-    /// Also optionally returns the new interval for network discovery.
-    pub(crate) async fn should_we_discover(
-        &self,
-        peers_in_rt: u32,
-        current_interval: Duration,
-    ) -> (bool, Option<Interval>) {
-        let is_ongoing = if let Some(last_network_discover_triggered) =
-            self.last_network_discover_triggered
-        {
-            last_network_discover_triggered.elapsed() < LAST_NETWORK_DISCOVER_TRIGGERED_TIME_LIMIT
-        } else {
-            false
-        };
-        let should_network_discover = !is_ongoing && peers_in_rt >= 1;
+    /// Returns true if the peer is one of the initial bootstrap peers.
+    pub(crate) fn is_bootstrap_peer(&self, peer_id: &PeerId) -> bool {
+        self.initial_bootstrap_peer_ids.contains(peer_id)
+    }
 
-        // if it has been a while (LAST_PEER_ADDED_TIME_LIMIT) since we have added a new peer,
-        // slowdown the network discovery process.
-        // Don't slow down if we haven't even added one peer to our RT.
-        if self.last_peer_added_instant.elapsed() > LAST_PEER_ADDED_TIME_LIMIT && peers_in_rt != 0 {
-            // To avoid a heart beat like cpu usage due to the 1K candidates generation,
-            // randomize the interval within certain range
-            let no_peer_added_slowdown_interval: u64 = OsRng.gen_range(
-                NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S / 2..NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S,
-            );
-            let no_peer_added_slowdown_interval_duration =
-                Duration::from_secs(no_peer_added_slowdown_interval);
-            info!(
-                    "It has been {LAST_PEER_ADDED_TIME_LIMIT:?} since we last added a peer to RT. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {no_peer_added_slowdown_interval_duration:?}"
-                );
+    pub(crate) fn has_terminated(&self) -> bool {
+        self.bootstrap_completed
+    }
 
-            let mut new_interval = interval(no_peer_added_slowdown_interval_duration);
-            new_interval.tick().await;
-
-            return (should_network_discover, Some(new_interval));
+    /// Trigger the initial bootstrap process.
+    ///
+    /// This will start dialing CONCURRENT_DIALS peers at a time from the initial addresses. If we have a successful
+    /// dial and if a few peer are added to the routing table, we stop the initial bootstrap process.
+    pub(crate) fn trigger_initial_bootstrap(
+        &mut self,
+        swarm: &mut Swarm<NodeBehaviour>,
+        peers_in_rt: usize,
+    ) {
+        if !self.trigger_condition(peers_in_rt, true) {
+            return;
         }
 
-        // increment network_discover_interval in steps of NETWORK_DISCOVER_INTERVAL every NETWORK_DISCOVER_CONNECTED_PEERS_STEP
-        let step = peers_in_rt / NETWORK_DISCOVER_CONNECTED_PEERS_STEP;
-        let step = std::cmp::max(1, step);
-        let new_interval = NETWORK_DISCOVER_INTERVAL * step;
-        let new_interval = if new_interval > current_interval {
-            info!("More peers have been added to our RT!. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {new_interval:?}");
+        while self.ongoing_dials.len() < CONCURRENT_DIALS && !self.initial_addrs.is_empty() {
+            let Some(mut addr) = self.initial_addrs.pop_front() else {
+                continue;
+            };
 
-            let mut interval = interval(new_interval);
-            interval.tick().await;
+            let addr_clone = addr.clone();
+            let peer_id = multiaddr_pop_p2p(&mut addr);
 
-            Some(interval)
-        } else {
-            None
-        };
-        (should_network_discover, new_interval)
+            let opts = match peer_id {
+                Some(peer_id) => DialOpts::peer_id(peer_id)
+                    // If we have a peer ID, we can prevent simultaneous dials.
+                    .condition(PeerCondition::NotDialing)
+                    .addresses(vec![addr])
+                    .build(),
+                None => DialOpts::unknown_peer_id().address(addr).build(),
+            };
+
+            info!("Trying to dial peer with address: {addr_clone}",);
+
+            match swarm.dial(opts) {
+                Ok(()) => {
+                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.ongoing_dials.len()+1);
+                    self.ongoing_dials.insert(addr_clone);
+                }
+                Err(err) => match err {
+                    DialError::LocalPeerId { .. } => {
+                        warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
+                    }
+                    DialError::NoAddresses => {
+                        error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
+                    }
+                    DialError::DialPeerConditionFalse(_) => {
+                        warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
+                    }
+                    DialError::Aborted => {
+                        error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
+                    }
+                    DialError::WrongPeerId { obtained, .. } => {
+                        error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
+                    }
+                    DialError::Denied { cause } => {
+                        error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
+                    }
+                    DialError::Transport(items) => {
+                        error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
+                    }
+                },
+            }
+        }
+    }
+
+    /// Check if the initial bootstrap process should be triggered.
+    /// Also update bootstrap_completed flag if the process is completed.
+    fn trigger_condition(&mut self, peers_in_rt: usize, verbose: bool) -> bool {
+        if self.bootstrap_completed {
+            if verbose {
+                info!("Initial bootstrap process has already completed successfully.");
+            } else {
+                trace!("Initial bootstrap process has already completed successfully.");
+            }
+            return false;
+        }
+
+        if peers_in_rt >= MAX_PEERS_BEFORE_TERMINATION {
+            // This will terminate the loop
+            self.bootstrap_completed = true;
+            self.initial_addrs.clear();
+            self.ongoing_dials.clear();
+
+            if verbose {
+                info!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+            } else {
+                trace!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+            }
+            return false;
+        }
+
+        if self.ongoing_dials.len() >= CONCURRENT_DIALS {
+            if verbose {
+                info!(
+                    "Initial bootstrap has {} ongoing dials. Not dialing anymore.",
+                    self.ongoing_dials.len()
+                );
+            } else {
+                debug!(
+                    "Initial bootstrap has {} ongoing dials. Not dialing anymore.",
+                    self.ongoing_dials.len()
+                );
+            }
+            return false;
+        }
+
+        if peers_in_rt < MAX_PEERS_BEFORE_TERMINATION && self.initial_addrs.is_empty() {
+            if verbose {
+                info!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+            } else {
+                debug!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+            }
+            return false;
+        }
+
+        if self.initial_addrs.is_empty() {
+            if verbose {
+                warn!("Initial bootstrap has no more addresses to dial.");
+            } else {
+                debug!("Initial bootstrap has no more addresses to dial.");
+            }
+            return false;
+        }
+
+        true
+    }
+
+    pub(crate) fn on_connection_established(
+        &mut self,
+        endpoint: &ConnectedPoint,
+        swarm: &mut Swarm<NodeBehaviour>,
+        peers_in_rt: usize,
+    ) {
+        if self.bootstrap_completed {
+            return;
+        }
+
+        if let ConnectedPoint::Dialer { address, .. } = endpoint {
+            if !self.ongoing_dials.remove(address) {
+                // try to remove via peer Id, to not block the bootstrap process.
+                // The only concern with the following removal is that we might increase the number of
+                // dials/concurrent dials, which is fine.
+                if let Some(peer_id) = multiaddr_get_p2p(address) {
+                    self.ongoing_dials.retain(|addr| {
+                        if let Some(id) = multiaddr_get_p2p(addr) {
+                            id != peer_id
+                        } else {
+                            true
+                        }
+                    });
+                }
+            }
+        }
+
+        self.trigger_initial_bootstrap(swarm, peers_in_rt);
+    }
+
+    pub(crate) fn on_outgoing_connection_error(
+        &mut self,
+        peer_id: Option<PeerId>,
+        swarm: &mut Swarm<NodeBehaviour>,
+        peers_in_rt: usize,
+    ) {
+        if self.bootstrap_completed {
+            return;
+        }
+
+        match peer_id {
+            Some(peer_id) => {
+                self.ongoing_dials.retain(|addr| {
+                    if let Some(id) = multiaddr_get_p2p(addr) {
+                        id != peer_id
+                    } else {
+                        true
+                    }
+                });
+            }
+            // we are left with no option but to remove all the addresses from the ongoing dials that
+            // do not have a peer ID.
+            None => {
+                self.ongoing_dials
+                    .retain(|addr| multiaddr_get_p2p(addr).is_some());
+            }
+        }
+
+        self.trigger_initial_bootstrap(swarm, peers_in_rt);
     }
 }
