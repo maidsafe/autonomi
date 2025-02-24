@@ -8,20 +8,22 @@
 
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
-use autonomi::{client::chunk::Chunk, Bytes, Client};
+use autonomi::{client::chunk::Chunk, Client};
 use eyre::Result;
 use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::{evm::get_funded_wallet, gen_random_data};
 
-#[tokio::test]
-#[serial]
-async fn chunk_put_manual() -> Result<()> {
+async fn chunk_put_with_size(size: usize) -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("chunk", false);
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
+    let data = gen_random_data(size);
+    let data_len = data.len();
 
-    let chunk = Chunk::new(Bytes::from("Hello, world!"));
+    // create a chunk of X bytes
+    let chunk = Chunk::new(data);
+    println!("chunk size: {data_len} bytes");
 
     // estimate the cost of the chunk
     let cost = client.chunk_cost(chunk.address()).await?;
@@ -42,4 +44,42 @@ async fn chunk_put_manual() -> Result<()> {
     println!("chunk got 1");
 
     Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn chunk_put_empty() -> Result<()> {
+    chunk_put_with_size(0).await
+}
+
+#[tokio::test]
+#[serial]
+async fn chunk_put_1mb() -> Result<()> {
+    chunk_put_with_size(1024 * 1024).await // 1MB
+}
+
+#[tokio::test]
+#[serial]
+async fn chunk_put_max_size() -> Result<()> {
+    chunk_put_with_size(Chunk::MAX_SIZE).await // 4MB
+}
+
+#[tokio::test]
+#[serial]
+async fn chunk_put_oversize() -> Result<()> {
+    let result = chunk_put_with_size(Chunk::MAX_SIZE + 1).await; // 4MB + 1 byte
+
+    // Verify we get the expected error
+    match result {
+        Err(err) => {
+            assert!(
+                err.to_string().contains("Chunk is too large"),
+                "Expected 'Chunk is too large' error, got: {err}"
+            );
+            Ok(())
+        }
+        Ok(_) => {
+            panic!("Expected error for oversized chunk, but operation succeeded");
+        }
+    }
 }
