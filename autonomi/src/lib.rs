@@ -80,8 +80,9 @@ pub use ant_evm::QuoteHash;
 pub use ant_evm::RewardsAddress;
 pub use ant_evm::{Amount, AttoTokens};
 
-// Re-exports of the ant-protocol address parsing error
+// Re-exports of address related types
 pub use ant_protocol::storage::AddressParseError;
+pub use xor_name::XorName;
 
 // Re-exports of the bls types
 pub use bls::{PublicKey, SecretKey, Signature};

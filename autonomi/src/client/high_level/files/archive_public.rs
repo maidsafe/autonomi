@@ -98,7 +98,7 @@ impl PublicArchive {
     }
 
     /// Iterate over the archive items
-    /// Returns an iterator over (PathBuf, DataAddr, Metadata)
+    /// Returns an iterator over ([`PathBuf`], [`DataAddress`], [`Metadata`])
     pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &DataAddress, &Metadata)> {
         self.map
             .iter()
@@ -142,11 +142,12 @@ impl Client {
     /// # Example
     ///
     /// ```no_run
-    /// # use autonomi::{Client, client::files::archive_public::ArchiveAddr};
+    /// # use autonomi::{Client, XorName, client::files::archive_public::ArchiveAddress};
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::init().await?;
-    /// let archive = client.archive_get_public(&ArchiveAddr::random(&mut rand::thread_rng())).await?;
+    /// let addr = ArchiveAddress::new(XorName::random(&mut rand::thread_rng()));
+    /// let archive = client.archive_get_public(&addr).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -165,7 +166,7 @@ impl Client {
     /// Create simple archive containing `file.txt` pointing to random XOR name.
     ///
     /// ```no_run
-    /// # use autonomi::{Client, client::{data::DataAddr, files::{Metadata, archive_public::{PublicArchive, ArchiveAddr}}}};
+    /// # use autonomi::{Client, XorName, client::{data::DataAddress, files::{Metadata, archive_public::{PublicArchive, ArchiveAddress}}}};
     /// # use autonomi::client::payment::PaymentOption;
     /// # use std::path::PathBuf;
     /// # #[tokio::main]
@@ -174,7 +175,8 @@ impl Client {
     /// # let wallet = todo!();
     /// # let payment = PaymentOption::Wallet(wallet);
     /// let mut archive = PublicArchive::new();
-    /// archive.add_file(PathBuf::from("file.txt"), DataAddr::random(&mut rand::thread_rng()), Metadata::new_with_size(0));
+    /// let data_addr = DataAddress::new(XorName::random(&mut rand::thread_rng()));
+    /// archive.add_file(PathBuf::from("file.txt"), data_addr, Metadata::new_with_size(0));
     /// let (cost, address) = client.archive_put_public(&archive, payment).await?;
     /// # Ok(())
     /// # }
