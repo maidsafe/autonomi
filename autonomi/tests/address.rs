@@ -37,7 +37,7 @@ async fn test_data_addresses_use() -> Result<()> {
     let chunk_addr = addr.to_hex();
     println!("Chunk: {chunk_addr}");
 
-    let parsed_chunk_addr = ChunkAddress::from_hex(&chunk_addr)?;
+    let parsed_chunk_addr = ChunkAddress::try_from_hex(&chunk_addr)?;
     assert_eq!(parsed_chunk_addr, *chunk.address());
 
     // put data

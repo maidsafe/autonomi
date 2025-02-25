@@ -34,7 +34,7 @@ impl ChunkAddress {
     }
 
     /// Creates a new ChunkAddress from a hex string.
-    pub fn from_hex(hex: &str) -> Result<Self, AddressParseError> {
+    pub fn try_from_hex(hex: &str) -> Result<Self, AddressParseError> {
         let bytes = hex::decode(hex)?;
         let xor = XorName(
             bytes
