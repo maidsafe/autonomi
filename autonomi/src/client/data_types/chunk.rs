@@ -76,10 +76,12 @@ pub static CHUNK_DOWNLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 pub struct DataMapChunk(pub(crate) Chunk);
 
 impl DataMapChunk {
+    /// Convert the chunk to a hex string.
     pub fn to_hex(&self) -> String {
         hex::encode(self.0.value())
     }
 
+    /// Convert a hex string to a [`DataMapChunk`].
     pub fn from_hex(hex: &str) -> Result<Self, hex::FromHexError> {
         let data = hex::decode(hex)?;
         Ok(Self(Chunk::new(Bytes::from(data))))

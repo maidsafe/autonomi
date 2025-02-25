@@ -6,13 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::archive_public::{ArchiveAddr, PublicArchive};
+use super::archive_public::{ArchiveAddress, PublicArchive};
 use super::{DownloadError, FileCostError, Metadata, UploadError};
 use crate::client::high_level::files::{
     get_relative_file_path_from_abs_file_and_folder_path, FILE_UPLOAD_BATCH_SIZE,
 };
 use crate::client::payment::PaymentOption;
-use crate::client::{high_level::data::DataAddr, utils::process_tasks_with_max_concurrency};
+use crate::client::{high_level::data::DataAddress, utils::process_tasks_with_max_concurrency};
 use crate::client::{Client, PutError};
 use crate::self_encryption::encrypt;
 use crate::{Amount, AttoTokens};
@@ -26,7 +26,7 @@ impl Client {
     /// Download file from network to local file system
     pub async fn file_download_public(
         &self,
-        data_addr: &DataAddr,
+        data_addr: &DataAddress,
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
         let data = self.data_get_public(data_addr).await?;
@@ -42,7 +42,7 @@ impl Client {
     /// Download directory from network to local file system
     pub async fn dir_download_public(
         &self,
-        archive_addr: &ArchiveAddr,
+        archive_addr: &ArchiveAddress,
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
         let archive = self.archive_get_public(archive_addr).await?;
@@ -125,13 +125,13 @@ impl Client {
                     file_path.to_string_lossy().to_string(),
                     xor_names,
                     chunks,
-                    (relative_path, data_address, metadata),
+                    (relative_path, DataAddress::new(data_address), metadata),
                 ))
             });
         }
 
         let mut combined_xor_names: Vec<(XorName, usize)> = vec![];
-        let mut combined_chunks: Vec<((String, XorName), Vec<Chunk>)> = vec![];
+        let mut combined_chunks: Vec<((String, DataAddress), Vec<Chunk>)> = vec![];
         let mut public_archive = PublicArchive::new();
 
         let encryption_results =
@@ -203,13 +203,13 @@ impl Client {
                     info!(
                         "Successfully uploaded {name} ({} chunks) to: {}",
                         chunks.len(),
-                        hex::encode(data_address.0)
+                        hex::encode(data_address.xorname())
                     );
                     #[cfg(feature = "loud")]
                     println!(
                         "Successfully uploaded {name} ({} chunks) to: {}",
                         chunks.len(),
-                        hex::encode(data_address.0)
+                        hex::encode(data_address.xorname())
                     );
 
                     (name, Ok(chunks_uploaded))
@@ -242,12 +242,12 @@ impl Client {
 
     /// Same as [`Client::dir_content_upload_public`] but also uploads the archive to the network.
     ///
-    /// Returns the [`ArchiveAddr`] of the uploaded archive.
+    /// Returns the [`ArchiveAddress`] of the uploaded archive.
     pub async fn dir_upload_public(
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, ArchiveAddr), UploadError> {
+    ) -> Result<(AttoTokens, ArchiveAddress), UploadError> {
         let (cost1, archive) = self
             .dir_content_upload_public(dir_path, payment_option.clone())
             .await?;
@@ -265,7 +265,7 @@ impl Client {
         &self,
         path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, DataAddr), UploadError> {
+    ) -> Result<(AttoTokens, DataAddress), UploadError> {
         info!("Uploading file: {path:?}");
         #[cfg(feature = "loud")]
         println!("Uploading file: {path:?}");
@@ -307,7 +307,7 @@ impl Client {
             let map_xor_name = *data_map_chunk.address().xorname();
 
             let metadata = metadata_from_entry(&entry);
-            archive.add_file(path, map_xor_name, metadata);
+            archive.add_file(path, DataAddress::new(map_xor_name), metadata);
         }
 
         let root_serialized = rmp_serde::to_vec(&archive)?;

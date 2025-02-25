@@ -14,6 +14,7 @@ mod pointer;
 mod scratchpad;
 
 pub use self::{
+    address::AddressParseError,
     address::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress},
     chunks::Chunk,
     graph::{GraphContent, GraphEntry},

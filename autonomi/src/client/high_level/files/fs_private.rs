@@ -14,7 +14,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::archive_private::{PrivateArchive, PrivateArchiveAccess};
+use super::archive_private::{PrivateArchive, PrivateArchiveDataMap};
 use super::{get_relative_file_path_from_abs_file_and_folder_path, FILE_UPLOAD_BATCH_SIZE};
 use super::{DownloadError, UploadError};
 
@@ -48,7 +48,7 @@ impl Client {
     /// Download a private directory from network to local file system
     pub async fn dir_download(
         &self,
-        archive_access: &PrivateArchiveAccess,
+        archive_access: &PrivateArchiveDataMap,
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
         let archive = self.archive_get(archive_access).await?;
@@ -229,12 +229,12 @@ impl Client {
 
     /// Same as [`Client::dir_content_upload`] but also uploads the archive (privately) to the network.
     ///
-    /// Returns the [`PrivateArchiveAccess`] allowing the private archive to be downloaded from the network.
+    /// Returns the [`PrivateArchiveDataMap`] allowing the private archive to be downloaded from the network.
     pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, PrivateArchiveAccess), UploadError> {
+    ) -> Result<(AttoTokens, PrivateArchiveDataMap), UploadError> {
         let (cost1, archive) = self
             .dir_content_upload(dir_path, payment_option.clone())
             .await?;

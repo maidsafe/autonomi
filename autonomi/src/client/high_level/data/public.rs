@@ -15,13 +15,13 @@ use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
 use crate::{chunk::ChunkAddress, self_encryption::encrypt, Client};
 use ant_evm::{Amount, AttoTokens};
 
-use super::DataAddr;
+use super::DataAddress;
 
 impl Client {
     /// Fetch a blob of data from the network
-    pub async fn data_get_public(&self, addr: &DataAddr) -> Result<Bytes, GetError> {
+    pub async fn data_get_public(&self, addr: &DataAddress) -> Result<Bytes, GetError> {
         info!("Fetching data from Data Address: {addr:?}");
-        let data_map_chunk = self.chunk_get(&ChunkAddress::new(*addr)).await?;
+        let data_map_chunk = self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?;
         let data = self
             .fetch_from_data_map_chunk(data_map_chunk.value())
             .await?;
@@ -37,7 +37,7 @@ impl Client {
         &self,
         data: Bytes,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, DataAddr), PutError> {
+    ) -> Result<(AttoTokens, DataAddress), PutError> {
         let now = ant_networking::time::Instant::now();
         let (data_map_chunk, chunks) = encrypt(data)?;
         let data_map_addr = data_map_chunk.address();
@@ -101,7 +101,7 @@ impl Client {
             }
         }
 
-        Ok((total_cost, map_xor_name))
+        Ok((total_cost, DataAddress::new(map_xor_name)))
     }
 
     /// Get the estimated cost of storing a piece of data.

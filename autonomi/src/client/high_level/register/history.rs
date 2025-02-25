@@ -49,14 +49,14 @@ impl RegisterHistory {
         let next_entry_pk: PublicKey = MainPubkey::from(self.register_owner)
             .derive_key(&next_derivation)
             .into();
-        self.current_iter = GraphEntryAddress::from_owner(next_entry_pk);
+        self.current_iter = GraphEntryAddress::new(next_entry_pk);
         Ok(Some(entry.content))
     }
 
     /// Get all the register values from the history, starting from the first to the latest entry
     pub async fn collect(&mut self) -> Result<Vec<RegisterValue>, RegisterError> {
         let mut history_from_first = self.clone();
-        history_from_first.current_iter = GraphEntryAddress::from_owner(self.register_owner);
+        history_from_first.current_iter = GraphEntryAddress::new(self.register_owner);
         let mut values = Vec::new();
         while let Some(value) = history_from_first.next().await? {
             values.push(value);
@@ -74,6 +74,6 @@ impl Client {
     /// [`RegisterHistory::collect`] can be used to get all the register values from the history from the first to the latest entry.
     pub fn register_history(&self, addr: &RegisterAddress) -> RegisterHistory {
         let graph_entry_addr = addr.to_underlying_graph_root();
-        RegisterHistory::new(self.clone(), addr.owner, graph_entry_addr)
+        RegisterHistory::new(self.clone(), addr.owner(), graph_entry_addr)
     }
 }

@@ -10,30 +10,44 @@ use bls::PublicKey;
 use serde::{Deserialize, Serialize};
 use xor_name::XorName;
 
-/// Address of a GraphEntry, is derived from the owner's unique public key
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct GraphEntryAddress(pub XorName);
+use super::AddressParseError;
+
+/// Address of a [`crate::storage::graph::GraphEntry`]
+/// It is derived from the owner's unique public key
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+pub struct GraphEntryAddress(PublicKey);
 
 impl GraphEntryAddress {
-    pub fn from_owner(owner: PublicKey) -> Self {
-        Self(XorName::from_content(&owner.to_bytes()))
+    /// Create a new [`GraphEntryAddress`]
+    pub fn new(owner: PublicKey) -> Self {
+        Self(owner)
     }
 
-    pub fn new(xor_name: XorName) -> Self {
-        Self(xor_name)
+    /// Return the network name of the scratchpad.
+    /// This is used to locate the scratchpad on the network.
+    pub fn xorname(&self) -> XorName {
+        XorName::from_content(&self.0.to_bytes())
     }
 
-    pub fn xorname(&self) -> &XorName {
+    /// Return the owner.
+    pub fn owner(&self) -> &PublicKey {
         &self.0
     }
 
+    /// Serialize this [`GraphEntryAddress`] into a hex-encoded string.
     pub fn to_hex(&self) -> String {
-        hex::encode(self.0)
+        hex::encode(self.0.to_bytes())
+    }
+
+    /// Parse a hex-encoded string into a [`GraphEntryAddress`].
+    pub fn from_hex(hex: &str) -> Result<Self, AddressParseError> {
+        let owner = PublicKey::from_hex(hex)?;
+        Ok(Self(owner))
     }
 }
 
-impl std::fmt::Debug for GraphEntryAddress {
+impl std::fmt::Display for GraphEntryAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GraphEntryAddress({})", &self.to_hex()[0..6])
+        write!(f, "{}", &self.to_hex())
     }
 }

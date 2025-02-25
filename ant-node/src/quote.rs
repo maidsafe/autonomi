@@ -23,9 +23,9 @@ impl Node {
     ) -> Result<PaymentQuote, ProtocolError> {
         let content = match address {
             NetworkAddress::ChunkAddress(addr) => *addr.xorname(),
-            NetworkAddress::GraphEntryAddress(addr) => *addr.xorname(),
+            NetworkAddress::GraphEntryAddress(addr) => addr.xorname(),
             NetworkAddress::ScratchpadAddress(addr) => addr.xorname(),
-            NetworkAddress::PointerAddress(addr) => *addr.xorname(),
+            NetworkAddress::PointerAddress(addr) => addr.xorname(),
             NetworkAddress::PeerId(_) | NetworkAddress::RecordKey(_) => XorName::default(),
         };
         let timestamp = std::time::SystemTime::now();
@@ -59,9 +59,9 @@ pub(crate) fn verify_quote_for_storecost(
     // check address
     let content = match address {
         NetworkAddress::ChunkAddress(addr) => *addr.xorname(),
-        NetworkAddress::GraphEntryAddress(addr) => *addr.xorname(),
+        NetworkAddress::GraphEntryAddress(addr) => addr.xorname(),
         NetworkAddress::ScratchpadAddress(addr) => addr.xorname(),
-        NetworkAddress::PointerAddress(addr) => *addr.xorname(),
+        NetworkAddress::PointerAddress(addr) => addr.xorname(),
         NetworkAddress::PeerId(_) | NetworkAddress::RecordKey(_) => XorName::default(),
     };
     if content != quote.content {

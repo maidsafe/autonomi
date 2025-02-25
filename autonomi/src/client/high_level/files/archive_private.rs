@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use super::Metadata;
 
 /// Private archive data map, allowing access to the [`PrivateArchive`] data.
-pub type PrivateArchiveAccess = DataMapChunk;
+pub type PrivateArchiveDataMap = DataMapChunk;
 
 /// Directory structure mapping filepaths to their data maps and metadata.
 ///
@@ -142,7 +142,7 @@ impl Client {
     /// Fetch a [`PrivateArchive`] from the network
     pub async fn archive_get(
         &self,
-        addr: &PrivateArchiveAccess,
+        addr: &PrivateArchiveDataMap,
     ) -> Result<PrivateArchive, GetError> {
         let data = self.data_get(addr).await?;
         Ok(PrivateArchive::from_bytes(data)?)
@@ -153,7 +153,7 @@ impl Client {
         &self,
         archive: &PrivateArchive,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, PrivateArchiveAccess), PutError> {
+    ) -> Result<(AttoTokens, PrivateArchiveDataMap), PutError> {
         let bytes = archive
             .to_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;

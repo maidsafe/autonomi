@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use crate::client::high_level::files::archive_private::PrivateArchiveAccess;
-use crate::client::high_level::files::archive_public::ArchiveAddr;
+use crate::client::high_level::files::archive_private::PrivateArchiveDataMap;
+use crate::client::high_level::files::archive_public::ArchiveAddress;
 use crate::client::payment::PaymentOption;
 use crate::client::Client;
 use crate::client::GetError;
@@ -32,9 +32,9 @@ pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct UserData {
     /// Owned file archive addresses, along with their names (can be empty)
-    pub file_archives: HashMap<ArchiveAddr, String>,
+    pub file_archives: HashMap<ArchiveAddress, String>,
     /// Owned private file archives, along with their names (can be empty)
-    pub private_file_archives: HashMap<PrivateArchiveAccess, String>,
+    pub private_file_archives: HashMap<PrivateArchiveDataMap, String>,
     /// Owned register addresses, along with their names (can be empty)
     pub register_addresses: HashMap<RegisterAddress, String>,
 }
@@ -64,40 +64,43 @@ impl UserData {
     }
 
     /// Add an archive. Returning `Option::Some` with the old name if the archive was already in the set.
-    pub fn add_file_archive(&mut self, archive: ArchiveAddr) -> Option<String> {
+    pub fn add_file_archive(&mut self, archive: ArchiveAddress) -> Option<String> {
         self.file_archives.insert(archive, "".into())
     }
 
     /// Add an archive. Returning `Option::Some` with the old name if the archive was already in the set.
     pub fn add_file_archive_with_name(
         &mut self,
-        archive: ArchiveAddr,
+        archive: ArchiveAddress,
         name: String,
     ) -> Option<String> {
         self.file_archives.insert(archive, name)
     }
 
     /// Add a private archive. Returning `Option::Some` with the old name if the archive was already in the set.
-    pub fn add_private_file_archive(&mut self, archive: PrivateArchiveAccess) -> Option<String> {
+    pub fn add_private_file_archive(&mut self, archive: PrivateArchiveDataMap) -> Option<String> {
         self.private_file_archives.insert(archive, "".into())
     }
 
     /// Add a private archive with a name. Returning `Option::Some` with the old name if the archive was already in the set.
     pub fn add_private_file_archive_with_name(
         &mut self,
-        archive: PrivateArchiveAccess,
+        archive: PrivateArchiveDataMap,
         name: String,
     ) -> Option<String> {
         self.private_file_archives.insert(archive, name)
     }
 
     /// Remove an archive. Returning `Option::Some` with the old name if the archive was already in the set.
-    pub fn remove_file_archive(&mut self, archive: ArchiveAddr) -> Option<String> {
+    pub fn remove_file_archive(&mut self, archive: ArchiveAddress) -> Option<String> {
         self.file_archives.remove(&archive)
     }
 
     /// Remove a private archive. Returning `Option::Some` with the old name if the archive was already in the set.
-    pub fn remove_private_file_archive(&mut self, archive: PrivateArchiveAccess) -> Option<String> {
+    pub fn remove_private_file_archive(
+        &mut self,
+        archive: PrivateArchiveDataMap,
+    ) -> Option<String> {
         self.private_file_archives.remove(&archive)
     }
 

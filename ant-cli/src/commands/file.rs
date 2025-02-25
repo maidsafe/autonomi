@@ -9,7 +9,6 @@
 use crate::network::NetworkPeers;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
-use autonomi::client::address::addr_to_str;
 use autonomi::client::payment::PaymentOption;
 use autonomi::ClientOperatingStrategy;
 use autonomi::ResponseQuorum;
@@ -70,7 +69,7 @@ pub async fn upload(
             .dir_upload_public(dir_path, payment.clone())
             .await
             .wrap_err("Failed to upload file")?;
-        local_addr = addr_to_str(xor_name);
+        local_addr = xor_name.to_hex();
         local_addr.clone()
     } else {
         let (_cost, private_data_access) = client
@@ -144,7 +143,7 @@ pub fn list() -> Result<()> {
         file_archives.len()
     );
     for (addr, name) in file_archives {
-        println!("{}: {}", name, addr_to_str(addr));
+        println!("{}: {}", name, addr.to_hex());
     }
 
     // get private file archives

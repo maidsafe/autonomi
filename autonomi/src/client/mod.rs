@@ -28,7 +28,6 @@ pub use high_level::files;
 pub use high_level::register;
 pub use high_level::vault;
 
-pub mod address;
 pub mod config;
 pub mod key_derivation;
 pub mod payment;

@@ -16,11 +16,10 @@ use ant_networking::time::{Duration, SystemTime, UNIX_EPOCH};
 use crate::{client::payment::PaymentOption, AttoTokens};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use xor_name::XorName;
 
 use crate::{
     client::{
-        high_level::{data::DataAddr, files::RenameError},
+        high_level::{data::DataAddress, files::RenameError},
         quote::CostError,
         GetError, PutError,
     },
@@ -30,7 +29,7 @@ use crate::{
 use super::Metadata;
 
 /// The address of a public archive on the network. Points to an [`PublicArchive`].
-pub type ArchiveAddr = XorName;
+pub type ArchiveAddress = DataAddress;
 
 /// Public variant of [`crate::client::files::archive_private::PrivateArchive`]. Differs in that data maps of files are uploaded
 /// to the network, of which the addresses are stored in this archive.
@@ -41,7 +40,7 @@ pub struct PublicArchive {
     ///           |         |         Metadata of the file
     ///           |         |         |
     ///           V         V         V
-    map: BTreeMap<PathBuf, (DataAddr, Metadata)>,
+    map: BTreeMap<PathBuf, (DataAddress, Metadata)>,
 }
 
 /// This type essentially wraps archive in version marker. E.g. in JSON format:
@@ -80,7 +79,7 @@ impl PublicArchive {
 
     /// Add a file to a local archive
     /// Note that this does not upload the archive to the network
-    pub fn add_file(&mut self, path: PathBuf, data_addr: DataAddr, meta: Metadata) {
+    pub fn add_file(&mut self, path: PathBuf, data_addr: DataAddress, meta: Metadata) {
         self.map.insert(path.clone(), (data_addr, meta));
         debug!("Added a new file to the archive, path: {:?}", path);
     }
@@ -94,20 +93,20 @@ impl PublicArchive {
     }
 
     /// List all data addresses of the files in the archive
-    pub fn addresses(&self) -> Vec<DataAddr> {
+    pub fn addresses(&self) -> Vec<DataAddress> {
         self.map.values().map(|(addr, _)| *addr).collect()
     }
 
     /// Iterate over the archive items
     /// Returns an iterator over (PathBuf, DataAddr, Metadata)
-    pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &DataAddr, &Metadata)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&PathBuf, &DataAddress, &Metadata)> {
         self.map
             .iter()
             .map(|(path, (addr, meta))| (path, addr, meta))
     }
 
     /// Get the underlying map
-    pub fn map(&self) -> &BTreeMap<PathBuf, (DataAddr, Metadata)> {
+    pub fn map(&self) -> &BTreeMap<PathBuf, (DataAddress, Metadata)> {
         &self.map
     }
 
@@ -151,7 +150,10 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn archive_get_public(&self, addr: &ArchiveAddr) -> Result<PublicArchive, GetError> {
+    pub async fn archive_get_public(
+        &self,
+        addr: &ArchiveAddress,
+    ) -> Result<PublicArchive, GetError> {
         let data = self.data_get_public(addr).await?;
         Ok(PublicArchive::from_bytes(data)?)
     }
@@ -181,7 +183,7 @@ impl Client {
         &self,
         archive: &PublicArchive,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, ArchiveAddr), PutError> {
+    ) -> Result<(AttoTokens, ArchiveAddress), PutError> {
         let bytes = archive
             .to_bytes()
             .map_err(|e| PutError::Serialization(format!("Failed to serialize archive: {e:?}")))?;
@@ -211,6 +213,7 @@ impl Client {
 #[cfg(test)]
 mod test {
     use std::str::FromStr;
+    use xor_name::XorName;
 
     use super::*;
 
@@ -229,7 +232,7 @@ mod test {
         let mut arch = PublicArchive::new();
         arch.add_file(
             PathBuf::from_str("hello_world").unwrap(),
-            DataAddr::random(&mut rand::thread_rng()),
+            DataAddress::new(XorName::random(&mut rand::thread_rng())),
             Metadata::new_with_size(1),
         );
         let arch_serialized = arch.to_bytes().unwrap();
@@ -272,7 +275,7 @@ mod test {
         }
         #[derive(Debug, Default, Serialize, Deserialize)]
         pub struct PublicArchiveV1p1 {
-            map: BTreeMap<PathBuf, (DataAddr, MetadataV1p1)>,
+            map: BTreeMap<PathBuf, (DataAddress, MetadataV1p1)>,
         }
         #[derive(Debug, Serialize, Deserialize)]
         pub enum PublicArchiveVersionedV1p1 {
@@ -283,7 +286,7 @@ mod test {
         arch_p1.map.insert(
             PathBuf::from_str("hello_world").unwrap(),
             (
-                DataAddr::random(&mut rand::thread_rng()),
+                DataAddress::new(XorName::random(&mut rand::thread_rng())),
                 MetadataV1p1 {
                     accessed: Some(1),
                     ..Default::default()
@@ -304,13 +307,13 @@ mod test {
         let file2 = PathBuf::from_str("file2").unwrap();
         arch.add_file(
             file1.clone(),
-            DataAddr::random(&mut rand::thread_rng()),
+            DataAddress::new(XorName::random(&mut rand::thread_rng())),
             Metadata::new_with_size(1),
         );
         let mut other_arch = PublicArchive::new();
         other_arch.add_file(
             file2.clone(),
-            DataAddr::random(&mut rand::thread_rng()),
+            DataAddress::new(XorName::random(&mut rand::thread_rng())),
             Metadata::new_with_size(2),
         );
         arch.merge(&other_arch);
@@ -321,7 +324,7 @@ mod test {
         let mut arch_with_duplicate = PublicArchive::new();
         arch_with_duplicate.add_file(
             file1.clone(),
-            DataAddr::random(&mut rand::thread_rng()),
+            DataAddress::new(XorName::random(&mut rand::thread_rng())),
             Metadata::new_with_size(5),
         );
         arch.merge(&arch_with_duplicate);

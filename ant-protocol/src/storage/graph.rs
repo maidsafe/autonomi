@@ -113,7 +113,7 @@ impl GraphEntry {
     }
 
     pub fn address(&self) -> GraphEntryAddress {
-        GraphEntryAddress::from_owner(self.owner)
+        GraphEntryAddress::new(self.owner)
     }
 
     /// Get the bytes that the signature is calculated from.

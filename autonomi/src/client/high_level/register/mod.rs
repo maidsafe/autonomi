@@ -30,36 +30,39 @@ pub use history::RegisterHistory;
 /// it is up to the owner to encrypt the data uploaded to the register, if wanted.
 /// Only the owner can update the register with its [`SecretKey`].
 /// The [`SecretKey`] is the only piece of information an owner should keep to access to the register.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct RegisterAddress {
-    pub owner: PublicKey,
-}
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+pub struct RegisterAddress(PublicKey);
 
 impl RegisterAddress {
     /// Create a new register address
     pub fn new(owner: PublicKey) -> Self {
-        Self { owner }
+        Self(owner)
     }
 
     /// Get the owner of the register
     pub fn owner(&self) -> PublicKey {
-        self.owner
+        self.0
     }
 
     /// To underlying graph representation
     pub fn to_underlying_graph_root(&self) -> GraphEntryAddress {
-        GraphEntryAddress::from_owner(self.owner)
+        GraphEntryAddress::new(self.0)
+    }
+
+    /// To underlying head pointer
+    pub fn to_underlying_head_pointer(&self) -> PointerAddress {
+        register_head_pointer_address(self)
     }
 
     /// Convert a register address to a hex string
     pub fn to_hex(&self) -> String {
-        self.owner.to_hex()
+        self.0.to_hex()
     }
 
     /// Convert a hex string to a register address
     pub fn from_hex(hex: &str) -> Result<Self, bls::Error> {
         let owner = PublicKey::from_hex(hex)?;
-        Ok(Self { owner })
+        Ok(Self(owner))
     }
 }
 
@@ -154,19 +157,14 @@ impl Client {
 
         // create a Pointer to the last entry
         let target = PointerTarget::GraphEntryAddress(addr);
-        let pointer_key = self.register_head_pointer_sk(&main_key.into());
+        let pointer_key = register_head_pointer_sk(&main_key.into());
         let (pointer_cost, _pointer_addr) = self
             .pointer_create(&pointer_key, target, payment_option.clone())
             .await?;
         let total_cost = graph_cost
             .checked_add(pointer_cost)
             .ok_or(RegisterError::InvalidCost)?;
-        Ok((
-            total_cost,
-            RegisterAddress {
-                owner: public_key.into(),
-            },
-        ))
+        Ok((total_cost, RegisterAddress(public_key.into())))
     }
 
     /// Update the value of a register.
@@ -179,10 +177,8 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<AttoTokens, RegisterError> {
         // get the pointer of the register head
-        let addr = RegisterAddress {
-            owner: owner.public_key(),
-        };
-        let pointer_addr = self.register_head_pointer_address(&addr);
+        let addr = RegisterAddress(owner.public_key());
+        let pointer_addr = register_head_pointer_address(&addr);
         debug!("Getting pointer of register head at {pointer_addr:?}");
         let pointer = match self.pointer_get(&pointer_addr).await {
             Ok(pointer) => pointer,
@@ -220,7 +216,7 @@ impl Client {
             Err(GraphError::AlreadyExists(address)) => {
                 // pointer is apparently not at head, update it
                 let target = PointerTarget::GraphEntryAddress(address);
-                let pointer_key = self.register_head_pointer_sk(&main_key.into());
+                let pointer_key = register_head_pointer_sk(&main_key.into());
                 self.pointer_update(&pointer_key, target).await?;
                 return Err(RegisterError::Corrupt(format!(
                     "Pointer is apparently not at head, attempting to heal the register by updating it to point to the next entry at {address:?}, please retry the operation"
@@ -231,7 +227,7 @@ impl Client {
 
         // update the pointer to point to the new entry
         let target = PointerTarget::GraphEntryAddress(new_graph_entry_addr);
-        let pointer_key = self.register_head_pointer_sk(&main_key.into());
+        let pointer_key = register_head_pointer_sk(&main_key.into());
         self.pointer_update(&pointer_key, target).await?;
 
         Ok(cost)
@@ -243,7 +239,7 @@ impl Client {
         addr: &RegisterAddress,
     ) -> Result<RegisterValue, RegisterError> {
         // get the pointer of the register head
-        let pointer_addr = self.register_head_pointer_address(addr);
+        let pointer_addr = register_head_pointer_address(addr);
         debug!("Getting pointer of register head at {pointer_addr:?}");
         let pointer = self.pointer_get(&pointer_addr).await?;
         let graph_entry_addr = match pointer.target() {
@@ -270,7 +266,7 @@ impl Client {
     /// Get the cost of a register operation.
     /// Returns the cost of creation if it doesn't exist, else returns the cost of an update
     pub async fn register_cost(&self, owner: &PublicKey) -> Result<AttoTokens, CostError> {
-        let pointer_pk = self.register_head_pointer_pk(&RegisterAddress { owner: *owner });
+        let pointer_pk = register_head_pointer_pk(&RegisterAddress(*owner));
         let graph_entry_cost = self.graph_entry_cost(owner);
         let pointer_cost = self.pointer_cost(&pointer_pk);
         let (graph_entry_cost, pointer_cost) =
@@ -278,29 +274,6 @@ impl Client {
         graph_entry_cost?
             .checked_add(pointer_cost?)
             .ok_or(CostError::InvalidCost)
-    }
-
-    /// Get the address of the register's head pointer
-    fn register_head_pointer_address(&self, addr: &RegisterAddress) -> PointerAddress {
-        let pk: MainPubkey = addr.owner.into();
-        let pointer_pk =
-            pk.derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
-        PointerAddress::from_owner(pointer_pk.into())
-    }
-
-    /// Get the secret key of the register's head pointer
-    fn register_head_pointer_sk(&self, register_owner: &SecretKey) -> SecretKey {
-        let pointer_sk = MainSecretKey::new(register_owner.clone())
-            .derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
-        pointer_sk.into()
-    }
-
-    /// Get the public key of the register's head pointer
-    fn register_head_pointer_pk(&self, addr: &RegisterAddress) -> PublicKey {
-        let pk: MainPubkey = addr.owner.into();
-        let pointer_pk =
-            pk.derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
-        pointer_pk.into()
     }
 
     /// Get underlying register graph entry and next derivation index
@@ -335,8 +308,29 @@ impl Client {
     }
 }
 
+/// Get the address of the register's head pointer
+fn register_head_pointer_address(addr: &RegisterAddress) -> PointerAddress {
+    let pk: MainPubkey = addr.0.into();
+    let pointer_pk = pk.derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
+    PointerAddress::new(pointer_pk.into())
+}
+
+/// Get the secret key of the register's head pointer
+fn register_head_pointer_sk(register_owner: &SecretKey) -> SecretKey {
+    let pointer_sk = MainSecretKey::new(register_owner.clone())
+        .derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
+    pointer_sk.into()
+}
+
+/// Get the public key of the register's head pointer
+fn register_head_pointer_pk(addr: &RegisterAddress) -> PublicKey {
+    let pk: MainPubkey = addr.0.into();
+    let pointer_pk = pk.derive_key(&DerivationIndex::from_bytes(REGISTER_HEAD_DERIVATION_INDEX));
+    pointer_pk.into()
+}
+
 fn get_derivation_from_graph_entry(entry: &GraphEntry) -> Result<DerivationIndex, RegisterError> {
-    let graph_entry_addr = GraphEntryAddress::from_owner(entry.owner);
+    let graph_entry_addr = GraphEntryAddress::new(entry.owner);
     let d = match entry.descendants.as_slice() {
         [d] => d.1,
         _ => return Err(RegisterError::Corrupt(format!(

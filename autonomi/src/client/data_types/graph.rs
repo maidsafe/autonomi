@@ -109,7 +109,7 @@ impl Client {
         let (payment_proofs, skipped_payments) = self
             .pay_for_content_addrs(
                 DataTypes::GraphEntry,
-                std::iter::once((*xor_name, entry.size())),
+                std::iter::once((xor_name, entry.size())),
                 payment_option,
             )
             .await
@@ -118,7 +118,7 @@ impl Client {
             })?;
 
         // make sure the graph entry was paid for
-        let (proof, price) = match payment_proofs.get(xor_name) {
+        let (proof, price) = match payment_proofs.get(&xor_name) {
             Some((proof, price)) => (proof, price),
             None => {
                 // graph entry was skipped, meaning it was already paid for
@@ -170,8 +170,8 @@ impl Client {
     /// Get the cost to create a GraphEntry
     pub async fn graph_entry_cost(&self, key: &PublicKey) -> Result<AttoTokens, CostError> {
         trace!("Getting cost for GraphEntry of {key:?}");
-        let address = GraphEntryAddress::from_owner(*key);
-        let xor = *address.xorname();
+        let address = GraphEntryAddress::new(*key);
+        let xor = address.xorname();
         let store_quote = self
             .get_store_quotes(
                 DataTypes::GraphEntry,

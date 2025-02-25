@@ -6,66 +6,50 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
 use bls::PublicKey;
 use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{Debug, Display},
-    hash::Hash,
-};
+use std::hash::Hash;
 use xor_name::XorName;
 
-/// Address of a Scratchpad on the SAFE Network
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
-pub struct ScratchpadAddress {
-    /// Owner of the scratchpad
-    pub(crate) owner: PublicKey,
-}
+use super::AddressParseError;
 
-impl Display for ScratchpadAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "({:?})", &self.to_hex()[0..6])
-    }
-}
-
-impl Debug for ScratchpadAddress {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ScratchpadAddress({}) {{ owner: {:?} }}",
-            &self.to_hex()[0..6],
-            self.owner
-        )
-    }
-}
+/// Address of a [`crate::storage::scratchpad::Scratchpad`]
+/// It is derived from the owner's public key
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+pub struct ScratchpadAddress(PublicKey);
 
 impl ScratchpadAddress {
-    /// Construct a new `ScratchpadAddress` given `owner`.
+    /// Create a new [`ScratchpadAddress`]
     pub fn new(owner: PublicKey) -> Self {
-        Self { owner }
+        Self(owner)
     }
 
     /// Return the network name of the scratchpad.
     /// This is used to locate the scratchpad on the network.
     pub fn xorname(&self) -> XorName {
-        XorName::from_content(&self.owner.to_bytes())
-    }
-
-    /// Serialize this `ScratchpadAddress` instance to a hex-encoded `String`.
-    pub fn to_hex(&self) -> String {
-        hex::encode(self.owner.to_bytes())
-    }
-
-    /// Deserialize a hex-encoded representation of a `ScratchpadAddress` to a `ScratchpadAddress` instance.
-    pub fn from_hex(hex: &str) -> Result<Self> {
-        // let bytes = hex::decode(hex).map_err(|_| Error::ScratchpadHexDeserializeFailed)?;
-        let owner = PublicKey::from_hex(hex).map_err(|_| Error::ScratchpadHexDeserializeFailed)?;
-        Ok(Self { owner })
+        XorName::from_content(&self.0.to_bytes())
     }
 
     /// Return the owner.
     pub fn owner(&self) -> &PublicKey {
-        &self.owner
+        &self.0
+    }
+
+    /// Serialize this [`ScratchpadAddress`] into a hex-encoded string.
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0.to_bytes())
+    }
+
+    /// Parse a hex-encoded string into a [`ScratchpadAddress`].
+    pub fn from_hex(hex: &str) -> Result<Self, AddressParseError> {
+        let owner = PublicKey::from_hex(hex)?;
+        Ok(Self(owner))
+    }
+}
+
+impl std::fmt::Display for ScratchpadAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
     }
 }
 
@@ -85,6 +69,6 @@ mod tests {
 
         let bad_hex = format!("{hex}0");
         let err = ScratchpadAddress::from_hex(&bad_hex);
-        assert_eq!(err, Err(Error::ScratchpadHexDeserializeFailed));
+        assert!(err.is_err());
     }
 }

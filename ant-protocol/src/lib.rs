@@ -30,9 +30,8 @@ pub mod antnode_proto {
 }
 pub use error::Error;
 pub use error::Error as NetworkError;
-use storage::ScratchpadAddress;
 
-use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress};
+use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress};
 
 /// Re-export of Bytes used throughout the protocol
 pub use bytes::Bytes;
@@ -125,12 +124,12 @@ impl NetworkAddress {
     pub fn as_bytes(&self) -> Vec<u8> {
         match self {
             NetworkAddress::PeerId(bytes) | NetworkAddress::RecordKey(bytes) => bytes.to_vec(),
-            NetworkAddress::ChunkAddress(chunk_address) => chunk_address.xorname().0.to_vec(),
+            NetworkAddress::ChunkAddress(chunk_address) => chunk_address.xorname().to_vec(),
             NetworkAddress::GraphEntryAddress(graph_entry_address) => {
-                graph_entry_address.xorname().0.to_vec()
+                graph_entry_address.xorname().to_vec()
             }
-            NetworkAddress::ScratchpadAddress(addr) => addr.xorname().0.to_vec(),
-            NetworkAddress::PointerAddress(pointer_address) => pointer_address.0.to_vec(),
+            NetworkAddress::ScratchpadAddress(addr) => addr.xorname().to_vec(),
+            NetworkAddress::PointerAddress(pointer_address) => pointer_address.xorname().to_vec(),
         }
     }
 
@@ -158,10 +157,10 @@ impl NetworkAddress {
             NetworkAddress::RecordKey(bytes) => RecordKey::new(bytes),
             NetworkAddress::ChunkAddress(chunk_address) => RecordKey::new(chunk_address.xorname()),
             NetworkAddress::GraphEntryAddress(graph_entry_address) => {
-                RecordKey::new(graph_entry_address.xorname())
+                RecordKey::new(&graph_entry_address.xorname())
             }
             NetworkAddress::PointerAddress(pointer_address) => {
-                RecordKey::new(pointer_address.xorname())
+                RecordKey::new(&pointer_address.xorname())
             }
             NetworkAddress::ScratchpadAddress(addr) => RecordKey::new(&addr.xorname()),
             NetworkAddress::PeerId(bytes) => RecordKey::new(bytes),
@@ -197,25 +196,25 @@ impl Debug for NetworkAddress {
             NetworkAddress::ChunkAddress(chunk_address) => {
                 format!(
                     "NetworkAddress::ChunkAddress({} - ",
-                    &chunk_address.to_hex()[0..6]
+                    &chunk_address.to_hex()
                 )
             }
             NetworkAddress::GraphEntryAddress(graph_entry_address) => {
                 format!(
                     "NetworkAddress::GraphEntryAddress({} - ",
-                    &graph_entry_address.to_hex()[0..6]
+                    &graph_entry_address.to_hex()
                 )
             }
             NetworkAddress::ScratchpadAddress(scratchpad_address) => {
                 format!(
                     "NetworkAddress::ScratchpadAddress({} - ",
-                    &scratchpad_address.to_hex()[0..6]
+                    &scratchpad_address.to_hex()
                 )
             }
             NetworkAddress::PointerAddress(pointer_address) => {
                 format!(
                     "NetworkAddress::PointerAddress({} - ",
-                    &pointer_address.to_hex()[0..6]
+                    &pointer_address.to_hex()
                 )
             }
             NetworkAddress::RecordKey(bytes) => {
@@ -238,19 +237,19 @@ impl Display for NetworkAddress {
                 write!(f, "NetworkAddress::PeerId({})", hex::encode(id))
             }
             NetworkAddress::ChunkAddress(addr) => {
-                write!(f, "NetworkAddress::ChunkAddress({addr:?})")
+                write!(f, "NetworkAddress::ChunkAddress({addr})")
             }
             NetworkAddress::GraphEntryAddress(addr) => {
-                write!(f, "NetworkAddress::GraphEntryAddress({addr:?})")
+                write!(f, "NetworkAddress::GraphEntryAddress({addr})")
             }
             NetworkAddress::ScratchpadAddress(addr) => {
-                write!(f, "NetworkAddress::ScratchpadAddress({addr:?})")
+                write!(f, "NetworkAddress::ScratchpadAddress({addr})")
             }
             NetworkAddress::RecordKey(key) => {
                 write!(f, "NetworkAddress::RecordKey({})", hex::encode(key))
             }
             NetworkAddress::PointerAddress(addr) => {
-                write!(f, "NetworkAddress::PointerAddress({addr:?})")
+                write!(f, "NetworkAddress::PointerAddress({addr})")
             }
         }
     }
@@ -378,17 +377,18 @@ impl std::fmt::Debug for PrettyPrintRecordKey<'_> {
 mod tests {
     use crate::storage::GraphEntryAddress;
     use crate::NetworkAddress;
-    use bls::rand::thread_rng;
 
     #[test]
     fn verify_graph_entry_addr_is_actionable() {
-        let xorname = xor_name::XorName::random(&mut thread_rng());
-        let graph_entry_addr = GraphEntryAddress::new(xorname);
+        let pk = bls::SecretKey::random().public_key();
+        let graph_entry_addr = GraphEntryAddress::new(pk);
         let net_addr = NetworkAddress::from_graph_entry_address(graph_entry_addr);
 
-        let graph_entry_addr_hex = &graph_entry_addr.to_hex()[0..6]; // we only log the first 6 chars
+        let graph_entry_addr_hex = &graph_entry_addr.to_hex();
         let net_addr_fmt = format!("{net_addr}");
+        let net_addr_dbg = format!("{net_addr:?}");
 
         assert!(net_addr_fmt.contains(graph_entry_addr_hex));
+        assert!(net_addr_dbg.contains(graph_entry_addr_hex));
     }
 }

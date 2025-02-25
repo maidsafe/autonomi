@@ -10,11 +10,10 @@ use super::get_progress_bar;
 use autonomi::{
     chunk::DataMapChunk,
     client::{
-        address::str_to_addr,
-        files::{archive_private::PrivateArchiveAccess, archive_public::ArchiveAddr},
+        files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
         GetError,
     },
-    data::DataAddr,
+    data::DataAddress,
     Client,
 };
 use color_eyre::{
@@ -24,7 +23,7 @@ use color_eyre::{
 use std::path::PathBuf;
 
 pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<()> {
-    let try_public_address = str_to_addr(addr).ok();
+    let try_public_address = DataAddress::from_hex(addr).ok();
     if let Some(public_address) = try_public_address {
         return download_public(addr, public_address, dest_path, client).await;
     }
@@ -48,7 +47,7 @@ pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<()
 
 async fn download_private(
     addr: &str,
-    private_address: PrivateArchiveAccess,
+    private_address: PrivateArchiveDataMap,
     dest_path: &str,
     client: &Client,
 ) -> Result<()> {
@@ -94,7 +93,7 @@ async fn download_private(
 
 async fn download_public(
     addr: &str,
-    address: ArchiveAddr,
+    address: ArchiveAddress,
     dest_path: &str,
     client: &Client,
 ) -> Result<()> {
@@ -146,7 +145,7 @@ async fn download_public(
 
 async fn download_public_single_file(
     addr: &str,
-    address: DataAddr,
+    address: DataAddress,
     dest_path: &str,
     client: &Client,
 ) -> Result<()> {

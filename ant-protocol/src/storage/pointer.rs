@@ -30,12 +30,23 @@ pub enum PointerTarget {
 }
 
 impl PointerTarget {
+    /// Returns the xorname of the target
     pub fn xorname(&self) -> XorName {
         match self {
             PointerTarget::ChunkAddress(addr) => *addr.xorname(),
-            PointerTarget::GraphEntryAddress(addr) => *addr.xorname(),
-            PointerTarget::PointerAddress(ptr) => *ptr.xorname(),
+            PointerTarget::GraphEntryAddress(addr) => addr.xorname(),
+            PointerTarget::PointerAddress(addr) => addr.xorname(),
             PointerTarget::ScratchpadAddress(addr) => addr.xorname(),
+        }
+    }
+
+    /// Returns the hex string representation of the target
+    pub fn to_hex(&self) -> String {
+        match self {
+            PointerTarget::ChunkAddress(addr) => addr.to_hex(),
+            PointerTarget::GraphEntryAddress(addr) => addr.to_hex(),
+            PointerTarget::PointerAddress(addr) => addr.to_hex(),
+            PointerTarget::ScratchpadAddress(addr) => addr.to_hex(),
         }
     }
 }
@@ -88,7 +99,7 @@ impl Pointer {
 
     /// Get the address of the pointer
     pub fn address(&self) -> PointerAddress {
-        PointerAddress::from_owner(self.owner)
+        PointerAddress::new(self.owner)
     }
 
     /// Get the owner of the pointer
@@ -131,15 +142,13 @@ impl Pointer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::thread_rng;
 
     #[test]
     fn test_pointer_creation_and_validation() {
         let owner_sk = SecretKey::random();
         let counter = 1;
-        let mut rng = thread_rng();
-        let target =
-            PointerTarget::GraphEntryAddress(GraphEntryAddress::new(XorName::random(&mut rng)));
+        let pk = SecretKey::random().public_key();
+        let target = PointerTarget::GraphEntryAddress(GraphEntryAddress::new(pk));
 
         // Create and sign pointer
         let pointer = Pointer::new(&owner_sk, counter, target.clone());

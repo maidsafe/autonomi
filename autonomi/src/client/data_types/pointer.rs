@@ -78,6 +78,7 @@ impl Client {
             ))
         })?;
 
+        info!("Got pointer at address {address:?}: {pointer:?}");
         Self::pointer_verify(&pointer)?;
         Ok(pointer)
     }
@@ -120,7 +121,7 @@ impl Client {
         let address = pointer.address();
 
         // pay for the pointer storage
-        let xor_name = *address.xorname();
+        let xor_name = address.xorname();
         debug!("Paying for pointer at address: {address:?}");
         let (payment_proofs, _skipped_payments) = self
             .pay_for_content_addrs(
@@ -191,7 +192,7 @@ impl Client {
         target: PointerTarget,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
-        let address = PointerAddress::from_owner(owner.public_key());
+        let address = PointerAddress::new(owner.public_key());
         let already_exists = self.pointer_check_existance(&address).await?;
         if already_exists {
             return Err(PointerError::PointerAlreadyExists(address));
@@ -211,7 +212,7 @@ impl Client {
         owner: &SecretKey,
         target: PointerTarget,
     ) -> Result<(), PointerError> {
-        let address = PointerAddress::from_owner(owner.public_key());
+        let address = PointerAddress::new(owner.public_key());
         let current = match self.pointer_get(&address).await {
             Ok(pointer) => Some(pointer),
             Err(PointerError::Network(NetworkError::GetRecordError(
@@ -263,8 +264,8 @@ impl Client {
     pub async fn pointer_cost(&self, key: &PublicKey) -> Result<AttoTokens, CostError> {
         trace!("Getting cost for pointer of {key:?}");
 
-        let address = PointerAddress::from_owner(*key);
-        let xor = *address.xorname();
+        let address = PointerAddress::new(*key);
+        let xor = address.xorname();
         let store_quote = self
             .get_store_quotes(DataTypes::Pointer, std::iter::once((xor, Pointer::size())))
             .await?;

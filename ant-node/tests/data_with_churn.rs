@@ -17,7 +17,7 @@ use ant_protocol::{
     storage::{ChunkAddress, GraphEntry, GraphEntryAddress, PointerTarget, ScratchpadAddress},
     NetworkAddress,
 };
-use autonomi::{Client, Wallet};
+use autonomi::{data::DataAddress, Client, Wallet};
 use bls::{PublicKey, SecretKey};
 use bytes::Bytes;
 use common::client::transfer_to_new_wallet;
@@ -690,7 +690,9 @@ fn store_chunks_task(
                         content
                             .write()
                             .await
-                            .push_back(NetworkAddress::ChunkAddress(ChunkAddress::new(data_map)));
+                            .push_back(NetworkAddress::ChunkAddress(ChunkAddress::new(
+                                *data_map.xorname(),
+                            )));
                         break;
                     }
                     Err(err) => {
@@ -872,7 +874,9 @@ async fn final_retry_query_content(
 async fn query_content(client: &Client, net_addr: &NetworkAddress) -> Result<()> {
     match net_addr {
         NetworkAddress::ChunkAddress(addr) => {
-            client.data_get_public(addr.xorname()).await?;
+            client
+                .data_get_public(&DataAddress::new(*addr.xorname()))
+                .await?;
             Ok(())
         }
         NetworkAddress::PointerAddress(addr) => {

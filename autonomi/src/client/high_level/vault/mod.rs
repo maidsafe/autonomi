@@ -85,7 +85,7 @@ impl Client {
             .derive_key(&DerivationIndex::from_bytes(VAULT_HEAD_DERIVATION_INDEX))
             .public_key();
 
-        let mut cur_graph_entry_addr = GraphEntryAddress::from_owner(public_key.into());
+        let mut cur_graph_entry_addr = GraphEntryAddress::new(public_key.into());
         let mut decrypted_full_text = vec![];
         let mut content_type = 0;
         let mut has_end_reached = false;
@@ -96,7 +96,7 @@ impl Client {
             // The first descendant is reserved for `expand GraphEntry`.
             match graph_entry.descendants.split_first() {
                 Some((&(first, _), rest)) => {
-                    cur_graph_entry_addr = GraphEntryAddress::from_owner(first);
+                    cur_graph_entry_addr = GraphEntryAddress::new(first);
                     let scratchpad_addresses = rest.to_vec();
 
                     let (decrypt_data, cur_content_type, is_end_reached) = self
@@ -343,7 +343,7 @@ impl Client {
             let public_key = main_secret_key
                 .derive_key(&cur_free_graphentry_derivation)
                 .public_key();
-            let cur_graph_entry_addr = GraphEntryAddress::from_owner(public_key.into());
+            let cur_graph_entry_addr = GraphEntryAddress::new(public_key.into());
 
             match self.graph_entry_get(&cur_graph_entry_addr).await {
                 Ok(entry) => {
