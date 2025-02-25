@@ -37,9 +37,9 @@ pub type ArchiveAddress = DataAddress;
 pub struct PublicArchive {
     ///           Path of the file in the directory
     ///           |         Data address of the content of the file (points to a DataMap)
-    ///           |         |         Metadata of the file
-    ///           |         |         |
-    ///           V         V         V
+    ///           |         |            Metadata of the file
+    ///           |         |            |
+    ///           V         V            V
     map: BTreeMap<PathBuf, (DataAddress, Metadata)>,
 }
 
