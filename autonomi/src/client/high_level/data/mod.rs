@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_protocol::storage::AddressParseError;
-use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use xor_name::XorName;
 
@@ -17,7 +16,7 @@ pub mod private;
 pub mod public;
 
 /// A [`DataAddress`] which points to a DataMap
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub struct DataAddress(XorName);
 
 impl DataAddress {
@@ -51,5 +50,40 @@ impl DataAddress {
 impl std::fmt::Display for DataAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.to_hex())
+    }
+}
+
+impl serde::Serialize for DataAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for DataAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let xor_name = XorName::deserialize(deserializer)?;
+        Ok(Self(xor_name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serialize_deserialize() {
+        let name = XorName::random(&mut rand::thread_rng());
+        let data_address = DataAddress::new(name);
+        let name_serialized = rmp_serde::to_vec_named(&name).unwrap();
+        let serialized = rmp_serde::to_vec_named(&data_address).unwrap();
+        assert_eq!(name_serialized, serialized);
+        let deserialized: DataAddress = rmp_serde::from_slice(&serialized).unwrap();
+        assert_eq!(data_address, deserialized);
     }
 }
