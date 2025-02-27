@@ -163,6 +163,8 @@ impl ContactsFetcher {
             }
         }
 
+        bootstrap_addresses.truncate(self.max_addrs);
+
         info!(
             "Successfully discovered {} total addresses. First few: {:?}",
             bootstrap_addresses.len(),

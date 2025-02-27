@@ -21,7 +21,7 @@
 #[macro_use]
 extern crate tracing;
 
-mod cache_store;
+pub mod cache_store;
 pub mod config;
 pub mod contacts;
 pub mod error;
