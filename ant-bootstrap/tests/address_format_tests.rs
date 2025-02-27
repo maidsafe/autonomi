@@ -18,10 +18,10 @@ use wiremock::{
 // Setup function to create a new temp directory and config for each test
 async fn setup() -> (TempDir, BootstrapCacheConfig) {
     let temp_dir = TempDir::new().unwrap();
-    let cache_path = temp_dir.path().join("cache.json");
+    let cache_dir = temp_dir.path();
 
     let config = BootstrapCacheConfig::empty()
-        .with_cache_path(&cache_path)
+        .with_cache_dir(cache_dir)
         .with_max_peers(50);
 
     (temp_dir, config)

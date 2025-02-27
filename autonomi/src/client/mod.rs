@@ -253,7 +253,7 @@ fn build_client_and_run_swarm(
     let mut network_builder =
         NetworkBuilder::new(Keypair::generate_ed25519(), local, initial_peers);
 
-    if let Ok(mut config) = BootstrapCacheConfig::default_config(local) {
+    if let Ok(mut config) = BootstrapCacheConfig::new(local) {
         if local {
             config.disable_cache_writing = true;
         }
