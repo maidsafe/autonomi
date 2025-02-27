@@ -5690,7 +5690,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        no_upnp: false,
+        no_upnp: true,
         write_older_cache_files: true,
     }
     .build()?;
