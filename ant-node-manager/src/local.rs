@@ -431,6 +431,7 @@ pub async fn run_node(
         user: None,
         user_mode: false,
         version: run_options.version.to_string(),
+        write_older_cache_files: false,
     })
 }
 

@@ -247,6 +247,9 @@ pub enum SubCmd {
         /// The binary will be downloaded.
         #[clap(long)]
         version: Option<String>,
+        /// Set this to true if you want the node to write the cache files in the older formats.
+        #[clap(long, default_value_t = false)]
+        write_older_cache_files: bool,
     },
     /// Get node reward balances.
     #[clap(name = "balance")]
@@ -850,6 +853,7 @@ async fn main() -> Result<()> {
             no_upnp,
             user,
             version,
+            write_older_cache_files,
         }) => {
             cmd::node::add(
                 alpha,
@@ -880,6 +884,7 @@ async fn main() -> Result<()> {
                 user,
                 version,
                 verbosity,
+                write_older_cache_files,
             )
             .await?;
             Ok(())

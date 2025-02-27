@@ -112,6 +112,7 @@ impl From<NodeServiceDataV1> for NodeServiceDataV2 {
             user: v1.user,
             user_mode: v1.user_mode,
             version: v1.version,
+            write_older_cache_files: false, // Default value for upgraded instances
         }
     }
 }

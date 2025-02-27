@@ -117,6 +117,10 @@ impl ServiceStateActions for NodeService {
         args.push(OsString::from("--rewards-address"));
         args.push(OsString::from(service_data.rewards_address.to_string()));
 
+        if service_data.write_older_cache_files {
+            args.push(OsString::from("--write-older-cache-files"));
+        }
+
         args.push(OsString::from(service_data.evm_network.to_string()));
         if let EvmNetwork::Custom(custom_network) = &service_data.evm_network {
             args.push(OsString::from("--rpc-url"));

@@ -84,6 +84,7 @@ pub async fn restart_node_service(
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
+            write_older_cache_files: current_node_clone.write_older_cache_files,
         }
         .build()?;
 
@@ -200,6 +201,7 @@ pub async fn restart_node_service(
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),
             service_user: current_node_clone.user.clone(),
+            write_older_cache_files: current_node_clone.write_older_cache_files,
         }
         .build()?;
         service_control.install(install_ctx, false).map_err(|err| {
@@ -237,6 +239,7 @@ pub async fn restart_node_service(
             user: current_node_clone.user.clone(),
             user_mode: false,
             version: current_node_clone.version.clone(),
+            write_older_cache_files: current_node_clone.write_older_cache_files,
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);

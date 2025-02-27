@@ -68,6 +68,7 @@ pub async fn add(
     user: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
+    write_older_cache_files: bool,
 ) -> Result<Vec<String>> {
     let user_mode = !is_running_as_root();
 
@@ -148,6 +149,7 @@ pub async fn add(
         user: service_user,
         user_mode,
         version,
+        write_older_cache_files,
     };
     info!("Adding node service(s)");
     let added_services_names =
@@ -623,6 +625,7 @@ pub async fn maintain_n_running_nodes(
     version: Option<String>,
     verbosity: VerbosityLevel,
     start_node_interval: Option<u64>,
+    write_older_cache_files: bool,
 ) -> Result<()> {
     let mut running_nodes = Vec::new();
 
@@ -736,6 +739,7 @@ pub async fn maintain_n_running_nodes(
                         user.clone(),
                         version.clone(),
                         verbosity,
+                        write_older_cache_files,
                     )
                     .await?;
 
