@@ -214,6 +214,7 @@ pub async fn add_node(
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
             no_upnp: options.no_upnp,
+            write_older_cache_files: options.write_older_cache_files,
         }
         .build()?;
 
@@ -259,6 +260,7 @@ pub async fn add_node(
                     user: options.user.clone(),
                     user_mode: options.user_mode,
                     version: options.version.clone(),
+                    write_older_cache_files: options.write_older_cache_files,
                 });
                 // We save the node registry for each service because it's possible any number of
                 // services could fail to be added.
