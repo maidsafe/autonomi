@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    config::cache_file_name,
     craft_valid_multiaddr, craft_valid_multiaddr_from_str,
     error::{Error, Result},
     BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
@@ -125,16 +124,13 @@ impl InitialPeersConfig {
             let cfg = if let Some(config) = config {
                 Some(config)
             } else {
-                BootstrapCacheConfig::default_config(self.local).ok()
+                BootstrapCacheConfig::new(self.local)
+                    .inspect_err(|err| {
+                        error!("Failed to create cache config: {err}",);
+                    })
+                    .ok()
             };
-            if let Some(mut cfg) = cfg {
-                if let Some(file_path) = self.get_bootstrap_cache_path()? {
-                    cfg.cache_file_path = file_path;
-                }
-                info!(
-                    "Loading bootstrap addresses from cache at: {:?}",
-                    cfg.cache_file_path
-                );
+            if let Some(cfg) = cfg {
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
                     bootstrap_addresses.extend(data.get_all_addrs().cloned());
 
@@ -231,23 +227,5 @@ impl InitialPeersConfig {
             }
         }
         bootstrap_addresses
-    }
-
-    /// Get the path to the bootstrap cache JSON file if `Self::bootstrap_cache_dir` is set
-    pub fn get_bootstrap_cache_path(&self) -> Result<Option<PathBuf>> {
-        if let Some(dir) = &self.bootstrap_cache_dir {
-            if dir.is_file() {
-                return Err(Error::InvalidBootstrapCacheDir);
-            }
-
-            if !dir.exists() {
-                std::fs::create_dir_all(dir)?;
-            }
-
-            let path = dir.join(cache_file_name());
-            Ok(Some(path))
-        } else {
-            Ok(None)
-        }
     }
 }

@@ -16,12 +16,10 @@ use tokio::time::sleep;
 #[tokio::test]
 async fn test_cache_store_operations() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
-
     let temp_dir = TempDir::new()?;
-    let cache_path = temp_dir.path().join("cache.json");
 
     // Create cache store with config
-    let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
+    let config = BootstrapCacheConfig::empty().with_cache_dir(temp_dir.path());
 
     let mut cache_store = BootstrapCacheStore::new(config)?;
 
@@ -46,10 +44,9 @@ async fn test_cache_max_peers() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
 
     let temp_dir = TempDir::new()?;
-    let cache_path = temp_dir.path().join("cache.json");
 
     // Create cache with small max_peers limit
-    let mut config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
+    let mut config = BootstrapCacheConfig::empty().with_cache_dir(temp_dir.path());
     config.max_peers = 2;
 
     let mut cache_store = BootstrapCacheStore::new(config)?;
@@ -87,10 +84,10 @@ async fn test_cache_max_peers() -> Result<(), Box<dyn std::error::Error>> {
 async fn test_cache_file_corruption() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
     let temp_dir = TempDir::new()?;
-    let cache_path = temp_dir.path().join("cache.json");
+    let cache_dir = temp_dir.path();
 
     // Create cache with some peers
-    let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
+    let config = BootstrapCacheConfig::empty().with_cache_dir(cache_dir);
 
     let mut cache_store = BootstrapCacheStore::new(config.clone())?;
 
@@ -103,7 +100,8 @@ async fn test_cache_file_corruption() -> Result<(), Box<dyn std::error::Error>> 
     assert_eq!(cache_store.peer_count(), 1);
 
     // Corrupt the cache file
-    tokio::fs::write(&cache_path, "invalid json content").await?;
+    let cache_file = cache_dir.join(BootstrapCacheStore::cache_file_name(false));
+    tokio::fs::write(&cache_file, "invalid json content").await?;
 
     // Create a new cache store - it should handle the corruption gracefully
     let mut new_cache_store = BootstrapCacheStore::new(config)?;
