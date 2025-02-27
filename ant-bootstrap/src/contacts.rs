@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{cache_store::CacheData, craft_valid_multiaddr_from_str, Error, Result};
+use crate::{craft_valid_multiaddr_from_str, Error, Result};
 use futures::stream::{self, StreamExt};
 use libp2p::Multiaddr;
 use reqwest::Client;
@@ -233,8 +233,20 @@ impl ContactsFetcher {
 
     /// Try to parse a response from an endpoint
     fn try_parse_response(response: &str, ignore_peer_id: bool) -> Result<Vec<Multiaddr>> {
-        match serde_json::from_str::<CacheData>(response) {
-            Ok(cache_data) => {
+        let cache_data = if let Ok(data) =
+            serde_json::from_str::<super::cache_store::cache_data_v1::CacheData>(response)
+        {
+            Some(data)
+        } else if let Ok(data) =
+            serde_json::from_str::<super::cache_store::cache_data_v0::CacheData>(response)
+        {
+            Some(data.into())
+        } else {
+            None
+        };
+
+        match cache_data {
+            Some(cache_data) => {
                 info!(
                     "Successfully parsed JSON response with {} peers",
                     cache_data.peers.len()
@@ -255,7 +267,7 @@ impl ContactsFetcher {
                 );
                 Ok(bootstrap_addresses)
             }
-            Err(_err) => {
+            None => {
                 info!("Attempting to parse response as plain text");
                 // Try parsing as plain text with one multiaddr per line
                 // example of contacts file exists in resources/network-contacts-examples

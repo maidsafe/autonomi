@@ -17,8 +17,7 @@ use wiremock::{
 
 async fn setup() -> (TempDir, BootstrapCacheConfig) {
     let temp_dir = TempDir::new().unwrap();
-    let cache_path = temp_dir.path().join("cache.json");
-    let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
+    let config = BootstrapCacheConfig::empty().with_cache_dir(temp_dir.path());
 
     (temp_dir, config)
 }
@@ -47,7 +46,7 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
 #[tokio::test]
 async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
-    let (_temp_dir, _config) = setup().await;
+    let (_temp_dir, config) = setup().await;
 
     let peer_addr: Multiaddr =
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
@@ -62,7 +61,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_bootstrap_addr(None, Some(1)).await?;
+    let addrs = args.get_bootstrap_addr(Some(config), Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have one addr");
     assert_eq!(addrs[0], peer_addr, "Should have the correct address");
@@ -109,15 +108,13 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
 #[tokio::test]
 async fn test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
-
     let temp_dir = TempDir::new()?;
-    let cache_path = temp_dir.path().join("cache.json");
 
     let peer_addr: Multiaddr =
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
             .parse()?;
 
-    let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
+    let config = BootstrapCacheConfig::empty().with_cache_dir(temp_dir.path());
 
     let args = InitialPeersConfig {
         first: false,

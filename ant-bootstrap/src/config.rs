@@ -32,35 +32,33 @@ const MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(3 * 60 *
 pub struct BootstrapCacheConfig {
     /// The duration since last)seen before removing the address of a Peer.
     pub addr_expiry_duration: Duration,
+    /// Enable backwards compatibility while writing the cache file.
+    /// This will write the cache file in all versions of the cache file format.
+    pub backwards_compatible_writes: bool,
+    /// The directory to load and store the bootstrap cache. If not provided, the default path will be used.
+    pub cache_dir: PathBuf,
+    /// The cache save scaling factor. We start with the min_cache_save_duration and scale it up to the max_cache_save_duration.
+    pub cache_save_scaling_factor: u64,
+    /// Flag to disable writing to the cache file
+    pub disable_cache_writing: bool,
+    /// If set to true, the cache filename will be suffixed with "_local"
+    pub local: bool,
+    /// The max time duration until we save the bootstrap cache to disk.
+    pub max_cache_save_duration: Duration,
     /// Maximum number of peers to keep in the cache
     pub max_peers: usize,
     /// Maximum number of addresses stored per peer.
     pub max_addrs_per_peer: usize,
-    /// Path to the bootstrap cache file
-    pub cache_file_path: PathBuf,
-    /// Flag to disable writing to the cache file
-    pub disable_cache_writing: bool,
     /// The min time duration until we save the bootstrap cache to disk.
     pub min_cache_save_duration: Duration,
-    /// The max time duration until we save the bootstrap cache to disk.
-    pub max_cache_save_duration: Duration,
-    /// The cache save scaling factor. We start with the min_cache_save_duration and scale it up to the max_cache_save_duration.
-    pub cache_save_scaling_factor: u64,
 }
 
 impl BootstrapCacheConfig {
     /// Creates a new BootstrapConfig with default settings
-    ///
-    /// When `local` is set to true, a different cache file name is used.
-    /// I.e. the file name will include `_local_` in the name.
-    pub fn default_config(local: bool) -> Result<Self> {
-        let cache_file_path = if local {
-            default_cache_path_local()?
-        } else {
-            default_cache_path()?
-        };
+    pub fn new(local: bool) -> Result<Self> {
         Ok(Self {
-            cache_file_path,
+            local,
+            cache_dir: default_cache_dir()?,
             ..Self::empty()
         })
     }
@@ -69,14 +67,28 @@ impl BootstrapCacheConfig {
     pub fn empty() -> Self {
         Self {
             addr_expiry_duration: ADDR_EXPIRY_DURATION,
+            backwards_compatible_writes: false,
             max_peers: MAX_PEERS,
             max_addrs_per_peer: MAX_ADDRS_PER_PEER,
-            cache_file_path: PathBuf::new(),
+            cache_dir: PathBuf::new(),
             disable_cache_writing: false,
+            local: false,
             min_cache_save_duration: MIN_BOOTSTRAP_CACHE_SAVE_INTERVAL,
             max_cache_save_duration: MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL,
             cache_save_scaling_factor: 2,
         }
+    }
+
+    /// Set backwards compatible writes
+    pub fn with_backwards_compatible_writes(mut self, enable: bool) -> Self {
+        self.backwards_compatible_writes = enable;
+        self
+    }
+
+    /// Set the local flag
+    pub fn with_local(mut self, enable: bool) -> Self {
+        self.local = enable;
+        self
     }
 
     /// Set a new addr expiry duration
@@ -86,8 +98,8 @@ impl BootstrapCacheConfig {
     }
 
     /// Update the config with a custom cache file path
-    pub fn with_cache_path<P: AsRef<Path>>(mut self, path: P) -> Self {
-        self.cache_file_path = path.as_ref().to_path_buf();
+    pub fn with_cache_dir<P: AsRef<Path>>(mut self, path: P) -> Self {
+        self.cache_dir = path.as_ref().to_path_buf();
         self
     }
 
@@ -110,16 +122,6 @@ impl BootstrapCacheConfig {
     }
 }
 
-/// Returns the default path for the bootstrap cache file
-fn default_cache_path() -> Result<PathBuf> {
-    Ok(default_cache_dir()?.join(cache_file_name()))
-}
-/// Returns the default path for the bootstrap cache file that is used for
-/// local networks
-fn default_cache_path_local() -> Result<PathBuf> {
-    Ok(default_cache_dir()?.join(cache_file_name_local()))
-}
-
 /// Returns the default dir that should contain the bootstrap cache file
 fn default_cache_dir() -> Result<PathBuf> {
     let dir = dirs_next::data_dir()
@@ -130,17 +132,4 @@ fn default_cache_dir() -> Result<PathBuf> {
     std::fs::create_dir_all(&dir)?;
 
     Ok(dir)
-}
-
-/// Returns the name of the cache file
-pub fn cache_file_name() -> String {
-    format!("bootstrap_cache_{}.json", crate::get_network_version())
-}
-
-/// Returns the name of the cache file for local networks
-pub fn cache_file_name_local() -> String {
-    format!(
-        "bootstrap_cache_local_{}.json",
-        crate::get_network_version()
-    )
 }
