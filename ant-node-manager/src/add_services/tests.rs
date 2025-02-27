@@ -151,6 +151,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
     mock_service_control
@@ -199,6 +200,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -313,6 +315,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             user: Some("ant".to_string()),
             user_mode: false,
             version: latest_version.to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -367,6 +370,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -456,6 +460,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -538,6 +543,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -586,6 +592,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -634,6 +641,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -683,6 +691,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -815,6 +824,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
     mock_service_control
@@ -863,6 +873,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -950,6 +961,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             user: Some("ant".to_string()),
             user_mode: false,
             version: latest_version.to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -1000,6 +1012,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -1049,6 +1062,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1213,6 +1227,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1370,6 +1385,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1522,6 +1538,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1678,6 +1695,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1833,6 +1851,7 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -1985,6 +2004,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2138,6 +2158,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2284,6 +2305,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2428,6 +2450,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2511,6 +2534,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -2560,6 +2584,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2820,6 +2845,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -2887,6 +2913,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -2939,6 +2966,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -3004,6 +3032,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -3056,6 +3085,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -3134,6 +3164,7 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -3217,6 +3248,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -3363,6 +3395,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -3501,6 +3534,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -3640,6 +3674,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -3895,6 +3930,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -3959,6 +3995,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -4011,6 +4048,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -4077,6 +4115,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -4129,6 +4168,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -4367,6 +4407,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -4442,6 +4483,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -4494,6 +4536,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -4560,6 +4603,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
+            write_older_cache_files: false,
         }],
         environment_variables: None,
         daemon: None,
@@ -4612,6 +4656,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &MockServiceControl::new(),
@@ -4693,6 +4738,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
     mock_service_control
@@ -4741,6 +4787,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -4819,6 +4866,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: true,
+        write_older_cache_files: false,
     }
     .build()?;
     mock_service_control
@@ -4867,6 +4915,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -4945,6 +4994,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
     mock_service_control
@@ -4993,6 +5043,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -5079,6 +5130,7 @@ async fn add_node_should_return_an_error_if_nat_status_is_none_but_auto_set_nat_
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -5690,6 +5742,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -5739,6 +5792,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -5818,6 +5872,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -5867,6 +5922,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -5946,6 +6002,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: false,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -5995,6 +6052,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -6071,6 +6129,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
         upnp: true,
+        write_older_cache_files: false,
     }
     .build()?;
 
@@ -6120,6 +6179,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -6255,6 +6315,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
+            write_older_cache_files: false,
         },
         &mut node_registry,
         &mock_service_control,
@@ -6263,6 +6324,136 @@ async fn add_node_should_auto_restart() -> Result<()> {
     .await?;
 
     assert!(node_registry.nodes[0].auto_restart);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<()> {
+    let tmp_data_dir = assert_fs::TempDir::new()?;
+    let node_reg_path = tmp_data_dir.child("node_reg.json");
+
+    let mut mock_service_control = MockServiceControl::new();
+
+    let mut node_registry = NodeRegistry {
+        auditor: None,
+        faucet: None,
+        save_path: node_reg_path.to_path_buf(),
+        nat_status: None,
+        nodes: vec![],
+        environment_variables: None,
+        daemon: None,
+    };
+
+    let latest_version = "0.96.4";
+    let temp_dir = assert_fs::TempDir::new()?;
+    let node_data_dir = temp_dir.child("data");
+    node_data_dir.create_dir_all()?;
+    let node_logs_dir = temp_dir.child("logs");
+    node_logs_dir.create_dir_all()?;
+    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
+    antnode_download_path.write_binary(b"fake antnode bin")?;
+
+    let mut seq = Sequence::new();
+
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+
+    let install_ctx = InstallNodeServiceCtxBuilder {
+        autostart: false,
+        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
+        env_variables: None,
+        evm_network: EvmNetwork::Custom(CustomNetwork {
+            rpc_url_http: "http://localhost:8545".parse()?,
+            payment_token_address: RewardsAddress::from_str(
+                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+            )?,
+            data_payments_address: RewardsAddress::from_str(
+                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+            )?,
+        }),
+        home_network: false,
+        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
+        log_format: None,
+        max_archived_log_files: None,
+        max_log_files: None,
+        metrics_port: None,
+        network_id: None,
+        name: "antnode1".to_string(),
+        node_ip: None,
+        node_port: None,
+        peers_args: PeersArgs::default(),
+        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+        antnode_path: node_data_dir
+            .to_path_buf()
+            .join("antnode1")
+            .join(ANTNODE_FILE_NAME),
+        service_user: Some(get_username()),
+        upnp: false,
+        write_older_cache_files: true,
+    }
+    .build()?;
+
+    mock_service_control
+        .expect_install()
+        .times(1)
+        .with(eq(install_ctx), eq(true))
+        .returning(|_, _| Ok(()))
+        .in_sequence(&mut seq);
+
+    add_node(
+        AddNodeServiceOptions {
+            auto_restart: false,
+            auto_set_nat_flags: false,
+            count: Some(1),
+            delete_antnode_src: false,
+            enable_metrics_server: false,
+            env_variables: None,
+            relay: false,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peers_args: PeersArgs::default(),
+            rpc_address: None,
+            rpc_port: None,
+            antnode_dir_path: temp_dir.to_path_buf(),
+            antnode_src_path: antnode_download_path.to_path_buf(),
+            service_data_dir_path: node_data_dir.to_path_buf(),
+            service_log_dir_path: node_logs_dir.to_path_buf(),
+            no_upnp: true,
+            user: Some(get_username()),
+            user_mode: true,
+            version: latest_version.to_string(),
+            evm_network: EvmNetwork::Custom(CustomNetwork {
+                rpc_url_http: "http://localhost:8545".parse()?,
+                payment_token_address: RewardsAddress::from_str(
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                )?,
+                data_payments_address: RewardsAddress::from_str(
+                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                )?,
+            }),
+            rewards_address: RewardsAddress::from_str(
+                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
+            )?,
+            write_older_cache_files: true,
+        },
+        &mut node_registry,
+        &mock_service_control,
+        VerbosityLevel::Normal,
+    )
+    .await?;
+
+    assert_eq!(node_registry.nodes.len(), 1);
+    assert!(node_registry.nodes[0].write_older_cache_files);
 
     Ok(())
 }

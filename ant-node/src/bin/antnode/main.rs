@@ -15,7 +15,7 @@ mod subcommands;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
-use ant_bootstrap::{BootstrapCacheStore, PeersArgs};
+use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, PeersArgs};
 use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
@@ -171,6 +171,10 @@ struct Opt {
     #[command(flatten)]
     peers: PeersArgs,
 
+    /// Set this to true if you want the node to write the cache files in the older formats.
+    #[clap(long, default_value_t = false)]
+    write_older_cache_files: bool,
+
     /// Enable the admin/control RPC service by providing an IP and port for it to listen on.
     ///
     /// The RPC service can be used for querying information about the running node.
@@ -276,7 +280,11 @@ fn main() -> Result<()> {
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
         init_logging(&opt, keypair.public().to_peer_id())?;
 
-    let mut bootstrap_cache = BootstrapCacheStore::new_from_peers_args(&opt.peers, None)?;
+    let mut bootstrap_config = BootstrapCacheConfig::new(opt.peers.local)?;
+    bootstrap_config.backwards_compatible_writes = opt.write_older_cache_files;
+    let mut bootstrap_cache =
+        BootstrapCacheStore::new_from_peers_args(&opt.peers, Some(bootstrap_config))?;
+
     // If we are the first node, write initial cache to disk.
     if opt.peers.first {
         bootstrap_cache.write()?;
