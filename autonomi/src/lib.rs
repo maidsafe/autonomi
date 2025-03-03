@@ -70,6 +70,7 @@ pub use client::data_types::scratchpad;
 pub use client::data;
 pub use client::files;
 pub use client::register;
+pub use client::smart_equation;
 pub use client::vault;
 
 // Re-exports of the evm types

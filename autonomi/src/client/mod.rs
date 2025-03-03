@@ -26,6 +26,7 @@ mod high_level;
 pub use high_level::data;
 pub use high_level::files;
 pub use high_level::register;
+pub use high_level::smart_equation;
 pub use high_level::vault;
 
 pub mod config;
