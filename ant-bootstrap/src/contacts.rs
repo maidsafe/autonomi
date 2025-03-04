@@ -15,6 +15,8 @@ use reqwest::Client;
 use std::time::Duration;
 use url::Url;
 
+const CONTACTS_CACHE_VERSION_HEADER: &str = "Cache-Version";
+
 pub const MAINNET_CONTACTS: &[&str] = &[
     "https://sn-testnet.s3.eu-west-2.amazonaws.com/network-contacts",
     "http://159.89.251.80/bootstrap_cache.json",
@@ -186,7 +188,7 @@ impl ContactsFetcher {
         let bootstrap_addresses = loop {
             let response = request_client
                 .get(endpoint.clone())
-                .header("cache_version", CACHE_DATA_VERSION_LATEST)
+                .header(CONTACTS_CACHE_VERSION_HEADER, CACHE_DATA_VERSION_LATEST)
                 .send()
                 .await;
 
