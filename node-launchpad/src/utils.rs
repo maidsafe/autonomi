@@ -39,7 +39,7 @@ pub fn initialize_panic_handler() -> Result<()> {
                 version: env!("CARGO_PKG_VERSION").into(),
                 name: env!("CARGO_PKG_NAME").into(),
                 authors: env!("CARGO_PKG_AUTHORS").replace(':', ", ").into(),
-                homepage: env!("CARGO_PKG_HOMEPAGE").into(),
+                homepage: "https://autonomi.com/".into(),
             };
 
             let file_path = handle_dump(&meta, panic_info);
