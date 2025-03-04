@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{craft_valid_multiaddr_from_str, Error, Result};
+use crate::{
+    cache_store::CACHE_DATA_VERSION_LATEST, craft_valid_multiaddr_from_str, Error, Result,
+};
 use futures::stream::{self, StreamExt};
 use libp2p::Multiaddr;
 use reqwest::Client;
@@ -182,7 +184,11 @@ impl ContactsFetcher {
         let mut retries = 0;
 
         let bootstrap_addresses = loop {
-            let response = request_client.get(endpoint.clone()).send().await;
+            let response = request_client
+                .get(endpoint.clone())
+                .header("cache_version", CACHE_DATA_VERSION_LATEST)
+                .send()
+                .await;
 
             match response {
                 Ok(response) => {
