@@ -14,6 +14,7 @@ use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use std::fs;
 
 pub type CacheDataLatest = cache_data_v1::CacheData;
+pub const CACHE_DATA_VERSION_LATEST: u32 = cache_data_v1::CacheData::CACHE_DATA_VERSION;
 
 #[derive(Clone, Debug)]
 pub struct BootstrapCacheStore {
