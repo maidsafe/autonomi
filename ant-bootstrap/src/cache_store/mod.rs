@@ -62,11 +62,15 @@ impl BootstrapCacheStore {
         init_peers_config: &InitialPeersConfig,
         config: Option<BootstrapCacheConfig>,
     ) -> Result<Self> {
-        let config = if let Some(cfg) = config {
+        let mut config = if let Some(cfg) = config {
             cfg
         } else {
             BootstrapCacheConfig::new(init_peers_config.local)?
         };
+
+        if let Some(cache_dir) = &init_peers_config.bootstrap_cache_dir {
+            config.cache_dir = cache_dir.clone();
+        }
 
         let mut store = Self::new(config)?;
 
