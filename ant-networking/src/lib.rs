@@ -958,7 +958,8 @@ impl Network {
 
             match error {
                 NetworkError::OutboundError(OutboundFailure::Io(_))
-                | NetworkError::OutboundError(OutboundFailure::ConnectionClosed) => {
+                | NetworkError::OutboundError(OutboundFailure::ConnectionClosed)
+                | NetworkError::OutboundError(OutboundFailure::DialFailure) => {
                     warn!(
                         "Outbound failed for {req:?} .. {error:?}, redialing once and reattempting"
                     );
