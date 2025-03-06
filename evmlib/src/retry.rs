@@ -10,6 +10,7 @@ pub(crate) const MAX_RETRIES: u8 = 3;
 const DEFAULT_RETRY_INTERVAL_MS: u64 = 4000;
 const BROADCAST_TRANSACTION_TIMEOUT_MS: u64 = 5000;
 const WATCH_TIMEOUT_MS: u64 = 1000;
+const REQUIRED_CONFIRMATIONS: u64 = 3;
 
 /// Execute an async closure that returns a result. Retry on failure.
 pub(crate) async fn retry<F, Fut, T, E>(
@@ -143,6 +144,7 @@ where
                     pending_tx_builder.inner().clone(),
                 )
                 .with_timeout(Some(TX_TIMEOUT))
+                .with_required_confirmations(REQUIRED_CONFIRMATIONS)
                 .watch()
                 .await
             },
