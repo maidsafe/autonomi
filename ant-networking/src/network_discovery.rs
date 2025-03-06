@@ -9,7 +9,7 @@
 use crate::time::{interval, Instant, Interval};
 use crate::{driver::PendingGetClosestType, SwarmDriver};
 use ant_protocol::NetworkAddress;
-use libp2p::kad::K_VALUE;
+// use libp2p::kad::K_VALUE;
 use libp2p::{kad::KBucketKey, PeerId};
 use rand::rngs::OsRng;
 use rand::{thread_rng, Rng};
@@ -58,23 +58,24 @@ impl SwarmDriver {
 
         // Find the farthest bucket that is not full.
         // This is used to skip refreshing the RT of farthest full buckets.
-        let mut farthest_unfilled_bucket = Some(255);
-        let kbuckets: Vec<_> = self.swarm.behaviour_mut().kademlia.kbuckets().collect();
-        // Iterate from 255, 254 and so on by calling `rev()` to tackle the `hole` situation.
-        for kbucket in kbuckets.iter().rev() {
-            if kbucket.num_entries() < K_VALUE.get() {
-                let Some(ilog2) = kbucket.range().0.ilog2() else {
-                    continue;
-                };
-                farthest_unfilled_bucket = Some(ilog2);
-                break;
-            }
-        }
+        let farthest_unfilled_bucket = Some(256);
+        // let kbuckets: Vec<_> = self.swarm.behaviour_mut().kademlia.kbuckets().collect();
+        // // Iterate from 255, 254 and so on by calling `rev()` to tackle the `hole` situation.
+        // for kbucket in kbuckets.iter().rev() {
+        //     if kbucket.num_entries() < K_VALUE.get() {
+        //         let Some(ilog2) = kbucket.range().0.ilog2() else {
+        //             continue;
+        //         };
+        //         farthest_unfilled_bucket = Some(ilog2);
+        //         break;
+        //     }
+        // }
 
-        let addrs = self
-            .network_discovery
-            .candidates
-            .get_candidates(farthest_unfilled_bucket);
+        // let addrs = self
+        //     .network_discovery
+        //     .candidates
+        //     .get_candidates(farthest_unfilled_bucket);
+        let addrs = vec![NetworkAddress::from_peer(PeerId::random())];
         info!(
             "Triggering network discovery with {} candidates. Farthest non full bucket: {farthest_unfilled_bucket:?}",
             addrs.len()
@@ -266,6 +267,7 @@ impl NetworkDiscoveryCandidates {
 
     /// Returns one random candidate per bucket. Also tries to refresh the candidate list.
     /// Set the farthest_bucket to get candidates that are closer than or equal to the farthest_bucket.
+    #[allow(dead_code)]
     fn get_candidates(&mut self, farthest_bucket: Option<u32>) -> Vec<&NetworkAddress> {
         self.try_refresh_candidates();
 
@@ -290,6 +292,7 @@ impl NetworkDiscoveryCandidates {
     }
 
     /// Tries to refresh our current candidate list. We replace the old ones with new if we find any.
+    #[allow(dead_code)]
     fn try_refresh_candidates(&mut self) {
         let candidates_vec = Self::generate_candidates(&self.self_key, GENERATION_ATTEMPTS);
         for (ilog2, candidates) in candidates_vec {
