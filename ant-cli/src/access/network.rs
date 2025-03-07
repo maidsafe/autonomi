@@ -31,7 +31,7 @@ impl NetworkPeers {
 }
 
 pub async fn get_peers(peers: PeersArgs) -> Result<NetworkPeers> {
-    let addrs = peers.get_addrs(None, Some(100)).await
+    let addrs = peers.get_bootstrap_addr(None, Some(100)).await
         .wrap_err("Please provide valid Network peers to connect to")
         .with_suggestion(|| format!("make sure you've provided network peers using the --peers option or the {ANT_PEERS_ENV} env var"))
         .with_suggestion(|| "a peer address looks like this: /ip4/42.42.42.42/udp/4242/quic-v1/p2p/B64nodePeerIDvdjb3FAJF4ks3moreBase64CharsHere")?;
