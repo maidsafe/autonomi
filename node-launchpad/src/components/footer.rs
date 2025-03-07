@@ -10,9 +10,10 @@ use crate::style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE};
 use ratatui::{prelude::*, widgets::*};
 
 pub enum NodesToStart {
-    Configured,
-    NotConfigured,
     Running,
+    NotRunning,
+    RunningSelected,
+    NotRunningSelected,
 }
 
 #[derive(Default)]
@@ -22,50 +23,99 @@ impl StatefulWidget for Footer {
     type State = NodesToStart;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let (text_style, command_style) = if matches!(state, NodesToStart::Configured) {
-            (
-                Style::default().fg(EUCALYPTUS),
-                Style::default().fg(GHOST_WHITE),
-            )
-        } else {
-            (
-                Style::default().fg(COOL_GREY),
-                Style::default().fg(LIGHT_PERIWINKLE),
-            )
-        };
+        let layout = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Length(3)])
+            .split(area);
+
+        let command_enabled = Style::default().fg(GHOST_WHITE);
+        let text_enabled = Style::default().fg(EUCALYPTUS);
+        let command_disabled = Style::default().fg(LIGHT_PERIWINKLE);
+        let text_disabled = Style::default().fg(COOL_GREY);
+
+        let mut remove_command_style = command_disabled;
+        let mut remove_text_style = text_disabled;
+        let mut start_stop_command_style = command_disabled;
+        let mut start_stop_text_style = text_disabled;
+        let mut open_logs_command_style = command_disabled;
+        let mut open_logs_text_style = text_disabled;
+        let mut stop_all_command_style = command_disabled;
+        let mut stop_all_text_style = text_disabled;
+
+        match state {
+            NodesToStart::Running => {
+                stop_all_command_style = command_enabled;
+                stop_all_text_style = text_enabled;
+            }
+            NodesToStart::RunningSelected => {
+                remove_command_style = command_enabled;
+                remove_text_style = text_enabled;
+                start_stop_command_style = command_enabled;
+                start_stop_text_style = text_enabled;
+                open_logs_command_style = command_enabled;
+                open_logs_text_style = text_enabled;
+                stop_all_command_style = command_enabled;
+                stop_all_text_style = text_enabled;
+            }
+            NodesToStart::NotRunning => {}
+            NodesToStart::NotRunningSelected => {
+                remove_command_style = command_enabled;
+                remove_text_style = text_enabled;
+                start_stop_command_style = command_enabled;
+                start_stop_text_style = text_enabled;
+                open_logs_command_style = command_enabled;
+                open_logs_text_style = text_enabled;
+            }
+        }
 
         let commands = vec![
-            Span::styled("[Ctrl+G] ", Style::default().fg(GHOST_WHITE)),
-            Span::styled("Manage Nodes", Style::default().fg(EUCALYPTUS)),
+            Span::styled("[+] ", command_enabled),
+            Span::styled("Add", text_enabled),
             Span::styled(" ", Style::default()),
-            Span::styled("[Ctrl+S] ", command_style),
-            Span::styled("Start Nodes", text_style),
+            Span::styled("[-] ", remove_command_style),
+            Span::styled("Remove", remove_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[L] ", command_style),
-            Span::styled("Open Logs", Style::default().fg(EUCALYPTUS)),
+            Span::styled("[Ctrl+S] ", start_stop_command_style),
+            Span::styled("Start/Stop Node", start_stop_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[Ctrl+X] ", command_style),
-            Span::styled(
-                "Stop All",
-                if matches!(state, NodesToStart::Running) {
-                    Style::default().fg(EUCALYPTUS)
-                } else {
-                    Style::default().fg(COOL_GREY)
-                },
-            ),
+            Span::styled("[L] ", open_logs_command_style),
+            Span::styled("Open Logs", open_logs_text_style),
         ];
 
-        let cell1 = Cell::from(Line::from(commands));
-        let row = Row::new(vec![cell1]);
+        let stop_all = vec![
+            Span::styled("[Ctrl+X] ", stop_all_command_style),
+            Span::styled("Stop All", stop_all_text_style),
+        ];
 
-        let table = Table::new(vec![row], vec![Constraint::Max(1)])
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(EUCALYPTUS))
-                    .padding(Padding::horizontal(1)),
-            )
-            .widths(vec![Constraint::Fill(1)]);
+        let total_width = (layout[0].width - 1) as usize;
+        let spaces = " ".repeat(total_width.saturating_sub(
+            commands.iter().map(|s| s.width()).sum::<usize>()
+                + stop_all.iter().map(|s| s.width()).sum::<usize>(),
+        ));
+
+        let commands_length = 6 + commands.iter().map(|s| s.width()).sum::<usize>() as u16;
+        let spaces_length = spaces.len().saturating_sub(6) as u16;
+        let stop_all_length = stop_all.iter().map(|s| s.width()).sum::<usize>() as u16;
+
+        let cell1 = Cell::from(Line::from(commands));
+        let cell2 = Cell::from(Line::raw(spaces));
+        let cell3 = Cell::from(Line::from(stop_all));
+        let row = Row::new(vec![cell1, cell2, cell3]);
+
+        let table = Table::new(
+            [row],
+            [
+                Constraint::Length(commands_length),
+                Constraint::Length(spaces_length),
+                Constraint::Length(stop_all_length),
+            ],
+        )
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(EUCALYPTUS))
+                .padding(Padding::horizontal(1)),
+        );
 
         StatefulWidget::render(table, area, buf, &mut TableState::default());
     }
