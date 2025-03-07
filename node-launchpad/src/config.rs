@@ -9,6 +9,7 @@
 use crate::connection_mode::ConnectionMode;
 use crate::system::get_primary_mount_point;
 use crate::{action::Action, mode::Scene};
+use ant_node_manager::config::is_running_as_root;
 use color_eyre::eyre::{eyre, Result};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use derive_deref::{Deref, DerefMut};
@@ -31,14 +32,23 @@ pub fn get_launchpad_nodes_data_dir_path(
     should_create: bool,
 ) -> Result<PathBuf> {
     let mut mount_point = PathBuf::new();
+    let is_root = is_running_as_root();
 
     let data_directory: PathBuf = if *base_dir == get_primary_mount_point() {
-        dirs_next::data_dir().ok_or_else(|| {
-            eyre!(
-                "Data directory is not obtainable for base_dir {:?}",
-                base_dir
-            )
-        })?
+        if is_root {
+            // The root's data directory isn't accessible to the user `ant`, so we are using an
+            // alternative default path that `ant` can access.
+            #[cfg(unix)]
+            {
+                let default_data_dir_path = PathBuf::from("/var/antctl/services");
+                debug!("Running as root; using default path {:?} for nodes data directory instead of primary mount point", default_data_dir_path);
+                default_data_dir_path
+            }
+            #[cfg(windows)]
+            get_user_data_dir()?
+        } else {
+            get_user_data_dir()?
+        }
     } else {
         base_dir.clone()
     };
@@ -62,6 +72,10 @@ pub fn get_launchpad_nodes_data_dir_path(
         }
     }
     Ok(mount_point)
+}
+
+fn get_user_data_dir() -> Result<PathBuf> {
+    dirs_next::data_dir().ok_or_else(|| eyre!("User data directory is not obtainable",))
 }
 
 /// Where to store the Launchpad config & logs.
