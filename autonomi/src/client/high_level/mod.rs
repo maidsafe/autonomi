@@ -8,6 +8,7 @@
 
 pub mod data;
 pub mod files;
+pub mod smart_equation;
 pub mod vault;
 
 /// Registers are a mutable piece of data on the Network.
