@@ -1029,15 +1029,33 @@ impl SwarmDriver {
         target: &NetworkAddress,
         num_of_peers: usize,
     ) -> Vec<(PeerId, Addresses)> {
-        self.swarm
+        let peer_ids = self
+            .swarm
             .behaviour_mut()
             .kademlia
-            // find_closest_local_peers would ignore the 'source' in the result.
-            .find_closest_local_peers(&target.as_kbucket_key(), &self.self_peer_id)
+            .get_closest_local_peers(&target.as_kbucket_key())
             // Map KBucketKey<PeerId> to PeerId.
-            .map(|key| (key.node_id, Addresses(key.multiaddrs)))
+            .map(|key| key.into_preimage())
             .take(num_of_peers)
-            .collect()
+            .collect();
+        self.collect_peers_info(peer_ids)
+    }
+
+    /// Collect peers' address info
+    fn collect_peers_info(&mut self, peers: Vec<PeerId>) -> Vec<(PeerId, Addresses)> {
+        let mut peers_info = vec![];
+        for peer_id in peers {
+            if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
+                if let Some(entry) = kbucket
+                    .iter()
+                    .find(|entry| entry.node.key.preimage() == &peer_id)
+                {
+                    peers_info.push((peer_id, Addresses(entry.node.value.clone().into_vec())));
+                }
+            }
+        }
+
+        peers_info
     }
 
     /// Record one handling time.

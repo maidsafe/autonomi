@@ -1229,17 +1229,7 @@ impl SwarmDriver {
         };
 
         // get closest peers from buckets, sorted by increasing distance to the target
-        let kbucket_key = target.as_kbucket_key();
-        let closest_k_peers: Vec<(PeerId, Addresses)> = self
-            .swarm
-            .behaviour_mut()
-            .kademlia
-            // find_closest_local_peers would ignore the 'source' in the result.
-            .find_closest_local_peers(&kbucket_key, &self.self_peer_id)
-            // Map KBucketKey<PeerId> to PeerId.
-            .map(|peer| (peer.node_id, Addresses(peer.multiaddrs)))
-            .take(K_VALUE.get())
-            .collect();
+        let closest_k_peers = self.get_closest_local_peers_to_target(target, K_VALUE.get());
 
         if let Some(responsible_range) = self
             .swarm
