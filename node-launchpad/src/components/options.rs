@@ -68,7 +68,7 @@ impl Component for Options {
             .constraints(
                 [
                     Constraint::Length(1),
-                    Constraint::Length(7),
+                    Constraint::Length(5),
                     Constraint::Length(3),
                     Constraint::Length(3),
                     Constraint::Length(4),
@@ -93,7 +93,6 @@ impl Component for Options {
             .border_style(Style::default().fg(VERY_LIGHT_AZURE));
         let storage_drivename = Table::new(
             vec![
-                Row::new(vec![Line::from(vec![])]),
                 Row::new(vec![
                     Cell::from(
                         Line::from(vec![Span::styled(
@@ -177,7 +176,6 @@ impl Component for Options {
                         .alignment(Alignment::Right),
                     ),
                 ]),
-                Row::new(vec![Line::from(vec![])]),
             ],
             &[
                 Constraint::Length(18),

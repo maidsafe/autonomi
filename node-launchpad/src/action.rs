@@ -46,25 +46,65 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
 pub enum StatusActions {
+    AddNode,
     StartNodes,
     StopNodes,
-    StartNodesCompleted,
-    StopNodesCompleted,
-    ResetNodesCompleted { trigger_start_node: bool },
+    RemoveNodes,
+    StartStopNode,
+    StartNodesCompleted {
+        service_name: String,
+    },
+    StopNodesCompleted {
+        service_name: String,
+    },
+    ResetNodesCompleted {
+        trigger_start_node: bool,
+    },
+    RemoveNodesCompleted {
+        service_name: String,
+    },
+    AddNodesCompleted {
+        service_name: String,
+    },
     UpdateNodesCompleted,
     SuccessfullyDetectedNatStatus,
     ErrorWhileRunningNatDetection,
-    ErrorLoadingNodeRegistry { raw_error: String },
-    ErrorGettingNodeRegistryPath { raw_error: String },
-    ErrorScalingUpNodes { raw_error: String },
-    ErrorStoppingNodes { raw_error: String },
-    ErrorResettingNodes { raw_error: String },
-    ErrorUpdatingNodes { raw_error: String },
+    ErrorLoadingNodeRegistry {
+        raw_error: String,
+    },
+    ErrorGettingNodeRegistryPath {
+        raw_error: String,
+    },
+    ErrorScalingUpNodes {
+        raw_error: String,
+    },
+    ErrorResettingNodes {
+        raw_error: String,
+    },
+    ErrorUpdatingNodes {
+        raw_error: String,
+    },
+    ErrorAddingNodes {
+        raw_error: String,
+    },
+    ErrorStartingNodes {
+        services: Vec<String>,
+        raw_error: String,
+    },
+    ErrorStoppingNodes {
+        services: Vec<String>,
+        raw_error: String,
+    },
+    ErrorRemovingNodes {
+        services: Vec<String>,
+        raw_error: String,
+    },
     NodesStatsObtained(NodeStats),
 
     TriggerManageNodes,
     TriggerRewardsAddress,
     TriggerNodeLogs,
+    TriggerRemoveNode,
 
     PreviousTableItem,
     NextTableItem,

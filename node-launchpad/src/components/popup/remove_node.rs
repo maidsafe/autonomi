@@ -9,33 +9,21 @@
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
 use crate::{
-    action::{Action, OptionsActions},
+    action::{Action, StatusActions},
     mode::{InputMode, Scene},
-    node_mgmt,
     style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
 };
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 
-pub struct UpgradeNodesPopUp {
+#[derive(Default)]
+pub struct RemoveNodePopUp {
     /// Whether the component is active right now, capturing keystrokes + draw things.
     active: bool,
 }
 
-impl UpgradeNodesPopUp {
-    pub fn new() -> Self {
-        Self { active: false }
-    }
-}
-
-impl Default for UpgradeNodesPopUp {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Component for UpgradeNodesPopUp {
+impl Component for RemoveNodePopUp {
     fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
         if !self.active {
             return Ok(vec![]);
@@ -43,15 +31,15 @@ impl Component for UpgradeNodesPopUp {
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back = match key.code {
             KeyCode::Enter => {
-                debug!("Got Enter, Upgrading nodes...");
+                debug!("Got Enter, Removing node...");
                 vec![
-                    Action::OptionsActions(OptionsActions::UpdateNodes),
+                    Action::StatusActions(StatusActions::RemoveNodes),
                     Action::SwitchScene(Scene::Status),
                 ]
             }
             KeyCode::Esc => {
-                debug!("Got Esc, Not upgrading nodes.");
-                vec![Action::SwitchScene(Scene::Options)]
+                debug!("Got Esc, Not removing node.");
+                vec![Action::SwitchScene(Scene::Status)]
             }
             _ => vec![],
         };
@@ -61,7 +49,7 @@ impl Component for UpgradeNodesPopUp {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
             Action::SwitchScene(scene) => match scene {
-                Scene::UpgradeNodesPopUp => {
+                Scene::RemoveNodePopUp => {
                     self.active = true;
                     Some(Action::SwitchInputMode(InputMode::Entry))
                 }
@@ -99,7 +87,7 @@ impl Component for UpgradeNodesPopUp {
         let pop_up_border = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Upgrade all nodes ")
+                .title(" Remove Node ")
                 .bold()
                 .title_style(Style::new().fg(VIVID_SKY_BLUE))
                 .padding(Padding::uniform(2))
@@ -112,9 +100,9 @@ impl Component for UpgradeNodesPopUp {
             Direction::Vertical,
             [
                 // for the text
-                Constraint::Length(10),
+                Constraint::Length(9),
                 // gap
-                Constraint::Length(3),
+                Constraint::Length(4),
                 // for the buttons
                 Constraint::Length(1),
             ],
@@ -123,41 +111,17 @@ impl Component for UpgradeNodesPopUp {
 
         let text = Paragraph::new(vec![
             Line::from(Span::styled("\n\n", Style::default())),
-            Line::from(vec![
-                Span::styled("This will ", Style::default().fg(LIGHT_PERIWINKLE)),
-                Span::styled(
-                    "stop and upgrade all nodes. ",
-                    Style::default().fg(GHOST_WHITE),
-                ),
-            ]),
-            Line::from(Span::styled(
-                "No data will be lost.",
+            Line::from(Span::styled("\n\n", Style::default())),
+            Line::from(vec![Span::styled(
+                "Removing this node will stop it, and delete all its data.",
                 Style::default().fg(LIGHT_PERIWINKLE),
-            )),
+            )]),
+            Line::from(Span::styled("\n\n", Style::default())),
             Line::from(Span::styled(
-                format!(
-                    "Upgrade time is {:.1?} seconds per node",
-                    node_mgmt::FIXED_INTERVAL / 1_000,
-                ),
-                Style::default().fg(LIGHT_PERIWINKLE),
-            )),
-            Line::from(Span::styled(
-                "plus, new binary download time.",
+                "Press Enter to confirm.",
                 Style::default().fg(LIGHT_PERIWINKLE),
             )),
             Line::from(Span::styled("\n\n", Style::default())),
-            Line::from(vec![
-                Span::styled("You’ll need to ", Style::default().fg(LIGHT_PERIWINKLE)),
-                Span::styled("Start ", Style::default().fg(GHOST_WHITE)),
-                Span::styled(
-                    "them again afterwards.",
-                    Style::default().fg(LIGHT_PERIWINKLE),
-                ),
-            ]),
-            Line::from(Span::styled(
-                "Are you sure you want to continue?",
-                Style::default(),
-            )),
         ])
         .block(Block::default().padding(Padding::horizontal(2)))
         .alignment(Alignment::Center)
@@ -181,7 +145,7 @@ impl Component for UpgradeNodesPopUp {
         f.render_widget(button_no, buttons_layer[0]);
 
         let button_yes = Paragraph::new(Line::from(vec![Span::styled(
-            "Yes, Upgrade [Enter]  ",
+            "Yes, Remove Node [Enter]  ",
             Style::default().fg(EUCALYPTUS),
         )]))
         .alignment(Alignment::Right);
