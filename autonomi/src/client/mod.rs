@@ -55,7 +55,7 @@ use std::{collections::HashSet, time::Duration};
 use tokio::sync::{mpsc, watch};
 
 /// Time before considering the connection timed out.
-pub const CONNECT_TIMEOUT_SECS: u64 = 10;
+pub const CONNECT_TIMEOUT_SECS: u64 = 100;
 
 const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
@@ -225,7 +225,7 @@ impl Client {
         println!("spawned a shutdown thread ");
         receiver.await.expect("sender should not close")?;
         debug!("Enough peers were added to our routing table, initialization complete");
-        println!("processed all the requirements for the init_with_config");
+        println!("processed all the requirements");
         Ok(Self {
             network,
             client_event_sender: None,
