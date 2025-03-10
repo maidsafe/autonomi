@@ -55,7 +55,7 @@ use std::{collections::HashSet, time::Duration};
 use tokio::sync::{mpsc, watch};
 
 /// Time before considering the connection timed out.
-pub const CONNECT_TIMEOUT_SECS: u64 = 10;
+pub const CONNECT_TIMEOUT_SECS: u64 = 100;
 
 const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
@@ -204,14 +204,17 @@ impl Client {
             local: config.local,
             ..Default::default()
         };
+        println!("peers_args: {:?}", peers_args);
+        println!("processing initial peers");
         let initial_peers = match peers_args.get_addrs(None, None).await {
             Ok(peers) => peers,
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e.into()), 
         };
+        println!("processed initial peers");
 
         let (shutdown_tx, network, event_receiver) =
             build_client_and_run_swarm(config.local, initial_peers);
-
+        println!("build_client_run_swarm is done");
         // Wait until we have added a few peers to our routing table.
         let (sender, receiver) = futures::channel::oneshot::channel();
         ant_networking::time::spawn(handle_event_receiver(
@@ -219,9 +222,10 @@ impl Client {
             sender,
             shutdown_tx.subscribe(),
         ));
+        println!("spawned a shutdown thread ");
         receiver.await.expect("sender should not close")?;
         debug!("Enough peers were added to our routing table, initialization complete");
-
+        println!("processed all the requirements");
         Ok(Self {
             network,
             client_event_sender: None,

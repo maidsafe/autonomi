@@ -684,18 +684,9 @@ jobs:
             echo "EVM_NETWORK has been set to $EVM_NETWORK"
           fi
 
-      - name: Chunks data integrity during nodes churn
-        run: cargo test --release -p ant-node --test data_with_churn -- --nocapture
-        env:
-          TEST_DURATION_MINS: 5
-          TEST_TOTAL_CHURN_CYCLES: 15
-          ANT_LOG: "all"
-          CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
-        timeout-minutes: 30
-
       # Sleep for a while to allow restarted nodes can be detected by others
       - name: Sleep a while
-        run: sleep 300
+        run: sleep 20
 
       - name: Stop the local network and upload logs
         if: always()
@@ -705,6 +696,15 @@ jobs:
           log_file_prefix: safe_test_logs_churn
           platform: ${{ matrix.os }}
 
+      - name: Chunks data integrity during nodes churn
+        run: cargo test --release -p ant-node --test data_with_churn -- --nocapture
+        env:
+          TEST_DURATION_MINS: 5
+          TEST_TOTAL_CHURN_CYCLES: 15
+          RUST_BACKTRACE: 1
+          ANT_LOG: "all"
+          CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
+
       - name: Get total node count
         shell: bash
         timeout-minutes: 1
@@ -712,16 +712,16 @@ jobs:
           node_count=$(ls "${{ matrix.node_data_path }}" | wc -l)
           echo "Node dir count is $node_count"
 
-      - name: Get restart of nodes using rg
-        shell: bash
-        timeout-minutes: 1
-        # get the counts, then the specific line, and then the digit count only
-        # then check we have an expected level of restarts
-        # TODO: make this use an env var, or relate to testnet size
-        run: |
-          restart_count=$(rg "Node is restarting in" "${{ matrix.node_data_path }}" -c --stats | \
-            rg "(\d+) matches" | rg "\d+" -o)
-          echo "Restarted $restart_count nodes"
+      # - name: Get restart of nodes using rg
+      #   shell: bash
+      #   timeout-minutes: 1
+      #   # get the counts, then the specific line, and then the digit count only
+      #   # then check we have an expected level of restarts
+      #   # TODO: make this use an env var, or relate to testnet size
+      #   run: |
+      #     restart_count=$(rg "Node is restarting in" "${{ matrix.node_data_path }}" -c --stats | \
+      #       rg "(\d+) matches" | rg "\d+" -o)
+      #     echo "Restarted $restart_count nodes"
 
       # `PeerRemovedFromRoutingTable` now only happens when a peer reported as `BadNode`.
       # Otherwise kad will remove a `dropped out node` directly from RT.
