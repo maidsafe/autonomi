@@ -98,7 +98,7 @@ pub use client::{
     // Client Configs
     config::ClientConfig,
     config::ClientOperatingStrategy,
-    config::PeersArgs,
+    config::InitialPeersConfig,
 
     // Native data types
     data_types::chunk::Chunk,

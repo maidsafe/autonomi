@@ -37,7 +37,7 @@ pub use cache_store::BootstrapCacheStore;
 pub use config::BootstrapCacheConfig;
 pub use contacts::ContactsFetcher;
 pub use error::{Error, Result};
-pub use initial_peers::{PeersArgs, ANT_PEERS_ENV};
+pub use initial_peers::{InitialPeersConfig, ANT_PEERS_ENV};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Set of addresses for a particular PeerId

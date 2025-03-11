@@ -7,13 +7,13 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::wallet::load_wallet;
-use autonomi::{PeersArgs, TransactionConfig};
+use autonomi::{InitialPeersConfig, TransactionConfig};
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 
-pub async fn cost(peers_args: PeersArgs, expected_max_size: u64) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn cost(init_peers_config: InitialPeersConfig, expected_max_size: u64) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Getting cost to create a new vault...");
@@ -27,8 +27,11 @@ pub async fn cost(peers_args: PeersArgs, expected_max_size: u64) -> Result<()> {
     Ok(())
 }
 
-pub async fn create(peers_args: PeersArgs, max_fee_per_gas: Option<u128>) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn create(
+    init_peers_config: InitialPeersConfig,
+    max_fee_per_gas: Option<u128>,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -61,8 +64,8 @@ pub async fn create(peers_args: PeersArgs, max_fee_per_gas: Option<u128>) -> Res
     Ok(())
 }
 
-pub async fn sync(force: bool, peers_args: PeersArgs) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn sync(force: bool, init_peers_config: InitialPeersConfig) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
     let wallet = load_wallet(client.evm_network())?;
 
@@ -97,8 +100,8 @@ pub async fn sync(force: bool, peers_args: PeersArgs) -> Result<()> {
     Ok(())
 }
 
-pub async fn load(peers_args: PeersArgs) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn load(init_peers_config: InitialPeersConfig) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Retrieving vault from network...");

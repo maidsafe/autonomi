@@ -2093,13 +2093,13 @@ impl PyClientConfig {
     /// Whether we're expected to connect to a local network.
     #[getter]
     fn get_local(&self) -> bool {
-        self.inner.peers_args.local
+        self.inner.init_peers_config.local
     }
 
     /// Whether we're expected to connect to a local network.
     #[setter]
     fn set_local(&mut self, value: bool) {
-        self.inner.peers_args.local = value;
+        self.inner.init_peers_config.local = value;
     }
 
     /// List of peers to connect to.
@@ -2108,7 +2108,7 @@ impl PyClientConfig {
     #[getter]
     fn get_peers(&self) -> Vec<String> {
         self.inner
-            .peers_args
+            .init_peers_config
             .addrs
             .iter()
             .map(|p| p.to_string())
@@ -2128,7 +2128,7 @@ impl PyClientConfig {
             .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(format!("Failed to parse peers: {e}")))?;
 
-        self.inner.peers_args.addrs = peers;
+        self.inner.init_peers_config.addrs = peers;
         Ok(())
     }
 

@@ -10,14 +10,14 @@ use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::payment::PaymentOption;
 use autonomi::ResponseQuorum;
-use autonomi::{ClientOperatingStrategy, PeersArgs, TransactionConfig};
+use autonomi::{ClientOperatingStrategy, InitialPeersConfig, TransactionConfig};
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 use std::path::PathBuf;
 
-pub async fn cost(file: &str, peers_args: PeersArgs) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn cost(file: &str, init_peers_config: InitialPeersConfig) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
 
     println!("Getting upload cost...");
     info!("Calculating cost for file: {file}");
@@ -35,7 +35,7 @@ pub async fn cost(file: &str, peers_args: PeersArgs) -> Result<()> {
 pub async fn upload(
     file: &str,
     public: bool,
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     optional_verification_quorum: Option<ResponseQuorum>,
     max_fee_per_gas: Option<u128>,
 ) -> Result<()> {
@@ -43,7 +43,8 @@ pub async fn upload(
     if let Some(verification_quorum) = optional_verification_quorum {
         config.chunks.verification_quorum = verification_quorum;
     }
-    let mut client = crate::actions::connect_to_network_with_config(peers_args, config).await?;
+    let mut client =
+        crate::actions::connect_to_network_with_config(init_peers_config, config).await?;
 
     let mut wallet = load_wallet(client.evm_network())?;
 
@@ -126,14 +127,14 @@ pub async fn upload(
 pub async fn download(
     addr: &str,
     dest_path: &str,
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     quorum: Option<ResponseQuorum>,
 ) -> Result<()> {
     let mut config = ClientOperatingStrategy::new();
     if let Some(quorum) = quorum {
         config.chunks.get_quorum = quorum;
     }
-    let client = crate::actions::connect_to_network_with_config(peers_args, config).await?;
+    let client = crate::actions::connect_to_network_with_config(init_peers_config, config).await?;
     crate::actions::download(addr, dest_path, &client).await
 }
 

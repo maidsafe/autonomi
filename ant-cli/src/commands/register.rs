@@ -9,7 +9,7 @@
 use crate::wallet::load_wallet;
 use autonomi::client::register::RegisterAddress;
 use autonomi::client::register::SecretKey as RegisterSecretKey;
-use autonomi::{Client, PeersArgs, TransactionConfig};
+use autonomi::{Client, InitialPeersConfig, TransactionConfig};
 use color_eyre::eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -34,10 +34,10 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn cost(name: &str, peers_args: PeersArgs) -> Result<()> {
+pub async fn cost(name: &str, init_peers_config: InitialPeersConfig) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(peers_args).await?;
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let key_for_name = Client::register_key_from_name(&main_registers_key, name);
 
     let cost = client
@@ -53,12 +53,12 @@ pub async fn create(
     name: &str,
     value: &str,
     hex: bool,
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(peers_args).await?;
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -107,12 +107,12 @@ pub async fn edit(
     name: bool,
     value: &str,
     hex: bool,
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(peers_args).await?;
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -160,8 +160,13 @@ pub async fn edit(
     Ok(())
 }
 
-pub async fn get(address: String, name: bool, hex: bool, peers_args: PeersArgs) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn get(
+    address: String,
+    name: bool,
+    hex: bool,
+    init_peers_config: InitialPeersConfig,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
 
     let addr = if name {
         let name_str = address.clone();
@@ -215,8 +220,13 @@ pub fn list() -> Result<()> {
     Ok(())
 }
 
-pub async fn history(address: String, name: bool, hex: bool, peers_args: PeersArgs) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers_args).await?;
+pub async fn history(
+    address: String,
+    name: bool,
+    hex: bool,
+    init_peers_config: InitialPeersConfig,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config).await?;
 
     let addr = if name {
         let name_str = address.clone();

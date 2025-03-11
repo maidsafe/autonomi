@@ -666,7 +666,7 @@ fn format_status_without_colour(status: &ServiceStatus) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ant_bootstrap::PeersArgs;
+    use ant_bootstrap::InitialPeersConfig;
     use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
     use ant_logging::LogFormat;
     use ant_service_management::{
@@ -789,7 +789,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -904,7 +904,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -982,7 +982,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1100,7 +1100,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1189,7 +1189,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1290,7 +1290,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1390,7 +1390,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1462,7 +1462,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1522,7 +1522,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1584,7 +1584,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1645,7 +1645,7 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1721,7 +1721,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1860,7 +1860,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1960,7 +1960,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2105,7 +2105,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2262,7 +2262,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2414,7 +2414,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2567,7 +2567,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2746,7 +2746,7 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: true,
                 addrs: vec![],
                 network_contacts_url: vec![],
@@ -2918,7 +2918,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args:  PeersArgs {
+            peers_args:  InitialPeersConfig {
                 first: false,
                 addrs: vec![
                     "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
@@ -3257,7 +3257,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: false,
                 addrs: vec![],
                 network_contacts_url: vec![],
@@ -3427,7 +3427,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: false,
                 addrs: vec![],
                 network_contacts_url: vec![
@@ -3607,7 +3607,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: false,
                 addrs: vec![],
                 network_contacts_url: vec![],
@@ -3782,7 +3782,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: false,
                 addrs: vec![],
                 network_contacts_url: vec![],
@@ -3952,7 +3952,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs {
+            peers_args: InitialPeersConfig {
                 first: false,
                 addrs: vec![],
                 network_contacts_url: vec![],
@@ -4132,7 +4132,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4294,7 +4294,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4459,7 +4459,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4621,7 +4621,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4786,7 +4786,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4947,7 +4947,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
@@ -5112,7 +5112,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
@@ -5275,7 +5275,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5440,7 +5440,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5603,7 +5603,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5777,7 +5777,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5952,7 +5952,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6117,7 +6117,7 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6198,7 +6198,7 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             pid: None,
             rewards_address: RewardsAddress::from_str(
@@ -6266,7 +6266,7 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
@@ -6349,7 +6349,7 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
@@ -6428,7 +6428,7 @@ network_id: None,
             node_port: None,
             number: 1,
             pid: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6504,7 +6504,7 @@ network_id: None,
             node_port: None,
             number: 1,
             pid: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",

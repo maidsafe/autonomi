@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{BootstrapCacheConfig, PeersArgs};
+use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig};
 use ant_logging::LogBuilder;
 use libp2p::Multiaddr;
 use tempfile::TempDir;
@@ -42,7 +42,7 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
     for addr_str in addrs {
         let (_temp_dir, _config) = setup().await; // Fresh config for each test case
         let addr = addr_str.parse::<Multiaddr>()?;
-        let args = PeersArgs {
+        let args = InitialPeersConfig {
             first: false,
             addrs: vec![addr.clone()],
             network_contacts_url: vec![],
@@ -80,7 +80,7 @@ async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>
         .mount(&mock_server)
         .await;
 
-    let args = PeersArgs {
+    let args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],

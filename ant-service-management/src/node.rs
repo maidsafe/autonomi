@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_protocol::get_port_from_multiaddr;
@@ -72,7 +72,7 @@ impl ServiceStateActions for NodeService<'_> {
             OsString::from(self.service_data.log_dir_path.to_string_lossy().to_string()),
         ];
 
-        push_arguments_from_peers_args(&self.service_data.peers_args, &mut args);
+        push_arguments_from_initial_peers_config(&self.service_data.peers_args, &mut args);
         if let Some(log_fmt) = self.service_data.log_format {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_fmt.as_str()));
@@ -295,7 +295,7 @@ pub struct NodeServiceData {
         deserialize_with = "deserialize_peer_id"
     )]
     pub peer_id: Option<PeerId>,
-    pub peers_args: PeersArgs,
+    pub peers_args: InitialPeersConfig,
     pub pid: Option<u32>,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
@@ -409,16 +409,19 @@ impl NodeServiceData {
     }
 }
 
-/// Pushes arguments from the `PeersArgs` struct to the provided `args` vector.
-pub fn push_arguments_from_peers_args(peers_args: &PeersArgs, args: &mut Vec<OsString>) {
-    if peers_args.first {
+/// Pushes arguments from the `InitialPeersConfig` struct to the provided `args` vector.
+pub fn push_arguments_from_initial_peers_config(
+    init_peers_config: &InitialPeersConfig,
+    args: &mut Vec<OsString>,
+) {
+    if init_peers_config.first {
         args.push(OsString::from("--first"));
     }
-    if peers_args.local {
+    if init_peers_config.local {
         args.push(OsString::from("--local"));
     }
-    if !peers_args.addrs.is_empty() {
-        let peers_str = peers_args
+    if !init_peers_config.addrs.is_empty() {
+        let peers_str = init_peers_config
             .addrs
             .iter()
             .map(|peer| peer.to_string())
@@ -427,10 +430,10 @@ pub fn push_arguments_from_peers_args(peers_args: &PeersArgs, args: &mut Vec<OsS
         args.push(OsString::from("--peer"));
         args.push(OsString::from(peers_str));
     }
-    if !peers_args.network_contacts_url.is_empty() {
+    if !init_peers_config.network_contacts_url.is_empty() {
         args.push(OsString::from("--network-contacts-url"));
         args.push(OsString::from(
-            peers_args
+            init_peers_config
                 .network_contacts_url
                 .iter()
                 .map(|url| url.to_string())
@@ -438,13 +441,13 @@ pub fn push_arguments_from_peers_args(peers_args: &PeersArgs, args: &mut Vec<OsS
                 .join(","),
         ));
     }
-    if peers_args.disable_mainnet_contacts {
+    if init_peers_config.disable_mainnet_contacts {
         args.push(OsString::from("--testnet"));
     }
-    if peers_args.ignore_cache {
+    if init_peers_config.ignore_cache {
         args.push(OsString::from("--ignore-cache"));
     }
-    if let Some(path) = &peers_args.bootstrap_cache_dir {
+    if let Some(path) = &init_peers_config.bootstrap_cache_dir {
         args.push(OsString::from("--bootstrap-cache-dir"));
         args.push(OsString::from(path.to_string_lossy().to_string()));
     }

@@ -7,18 +7,18 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use autonomi::client::config::ClientOperatingStrategy;
-use autonomi::{get_evm_network, Client, ClientConfig, PeersArgs};
+use autonomi::{get_evm_network, Client, ClientConfig, InitialPeersConfig};
 use color_eyre::eyre::bail;
 use color_eyre::eyre::Result;
 use indicatif::ProgressBar;
 use std::time::Duration;
 
-pub async fn connect_to_network(peers_args: PeersArgs) -> Result<Client> {
-    connect_to_network_with_config(peers_args, Default::default()).await
+pub async fn connect_to_network(init_peers_config: InitialPeersConfig) -> Result<Client> {
+    connect_to_network_with_config(init_peers_config, Default::default()).await
 }
 
 pub async fn connect_to_network_with_config(
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     operation_config: ClientOperatingStrategy,
 ) -> Result<Client> {
     let progress_bar = ProgressBar::new_spinner();
@@ -27,16 +27,16 @@ pub async fn connect_to_network_with_config(
     let new_style = progress_bar.style().tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈🔗");
     progress_bar.set_style(new_style);
 
-    if peers_args.local {
+    if init_peers_config.local {
         progress_bar.set_message("Connecting to a local Autonomi Network...");
     } else {
         progress_bar.set_message("Connecting to The Autonomi Network...");
     };
 
-    let evm_network = get_evm_network(peers_args.local)?;
+    let evm_network = get_evm_network(init_peers_config.local)?;
 
     let config = ClientConfig {
-        peers_args,
+        init_peers_config,
         evm_network,
         strategy: operation_config,
     };

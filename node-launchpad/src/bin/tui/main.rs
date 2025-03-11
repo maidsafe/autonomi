@@ -11,7 +11,7 @@ mod terminal;
 #[macro_use]
 extern crate tracing;
 
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 #[cfg(target_os = "windows")]
 use ant_node_manager::config::is_running_as_root;
 use clap::Parser;
@@ -53,7 +53,7 @@ pub struct Cli {
     path: Option<PathBuf>,
 
     #[command(flatten)]
-    peers: PeersArgs,
+    peers: InitialPeersConfig,
 
     /// Print the package version.
     #[clap(long)]

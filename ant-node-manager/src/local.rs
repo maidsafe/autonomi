@@ -11,7 +11,7 @@ use crate::helpers::{
     check_port_availability, get_bin_version, get_start_port_if_applicable, increment_port_option,
 };
 
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::{
@@ -425,7 +425,7 @@ pub async fn run_node(
         node_port: run_options.node_port,
         number: run_options.number,
         peer_id: Some(peer_id),
-        peers_args: PeersArgs {
+        peers_args: InitialPeersConfig {
             first: run_options.first,
             addrs: vec![],
             network_contacts_url: vec![],

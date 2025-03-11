@@ -1,6 +1,6 @@
 use crate::action::{Action, StatusActions};
 use crate::connection_mode::ConnectionMode;
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_node_manager::{
     add_services::config::PortRange, config::get_node_registry_path, VerbosityLevel,
@@ -129,7 +129,7 @@ pub struct MaintainNodesArgs {
     pub data_dir_path: Option<PathBuf>,
     pub network_id: Option<u8>,
     pub owner: String,
-    pub peers_args: PeersArgs,
+    pub init_peers_config: InitialPeersConfig,
     pub port_range: Option<PortRange>,
     pub rewards_address: String,
     pub run_nat_detection: bool,
@@ -298,7 +298,7 @@ struct NodeConfig {
     home_network: bool,
     network_id: Option<u8>,
     owner: Option<String>,
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     rewards_address: String,
     upnp: bool,
 }
@@ -362,7 +362,7 @@ fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
         },
         home_network: args.connection_mode == ConnectionMode::HomeNetwork,
         network_id: args.network_id,
-        peers_args: args.peers_args.clone(),
+        init_peers_config: args.init_peers_config.clone(),
         rewards_address: args.rewards_address.clone(),
         upnp: args.connection_mode == ConnectionMode::UPnP,
     }
@@ -376,8 +376,8 @@ fn debug_log_config(config: &NodeConfig, args: &MaintainNodesArgs) {
         config.count
     );
     debug!(
-        " owner: {:?}, peers_args: {:?}, antnode_path: {:?}, network_id: {:?}",
-        config.owner, config.peers_args, config.antnode_path, args.network_id
+        " owner: {:?}, init_peers_config: {:?}, antnode_path: {:?}, network_id: {:?}",
+        config.owner, config.init_peers_config, config.antnode_path, args.network_id
     );
     debug!(
         " data_dir_path: {:?}, connection_mode: {:?}",
@@ -429,7 +429,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         config.network_id,
         None,
         None, // We don't care about the port, as we are scaling down
-        config.peers_args.clone(),
+        config.init_peers_config.clone(),
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,
         None,
@@ -502,7 +502,7 @@ async fn add_nodes(
             config.network_id,
             None,
             port_range,
-            config.peers_args.clone(),
+            config.init_peers_config.clone(),
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
             None,
             None,

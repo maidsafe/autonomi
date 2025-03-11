@@ -8,7 +8,7 @@
 
 use crate::commands::SubCmd;
 use ant_logging::{LogFormat, LogOutputDest};
-use autonomi::PeersArgs;
+use autonomi::InitialPeersConfig;
 use clap::Parser;
 use color_eyre::Result;
 use std::time::Duration;
@@ -66,7 +66,7 @@ pub(crate) struct Opt {
     pub no_verify: bool,
 
     #[command(flatten)]
-    pub(crate) peers: PeersArgs,
+    pub(crate) peers: InitialPeersConfig,
 
     /// Print the package version.
     #[cfg(not(feature = "nightly"))]

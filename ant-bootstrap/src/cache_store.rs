@@ -8,7 +8,7 @@
 
 use crate::{
     craft_valid_multiaddr, multiaddr_get_peer_id, BootstrapAddr, BootstrapAddresses,
-    BootstrapCacheConfig, Error, PeersArgs, Result,
+    BootstrapCacheConfig, Error, InitialPeersConfig, Result,
 };
 use atomic_write_file::AtomicWriteFile;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
@@ -172,28 +172,28 @@ impl BootstrapCacheStore {
         Ok(store)
     }
 
-    /// Create an empty CacheStore from the given peers argument.
-    /// This also modifies the cfg if provided based on the PeersArgs.
-    /// And also performs some actions based on the PeersArgs.
+    /// Create an empty CacheStore from the given Initial Peers Configuration.
+    /// This also modifies the `BootstrapCacheConfig` if provided based on the `InitialPeersConfig`.
+    /// And also performs some actions based on the `InitialPeersConfig`.
     ///
-    /// `PeersArgs::bootstrap_cache_dir` will take precedence over the path provided inside `config`.
-    pub fn new_from_peers_args(
-        peers_arg: &PeersArgs,
+    /// `InitialPeersConfig::bootstrap_cache_dir` will take precedence over the path provided inside `config`.
+    pub fn new_from_initial_peers_config(
+        init_peers_config: &InitialPeersConfig,
         config: Option<BootstrapCacheConfig>,
     ) -> Result<Self> {
         let mut config = if let Some(cfg) = config {
             cfg
         } else {
-            BootstrapCacheConfig::default_config(peers_arg.local)?
+            BootstrapCacheConfig::default_config(init_peers_config.local)?
         };
-        if let Some(bootstrap_cache_path) = peers_arg.get_bootstrap_cache_path()? {
+        if let Some(bootstrap_cache_path) = init_peers_config.get_bootstrap_cache_path()? {
             config.cache_file_path = bootstrap_cache_path;
         }
 
         let store = Self::new(config)?;
 
         // If it is the first node, clear the cache.
-        if peers_arg.first {
+        if init_peers_config.first {
             info!("First node in network, writing empty cache to disk");
             store.write()?;
         }

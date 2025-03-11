@@ -21,9 +21,10 @@ use url::Url;
 /// The name of the environment variable that can be used to pass peers to the node.
 pub const ANT_PEERS_ENV: &str = "ANT_PEERS";
 
-/// Command line arguments for peer configuration
+/// Configurations to fetch the initial peers which is used to bootstrap the network.
+/// This could optionally also be used as a command line argument struct.
 #[derive(Args, Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct PeersArgs {
+pub struct InitialPeersConfig {
     /// Set to indicate this is the first node in a new network
     ///
     /// If this argument is used, any others will be ignored because they do not apply to the first
@@ -76,7 +77,7 @@ pub struct PeersArgs {
     pub bootstrap_cache_dir: Option<PathBuf>,
 }
 
-impl PeersArgs {
+impl InitialPeersConfig {
     /// Get bootstrap peers sorted by the failure rate. The peer with the lowest failure rate will be
     /// the first in the list.
     pub async fn get_addrs(

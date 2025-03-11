@@ -18,7 +18,7 @@ use crate::{
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
@@ -52,7 +52,7 @@ pub async fn add(
     network_id: Option<u8>,
     node_ip: Option<Ipv4Addr>,
     node_port: Option<PortRange>,
-    mut peers_args: PeersArgs,
+    mut init_peers_config: InitialPeersConfig,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,
@@ -109,8 +109,10 @@ pub async fn add(
 
     debug!("Parsing peers from PeersArgs");
 
-    peers_args.addrs.extend(PeersArgs::read_addr_from_env());
-    peers_args.bootstrap_cache_dir = bootstrap_cache_dir;
+    init_peers_config
+        .addrs
+        .extend(InitialPeersConfig::read_addr_from_env());
+    init_peers_config.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {
         auto_restart,
@@ -128,7 +130,7 @@ pub async fn add(
         network_id,
         node_ip,
         node_port,
-        peers_args,
+        init_peers_config,
         rewards_address,
         rpc_address,
         rpc_port,
@@ -598,7 +600,7 @@ pub async fn maintain_n_running_nodes(
     network_id: Option<u8>,
     node_ip: Option<Ipv4Addr>,
     node_port: Option<PortRange>,
-    peers_args: PeersArgs,
+    peers_args: InitialPeersConfig,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,

@@ -32,7 +32,7 @@ use crate::{
         clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE,
     },
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_node_manager::add_services::config::PortRange;
 use ant_node_manager::config::get_node_registry_path;
 use ant_service_management::{
@@ -98,7 +98,7 @@ pub struct Status<'a> {
     // inconsistent state. Another solution would be to have a file lock/db.
     lock_registry: Option<LockRegistryState>,
     // Peers to pass into nodes for startup
-    peers_args: PeersArgs,
+    init_peers_config: InitialPeersConfig,
     // If path is provided, we don't fetch the binary from the network
     antnode_path: Option<PathBuf>,
     // Path where the node data is stored
@@ -129,7 +129,7 @@ pub struct StatusConfig {
     pub upnp_support: UpnpSupport,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
-    pub peers_args: PeersArgs,
+    pub init_peers_config: InitialPeersConfig,
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
     pub rewards_address: String,
@@ -138,7 +138,7 @@ pub struct StatusConfig {
 impl Status<'_> {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let mut status = Self {
-            peers_args: config.peers_args,
+            init_peers_config: config.init_peers_config,
             action_sender: Default::default(),
             config: Default::default(),
             active: true,
@@ -640,7 +640,7 @@ impl Component for Status<'_> {
                         data_dir_path: Some(self.data_dir_path.clone()),
                         network_id: self.network_id,
                         owner: self.rewards_address.clone(),
-                        peers_args: self.peers_args.clone(),
+                        init_peers_config: self.init_peers_config.clone(),
                         port_range: Some(port_range),
                         rewards_address: self.rewards_address.clone(),
                         run_nat_detection: self.should_we_run_nat_detection(),

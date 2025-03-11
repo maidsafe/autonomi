@@ -40,7 +40,7 @@ pub mod external_signer;
 // private module with utility functions
 mod utils;
 
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, PeersArgs};
+use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
 use ant_networking::{
@@ -155,7 +155,7 @@ impl Client {
     /// See [`Client::init_with_config`].
     pub async fn init_local() -> Result<Self, ConnectError> {
         Self::init_with_config(ClientConfig {
-            peers_args: PeersArgs {
+            init_peers_config: InitialPeersConfig {
                 local: true,
                 ..Default::default()
             },
@@ -183,7 +183,7 @@ impl Client {
         let local = !peers.iter().any(multiaddr_is_global);
 
         Self::init_with_config(ClientConfig {
-            peers_args: PeersArgs {
+            init_peers_config: InitialPeersConfig {
                 local,
                 addrs: peers,
                 ..Default::default()
@@ -209,13 +209,13 @@ impl Client {
     /// # }
     /// ```
     pub async fn init_with_config(config: ClientConfig) -> Result<Self, ConnectError> {
-        let initial_peers = match config.peers_args.get_addrs(None, None).await {
+        let initial_peers = match config.init_peers_config.get_addrs(None, None).await {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };
 
         let (shutdown_tx, network, event_receiver) =
-            build_client_and_run_swarm(config.peers_args.local, initial_peers);
+            build_client_and_run_swarm(config.init_peers_config.local, initial_peers);
 
         // Wait until we have added a few peers to our routing table.
         let (sender, receiver) = futures::channel::oneshot::channel();

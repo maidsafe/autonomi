@@ -48,7 +48,7 @@ pub async fn add_node(
     service_control: &dyn ServiceControl,
     verbosity: VerbosityLevel,
 ) -> Result<Vec<String>> {
-    if options.peers_args.first {
+    if options.init_peers_config.first {
         if let Some(count) = options.count {
             if count > 1 {
                 error!("A genesis node can only be added as a single node");
@@ -203,7 +203,7 @@ pub async fn add_node(
             network_id: options.network_id,
             node_ip: options.node_ip,
             node_port,
-            peers_args: options.peers_args.clone(),
+            init_peers_config: options.init_peers_config.clone(),
             rewards_address: options.rewards_address,
             rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
@@ -244,7 +244,7 @@ pub async fn add_node(
                     reward_balance: None,
                     rpc_socket_addr,
                     peer_id: None,
-                    peers_args: options.peers_args.clone(),
+                    peers_args: options.init_peers_config.clone(),
                     pid: None,
                     service_name,
                     status: ServiceStatus::Added,

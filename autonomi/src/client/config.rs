@@ -13,14 +13,15 @@ use libp2p::{kad::Record, PeerId};
 use rand::{thread_rng, Rng};
 use std::{collections::HashSet, num::NonZero};
 
-pub use ant_bootstrap::PeersArgs;
+pub use ant_bootstrap::InitialPeersConfig;
 pub use ant_networking::{ResponseQuorum, RetryStrategy};
 
 /// Configuration for the [`crate::Client`] which can be provided through: [`crate::Client::init_with_config`].
 #[derive(Debug, Clone, Default)]
 pub struct ClientConfig {
-    /// Configurations to the bootstrap cache and the initial peers to connect to.
-    pub peers_args: PeersArgs,
+    /// Configurations to fetch the initial peers which is used to bootstrap the network.
+    /// Also contains the configurations to the bootstrap cache.
+    pub init_peers_config: InitialPeersConfig,
 
     /// EVM network to use for quotations and payments.
     pub evm_network: EvmNetwork,
