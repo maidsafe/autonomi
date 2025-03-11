@@ -807,7 +807,6 @@ dependencies = [
 name = "ant-cli"
 version = "0.3.8"
 dependencies = [
- "ant-bootstrap",
  "ant-build-info",
  "ant-logging",
  "ant-protocol",

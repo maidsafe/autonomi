@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::commands::SubCmd;
-use ant_bootstrap::PeersArgs;
 use ant_logging::{LogFormat, LogOutputDest};
+use autonomi::PeersArgs;
 use clap::Parser;
 use color_eyre::Result;
 use std::time::Duration;

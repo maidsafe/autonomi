@@ -9,39 +9,24 @@
 use ant_evm::EvmNetwork;
 use ant_networking::{GetRecordCfg, PutRecordCfg, VerificationKind};
 use ant_protocol::messages::ChunkProof;
-use libp2p::{kad::Record, Multiaddr, PeerId};
+use libp2p::{kad::Record, PeerId};
 use rand::{thread_rng, Rng};
 use std::{collections::HashSet, num::NonZero};
 
+pub use ant_bootstrap::PeersArgs;
 pub use ant_networking::{ResponseQuorum, RetryStrategy};
 
 /// Configuration for the [`crate::Client`] which can be provided through: [`crate::Client::init_with_config`].
 #[derive(Debug, Clone, Default)]
 pub struct ClientConfig {
-    /// Whether we're expected to connect to a local network.
-    pub local: bool,
-
-    /// List of peers to connect to.
-    ///
-    /// If not provided, the client will use the default bootstrap peers.
-    pub peers: Option<Vec<Multiaddr>>,
+    /// Configurations to the bootstrap cache and the initial peers to connect to.
+    pub peers_args: PeersArgs,
 
     /// EVM network to use for quotations and payments.
     pub evm_network: EvmNetwork,
 
     /// Strategy for data operations by the client.
     pub strategy: ClientOperatingStrategy,
-}
-
-impl ClientConfig {
-    pub fn local(peers: Option<Vec<Multiaddr>>) -> Self {
-        Self {
-            local: true,
-            peers,
-            evm_network: EvmNetwork::new(true).unwrap_or_default(),
-            strategy: Default::default(),
-        }
-    }
 }
 
 /// Strategy configuration for data operations by the client.

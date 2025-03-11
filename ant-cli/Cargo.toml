@@ -23,7 +23,6 @@ name = "files"
 harness = false
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.1.6" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.25" }
 ant-logging = { path = "../ant-logging", version = "0.2.47" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.1" }

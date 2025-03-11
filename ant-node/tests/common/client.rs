@@ -15,9 +15,9 @@ use evmlib::wallet::Wallet;
 use eyre::Result;
 use std::str::FromStr;
 use std::{net::SocketAddr, path::Path};
+use test_utils::evm::get_funded_wallet;
 use test_utils::evm::get_new_wallet;
 use test_utils::testnet::DeploymentInventory;
-use test_utils::{evm::get_funded_wallet, peers_from_env};
 use tokio::sync::Mutex;
 use tonic::Request;
 use tracing::{debug, info};
@@ -126,11 +126,7 @@ pub struct LocalNetwork;
 impl LocalNetwork {
     ///  Get a new Client for testing
     pub async fn get_client() -> Client {
-        let bootstrap_peers = peers_from_env().expect("Failed to get bootstrap peers from env");
-
-        println!("Client bootstrap with peer {bootstrap_peers:?}");
-        info!("Client bootstrap with peer {bootstrap_peers:?}");
-        Client::init_with_peers(bootstrap_peers)
+        Client::init_local()
             .await
             .expect("Client shall be successfully created.")
     }

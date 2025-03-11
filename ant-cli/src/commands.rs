@@ -233,58 +233,53 @@ pub enum WalletCmd {
 }
 
 pub async fn handle_subcommand(opt: Opt) -> Result<()> {
-    let peers = crate::access::network::get_peers(opt.peers);
     let cmd = opt.command;
 
     match cmd {
         Some(SubCmd::File { command }) => match command {
-            FileCmd::Cost { file } => file::cost(&file, peers.await?).await,
+            FileCmd::Cost { file } => file::cost(&file, opt.peers).await,
             FileCmd::Upload {
                 file,
                 public,
                 quorum,
                 max_fee_per_gas,
-            } => file::upload(&file, public, peers.await?, quorum, max_fee_per_gas).await,
+            } => file::upload(&file, public, opt.peers, quorum, max_fee_per_gas).await,
             FileCmd::Download {
                 addr,
                 dest_file,
                 quorum,
-            } => file::download(&addr, &dest_file, peers.await?, quorum).await,
+            } => file::download(&addr, &dest_file, opt.peers, quorum).await,
             FileCmd::List => file::list(),
         },
         Some(SubCmd::Register { command }) => match command {
             RegisterCmd::GenerateKey { overwrite } => register::generate_key(overwrite),
-            RegisterCmd::Cost { name } => register::cost(&name, peers.await?).await,
+            RegisterCmd::Cost { name } => register::cost(&name, opt.peers).await,
             RegisterCmd::Create {
                 name,
                 value,
                 hex,
                 max_fee_per_gas,
-            } => register::create(&name, &value, hex, peers.await?, max_fee_per_gas).await,
+            } => register::create(&name, &value, hex, opt.peers, max_fee_per_gas).await,
             RegisterCmd::Edit {
                 address,
                 name,
                 value,
                 hex,
                 max_fee_per_gas,
-            } => register::edit(address, name, &value, hex, peers.await?, max_fee_per_gas).await,
+            } => register::edit(address, name, &value, hex, opt.peers, max_fee_per_gas).await,
             RegisterCmd::Get { address, name, hex } => {
-                register::get(address, name, hex, peers.await?).await
+                register::get(address, name, hex, opt.peers).await
             }
             RegisterCmd::History { address, name, hex } => {
-                register::history(address, name, hex, peers.await?).await
+                register::history(address, name, hex, opt.peers).await
             }
             RegisterCmd::List => register::list(),
         },
         Some(SubCmd::Vault { command }) => match command {
-            VaultCmd::Cost { expected_max_size } => {
-                vault::cost(peers.await?, expected_max_size).await
-            }
-            VaultCmd::Create { max_fee_per_gas } => {
-                vault::create(peers.await?, max_fee_per_gas).await
-            }
-            VaultCmd::Load => vault::load(peers.await?).await,
-            VaultCmd::Sync { force } => vault::sync(force, peers.await?).await,
+            VaultCmd::Cost { expected_max_size } => vault::cost(opt.peers, expected_max_size).await,
+            VaultCmd::Create { max_fee_per_gas } => vault::create(opt.peers, max_fee_per_gas).await,
+            VaultCmd::Load => vault::load(opt.peers).await,
+            VaultCmd::Sync { force } => vault::sync(force, opt.peers).await,
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {
@@ -297,7 +292,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 password,
             } => wallet::import(private_key, no_password, password),
             WalletCmd::Export => wallet::export(),
-            WalletCmd::Balance => wallet::balance(peers.await?.is_local()).await,
+            WalletCmd::Balance => wallet::balance(opt.peers.local).await,
         },
         None => {
             // If no subcommand is given, default to clap's error behaviour.

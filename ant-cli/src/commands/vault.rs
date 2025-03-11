@@ -6,15 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::network::NetworkPeers;
 use crate::wallet::load_wallet;
-use autonomi::TransactionConfig;
+use autonomi::{PeersArgs, TransactionConfig};
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 
-pub async fn cost(peers: NetworkPeers, expected_max_size: u64) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+pub async fn cost(peers_args: PeersArgs, expected_max_size: u64) -> Result<()> {
+    let client = crate::actions::connect_to_network(peers_args).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Getting cost to create a new vault...");
@@ -28,8 +27,8 @@ pub async fn cost(peers: NetworkPeers, expected_max_size: u64) -> Result<()> {
     Ok(())
 }
 
-pub async fn create(peers: NetworkPeers, max_fee_per_gas: Option<u128>) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+pub async fn create(peers_args: PeersArgs, max_fee_per_gas: Option<u128>) -> Result<()> {
+    let client = crate::actions::connect_to_network(peers_args).await?;
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -62,8 +61,8 @@ pub async fn create(peers: NetworkPeers, max_fee_per_gas: Option<u128>) -> Resul
     Ok(())
 }
 
-pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+pub async fn sync(force: bool, peers_args: PeersArgs) -> Result<()> {
+    let client = crate::actions::connect_to_network(peers_args).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
     let wallet = load_wallet(client.evm_network())?;
 
@@ -98,8 +97,8 @@ pub async fn sync(force: bool, peers: NetworkPeers) -> Result<()> {
     Ok(())
 }
 
-pub async fn load(peers: NetworkPeers) -> Result<()> {
-    let client = crate::actions::connect_to_network(peers).await?;
+pub async fn load(peers_args: PeersArgs) -> Result<()> {
+    let client = crate::actions::connect_to_network(peers_args).await?;
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Retrieving vault from network...");

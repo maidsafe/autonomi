@@ -2093,31 +2093,32 @@ impl PyClientConfig {
     /// Whether we're expected to connect to a local network.
     #[getter]
     fn get_local(&self) -> bool {
-        self.inner.local
+        self.inner.peers_args.local
     }
 
     /// Whether we're expected to connect to a local network.
     #[setter]
     fn set_local(&mut self, value: bool) {
-        self.inner.local = value;
+        self.inner.peers_args.local = value;
     }
 
     /// List of peers to connect to.
     ///
     /// If not provided, the client will use the default bootstrap peers.
     #[getter]
-    fn get_peers(&self) -> Option<Vec<String>> {
+    fn get_peers(&self) -> Vec<String> {
         self.inner
-            .peers
-            .as_ref()
-            .map(|peers| peers.iter().map(|p| p.to_string()).collect())
+            .peers_args
+            .addrs
+            .iter()
+            .map(|p| p.to_string())
+            .collect()
     }
 
     /// List of peers to connect to. If given empty list, the client will use the default bootstrap peers.
     #[setter]
     fn set_peers(&mut self, peers: Vec<String>) -> PyResult<()> {
         if peers.is_empty() {
-            self.inner.peers = None;
             return Ok(());
         }
 
@@ -2127,7 +2128,7 @@ impl PyClientConfig {
             .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(format!("Failed to parse peers: {e}")))?;
 
-        self.inner.peers = Some(peers);
+        self.inner.peers_args.addrs = peers;
         Ok(())
     }
 
