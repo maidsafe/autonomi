@@ -40,7 +40,7 @@ pub mod external_signer;
 // private module with utility functions
 mod utils;
 
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
+use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
 use ant_networking::{
@@ -215,7 +215,7 @@ impl Client {
         };
 
         let (shutdown_tx, network, event_receiver) =
-            build_client_and_run_swarm(config.init_peers_config.local, initial_peers);
+            build_client_and_run_swarm(&config.init_peers_config, initial_peers);
 
         // Wait until we have added a few peers to our routing table.
         let (sender, receiver) = futures::channel::oneshot::channel();
@@ -252,18 +252,21 @@ impl Client {
 }
 
 fn build_client_and_run_swarm(
-    local: bool,
+    init_peers_config: &InitialPeersConfig,
     initial_peers: Vec<Multiaddr>,
 ) -> (watch::Sender<bool>, Network, mpsc::Receiver<NetworkEvent>) {
-    let mut network_builder =
-        NetworkBuilder::new(Keypair::generate_ed25519(), local, initial_peers);
+    let mut network_builder = NetworkBuilder::new(
+        Keypair::generate_ed25519(),
+        init_peers_config.local,
+        initial_peers,
+    );
 
-    if let Ok(mut config) = BootstrapCacheConfig::default_config(local) {
-        if local {
-            config.disable_cache_writing = true;
+    match BootstrapCacheStore::new_from_initial_peers_config(init_peers_config, None) {
+        Ok(cache_store) => {
+            network_builder.bootstrap_cache(cache_store);
         }
-        if let Ok(cache) = BootstrapCacheStore::new(config) {
-            network_builder.bootstrap_cache(cache);
+        Err(err) => {
+            warn!("Failed to create bootstrap cache store from initial peers config: {err:?}");
         }
     }
 
