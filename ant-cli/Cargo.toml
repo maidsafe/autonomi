@@ -35,7 +35,7 @@ hex = "0.4.3"
 indicatif = { version = "0.17.5", features = ["tokio"] }
 prettytable = "0.10.0"
 rand = { version = "~0.8.5", features = ["small_rng"] }
-ring = "0.17.8"
+ring = "0.17.12"
 rpassword = "7.0"
 serde = "1.0.210"
 serde_json = "1.0.132"
