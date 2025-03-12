@@ -440,6 +440,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         None,
         VerbosityLevel::Minimal,
         None,
+        false,
     )
     .await
     {
@@ -513,6 +514,7 @@ async fn add_nodes(
             None,
             VerbosityLevel::Minimal,
             None,
+            false,
         )
         .await
         {
