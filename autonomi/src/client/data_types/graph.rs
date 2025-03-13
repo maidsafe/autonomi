@@ -15,6 +15,7 @@ use crate::client::UploadSummary;
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_networking::get_graph_entry_from_record;
+use ant_networking::Addresses;
 use ant_networking::GetRecordError;
 use ant_networking::NetworkError;
 use ant_protocol::PrettyPrintRecordKey;
@@ -129,7 +130,11 @@ impl Client {
         let total_cost = *price;
 
         // prepare the record for network storage
-        let payees = proof.payees();
+        let payees = proof
+            .payees()
+            .iter()
+            .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+            .collect();
         let record = Record {
             key: NetworkAddress::from_graph_entry_address(address).to_record_key(),
             value: try_serialize_record(
