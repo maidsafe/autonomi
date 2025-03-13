@@ -12,7 +12,8 @@ use xor_name::XorName;
 
 use super::AddressParseError;
 
-/// Address of a [`crate::storage::graph::GraphEntry`]
+/// Address of a [`crate::storage::graph::GraphEntry`].
+///
 /// It is derived from the owner's unique public key
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct GraphEntryAddress(PublicKey);
