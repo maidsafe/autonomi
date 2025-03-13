@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use xor_name::XorName;
 
 impl Client {
-    /// Download a private file from network to local file system
+    /// Download a private file from network to local file system.
     pub async fn file_download(
         &self,
         data_access: &DataMapChunk,
@@ -45,7 +45,7 @@ impl Client {
         Ok(())
     }
 
-    /// Download a private directory from network to local file system
+    /// Download a private directory from network to local file system.
     pub async fn dir_download(
         &self,
         archive_access: &PrivateArchiveDataMap,
@@ -227,9 +227,9 @@ impl Client {
         Ok((total_cost, private_archive))
     }
 
-    /// Same as [`Client::dir_content_upload`] but also uploads the archive (privately) to the network.
+    /// Same as [`Client::dir_content_upload`] but also uploads the `PrivateArchive` to the network.
     ///
-    /// Returns the [`PrivateArchiveDataMap`] allowing the private archive to be downloaded from the network.
+    /// Returns the [`PrivateArchiveDataMap`] allowing the [`PrivateArchive`] to be downloaded from the network.
     pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
@@ -247,7 +247,7 @@ impl Client {
     }
 
     /// Upload the content of a private file to the network.
-    /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns [`DataMapChunk`] (pointing to the datamap)
+    /// Reads file, splits into multiple [`Chunk`], uploads the [`Chunk`], uploads datamap, returns [`DataMapChunk`] (pointing to the datamap).
     pub async fn file_content_upload(
         &self,
         path: PathBuf,

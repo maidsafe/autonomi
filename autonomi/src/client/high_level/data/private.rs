@@ -18,7 +18,7 @@ pub use crate::client::data_types::chunk::DataMapChunk;
 pub use crate::Bytes;
 
 impl Client {
-    /// Fetch a blob of (private) data from the network
+    /// Fetch a blob of private data from the network.
     ///
     /// # Example
     ///
@@ -46,7 +46,7 @@ impl Client {
     /// Upload a piece of private data to the network. This data will be self-encrypted.
     /// The [`DataMapChunk`] is not uploaded to the network, keeping the data private.
     ///
-    /// Returns the [`DataMapChunk`] containing the map to the encrypted chunks.
+    /// Returns the [`DataMapChunk`] containing the map to the multiple encrypted [`Chunk`].
     ///
     /// # Example
     ///
