@@ -1267,7 +1267,7 @@ impl JsChunkAddress {
     /// Creates a new ChunkAddress from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = ChunkAddress::try_from_hex(&hex).map_err(map_error)?;
+        let addr = ChunkAddress::from_hex(&hex).map_err(map_error)?;
 
         Ok(Self(addr))
     }
