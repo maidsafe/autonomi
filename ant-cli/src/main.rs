@@ -79,6 +79,8 @@ async fn main() -> Result<()> {
     let version = ant_build_info::git_info();
     info!("autonomi client built with git version: {version}");
 
+    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
+
     commands::handle_subcommand(opt).await?;
 
     Ok(())
@@ -86,7 +88,7 @@ async fn main() -> Result<()> {
 
 fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGuard>)> {
     let logging_targets = vec![
-        ("ant_bootstrap".to_string(), Level::DEBUG),
+        ("ant_bootstrap".to_string(), Level::INFO),
         ("ant_build_info".to_string(), Level::TRACE),
         ("ant_evm".to_string(), Level::TRACE),
         ("ant_networking".to_string(), Level::INFO),
@@ -95,6 +97,7 @@ fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGua
         ("evmlib".to_string(), Level::TRACE),
         ("ant_logging".to_string(), Level::TRACE),
         ("ant_protocol".to_string(), Level::TRACE),
+        ("ant_cli".to_string(), Level::TRACE),
     ];
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(opt.log_output_dest.clone());

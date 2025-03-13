@@ -17,7 +17,7 @@ use crate::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, ProofOfPayment};
-use ant_networking::NetworkError;
+use ant_networking::{Addresses, NetworkError};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
@@ -165,7 +165,11 @@ impl Client {
         };
         let total_cost = *price;
 
-        let payees = proof.payees();
+        let payees = proof
+            .payees()
+            .iter()
+            .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+            .collect();
         let record = Record {
             key: address.to_record_key(),
             value: try_serialize_record(
@@ -290,7 +294,11 @@ impl Client {
         chunk: &Chunk,
         payment: ProofOfPayment,
     ) -> Result<ChunkAddress, PutError> {
-        let storing_nodes = payment.payees();
+        let storing_nodes: Vec<_> = payment
+            .payees()
+            .iter()
+            .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+            .collect();
 
         if storing_nodes.is_empty() {
             return Err(PutError::PayeesMissing);

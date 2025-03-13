@@ -515,7 +515,7 @@ impl SwarmDriver {
                     peers.into_iter(),
                     quorum.get_kad_quorum(),
                 );
-                debug!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
+                info!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
 
                 if let Err(err) = sender.send(Ok(())) {
                     error!("Could not send response to PutRecordTo cmd: {:?}", err);
