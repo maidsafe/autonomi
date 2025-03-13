@@ -36,11 +36,11 @@ fn big_int_to_u64(value: BigInt) -> Result<u64> {
     Ok(value)
 }
 
-fn uint8_array_to_array(value: Uint8Array) -> Result<[u8; 32]> {
+fn uint8_array_to_array<const LEN: usize>(value: Uint8Array) -> Result<[u8; LEN]> {
     value.as_ref().try_into().map_err(|err| {
         napi::Error::new(
             Status::InvalidArg,
-            format!("array must be 32 bytes long: {}", err),
+            format!("array must be {LEN} bytes long: {}", err),
         )
     })
 }
@@ -1395,8 +1395,80 @@ impl JsNetwork {
 #[napi(js_name = "PublicKey")]
 pub struct JsPublicKey(PublicKey);
 
+#[napi]
+impl JsPublicKey {
+    /// Returns a byte string representation of the public key.
+    #[napi]
+    pub fn to_bytes(&self) -> [u8; bls::PK_SIZE] {
+        self.0.to_bytes()
+    }
+
+    /// Returns the key with the given representation, if valid.
+    #[napi(factory)]
+    pub fn from_bytes(bytes: Uint8Array) -> Result<Self> {
+        let bytes = uint8_array_to_array(bytes)?;
+        let key = PublicKey::from_bytes(bytes).map_err(map_error)?;
+        Ok(Self(key))
+    }
+
+    /// Returns the hex string representation of the public key.
+    #[napi]
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+
+    /// Creates a new PublicKey from a hex string.
+    #[napi(factory)]
+    pub fn from_hex(hex: String) -> Result<Self> {
+        let key = PublicKey::from_hex(&hex).map_err(map_error)?;
+        Ok(Self(key))
+    }
+}
+
 #[napi(js_name = "SecretKey")]
 pub struct JsSecretKey(SecretKey);
+
+#[napi]
+impl JsSecretKey {
+    /// Generate a random SecretKey
+    #[napi(factory)]
+    pub fn random() -> Self {
+        Self(SecretKey::random())
+    }
+
+    /// Returns the public key corresponding to this secret key.
+    #[napi]
+    pub fn public_key(&self) -> JsPublicKey {
+        JsPublicKey(self.0.public_key())
+    }
+
+    /// Converts the secret key to big endian bytes
+    #[napi]
+    pub fn to_bytes(&self) -> [u8; bls::SK_SIZE] {
+        self.0.to_bytes()
+    }
+
+    /// Deserialize from big endian bytes
+    #[napi(factory)]
+    pub fn from_bytes(bytes: Uint8Array) -> Result<Self> {
+        let bytes = uint8_array_to_array(bytes)?;
+        let key = SecretKey::from_bytes(bytes).map_err(map_error)?;
+        Ok(Self(key))
+    }
+
+    /// Returns the hex string representation of the secret key.
+    #[napi]
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+
+    /// Creates a new SecretKey from a hex string.
+    #[napi(factory)]
+    pub fn from_hex(hex: String) -> Result<Self> {
+        let key = SecretKey::from_hex(&hex).map_err(map_error)?;
+        Ok(Self(key))
+    }
+}
 
 #[napi(js_name = "GraphEntry")]
 pub struct JsGraphEntry(GraphEntry);
@@ -1404,11 +1476,145 @@ pub struct JsGraphEntry(GraphEntry);
 #[napi(js_name = "Pointer")]
 pub struct JsPointer(Pointer);
 
+#[napi]
+impl JsPointer {
+    /// Create a new pointer, signing it with the provided secret key.
+    /// This pointer would be stored on the network at the provided key's public key.
+    /// There can only be one pointer at a time at the same address (one per key).
+    #[napi(constructor)]
+    pub fn new(owner: &JsSecretKey, counter: u32, target: &JsPointerTarget) -> Self {
+        JsPointer(Pointer::new(&owner.0, counter, target.0.clone()))
+    }
+
+    /// Get the address of the pointer
+    #[napi]
+    pub fn address(&self) -> JsPointerAddress {
+        JsPointerAddress(self.0.address())
+    }
+
+    /// Get the owner of the pointer
+    #[napi]
+    pub fn owner(&self) -> JsPublicKey {
+        JsPublicKey(self.0.owner().clone())
+    }
+
+    /// Get the target of the pointer
+    #[napi]
+    pub fn target(&self) -> JsPointerTarget {
+        JsPointerTarget(self.0.target().clone())
+    }
+
+    /// Get the bytes that were signed for this pointer
+    #[napi]
+    pub fn bytes_for_signature(&self) -> Buffer {
+        Buffer::from(self.0.bytes_for_signature())
+    }
+
+    /// Get the xorname of the pointer target
+    #[napi]
+    pub fn xorname(&self) -> JsXorName {
+        JsXorName(self.0.xorname())
+    }
+
+    /// Get the counter of the pointer, the higher the counter, the more recent the pointer is
+    /// Similarly to counter CRDTs only the latest version (highest counter) of the pointer is kept on the network
+    #[napi]
+    pub fn counter(&self) -> u32 {
+        self.0.counter()
+    }
+
+    /// Verifies if the pointer has a valid signature
+    #[napi]
+    pub fn verify_signature(&self) -> bool {
+        self.0.verify_signature()
+    }
+
+    /// Size of the pointer
+    #[napi]
+    pub fn size() -> usize {
+        Pointer::size()
+    }
+}
+
 #[napi(js_name = "PointerTarget")]
 pub struct JsPointerTarget(PointerTarget);
 
+#[napi]
+impl JsPointerTarget {
+    /// Returns the xorname of the target
+    #[napi]
+    pub fn xorname(&self) -> JsXorName {
+        JsXorName(self.0.xorname())
+    }
+
+    /// Returns the hex string representation of the target
+    #[napi]
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+
+    /// Creates a new PointerTarget from a ChunkAddress
+    #[napi(factory, js_name = "ChunkAddress")]
+    pub fn from_chunk_address(addr: &JsChunkAddress) -> Self {
+        Self(PointerTarget::ChunkAddress(addr.0.clone()))
+    }
+
+    /// Creates a new PointerTarget from a GraphEntryAddress
+    #[napi(factory, js_name = "GraphEntryAddress")]
+    pub fn from_graph_entry_address(addr: &JsGraphEntryAddress) -> Self {
+        Self(PointerTarget::GraphEntryAddress(addr.0.clone()))
+    }
+
+    /// Creates a new PointerTarget from a PointerAddress
+    #[napi(factory, js_name = "PointerAddress")]
+    pub fn from_pointer_address(addr: &JsPointerAddress) -> Self {
+        Self(PointerTarget::PointerAddress(addr.0.clone()))
+    }
+
+    /// Creates a new PointerTarget from a ScratchpadAddress
+    #[napi(factory, js_name = "ScratchpadAddress")]
+    pub fn from_scratchpad_address(addr: &JsScratchpadAddress) -> Self {
+        Self(PointerTarget::ScratchpadAddress(addr.0.clone()))
+    }
+}
+
 #[napi(js_name = "PointerAddress")]
 pub struct JsPointerAddress(PointerAddress);
+
+#[napi]
+impl JsPointerAddress {
+    /// Creates a new PointerAddress.
+    #[napi(constructor)]
+    pub fn new(owner: &JsPublicKey) -> Self {
+        Self(PointerAddress::new(owner.0.clone()))
+    }
+
+    /// Return the network name of the pointer.
+    /// This is used to locate the pointer on the network.
+    #[napi]
+    pub fn xorname(&self) -> JsXorName {
+        JsXorName(self.0.xorname())
+    }
+
+    /// Return the owner.
+    #[napi]
+    pub fn owner(&self) -> JsPublicKey {
+        JsPublicKey(self.0.owner().clone())
+    }
+
+    /// Serialize this PointerAddress into a hex-encoded string.
+    #[napi]
+    pub fn to_hex(&self) -> String {
+        self.0.to_hex()
+    }
+
+    /// Parse a hex-encoded string into a PointerAddress.
+    #[napi(factory)]
+    pub fn from_hex(hex: String) -> Result<Self> {
+        let addr = PointerAddress::from_hex(&hex).map_err(map_error)?;
+        Ok(Self(addr))
+    }
+}
 
 #[napi(js_name = "Scratchpad")]
 pub struct JsScratchpad(Scratchpad);

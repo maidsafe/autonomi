@@ -376,17 +376,92 @@ export declare class Network {
   constructor(local: boolean)
 }
 export type JsPublicKey = PublicKey
-export declare class PublicKey { }
+export declare class PublicKey {
+  /** Returns a byte string representation of the public key. */
+  toBytes(): number[]
+  /** Returns the key with the given representation, if valid. */
+  static fromBytes(bytes: Uint8Array): JsPublicKey
+  /** Returns the hex string representation of the public key. */
+  toHex(): string
+  /** Creates a new PublicKey from a hex string. */
+  static fromHex(hex: string): JsPublicKey
+}
 export type JsSecretKey = SecretKey
-export declare class SecretKey { }
+export declare class SecretKey {
+  /** Generate a random SecretKey */
+  static random(): JsSecretKey
+  /** Returns the public key corresponding to this secret key. */
+  publicKey(): PublicKey
+  /** Converts the secret key to big endian bytes */
+  toBytes(): number[]
+  /** Deserialize from big endian bytes */
+  static fromBytes(bytes: Uint8Array): JsSecretKey
+  /** Returns the hex string representation of the secret key. */
+  toHex(): string
+  /** Creates a new SecretKey from a hex string. */
+  static fromHex(hex: string): JsSecretKey
+}
 export type JsGraphEntry = GraphEntry
 export declare class GraphEntry { }
 export type JsPointer = Pointer
-export declare class Pointer { }
+export declare class Pointer {
+  /**
+   * Create a new pointer, signing it with the provided secret key.
+   * This pointer would be stored on the network at the provided key's public key.
+   * There can only be one pointer at a time at the same address (one per key).
+   */
+  constructor(owner: SecretKey, counter: number, target: JsPointerTarget)
+  /** Get the address of the pointer */
+  address(): JsPointerAddress
+  /** Get the owner of the pointer */
+  owner(): PublicKey
+  /** Get the target of the pointer */
+  target(): JsPointerTarget
+  /** Get the bytes that were signed for this pointer */
+  bytesForSignature(): Buffer
+  /** Get the xorname of the pointer target */
+  xorname(): XorName
+  /**
+   * Get the counter of the pointer, the higher the counter, the more recent the pointer is
+   * Similarly to counter CRDTs only the latest version (highest counter) of the pointer is kept on the network
+   */
+  counter(): number
+  /** Verifies if the pointer has a valid signature */
+  verifySignature(): boolean
+  /** Size of the pointer */
+  static size(): bigint
+}
 export type JsPointerTarget = PointerTarget
-export declare class PointerTarget { }
+export declare class PointerTarget {
+  /** Returns the xorname of the target */
+  xorname(): XorName
+  /** Returns the hex string representation of the target */
+  toHex(): string
+  /** Creates a new PointerTarget from a ChunkAddress */
+  static ChunkAddress(addr: ChunkAddress): JsPointerTarget
+  /** Creates a new PointerTarget from a GraphEntryAddress */
+  static GraphEntryAddress(addr: GraphEntryAddress): JsPointerTarget
+  /** Creates a new PointerTarget from a PointerAddress */
+  static PointerAddress(addr: JsPointerAddress): JsPointerTarget
+  /** Creates a new PointerTarget from a ScratchpadAddress */
+  static ScratchpadAddress(addr: JsScratchpadAddress): JsPointerTarget
+}
 export type JsPointerAddress = PointerAddress
-export declare class PointerAddress { }
+export declare class PointerAddress {
+  /** Creates a new PointerAddress. */
+  constructor(owner: PublicKey)
+  /**
+   * Return the network name of the pointer.
+   * This is used to locate the pointer on the network.
+   */
+  xorname(): XorName
+  /** Return the owner. */
+  owner(): PublicKey
+  /** Serialize this PointerAddress into a hex-encoded string. */
+  toHex(): string
+  /** Parse a hex-encoded string into a PointerAddress. */
+  static fromHex(hex: string): JsPointerAddress
+}
 export type JsScratchpad = Scratchpad
 export declare class Scratchpad { }
 export type JsScratchpadAddress = ScratchpadAddress
