@@ -30,7 +30,6 @@ pub enum PayError {
 
 pub fn receipt_from_store_quotes(quotes: StoreQuote) -> Receipt {
     let mut receipt = Receipt::new();
-
     for (content_addr, quote_for_address) in quotes.0 {
         let price = AttoTokens::from_atto(quote_for_address.price());
 
@@ -38,10 +37,10 @@ pub fn receipt_from_store_quotes(quotes: StoreQuote) -> Receipt {
             peer_quotes: vec![],
         };
 
-        for (peer_id, quote, _amount) in quote_for_address.0 {
+        for (peer_id, addrs, quote, _amount) in quote_for_address.0 {
             proof_of_payment
                 .peer_quotes
-                .push((EncodedPeerId::from(peer_id), quote));
+                .push((EncodedPeerId::from(peer_id), addrs.0, quote));
         }
 
         // skip empty proofs

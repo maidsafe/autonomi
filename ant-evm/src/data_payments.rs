@@ -11,7 +11,7 @@ use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
     quoting_metrics::QuotingMetrics,
 };
-use libp2p::{identity::PublicKey, PeerId};
+use libp2p::{identity::PublicKey, Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 pub use std::time::SystemTime;
 use xor_name::XorName;
@@ -41,7 +41,7 @@ impl From<PeerId> for EncodedPeerId {
 /// The proof of payment for a data payment
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct ProofOfPayment {
-    pub peer_quotes: Vec<(EncodedPeerId, PaymentQuote)>,
+    pub peer_quotes: Vec<(EncodedPeerId, Vec<Multiaddr>, PaymentQuote)>,
 }
 
 impl ProofOfPayment {
@@ -50,15 +50,21 @@ impl ProofOfPayment {
         self.peer_quotes
             .clone()
             .into_iter()
-            .map(|(_, quote)| (quote.hash(), quote.quoting_metrics, quote.rewards_address))
+            .map(|(_, _, quote)| (quote.hash(), quote.quoting_metrics, quote.rewards_address))
             .collect()
     }
 
     /// returns the list of payees
-    pub fn payees(&self) -> Vec<PeerId> {
+    pub fn payees(&self) -> Vec<(PeerId, Vec<Multiaddr>)> {
         self.peer_quotes
             .iter()
-            .filter_map(|(peer_id, _)| peer_id.to_peer_id().ok())
+            .filter_map(|(peer_id, addrs, _)| {
+                if let Ok(peer_id) = peer_id.to_peer_id() {
+                    Some((peer_id, addrs.clone()))
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -66,14 +72,14 @@ impl ProofOfPayment {
     pub fn has_expired(&self) -> bool {
         self.peer_quotes
             .iter()
-            .any(|(_, quote)| quote.has_expired())
+            .any(|(_, _, quote)| quote.has_expired())
     }
 
     /// Returns all quotes by given peer id
     pub fn quotes_by_peer(&self, peer_id: &PeerId) -> Vec<&PaymentQuote> {
         self.peer_quotes
             .iter()
-            .filter_map(|(_id, quote)| {
+            .filter_map(|(_id, _addr, quote)| {
                 if let Ok(quote_peer_id) = quote.peer_id() {
                     if *peer_id == quote_peer_id {
                         return Some(quote);
@@ -87,7 +93,7 @@ impl ProofOfPayment {
     /// verifies the proof of payment is valid for the given peer id
     pub fn verify_for(&self, peer_id: PeerId) -> bool {
         // make sure I am in the list of payees
-        if !self.payees().contains(&peer_id) {
+        if !self.payees().iter().any(|(id, _addrs)| *id == peer_id) {
             warn!("Payment does not contain node peer id");
             debug!("Payment contains peer ids: {:?}", self.payees());
             debug!("Node peer id: {:?}", peer_id);
@@ -95,7 +101,7 @@ impl ProofOfPayment {
         }
 
         // verify all signatures
-        for (encoded_peer_id, quote) in self.peer_quotes.iter() {
+        for (encoded_peer_id, _addr, quote) in self.peer_quotes.iter() {
             let peer_id = match encoded_peer_id.to_peer_id() {
                 Ok(peer_id) => peer_id,
                 Err(e) => {
@@ -113,7 +119,7 @@ impl ProofOfPayment {
 
     /// Verifies whether all quotes were made for the expected data type.
     pub fn verify_data_type(&self, data_type: u32) -> bool {
-        for (_, quote) in self.peer_quotes.iter() {
+        for (_, _, quote) in self.peer_quotes.iter() {
             if quote.quoting_metrics.data_type != data_type {
                 return false;
             }

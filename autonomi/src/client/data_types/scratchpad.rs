@@ -9,7 +9,7 @@
 use crate::client::payment::{PayError, PaymentOption};
 use crate::{client::quote::CostError, Client};
 use crate::{Amount, AttoTokens};
-use ant_networking::{GetRecordError, NetworkError};
+use ant_networking::{Addresses, GetRecordError, NetworkError};
 use ant_protocol::storage::{try_serialize_record, RecordKind};
 use ant_protocol::{
     storage::{try_deserialize_record, DataTypes},
@@ -186,7 +186,13 @@ impl Client {
 
         let net_addr = NetworkAddress::from_scratchpad_address(*address);
         let (record, payees) = if let Some(proof) = proof {
-            let payees = Some(proof.payees());
+            let payees = Some(
+                proof
+                    .payees()
+                    .iter()
+                    .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+                    .collect(),
+            );
             let record = Record {
                 key: net_addr.to_record_key(),
                 value: try_serialize_record(

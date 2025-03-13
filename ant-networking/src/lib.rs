@@ -294,6 +294,7 @@ impl Network {
     pub async fn verify_chunk_existence(
         &self,
         chunk_address: NetworkAddress,
+        mut close_nodes: Vec<(PeerId, Addresses)>,
         nonce: Nonce,
         expected_proof: ChunkProof,
         quorum: ResponseQuorum,
@@ -312,18 +313,14 @@ impl Network {
             difficulty: 1,
         });
 
-        let mut close_nodes = Vec::new();
+        if close_nodes.is_empty() {
+            close_nodes = self
+                .client_get_all_close_peers_in_range_or_close_group(&chunk_address)
+                .await?;
+        }
+
         let mut retry_attempts = 0;
         while retry_attempts < total_attempts {
-            // the check should happen before incrementing retry_attempts
-            if retry_attempts % 2 == 0 {
-                // Do not query the closest_peers during every re-try attempt.
-                // The close_nodes don't change often and the previous set of close_nodes might be taking a while to write
-                // the Chunk, so query them again incase of a failure.
-                close_nodes = self
-                    .client_get_all_close_peers_in_range_or_close_group(&chunk_address)
-                    .await?;
-            }
             retry_attempts += 1;
             info!(
                 "Getting ChunkProof for {pretty_key:?}. Attempts: {retry_attempts:?}/{total_attempts:?}",
@@ -390,7 +387,7 @@ impl Network {
         data_type: u32,
         data_size: usize,
         ignore_peers: Vec<PeerId>,
-    ) -> Result<Vec<(PeerId, PaymentQuote)>> {
+    ) -> Result<Vec<(PeerId, Addresses, PaymentQuote)>> {
         // The requirement of having at least CLOSE_GROUP_SIZE
         // close nodes will be checked internally automatically.
         let mut close_nodes = self
@@ -427,7 +424,6 @@ impl Network {
         let mut peers_returned_error = 0;
 
         // loop over responses
-        let mut all_quotes = vec![];
         let mut quotes_to_pay = vec![];
         for (peer, response) in responses {
             info!("StoreCostReq for {record_address:?} received response: {response:?}");
@@ -453,8 +449,15 @@ impl Network {
                         continue;
                     }
 
-                    all_quotes.push((peer_address.clone(), quote.clone()));
-                    quotes_to_pay.push((peer, quote));
+                    let Some((_peer_id, addrs)) = close_nodes
+                        .iter()
+                        .find(|(peer_id, _addrs)| *peer_id == peer)
+                    else {
+                        warn!("Can't find the addresses of the peer {peer:?}");
+                        continue;
+                    };
+
+                    quotes_to_pay.push((peer, addrs.clone(), quote));
                 }
                 Ok(Response::Query(QueryResponse::GetStoreQuote {
                     quote: Err(ProtocolError::RecordExists(_)),
@@ -818,20 +821,26 @@ impl Network {
 
         // Waiting for a response to avoid flushing to network too quick that causing choke
         let (sender, receiver) = oneshot::channel();
-        if let Some(put_record_to_peers) = &cfg.use_put_record_to {
+        let close_nodes = if let Some(put_record_to_peers) = &cfg.use_put_record_to {
+            let peers = put_record_to_peers
+                .iter()
+                .map(|(peer_id, _addrs)| *peer_id)
+                .collect();
             self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecordTo {
-                peers: put_record_to_peers.clone(),
+                peers,
                 record: record.clone(),
                 sender,
                 quorum: cfg.put_quorum,
             });
+            put_record_to_peers.clone()
         } else {
             self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecord {
                 record: record.clone(),
                 sender,
                 quorum: cfg.put_quorum,
             });
-        }
+            vec![]
+        };
 
         let response = receiver.await?;
 
@@ -852,6 +861,7 @@ impl Network {
             {
                 self.verify_chunk_existence(
                     NetworkAddress::from_record_key(&record_key),
+                    close_nodes,
                     *nonce,
                     expected_proof.clone(),
                     get_cfg.get_quorum,

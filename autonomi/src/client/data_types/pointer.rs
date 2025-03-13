@@ -12,7 +12,7 @@ use crate::client::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_networking::{GetRecordError, NetworkError};
+use ant_networking::{Addresses, GetRecordError, NetworkError};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
@@ -144,7 +144,13 @@ impl Client {
         let total_cost = *price;
 
         let (record, payees) = if let Some(proof) = proof {
-            let payees = Some(proof.payees());
+            let payees = Some(
+                proof
+                    .payees()
+                    .iter()
+                    .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+                    .collect(),
+            );
             let record = Record {
                 key: NetworkAddress::from_pointer_address(address).to_record_key(),
                 value: try_serialize_record(

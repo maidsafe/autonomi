@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_evm::EvmNetwork;
-use ant_networking::{GetRecordCfg, PutRecordCfg, VerificationKind};
+use ant_networking::{Addresses, GetRecordCfg, PutRecordCfg, VerificationKind};
 use ant_protocol::messages::ChunkProof;
 use libp2p::{kad::Record, PeerId};
 use rand::{thread_rng, Rng};
@@ -138,7 +138,7 @@ impl Strategy {
     }
 
     /// Put config for storing a record
-    pub(crate) fn put_cfg(&self, put_to: Option<Vec<PeerId>>) -> PutRecordCfg {
+    pub(crate) fn put_cfg(&self, put_to: Option<Vec<(PeerId, Addresses)>>) -> PutRecordCfg {
         PutRecordCfg {
             put_quorum: self.put_quorum,
             retry_strategy: self.put_retry,
@@ -148,7 +148,11 @@ impl Strategy {
     }
 
     /// Put config for storing a Chunk, more strict and requires a chunk proof of storage
-    pub(crate) fn chunk_put_cfg(&self, expected: Record, put_to: Vec<PeerId>) -> PutRecordCfg {
+    pub(crate) fn chunk_put_cfg(
+        &self,
+        expected: Record,
+        put_to: Vec<(PeerId, Addresses)>,
+    ) -> PutRecordCfg {
         let random_nonce = thread_rng().gen::<u64>();
         let expected_proof = ChunkProof::new(&expected.value, random_nonce);
 
