@@ -227,7 +227,7 @@ jobs:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
-        timeout-minutes: 15
+        timeout-minutes: 20
 
       # FIXME: do this in a generic way for localtestnets
       - name: export default secret key

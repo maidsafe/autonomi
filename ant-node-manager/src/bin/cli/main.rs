@@ -9,7 +9,7 @@
 mod subcommands;
 
 use crate::subcommands::evm_network::EvmNetworkCommand;
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::RewardsAddress;
 use ant_logging::{LogBuilder, LogFormat};
 use ant_node_manager::{
@@ -195,7 +195,7 @@ pub enum SubCmd {
         #[clap(long)]
         path: Option<PathBuf>,
         #[command(flatten)]
-        peers: PeersArgs,
+        peers: InitialPeersConfig,
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
@@ -548,7 +548,7 @@ pub enum FaucetSubCmd {
         #[clap(long)]
         path: Option<PathBuf>,
         #[command(flatten)]
-        peers: PeersArgs,
+        peers: InitialPeersConfig,
         /// Provide a faucet binary using a URL.
         ///
         /// The binary must be inside a zip or gzipped tar archive.
@@ -744,7 +744,7 @@ pub enum LocalSubCmd {
         #[clap(long)]
         node_version: Option<String>,
         #[command(flatten)]
-        peers: PeersArgs,
+        peers: InitialPeersConfig,
         /// Specify a port for the RPC service(s).
         ///
         /// If not used, ports will be selected at random.

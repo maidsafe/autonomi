@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{BootstrapCacheConfig, PeersArgs};
+use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig};
 use ant_logging::LogBuilder;
 use libp2p::Multiaddr;
 use tempfile::TempDir;
@@ -28,7 +28,7 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
     let (_temp_dir, config) = setup().await;
 
-    let args = PeersArgs {
+    let args = InitialPeersConfig {
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -54,7 +54,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
             .parse()?;
 
-    let args = PeersArgs {
+    let args = InitialPeersConfig {
         first: false,
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],
@@ -89,7 +89,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
         .mount(&mock_server)
         .await;
 
-    let args = PeersArgs {
+    let args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],
@@ -122,7 +122,7 @@ async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
 
-    let args = PeersArgs {
+    let args = InitialPeersConfig {
         first: false,
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],

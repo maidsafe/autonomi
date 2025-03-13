@@ -8,7 +8,7 @@ use autonomi::{
         PublicArchive,
     },
     pointer::PointerTarget,
-    register::{RegisterAddress, RegisterHistory, RegisterValue},
+    register::{RegisterAddress, RegisterHistory},
     vault::{UserData, VaultContentType, VaultSecretKey},
     AttoTokens, Bytes, Chunk, ChunkAddress, Client, GraphEntry, GraphEntryAddress, Network,
     Pointer, PointerAddress, PublicKey, Scratchpad, ScratchpadAddress, SecretKey, Wallet, XorName,

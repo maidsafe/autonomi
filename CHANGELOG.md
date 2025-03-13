@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-03-12
+
+### Network
+
+#### Changed
+
+- Log the `evmlib` crate by default.
+- When a node receives a payment from a client, failed payment verification will be retried after 5
+  seconds. The client and node could have queried different EVM nodes that were not synchronised
+  yet. This could have resulted in a chunk proof verification error on the client.
+
+#### Fixed
+
+- During payee verification, use closest peers to target, rather than self. In some edge cases, the
+  latter could cause payment to be rejected and result in a chunk proof verification error on
+  uploads.
+- Improve the efficiency of network discovery by handling an edge case where there is a 'hole' in
+  the routing table.
+- A peer will be dialled before sending it a request. This helped in the elimination of 'not enough
+  quotes' errors.
+- When obtaining peers, use `get_closest_local_peers` rather than `find_closest_local_peers`. This
+  helped eliminate chunk proof verification errors.
+
+### Autonomi API
+
+#### Fixed
+
+- Add missing class exports for several Python bindings.
+
+### Client
+
+#### Changed
+
+- Use a single error variant for 'not enough quotes' error. This facilitated easier internal testing
+  when investigating the errors.
+- Various changes improved the efficiency of obtaining quotes for uploads:
+    + Use a cloned network to increase parallelism.
+    + Use 10 seconds for query timeout, rather than the default 60 seconds.
+    + Use redials only during reattempts to avoid unnecessary timeout.
+    + All content addresses across files are merged into a single call for obtaining the quotes.
+
+#### Fixed
+
+- The client no longer dials back when it receives an identify request; it has to assume nodes are
+  OK. This may help to reduce open connections.
+- Do not fetch mainnet contacts when the `--testnet` argument is used.
+
+### Launchpad
+
+#### Fixed
+
+- When `UPnP` was selected, nodes would be started using `Manual` mode. They will now start as
+  expected when `UPnP` is used.
+
 ## 2025-02-28
 
 ### Network

@@ -16,7 +16,7 @@ use crate::{
     },
     VerbosityLevel,
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{auditor::AuditorServiceData, control::ServiceControl};
 use ant_service_management::{error::Result as ServiceControlResult, NatDetectionStatus};
@@ -109,7 +109,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
 
-    let peers_args = PeersArgs {
+    let init_peers_config = InitialPeersConfig {
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -142,7 +142,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         network_id: None,
         node_ip: None,
         node_port: None,
-        peers_args: peers_args.clone(),
+        init_peers_config: init_peers_config.clone(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
@@ -176,7 +176,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args,
+            init_peers_config,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -260,7 +260,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
 
     let latest_version = "0.96.4";
 
-    let peers_args = PeersArgs {
+    let init_peers_config = InitialPeersConfig {
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -299,7 +299,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: peers_args.clone(),
+            peers_args: init_peers_config.clone(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -344,7 +344,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args,
+            init_peers_config,
             rpc_address: Some(custom_rpc_address),
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -398,7 +398,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
         environment_variables: None,
         daemon: None,
     };
-    let peers_args = PeersArgs {
+    let init_peers_config = InitialPeersConfig {
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -433,7 +433,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args,
+            init_peers_config,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -529,7 +529,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
@@ -577,7 +577,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         name: "antnode2".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
@@ -625,7 +625,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         name: "antnode3".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085),
         antnode_path: node_data_dir
@@ -660,7 +660,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -806,7 +806,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
@@ -840,7 +840,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -936,7 +936,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -991,7 +991,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         name: "antnode2".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083),
         antnode_path: node_data_dir
@@ -1026,7 +1026,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
@@ -1104,7 +1104,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -1190,7 +1190,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1256,7 +1256,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![
             "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
@@ -1347,7 +1347,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1413,7 +1413,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -1499,7 +1499,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1565,7 +1565,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![
@@ -1655,7 +1655,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1724,7 +1724,7 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -1810,7 +1810,7 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1876,7 +1876,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -1962,7 +1962,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2028,7 +2028,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let peers_args = PeersArgs {
+    let peers_args = InitialPeersConfig {
         first: false,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -2115,7 +2115,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: peers_args.clone(),
+            init_peers_config: peers_args.clone(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2261,7 +2261,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             network_id: Some(5),
             node_ip: None,
             node_port: None,
-            peers_args: Default::default(),
+            init_peers_config: Default::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2405,7 +2405,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             network_id: None,
             node_ip: Some(custom_ip),
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2502,7 +2502,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: Some(custom_port),
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
@@ -2537,7 +2537,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Single(custom_port)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2797,7 +2797,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2873,7 +2873,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             node_port: Some(12000),
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2916,7 +2916,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Single(12000)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2988,7 +2988,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             network_id: None,
             node_ip: None,
             node_port: Some(12000),
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             number: 1,
             peer_id: None,
             pid: None,
@@ -3033,7 +3033,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3111,7 +3111,7 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Range(12000, 12002)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
@@ -3194,7 +3194,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             network_id: None,
             node_ip: None,
             node_port: Some(PortRange::Single(12000)),
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3340,7 +3340,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3478,7 +3478,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3617,7 +3617,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3872,7 +3872,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3945,7 +3945,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3988,7 +3988,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4063,7 +4063,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4106,7 +4106,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4344,7 +4344,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: Some(PortRange::Range(20000, 20002)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4428,7 +4428,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4471,7 +4471,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: Some(PortRange::Single(8081)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4546,7 +4546,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: PeersArgs::default(),
+            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4589,7 +4589,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: Some(PortRange::Range(8081, 8082)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4684,7 +4684,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
@@ -4718,7 +4718,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4810,7 +4810,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
@@ -4844,7 +4844,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4936,7 +4936,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
         antnode_path: node_data_dir
@@ -4970,7 +4970,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5056,7 +5056,7 @@ async fn add_node_should_return_an_error_if_nat_status_is_none_but_auto_set_nat_
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5681,7 +5681,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
@@ -5716,7 +5716,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5809,7 +5809,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
@@ -5844,7 +5844,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5937,7 +5937,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
@@ -5972,7 +5972,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -6062,7 +6062,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
-        peers_args: PeersArgs::default(),
+        init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
@@ -6097,7 +6097,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -6232,7 +6232,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),

@@ -10,7 +10,7 @@ use crate::{
     config::{self, is_running_as_root},
     print_banner, ServiceManager, VerbosityLevel,
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_service_management::{auditor::AuditorService, control::ServiceController, NodeRegistry};
 use color_eyre::{eyre::eyre, Result};
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ pub async fn add(
     _beta_encryption_key: Option<String>,
     _env_variables: Option<Vec<(String, String)>>,
     _log_dir_path: Option<PathBuf>,
-    _peers_args: PeersArgs,
+    _peers_args: InitialPeersConfig,
     _src_path: Option<PathBuf>,
     _url: Option<String>,
     _version: Option<String>,

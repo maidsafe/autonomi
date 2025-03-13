@@ -30,7 +30,7 @@ use crate::{
     system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
     tui,
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::{prelude::Rect, style::Style, widgets::Block};
@@ -53,7 +53,7 @@ impl App {
     pub async fn new(
         tick_rate: f64,
         frame_rate: f64,
-        peers_args: PeersArgs,
+        init_peers_config: InitialPeersConfig,
         antnode_path: Option<PathBuf>,
         app_data_path: Option<PathBuf>,
         network_id: Option<u8>,
@@ -97,7 +97,7 @@ impl App {
         let status_config = StatusConfig {
             allocated_disk_space: app_data.nodes_to_start,
             rewards_address: app_data.discord_username.clone(),
-            peers_args,
+            init_peers_config,
             network_id,
             antnode_path,
             data_dir_path,
@@ -334,7 +334,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ant_bootstrap::PeersArgs;
+    use ant_bootstrap::InitialPeersConfig;
     use color_eyre::eyre::Result;
     use serde_json::json;
     use std::io::Cursor;
@@ -363,13 +363,14 @@ mod tests {
         std::fs::write(&config_path, valid_config)?;
 
         // Create default PeersArgs
-        let peers_args = PeersArgs::default();
+        let init_peers_config = InitialPeersConfig::default();
 
         // Create a buffer to capture output
         let mut output = Cursor::new(Vec::new());
 
         // Create and run the App, capturing its output
-        let app_result = App::new(60.0, 60.0, peers_args, None, Some(config_path), None).await;
+        let app_result =
+            App::new(60.0, 60.0, init_peers_config, None, Some(config_path), None).await;
 
         match app_result {
             Ok(app) => {
@@ -424,14 +425,21 @@ mod tests {
         std::fs::write(&test_app_data_path, custom_config)?;
 
         // Create default PeersArgs
-        let peers_args = PeersArgs::default();
+        let init_peers_config = InitialPeersConfig::default();
 
         // Create a buffer to capture output
         let mut output = Cursor::new(Vec::new());
 
         // Create and run the App, capturing its output
-        let app_result =
-            App::new(60.0, 60.0, peers_args, None, Some(test_app_data_path), None).await;
+        let app_result = App::new(
+            60.0,
+            60.0,
+            init_peers_config,
+            None,
+            Some(test_app_data_path),
+            None,
+        )
+        .await;
 
         match app_result {
             Ok(app) => {
@@ -480,7 +488,7 @@ mod tests {
         let non_existent_config_path = temp_dir.path().join("non_existent_config.json");
 
         // Create default PeersArgs
-        let peers_args = PeersArgs::default();
+        let init_peers_config = InitialPeersConfig::default();
 
         // Create a buffer to capture output
         let mut output = Cursor::new(Vec::new());
@@ -489,7 +497,7 @@ mod tests {
         let app_result = App::new(
             60.0,
             60.0,
-            peers_args,
+            init_peers_config,
             None,
             Some(non_existent_config_path),
             None,
@@ -553,10 +561,11 @@ mod tests {
         std::fs::write(&config_path, invalid_config)?;
 
         // Create default PeersArgs
-        let peers_args = PeersArgs::default();
+        let init_peers_config = InitialPeersConfig::default();
 
         // Create and run the App, capturing its output
-        let app_result = App::new(60.0, 60.0, peers_args, None, Some(config_path), None).await;
+        let app_result =
+            App::new(60.0, 60.0, init_peers_config, None, Some(config_path), None).await;
 
         // Could be that the mountpoint doesn't exists
         // or that the user doesn't have permissions to access it
@@ -594,11 +603,18 @@ mod tests {
         std::fs::write(&test_app_data_path, custom_config)?;
 
         // Create default PeersArgs
-        let peers_args = PeersArgs::default();
+        let init_peers_config = InitialPeersConfig::default();
 
         // Create and run the App
-        let app_result =
-            App::new(60.0, 60.0, peers_args, None, Some(test_app_data_path), None).await;
+        let app_result = App::new(
+            60.0,
+            60.0,
+            init_peers_config,
+            None,
+            Some(test_app_data_path),
+            None,
+        )
+        .await;
 
         match app_result {
             Ok(app) => {

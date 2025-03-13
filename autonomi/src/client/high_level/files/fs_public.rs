@@ -15,7 +15,7 @@ use crate::client::payment::PaymentOption;
 use crate::client::{high_level::data::DataAddress, utils::process_tasks_with_max_concurrency};
 use crate::client::{Client, PutError};
 use crate::self_encryption::encrypt;
-use crate::{Amount, AttoTokens};
+use crate::AttoTokens;
 use ant_networking::time::{Duration, SystemTime};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
@@ -281,7 +281,7 @@ impl Client {
     /// quick and dirty implementation, please refactor once files are cleanly implemented
     pub async fn file_cost(&self, path: &PathBuf) -> Result<AttoTokens, FileCostError> {
         let mut archive = PublicArchive::new();
-        let mut total_cost = Amount::ZERO;
+        let mut content_addrs = vec![];
 
         for entry in walkdir::WalkDir::new(path) {
             let entry = entry?;
@@ -295,28 +295,24 @@ impl Client {
 
             let data = tokio::fs::read(&path).await?;
             let file_bytes = Bytes::from(data);
-            let file_cost = self.data_cost(file_bytes.clone()).await?;
 
-            total_cost += file_cost.as_atto();
+            let addrs = self.get_content_addrs(file_bytes.clone())?;
 
-            // re-do encryption to get the correct map xorname here
-            // this code needs refactor
-            let now = ant_networking::time::Instant::now();
-            let (data_map_chunk, _) = crate::self_encryption::encrypt(file_bytes)?;
-            tracing::debug!("Encryption took: {:.2?}", now.elapsed());
-            let map_xor_name = *data_map_chunk.address().xorname();
+            // The first addr is always the chunk_map_name
+            let map_xor_name = addrs[0].0;
+
+            content_addrs.extend(addrs);
 
             let metadata = metadata_from_entry(&entry);
             archive.add_file(path, DataAddress::new(map_xor_name), metadata);
         }
 
         let root_serialized = rmp_serde::to_vec(&archive)?;
+        content_addrs.extend(self.get_content_addrs(Bytes::from(root_serialized))?);
 
-        let archive_cost = self.data_cost(Bytes::from(root_serialized)).await?;
-
-        total_cost += archive_cost.as_atto();
+        let total_cost = self.get_cost_estimation(content_addrs).await?;
         debug!("Total cost for the directory: {total_cost:?}");
-        Ok(total_cost.into())
+        Ok(total_cost)
     }
 }
 

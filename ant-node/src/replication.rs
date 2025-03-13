@@ -47,7 +47,13 @@ impl Node {
                     key: NetworkAddress::from_record_key(&key),
                 });
 
-                let record = match node.network().send_request(req, holder).await {
+                // Addrs are skipped for replication because the peer should be part of the RT and swarm should be
+                // able to find the multiaddr.
+                let record = match node
+                    .network()
+                    .send_request(req, holder, Default::default())
+                    .await
+                {
                     Ok(Response::Query(QueryResponse::GetReplicatedRecord(result))) => match result
                     {
                         Ok((_holder, record_content)) => {

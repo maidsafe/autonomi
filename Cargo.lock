@@ -772,7 +772,7 @@ dependencies = [
 
 [[package]]
 name = "ant-bootstrap"
-version = "0.1.6"
+version = "0.2.0"
 dependencies = [
  "ant-logging",
  "ant-protocol",
@@ -796,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "ant-build-info"
-version = "0.1.25"
+version = "0.1.26"
 dependencies = [
  "chrono",
  "tracing",
@@ -805,9 +805,8 @@ dependencies = [
 
 [[package]]
 name = "ant-cli"
-version = "0.3.8"
+version = "0.3.9"
 dependencies = [
- "ant-bootstrap",
  "ant-build-info",
  "ant-logging",
  "ant-protocol",
@@ -836,7 +835,7 @@ dependencies = [
 
 [[package]]
 name = "ant-evm"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "custom_debug",
  "evmlib",
@@ -858,7 +857,7 @@ dependencies = [
 
 [[package]]
 name = "ant-logging"
-version = "0.2.47"
+version = "0.2.48"
 dependencies = [
  "chrono",
  "color-eyre",
@@ -883,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "ant-metrics"
-version = "0.1.26"
+version = "0.1.27"
 dependencies = [
  "clap",
  "color-eyre",
@@ -897,7 +896,7 @@ dependencies = [
 
 [[package]]
 name = "ant-networking"
-version = "0.3.6"
+version = "0.3.7"
 dependencies = [
  "aes-gcm-siv",
  "ant-bootstrap",
@@ -938,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node"
-version = "0.3.7"
+version = "0.3.8"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -995,7 +994,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node-manager"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -1038,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node-rpc-client"
-version = "0.6.43"
+version = "0.6.44"
 dependencies = [
  "ant-build-info",
  "ant-logging",
@@ -1062,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "ant-protocol"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "ant-build-info",
  "ant-evm",
@@ -1113,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "ant-service-management"
-version = "0.4.9"
+version = "0.4.10"
 dependencies = [
  "ant-bootstrap",
  "ant-evm",
@@ -1141,7 +1140,7 @@ dependencies = [
 
 [[package]]
 name = "ant-token-supplies"
-version = "0.1.64"
+version = "0.1.65"
 dependencies = [
  "dirs-next",
  "reqwest 0.11.27",
@@ -1579,7 +1578,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "autonomi"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "alloy",
  "ant-bootstrap",
@@ -3216,7 +3215,7 @@ dependencies = [
 
 [[package]]
 name = "evm-testnet"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "ant-evm",
  "clap",
@@ -3227,7 +3226,7 @@ dependencies = [
 
 [[package]]
 name = "evmlib"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -6147,7 +6146,7 @@ dependencies = [
 
 [[package]]
 name = "nat-detection"
-version = "0.2.17"
+version = "0.2.18"
 dependencies = [
  "ant-build-info",
  "ant-networking",
@@ -6288,7 +6287,7 @@ dependencies = [
 
 [[package]]
 name = "node-launchpad"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -8902,7 +8901,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 
 [[package]]
 name = "test-utils"
-version = "0.4.17"
+version = "0.4.18"
 dependencies = [
  "bytes",
  "color-eyre",

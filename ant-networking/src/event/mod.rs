@@ -11,11 +11,11 @@ mod kad;
 mod request_response;
 mod swarm;
 
-use crate::{driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer};
+use crate::{driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses};
 use core::fmt;
 use custom_debug::Debug as CustomDebug;
 use libp2p::{
-    kad::{Addresses, Record, RecordKey, K_VALUE},
+    kad::{Record, RecordKey, K_VALUE},
     request_response::ResponseChannel as PeerResponseChannel,
     Multiaddr, PeerId,
 };
@@ -266,8 +266,11 @@ impl SwarmDriver {
         // this includes self
         let closest_k_peers = self.get_closest_k_value_local_peers();
 
-        let new_closest_peers: Vec<_> =
-            closest_k_peers.into_iter().take(CLOSE_GROUP_SIZE).collect();
+        let new_closest_peers: Vec<PeerId> = closest_k_peers
+            .into_iter()
+            .map(|(peer_id, _)| peer_id)
+            .take(CLOSE_GROUP_SIZE)
+            .collect();
 
         let old = self.close_group.iter().cloned().collect::<HashSet<_>>();
         let new_members: Vec<_> = new_closest_peers
@@ -301,7 +304,7 @@ impl SwarmDriver {
         kbucket_status.log();
 
         if let Some(bootstrap_cache) = &mut self.bootstrap_cache {
-            for addr in addresses.iter() {
+            for addr in addresses.0.iter() {
                 bootstrap_cache.add_addr(addr.clone());
             }
         }

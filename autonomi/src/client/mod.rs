@@ -28,6 +28,7 @@ pub use high_level::files;
 pub use high_level::register;
 pub use high_level::vault;
 
+pub mod analyze;
 pub mod config;
 pub mod key_derivation;
 pub mod payment;
@@ -40,7 +41,7 @@ pub mod external_signer;
 // private module with utility functions
 mod utils;
 
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, PeersArgs};
+use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
 use ant_networking::{
@@ -154,7 +155,15 @@ impl Client {
     ///
     /// See [`Client::init_with_config`].
     pub async fn init_local() -> Result<Self, ConnectError> {
-        Self::init_with_config(ClientConfig::local(None)).await
+        Self::init_with_config(ClientConfig {
+            init_peers_config: InitialPeersConfig {
+                local: true,
+                ..Default::default()
+            },
+            evm_network: EvmNetwork::new(true).unwrap_or_default(),
+            strategy: Default::default(),
+        })
+        .await
     }
 
     /// Initialize a client that bootstraps from a list of peers.
@@ -175,8 +184,11 @@ impl Client {
         let local = !peers.iter().any(multiaddr_is_global);
 
         Self::init_with_config(ClientConfig {
-            local,
-            peers: Some(peers),
+            init_peers_config: InitialPeersConfig {
+                local,
+                addrs: peers,
+                ..Default::default()
+            },
             evm_network: EvmNetwork::new(local).unwrap_or_default(),
             strategy: Default::default(),
         })
@@ -198,19 +210,13 @@ impl Client {
     /// # }
     /// ```
     pub async fn init_with_config(config: ClientConfig) -> Result<Self, ConnectError> {
-        let peers_args = PeersArgs {
-            disable_mainnet_contacts: config.local,
-            addrs: config.peers.unwrap_or_default(),
-            local: config.local,
-            ..Default::default()
-        };
-        let initial_peers = match peers_args.get_addrs(None, None).await {
+        let initial_peers = match config.init_peers_config.get_addrs(None, None).await {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };
 
         let (shutdown_tx, network, event_receiver) =
-            build_client_and_run_swarm(config.local, initial_peers);
+            build_client_and_run_swarm(&config.init_peers_config, initial_peers);
 
         // Wait until we have added a few peers to our routing table.
         let (sender, receiver) = futures::channel::oneshot::channel();
@@ -247,18 +253,21 @@ impl Client {
 }
 
 fn build_client_and_run_swarm(
-    local: bool,
+    init_peers_config: &InitialPeersConfig,
     initial_peers: Vec<Multiaddr>,
 ) -> (watch::Sender<bool>, Network, mpsc::Receiver<NetworkEvent>) {
-    let mut network_builder =
-        NetworkBuilder::new(Keypair::generate_ed25519(), local, initial_peers);
+    let mut network_builder = NetworkBuilder::new(
+        Keypair::generate_ed25519(),
+        init_peers_config.local,
+        initial_peers,
+    );
 
-    if let Ok(mut config) = BootstrapCacheConfig::default_config(local) {
-        if local {
-            config.disable_cache_writing = true;
+    match BootstrapCacheStore::new_from_initial_peers_config(init_peers_config, None) {
+        Ok(cache_store) => {
+            network_builder.bootstrap_cache(cache_store);
         }
-        if let Ok(cache) = BootstrapCacheStore::new(config) {
-            network_builder.bootstrap_cache(cache);
+        Err(err) => {
+            warn!("Failed to create bootstrap cache store from initial peers config: {err:?}");
         }
     }
 

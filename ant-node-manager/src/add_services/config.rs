@@ -6,10 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
-use ant_service_management::node::push_arguments_from_peers_args;
+use ant_service_management::node::push_arguments_from_initial_peers_config;
 use color_eyre::{eyre::eyre, Result};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{
@@ -85,7 +85,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub metrics_port: Option<u16>,
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<u16>,
-    pub peers_args: PeersArgs,
+    pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
@@ -104,7 +104,7 @@ impl InstallNodeServiceCtxBuilder {
             OsString::from(self.log_dir_path.to_string_lossy().to_string()),
         ];
 
-        push_arguments_from_peers_args(&self.peers_args, &mut args);
+        push_arguments_from_initial_peers_config(&self.init_peers_config, &mut args);
         if let Some(id) = self.network_id {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
@@ -181,7 +181,7 @@ pub struct AddNodeServiceOptions {
     pub enable_metrics_server: bool,
     pub env_variables: Option<Vec<(String, String)>>,
     pub evm_network: EvmNetwork,
-    pub relay: bool,
+    pub init_peers_config: InitialPeersConfig,
     pub log_format: Option<LogFormat>,
     pub max_archived_log_files: Option<usize>,
     pub max_log_files: Option<usize>,
@@ -189,7 +189,7 @@ pub struct AddNodeServiceOptions {
     pub network_id: Option<u8>,
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<PortRange>,
-    pub peers_args: PeersArgs,
+    pub relay: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
@@ -324,7 +324,7 @@ mod tests {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -359,7 +359,7 @@ mod tests {
             network_id: None,
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -395,7 +395,7 @@ mod tests {
             network_id: Some(5),
             node_ip: None,
             node_port: None,
-            peers_args: PeersArgs::default(),
+            init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -484,15 +484,16 @@ mod tests {
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
         builder.node_port = Some(12345);
         builder.metrics_port = Some(9090);
-        builder.peers_args.addrs = vec![
+        builder.init_peers_config.addrs = vec![
             "/ip4/127.0.0.1/tcp/8080".parse().unwrap(),
             "/ip4/192.168.1.1/tcp/8081".parse().unwrap(),
         ];
-        builder.peers_args.first = true;
-        builder.peers_args.local = true;
-        builder.peers_args.network_contacts_url = vec!["http://localhost:8080".parse().unwrap()];
-        builder.peers_args.ignore_cache = true;
-        builder.peers_args.disable_mainnet_contacts = true;
+        builder.init_peers_config.first = true;
+        builder.init_peers_config.local = true;
+        builder.init_peers_config.network_contacts_url =
+            vec!["http://localhost:8080".parse().unwrap()];
+        builder.init_peers_config.ignore_cache = true;
+        builder.init_peers_config.disable_mainnet_contacts = true;
         builder.service_user = Some("antnode-user".to_string());
 
         let result = builder.build().unwrap();

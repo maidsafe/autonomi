@@ -15,7 +15,7 @@ use super::AddressParseError;
 
 /// Address of a [`crate::storage::scratchpad::Scratchpad`]
 /// It is derived from the owner's public key
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct ScratchpadAddress(PublicKey);
 
 impl ScratchpadAddress {
@@ -48,6 +48,12 @@ impl ScratchpadAddress {
 }
 
 impl std::fmt::Display for ScratchpadAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
+    }
+}
+
+impl std::fmt::Debug for ScratchpadAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.to_hex())
     }

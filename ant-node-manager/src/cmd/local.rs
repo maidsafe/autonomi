@@ -14,7 +14,7 @@ use crate::{
     local::{kill_network, run_network, LocalNetworkOptions},
     print_banner, status_report, VerbosityLevel,
 };
-use ant_bootstrap::PeersArgs;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
@@ -34,7 +34,7 @@ pub async fn join(
     node_port: Option<PortRange>,
     node_version: Option<String>,
     log_format: Option<LogFormat>,
-    _peers_args: PeersArgs,
+    _peers_args: InitialPeersConfig,
     rpc_port: Option<PortRange>,
     rewards_address: RewardsAddress,
     evm_network: Option<EvmNetwork>,

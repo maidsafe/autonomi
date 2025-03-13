@@ -24,7 +24,7 @@ use crate::{
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     time::{interval, spawn, Instant, Interval},
-    GetRecordError, NodeIssue, CLOSE_GROUP_SIZE,
+    Addresses, GetRecordError, NodeIssue, CLOSE_GROUP_SIZE,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
@@ -70,9 +70,9 @@ pub(crate) enum PendingGetClosestType {
     /// Thus we can just process the queries made by NetworkDiscovery without using any channels
     NetworkDiscovery,
     /// These are queries made by a function at the upper layers and contains a channel to send the result back.
-    FunctionCall(oneshot::Sender<Vec<PeerId>>),
+    FunctionCall(oneshot::Sender<Vec<(PeerId, Addresses)>>),
 }
-type PendingGetClosest = HashMap<QueryId, (PendingGetClosestType, Vec<PeerId>)>;
+type PendingGetClosest = HashMap<QueryId, (PendingGetClosestType, Vec<(PeerId, Addresses)>)>;
 
 /// Using XorName to differentiate different record content under the same key.
 type GetRecordResultMap = HashMap<XorName, (Record, HashSet<PeerId>)>;
@@ -311,7 +311,7 @@ impl SwarmDriver {
                         // Results are sorted, hence can calculate distance directly
                         // Note: self is included
                         let self_addr = NetworkAddress::from_peer(self.self_peer_id);
-                        let close_peers_distance = self_addr.distance(&NetworkAddress::from_peer(closest_k_peers[CLOSE_GROUP_SIZE + 1]));
+                        let close_peers_distance = self_addr.distance(&NetworkAddress::from_peer(closest_k_peers[CLOSE_GROUP_SIZE + 1].0));
 
                         let distance = std::cmp::max(Distance(density_distance), close_peers_distance);
 
@@ -440,25 +440,55 @@ impl SwarmDriver {
         });
     }
 
-    /// get closest k_value the peers from our local RoutingTable. Contains self.
+    /// Get closest K_VALUE peers from our local RoutingTable. Contains self.
     /// Is sorted for closeness to self.
-    pub(crate) fn get_closest_k_value_local_peers(&mut self) -> Vec<PeerId> {
-        let k_bucket_key = NetworkAddress::from_peer(self.self_peer_id).as_kbucket_key();
+    pub(crate) fn get_closest_k_value_local_peers(&mut self) -> Vec<(PeerId, Addresses)> {
+        // Limit ourselves to K_VALUE (20) peers.
+        let peers: Vec<_> = self.get_closest_local_peers_to_target(
+            &NetworkAddress::from_peer(self.self_peer_id),
+            K_VALUE.get() - 1,
+        );
 
-        // get closest peers from buckets, sorted by increasing distance to us
-        let peers: Vec<_> = self
+        // Start with our own PeerID and chain the closest.
+        std::iter::once((self.self_peer_id, Default::default()))
+            .chain(peers)
+            .collect()
+    }
+
+    /// Get closest X peers to the target. Not containing self.
+    /// Is sorted for closeness to the target.
+    pub(crate) fn get_closest_local_peers_to_target(
+        &mut self,
+        target: &NetworkAddress,
+        num_of_peers: usize,
+    ) -> Vec<(PeerId, Addresses)> {
+        let peer_ids = self
             .swarm
             .behaviour_mut()
             .kademlia
-            .get_closest_local_peers(&k_bucket_key)
+            .get_closest_local_peers(&target.as_kbucket_key())
             // Map KBucketKey<PeerId> to PeerId.
             .map(|key| key.into_preimage())
-            // Limit ourselves to K_VALUE (20) peers.
-            .take(K_VALUE.get() - 1)
+            .take(num_of_peers)
             .collect();
+        self.collect_peers_info(peer_ids)
+    }
 
-        // Start with our own PeerID and chain the closest.
-        std::iter::once(self.self_peer_id).chain(peers).collect()
+    /// Collect peers' address info
+    fn collect_peers_info(&mut self, peers: Vec<PeerId>) -> Vec<(PeerId, Addresses)> {
+        let mut peers_info = vec![];
+        for peer_id in peers {
+            if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
+                if let Some(entry) = kbucket
+                    .iter()
+                    .find(|entry| entry.node.key.preimage() == &peer_id)
+                {
+                    peers_info.push((peer_id, Addresses(entry.node.value.clone().into_vec())));
+                }
+            }
+        }
+
+        peers_info
     }
 
     /// Record one handling time.

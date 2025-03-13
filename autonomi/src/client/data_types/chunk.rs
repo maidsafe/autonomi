@@ -72,7 +72,7 @@ pub static CHUNK_DOWNLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 
 /// Private data on the network can be accessed with this
 /// Uploading this data in a chunk makes it publicly accessible from the address of that Chunk
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DataMapChunk(pub(crate) Chunk);
 
 impl DataMapChunk {
@@ -96,6 +96,18 @@ impl DataMapChunk {
 impl From<Chunk> for DataMapChunk {
     fn from(value: Chunk) -> Self {
         Self(value)
+    }
+}
+
+impl std::fmt::Display for DataMapChunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
+    }
+}
+
+impl std::fmt::Debug for DataMapChunk {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
     }
 }
 

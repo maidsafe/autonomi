@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    driver::PendingGetClosestType, get_graph_entry_from_record, time::Instant, GetRecordCfg,
-    GetRecordError, NetworkError, Result, SwarmDriver, CLOSE_GROUP_SIZE,
+    driver::PendingGetClosestType, get_graph_entry_from_record, time::Instant, Addresses,
+    GetRecordCfg, GetRecordError, NetworkError, Result, SwarmDriver, CLOSE_GROUP_SIZE,
 };
 use ant_protocol::{
     storage::{try_serialize_record, DataTypes, GraphEntry, RecordKind},
@@ -31,7 +31,7 @@ impl SwarmDriver {
         match kad_event {
             kad::Event::OutboundQueryProgressed {
                 id,
-                result: QueryResult::GetClosestPeers(Ok(ref closest_peers)),
+                result: QueryResult::GetClosestPeers(Ok(closest_peers)),
                 ref stats,
                 ref step,
             } => {
@@ -49,7 +49,12 @@ impl SwarmDriver {
                     //       following criteria:
                     //   1, `stats.num_pending()` is 0
                     //   2, `stats.duration()` is longer than a defined period
-                    current_closest.extend(closest_peers.peers.iter().map(|i| i.peer_id));
+                    current_closest.extend(
+                        closest_peers
+                            .peers
+                            .into_iter()
+                            .map(|i| (i.peer_id, Addresses(i.addrs))),
+                    );
                     if current_closest.len() >= usize::from(K_VALUE) || step.last {
                         let (get_closest_type, current_closest) = entry.remove();
                         match get_closest_type {
@@ -74,7 +79,7 @@ impl SwarmDriver {
             // Handle GetClosestPeers timeouts
             kad::Event::OutboundQueryProgressed {
                 id,
-                result: QueryResult::GetClosestPeers(Err(ref err)),
+                result: QueryResult::GetClosestPeers(Err(err)),
                 ref stats,
                 ref step,
             } => {
@@ -96,8 +101,9 @@ impl SwarmDriver {
                 // and `peers` from `GetClosestPeersError`.
                 // Trust them and leave for the caller to check whether they are enough.
                 match err {
-                    GetClosestPeersError::Timeout { ref peers, .. } => {
-                        current_closest.extend(peers.iter().map(|i| i.peer_id));
+                    GetClosestPeersError::Timeout { peers, .. } => {
+                        current_closest
+                            .extend(peers.into_iter().map(|i| (i.peer_id, Addresses(i.addrs))));
                     }
                 }
 
@@ -106,9 +112,9 @@ impl SwarmDriver {
                         .network_discovery
                         .handle_get_closest_query(current_closest),
                     PendingGetClosestType::FunctionCall(sender) => {
-                        sender
-                            .send(current_closest)
-                            .map_err(|_| NetworkError::InternalMsgChannelDropped)?;
+                        tokio::spawn(async move {
+                            let _ = sender.send(current_closest);
+                        });
                     }
                 }
             }
@@ -246,7 +252,7 @@ impl SwarmDriver {
             } => {
                 event_string = "kad_event::RoutingUpdated";
                 if is_new_peer {
-                    self.update_on_peer_addition(peer, addresses);
+                    self.update_on_peer_addition(peer, Addresses(addresses.into_vec()));
 
                     // This should only happen once
                     if self.network_discovery.notify_new_peer() {

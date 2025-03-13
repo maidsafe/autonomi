@@ -21,8 +21,11 @@ use ant_protocol::{
     },
     NetworkAddress, PrettyPrintRecordKey,
 };
-use libp2p::kad::{Record, RecordKey};
+use libp2p::kad::{Record, RecordKey, K_VALUE};
 use xor_name::XorName;
+
+// We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync
+const RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS: u64 = 5;
 
 impl Node {
     /// Validate a record and its payment, and store the record to the RecordStore
@@ -666,9 +669,14 @@ impl Node {
         }
 
         // verify the claimed payees are all known to us within the certain range.
-        let closest_k_peers = self.network().get_closest_k_value_local_peers().await?;
+        let mut closest_k_peers = self
+            .network()
+            .get_close_peers_to_the_target(address.clone(), K_VALUE.get())
+            .await?;
+        // push self in as the returned list doesn't contain self
+        closest_k_peers.push((self_peer_id, Default::default()));
         let mut payees = payment.payees();
-        payees.retain(|peer_id| !closest_k_peers.contains(peer_id));
+        payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
         if !payees.is_empty() {
             warn!("Payment quote has out-of-range payees for record {pretty_key}");
             return Err(Error::InvalidRequest(format!(
@@ -676,20 +684,40 @@ impl Node {
             )));
         }
 
-        let owned_payment_quotes = payment
+        let owned_payment_quotes: Vec<_> = payment
             .quotes_by_peer(&self_peer_id)
             .iter()
             .map(|quote| quote.hash())
             .collect();
+
         // check if payment is valid on chain
         let payments_to_verify = payment.digest();
-        let reward_amount =
-            verify_data_payment(self.evm_network(), owned_payment_quotes, payments_to_verify)
-                .await
-                .inspect_err(|e| {
-                    warn!("Failed to verify record payment: {e}");
-                })
-                .map_err(|e| Error::EvmNetwork(format!("Failed to verify record payment: {e}")))?;
+
+        let reward_amount = match verify_data_payment(
+            self.evm_network(),
+            owned_payment_quotes.clone(),
+            payments_to_verify.clone(),
+        )
+        .await
+        {
+            Ok(amount) => amount,
+            Err(e) => {
+                warn!("Failed to verify record payment on the first attempt: {e}");
+                // Try again, because there could be a possible EVM node desync
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
+                ))
+                .await;
+                verify_data_payment(self.evm_network(), owned_payment_quotes, payments_to_verify)
+                    .await
+                    .inspect_err(|e| {
+                        warn!("Failed to verify record payment on the second attempt: {e}");
+                    })
+                    .map_err(|e| {
+                        Error::EvmNetwork(format!("Failed to verify record payment: {e}"))
+                    })?
+            }
+        };
 
         debug!("Payment of {reward_amount:?} is valid for record {pretty_key}");
 

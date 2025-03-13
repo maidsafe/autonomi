@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::time::{interval, Instant, Interval};
+use crate::Addresses;
 use crate::{driver::PendingGetClosestType, SwarmDriver};
 use ant_protocol::NetworkAddress;
 use libp2p::kad::K_VALUE;
@@ -186,7 +187,7 @@ impl NetworkDiscovery {
         (should_network_discover, new_interval)
     }
 
-    pub(crate) fn handle_get_closest_query(&mut self, closest_peers: Vec<PeerId>) {
+    pub(crate) fn handle_get_closest_query(&mut self, closest_peers: Vec<(PeerId, Addresses)>) {
         self.candidates.handle_get_closest_query(closest_peers);
     }
 
@@ -235,12 +236,12 @@ impl NetworkDiscoveryCandidates {
     }
 
     /// The result from the kad::GetClosestPeers are again used to update our kbucket.
-    fn handle_get_closest_query(&mut self, closest_peers: Vec<PeerId>) {
+    fn handle_get_closest_query(&mut self, closest_peers: Vec<(PeerId, Addresses)>) {
         let now = Instant::now();
 
         let candidates_map: BTreeMap<u32, Vec<NetworkAddress>> = closest_peers
             .into_iter()
-            .filter_map(|peer| {
+            .filter_map(|(peer, _)| {
                 let peer = NetworkAddress::from_peer(peer);
                 let peer_key = peer.as_kbucket_key();
                 peer_key

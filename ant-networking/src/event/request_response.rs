@@ -196,7 +196,11 @@ impl SwarmDriver {
         // accept replication requests from the K_VALUE peers away,
         // giving us some margin for replication
         let closest_k_peers = self.get_closest_k_value_local_peers();
-        if !closest_k_peers.contains(&holder) || holder == self.self_peer_id {
+        if !closest_k_peers
+            .iter()
+            .any(|(peer_id, _)| peer_id == &holder)
+            || holder == self.self_peer_id
+        {
             debug!("Holder {holder:?} is self or not in replication range.");
             return Ok(());
         }
@@ -219,7 +223,7 @@ impl SwarmDriver {
             is_fresh_replicate,
             closest_k_peers
                 .iter()
-                .map(|peer_id| NetworkAddress::from_peer(*peer_id))
+                .map(|(peer_id, _addrs)| NetworkAddress::from_peer(*peer_id))
                 .collect(),
         );
         if keys_to_fetch.is_empty() {

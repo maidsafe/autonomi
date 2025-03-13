@@ -6,7 +6,7 @@ use super::AddressParseError;
 
 /// Address of a [`crate::storage::pointer::Pointer`]
 /// It is derived from the owner's public key
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct PointerAddress(PublicKey);
 
 impl PointerAddress {
@@ -39,6 +39,12 @@ impl PointerAddress {
 }
 
 impl std::fmt::Display for PointerAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
+    }
+}
+
+impl std::fmt::Debug for PointerAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.to_hex())
     }

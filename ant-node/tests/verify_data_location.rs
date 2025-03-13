@@ -21,6 +21,7 @@ use common::{
     get_all_peer_ids, get_antnode_rpc_client, NodeRestart,
 };
 use eyre::{eyre, Result};
+use itertools::Itertools;
 use libp2p::{
     kad::{KBucketKey, RecordKey},
     PeerId,
@@ -150,14 +151,21 @@ fn print_node_close_groups(all_peers: &[PeerId]) {
 
     for (node_index, peer) in all_peers.iter().enumerate() {
         let key = NetworkAddress::from_peer(*peer).as_kbucket_key();
-        let closest_peers =
-            sort_peers_by_key(&all_peers, &key, CLOSE_GROUP_SIZE).expect("failed to sort peer");
+        let closest_peers = sort_peers_by_key(
+            all_peers
+                .iter()
+                .map(|peer_id| (*peer_id, Default::default()))
+                .collect_vec(),
+            &key,
+            CLOSE_GROUP_SIZE,
+        )
+        .expect("failed to sort peer");
         let closest_peers_idx = closest_peers
             .iter()
-            .map(|&&peer| {
+            .map(|(closest_peer, _)| {
                 all_peers
                     .iter()
-                    .position(|&p| p == peer)
+                    .position(|p| p == closest_peer)
                     .expect("peer to be in iterator")
             })
             .collect::<Vec<_>>();
@@ -203,10 +211,17 @@ async fn verify_location(all_peers: &Vec<PeerId>, node_rpc_addresses: &[SocketAd
             println!("Verifying {:?}", PrettyPrintRecordKey::from(key));
             info!("Verifying {:?}", PrettyPrintRecordKey::from(key));
             let record_key = KBucketKey::from(key.to_vec());
-            let expected_holders = sort_peers_by_key(all_peers, &record_key, CLOSE_GROUP_SIZE)?
-                .into_iter()
-                .cloned()
-                .collect::<BTreeSet<_>>();
+            let expected_holders = sort_peers_by_key(
+                all_peers
+                    .iter()
+                    .map(|peer_id| (*peer_id, Default::default()))
+                    .collect_vec(),
+                &record_key,
+                CLOSE_GROUP_SIZE,
+            )?
+            .into_iter()
+            .map(|(peer_id, _)| peer_id)
+            .collect::<BTreeSet<_>>();
 
             let actual_holders = actual_holders_idx
                 .iter()

@@ -13,7 +13,7 @@ use xor_name::XorName;
 
 /// Pointer, a mutable address pointing to other data on the Network
 /// It is stored at the owner's public key and can only be updated by the owner
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Pointer {
     owner: PublicKey,
     counter: u32,
@@ -21,6 +21,18 @@ pub struct Pointer {
     signature: Signature,
 }
 
+impl std::fmt::Debug for Pointer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Pointer")
+            .field("owner", &self.owner.to_hex())
+            .field("counter", &self.counter)
+            .field("target", &self.target)
+            .field("signature", &hex::encode(self.signature.to_bytes()))
+            .finish()
+    }
+}
+
+/// The target of a pointer, the address it points to
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub enum PointerTarget {
     ChunkAddress(ChunkAddress),

@@ -24,7 +24,7 @@ pub type GraphContent = [u8; 32];
 /// The protocol only ensures that the graph entry is immutable once uploaded and that the signature is valid and matches the owner.
 ///
 /// For convenience it is advised to make use of BLS key derivation to create multiple graph entries from a single key.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Ord, PartialOrd)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Hash, Ord, PartialOrd)]
 pub struct GraphEntry {
     /// The owner of the graph. Note that graph entries are stored at the owner's public key
     pub owner: PublicKey,
@@ -36,6 +36,28 @@ pub struct GraphEntry {
     pub descendants: Vec<(PublicKey, GraphContent)>,
     /// signs the above 4 fields with the owners key
     pub signature: Signature,
+}
+
+impl std::fmt::Debug for GraphEntry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GraphEntry")
+            .field("owner", &self.owner.to_hex())
+            .field(
+                "parents",
+                &self.parents.iter().map(|p| p.to_hex()).collect::<Vec<_>>(),
+            )
+            .field("content", &hex::encode(self.content))
+            .field(
+                "descendants",
+                &self
+                    .descendants
+                    .iter()
+                    .map(|(p, c)| format!("{}: {}", p.to_hex(), hex::encode(c)))
+                    .collect::<Vec<_>>(),
+            )
+            .field("signature", &hex::encode(self.signature.to_bytes()))
+            .finish()
+    }
 }
 
 impl GraphEntry {

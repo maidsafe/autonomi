@@ -14,6 +14,7 @@ use crate::client::quote::CostError;
 use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
 use crate::{chunk::ChunkAddress, self_encryption::encrypt, Client};
 use ant_evm::{Amount, AttoTokens};
+use xor_name::XorName;
 
 use super::DataAddress;
 
@@ -105,7 +106,16 @@ impl Client {
     }
 
     /// Get the estimated cost of storing a piece of data.
-    pub async fn data_cost(&self, data: Bytes) -> Result<AttoTokens, CostError> {
+    pub(crate) async fn data_cost(&self, data: Bytes) -> Result<AttoTokens, CostError> {
+        let content_addrs = self.get_content_addrs(data)?;
+        self.get_cost_estimation(content_addrs).await
+    }
+
+    /// Get the content addresses of the data.
+    pub(crate) fn get_content_addrs(
+        &self,
+        data: Bytes,
+    ) -> Result<Vec<(XorName, usize)>, CostError> {
         let now = ant_networking::time::Instant::now();
         let (data_map_chunks, chunks) = encrypt(data)?;
 
@@ -123,6 +133,14 @@ impl Client {
             content_addrs.len()
         );
 
+        Ok(content_addrs)
+    }
+
+    /// Get the estimated cost of content addresses.
+    pub async fn get_cost_estimation(
+        &self,
+        content_addrs: Vec<(XorName, usize)>,
+    ) -> Result<AttoTokens, CostError> {
         let store_quote = self
             .get_store_quotes(DataTypes::Chunk, content_addrs.into_iter())
             .await

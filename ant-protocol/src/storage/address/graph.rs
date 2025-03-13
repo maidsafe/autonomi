@@ -15,7 +15,7 @@ use super::AddressParseError;
 /// Address of a [`crate::storage::graph::GraphEntry`].
 ///
 /// It is derived from the owner's unique public key
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct GraphEntryAddress(PublicKey);
 
 impl GraphEntryAddress {
@@ -48,6 +48,12 @@ impl GraphEntryAddress {
 }
 
 impl std::fmt::Display for GraphEntryAddress {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_hex())
+    }
+}
+
+impl std::fmt::Debug for GraphEntryAddress {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.to_hex())
     }
