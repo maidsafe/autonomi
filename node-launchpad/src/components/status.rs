@@ -936,7 +936,7 @@ impl Component for Status<'_> {
                         data_dir_path: Some(self.data_dir_path.clone()),
                         network_id: self.network_id,
                         owner: self.rewards_address.clone(),
-                        peers_args: self.peers_args.clone(),
+                        init_peers_config: self.init_peers_config.clone(),
                         port_range: Some(port_range),
                         rewards_address: self.rewards_address.clone(),
                         run_nat_detection: self.should_we_run_nat_detection(),

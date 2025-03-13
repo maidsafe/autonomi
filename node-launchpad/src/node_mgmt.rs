@@ -398,12 +398,12 @@ async fn add_node(args: MaintainNodesArgs) {
         None,       // network_id
         None,       // node_ip,
         port_range, // node_port
-        config.peers_args.clone(),
+        config.init_peers_config.clone(),
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
         config.antnode_path.clone(), // src_path,
-        config.upnp,
+        !config.upnp,
         None, // url,
         None, // user,
         None, // version,
