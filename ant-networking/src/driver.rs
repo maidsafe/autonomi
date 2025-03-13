@@ -121,6 +121,9 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
 
+/// Client requires a super long time when have get_closest query against production network
+const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(60);
+
 /// Interval to trigger native libp2p::kad bootstrap.
 /// This is the max time it should take. Minimum interval at any node will be half this
 const PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S: u64 = 21600;
@@ -342,7 +345,7 @@ impl NetworkBuilder {
             .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
             .set_max_packet_size(MAX_PACKET_SIZE)
             .set_replication_factor(REPLICATION_FACTOR)
-            .set_query_timeout(KAD_QUERY_TIMEOUT_S)
+            .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
             // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
             .disjoint_query_paths(true)
             // How many nodes _should_ store data.

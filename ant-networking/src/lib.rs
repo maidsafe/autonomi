@@ -297,12 +297,20 @@ impl Network {
         nonce: Nonce,
         expected_proof: ChunkProof,
         quorum: ResponseQuorum,
-        retry_strategy: RetryStrategy,
+        _retry_strategy: RetryStrategy,
     ) -> Result<()> {
-        let total_attempts = retry_strategy.attempts();
+        // The above calling place shall already carried out same `re-attempts`.
+        // Hence here just use a fixed number.
+        let total_attempts = 2;
 
         let pretty_key = PrettyPrintRecordKey::from(&chunk_address.to_record_key()).into_owned();
         let expected_n_verified = quorum.get_value();
+
+        let request = Request::Query(Query::GetChunkExistenceProof {
+            key: chunk_address.clone(),
+            nonce,
+            difficulty: 1,
+        });
 
         let mut close_nodes = Vec::new();
         let mut retry_attempts = 0;
@@ -321,11 +329,6 @@ impl Network {
                 "Getting ChunkProof for {pretty_key:?}. Attempts: {retry_attempts:?}/{total_attempts:?}",
             );
 
-            let request = Request::Query(Query::GetChunkExistenceProof {
-                key: chunk_address.clone(),
-                nonce,
-                difficulty: 1,
-            });
             let responses = self
                 .send_and_get_responses(&close_nodes, &request, true)
                 .await;
