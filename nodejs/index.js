@@ -310,14 +310,14 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { DataPutResult, Client, ChunkPut, GraphEntryPut, ScratchpadPut, PointerPut, DataPutPublicResult, ArchivePutResult, ArchivePutPublicResult, DirContentUpload, DirUpload, FileContentUpload, DirContentUploadPublic, DirUploadPublic, FileContentUploadPublic, FetchAndDecryptVault, RegisterCreate, XorName, ChunkAddress, GraphEntryAddress, DataAddress, ArchiveAddress, Wallet, PaymentOption, Network, PublicKey, SecretKey, GraphEntry, GraphEntry, Pointer, PointerTarget, PointerAddress, Scratchpad, ScratchpadAddress, DataMapChunk, PrivateArchiveDataMap, PrivateArchive, VaultSecretKey, UserData, VaultContentType, RegisterAddress, RegisterHistory, PublicArchive, RegisterValue } = nativeBinding
+const { Client, ChunkPut, GraphEntryPut, ScratchpadPut, PointerPut, DataPutResult, DataPutPublicResult, ArchivePutResult, ArchivePutPublicResult, DirContentUpload, DirUpload, FileContentUpload, DirContentUploadPublic, DirUploadPublic, FileContentUploadPublic, FetchAndDecryptVault, RegisterCreate, XorName, ChunkAddress, GraphEntryAddress, DataAddress, ArchiveAddress, Wallet, PaymentOption, Network, PublicKey, SecretKey, GraphEntry, Pointer, PointerTarget, PointerAddress, Scratchpad, ScratchpadAddress, DataMapChunk, PrivateArchiveDataMap, PrivateArchive, VaultSecretKey, UserData, VaultContentType, RegisterAddress, RegisterHistory, PublicArchive } = nativeBinding
 
-module.exports.DataPutResult = DataPutResult
 module.exports.Client = Client
 module.exports.ChunkPut = ChunkPut
 module.exports.GraphEntryPut = GraphEntryPut
 module.exports.ScratchpadPut = ScratchpadPut
 module.exports.PointerPut = PointerPut
+module.exports.DataPutResult = DataPutResult
 module.exports.DataPutPublicResult = DataPutPublicResult
 module.exports.ArchivePutResult = ArchivePutResult
 module.exports.ArchivePutPublicResult = ArchivePutPublicResult
@@ -340,7 +340,6 @@ module.exports.Network = Network
 module.exports.PublicKey = PublicKey
 module.exports.SecretKey = SecretKey
 module.exports.GraphEntry = GraphEntry
-module.exports.GraphEntry = GraphEntry
 module.exports.Pointer = Pointer
 module.exports.PointerTarget = PointerTarget
 module.exports.PointerAddress = PointerAddress
@@ -355,4 +354,3 @@ module.exports.VaultContentType = VaultContentType
 module.exports.RegisterAddress = RegisterAddress
 module.exports.RegisterHistory = RegisterHistory
 module.exports.PublicArchive = PublicArchive
-module.exports.RegisterValue = RegisterValue

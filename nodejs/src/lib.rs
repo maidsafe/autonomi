@@ -1230,6 +1230,12 @@ impl JsXorName {
     pub fn from_content(content: &[u8]) -> Self {
         Self(XorName::from_content_parts(&[content]))
     }
+
+    /// Generate a random XorName
+    #[napi(factory)]
+    pub fn random() -> Self {
+        Self(XorName::random(&mut bls::rand::thread_rng()))
+    }
 }
 
 /// Address of a chunk.
@@ -1260,7 +1266,7 @@ impl JsChunkAddress {
 
     /// Creates a new ChunkAddress from a hex string.
     #[napi(factory)]
-    pub fn try_from_hex(hex: String) -> Result<Self> {
+    pub fn from_hex(hex: String) -> Result<Self> {
         let addr = ChunkAddress::try_from_hex(&hex).map_err(map_error)?;
 
         Ok(Self(addr))
@@ -1296,7 +1302,7 @@ impl JsGraphEntryAddress {
 
     /// Parse a hex-encoded string into a `GraphEntryAddress`.
     #[napi(factory)]
-    pub fn try_from_hex(hex: String) -> Result<Self> {
+    pub fn from_hex(hex: String) -> Result<Self> {
         let addr = GraphEntryAddress::from_hex(&hex).map_err(map_error)?;
 
         Ok(Self(addr))
@@ -1391,9 +1397,6 @@ pub struct JsPublicKey(PublicKey);
 
 #[napi(js_name = "SecretKey")]
 pub struct JsSecretKey(SecretKey);
-
-#[napi(js_name = "GraphEntry")]
-pub struct JsGPointerAddress(PointerAddress);
 
 #[napi(js_name = "GraphEntry")]
 pub struct JsGraphEntry(GraphEntry);
