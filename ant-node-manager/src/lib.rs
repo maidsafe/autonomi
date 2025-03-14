@@ -267,7 +267,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                     // crate treats as an error. We then return our own error type, which allows us
                     // to handle it here and just proceed with removing the service from the
                     // registry.
-                    println!("The user appears to have removed the {name} service manually");
+                    if self.verbosity != VerbosityLevel::Minimal {
+                        println!("The user appears to have removed the {name} service manually");
+                    }
                 }
                 ServiceError::ServiceDoesNotExists(name) => {
                     warn!("The service {name} has most probably been removed already, it does not exists. Skipping the error.");

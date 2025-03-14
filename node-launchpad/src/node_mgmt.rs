@@ -19,6 +19,11 @@ pub const PORT_MIN: u32 = 1024;
 
 const NODE_ADD_MAX_RETRIES: u32 = 5;
 
+pub const FIXED_INTERVAL: u64 = 60_000;
+pub const CONNECTION_TIMEOUT_START: u64 = 120;
+
+pub const NODES_ALL: &str = "NODES_ALL";
+
 #[derive(Debug)]
 pub enum NodeManagementTask {
     MaintainNodes {
@@ -34,6 +39,17 @@ pub enum NodeManagementTask {
     },
     UpgradeNodes {
         args: UpgradeNodesArgs,
+    },
+    AddNode {
+        args: MaintainNodesArgs,
+    },
+    RemoveNodes {
+        services: Vec<String>,
+        action_sender: UnboundedSender<Action>,
+    },
+    StartNode {
+        services: Vec<String>,
+        action_sender: UnboundedSender<Action>,
     },
 }
 
@@ -70,6 +86,15 @@ impl NodeManagement {
                             stop_nodes(services, action_sender).await;
                         }
                         NodeManagementTask::UpgradeNodes { args } => upgrade_nodes(args).await,
+                        NodeManagementTask::RemoveNodes {
+                            services,
+                            action_sender,
+                        } => remove_nodes(services, action_sender).await,
+                        NodeManagementTask::StartNode {
+                            services,
+                            action_sender,
+                        } => start_nodes(services, action_sender).await,
+                        NodeManagementTask::AddNode { args } => add_node(args).await,
                     }
                 }
                 // If the while loop returns, then all the LocalSpawner
@@ -102,21 +127,27 @@ impl NodeManagement {
 /// Stop the specified services
 async fn stop_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
     if let Err(err) =
-        ant_node_manager::cmd::node::stop(None, vec![], services, VerbosityLevel::Minimal).await
+        ant_node_manager::cmd::node::stop(None, vec![], services.clone(), VerbosityLevel::Minimal)
+            .await
     {
         error!("Error while stopping services {err:?}");
         send_action(
             action_sender,
             Action::StatusActions(StatusActions::ErrorStoppingNodes {
+                services,
                 raw_error: err.to_string(),
             }),
         );
     } else {
         info!("Successfully stopped services");
-        send_action(
-            action_sender,
-            Action::StatusActions(StatusActions::StopNodesCompleted),
-        );
+        for service in services {
+            send_action(
+                action_sender.clone(),
+                Action::StatusActions(StatusActions::StopNodesCompleted {
+                    service_name: service,
+                }),
+            );
+        }
     }
 }
 
@@ -176,7 +207,9 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs) {
     debug!("Finished maintaining {} nodes", args.count);
     send_action(
         args.action_sender,
-        Action::StatusActions(StatusActions::StartNodesCompleted),
+        Action::StatusActions(StatusActions::StartNodesCompleted {
+            service_name: NODES_ALL.to_string(),
+        }),
     );
 }
 
@@ -217,12 +250,30 @@ pub struct UpgradeNodesArgs {
 }
 
 async fn upgrade_nodes(args: UpgradeNodesArgs) {
+    // First we stop the Nodes
+    if let Err(err) = ant_node_manager::cmd::node::stop(
+        None,
+        vec![],
+        args.service_names.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while stopping services {err:?}");
+        send_action(
+            args.action_sender.clone(),
+            Action::StatusActions(StatusActions::ErrorUpdatingNodes {
+                raw_error: err.to_string(),
+            }),
+        );
+    }
+
     if let Err(err) = ant_node_manager::cmd::node::upgrade(
-        args.connection_timeout_s,
+        0, // will be overwrite by FIXED_INTERVAL
         args.do_not_start,
         args.custom_bin_path,
         args.force,
-        args.fixed_interval,
+        Some(FIXED_INTERVAL),
         args.peer_ids,
         args.provided_env_variables,
         args.service_names,
@@ -245,6 +296,173 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
             args.action_sender,
             Action::StatusActions(StatusActions::UpdateNodesCompleted),
         );
+    }
+}
+
+async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+    // First we stop the nodes
+    if let Err(err) =
+        ant_node_manager::cmd::node::stop(None, vec![], services.clone(), VerbosityLevel::Minimal)
+            .await
+    {
+        error!("Error while stopping services {err:?}");
+        send_action(
+            action_sender.clone(),
+            Action::StatusActions(StatusActions::ErrorRemovingNodes {
+                services: services.clone(),
+                raw_error: err.to_string(),
+            }),
+        );
+    }
+
+    if let Err(err) = ant_node_manager::cmd::node::remove(
+        false,
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while removing services {err:?}");
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::ErrorRemovingNodes {
+                services,
+                raw_error: err.to_string(),
+            }),
+        );
+    } else {
+        info!("Successfully removed services {:?}", services);
+        for service in services {
+            send_action(
+                action_sender.clone(),
+                Action::StatusActions(StatusActions::RemoveNodesCompleted {
+                    service_name: service,
+                }),
+            );
+        }
+    }
+}
+
+async fn add_node(args: MaintainNodesArgs) {
+    debug!("Adding node");
+
+    if args.run_nat_detection {
+        run_nat_detection(&args.action_sender).await;
+    }
+
+    let config = prepare_node_config(&args);
+
+    let node_registry = match load_node_registry(&args.action_sender).await {
+        Ok(registry) => registry,
+        Err(err) => {
+            error!("Failed to load node registry: {:?}", err);
+            return;
+        }
+    };
+    let used_ports = get_used_ports(&node_registry);
+    let (mut current_port, max_port) = get_port_range(&config.custom_ports);
+
+    while used_ports.contains(&current_port) && current_port <= max_port {
+        current_port += 1;
+    }
+
+    if current_port > max_port {
+        error!("Reached maximum port number. Unable to find an available port.");
+        send_action(
+            args.action_sender.clone(),
+            Action::StatusActions(StatusActions::ErrorAddingNodes {
+                raw_error: format!(
+                    "When adding a new node we reached maximum port number ({}).\nUnable to find an available port.",
+                    max_port
+                ),
+            }),
+        );
+    }
+
+    let port_range = Some(PortRange::Single(current_port));
+    match ant_node_manager::cmd::node::add(
+        false, // auto_restart,
+        config.auto_set_nat_flags,
+        Some(config.count),
+        config.data_dir_path,
+        true, // enable_metrics_server,
+        None, // env_variables,
+        None, // evm_network
+        config.home_network,
+        None,       // log_dir_path,
+        None,       // log_format,
+        None,       // max_archived_log_files,
+        None,       // max_log_files,
+        None,       // metrics_port,
+        None,       // network_id
+        None,       // node_ip,
+        port_range, // node_port
+        config.init_peers_config.clone(),
+        RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+        None,                        // rpc_address,
+        None,                        // rpc_port,
+        config.antnode_path.clone(), // src_path,
+        !config.upnp,
+        None, // url,
+        None, // user,
+        None, // version,
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        Err(err) => {
+            error!("Error while adding services {err:?}");
+            send_action(
+                args.action_sender,
+                Action::StatusActions(StatusActions::ErrorAddingNodes {
+                    raw_error: err.to_string(),
+                }),
+            );
+        }
+        Ok(services) => {
+            info!("Successfully added services: {:?}", services);
+            for service in services {
+                send_action(
+                    args.action_sender.clone(),
+                    Action::StatusActions(StatusActions::AddNodesCompleted {
+                        service_name: service,
+                    }),
+                );
+            }
+        }
+    }
+}
+
+async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+    debug!("Starting node {:?}", services);
+    if let Err(err) = ant_node_manager::cmd::node::start(
+        CONNECTION_TIMEOUT_START,
+        None,
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
+    {
+        error!("Error while starting services {err:?}");
+        send_action(
+            action_sender,
+            Action::StatusActions(StatusActions::ErrorStartingNodes {
+                services,
+                raw_error: err.to_string(),
+            }),
+        );
+    } else {
+        info!("Successfully started services {:?}", services);
+        for service in services {
+            send_action(
+                action_sender.clone(),
+                Action::StatusActions(StatusActions::StartNodesCompleted {
+                    service_name: service,
+                }),
+            );
+        }
     }
 }
 
@@ -414,7 +632,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
     match ant_node_manager::cmd::node::maintain_n_running_nodes(
         false,
         config.auto_set_nat_flags,
-        120,
+        CONNECTION_TIMEOUT_START,
         count,
         config.data_dir_path.clone(),
         true,
@@ -487,7 +705,7 @@ async fn add_nodes(
         match ant_node_manager::cmd::node::maintain_n_running_nodes(
             false,
             config.auto_set_nat_flags,
-            120,
+            CONNECTION_TIMEOUT_START,
             config.count,
             config.data_dir_path.clone(),
             true,
@@ -575,9 +793,8 @@ async fn add_nodes(
             action_sender.clone(),
             Action::StatusActions(StatusActions::ErrorScalingUpNodes {
                 raw_error: format!(
-                    "When trying run a node, we reached the maximum amount of retries ({}).\n\
-                    Could this be a firewall blocking nodes starting?\n\
-                    Or ports on your router already in use?",
+                    "When trying to start a node, we reached the maximum amount of retries ({}).\n\
+                    Could this be a firewall blocking nodes starting or ports on your router already in use?",
                     NODE_ADD_MAX_RETRIES
                 ),
             }),
