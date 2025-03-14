@@ -119,7 +119,7 @@ fn hash_to_short_string(input: &str) -> String {
 }
 
 impl Client {
-    /// Get a chunk from the network.
+    /// Get a [`Chunk`] from the network.
     pub async fn chunk_get(&self, addr: &ChunkAddress) -> Result<Chunk, GetError> {
         info!("Getting chunk: {addr:?}");
 
@@ -146,7 +146,7 @@ impl Client {
         }
     }
 
-    /// Manually upload a chunk to the network.
+    /// Manually upload a [`Chunk`] to the network.
     /// It is recommended to use the [`Client::data_put`] method instead to upload data.
     pub async fn chunk_put(
         &self,
@@ -223,7 +223,7 @@ impl Client {
         Ok((total_cost, *chunk.address()))
     }
 
-    /// Get the cost of a chunk.
+    /// Get the cost of storing a [`Chunk`] on the network.
     pub async fn chunk_cost(&self, addr: &ChunkAddress) -> Result<AttoTokens, CostError> {
         trace!("Getting cost for chunk of {addr:?}");
 
@@ -242,7 +242,7 @@ impl Client {
         Ok(total_cost)
     }
 
-    /// Upload chunks and retry failed uploads up to `RETRY_ATTEMPTS` times.
+    /// Upload multiple [`Chunk`] and retry failed uploads up to `RETRY_ATTEMPTS` times.
     pub async fn upload_chunks_with_retries<'a>(
         &self,
         mut chunks: Vec<&'a Chunk>,
@@ -409,7 +409,7 @@ impl Client {
         }
     }
 
-    /// Fetch and decrypt all chunks in the data map.
+    /// Fetch and decrypt all the [`Chunk`] in the data map.
     pub(crate) async fn fetch_from_data_map(&self, data_map: &DataMap) -> Result<Bytes, GetError> {
         debug!("Fetching encrypted data chunks from data map {data_map:?}");
         let mut download_tasks = vec![];

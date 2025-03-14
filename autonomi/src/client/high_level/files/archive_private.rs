@@ -139,7 +139,7 @@ impl PrivateArchive {
 }
 
 impl Client {
-    /// Fetch a [`PrivateArchive`] from the network
+    /// Fetch a [`PrivateArchive`] from the network using its data map.
     pub async fn archive_get(
         &self,
         addr: &PrivateArchiveDataMap,
@@ -148,7 +148,7 @@ impl Client {
         Ok(PrivateArchive::from_bytes(data)?)
     }
 
-    /// Upload a [`PrivateArchive`] to the network
+    /// Upload a [`PrivateArchive`] to the network.
     pub async fn archive_put(
         &self,
         archive: &PrivateArchive,

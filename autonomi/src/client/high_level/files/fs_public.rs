@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use xor_name::XorName;
 
 impl Client {
-    /// Download file from network to local file system
+    /// Download file from network to local file system.
     pub async fn file_download_public(
         &self,
         data_addr: &DataAddress,
@@ -39,7 +39,7 @@ impl Client {
         Ok(())
     }
 
-    /// Download directory from network to local file system
+    /// Download a public directory from the network to a local directory.
     pub async fn dir_download_public(
         &self,
         archive_addr: &ArchiveAddress,
@@ -63,7 +63,7 @@ impl Client {
     ///
     /// The data maps of these files are uploaded on the network, making the individual files publicly available.
     ///
-    /// This returns, but does not upload (!),the [`PublicArchive`] containing the data maps of the uploaded files.
+    /// This returns, BUT does not upload, the [`PublicArchive`] containing the data maps of the uploaded files.
     pub async fn dir_content_upload_public(
         &self,
         dir_path: PathBuf,
@@ -260,7 +260,7 @@ impl Client {
     }
 
     /// Upload the content of a file to the network.
-    /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns DataAddr (pointing to the datamap)
+    /// Reads file, splits into multiple [`Chunk`], uploads the [`Chunk`], uploads datamap, returns [`DataAddress`].
     pub async fn file_content_upload_public(
         &self,
         path: PathBuf,

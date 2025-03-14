@@ -94,7 +94,7 @@ impl PyClient {
         })
     }
 
-    /// Get the cost of storing a chunk on the network
+    /// Get the cost of storing a `Chunk` on the network.
     fn chunk_cost<'a>(&self, py: Python<'a>, addr: PyChunkAddress) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
@@ -107,7 +107,7 @@ impl PyClient {
         })
     }
 
-    /// Get a chunk from the network.
+    /// Get a `Chunk` from the network.
     fn chunk_get<'a>(&self, py: Python<'a>, addr: &PyChunkAddress) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
         let addr = addr.inner;
@@ -121,7 +121,8 @@ impl PyClient {
         })
     }
 
-    /// Manually upload a chunk to the network. It is recommended to use the `data_put` method instead to upload data.
+    /// Manually upload a `Chunk` to the network.
+    /// It is recommended to use the `data_put` method instead to upload data.
     fn chunk_put<'a>(
         &self,
         py: Python<'a>,
@@ -141,7 +142,7 @@ impl PyClient {
         })
     }
 
-    /// Fetches a GraphEntry from the network.
+    /// Fetches a `GraphEntry` from the network.
     fn graph_entry_get<'a>(
         &self,
         py: Python<'a>,
@@ -158,7 +159,7 @@ impl PyClient {
         })
     }
 
-    /// Check if a graph_entry exists on the network
+    /// Check if a `GraphEntry` exists on the network.
     fn graph_entry_check_existance<'a>(
         &self,
         py: Python<'a>,
@@ -175,7 +176,7 @@ impl PyClient {
         })
     }
 
-    /// Manually puts a GraphEntry to the network.
+    /// Manually puts a `GraphEntry` to the network.
     fn graph_entry_put<'a>(
         &self,
         py: Python<'a>,
@@ -195,7 +196,7 @@ impl PyClient {
         })
     }
 
-    /// Get the cost to create a GraphEntry
+    /// Get the cost to create a `GraphEntry`.
     fn graph_entry_cost<'a>(&self, py: Python<'a>, key: PyPublicKey) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
@@ -208,8 +209,8 @@ impl PyClient {
         })
     }
 
-    /// Get Scratchpad from the Network.
-    /// A Scratchpad is stored at the owner's public key so we can derive the address from it.
+    /// Get a `Scratchpad` from the network.
+    /// A `Scratchpad` is stored at the owner's public key so we can derive the address from it.
     fn scratchpad_get_from_public_key<'a>(
         &self,
         py: Python<'a>,
@@ -227,7 +228,7 @@ impl PyClient {
         })
     }
 
-    /// Get Scratchpad from the Network using the scratpad address.
+    /// Get a `Scratchpad` from the network using the `ScratchpadAddress`.
     fn scratchpad_get<'a>(
         &self,
         py: Python<'a>,
@@ -245,7 +246,7 @@ impl PyClient {
         })
     }
 
-    /// Check if a scratchpad exists on the network
+    /// Check if a `Scratchpad` exists on the network.
     fn scratchpad_check_existance<'a>(
         &self,
         py: Python<'a>,
@@ -263,7 +264,7 @@ impl PyClient {
         })
     }
 
-    /// Manually store a scratchpad on the network
+    /// Manually store a `Scratchpad` on the network.
     fn scratchpad_put<'a>(
         &self,
         py: Python<'a>,
@@ -283,7 +284,7 @@ impl PyClient {
         })
     }
 
-    /// Create a new scratchpad to the network.
+    /// Create a new `Scratchpad` to the network.
     ///
     /// Make sure that the owner key is not already used for another scratchpad as each key is associated with one scratchpad.
     /// The data will be encrypted with the owner key before being stored on the network.
@@ -318,10 +319,10 @@ impl PyClient {
         })
     }
 
-    /// Update an existing scratchpad to the network.
-    /// The scratchpad needs to be created first with `scratchpad_create`.
+    /// Update an existing `Scratchpad` to the network.
+    /// The scratchpad needs to be created first with scratchpad_create().
     /// This operation is free as the scratchpad was already paid for at creation.
-    /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable.
+    /// Only the latest version of the scratchpad is kept on the network, previous versions will be overwritten and unrecoverable.
     fn scratchpad_update<'a>(
         &self,
         py: Python<'a>,
@@ -343,7 +344,7 @@ impl PyClient {
         })
     }
 
-    /// Get the cost of creating a new Scratchpad
+    /// Get the cost of creating a new `Scratchpad`.
     fn scratchpad_cost<'a>(
         &self,
         py: Python<'a>,
@@ -363,7 +364,7 @@ impl PyClient {
         })
     }
 
-    /// Get the cost of storing an archive on the network
+    /// Get the cost of storing an archive on the network.
     fn archive_cost<'a>(
         &self,
         py: Python<'a>,
@@ -380,7 +381,7 @@ impl PyClient {
         })
     }
 
-    /// Fetch a private archive from the network using its data map
+    /// Fetch a `PrivateArchive` from the network using its data map.
     fn archive_get<'a>(
         &self,
         py: Python<'a>,
@@ -399,7 +400,7 @@ impl PyClient {
         })
     }
 
-    /// Upload a private archive to the network
+    /// Upload a `PrivateArchive` to the network.
     fn archive_put<'a>(
         &self,
         py: Python<'a>,
@@ -418,7 +419,7 @@ impl PyClient {
         })
     }
 
-    /// Upload a public archive to the network
+    /// Upload a `PublicArchive` to the network.
     fn archive_put_public<'a>(
         &self,
         py: Python<'a>,
@@ -472,7 +473,7 @@ impl PyClient {
         })
     }
 
-    /// Download a private directory from network to local file system
+    /// Download a private directory from network to local file system.
     fn dir_download<'a>(
         &self,
         py: Python<'a>,
@@ -492,8 +493,10 @@ impl PyClient {
         })
     }
 
-    /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
-    /// The data maps of these (private) files are not uploaded but returned within the PrivateArchive return type.
+    /// Upload the content of all files in a directory to the network.
+    /// The directory is recursively walked and each file is uploaded to the network.
+    ///
+    /// The data maps of these (private) files are not uploaded but returned within the `PrivateArchive` return type.
     fn dir_content_upload<'a>(
         &self,
         py: Python<'a>,
@@ -533,9 +536,9 @@ impl PyClient {
         })
     }
 
-    /// Same as `dir_upload` but also uploads the archive (privately) to the network.
+    /// Same as dir_content_upload() but also uploads the `PrivateArchive` to the network.
     ///
-    /// Returns the data map allowing the private archive to be downloaded from the network.
+    /// Returns the `PrivateArchiveDataMap` allowing the `PrivateArchive` to be downloaded from the network.
     fn dir_upload<'a>(
         &self,
         py: Python<'a>,
@@ -557,9 +560,9 @@ impl PyClient {
     }
 
     /// Upload a piece of private data to the network. This data will be self-encrypted.
-    /// The [`DataMapChunk`] is not uploaded to the network, keeping the data private.
+    /// The `DataMapChunk` is not uploaded to the network, keeping the data private.
     ///
-    /// Returns the [`DataMapChunk`] containing the map to the encrypted chunks.
+    /// Returns the `DataMapChunk` containing the map to the multiple encrypted `Chunk`.
     fn data_put<'a>(
         &self,
         py: Python<'a>,
@@ -578,7 +581,7 @@ impl PyClient {
         })
     }
 
-    /// Fetch a blob of (private) data from the network
+    /// Fetch a blob of private data from the network.
     fn data_get<'a>(&self, py: Python<'a>, access: &PyDataMapChunk) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
         let access = access.inner.clone();
@@ -607,7 +610,7 @@ impl PyClient {
 
     /// Upload a piece of data to the network. This data is publicly accessible.
     ///
-    /// Returns the Data Address at which the data was stored.
+    /// Returns the `DataAddress` at which the data was stored.
     fn data_put_public<'a>(
         &self,
         py: Python<'a>,
@@ -627,7 +630,7 @@ impl PyClient {
         })
     }
 
-    /// Fetch a blob of data from the network
+    /// Fetch a blob of public data from the network.
     fn data_get_public<'a>(
         &self,
         py: Python<'a>,
@@ -645,8 +648,9 @@ impl PyClient {
         })
     }
 
-    /// Upload a directory as a public archive to the network.
-    /// Returns the network address where the archive is stored.
+    /// Same as dir_content_upload_public` but also uploads the `PublicArchive` to the network.
+    ///
+    /// Returns the `ArchiveAddress` of the uploaded `PublicArchive`.
     fn dir_upload_public<'a>(
         &self,
         py: Python<'a>,
@@ -665,7 +669,7 @@ impl PyClient {
         })
     }
 
-    /// Download a public archive from the network to a local directory.
+    /// Download a public directory from the network to a local directory.
     fn dir_download_public<'a>(
         &self,
         py: Python<'a>,
@@ -686,11 +690,12 @@ impl PyClient {
         })
     }
 
-    /// Upload a directory to the network. The directory is recursively walked and each file is uploaded to the network.
+    /// Upload the content of all files in a directory to the network.
+    /// The directory is recursively walked and each file is uploaded to the network.
     ///
     /// The data maps of these files are uploaded on the network, making the individual files publicly available.
     ///
-    /// This returns, but does not upload (!),the `PublicArchive` containing the data maps of the uploaded files.
+    /// This returns, BUT does not upload, the `PublicArchive` containing the data maps of the uploaded files.
     fn dir_content_upload_public<'a>(
         &self,
         py: Python<'a>,
@@ -708,7 +713,7 @@ impl PyClient {
         })
     }
 
-    /// Get a public archive from the network.
+    /// Get a `PublicArchive` from the network.
     fn archive_get_public<'a>(
         &self,
         py: Python<'a>,
@@ -728,6 +733,8 @@ impl PyClient {
     }
 
     /// Get the cost of creating a new vault.
+    /// A quick estimation of cost:
+    ///   num_of_graph_entry * graph_entry_cost + num_of_scratchpad * scratchpad_cost
     fn vault_cost<'a>(
         &self,
         py: Python<'a>,
@@ -746,9 +753,9 @@ impl PyClient {
         })
     }
 
-    /// Put data into the client's VaultPacket
+    /// Put data into the client's vault.
     ///
-    /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
+    /// Dynamically expand the vault capacity by paying for more space (`Scratchpad`) when needed.
     ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
     fn write_bytes_to_vault<'a>(
@@ -778,10 +785,10 @@ impl PyClient {
 
     /// Get the register history, starting from the root to the latest entry.
     ///
-    /// This returns a [`RegisterHistory`] that can be use to get the register values from the history.
+    /// This returns a `RegisterHistory` that can be use to get the register values from the history.
     ///
-    /// [`RegisterHistory::next`] can be used to get the values one by one, from the first to the latest entry.
-    /// [`RegisterHistory::collect`] can be used to get all the register values from the history from the first to the latest entry.
+    /// RegisterHistory.next() can be used to get the values one by one, from the first to the latest entry.
+    /// RegisterHistory.collect() can be used to get all the register values from the history from the first to the latest entry.
     fn register_history(&self, addr: String) -> PyResult<PyRegisterHistory> {
         let client = self.inner.clone();
         let addr = RegisterAddress::from_hex(&addr)
@@ -801,7 +808,7 @@ impl PyClient {
         Ok(PySecretKey { inner: key })
     }
 
-    /// Create a new RegisterValue from bytes, make sure the bytes are not longer than `REGISTER_VALUE_SIZE`
+    /// Create a new `RegisterValue` from bytes, make sure the bytes are not longer than `REGISTER_VALUE_SIZE`.
     #[staticmethod]
     fn register_value_from_bytes(bytes: &[u8]) -> PyResult<[u8; 32]> {
         let value = Client::register_value_from_bytes(bytes)
@@ -833,7 +840,7 @@ impl PyClient {
 
     /// Update the value of a register.
     ///
-    /// The register needs to be created first with `register_create`.
+    /// The register needs to be created first with register_create().
     fn register_update<'a>(
         &self,
         py: Python<'a>,
@@ -853,7 +860,7 @@ impl PyClient {
         })
     }
 
-    /// Get the current value of the register
+    /// Get the current value of the register.
     fn register_get<'a>(&self, py: Python<'a>, addr: String) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
         let addr = RegisterAddress::from_hex(&addr)
@@ -869,7 +876,8 @@ impl PyClient {
         })
     }
 
-    /// Get the current value of the register
+    /// Get the cost of a register operation.
+    /// Returns the cost of creation if it doesn't exist, else returns the cost of an update.
     fn register_cost<'a>(&self, py: Python<'a>, owner: PyPublicKey) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
 
@@ -903,7 +911,7 @@ impl PyClient {
         })
     }
 
-    /// Get the user data from the vault
+    /// Get the user data from the vault.
     fn get_user_data_from_vault<'a>(
         &self,
         py: Python<'a>,
@@ -950,7 +958,7 @@ impl PyClient {
         })
     }
 
-    /// Get a pointer from the network
+    /// Get a `Pointer` from the network.
     fn pointer_get<'a>(
         &self,
         py: Python<'a>,
@@ -968,7 +976,7 @@ impl PyClient {
         })
     }
 
-    /// Check if a pointer exists on the network
+    /// Check if a `Pointer` exists on the network.
     fn pointer_check_existance<'a>(
         &self,
         py: Python<'a>,
@@ -986,7 +994,7 @@ impl PyClient {
         })
     }
 
-    /// Manually store a pointer on the network
+    /// Manually store a `Pointer` on the network.
     fn pointer_put<'a>(
         &self,
         py: Python<'a>,
@@ -1007,9 +1015,9 @@ impl PyClient {
         })
     }
 
-    /// Create a new pointer on the network.
+    /// Create a new `Pointer` on the network.
     ///
-    /// Make sure that the owner key is not already used for another pointer as each key is associated with one pointer
+    /// Make sure that the owner key is not already used for another `Pointer` as each key is associated with one `Pointer`.
     fn pointer_create<'a>(
         &self,
         py: Python<'a>,
@@ -1030,11 +1038,11 @@ impl PyClient {
         })
     }
 
-    /// Update an existing pointer to point to a new target on the network.
+    /// Update an existing `Pointer` to point to a new target on the network.
     ///
-    /// The pointer needs to be created first with `pointer_put`.
-    /// This operation is free as the pointer was already paid for at creation.
-    /// Only the latest version of the pointer is kept on the Network, previous versions will be overwritten and unrecoverable.
+    /// The `Pointer` needs to be created first with pointer_put().
+    /// This operation is free as the `Pointer` was already paid for at creation.
+    /// Only the latest version of the `Pointer` is kept on the Network, previous versions will be overwritten and unrecoverable.
     fn pointer_update<'a>(
         &self,
         py: Python<'a>,
@@ -1053,7 +1061,7 @@ impl PyClient {
         })
     }
 
-    /// Calculate the cost of storing a pointer
+    /// Calculate the cost of storing a `Pointer`.
     fn pointer_cost<'a>(&self, py: Python<'a>, key: &PyPublicKey) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
         let key = key.inner;
@@ -1069,7 +1077,7 @@ impl PyClient {
     }
 }
 
-/// Address of a Pointer, is derived from the owner's unique public key.
+/// Address of a `Pointer`, is derived from the owner's unique public key.
 #[pyclass(name = "PointerAddress", eq, ord)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PyPointerAddress {
@@ -1078,7 +1086,7 @@ pub struct PyPointerAddress {
 
 #[pymethods]
 impl PyPointerAddress {
-    /// Construct a new PointerAddress given an owner.
+    /// Construct a new `PointerAddress` given an owner.
     #[new]
     fn new(public_key: PyPublicKey) -> PyResult<Self> {
         Ok(Self {
@@ -1093,13 +1101,13 @@ impl PyPointerAddress {
         }
     }
 
-    /// Returns the hex string representation of the pointer address.
+    /// Returns the hex string representation of the `PointerAddress`.
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Create a Pointer address from a hex string.
+    /// Create a `PointerAddress` from a hex string.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         Ok(Self {
@@ -1117,7 +1125,7 @@ impl PyPointerAddress {
     }
 }
 
-/// Pointer, a mutable address pointing to other data on the Network.
+/// `Pointer`, a mutable address pointing to other data on the Network.
 /// It is stored at the owner's public key and can only be updated by the owner.
 #[pyclass(name = "Pointer")]
 #[derive(Debug, Clone)]
@@ -1127,9 +1135,9 @@ pub struct PyPointer {
 
 #[pymethods]
 impl PyPointer {
-    /// Create a new pointer, signing it with the provided secret key.
-    /// This pointer would be stored on the network at the provided key's public key.
-    /// There can only be one pointer at a time at the same address (one per key).
+    /// Create a new `Pointer`, signing it with the provided secret key.
+    /// This `Pointer` would be stored on the network at the provided key's public key.
+    /// There can only be one `Pointer` at a time at the same address (one per key).
     #[new]
     pub fn new(key: &PySecretKey, counter: u32, target: &PyPointerTarget) -> PyResult<Self> {
         Ok(Self {
@@ -1137,14 +1145,14 @@ impl PyPointer {
         })
     }
 
-    /// Returns the network address where this pointer is stored.
+    /// Returns the network address where this `Pointer` is stored.
     pub fn address(&self) -> PyPointerAddress {
         PyPointerAddress {
             inner: self.inner.address(),
         }
     }
 
-    /// Returns the target that this pointer points to.
+    /// Returns the target that this `Pointer` points to.
     #[getter]
     fn target(&self) -> PyPointerTarget {
         PyPointerTarget {
@@ -1157,7 +1165,7 @@ impl PyPointer {
     }
 }
 
-/// The target that a pointer points to on the network.
+/// The target that a `Pointer` points to on the network.
 #[pyclass(name = "PointerTarget")]
 #[derive(Debug, Clone)]
 pub struct PyPointerTarget {
@@ -1166,7 +1174,7 @@ pub struct PyPointerTarget {
 
 #[pymethods]
 impl PyPointerTarget {
-    /// Initialize a pointer targeting a chunk.
+    /// Initialize a `Pointer` targeting a `Chunk`.
     #[staticmethod]
     fn new_chunk(addr: PyChunkAddress) -> PyResult<Self> {
         Ok(Self {
@@ -1174,7 +1182,7 @@ impl PyPointerTarget {
         })
     }
 
-    /// Initialize a pointer targeting a graph entry.
+    /// Initialize a `Pointer` targeting a `GraphEntry`.
     #[staticmethod]
     fn new_graph_entry(addr: PyGraphEntryAddress) -> PyResult<Self> {
         Ok(Self {
@@ -1182,7 +1190,7 @@ impl PyPointerTarget {
         })
     }
 
-    /// Initialize a pointer targeting another pointer.
+    /// Initialize a `Pointer` targeting another `Pointer`.
     #[staticmethod]
     fn new_pointer(addr: PyPointerAddress) -> PyResult<Self> {
         Ok(Self {
@@ -1190,7 +1198,7 @@ impl PyPointerTarget {
         })
     }
 
-    /// Initialize a pointer targeting a scratchpad.
+    /// Initialize a `Pointer` targeting a `Scratchpad`.
     #[staticmethod]
     fn new_scratchpad(addr: PyScratchpadAddress) -> PyResult<Self> {
         Ok(Self {
@@ -1216,7 +1224,7 @@ impl PyPointerTarget {
     }
 }
 
-/// An address of a chunk of data on the network. Used to locate and retrieve data chunks.
+/// An address of a `Chunk` of data on the network. Used to locate and retrieve data from `Chunk`.
 #[pyclass(name = "ChunkAddress", eq, ord)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PyChunkAddress {
@@ -1303,7 +1311,7 @@ impl PyGraphEntryAddress {
     }
 }
 
-/// Address of a Scratchpad, is derived from the owner's unique public key.
+/// Address of a `Scratchpad`, is derived from the owner's unique public key.
 #[pyclass(name = "ScratchpadAddress", eq, ord)]
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PyScratchpadAddress {
@@ -1312,7 +1320,7 @@ pub struct PyScratchpadAddress {
 
 #[pymethods]
 impl PyScratchpadAddress {
-    /// Construct a new ScratchpadAddress given an owner.
+    /// Construct a new `ScratchpadAddress` given an owner.
     #[new]
     fn new(public_key: PyPublicKey) -> PyResult<Self> {
         Ok(Self {
@@ -1327,13 +1335,13 @@ impl PyScratchpadAddress {
         }
     }
 
-    /// Returns the hex string representation of the scratchpad address.
+    /// Returns the hex string representation of the `ScratchpadAddress`.
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Create a scratchpad address from a hex string.
+    /// Create a `ScratchpadAddress` from a hex string.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         Ok(Self {
@@ -1360,7 +1368,7 @@ pub struct PyDataAddress {
 
 #[pymethods]
 impl PyDataAddress {
-    /// Construct a new DataAddress
+    /// Construct a new `DataAddress`
     #[new]
     fn new(xorname: PyXorName) -> PyResult<Self> {
         Ok(Self {
@@ -1368,13 +1376,13 @@ impl PyDataAddress {
         })
     }
 
-    /// Returns the hex string representation of the data address.
+    /// Returns the hex string representation of the `DataAddress`.
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Create a Data address from a hex string.
+    /// Create a `DataAddress` from a hex string.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         Ok(Self {
@@ -1400,7 +1408,7 @@ pub struct PyArchiveAddress {
 
 #[pymethods]
 impl PyArchiveAddress {
-    /// Construct a new ArchiveAddress, the address of a public archive on the network.
+    /// Construct a new `ArchiveAddress`, the address of a `PublicArchive` on the network.
     #[new]
     fn new(xorname: PyXorName) -> PyResult<Self> {
         Ok(Self {
@@ -1408,13 +1416,13 @@ impl PyArchiveAddress {
         })
     }
 
-    /// Returns the hex string representation of this archive address.
+    /// Returns the hex string representation of this `ArchiveAddress`.
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Create an ArchiveAddress from a hex string.
+    /// Create an `ArchiveAddress` from a hex string.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         Ok(Self {
@@ -1441,13 +1449,13 @@ pub struct PyPrivateArchiveDataMap {
 
 #[pymethods]
 impl PyPrivateArchiveDataMap {
-    /// Returns the hex string representation of this private archive data map.
+    /// Returns the hex string representation of this `PrivateArchiveDataMap`.
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Create a PrivateArchiveDataMap from a hex string.
+    /// Create a `PrivateArchiveDataMap` from a hex string.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         Ok(Self {
@@ -1717,7 +1725,7 @@ pub struct PyDataMapChunk {
 
 #[pymethods]
 impl PyDataMapChunk {
-    /// Creates a DataMapChunk from a hex string representation.
+    /// Creates a `DataMapChunk` from a hex string representation.
     #[staticmethod]
     fn from_hex(hex: &str) -> PyResult<Self> {
         DataMapChunk::from_hex(hex)
@@ -1725,12 +1733,12 @@ impl PyDataMapChunk {
             .map_err(|e| PyValueError::new_err(format!("Invalid hex: {e}")))
     }
 
-    /// Returns the hex string representation of this DataMapChunk.
+    /// Returns the hex string representation of this `DataMapChunk`.
     fn hex(&self) -> String {
         self.inner.to_hex()
     }
 
-    /// Returns the private address of this DataMapChunk.
+    /// Returns the private address of this `DataMapChunk`.
     ///
     /// Note that this is not a network address, it is only used for refering to private data client side.
     fn address(&self) -> String {
@@ -1835,7 +1843,7 @@ pub struct PyPublicArchive {
 
 #[pymethods]
 impl PyPublicArchive {
-    /// Create a new empty archive
+    /// Create a new empty `PublicArchive`.
     #[new]
     fn new() -> Self {
         Self {
@@ -1843,7 +1851,7 @@ impl PyPublicArchive {
         }
     }
 
-    /// Rename a file in the archive.
+    /// Rename a file in the `PublicArchive`.
     ///
     /// Returns None on success, or error message on failure
     fn rename_file(&mut self, old_path: PathBuf, new_path: PathBuf) -> PyResult<()> {
@@ -1852,13 +1860,13 @@ impl PyPublicArchive {
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to rename file: {e}")))
     }
 
-    /// Add a file to the archive
+    /// Add a file to the `PublicArchive`.
     fn add_file(&mut self, path: PathBuf, addr: &PyDataAddress, metadata: &PyMetadata) {
         self.inner
             .add_file(path, addr.inner, metadata.inner.clone());
     }
 
-    /// List all files in the archive.
+    /// List all files in the `PublicArchive`.
     ///
     /// Returns a list of (path, metadata) tuples
     fn files(&self) -> Vec<(PathBuf, PyMetadata)> {
@@ -1869,7 +1877,7 @@ impl PyPublicArchive {
             .collect()
     }
 
-    /// List all data addresses of files in the archive
+    /// List all data addresses of files in the `PublicArchive`.
     fn addresses(&self) -> Vec<String> {
         self.inner
             .addresses()
@@ -1879,7 +1887,7 @@ impl PyPublicArchive {
     }
 }
 
-/// A public archive containing files that can be accessed by anyone on the network.
+/// A private archive containing files.
 #[pyclass(name = "PrivateArchive")]
 #[derive(Debug, Clone)]
 pub struct PyPrivateArchive {
@@ -1888,7 +1896,7 @@ pub struct PyPrivateArchive {
 
 #[pymethods]
 impl PyPrivateArchive {
-    /// Create a new empty archive
+    /// Create a new empty `PrivateArchive`.
     #[new]
     fn new() -> Self {
         Self {
@@ -1896,7 +1904,7 @@ impl PyPrivateArchive {
         }
     }
 
-    /// Rename a file in the archive.
+    /// Rename a file in the `PrivateArchive`.
     ///
     /// Returns None on success, or error message on failure
     fn rename_file(&mut self, old_path: PathBuf, new_path: PathBuf) -> PyResult<()> {
@@ -1905,13 +1913,13 @@ impl PyPrivateArchive {
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to rename file: {e}")))
     }
 
-    /// Add a file to a local archive. Note that this does not upload the archive to the network.
+    /// Add a file to a local `PrivateArchive`. Note that this does not upload the `PrivateArchive` to the network.
     fn add_file(&mut self, path: PathBuf, data_map: &PyDataMapChunk, metadata: &PyMetadata) {
         self.inner
             .add_file(path, data_map.inner.clone(), metadata.inner.clone());
     }
 
-    /// List all files in the archive.
+    /// List all files in the `PrivateArchive`.
     fn files(&self) -> Vec<(PathBuf, PyMetadata)> {
         self.inner
             .files()
@@ -1920,7 +1928,7 @@ impl PyPrivateArchive {
             .collect()
     }
 
-    /// List all data maps of files in the archive
+    /// List all data maps of files in the `PrivateArchive`.
     fn data_maps(&self) -> Vec<PyDataMapChunk> {
         self.inner
             .data_maps()
@@ -1930,7 +1938,7 @@ impl PyPrivateArchive {
     }
 }
 
-/// A generic GraphEntry on the Network.
+/// A generic `GraphEntry` on the Network.
 ///
 /// Graph entries are stored at the owner's public key. Note that there can only be one graph entry per owner.
 /// Graph entries can be linked to other graph entries as parents or descendants.
@@ -1946,7 +1954,7 @@ pub struct PyGraphEntry {
 
 #[pymethods]
 impl PyGraphEntry {
-    /// Create a new graph entry, signing it with the provided secret key.
+    /// Create a new `GraphEntry`, signing it with the provided secret key.
     #[new]
     fn new(
         owner: PySecretKey,
@@ -1981,7 +1989,7 @@ pub struct PyScratchpad {
 
 #[pymethods]
 impl PyScratchpad {
-    /// Creates a new instance of Scratchpad. Encrypts the data, and signs all the elements.
+    /// Creates a new instance of `Scratchpad`. Encrypts the data, and signs all the elements.
     #[new]
     fn new(
         owner: PySecretKey,
@@ -1999,7 +2007,7 @@ impl PyScratchpad {
         })
     }
 
-    /// Returns the address of the scratchpad.
+    /// Returns the address of the `Scratchpad`.
     pub fn address(&self) -> PyScratchpadAddress {
         PyScratchpadAddress {
             inner: *self.inner.address(),
@@ -2011,9 +2019,9 @@ impl PyScratchpad {
         self.inner.data_encoding()
     }
 
-    /// Get the counter of the Scratchpad, the higher the counter, the more recent the Scratchpad is.
+    /// Get the counter of the `Scratchpad`, the higher the counter, the more recent the `Scratchpad` is.
     ///
-    /// Similarly to counter CRDTs only the latest version (highest counter) of the Scratchpad is kept on the network
+    /// Similarly to counter CRDTs only the latest version (highest counter) of the `Scratchpad` is kept on the network
     pub fn counter(&self) -> u64 {
         self.inner.counter()
     }
@@ -2074,7 +2082,7 @@ impl PyRegisterHistory {
     }
 }
 
-/// Configuration for the `Client` which can be provided through: `init_with_config`.
+/// Configuration for the `Client` which can be provided through: init_with_config().
 #[pyclass(name = "ClientConfig")]
 #[derive(Debug, Clone)]
 pub struct PyClientConfig {

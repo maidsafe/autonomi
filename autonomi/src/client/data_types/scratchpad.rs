@@ -47,8 +47,8 @@ pub enum ScratchpadError {
 }
 
 impl Client {
-    /// Get Scratchpad from the Network.
-    /// A Scratchpad is stored at the owner's public key so we can derive the address from it.
+    /// Get a [`Scratchpad`] from the network.
+    /// A [`Scratchpad`] is stored at the owner's public key so we can derive the address from it.
     pub async fn scratchpad_get_from_public_key(
         &self,
         public_key: &PublicKey,
@@ -57,7 +57,7 @@ impl Client {
         self.scratchpad_get(&address).await
     }
 
-    /// Get Scratchpad from the Network
+    /// Get a [`Scratchpad`] from the network using the [`Scratchpad`] address.
     pub async fn scratchpad_get(
         &self,
         address: &ScratchpadAddress,
@@ -119,7 +119,7 @@ impl Client {
         Ok(pad)
     }
 
-    /// Check if a scratchpad exists on the network
+    /// Check if a [`Scratchpad`] exists on the network.
     pub async fn scratchpad_check_existance(
         &self,
         address: &ScratchpadAddress,
@@ -140,7 +140,7 @@ impl Client {
         }
     }
 
-    /// Verify a scratchpad
+    /// Verify a [`Scratchpad`].
     pub fn scratchpad_verify(scratchpad: &Scratchpad) -> Result<(), ScratchpadError> {
         if !scratchpad.verify_signature() {
             return Err(ScratchpadError::BadSignature);
@@ -151,7 +151,7 @@ impl Client {
         Ok(())
     }
 
-    /// Manually store a scratchpad on the network
+    /// Manually store a [`Scratchpad`] on the network.
     pub async fn scratchpad_put(
         &self,
         scratchpad: Scratchpad,
@@ -227,13 +227,13 @@ impl Client {
         Ok((total_cost, *address))
     }
 
-    /// Create a new scratchpad to the network.
+    /// Create a new [`Scratchpad`] to the network.
     ///
-    /// Make sure that the owner key is not already used for another scratchpad as each key is associated with one scratchpad.
+    /// Make sure that the owner key is not already used for another [`Scratchpad`] as each key is associated with one [`Scratchpad`].
     /// The data will be encrypted with the owner key before being stored on the network.
-    /// The content type is used to identify the type of data stored in the scratchpad, the choice is up to the caller.
+    /// The content type is used to identify the type of data stored in the [`Scratchpad`], the choice is up to the caller.
     ///
-    /// Returns the cost and the address of the scratchpad.
+    /// Returns the cost and the address of the [`Scratchpad`].
     pub async fn scratchpad_create(
         &self,
         owner: &SecretKey,
@@ -252,10 +252,10 @@ impl Client {
         self.scratchpad_put(scratchpad, payment_option).await
     }
 
-    /// Update an existing scratchpad to the network.
-    /// The scratchpad needs to be created first with [`Client::scratchpad_create`].
-    /// This operation is free as the scratchpad was already paid for at creation.
-    /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable.
+    /// Update an existing [`Scratchpad`] to the network.
+    /// The [`Scratchpad`] needs to be created first with [`Client::scratchpad_create`].
+    /// This operation is free as the [`Scratchpad`] was already paid for at creation.
+    /// Only the latest version of the [`Scratchpad`] is kept on the network, previous versions will be overwritten and unrecoverable.
     pub async fn scratchpad_update(
         &self,
         owner: &SecretKey,
@@ -313,7 +313,7 @@ impl Client {
         Ok(())
     }
 
-    /// Get the cost of creating a new Scratchpad
+    /// Get the cost of creating a new [`Scratchpad`].
     pub async fn scratchpad_cost(&self, owner: &PublicKey) -> Result<AttoTokens, CostError> {
         info!("Getting cost for scratchpad");
         let scratch_xor = ScratchpadAddress::new(*owner).xorname();
