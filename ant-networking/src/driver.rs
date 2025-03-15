@@ -611,9 +611,7 @@ impl NetworkBuilder {
             pending_get_closest_peers: Default::default(),
             pending_requests: Default::default(),
             pending_get_record: Default::default(),
-            // We use 255 here which allows covering a network larger than 64k without any rotating.
-            // This is based on the libp2p kad::kBuckets peers distribution.
-            dialed_peers: CircularVec::new(255),
+            dialed_peers: CircularVec::new(1024),
             network_discovery: NetworkDiscovery::new(&peer_id),
             live_connected_peers: Default::default(),
             latest_established_connection_ids: Default::default(),
