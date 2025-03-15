@@ -822,6 +822,16 @@ impl Network {
         // Waiting for a response to avoid flushing to network too quick that causing choke
         let (sender, receiver) = oneshot::channel();
         let close_nodes = if let Some(put_record_to_peers) = &cfg.use_put_record_to {
+            // Before firing put_record_to, dial first to ensure re-establish the connection.
+            for (peer_id, addrs) in put_record_to_peers.iter() {
+                self.send_network_swarm_cmd(NetworkSwarmCmd::DialPeer {
+                    peer: *peer_id,
+                    addrs: addrs.clone(),
+                });
+            }
+            // Short wait to allow connection re-established.
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+
             let peers = put_record_to_peers
                 .iter()
                 .map(|(peer_id, _addrs)| *peer_id)
