@@ -196,7 +196,7 @@ impl Client {
             let record = Record {
                 key: net_addr.to_record_key(),
                 value: try_serialize_record(
-                    &(proof, &scratchpad),
+                    &(proof.to_proof_of_payment(), &scratchpad),
                     RecordKind::DataWithPayment(DataTypes::Scratchpad),
                 )
                 .map_err(|_| ScratchpadError::Serialization)?

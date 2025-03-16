@@ -38,22 +38,13 @@ impl From<PeerId> for EncodedPeerId {
     }
 }
 
-/// The proof of payment for a data payment
+/// The proof of payment for a data payment, only to be used on client side
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct ProofOfPayment {
+pub struct ClientProofOfPayment {
     pub peer_quotes: Vec<(EncodedPeerId, Vec<Multiaddr>, PaymentQuote)>,
 }
 
-impl ProofOfPayment {
-    /// returns a short digest of the proof of payment to use for verification
-    pub fn digest(&self) -> Vec<(QuoteHash, QuotingMetrics, RewardsAddress)> {
-        self.peer_quotes
-            .clone()
-            .into_iter()
-            .map(|(_, _, quote)| (quote.hash(), quote.quoting_metrics, quote.rewards_address))
-            .collect()
-    }
-
+impl ClientProofOfPayment {
     /// returns the list of payees
     pub fn payees(&self) -> Vec<(PeerId, Vec<Multiaddr>)> {
         self.peer_quotes
@@ -68,18 +59,53 @@ impl ProofOfPayment {
             .collect()
     }
 
+    /// Convert to ProofOfPayment
+    pub fn to_proof_of_payment(&self) -> ProofOfPayment {
+        let peer_quotes = self
+            .peer_quotes
+            .iter()
+            .map(|(peer_id, _addrs, quote)| (peer_id.clone(), quote.clone()))
+            .collect();
+        ProofOfPayment { peer_quotes }
+    }
+}
+
+/// The proof of payment for a data payment, only to be used on node side
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct ProofOfPayment {
+    pub peer_quotes: Vec<(EncodedPeerId, PaymentQuote)>,
+}
+
+impl ProofOfPayment {
+    /// returns a short digest of the proof of payment to use for verification
+    pub fn digest(&self) -> Vec<(QuoteHash, QuotingMetrics, RewardsAddress)> {
+        self.peer_quotes
+            .clone()
+            .into_iter()
+            .map(|(_, quote)| (quote.hash(), quote.quoting_metrics, quote.rewards_address))
+            .collect()
+    }
+
+    /// returns the list of payees
+    pub fn payees(&self) -> Vec<PeerId> {
+        self.peer_quotes
+            .iter()
+            .filter_map(|(peer_id, _)| peer_id.to_peer_id().ok())
+            .collect()
+    }
+
     /// has the quote expired
     pub fn has_expired(&self) -> bool {
         self.peer_quotes
             .iter()
-            .any(|(_, _, quote)| quote.has_expired())
+            .any(|(_, quote)| quote.has_expired())
     }
 
     /// Returns all quotes by given peer id
     pub fn quotes_by_peer(&self, peer_id: &PeerId) -> Vec<&PaymentQuote> {
         self.peer_quotes
             .iter()
-            .filter_map(|(_id, _addr, quote)| {
+            .filter_map(|(_id, quote)| {
                 if let Ok(quote_peer_id) = quote.peer_id() {
                     if *peer_id == quote_peer_id {
                         return Some(quote);
@@ -93,7 +119,7 @@ impl ProofOfPayment {
     /// verifies the proof of payment is valid for the given peer id
     pub fn verify_for(&self, peer_id: PeerId) -> bool {
         // make sure I am in the list of payees
-        if !self.payees().iter().any(|(id, _addrs)| *id == peer_id) {
+        if !self.payees().contains(&peer_id) {
             warn!("Payment does not contain node peer id");
             debug!("Payment contains peer ids: {:?}", self.payees());
             debug!("Node peer id: {:?}", peer_id);
@@ -101,7 +127,7 @@ impl ProofOfPayment {
         }
 
         // verify all signatures
-        for (encoded_peer_id, _addr, quote) in self.peer_quotes.iter() {
+        for (encoded_peer_id, quote) in self.peer_quotes.iter() {
             let peer_id = match encoded_peer_id.to_peer_id() {
                 Ok(peer_id) => peer_id,
                 Err(e) => {
@@ -119,7 +145,7 @@ impl ProofOfPayment {
 
     /// Verifies whether all quotes were made for the expected data type.
     pub fn verify_data_type(&self, data_type: u32) -> bool {
-        for (_, _, quote) in self.peer_quotes.iter() {
+        for (_, quote) in self.peer_quotes.iter() {
             if quote.quoting_metrics.data_type != data_type {
                 return false;
             }
