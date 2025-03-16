@@ -822,16 +822,24 @@ impl Network {
         // Waiting for a response to avoid flushing to network too quick that causing choke
         let (sender, receiver) = oneshot::channel();
         let close_nodes = if let Some(put_record_to_peers) = &cfg.use_put_record_to {
-            let peers = put_record_to_peers
-                .iter()
-                .map(|(peer_id, _addrs)| *peer_id)
-                .collect();
-            self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecordTo {
-                peers,
-                record: record.clone(),
-                sender,
-                quorum: cfg.put_quorum,
-            });
+            if put_record_to_peers.len() >= 3 {
+                self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecord {
+                    record: record.clone(),
+                    sender,
+                    quorum: cfg.put_quorum,
+                });
+            } else {
+                let peers = put_record_to_peers
+                    .iter()
+                    .map(|(peer_id, _addrs)| *peer_id)
+                    .collect();
+                self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecordTo {
+                    peers,
+                    record: record.clone(),
+                    sender,
+                    quorum: cfg.put_quorum,
+                });
+            }
             put_record_to_peers.clone()
         } else {
             self.send_network_swarm_cmd(NetworkSwarmCmd::PutRecord {

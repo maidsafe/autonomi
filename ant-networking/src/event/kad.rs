@@ -304,7 +304,7 @@ impl SwarmDriver {
             }
             other => {
                 event_string = "kad_event::Other";
-                debug!("kad::Event ignored: {other:?}");
+                info!("kad::Event ignored: {other:?}");
             }
         }
 
