@@ -154,7 +154,7 @@ impl Client {
             let record = Record {
                 key: NetworkAddress::from_pointer_address(address).to_record_key(),
                 value: try_serialize_record(
-                    &(proof, &pointer),
+                    &(proof.to_proof_of_payment(), &pointer),
                     RecordKind::DataWithPayment(DataTypes::Pointer),
                 )
                 .map_err(|_| PointerError::Serialization)?

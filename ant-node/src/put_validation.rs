@@ -668,7 +668,7 @@ impl Node {
         // push self in as the returned list doesn't contain self
         closest_k_peers.push((self_peer_id, Default::default()));
         let mut payees = payment.payees();
-        payees.retain(|(peer_id, _addrs)| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
+        payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
         if !payees.is_empty() {
             // There might be payee got blocked by us or churned out from our perspective.
             // We shall still consider the payment is valid whenever payees are close enough.
