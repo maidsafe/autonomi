@@ -405,7 +405,7 @@ jobs:
           done
         env:
           ANT_LOG: "v"
-        timeout-minutes: 25
+        timeout-minutes: 40
 
       - name: add more files - windows
         if: matrix.os == 'windows-latest'

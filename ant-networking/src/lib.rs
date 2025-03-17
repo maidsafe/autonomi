@@ -313,11 +313,13 @@ impl Network {
             difficulty: 1,
         });
 
-        if close_nodes.is_empty() {
-            close_nodes = self
-                .client_get_all_close_peers_in_range_or_close_group(&chunk_address)
-                .await?;
-        }
+        // Checking both selected payees(if has) and network fetched close_nodes
+        let mut network_close_nodes = self
+            .client_get_all_close_peers_in_range_or_close_group(&chunk_address)
+            .await?;
+        network_close_nodes
+            .retain(|(peer_id, _addrs)| !close_nodes.iter().any(|(peer, _addrs)| peer == peer_id));
+        close_nodes.extend(network_close_nodes);
 
         let mut retry_attempts = 0;
         while retry_attempts < total_attempts {
