@@ -183,6 +183,12 @@ impl NetworkAddress {
     }
 }
 
+impl From<ChunkAddress> for NetworkAddress {
+    fn from(chunk_address: ChunkAddress) -> Self {
+        NetworkAddress::ChunkAddress(chunk_address)
+    }
+}
+
 impl Debug for NetworkAddress {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let name_str = match self {
