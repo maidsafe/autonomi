@@ -10,10 +10,12 @@ use super::get_progress_bar;
 use autonomi::{
     chunk::DataMapChunk,
     client::{
+        analyze::Analysis,
         files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
         GetError,
     },
     data::DataAddress,
+    files::{PrivateArchive, PublicArchive},
     Client,
 };
 use color_eyre::{
@@ -55,7 +57,15 @@ async fn download_private(
         .archive_get(&private_address)
         .await
         .wrap_err("Failed to fetch Private Archive from address")?;
+    download_priv_archive_to_disk(addr, archive, dest_path, client).await
+}
 
+async fn download_priv_archive_to_disk(
+    addr: &str,
+    archive: PrivateArchive,
+    dest_path: &str,
+    client: &Client,
+) -> Result<()> {
     let progress_bar = get_progress_bar(archive.iter().count() as u64)?;
     let mut all_errs = vec![];
     for (path, access, _meta) in archive.iter() {
@@ -107,7 +117,15 @@ async fn download_public(
         }
         Err(e) => return Err(e).wrap_err("Failed to fetch Public Archive from address")?,
     };
+    download_pub_archive_to_disk(addr, archive, dest_path, client).await
+}
 
+async fn download_pub_archive_to_disk(
+    addr: &str,
+    archive: PublicArchive,
+    dest_path: &str,
+    client: &Client,
+) -> Result<()> {
     let progress_bar = get_progress_bar(archive.iter().count() as u64)?;
     let mut all_errs = vec![];
     for (path, addr, _meta) in archive.iter() {
@@ -173,20 +191,32 @@ async fn download_from_datamap(
     dest_path: &str,
     client: &Client,
 ) -> Result<()> {
-    let bytes = match client.data_get(&datamap).await {
-        Ok(bytes) => bytes,
+    match client.analyze_address(&datamap.to_hex(), false).await {
+        Ok(Analysis::RawDataMap { data, .. }) => {
+            let path = PathBuf::from(dest_path);
+            let here = PathBuf::from(".");
+            let parent = path.parent().unwrap_or_else(|| &here);
+            std::fs::create_dir_all(parent)?;
+            std::fs::write(path, data)?;
+            info!("Successfully downloaded file from datamap at: {addr}");
+            println!("Successfully downloaded file from datamap at: {addr}");
+            Ok(())
+        }
+        Ok(Analysis::PublicArchive { archive, .. }) => {
+            info!("Detected public archive at: {addr}");
+            download_pub_archive_to_disk(addr, archive, dest_path, client).await
+        }
+        Ok(Analysis::PrivateArchive(private_archive)) => {
+            info!("Detected private archive at: {addr}");
+            download_priv_archive_to_disk(addr, private_archive, dest_path, client).await
+        }
+        Ok(a) => {
+            let err = format!("Unexpected data type found at {addr:?}: {a}");
+            Err(eyre!(err)).wrap_err("Failed to fetch file from address")
+        }
         Err(e) => {
             let err = format!("Failed to fetch file {addr:?}: {e}");
-            return Err(eyre!(err)).wrap_err("Failed to fetch file content from address");
+            Err(eyre!(err)).wrap_err("Failed to fetch file content from address")
         }
-    };
-
-    let path = PathBuf::from(dest_path);
-    let here = PathBuf::from(".");
-    let parent = path.parent().unwrap_or_else(|| &here);
-    std::fs::create_dir_all(parent)?;
-    std::fs::write(path, bytes)?;
-    info!("Successfully downloaded file from datamap at: {addr}");
-    println!("Successfully downloaded file from datamap at: {addr}");
-    Ok(())
+    }
 }

@@ -1,9 +1,8 @@
-name: Build and Publish Python Client Package
+name: Publish Python Client Package
 
 on:
   workflow_dispatch:
 
-# Add top-level permissions block
 permissions:
   id-token: write
   contents: read
@@ -11,7 +10,6 @@ permissions:
 jobs:
   macos:
     runs-on: macos-latest
-    # Add permissions to job
     permissions:
       id-token: write
       contents: read
@@ -40,7 +38,6 @@ jobs:
 
   windows:
     runs-on: windows-latest
-    # Add permissions to job
     permissions:
       id-token: write
       contents: read
@@ -140,7 +137,6 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
-    # Add permissions to job
     permissions:
       id-token: write
       contents: read

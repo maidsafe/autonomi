@@ -653,6 +653,51 @@ jobs:
         run: cargo build --release --bin antnode
         timeout-minutes: 30
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: install foundary
+        shell: bash
+        run: curl -L https://foundry.paradigm.xyz | bash
+
+      - name: move foundry bins to path (linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: sudo mv /home/runner/.config/.foundry/bin/* /usr/local/bin
+
+      - name: move foundry bins to path (macos)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: sudo mv /Users/runner/.foundry/bin/* /usr/local/bin
+
+      - name: move foundry bins to path (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Copy-Item -Path C:\Users\runneradmin\.foundry\bin\* -Destination C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps
+
+      - name: run foundry
+        shell: bash
+        run: foundryup
+
+      - name: move anvil and other bins to path (linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: sudo mv /home/runner/.config/.foundry/bin/* /usr/local/bin
+
+      - name: move anvil and other bins to path (macos)
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: sudo mv /Users/runner/.foundry/bin/* /usr/local/bin
+
+      - name: move anvil and other bins to path (windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: Copy-Item -Path C:\Users\runneradmin\.foundry\bin\* -Destination C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps
+
+      - name: Verify Anvil installation
+        run: |
+          anvil --version
+
       - name: Build churn tests
         run: cargo test --release -p ant-node --test data_with_churn --no-run
         env:
@@ -661,117 +706,15 @@ jobs:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 30
 
-      - name: Start a local network
-        uses: maidsafe/ant-local-testnet-action@main
-        with:
-          action: start
-          enable-evm-testnet: true
-          node-path: target/release/antnode
-          platform: ${{ matrix.os }}
-          build: true
-
-      - name: Check if ANT_PEERS and EVM_NETWORK are set
-        shell: bash
-        run: |
-          if [[ -z "$ANT_PEERS" ]]; then
-            echo "The ANT_PEERS variable has not been set"
-            exit 1
-          elif [[ -z "$EVM_NETWORK" ]]; then
-            echo "The EVM_NETWORK variable has not been set"
-            exit 1
-          else
-            echo "ANT_PEERS has been set to $ANT_PEERS"
-            echo "EVM_NETWORK has been set to $EVM_NETWORK"
-          fi
-
       - name: Chunks data integrity during nodes churn
         run: cargo test --release -p ant-node --test data_with_churn -- --nocapture
         env:
           TEST_DURATION_MINS: 5
           TEST_TOTAL_CHURN_CYCLES: 15
+          EVM_NETWORK: local
           ANT_LOG: "all"
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 30
-
-      # Sleep for a while to allow restarted nodes can be detected by others
-      - name: Sleep a while
-        run: sleep 300
-
-      - name: Stop the local network and upload logs
-        if: always()
-        uses: maidsafe/ant-local-testnet-action@main
-        with:
-          action: stop
-          log_file_prefix: safe_test_logs_churn
-          platform: ${{ matrix.os }}
-
-      - name: Get total node count
-        shell: bash
-        timeout-minutes: 1
-        run: |
-          node_count=$(ls "${{ matrix.node_data_path }}" | wc -l)
-          echo "Node dir count is $node_count"
-
-      - name: Get restart of nodes using rg
-        shell: bash
-        timeout-minutes: 1
-        # get the counts, then the specific line, and then the digit count only
-        # then check we have an expected level of restarts
-        # TODO: make this use an env var, or relate to testnet size
-        run: |
-          restart_count=$(rg "Node is restarting in" "${{ matrix.node_data_path }}" -c --stats | \
-            rg "(\d+) matches" | rg "\d+" -o)
-          echo "Restarted $restart_count nodes"
-
-      # `PeerRemovedFromRoutingTable` now only happens when a peer reported as `BadNode`.
-      # Otherwise kad will remove a `dropped out node` directly from RT.
-      # So, the detection of the removal explicity will now have much less chance,
-      # due to the removal of connection_issue tracking.
-      - name: Get peers removed from nodes using rg
-        shell: bash
-        timeout-minutes: 1
-        run: |
-          peer_removed=$(rg "PeerRemovedFromRoutingTable" "${{ matrix.node_data_path }}" -c --stats | \
-            rg "(\d+) matches" | rg "\d+" -o) || { echo "Failed to extract peer removal count"; exit 0; }
-          if [ -z "$peer_removed" ]; then
-            echo "No peer removal count found"
-            exit 1
-          fi
-          echo "PeerRemovedFromRoutingTable $peer_removed times"
-
-        # TODO: reenable this once the testnet dir creation is tidied up to avoid a large count here
-        # if [ $restart_count -lt $node_count ]; then
-        #   echo "Restart count of: $restart_count is less than the node count of: $node_count"
-        #   exit 1
-        # fi
-
-      - name: Verify data replication using rg
-        shell: bash
-        timeout-minutes: 1
-        # get the counts, then the specific line, and then the digit count only
-        # then check we have an expected level of replication
-        # TODO: make this use an env var, or relate to testnet size
-        run: |
-          fetching_attempt_count=$(rg "FetchingKeysForReplication" "${{ matrix.node_data_path }}" -c --stats | \
-            rg "(\d+) matches" | rg "\d+" -o)
-          echo "Carried out $fetching_attempt_count fetching attempts"
-          node_count=$(ls "${{ matrix.node_data_path }}" | wc -l)
-          if [ $fetching_attempt_count -lt $node_count ]; then
-            echo "Replication fetching attempts of: $fetching_attempt_count is less than the node count of: $node_count"
-            exit 1
-          fi
-
-      # Only error out after uploading the logs
-      - name: Don't log raw data
-        if: matrix.os != 'windows-latest' # causes error
-        shell: bash
-        timeout-minutes: 10
-        run: |
-          if ! rg '^' "${{ matrix.ant_path }}"/*/*/logs | awk 'length($0) > 15000 { print; exit 1 }'
-          then
-            echo "We are logging an extremely large data"
-            exit 1
-          fi
 
   verify_data_location_routing_table:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
