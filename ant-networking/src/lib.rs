@@ -30,6 +30,7 @@ mod relay_manager;
 mod replication_fetcher;
 pub mod time;
 mod transport;
+pub mod version;
 
 use cmd::LocalSwarmCmd;
 use xor_name::XorName;
@@ -50,6 +51,7 @@ pub use metrics::service::MetricsRegistries;
 pub use time::{interval, sleep, spawn, Instant, Interval};
 
 use self::{cmd::NetworkSwarmCmd, error::Result};
+use crate::version::Version;
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::{
     error::Error as ProtocolError,
@@ -726,6 +728,28 @@ impl Network {
             return Ok(Some(record));
         }
         Ok(None)
+    }
+
+    /// Request the node version of a peer on the network.
+    pub async fn get_node_version(&self, peer_id: PeerId) -> Result<Version, String> {
+        let request = Request::Query(Query::GetVersion(NetworkAddress::from_peer(peer_id)));
+        match self
+            .send_request(request, peer_id, Default::default())
+            .await
+        {
+            Ok(Response::Query(QueryResponse::GetVersion { version, .. })) => {
+                info!("Fetched peer {peer_id:?} version as {version:?}");
+                Version::try_from(version)
+            }
+            Ok(other) => {
+                info!("Not a version fetched from peer {peer_id:?}, {other:?}");
+                Err("none".to_string())
+            }
+            Err(err) => {
+                info!("Failed to fetch version from peer {peer_id:?} with error {err:?}");
+                Err("old".to_string())
+            }
+        }
     }
 
     /// Get the quoting metrics for storing the next record from the network
