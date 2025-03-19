@@ -809,7 +809,6 @@ version = "0.3.9"
 dependencies = [
  "ant-build-info",
  "ant-logging",
- "ant-protocol",
  "autonomi",
  "clap",
  "color-eyre",

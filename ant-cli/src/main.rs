@@ -25,7 +25,7 @@ use color_eyre::Result;
 
 use ant_logging::metrics::init_metrics;
 use ant_logging::{LogBuilder, LogFormat, ReloadHandle, WorkerGuard};
-use ant_protocol::version;
+use autonomi::version;
 use opt::Opt;
 use tracing::Level;
 
@@ -34,7 +34,7 @@ async fn main() -> Result<()> {
     color_eyre::install().expect("Failed to initialise error handler");
     let opt = Opt::parse();
     if let Some(network_id) = opt.network_id {
-        ant_protocol::version::set_network_id(network_id);
+        version::set_network_id(network_id);
     }
 
     // The clone is necessary to resolve a clippy warning related to a mutex.

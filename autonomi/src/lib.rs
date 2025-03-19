@@ -85,6 +85,9 @@ pub use ant_evm::{Amount, AttoTokens};
 pub use ant_protocol::storage::AddressParseError;
 pub use xor_name::XorName;
 
+// Re-exports protocol version
+pub use ant_protocol::version;
+
 // Re-exports of the bls types
 pub use bls::{PublicKey, SecretKey, Signature};
 
