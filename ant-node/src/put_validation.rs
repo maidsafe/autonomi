@@ -641,8 +641,11 @@ impl Node {
             )));
         }
 
-        // verify quote expiration
-        if payment.has_expired() {
+        // verify quote expiration.
+        // Note there could be error when try to deduce elapsed time from other OS clock,
+        // hence here only verify the expiration of own quotes.
+        let own_quotes: Vec<_> = payment.quotes_by_peer(&self_peer_id);
+        if own_quotes.iter().any(|quote| quote.has_expired()) {
             warn!("Payment quote has expired for record {pretty_key}");
             return Err(Error::InvalidRequest(format!(
                 "Payment quote has expired for record {pretty_key}"
@@ -673,15 +676,9 @@ impl Node {
             )));
         }
 
-        let owned_payment_quotes: Vec<_> = payment
-            .quotes_by_peer(&self_peer_id)
-            .iter()
-            .map(|quote| quote.hash())
-            .collect();
-
         // check if payment is valid on chain
         let payments_to_verify = payment.digest();
-
+        let owned_payment_quotes: Vec<_> = own_quotes.iter().map(|quote| quote.hash()).collect();
         let reward_amount = match verify_data_payment(
             self.evm_network(),
             owned_payment_quotes.clone(),
