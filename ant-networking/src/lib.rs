@@ -971,9 +971,32 @@ impl Network {
                         "Outbound failed for {req_str} .. {error:?}, dialing it then re-attempt."
                     );
 
+                    // Default Addresses will be used for request sent to close range.
+                    // For example: replication requests.
+                    // In that case, we shall get the proper addrs from local then re-dial.
+                    let dial_addrs = if addrs.0.is_empty() {
+                        debug!("Input addrs of {peer:?} is empty, lookup from local");
+                        let (sender, receiver) = oneshot::channel();
+
+                        self.send_local_swarm_cmd(LocalSwarmCmd::GetPeersWithMultiaddr { sender });
+                        let peers = receiver.await?;
+
+                        let Some(new_addrs) = peers
+                            .iter()
+                            .find(|(id, _addrs)| *id == peer)
+                            .map(|(_id, addrs)| addrs.clone())
+                        else {
+                            error!("Cann't find the addrs of peer {peer:?} from local, during the request reattempt of {req:?}.");
+                            return r;
+                        };
+                        Addresses(new_addrs)
+                    } else {
+                        addrs.clone()
+                    };
+
                     self.send_network_swarm_cmd(NetworkSwarmCmd::DialPeer {
                         peer,
-                        addrs: addrs.clone(),
+                        addrs: dial_addrs.clone(),
                     });
 
                     // Short wait to allow connection re-established.
@@ -984,7 +1007,7 @@ impl Network {
                     self.send_network_swarm_cmd(NetworkSwarmCmd::SendRequest {
                         req,
                         peer,
-                        addrs: Some(addrs),
+                        addrs: Some(dial_addrs),
                         sender: Some(sender),
                     });
 
