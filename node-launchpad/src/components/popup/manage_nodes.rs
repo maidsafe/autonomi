@@ -165,7 +165,11 @@ impl Component for ManageNodes {
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
             Action::SwitchScene(scene) => match scene {
-                Scene::ManageNodesPopUp => {
+                Scene::ManageNodesPopUp { amount_of_nodes } => {
+                    self.nodes_to_start_input = self
+                        .nodes_to_start_input
+                        .clone()
+                        .with_value(amount_of_nodes.to_string());
                     self.active = true;
                     self.old_value = self.nodes_to_start_input.value().to_string();
                     // set to entry input mode as we want to handle everything within our handle_key_events
@@ -281,7 +285,7 @@ impl Component for ManageNodes {
         let help = Paragraph::new(vec![
             Line::raw(format!(
                 "Note: Each node will use a small amount of CPU Memory and Network Bandwidth. \
-                 We recommend starting no more than 5 at a time (max {MAX_NODE_COUNT} nodes)."
+                 We recommend starting no more than 2 at a time (max {MAX_NODE_COUNT} nodes)."
             )),
             Line::raw(""),
             Line::raw("▲▼ to change the number of nodes to start."),

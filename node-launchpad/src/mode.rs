@@ -23,9 +23,12 @@ pub enum Scene {
     },
     StatusRewardsAddressPopUp,
     OptionsRewardsAddressPopUp,
-    ManageNodesPopUp,
+    ManageNodesPopUp {
+        amount_of_nodes: usize,
+    },
     ResetNodesPopUp,
     UpgradeNodesPopUp,
+    RemoveNodePopUp,
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

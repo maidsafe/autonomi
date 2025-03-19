@@ -166,6 +166,19 @@ impl RunningNetwork {
             node.shutdown();
         }
     }
+
+    pub fn update_peer(&mut self, index: usize, new_peer: RunningNode) {
+        if index < self.running_nodes.len() {
+            self.running_nodes[index] = new_peer.clone();
+            println!(
+                "Updated index: {} with peer_id: {}",
+                index,
+                new_peer.peer_id()
+            );
+        } else {
+            println!("Invalid index: {index}");
+        }
+    }
 }
 
 async fn spawn_network(

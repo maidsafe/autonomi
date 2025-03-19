@@ -10,6 +10,7 @@ pub mod change_drive;
 pub mod connection_mode;
 pub mod manage_nodes;
 pub mod port_range;
+pub mod remove_node;
 pub mod reset_nodes;
 pub mod rewards_address;
 pub mod upgrade_nodes;

@@ -160,3 +160,19 @@ pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<usize> {
 
     Ok(available_space_b)
 }
+
+// Gets the name of the drive given a mountpoint
+pub fn get_drive_name(storage_mountpoint: &PathBuf) -> Result<String> {
+    let disks = Disks::new_with_refreshed_list();
+    let name = disks
+        .list()
+        .iter()
+        .find(|disk| disk.mount_point() == storage_mountpoint)
+        .context("Cannot find the primary disk. Configuration file might be wrong.")?
+        .name()
+        .to_str()
+        .unwrap_or_default()
+        .to_string();
+
+    Ok(name)
+}

@@ -8,8 +8,8 @@
       "<h>": {"SwitchScene":"Help"},
       "<H>": {"SwitchScene":"Help"},
 
-      "<Ctrl-s>": {"StatusActions":"StartNodes"},
-      "<Ctrl-S>": {"StatusActions":"StartNodes"},
+      "<Ctrl-s>": {"StatusActions":"StartStopNode"},
+      "<Ctrl-S>": {"StatusActions":"StartStopNode"},
       "<Ctrl-Shift-s>": {"StatusActions":"StartNodes"},
       "<Ctrl-x>": {"StatusActions":"StopNodes"},
       "<Ctrl-X>": {"StatusActions":"StopNodes"},
@@ -19,6 +19,8 @@
       "<Ctrl-Shift-b>": {"StatusActions":"TriggerRewardsAddress"},
       "<l>": {"StatusActions":"TriggerNodeLogs"},
       "<L>": {"StatusActions":"TriggerNodeLogs"},
+      "<+>": {"StatusActions":"AddNode"},
+      "<->": {"StatusActions":"TriggerRemoveNode"},
 
       "up" : {"StatusActions":"PreviousTableItem"},
       "down": {"StatusActions":"NextTableItem"},
