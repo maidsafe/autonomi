@@ -13,7 +13,7 @@ use libp2p::{kad::Record, PeerId};
 use rand::{thread_rng, Rng};
 use std::{collections::HashSet, num::NonZero};
 
-pub use ant_bootstrap::InitialPeersConfig;
+pub use ant_bootstrap::{error::Error as BootstrapError, InitialPeersConfig};
 pub use ant_networking::{ResponseQuorum, RetryStrategy};
 
 /// Configuration for the [`crate::Client`] which can be provided through: [`crate::Client::init_with_config`].
