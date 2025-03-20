@@ -667,10 +667,21 @@ impl Node {
         let mut payees = payment.payees();
         payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
         if !payees.is_empty() {
-            warn!("Payment quote has out-of-range payees for record {pretty_key}");
-            return Err(Error::InvalidRequest(format!(
-                "Payment quote has out-of-range payees {payees:?}"
-            )));
+            // There might be payee got blocked by us or churned out from our perspective.
+            // We shall still consider the payment is valid whenever payees are close enough.
+            // In case we don't have enough knowledge of the network, we shall trust the payment.
+            if let Some(network_density) = self.network().get_network_density().await? {
+                payees.retain(|peer_id| {
+                    NetworkAddress::from_peer(*peer_id).distance(address) > network_density
+                });
+
+                if !payees.is_empty() {
+                    warn!("Payment quote has out-of-range payees for record {pretty_key}");
+                    return Err(Error::InvalidRequest(format!(
+                        "Payment quote has out-of-range payees {payees:?}"
+                    )));
+                }
+            }
         }
 
         let owned_payment_quotes: Vec<_> = payment

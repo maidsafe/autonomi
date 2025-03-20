@@ -1154,6 +1154,17 @@ impl Network {
         debug!("Received all responses for {req:?}");
         responses
     }
+
+    /// Get the estimated network density (i.e. the responsible_distance_range).
+    pub async fn get_network_density(&self) -> Result<Option<KBucketDistance>> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_local_swarm_cmd(LocalSwarmCmd::GetNetworkDensity { sender });
+
+        let density = receiver
+            .await
+            .map_err(|_e| NetworkError::InternalMsgChannelDropped)?;
+        Ok(density)
+    }
 }
 
 /// Verifies if `Multiaddr` contains IPv4 address that is not global.
