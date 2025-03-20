@@ -464,6 +464,11 @@ impl Node {
                 self.record_metrics(Marker::PeersInRoutingTable(connected_peers));
                 self.record_metrics(Marker::PeerRemovedFromRoutingTable(&peer_id));
 
+                let self_id = self.network().peer_id();
+                let distance = NetworkAddress::from_peer(self_id)
+                    .distance(&NetworkAddress::from_peer(peer_id));
+                info!("Node {self_id:?} removed peer from routing table: {peer_id:?}. It has a {:?} distance to us.", distance.ilog2());
+
                 let network = self.network().clone();
                 self.record_metrics(Marker::IntervalReplicationTriggered);
                 let _handle = spawn(async move {
