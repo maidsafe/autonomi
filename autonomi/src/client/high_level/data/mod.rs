@@ -20,7 +20,7 @@ pub mod public;
 pub struct DataAddress(XorName);
 
 impl DataAddress {
-    /// Creates a new DataAddress.
+    /// Creates a new [`DataAddress`].
     pub fn new(xor_name: XorName) -> Self {
         Self(xor_name)
     }
@@ -35,7 +35,7 @@ impl DataAddress {
         hex::encode(self.0)
     }
 
-    /// Creates a new DataAddress from a hex string.
+    /// Creates a new [`DataAddress`] from a hex string.
     pub fn from_hex(hex: &str) -> Result<Self, AddressParseError> {
         let bytes = hex::decode(hex)?;
         let xor = XorName(

@@ -19,7 +19,7 @@ use xor_name::XorName;
 use super::DataAddress;
 
 impl Client {
-    /// Fetch a blob of data from the network
+    /// Fetch a blob of public data from the network
     pub async fn data_get_public(&self, addr: &DataAddress) -> Result<Bytes, GetError> {
         info!("Fetching data from Data Address: {addr:?}");
         let data_map_chunk = self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?;
@@ -33,7 +33,7 @@ impl Client {
 
     /// Upload a piece of data to the network. This data is publicly accessible.
     ///
-    /// Returns the Data Address at which the data was stored.
+    /// Returns the [`DataAddress`] at which the data was stored.
     pub async fn data_put_public(
         &self,
         data: Bytes,
