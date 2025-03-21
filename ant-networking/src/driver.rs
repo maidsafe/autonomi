@@ -28,6 +28,7 @@ use crate::{
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
+use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     messages::{Request, Response},
     NetworkAddress,
@@ -139,8 +140,11 @@ pub struct SwarmDriver {
 
     /// Trackers for underlying behaviour related events
     pub(crate) pending_get_closest_peers: PendingGetClosest,
-    pub(crate) pending_requests:
-        HashMap<OutboundRequestId, Option<oneshot::Sender<Result<Response>>>>,
+    #[allow(clippy::type_complexity)]
+    pub(crate) pending_requests: HashMap<
+        OutboundRequestId,
+        Option<oneshot::Sender<Result<(Response, Option<ConnectionInfo>)>>>,
+    >,
     pub(crate) pending_get_record: PendingGetRecord,
     /// A list of the most recent peers we have dialed ourselves. Old dialed peers are evicted once the vec fills up.
     pub(crate) dialed_peers: CircularVec<PeerId>,
@@ -310,8 +314,8 @@ impl SwarmDriver {
                         }
                         // Results are sorted, hence can calculate distance directly
                         // Note: self is included
-                        let self_addr = NetworkAddress::from_peer(self.self_peer_id);
-                        let close_peers_distance = self_addr.distance(&NetworkAddress::from_peer(closest_k_peers[CLOSE_GROUP_SIZE + 1].0));
+                        let self_addr = NetworkAddress::from(self.self_peer_id);
+                        let close_peers_distance = self_addr.distance(&NetworkAddress::from(closest_k_peers[CLOSE_GROUP_SIZE + 1].0));
 
                         let distance = std::cmp::max(Distance(density_distance), close_peers_distance);
 
@@ -328,8 +332,8 @@ impl SwarmDriver {
                         //     }
                         //     // Results are sorted, hence can calculate distance directly
                         //     // Note: self is included
-                        //     let self_addr = NetworkAddress::from_peer(self.self_peer_id);
-                        //     self_addr.distance(&NetworkAddress::from_peer(closest_k_peers[CLOSE_GROUP_SIZE]))
+                        //     let self_addr = NetworkAddress::from(self.self_peer_id);
+                        //     self_addr.distance(&NetworkAddress::from(closest_k_peers[CLOSE_GROUP_SIZE]))
                         // };
 
                         info!("Set responsible range to {distance:?}({:?})", distance.ilog2());
@@ -445,7 +449,7 @@ impl SwarmDriver {
     pub(crate) fn get_closest_k_value_local_peers(&mut self) -> Vec<(PeerId, Addresses)> {
         // Limit ourselves to K_VALUE (20) peers.
         let peers: Vec<_> = self.get_closest_local_peers_to_target(
-            &NetworkAddress::from_peer(self.self_peer_id),
+            &NetworkAddress::from(self.self_peer_id),
             K_VALUE.get() - 1,
         );
 

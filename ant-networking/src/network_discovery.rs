@@ -242,7 +242,7 @@ impl NetworkDiscoveryCandidates {
         let candidates_map: BTreeMap<u32, Vec<NetworkAddress>> = closest_peers
             .into_iter()
             .filter_map(|(peer, _)| {
-                let peer = NetworkAddress::from_peer(peer);
+                let peer = NetworkAddress::from(peer);
                 let peer_key = peer.as_kbucket_key();
                 peer_key
                     .distance(&self.self_key)
@@ -331,7 +331,7 @@ impl NetworkDiscoveryCandidates {
         (0..num_to_generate)
             .into_par_iter()
             .filter_map(|_| {
-                let candidate = NetworkAddress::from_peer(PeerId::random());
+                let candidate = NetworkAddress::from(PeerId::random());
                 let candidate_key = candidate.as_kbucket_key();
                 let ilog2 = candidate_key.distance(&self_key).ilog2()?;
                 Some((ilog2, candidate))

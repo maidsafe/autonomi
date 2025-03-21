@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-03-20
+
+### Client
+
+- Increase the timeout for the query that obtains the closest nodes, from 10 seconds to 60 seconds.
+  This is currently necessary because our routing table refresh is not optimised to purge dead nodes,
+  and those dead entries cause the query to take more time. With more time, the query result is
+  better and thus the upload and download performance is improved.
+- Decrease the time between some retries during uploads. In many cases, the larger interval will not
+  help. This allows the uploading process to fail faster if need be.
+
 ## 2025-03-12
 
 ### Network

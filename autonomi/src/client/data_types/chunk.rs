@@ -123,7 +123,7 @@ impl Client {
     pub async fn chunk_get(&self, addr: &ChunkAddress) -> Result<Chunk, GetError> {
         info!("Getting chunk: {addr:?}");
 
-        let key = NetworkAddress::from_chunk_address(*addr).to_record_key();
+        let key = NetworkAddress::from(*addr).to_record_key();
         debug!("Fetching chunk from network at: {key:?}");
 
         let get_cfg = self.config.chunks.get_cfg();

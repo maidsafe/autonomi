@@ -46,6 +46,7 @@ use std::{
     borrow::Cow,
     fmt::{self, Debug, Display, Formatter, Write},
 };
+use xor_name::XorName;
 
 /// The maximum number of peers to return in a `GetClosestPeers` response.
 /// This is the group size used in safe network protocol to be responsible for
@@ -90,36 +91,6 @@ pub enum NetworkAddress {
 }
 
 impl NetworkAddress {
-    /// Return a `NetworkAddress` representation of the `ChunkAddress`.
-    pub fn from_chunk_address(chunk_address: ChunkAddress) -> Self {
-        NetworkAddress::ChunkAddress(chunk_address)
-    }
-
-    /// Return a `NetworkAddress` representation of the `GraphEntryAddress`.
-    pub fn from_graph_entry_address(graph_entry_address: GraphEntryAddress) -> Self {
-        NetworkAddress::GraphEntryAddress(graph_entry_address)
-    }
-
-    /// Return a `NetworkAddress` representation of the `GraphEntryAddress`.
-    pub fn from_scratchpad_address(address: ScratchpadAddress) -> Self {
-        NetworkAddress::ScratchpadAddress(address)
-    }
-
-    /// Return a `NetworkAddress` representation of the `PeerId` by encapsulating its bytes.
-    pub fn from_peer(peer_id: PeerId) -> Self {
-        NetworkAddress::PeerId(Bytes::from(peer_id.to_bytes()))
-    }
-
-    /// Return a `NetworkAddress` representation of the `RecordKey` by encapsulating its bytes.
-    pub fn from_record_key(record_key: &RecordKey) -> Self {
-        NetworkAddress::RecordKey(Bytes::copy_from_slice(record_key.as_ref()))
-    }
-
-    /// Return a `NetworkAddress` representation of the `PointerAddress`.
-    pub fn from_pointer_address(pointer_address: PointerAddress) -> Self {
-        NetworkAddress::PointerAddress(pointer_address)
-    }
-
     /// Return the encapsulated bytes of this `NetworkAddress`.
     pub fn as_bytes(&self) -> Vec<u8> {
         match self {
@@ -180,6 +151,48 @@ impl NetworkAddress {
     /// Compute the distance of the keys according to the XOR metric.
     pub fn distance(&self, other: &NetworkAddress) -> Distance {
         self.as_kbucket_key().distance(&other.as_kbucket_key())
+    }
+}
+
+impl From<XorName> for NetworkAddress {
+    fn from(xorname: XorName) -> Self {
+        NetworkAddress::ChunkAddress(ChunkAddress::new(xorname))
+    }
+}
+
+impl From<ChunkAddress> for NetworkAddress {
+    fn from(chunk_address: ChunkAddress) -> Self {
+        NetworkAddress::ChunkAddress(chunk_address)
+    }
+}
+
+impl From<GraphEntryAddress> for NetworkAddress {
+    fn from(graph_entry_address: GraphEntryAddress) -> Self {
+        NetworkAddress::GraphEntryAddress(graph_entry_address)
+    }
+}
+
+impl From<ScratchpadAddress> for NetworkAddress {
+    fn from(scratchpad_address: ScratchpadAddress) -> Self {
+        NetworkAddress::ScratchpadAddress(scratchpad_address)
+    }
+}
+
+impl From<PointerAddress> for NetworkAddress {
+    fn from(pointer_address: PointerAddress) -> Self {
+        NetworkAddress::PointerAddress(pointer_address)
+    }
+}
+
+impl From<PeerId> for NetworkAddress {
+    fn from(peer_id: PeerId) -> Self {
+        NetworkAddress::PeerId(Bytes::from(peer_id.to_bytes()))
+    }
+}
+
+impl From<&RecordKey> for NetworkAddress {
+    fn from(record_key: &RecordKey) -> Self {
+        NetworkAddress::RecordKey(Bytes::copy_from_slice(record_key.as_ref()))
     }
 }
 
@@ -361,7 +374,7 @@ impl std::fmt::Display for PrettyPrintRecordKey<'_> {
         write!(
             f,
             "({:?})",
-            PrettyPrintKBucketKey(NetworkAddress::from_record_key(&self.key).as_kbucket_key())
+            PrettyPrintKBucketKey(NetworkAddress::from(self.key.as_ref()).as_kbucket_key())
         )
     }
 }
@@ -382,7 +395,7 @@ mod tests {
     fn verify_graph_entry_addr_is_actionable() {
         let pk = bls::SecretKey::random().public_key();
         let graph_entry_addr = GraphEntryAddress::new(pk);
-        let net_addr = NetworkAddress::from_graph_entry_address(graph_entry_addr);
+        let net_addr = NetworkAddress::from(graph_entry_addr);
 
         let graph_entry_addr_hex = &graph_entry_addr.to_hex();
         let net_addr_fmt = format!("{net_addr}");

@@ -3,7 +3,7 @@ authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 name = "ant-cli"
 description = "CLI client for the Autonomi network"
 license = "GPL-3.0"
-version = "0.3.9"
+version = "0.3.10"
 edition = "2021"
 homepage = "https://maidsafe.net"
 readme = "README.md"
@@ -26,7 +26,7 @@ harness = false
 ant-build-info = { path = "../ant-build-info", version = "0.1.26" }
 ant-logging = { path = "../ant-logging", version = "0.2.48" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.2" }
-autonomi = { path = "../autonomi", version = "0.4.1", features = [ "loud" ] }
+autonomi = { path = "../autonomi", version = "0.4.2", features = [ "loud" ] }
 clap = { version = "4.2.1", features = ["derive"] }
 color-eyre = "0.6.3"
 const-hex = "1.13.1"
@@ -53,7 +53,7 @@ tracing = { version = "~0.1.26" }
 walkdir = "2.5.0"
 
 [dev-dependencies]
-autonomi = { path = "../autonomi", version = "0.4.1" }
+autonomi = { path = "../autonomi", version = "0.4.2" }
 criterion = "0.5.1"
 eyre = "0.6.8"
 rand = { version = "~0.8.5", features = ["small_rng"] }

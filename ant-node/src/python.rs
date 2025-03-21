@@ -181,7 +181,7 @@ impl PyAntNode {
                     .map_err(|e| PyValueError::new_err(format!("Invalid key format: {e}")))?,
             );
             let chunk_address = ChunkAddress::new(xorname);
-            let network_address = NetworkAddress::from_chunk_address(chunk_address);
+            let network_address = NetworkAddress::from(chunk_address);
             let record_key = network_address.to_record_key();
 
             let record = KadRecord {
@@ -222,7 +222,7 @@ impl PyAntNode {
                     .map_err(|e| PyValueError::new_err(format!("Invalid key format: {e}")))?,
             );
             let chunk_address = ChunkAddress::new(xorname);
-            let network_address = NetworkAddress::from_chunk_address(chunk_address);
+            let network_address = NetworkAddress::from(chunk_address);
             let record_key = network_address.to_record_key();
 
             let record = node_guard

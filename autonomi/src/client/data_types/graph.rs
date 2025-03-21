@@ -56,7 +56,7 @@ impl Client {
         &self,
         address: &GraphEntryAddress,
     ) -> Result<GraphEntry, GraphError> {
-        let key = NetworkAddress::from_graph_entry_address(*address).to_record_key();
+        let key = NetworkAddress::from(*address).to_record_key();
         let get_cfg = self.config.graph_entry.get_cfg();
         let record = self
             .network
@@ -79,7 +79,7 @@ impl Client {
         &self,
         address: &GraphEntryAddress,
     ) -> Result<bool, GraphError> {
-        let key = NetworkAddress::from_graph_entry_address(*address).to_record_key();
+        let key = NetworkAddress::from(*address).to_record_key();
         debug!("Checking graph_entry existance at: {key:?}");
         let get_cfg = self.config.graph_entry.verification_cfg();
         match self
@@ -131,7 +131,7 @@ impl Client {
         // prepare the record for network storage
         let payees = proof.payees();
         let record = Record {
-            key: NetworkAddress::from_graph_entry_address(address).to_record_key(),
+            key: NetworkAddress::from(address).to_record_key(),
             value: try_serialize_record(
                 &(proof, &entry),
                 RecordKind::DataWithPayment(DataTypes::GraphEntry),

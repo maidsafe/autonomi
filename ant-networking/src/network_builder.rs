@@ -311,7 +311,7 @@ impl NetworkBuilder {
         );
         info!(
             "Self PeerID {peer_id} is represented as kbucket_key {:?}",
-            PrettyPrintKBucketKey(NetworkAddress::from_peer(peer_id).as_kbucket_key())
+            PrettyPrintKBucketKey(NetworkAddress::from(peer_id).as_kbucket_key())
         );
 
         #[cfg(feature = "open-metrics")]

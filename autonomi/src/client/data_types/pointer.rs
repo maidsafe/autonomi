@@ -49,7 +49,7 @@ pub enum PointerError {
 impl Client {
     /// Get a [`Pointer`] from the network.
     pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer, PointerError> {
-        let key = NetworkAddress::from_pointer_address(*address).to_record_key();
+        let key = NetworkAddress::from(*address).to_record_key();
         debug!("Fetching pointer from network at: {key:?}");
 
         let get_cfg = self.config.pointer.get_cfg();
@@ -88,7 +88,7 @@ impl Client {
         &self,
         address: &PointerAddress,
     ) -> Result<bool, PointerError> {
-        let key = NetworkAddress::from_pointer_address(*address).to_record_key();
+        let key = NetworkAddress::from(*address).to_record_key();
         debug!("Checking pointer existance at: {key:?}");
         let get_cfg = self.config.pointer.verification_cfg();
         match self
@@ -147,7 +147,7 @@ impl Client {
         let (record, payees) = if let Some(proof) = proof {
             let payees = Some(proof.payees());
             let record = Record {
-                key: NetworkAddress::from_pointer_address(address).to_record_key(),
+                key: NetworkAddress::from(address).to_record_key(),
                 value: try_serialize_record(
                     &(proof, &pointer),
                     RecordKind::DataWithPayment(DataTypes::Pointer),
@@ -160,7 +160,7 @@ impl Client {
             (record, payees)
         } else {
             let record = Record {
-                key: NetworkAddress::from_pointer_address(address).to_record_key(),
+                key: NetworkAddress::from(address).to_record_key(),
                 value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))
                     .map_err(|_| PointerError::Serialization)?
                     .to_vec(),
@@ -241,7 +241,7 @@ impl Client {
 
         // prepare the record to be stored
         let record = Record {
-            key: NetworkAddress::from_pointer_address(address).to_record_key(),
+            key: NetworkAddress::from(address).to_record_key(),
             value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))
                 .map_err(|_| PointerError::Serialization)?
                 .to_vec(),

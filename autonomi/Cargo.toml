@@ -3,7 +3,7 @@ authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "Autonomi client API"
 name = "autonomi"
 license = "GPL-3.0"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 homepage = "https://maidsafe.net"
 readme = "README.md"
@@ -28,7 +28,7 @@ loud = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.0" }
 ant-evm = { path = "../ant-evm", version = "0.1.11" }
-ant-networking = { path = "../ant-networking", version = "0.3.7" }
+ant-networking = { path = "../ant-networking", version = "0.3.8" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.2" }
 bip39 = "2.0.0"
 blst = "0.3.13"
@@ -57,6 +57,8 @@ xor_name = "5.0.0"
 [dev-dependencies]
 alloy = { version = "0.7.3", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 ant-logging = { path = "../ant-logging", version = "0.2.48" }
+ant-node = { path = "../ant-node", version = "0.3.7" }
+evmlib = { path = "../evmlib", version = "0.2.0" }
 eyre = "0.6.5"
 serial_test = "3.2.0"
 sha2 = "0.10.6"

@@ -10,6 +10,7 @@ use crate::{
     cmd::NetworkSwarmCmd, log_markers::Marker, MsgResponder, NetworkError, NetworkEvent,
     SwarmDriver,
 };
+use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     messages::{CmdResponse, Request, Response},
     storage::ValidationType,
@@ -24,7 +25,11 @@ impl SwarmDriver {
         event: request_response::Event<Request, Response>,
     ) -> Result<(), NetworkError> {
         match event {
-            request_response::Event::Message { message, peer, .. } => match message {
+            request_response::Event::Message {
+                message,
+                peer,
+                connection_id,
+            } => match message {
                 Message::Request {
                     request,
                     channel,
@@ -107,13 +112,22 @@ impl SwarmDriver {
                 } => {
                     debug!("Got response {request_id:?} from peer {peer:?}, res: {response}.");
                     if let Some(sender) = self.pending_requests.remove(&request_id) {
+                        // Get the optional connection info.
+                        let connection_info =
+                            self.live_connected_peers.get(&connection_id).cloned().map(
+                                |(peer_id, multiaddr, ..)| ConnectionInfo {
+                                    peer_id,
+                                    response_origin: multiaddr,
+                                },
+                            );
+
                         // The sender will be provided if the caller (Requester) is awaiting for a response
                         // at the call site.
                         // Else the Request was just sent to the peer and the Response was
                         // meant to be handled in another way and is not awaited.
                         match sender {
                             Some(sender) => sender
-                                .send(Ok(response))
+                                .send(Ok((response, connection_info)))
                                 .map_err(|_| NetworkError::InternalMsgChannelDropped)?,
                             None => {
                                 if let Response::Cmd(CmdResponse::Replicate(Ok(()))) = response {
@@ -223,7 +237,7 @@ impl SwarmDriver {
             is_fresh_replicate,
             closest_k_peers
                 .iter()
-                .map(|(peer_id, _addrs)| NetworkAddress::from_peer(*peer_id))
+                .map(|(peer_id, _addrs)| NetworkAddress::from(*peer_id))
                 .collect(),
         );
         if keys_to_fetch.is_empty() {

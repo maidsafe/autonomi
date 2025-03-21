@@ -38,13 +38,13 @@ impl Node {
     ) -> Result<()> {
         for (holder, key) in keys_to_fetch {
             let node = self.clone();
-            let requester = NetworkAddress::from_peer(self.network().peer_id());
+            let requester = NetworkAddress::from(self.network().peer_id());
             let _handle = spawn(async move {
                 let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
                 debug!("Fetching record {pretty_key:?} from node {holder:?}");
                 let req = Request::Query(Query::GetReplicatedRecord {
                     requester,
-                    key: NetworkAddress::from_record_key(&key),
+                    key: NetworkAddress::from(&key),
                 });
 
                 // Addrs are skipped for replication because the peer should be part of the RT and swarm should be
@@ -54,8 +54,10 @@ impl Node {
                     .send_request(req, holder, Default::default())
                     .await
                 {
-                    Ok(Response::Query(QueryResponse::GetReplicatedRecord(result))) => match result
-                    {
+                    Ok((
+                        Response::Query(QueryResponse::GetReplicatedRecord(result)),
+                        _conn_info,
+                    )) => match result {
                         Ok((_holder, record_content)) => {
                             debug!("Fecthed record {pretty_key:?} from holder {holder:?}");
                             Record::new(key, record_content.to_vec())
@@ -132,7 +134,7 @@ impl Node {
 
     //         debug!("Start replication of fresh record {pretty_key:?} from store");
 
-    //         let data_addr = NetworkAddress::from_record_key(&paid_key);
+    //         let data_addr = NetworkAddress::from(&paid_key);
 
     //         // If payment exists, only candidates are the payees.
     //         // Else get candidates from network.
@@ -152,7 +154,7 @@ impl Node {
     //         };
 
     //         let our_peer_id = network.peer_id();
-    //         let our_address = NetworkAddress::from_peer(our_peer_id);
+    //         let our_address = NetworkAddress::from(our_peer_id);
     //         let keys = vec![(data_addr, data_type, validation_type.clone(), payment)];
 
     //         for peer_id in replicate_candidates {

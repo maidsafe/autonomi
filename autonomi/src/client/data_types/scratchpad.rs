@@ -62,7 +62,7 @@ impl Client {
         &self,
         address: &ScratchpadAddress,
     ) -> Result<Scratchpad, ScratchpadError> {
-        let network_address = NetworkAddress::from_scratchpad_address(*address);
+        let network_address = NetworkAddress::from(*address);
         info!("Fetching scratchpad from network at {network_address:?}",);
         let scratch_key = network_address.to_record_key();
         let get_cfg = self.config.scratchpad.get_cfg();
@@ -124,7 +124,7 @@ impl Client {
         &self,
         address: &ScratchpadAddress,
     ) -> Result<bool, ScratchpadError> {
-        let key = NetworkAddress::from_scratchpad_address(*address).to_record_key();
+        let key = NetworkAddress::from(*address).to_record_key();
         debug!("Checking scratchpad existance at: {key:?}");
         let get_cfg = self.config.scratchpad.verification_cfg();
         match self
@@ -184,7 +184,7 @@ impl Client {
         };
         let total_cost = *price;
 
-        let net_addr = NetworkAddress::from_scratchpad_address(*address);
+        let net_addr = NetworkAddress::from(*address);
         let (record, payees) = if let Some(proof) = proof {
             let payees = Some(proof.payees());
             let record = Record {
@@ -292,7 +292,7 @@ impl Client {
 
         // prepare the record to be stored
         let record = Record {
-            key: NetworkAddress::from_scratchpad_address(address).to_record_key(),
+            key: NetworkAddress::from(address).to_record_key(),
             value: try_serialize_record(&scratchpad, RecordKind::DataOnly(DataTypes::Scratchpad))
                 .map_err(|_| ScratchpadError::Serialization)?
                 .to_vec(),

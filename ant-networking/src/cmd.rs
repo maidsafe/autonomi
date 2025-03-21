@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::time::Instant;
 use crate::{
     config::GetRecordCfg,
     driver::{PendingGetClosestType, SwarmDriver},
@@ -15,6 +16,7 @@ use crate::{
     Addresses, GetRecordError, MsgResponder, NetworkEvent, ResponseQuorum, CLOSE_GROUP_SIZE,
 };
 use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     messages::{Cmd, Request, Response},
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
@@ -35,8 +37,6 @@ use std::{
 };
 use tokio::sync::oneshot;
 use xor_name::XorName;
-
-use crate::time::Instant;
 
 const MAX_CONTINUOUS_HDD_WRITE_ERROR: usize = 5;
 
@@ -202,7 +202,8 @@ pub enum NetworkSwarmCmd {
         // If a `sender` is not provided, the requesting node will not wait for the Peer's
         // response. Instead we trigger a `NetworkEvent::ResponseReceived` which calls the common
         // `response_handler`
-        sender: Option<oneshot::Sender<Result<Response>>>,
+        #[allow(clippy::type_complexity)]
+        sender: Option<oneshot::Sender<Result<(Response, Option<ConnectionInfo>)>>>,
     },
     SendResponse {
         resp: Response,
@@ -517,7 +518,7 @@ impl SwarmDriver {
                     peers.into_iter(),
                     quorum.get_kad_quorum(),
                 );
-                debug!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
+                info!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
 
                 if let Err(err) = sender.send(Ok(())) {
                     error!("Could not send response to PutRecordTo cmd: {:?}", err);
@@ -604,7 +605,7 @@ impl SwarmDriver {
                         match channel {
                             Some(channel) => {
                                 channel
-                                    .send(Ok(resp))
+                                    .send(Ok((resp, None)))
                                     .map_err(|_| NetworkError::InternalMsgChannelDropped)?;
                             }
                             None => {
@@ -691,7 +692,7 @@ impl SwarmDriver {
                     .iter()
                     .filter_map(|(peer_id, (_issue_list, is_bad))| {
                         if *is_bad {
-                            Some(NetworkAddress::from_peer(*peer_id))
+                            Some(NetworkAddress::from(*peer_id))
                         } else {
                             None
                         }
@@ -699,7 +700,7 @@ impl SwarmDriver {
                     .collect();
 
                 // List is ordered already, hence the last one is always the one wanted
-                let kbucket_key = NetworkAddress::from_record_key(&key).as_kbucket_key();
+                let kbucket_key = NetworkAddress::from(&key).as_kbucket_key();
                 let closest_peers: Vec<_> = self
                     .swarm
                     .behaviour_mut()
@@ -711,9 +712,9 @@ impl SwarmDriver {
                 // In case of not enough clsest_peers, send the entire list
                 if closest_peers.len() >= CLOSE_GROUP_SIZE {
                     let boundary_peer = closest_peers[CLOSE_GROUP_SIZE - 1];
-                    let key_address = NetworkAddress::from_record_key(&key);
+                    let key_address = NetworkAddress::from(&key);
                     let boundary_distance =
-                        key_address.distance(&NetworkAddress::from_peer(boundary_peer));
+                        key_address.distance(&NetworkAddress::from(boundary_peer));
                     bad_nodes
                         .retain(|peer_addr| key_address.distance(peer_addr) < boundary_distance);
                 }
@@ -1147,8 +1148,8 @@ impl SwarmDriver {
 
                 // request
                 let request = Request::Cmd(Cmd::PeerConsideredAsBad {
-                    detected_by: NetworkAddress::from_peer(self.self_peer_id),
-                    bad_peer: NetworkAddress::from_peer(peer_id),
+                    detected_by: NetworkAddress::from(self.self_peer_id),
+                    bad_peer: NetworkAddress::from(peer_id),
                     bad_behaviour: bad_behaviour.to_string(),
                 });
                 self.queue_network_swarm_cmd(NetworkSwarmCmd::SendRequest {
@@ -1188,7 +1189,7 @@ impl SwarmDriver {
         // Store the current time as the last replication time
         self.last_replication = Some(Instant::now());
 
-        let self_addr = NetworkAddress::from_peer(self.self_peer_id);
+        let self_addr = NetworkAddress::from(self.self_peer_id);
         let mut replicate_targets = self.get_replicate_candidates(&self_addr)?;
 
         let now = Instant::now();
@@ -1217,7 +1218,7 @@ impl SwarmDriver {
                 all_records.len()
             );
             let request = Request::Cmd(Cmd::Replicate {
-                holder: NetworkAddress::from_peer(self.self_peer_id),
+                holder: NetworkAddress::from(self.self_peer_id),
                 keys: all_records
                     .into_iter()
                     .map(|(addr, val_type, _data_type)| (addr, val_type))
@@ -1292,7 +1293,7 @@ fn get_peers_in_range(
     peers
         .iter()
         .filter_map(|(peer_id, addresses)| {
-            if address.distance(&NetworkAddress::from_peer(*peer_id)) <= range {
+            if address.distance(&NetworkAddress::from(*peer_id)) <= range {
                 Some((*peer_id, addresses.clone()))
             } else {
                 None

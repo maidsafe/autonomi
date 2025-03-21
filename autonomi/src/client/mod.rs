@@ -39,6 +39,7 @@ pub mod quote;
 pub mod external_signer;
 
 // private module with utility functions
+mod network;
 mod utils;
 
 use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};

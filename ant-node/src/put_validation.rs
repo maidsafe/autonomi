@@ -198,7 +198,7 @@ impl Node {
                     try_deserialize_record::<(ProofOfPayment, GraphEntry)>(&record)?;
 
                 // check if the deserialized value's GraphEntryAddress matches the record's key
-                let net_addr = NetworkAddress::from_graph_entry_address(graph_entry.address());
+                let net_addr = NetworkAddress::from(graph_entry.address());
                 let key = net_addr.to_record_key();
                 let pretty_key = PrettyPrintRecordKey::from(&key);
                 if record.key != key {
@@ -258,7 +258,7 @@ impl Node {
             }
             RecordKind::DataOnly(DataTypes::Pointer) => {
                 let pointer = try_deserialize_record::<Pointer>(&record)?;
-                let net_addr = NetworkAddress::from_pointer_address(pointer.address());
+                let net_addr = NetworkAddress::from(pointer.address());
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);
                 let already_exists = self
                     .validate_key_and_existence(&net_addr, &record.key)
@@ -290,7 +290,7 @@ impl Node {
                 let (payment, pointer) =
                     try_deserialize_record::<(ProofOfPayment, Pointer)>(&record)?;
 
-                let net_addr = NetworkAddress::from_pointer_address(pointer.address());
+                let net_addr = NetworkAddress::from(pointer.address());
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);
                 let already_exists = self
                     .validate_key_and_existence(&net_addr, &record.key)
@@ -429,7 +429,7 @@ impl Node {
 
     /// Store a `Chunk` to the RecordStore
     pub(crate) fn store_chunk(&self, chunk: &Chunk, is_client_put: bool) -> Result<()> {
-        let key = NetworkAddress::from_chunk_address(*chunk.address()).to_record_key();
+        let key = NetworkAddress::from(*chunk.address()).to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
         // reject if chunk is too large
@@ -561,7 +561,7 @@ impl Node {
             .filter(|s| {
                 // get the record key for the GraphEntry
                 let graph_entry_address = s.address();
-                let network_address = NetworkAddress::from_graph_entry_address(graph_entry_address);
+                let network_address = NetworkAddress::from(graph_entry_address);
                 let graph_entry_record_key = network_address.to_record_key();
                 let graph_entry_pretty = PrettyPrintRecordKey::from(&graph_entry_record_key);
                 if &graph_entry_record_key != record_key {
@@ -766,7 +766,7 @@ impl Node {
     /// This only fetches the GraphEntries from the local store and does not perform any network operations.
     async fn get_local_graphentries(&self, addr: GraphEntryAddress) -> Result<Vec<GraphEntry>> {
         // get the local GraphEntries
-        let record_key = NetworkAddress::from_graph_entry_address(addr).to_record_key();
+        let record_key = NetworkAddress::from(addr).to_record_key();
         debug!("Checking for local GraphEntries with key: {record_key:?}");
         let local_record = match self.network().get_local_record(&record_key).await? {
             Some(r) => r,
@@ -795,7 +795,7 @@ impl Node {
     /// If the local Pointer is not present or corrupted, returns `None`.
     async fn get_local_pointer(&self, addr: PointerAddress) -> Option<Pointer> {
         // get the local Pointer
-        let record_key = NetworkAddress::from_pointer_address(addr).to_record_key();
+        let record_key = NetworkAddress::from(addr).to_record_key();
         debug!("Checking for local Pointer with key: {record_key:?}");
         let local_record = match self.network().get_local_record(&record_key).await {
             Ok(Some(r)) => r,
@@ -847,7 +847,7 @@ impl Node {
         }
 
         // Check if the pointer's address matches the record key
-        let net_addr = NetworkAddress::from_pointer_address(pointer.address());
+        let net_addr = NetworkAddress::from(pointer.address());
         if key != net_addr.to_record_key() {
             warn!("Pointer address does not match record key");
             return Err(Error::RecordKeyMismatch);

@@ -294,7 +294,7 @@ impl NodeRecordStore {
                             }
                         };
 
-                        let address = NetworkAddress::from_record_key(&key);
+                        let address = NetworkAddress::from(&key);
                         info!("Existing record {address:?} loaded from: {path:?}");
                         return Some((key, (address, validate_type, data_type)));
                     }
@@ -386,7 +386,7 @@ impl NodeRecordStore {
         };
 
         let records = Self::update_records_from_an_existing_store(&config, &encryption_details);
-        let local_address = NetworkAddress::from_peer(local_id);
+        let local_address = NetworkAddress::from(local_id);
 
         // Initialize records_by_distance
         let mut records_by_distance: BTreeMap<Distance, Key> = BTreeMap::new();
@@ -514,12 +514,12 @@ impl NodeRecordStore {
         // sort records by distance to our local key
         let mut sorted_records: Vec<_> = self.records.keys().collect();
         sorted_records.sort_by_key(|key| {
-            let addr = NetworkAddress::from_record_key(key);
+            let addr = NetworkAddress::from(*key);
             self.local_address.distance(&addr)
         });
 
         if let Some(key) = sorted_records.last() {
-            let addr = NetworkAddress::from_record_key(key);
+            let addr = NetworkAddress::from(*key);
             Some(((*key).clone(), self.local_address.distance(&addr)))
         } else {
             None
@@ -543,7 +543,7 @@ impl NodeRecordStore {
             if farthest_record_distance
                 < self
                     .local_address
-                    .distance(&NetworkAddress::from_record_key(incoming_record_key))
+                    .distance(&NetworkAddress::from(incoming_record_key))
             {
                 return Err(Error::MaxRecords);
             }
@@ -628,7 +628,7 @@ impl NodeRecordStore {
         validate_type: ValidationType,
         data_type: DataTypes,
     ) {
-        let addr = NetworkAddress::from_record_key(&key);
+        let addr = NetworkAddress::from(&key);
         let distance = self.local_address.distance(&addr);
 
         // Update main records store
@@ -1463,7 +1463,7 @@ mod tests {
         );
         // keep track of everything ever stored, to check missing at the end are further away
         let mut stored_records_at_some_point: Vec<RecordKey> = vec![];
-        let self_address = NetworkAddress::from_peer(self_id);
+        let self_address = NetworkAddress::from(self_id);
 
         // keep track of fails to assert they're further than stored
         let mut failed_records = vec![];
@@ -1471,7 +1471,7 @@ mod tests {
         // try and put an excess of records
         for _ in 0..max_records * 2 {
             // println!("i: {i}");
-            let record_key = NetworkAddress::from_peer(PeerId::random()).to_record_key();
+            let record_key = NetworkAddress::from(PeerId::random()).to_record_key();
             let value = match try_serialize_record(
                 &(0..50).map(|_| rand::random::<u8>()).collect::<Bytes>(),
                 RecordKind::DataOnly(DataTypes::Chunk),
@@ -1541,7 +1541,7 @@ mod tests {
         // next assert that all records stored are closer than the next closest of the failed records
         if let Some((most_distant_data, _)) = sorted_stored_data.last() {
             for failed_record in failed_records {
-                let failed_data = NetworkAddress::from_record_key(&failed_record);
+                let failed_data = NetworkAddress::from(&failed_record);
                 assert!(
                     self_address.distance(&failed_data) > self_address.distance(most_distant_data),
                     "failed record {failed_data:?} should be farther than the farthest stored record {most_distant_data:?}"
@@ -1550,7 +1550,7 @@ mod tests {
 
             // now for any stored data. It either shoudl still be stored OR further away than `most_distant_data`
             for data in stored_records_at_some_point {
-                let data_addr = NetworkAddress::from_record_key(&data);
+                let data_addr = NetworkAddress::from(&data);
                 if !sorted_stored_data.contains(&(&data_addr, &ValidationType::Chunk)) {
                     assert!(
                         self_address.distance(&data_addr)
@@ -1591,12 +1591,12 @@ mod tests {
         );
 
         let mut stored_records: Vec<RecordKey> = vec![];
-        let self_address = NetworkAddress::from_peer(self_id);
+        let self_address = NetworkAddress::from(self_id);
 
         // add records...
         // minus one here as if we hit max, the store will fail
         for _ in 0..max_records - 1 {
-            let record_key = NetworkAddress::from_peer(PeerId::random()).to_record_key();
+            let record_key = NetworkAddress::from(PeerId::random()).to_record_key();
             let value = match try_serialize_record(
                 &(0..max_records)
                     .map(|_| rand::random::<u8>())
@@ -1621,14 +1621,14 @@ mod tests {
 
             stored_records.push(record_key.clone());
             stored_records.sort_by(|a, b| {
-                let a = NetworkAddress::from_record_key(a);
-                let b = NetworkAddress::from_record_key(b);
+                let a = NetworkAddress::from(a);
+                let b = NetworkAddress::from(b);
                 self_address.distance(&a).cmp(&self_address.distance(&b))
             });
         }
 
         // get a record halfway through the list
-        let halfway_record_address = NetworkAddress::from_record_key(
+        let halfway_record_address = NetworkAddress::from(
             stored_records
                 .get(max_records / 2)
                 .wrap_err("Could not parse record store key")?,

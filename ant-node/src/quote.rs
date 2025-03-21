@@ -96,8 +96,7 @@ pub(crate) async fn quotes_verification(network: &Network, quotes: Vec<(PeerId, 
         .iter()
         .find(|(peer_id, _quote)| *peer_id == network.peer_id())
     {
-        let target_address =
-            NetworkAddress::from_chunk_address(ChunkAddress::new(self_quote.content));
+        let target_address = NetworkAddress::from(ChunkAddress::new(self_quote.content));
         if verify_quote_for_storecost(network, self_quote.clone(), &target_address).is_ok() {
             let quotes_for_nodes_duty: Vec<_> = quotes
                 .iter()

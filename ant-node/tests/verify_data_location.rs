@@ -187,7 +187,7 @@ fn print_node_close_groups(all_peers: &[PeerId]) {
     info!("\nNode close groups:");
 
     for (node_index, peer) in all_peers.iter().enumerate() {
-        let key = NetworkAddress::from_peer(*peer).as_kbucket_key();
+        let key = NetworkAddress::from(*peer).as_kbucket_key();
         let closest_peers = sort_peers_by_key(
             all_peers
                 .iter()
@@ -320,10 +320,10 @@ async fn verify_location(all_peers: &Vec<PeerId>, running_network: &RunningNetwo
             println!("Verification failed for {:?} entries", failed.len());
 
             failed.iter().for_each(|(key, failed_peers)| {
-                let key_addr = NetworkAddress::from_record_key(key);
+                let key_addr = NetworkAddress::from(key);
                 let pretty_key = PrettyPrintRecordKey::from(key);
                 failed_peers.iter().for_each(|peer| {
-                    let peer_addr = NetworkAddress::from_peer(*peer);
+                    let peer_addr = NetworkAddress::from(*peer);
                     let ilog2_distance = peer_addr.distance(&key_addr).ilog2();
                     println!("Record {pretty_key:?} is not stored inside {peer:?}, with ilog2 distance to be {ilog2_distance:?}");
                     error!("Record {pretty_key:?} is not stored inside {peer:?}, with ilog2 distance to be {ilog2_distance:?}");

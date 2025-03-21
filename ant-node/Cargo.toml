@@ -26,7 +26,7 @@ ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.0" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.26" }
 ant-evm = { path = "../ant-evm", version = "0.1.11" }
 ant-logging = { path = "../ant-logging", version = "0.2.48", features = ["process-metrics"] }
-ant-networking = { path = "../ant-networking", version = "0.3.7" }
+ant-networking = { path = "../ant-networking", version = "0.3.8" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.2" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.10" }
 async-trait = "0.1"
@@ -81,7 +81,7 @@ xor_name = "5.0.0"
 ant-protocol = { path = "../ant-protocol", version = "1.0.2", features = ["rpc"] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.2.1" }
-autonomi = { path = "../autonomi", version = "0.4.1" }
+autonomi = { path = "../autonomi", version = "0.4.2" }
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }

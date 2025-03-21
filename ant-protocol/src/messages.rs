@@ -9,6 +9,7 @@
 //! Data messages and their possible responses.
 mod chunk_proof;
 mod cmd;
+mod connection_info;
 mod node_id;
 mod query;
 mod response;
@@ -16,6 +17,7 @@ mod response;
 pub use self::{
     chunk_proof::{ChunkProof, Nonce},
     cmd::Cmd,
+    connection_info::ConnectionInfo,
     node_id::NodeId,
     query::Query,
     response::{CmdResponse, QueryResponse},

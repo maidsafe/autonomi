@@ -51,6 +51,7 @@ pub use time::{interval, sleep, spawn, Instant, Interval};
 
 use self::{cmd::NetworkSwarmCmd, error::Result};
 use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     error::Error as ProtocolError,
     messages::{ChunkProof, Nonce, Query, QueryResponse, Request, Response},
@@ -130,7 +131,7 @@ pub fn sort_peers_by_key<T>(
         Vec::with_capacity(peers.len());
 
     for (peer_id, addrs) in peers.into_iter() {
-        let addr = NetworkAddress::from_peer(peer_id);
+        let addr = NetworkAddress::from(peer_id);
         let distance = key.distance(&addr.as_kbucket_key());
         peer_distances.push((peer_id, addrs, distance));
     }
@@ -299,12 +300,20 @@ impl Network {
         nonce: Nonce,
         expected_proof: ChunkProof,
         quorum: ResponseQuorum,
-        retry_strategy: RetryStrategy,
+        _retry_strategy: RetryStrategy,
     ) -> Result<()> {
-        let total_attempts = retry_strategy.attempts();
+        // The above calling place shall already carried out same `re-attempts`.
+        // Hence here just use a fixed number.
+        let total_attempts = 2;
 
         let pretty_key = PrettyPrintRecordKey::from(&chunk_address.to_record_key()).into_owned();
         let expected_n_verified = quorum.get_value();
+
+        let request = Request::Query(Query::GetChunkExistenceProof {
+            key: chunk_address.clone(),
+            nonce,
+            difficulty: 1,
+        });
 
         let mut close_nodes = Vec::new();
         let mut retry_attempts = 0;
@@ -323,18 +332,13 @@ impl Network {
                 "Getting ChunkProof for {pretty_key:?}. Attempts: {retry_attempts:?}/{total_attempts:?}",
             );
 
-            let request = Request::Query(Query::GetChunkExistenceProof {
-                key: chunk_address.clone(),
-                nonce,
-                difficulty: 1,
-            });
             let responses = self
                 .send_and_get_responses(&close_nodes, &request, true)
                 .await;
             let n_verified = responses
                 .into_iter()
                 .filter_map(|(peer, resp)| {
-                    if let Ok(Response::Query(QueryResponse::GetChunkExistenceProof(proofs))) =
+                    if let Ok((Response::Query(QueryResponse::GetChunkExistenceProof(proofs)), _conn_info)) =
                         resp
                     {
                         if proofs.is_empty() {
@@ -431,11 +435,14 @@ impl Network {
         for (peer, response) in responses {
             info!("StoreCostReq for {record_address:?} received response: {response:?}");
             match response {
-                Ok(Response::Query(QueryResponse::GetStoreQuote {
-                    quote: Ok(quote),
-                    peer_address,
-                    storage_proofs,
-                })) => {
+                Ok((
+                    Response::Query(QueryResponse::GetStoreQuote {
+                        quote: Ok(quote),
+                        peer_address,
+                        storage_proofs,
+                    }),
+                    _conn_info,
+                )) => {
                     if !storage_proofs.is_empty() {
                         debug!("Storage proofing during GetStoreQuote to be implemented.");
                     }
@@ -455,11 +462,14 @@ impl Network {
                     all_quotes.push((peer_address.clone(), quote.clone()));
                     quotes_to_pay.push((peer, quote));
                 }
-                Ok(Response::Query(QueryResponse::GetStoreQuote {
-                    quote: Err(ProtocolError::RecordExists(_)),
-                    peer_address,
-                    storage_proofs,
-                })) => {
+                Ok((
+                    Response::Query(QueryResponse::GetStoreQuote {
+                        quote: Err(ProtocolError::RecordExists(_)),
+                        peer_address,
+                        storage_proofs,
+                    }),
+                    _conn_info,
+                )) => {
                     if !storage_proofs.is_empty() {
                         debug!("Storage proofing during GetStoreQuote to be implemented.");
                     }
@@ -850,7 +860,7 @@ impl Network {
             } = verification_kind
             {
                 self.verify_chunk_existence(
-                    NetworkAddress::from_record_key(&record_key),
+                    NetworkAddress::from(&record_key),
                     *nonce,
                     expected_proof.clone(),
                     get_cfg.get_quorum,
@@ -867,9 +877,9 @@ impl Network {
                     }
                     Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => {
                         warn!("Record {pretty_key:?} not found after PUT, either rejected or not yet stored by nodes when we asked");
-                        return Err(NetworkError::RecordNotStoredByNodes(
-                            NetworkAddress::from_record_key(&record_key),
-                        ));
+                        return Err(NetworkError::RecordNotStoredByNodes(NetworkAddress::from(
+                            &record_key,
+                        )));
                     }
                     Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. }))
                         if matches!(verification_kind, VerificationKind::Crdt) =>
@@ -947,7 +957,7 @@ impl Network {
         req: Request,
         peer: PeerId,
         addrs: Addresses,
-    ) -> Result<Response> {
+    ) -> Result<(Response, Option<ConnectionInfo>)> {
         let (sender, receiver) = oneshot::channel();
         let req_str = format!("{req:?}");
         // try to send the request without dialing the peer
@@ -1099,7 +1109,7 @@ impl Network {
                 .map(|(peer_id, _)| {
                     format!(
                         "{peer_id:?}({:?})",
-                        PrettyPrintKBucketKey(NetworkAddress::from_peer(*peer_id).as_kbucket_key())
+                        PrettyPrintKBucketKey(NetworkAddress::from(*peer_id).as_kbucket_key())
                     )
                 })
                 .collect();
@@ -1123,7 +1133,7 @@ impl Network {
         peers: &[(PeerId, Addresses)],
         req: &Request,
         get_all_responses: bool,
-    ) -> BTreeMap<PeerId, Result<Response>> {
+    ) -> BTreeMap<PeerId, Result<(Response, Option<ConnectionInfo>)>> {
         debug!("send_and_get_responses for {req:?}");
         let mut list_of_futures = peers
             .iter()
@@ -1139,7 +1149,7 @@ impl Network {
         while !list_of_futures.is_empty() {
             let ((peer, resp), _, remaining_futures) = select_all(list_of_futures).await;
             let resp_string = match &resp {
-                Ok(resp) => format!("{resp}"),
+                Ok(resp) => format!("{resp:?}"),
                 Err(err) => format!("{err:?}"),
             };
             debug!("Got response from {peer:?} for the req: {req:?}, resp: {resp_string}");

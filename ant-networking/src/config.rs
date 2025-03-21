@@ -59,7 +59,7 @@ impl RetryStrategy {
         let mut backoff = Backoff::new(
             self.attempts() as u32,
             Duration::from_secs(1), // First interval is double of this (see https://github.com/yoshuawuyts/exponential-backoff/issues/23)
-            Some(Duration::from_secs(32)),
+            Some(Duration::from_secs(8)),
         );
         backoff.set_factor(2); // Default.
         backoff.set_jitter(0.2); // Default is 0.3.
@@ -214,13 +214,13 @@ fn verify_retry_strategy_intervals() {
 
     assert_eq!(intervals(RetryStrategy::None), Vec::<u32>::new());
     assert_eq!(intervals(RetryStrategy::Quick), vec![2, 4, 8]);
-    assert_eq!(intervals(RetryStrategy::Balanced), vec![2, 4, 8, 16, 32]);
+    assert_eq!(intervals(RetryStrategy::Balanced), vec![2, 4, 8, 8, 8]);
     assert_eq!(
         intervals(RetryStrategy::Persistent),
-        vec![2, 4, 8, 16, 32, 32, 32, 32, 32]
+        vec![2, 4, 8, 8, 8, 8, 8, 8, 8]
     );
     assert_eq!(
         intervals(RetryStrategy::N(NonZeroUsize::new(12).unwrap())),
-        vec![2, 4, 8, 16, 32, 32, 32, 32, 32, 32, 32]
+        vec![2, 4, 8, 8, 8, 8, 8, 8, 8, 8, 8]
     );
 }

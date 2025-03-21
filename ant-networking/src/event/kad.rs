@@ -478,7 +478,7 @@ impl SwarmDriver {
         // return error if the entry cannot be found
         if let Some((r_key, senders, result_map, cfg)) = self.pending_get_record.remove(&query_id) {
             let num_of_versions = result_map.len();
-            let data_key_address = NetworkAddress::from_record_key(&r_key);
+            let data_key_address = NetworkAddress::from(&r_key);
 
             // we have a split record, return it
             if num_of_versions > 1 {

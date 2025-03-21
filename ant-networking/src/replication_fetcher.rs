@@ -132,10 +132,10 @@ impl ReplicationFetcher {
 
     // Node is full, any fetch (ongoing or new) shall no farther than the current farthest.
     pub(crate) fn set_farthest_on_full(&mut self, farthest_in: Option<RecordKey>) {
-        let self_addr = NetworkAddress::from_peer(self.self_peer_id);
+        let self_addr = NetworkAddress::from(self.self_peer_id);
 
         let new_farthest_distance = if let Some(farthest_in) = farthest_in {
-            let addr = NetworkAddress::from_record_key(&farthest_in);
+            let addr = NetworkAddress::from(&farthest_in);
             self_addr.distance(&addr)
         } else {
             return;
@@ -149,11 +149,11 @@ impl ReplicationFetcher {
 
         // Remove any ongoing or pending fetches that is farther than the current farthest
         self.to_be_fetched.retain(|(key, _t, _), _| {
-            let addr = NetworkAddress::from_record_key(key);
+            let addr = NetworkAddress::from(key);
             self_addr.distance(&addr) <= new_farthest_distance
         });
         self.on_going_fetches.retain(|(key, _t), _| {
-            let addr = NetworkAddress::from_record_key(key);
+            let addr = NetworkAddress::from(key);
             self_addr.distance(&addr) <= new_farthest_distance
         });
 
@@ -233,11 +233,11 @@ impl ReplicationFetcher {
         // Sort to_be_fetched by key closeness to our PeerId
         let mut to_be_fetched_sorted: Vec<_> = self.to_be_fetched.iter_mut().collect();
 
-        let self_address = NetworkAddress::from_peer(self.self_peer_id);
+        let self_address = NetworkAddress::from(self.self_peer_id);
 
         to_be_fetched_sorted.sort_by(|((a, _, _), _), ((b, _, _), _)| {
-            let a = NetworkAddress::from_record_key(a);
-            let b = NetworkAddress::from_record_key(b);
+            let a = NetworkAddress::from(a);
+            let b = NetworkAddress::from(b);
             self_address.distance(&a).cmp(&self_address.distance(&b))
         });
 
@@ -426,7 +426,7 @@ impl ReplicationFetcher {
         mut closest_k_peers: Vec<NetworkAddress>,
     ) -> Vec<(NetworkAddress, ValidationType)> {
         // Pre-calculate self_address since it's used multiple times
-        let self_address = NetworkAddress::from_peer(self.self_peer_id);
+        let self_address = NetworkAddress::from(self.self_peer_id);
         closest_k_peers.push(self_address.clone());
         let total_incoming_keys = incoming_keys.len();
 
@@ -617,7 +617,7 @@ mod tests {
         let mut incoming_keys = Vec::new();
         (0..MAX_PARALLEL_FETCH * 2).for_each(|_| {
             let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-            let key = NetworkAddress::from_record_key(&RecordKey::from(random_data));
+            let key = NetworkAddress::from(&RecordKey::from(random_data));
             incoming_keys.push((key, ValidationType::Chunk));
         });
 
@@ -639,9 +639,9 @@ mod tests {
         replication_fetcher.add_peer_scores(vec![(replication_src_1, true)]);
         // we should not fetch anymore keys
         let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key_1 = NetworkAddress::from_record_key(&RecordKey::from(random_data));
+        let key_1 = NetworkAddress::from(&RecordKey::from(random_data));
         let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key_2 = NetworkAddress::from_record_key(&RecordKey::from(random_data));
+        let key_2 = NetworkAddress::from(&RecordKey::from(random_data));
         let keys_to_fetch = replication_fetcher.add_keys(
             replication_src_1,
             vec![
@@ -656,7 +656,7 @@ mod tests {
 
         // Fresh replication shall be fetched immediately
         let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key = NetworkAddress::from_record_key(&RecordKey::from(random_data));
+        let key = NetworkAddress::from(&RecordKey::from(random_data));
         let keys_to_fetch = replication_fetcher.add_keys(
             replication_src,
             vec![(key, ValidationType::Chunk)],
@@ -683,18 +683,18 @@ mod tests {
     fn verify_in_range_check() {
         //random peer_id
         let peer_id = PeerId::random();
-        let self_address = NetworkAddress::from_peer(peer_id);
+        let self_address = NetworkAddress::from(peer_id);
         let (event_sender, _event_receiver) = mpsc::channel(4);
         let mut replication_fetcher = ReplicationFetcher::new(peer_id, event_sender);
 
         // Set distance range
-        let distance_target = NetworkAddress::from_peer(PeerId::random());
+        let distance_target = NetworkAddress::from(PeerId::random());
         let distance_range = self_address.distance(&distance_target);
         replication_fetcher.set_replication_distance_range(distance_range);
 
         let mut closest_k_peers = vec![];
         (0..19).for_each(|_| {
-            closest_k_peers.push(NetworkAddress::from_peer(PeerId::random()));
+            closest_k_peers.push(NetworkAddress::from(PeerId::random()));
         });
 
         let mut incoming_keys = Vec::new();
@@ -703,7 +703,7 @@ mod tests {
         closest_k_peers_include_self.push(self_address.clone());
         (0..100).for_each(|_| {
             let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-            let key = NetworkAddress::from_record_key(&RecordKey::from(random_data));
+            let key = NetworkAddress::from(&RecordKey::from(random_data));
 
             let distance = key.distance(&self_address);
             if distance <= distance_range {
