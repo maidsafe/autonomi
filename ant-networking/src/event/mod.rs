@@ -171,6 +171,8 @@ pub enum NetworkEvent {
             Option<ProofOfPayment>,
         )>,
     },
+    /// Peers of picked non-full bucket for version query.
+    PeersForVersionQuery(Vec<(PeerId, Addresses)>),
 }
 
 /// Terminate node for the following reason
@@ -240,6 +242,16 @@ impl Debug for NetworkEvent {
                 write!(
                     f,
                     "NetworkEvent::FreshReplicateToFetch({holder:?}, {keys:?})"
+                )
+            }
+            NetworkEvent::PeersForVersionQuery(peers) => {
+                write!(
+                    f,
+                    "NetworkEvent::PeersForVersionQuery({:?})",
+                    peers
+                        .iter()
+                        .map(|(peer, _addrs)| peer)
+                        .collect::<Vec<&PeerId>>()
                 )
             }
         }

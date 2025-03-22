@@ -449,7 +449,7 @@ impl Node {
                 // try query peer version
                 let network = self.network().clone();
                 let _handle = spawn(async move {
-                    Self::try_query_peer_version(network, peer_id).await;
+                    Self::try_query_peer_version(network, peer_id, Default::default()).await;
                 });
 
                 // try replication here
@@ -567,6 +567,13 @@ impl Node {
             NetworkEvent::FreshReplicateToFetch { holder, keys } => {
                 event_header = "FreshReplicateToFetch";
                 self.fresh_replicate_to_fetch(holder, keys);
+            }
+            NetworkEvent::PeersForVersionQuery(peers) => {
+                event_header = "PeersForVersionQuery";
+                let network = self.network().clone();
+                let _handle = spawn(async move {
+                    Self::query_peers_version(network, peers).await;
+                });
             }
         }
 
@@ -978,14 +985,19 @@ impl Node {
         );
     }
 
+    /// Query peers' versions and update local knowledge.
+    async fn query_peers_version(network: Network, peers: Vec<(PeerId, Addresses)>) {
+        // To avoid choking, carry out the queries one by one
+        for (peer_id, addrs) in peers {
+            Self::try_query_peer_version(network.clone(), peer_id, addrs).await;
+        }
+    }
+
     /// Query peer's version and update local knowledge.
-    async fn try_query_peer_version(network: Network, peer: PeerId) {
+    async fn try_query_peer_version(network: Network, peer: PeerId, addrs: Addresses) {
         let request = Request::Query(Query::GetVersion(NetworkAddress::from_peer(peer)));
         // We can skip passing `addrs` here as the new peer should be part of the kad::RT and swarm can get the addr.
-        let version = match network
-            .send_request(request, peer, Default::default())
-            .await
-        {
+        let version = match network.send_request(request, peer, addrs).await {
             Ok(Response::Query(QueryResponse::GetVersion { version, .. })) => {
                 info!("Fetched peer {peer:?} version as {version:?}");
                 version
