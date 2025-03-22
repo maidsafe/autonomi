@@ -772,6 +772,7 @@ impl SwarmDriver {
             );
         }
 
+        let mut round_robin_index = 0;
         // temporarily skip processing IncomingConnectionError swarm event to avoid log spamming
         let mut previous_incoming_connection_error_event = None;
         loop {
@@ -851,8 +852,12 @@ impl SwarmDriver {
 
                 // runs every bootstrap_interval time
                 _ = network_discover_interval.tick() => {
-                    if let Some(new_interval) = self.run_network_discover_continuously(network_discover_interval.period()).await {
+                    if let Some(new_interval) = self.run_network_discover_continuously(network_discover_interval.period(), round_robin_index).await {
                         network_discover_interval = new_interval;
+                        round_robin_index += 1;
+                        if round_robin_index > 255 {
+                            round_robin_index = 0;
+                        }
                     }
                 }
                 _ = set_farthest_record_interval.tick() => {

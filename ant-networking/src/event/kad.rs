@@ -257,7 +257,7 @@ impl SwarmDriver {
                     // This should only happen once
                     if self.network_discovery.notify_new_peer() {
                         info!("Performing the first bootstrap");
-                        self.trigger_network_discovery();
+                        self.trigger_network_discovery(0);
                     }
                 }
 
