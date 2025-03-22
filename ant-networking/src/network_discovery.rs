@@ -131,11 +131,17 @@ impl SwarmDriver {
         } else {
             255
         };
+        // Non-full bucket that being a `hole` among full-buckets shall be queried as well
+        let non_full_buckets_higher_than_farthest = full_buckets
+            .iter()
+            .filter_map(|kbucket| kbucket.range().0.ilog2())
+            .filter(|index| *index > farthest_non_full_index)
+            .collect();
 
-        let get_closest_candidates = self
-            .network_discovery
-            .candidates
-            .get_candidates(farthest_non_full_index);
+        let get_closest_candidates = self.network_discovery.candidates.get_candidates(
+            farthest_non_full_index,
+            non_full_buckets_higher_than_farthest,
+        );
         info!(
             "Going to undertake {} get_closest queries for {} non_full_buckets with farthest {farthest_non_full_index:?}",
             get_closest_candidates.len(),
@@ -370,14 +376,20 @@ impl NetworkDiscoveryCandidates {
 
     /// Returns one random candidate per bucket. Also tries to refresh the candidate list.
     /// Set the farthest_bucket to get candidates that are closer than or equal to the farthest_bucket.
-    fn get_candidates(&mut self, farthest_bucket: u32) -> Vec<NetworkAddress> {
+    fn get_candidates(
+        &mut self,
+        farthest_bucket: u32,
+        non_full_buckets_higher_than_farthest: Vec<u32>,
+    ) -> Vec<NetworkAddress> {
         self.try_refresh_candidates();
 
         let mut rng = thread_rng();
         self.candidates
             .iter()
             .filter_map(|(ilog2, candidates)| {
-                if *ilog2 <= farthest_bucket {
+                if (*ilog2 <= farthest_bucket)
+                    | non_full_buckets_higher_than_farthest.contains(ilog2)
+                {
                     let random_index = rng.gen::<usize>() % candidates.len();
                     candidates.get(random_index).cloned()
                 } else {
@@ -386,24 +398,6 @@ impl NetworkDiscoveryCandidates {
             })
             .collect()
     }
-
-    // /// Returns one random candidate per targeted bucket. Also tries to refresh the candidate list.
-    // fn get_candidates(&mut self, targeted_buckets: Vec<u32>) -> Vec<NetworkAddress> {
-    //     self.try_refresh_candidates();
-
-    //     let mut rng = thread_rng();
-    //     self.candidates
-    //         .iter()
-    //         .filter_map(|(ilog2, candidates)| {
-    //             if targeted_buckets.contains(ilog2) {
-    //                 let random_index = rng.gen::<usize>() % candidates.len();
-    //                 candidates.get(random_index).cloned()
-    //             } else {
-    //                 None
-    //             }
-    //         })
-    //         .collect()
-    // }
 
     /// Tries to refresh our current candidate list. We replace the old ones with new if we find any.
     fn try_refresh_candidates(&mut self) {
