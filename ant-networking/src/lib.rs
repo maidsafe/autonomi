@@ -1052,6 +1052,10 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::NotifyPeerVersion { peer, version })
     }
 
+    pub fn remove_peer(&self, peer: PeerId) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::RemovePeer { peer })
+    }
+
     /// Helper to send NetworkSwarmCmd
     fn send_network_swarm_cmd(&self, cmd: NetworkSwarmCmd) {
         send_network_swarm_cmd(self.network_swarm_cmd_sender().clone(), cmd);

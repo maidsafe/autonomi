@@ -179,6 +179,10 @@ pub enum LocalSwarmCmd {
         peer: PeerId,
         version: String,
     },
+    /// Remove peer from the routing table
+    RemovePeer {
+        peer: PeerId,
+    },
 }
 
 /// Commands to send to the Swarm
@@ -359,6 +363,9 @@ impl Debug for LocalSwarmCmd {
             }
             LocalSwarmCmd::NotifyPeerVersion { peer, version } => {
                 write!(f, "LocalSwarmCmd::NotifyPeerVersion({peer:?}, {version:?})")
+            }
+            LocalSwarmCmd::RemovePeer { peer } => {
+                write!(f, "LocalSwarmCmd::RemovePeer({peer:?})")
             }
         }
     }
@@ -1008,6 +1015,12 @@ impl SwarmDriver {
             LocalSwarmCmd::NotifyPeerVersion { peer, version } => {
                 cmd_string = "NotifyPeerVersion";
                 self.record_node_version(peer, version);
+            }
+            LocalSwarmCmd::RemovePeer { peer } => {
+                cmd_string = "RemovePeer";
+                if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer) {
+                    self.update_on_peer_removal(*dead_peer.node.key.preimage());
+                }
             }
         }
 

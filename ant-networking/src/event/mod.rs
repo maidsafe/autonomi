@@ -171,7 +171,7 @@ pub enum NetworkEvent {
             Option<ProofOfPayment>,
         )>,
     },
-    /// Peers of picked non-full bucket for version query.
+    /// Peers of picked bucket for version query.
     PeersForVersionQuery(Vec<(PeerId, Addresses)>),
 }
 

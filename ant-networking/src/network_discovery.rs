@@ -14,8 +14,7 @@ use crate::{
 use ant_protocol::NetworkAddress;
 use libp2p::{
     kad::{KBucketKey, K_VALUE},
-    swarm::dial_opts::{DialOpts, PeerCondition},
-    Multiaddr, PeerId,
+    PeerId,
 };
 use rand::rngs::OsRng;
 use rand::{thread_rng, Rng};
@@ -45,7 +44,7 @@ const NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S: u64 = 600;
 type RefreshTargets = (
     Vec<NetworkAddress>,
     Vec<(PeerId, Addresses)>,
-    Vec<(PeerId, Vec<Multiaddr>)>,
+    Vec<(PeerId, Addresses)>,
 );
 
 impl SwarmDriver {
@@ -86,13 +85,9 @@ impl SwarmDriver {
             );
         }
 
-        // dial all peers within one picked full bucket
-        for (peer_id, addrs) in picked_full_bucket_peers {
-            let opts = DialOpts::peer_id(peer_id)
-                .condition(PeerCondition::NotDialing)
-                .addresses(addrs)
-                .build();
-            let _ = self.swarm.dial(opts);
+        // notify node instance to carry out version queries off thread
+        if !picked_full_bucket_peers.is_empty() {
+            self.send_event(NetworkEvent::PeersForVersionQuery(picked_full_bucket_peers));
         }
 
         // notify node instance to carry out version queries off thread
@@ -140,10 +135,10 @@ impl SwarmDriver {
 
         let get_closest_candidates = self.network_discovery.candidates.get_candidates(
             farthest_non_full_index,
-            non_full_buckets_higher_than_farthest,
+            &non_full_buckets_higher_than_farthest,
         );
         info!(
-            "Going to undertake {} get_closest queries for {} non_full_buckets with farthest {farthest_non_full_index:?}",
+            "Going to undertake {} get_closest queries for {} non_full_buckets with farthest {farthest_non_full_index:?} and holes {non_full_buckets_higher_than_farthest:?}",
             get_closest_candidates.len(),
             non_full_buckets.len()
         );
@@ -156,8 +151,10 @@ impl SwarmDriver {
 
         // Collect peers from one non-full bucket (round robin)
         let picked_non_full_bucket = round_robin_index % non_full_buckets.len();
+        let mut targeted_bucket = None;
         let picked_non_full_bucket_peers =
             if let Some(kbucket) = non_full_buckets.get(picked_non_full_bucket) {
+                targeted_bucket = kbucket.range().0.ilog2();
                 kbucket
                     .iter()
                     .map(|peer_entry| {
@@ -174,21 +171,26 @@ impl SwarmDriver {
                 );
                 vec![]
             };
-        info!("Going to query {} peers of a non-full bucket {picked_non_full_bucket} to check liveness.", picked_non_full_bucket_peers.len());
+        info!(
+            "Going to query {} peers of a non-full bucket {targeted_bucket:?} to check liveness.",
+            picked_non_full_bucket_peers.len()
+        );
 
         // Collect peers from one full bucket (round robin)
         let picked_full_bucket_index = round_robin_index % full_buckets.len();
+        let mut targeted_bucket = None;
         let picked_full_bucket_peers =
             if let Some(kbucket) = full_buckets.get(picked_full_bucket_index) {
+                targeted_bucket = kbucket.range().0.ilog2();
                 kbucket
                     .iter()
                     .map(|peer_entry| {
                         (
                             peer_entry.node.key.into_preimage(),
-                            peer_entry.node.value.clone().into_vec(),
+                            Addresses(peer_entry.node.value.clone().into_vec()),
                         )
                     })
-                    .collect::<Vec<(PeerId, Vec<Multiaddr>)>>()
+                    .collect::<Vec<(PeerId, Addresses)>>()
             } else {
                 error!(
                     "Full bucket {picked_non_full_bucket} doesn't exists among {} buckets.",
@@ -197,7 +199,7 @@ impl SwarmDriver {
                 vec![]
             };
         info!(
-            "Going to dial {} peers of a full bucket {picked_full_bucket_index} to check liveness.",
+            "Going to query {} peers of a full bucket {targeted_bucket:?} to check liveness.",
             picked_full_bucket_peers.len()
         );
 
@@ -376,10 +378,11 @@ impl NetworkDiscoveryCandidates {
 
     /// Returns one random candidate per bucket. Also tries to refresh the candidate list.
     /// Set the farthest_bucket to get candidates that are closer than or equal to the farthest_bucket.
+    #[allow(clippy::ptr_arg)]
     fn get_candidates(
         &mut self,
         farthest_bucket: u32,
-        non_full_buckets_higher_than_farthest: Vec<u32>,
+        non_full_buckets_higher_than_farthest: &Vec<u32>,
     ) -> Vec<NetworkAddress> {
         self.try_refresh_candidates();
 

@@ -19,7 +19,8 @@ use ant_networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use ant_networking::MetricsRegistries;
 use ant_networking::{
-    time::sleep, Instant, Network, NetworkBuilder, NetworkEvent, NodeIssue, SwarmDriver,
+    time::sleep, Instant, Network, NetworkBuilder, NetworkError, NetworkEvent, NodeIssue,
+    SwarmDriver,
 };
 use ant_protocol::{
     error::Error as ProtocolError,
@@ -29,7 +30,7 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, Multiaddr, PeerId};
+use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -999,15 +1000,22 @@ impl Node {
         // We can skip passing `addrs` here as the new peer should be part of the kad::RT and swarm can get the addr.
         let version = match network.send_request(request, peer, addrs).await {
             Ok(Response::Query(QueryResponse::GetVersion { version, .. })) => {
-                info!("Fetched peer {peer:?} version as {version:?}");
+                info!("Fetched peer version {peer:?} as {version:?}");
                 version
             }
             Ok(other) => {
-                info!("Not a version fetched from peer {peer:?}, {other:?}");
+                info!("Not a fetched peer version {peer:?}, {other:?}");
                 "none".to_string()
             }
             Err(err) => {
-                info!("Failed to fetch version from peer {peer:?} with error {err:?}");
+                info!("Failed to fetch peer version {peer:?} with error {err:?}");
+                // Failed version fetch (which contains dial then re-attempt by itself)
+                // with error of `DialFailure` indicates the peer could be dead with high chance.
+                // In that case, the peer shall be removed from the routing table.
+                if let NetworkError::OutboundError(OutboundFailure::DialFailure) = err {
+                    network.remove_peer(peer);
+                    return;
+                }
                 "old".to_string()
             }
         };
