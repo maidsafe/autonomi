@@ -859,6 +859,11 @@ impl SwarmDriver {
                             round_robin_index = 0;
                         }
                     }
+
+                    #[cfg(feature = "open-metrics")]
+                    if let Some(metrics_recorder) = &self.metrics_recorder {
+                        metrics_recorder.update_node_versions(&self.peers_version);
+                    }
                 }
                 _ = set_farthest_record_interval.tick() => {
                     if !self.is_client {

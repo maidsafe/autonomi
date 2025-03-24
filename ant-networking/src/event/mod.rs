@@ -327,11 +327,6 @@ impl SwarmDriver {
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
         }
-
-        #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
-            metrics_recorder.update_node_versions(&self.peers_version);
-        }
     }
 
     /// Update state on removal of a peer from the routing table.
