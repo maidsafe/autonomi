@@ -12,8 +12,9 @@ use xor_name::XorName;
 
 use super::AddressParseError;
 
-/// Address of a [`crate::storage::chunks::Chunk`]
-/// It is derived from the content of the chunk
+/// Address of a [`crate::storage::chunks::Chunk`].
+///
+/// It is derived from the content of the chunk.
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
 pub struct ChunkAddress(XorName);
 
