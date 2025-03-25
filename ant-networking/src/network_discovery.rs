@@ -113,34 +113,21 @@ impl SwarmDriver {
             .partition(|kb| kb.num_entries() >= K_VALUE.get());
 
         // Process non-full buckets, collect get_closest candidates
-
-        // shall take the lowest of full_bucket minus one.
-        let farthest_non_full_index = if full_buckets.is_empty() {
-            255
-        } else if let Some(min_full_bucket) = full_buckets
+        let non_full_buckets_indexes = non_full_buckets
             .iter()
             .filter_map(|kbucket| kbucket.range().0.ilog2())
-            .min()
-        {
-            min_full_bucket - 1
-        } else {
-            255
-        };
-        // Non-full bucket that being a `hole` among full-buckets shall be queried as well
-        let non_full_buckets_higher_than_farthest = full_buckets
+            .collect::<Vec<_>>();
+        let min_full_bucket_index = full_buckets
             .iter()
             .filter_map(|kbucket| kbucket.range().0.ilog2())
-            .filter(|index| *index > farthest_non_full_index)
-            .collect();
-
-        let get_closest_candidates = self.network_discovery.candidates.get_candidates(
-            farthest_non_full_index,
-            &non_full_buckets_higher_than_farthest,
-        );
+            .min();
+        let get_closest_candidates = self
+            .network_discovery
+            .candidates
+            .get_candidates(non_full_buckets_indexes.clone(), min_full_bucket_index);
         info!(
-            "Going to undertake {} get_closest queries for {} non_full_buckets with farthest {farthest_non_full_index:?} and holes {non_full_buckets_higher_than_farthest:?}",
+            "Going to undertake {} get_closest queries for non_full_buckets {non_full_buckets_indexes:?}",
             get_closest_candidates.len(),
-            non_full_buckets.len()
         );
 
         // The following liveness check part will only become efficient with large sized network.
@@ -376,23 +363,35 @@ impl NetworkDiscoveryCandidates {
         );
     }
 
-    /// Returns one random candidate per bucket. Also tries to refresh the candidate list.
-    /// Set the farthest_bucket to get candidates that are closer than or equal to the farthest_bucket.
-    #[allow(clippy::ptr_arg)]
+    /// Returns one random candidate per non-full bucket. Also tries to refresh the candidate list.
     fn get_candidates(
         &mut self,
-        farthest_bucket: u32,
-        non_full_buckets_higher_than_farthest: &Vec<u32>,
+        mut non_full_buckets: Vec<u32>,
+        min_full_bucket_index: Option<u32>,
     ) -> Vec<NetworkAddress> {
         self.try_refresh_candidates();
+
+        // As the `empty` buckets won't be returned by the libp2p, which may not have enough targets.
+        // Hence here need to insert extra potential targeted buckets in,
+        // to fill the gap from the min_full_bucket_index.
+        let mut min_full_bucket_index = min_full_bucket_index.unwrap_or(255);
+
+        // adding numbers in [min_full_bucket_index, 0) with downward
+        while non_full_buckets.len() < 10 && min_full_bucket_index > 0 {
+            if !non_full_buckets.contains(&min_full_bucket_index) {
+                non_full_buckets.push(min_full_bucket_index);
+            }
+            // Update min_full_bucket_index to continue filling downwards
+            min_full_bucket_index = min_full_bucket_index.saturating_sub(1);
+        }
+
+        debug!("With min_full_bucket_index of {min_full_bucket_index:?}, targeting buckets of {non_full_buckets:?}");
 
         let mut rng = thread_rng();
         self.candidates
             .iter()
             .filter_map(|(ilog2, candidates)| {
-                if (*ilog2 <= farthest_bucket)
-                    | non_full_buckets_higher_than_farthest.contains(ilog2)
-                {
+                if non_full_buckets.contains(ilog2) {
                     let random_index = rng.gen::<usize>() % candidates.len();
                     candidates.get(random_index).cloned()
                 } else {
