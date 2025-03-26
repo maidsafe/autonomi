@@ -16,12 +16,16 @@ pub enum Error {
     Json(#[from] serde_json::Error),
     #[error(transparent)]
     Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Join(#[from] tokio::task::JoinError),
     #[error("The PID of the process was not found after starting it.")]
     PidNotFoundAfterStarting,
     #[error("The PID of the process was not set.")]
     PidNotSet,
     #[error("The metric port of the node is empty")]
     MetricPortEmpty,
+    #[error("multithreaded join error in node registry refreshment")]
+    NodeRegistryRefreshmentJoinError,
     #[error(transparent)]
     SemverError(#[from] semver::Error),
     #[error("The service(s) is already running: {0:?}")]

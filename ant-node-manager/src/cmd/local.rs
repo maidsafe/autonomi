@@ -22,7 +22,7 @@ use ant_service_management::{
     control::ServiceController, get_local_node_registry_path, NodeRegistry,
 };
 use color_eyre::{eyre::eyre, Help, Report, Result};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 pub async fn join(
     build: bool,
@@ -198,7 +198,7 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
     }
     status_report(
         &mut local_node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         details,
         json,
         fail,

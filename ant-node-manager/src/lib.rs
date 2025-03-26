@@ -37,6 +37,8 @@ impl From<u8> for VerbosityLevel {
     }
 }
 
+use std::sync::Arc;
+
 use crate::error::{Error, Result};
 use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
@@ -44,6 +46,7 @@ use ant_service_management::{
     NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
 };
 use colored::Colorize;
+use libp2p::futures::future::try_join_all;
 use semver::Version;
 use tracing::debug;
 
@@ -372,12 +375,13 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
 
 pub async fn status_report(
     node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     detailed_view: bool,
     output_json: bool,
     fail: bool,
     is_local_network: bool,
 ) -> Result<()> {
+    // let service_control: Arc<dyn ServiceControl + Send + Sync> = Arc::new(ServiceControl::new());
     refresh_node_registry(
         node_registry,
         service_control,
@@ -554,89 +558,102 @@ pub async fn status_report(
 /// running if we can connect to its RPC service; otherwise it is considered stopped.
 pub async fn refresh_node_registry(
     node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     print_refresh_message: bool,
     full_refresh: bool,
     is_local_network: bool,
 ) -> Result<()> {
-    // This message is useful for users, but needs to be suppressed when a JSON output is
-    // requested.
     if print_refresh_message {
         println!("Refreshing the node registry...");
     }
     info!("Refreshing the node registry");
 
-    for node in &mut node_registry.nodes {
-        // The `status` command can run before a node is started and therefore before its wallet
-        // exists.
-        // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-        node.reward_balance = None;
-        let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+    let mut tasks = vec![];
 
-        let metric_client = MetricClient::new(metrics_port);
-        let mut service = NodeService::new(node, Box::new(metric_client.clone()));
+    for node in node_registry.nodes.iter_mut() {
+        // Clone things that are needed inside the task
+        let mut node = node.clone(); // Necessary because you can't move &mut node across .await safely
+        let service_control = Arc::clone(&service_control); // trait object already valid for sync reference
+        let full_refresh = full_refresh;
+        let is_local_network = is_local_network;
 
-        if is_local_network {
-            // For a local network, retrieving the process by its path does not work, because the
-            // paths are not unique: they are all launched from the same binary. Instead we will
-            // just determine whether the node is running by connecting to its RPC service. We
-            // only need to distinguish between `RUNNING` and `STOPPED` for a local network.
-            match metric_client.node_info().await {
-                Ok(info) => {
-                    let pid = info.pid;
-                    debug!(
-                        "local node {} is running with PID {pid}",
-                        service.service_data.service_name
-                    );
-                    service.on_start(Some(pid), full_refresh).await?;
+        let metrics_port = node.metrics_port
+                                    .ok_or_else
+                                    (|| ant_service_management::Error::MetricServicePortNumUnavailable)?;
+
+        let task = tokio::task::spawn(async move {
+            node.reward_balance = None;
+            // let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+
+            let metric_client = MetricClient::new(metrics_port);
+            let mut service = NodeService::new(&mut node, Box::new(metric_client.clone()));
+            
+            if is_local_network {
+                match metric_client.node_info().await {
+                    Ok(info) => {
+                        let pid = info.pid;
+                        debug!(
+                            "local node {} is running with PID {pid}",
+                            service.service_data.service_name
+                        );
+                        service.on_start(Some(pid), full_refresh).await
+                    }
+                    Err(_) => {
+                        debug!(
+                            "Failed to retrieve PID for local node {}",
+                            service.service_data.service_name
+                        );
+                        service.on_stop().await
+                    }
                 }
-                Err(_) => {
-                    debug!(
-                        "Failed to retrieve PID for local node {}",
-                        service.service_data.service_name
-                    );
-                    service.on_stop().await?;
-                }
-            }
-        } else {
-            match service_control.get_process_pid(&service.bin_path()) {
-                Ok(pid) => {
-                    debug!(
-                        "{} is running with PID {pid}",
-                        service.service_data.service_name
-                    );
-                    service.on_start(Some(pid), full_refresh).await?;
-                }
-                Err(_) => {
-                    match service.status() {
+            } else {
+                match service_control.get_process_pid(&service.bin_path()) {
+                    Ok(pid) => {
+                        debug!(
+                            "{} is running with PID {pid}",
+                            service.service_data.service_name
+                        );
+                        service.on_start(Some(pid), full_refresh).await
+                    }
+                    Err(_) => match service.status() {
                         ServiceStatus::Added => {
-                            // If the service is still at `Added` status, there hasn't been an attempt
-                            // to start it since it was installed. It's useful to keep this status
-                            // rather than setting it to `STOPPED`, so that the user can differentiate.
                             debug!(
                                 "{} has not been started since it was installed",
                                 service.service_data.service_name
                             );
+                            Ok(())
                         }
                         ServiceStatus::Removed => {
-                            // In the case of the service being removed, we want to retain that state
-                            // and not have it marked `STOPPED`.
                             debug!("{} has been removed", service.service_data.service_name);
+                            Ok(())
                         }
                         _ => {
                             debug!(
                                 "Failed to retrieve PID for {}",
                                 service.service_data.service_name
                             );
-                            service.on_stop().await?;
+                            service.on_stop().await
                         }
-                    }
+                    },
                 }
             }
-        }
+        });
+
+        tasks.push(task);
+    }
+
+    // Wait for all tasks to complete
+    let results: Vec<Result<(), Error>> = try_join_all(tasks)
+                                            .await?.into_iter()
+                                            .map(|res| res.map_err(|e| e.into())).collect();
+
+    // Each task returns a Result<()>, so we propagate any inner error
+    for result in &results {
+        _ =result; // Prevents moving `result`
     }
     Ok(())
 }
+
 
 pub fn print_banner(text: &str) {
     let padding = 2;

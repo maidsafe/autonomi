@@ -52,6 +52,8 @@ pub enum Error {
     ServiceUserAccountCreationFailed,
     #[error("Could not obtain user's data directory")]
     UserDataDirectoryNotObtainable,
+    #[error("Could not connect to the metric service at")]
+    MetricServicePortNumUnavailable,
     #[error("Could not connect to the metric service at port {0}")]
     MetricServiceConnectionError(String),
     #[error("Could not process the metric service inforesponse")]

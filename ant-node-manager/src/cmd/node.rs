@@ -33,6 +33,7 @@ use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
 use std::{cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, time::Duration};
+use std::sync::Arc;
 use tracing::debug;
 
 /// Returns the added service names
@@ -162,7 +163,7 @@ pub async fn balance(
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
         &mut node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         false,
@@ -202,7 +203,7 @@ pub async fn remove(
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
         &mut node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         false,
@@ -291,7 +292,7 @@ pub async fn start(
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
         &mut node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         false,
@@ -360,7 +361,7 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
         }
         status_report(
             &mut node_registry,
-            &ServiceController {},
+            Arc::new(ServiceController {}),
             details,
             json,
             fail,
@@ -386,7 +387,7 @@ pub async fn stop(
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
         &mut node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         false,
@@ -470,7 +471,7 @@ pub async fn upgrade(
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
         &mut node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         false,
