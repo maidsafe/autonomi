@@ -15,8 +15,7 @@ pub mod config;
 pub mod error;
 pub mod helpers;
 pub mod local;
-pub mod rpc;
-pub mod rpc_client;
+pub mod metric;
 
 pub const DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S: u64 = 300;
 
@@ -38,21 +37,23 @@ impl From<u8> for VerbosityLevel {
     }
 }
 
+use std::sync::Arc;
+
 use crate::error::{Error, Result};
-use ant_service_management::rpc::RpcActions;
+use ant_service_management::metric::{MetricActions, MetricClient};
 use ant_service_management::{
-    control::ServiceControl, error::Error as ServiceError, rpc::RpcClient, NodeRegistry,
-    NodeService, NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions,
-    UpgradeResult,
+    control::ServiceControl, error::Error as ServiceError, NodeRegistry, NodeService,
+    NodeServiceData, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
 };
 use colored::Colorize;
+use libp2p::futures::future::try_join_all;
 use semver::Version;
 use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
 pub const DAEMON_SERVICE_NAME: &str = "antctld";
 
-const RPC_START_UP_DELAY_MS: u64 = 3000;
+const METRIC_START_UP_DELAY_MS: u64 = 3000;
 
 pub struct ServiceManager<T: ServiceStateActions + Send> {
     pub service: T,
@@ -101,7 +102,7 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
         }
         self.service_control
             .start(&self.service.name(), self.service.is_user_mode())?;
-        self.service_control.wait(RPC_START_UP_DELAY_MS);
+        self.service_control.wait(METRIC_START_UP_DELAY_MS);
 
         // This is an attempt to see whether the service process has actually launched. You don't
         // always get an error from the service infrastructure.
@@ -374,12 +375,13 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
 
 pub async fn status_report(
     node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     detailed_view: bool,
     output_json: bool,
     fail: bool,
     is_local_network: bool,
 ) -> Result<()> {
+    // let service_control: Arc<dyn ServiceControl + Send + Sync> = Arc::new(ServiceControl::new());
     refresh_node_registry(
         node_registry,
         service_control,
@@ -404,7 +406,6 @@ pub async fn status_report(
                 "Peer ID: {}",
                 node.peer_id.map_or("-".to_string(), |p| p.to_string())
             );
-            println!("RPC Socket: {}", node.rpc_socket_addr);
             println!("Listen Addresses: {:?}", node.listen_addr);
             println!(
                 "PID: {}",
@@ -421,12 +422,12 @@ pub async fn status_report(
             println!("Data path: {}", node.data_dir_path.to_string_lossy());
             println!("Log path: {}", node.log_dir_path.to_string_lossy());
             println!("Bin path: {}", node.antnode_path.to_string_lossy());
-            println!(
-                "Connected peers: {}",
-                node.connected_peers
-                    .as_ref()
-                    .map_or("-".to_string(), |p| p.len().to_string())
-            );
+            // println!(
+            //     "Connected peers is: {}",
+            //     node.connected_peers
+            //         .as_ref()
+            //         .map_or("-".to_string(), |p| p.len().to_string())
+            // );
             println!(
                 "Reward balance: {}",
                 node.reward_balance
@@ -458,8 +459,13 @@ pub async fn status_report(
         }
     } else {
         println!(
-            "{:<18} {:<52} {:<7} {:>15} {:<}",
-            "Service Name", "Peer ID", "Status", "Connected Peers", "Failure"
+            "{:<18} {:<52} {:<7} {:<}",
+            // {:>15}",
+            "Service Name",
+            "Peer ID",
+            "Status",
+            //"Connected Peers",
+            "Failure"
         );
         let nodes = node_registry
             .nodes
@@ -468,7 +474,7 @@ pub async fn status_report(
             .collect::<Vec<&NodeServiceData>>();
         for node in nodes {
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
-            let connected_peers = node
+            let _connected_peers = node
                 .connected_peers
                 .clone()
                 .map_or("-".to_string(), |p| p.len().to_string());
@@ -479,11 +485,12 @@ pub async fn status_report(
                 "-".to_string()
             };
             println!(
-                "{:<18} {:<52} {:<7} {:>15} {:<}",
+                "{:<18} {:<52} {:<7} {:<}",
+                // {:>15}",
                 node.service_name,
                 peer_id,
                 format_status(&node.status),
-                connected_peers,
+                //connected_peers
                 failure_reason
             );
         }
@@ -551,89 +558,102 @@ pub async fn status_report(
 /// running if we can connect to its RPC service; otherwise it is considered stopped.
 pub async fn refresh_node_registry(
     node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     print_refresh_message: bool,
     full_refresh: bool,
     is_local_network: bool,
 ) -> Result<()> {
-    // This message is useful for users, but needs to be suppressed when a JSON output is
-    // requested.
     if print_refresh_message {
         println!("Refreshing the node registry...");
     }
     info!("Refreshing the node registry");
 
-    for node in &mut node_registry.nodes {
-        // The `status` command can run before a node is started and therefore before its wallet
-        // exists.
-        // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-        node.reward_balance = None;
+    let mut tasks = vec![];
 
-        let mut rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        rpc_client.set_max_attempts(1);
-        let mut service = NodeService::new(node, Box::new(rpc_client.clone()));
+    for node in node_registry.nodes.iter_mut() {
+        // Clone things that are needed inside the task
+        let mut node = node.clone(); // Necessary because you can't move &mut node across .await safely
+        let service_control = Arc::clone(&service_control); // trait object already valid for sync reference
+        let full_refresh = full_refresh;
+        let is_local_network = is_local_network;
 
-        if is_local_network {
-            // For a local network, retrieving the process by its path does not work, because the
-            // paths are not unique: they are all launched from the same binary. Instead we will
-            // just determine whether the node is running by connecting to its RPC service. We
-            // only need to distinguish between `RUNNING` and `STOPPED` for a local network.
-            match rpc_client.node_info().await {
-                Ok(info) => {
-                    let pid = info.pid;
-                    debug!(
-                        "local node {} is running with PID {pid}",
-                        service.service_data.service_name
-                    );
-                    service.on_start(Some(pid), full_refresh).await?;
+        let metrics_port = node.metrics_port
+                                    .ok_or_else
+                                    (|| ant_service_management::Error::MetricServicePortNumUnavailable)?;
+
+        let task = tokio::task::spawn(async move {
+            node.reward_balance = None;
+            // let metrics_port = node.metrics_port.ok_or(Error::MetricPortEmpty)?;
+
+            let metric_client = MetricClient::new(metrics_port);
+            let mut service = NodeService::new(&mut node, Box::new(metric_client.clone()));
+            
+            if is_local_network {
+                match metric_client.node_info().await {
+                    Ok(info) => {
+                        let pid = info.pid;
+                        debug!(
+                            "local node {} is running with PID {pid}",
+                            service.service_data.service_name
+                        );
+                        service.on_start(Some(pid), full_refresh).await
+                    }
+                    Err(_) => {
+                        debug!(
+                            "Failed to retrieve PID for local node {}",
+                            service.service_data.service_name
+                        );
+                        service.on_stop().await
+                    }
                 }
-                Err(_) => {
-                    debug!(
-                        "Failed to retrieve PID for local node {}",
-                        service.service_data.service_name
-                    );
-                    service.on_stop().await?;
-                }
-            }
-        } else {
-            match service_control.get_process_pid(&service.bin_path()) {
-                Ok(pid) => {
-                    debug!(
-                        "{} is running with PID {pid}",
-                        service.service_data.service_name
-                    );
-                    service.on_start(Some(pid), full_refresh).await?;
-                }
-                Err(_) => {
-                    match service.status() {
+            } else {
+                match service_control.get_process_pid(&service.bin_path()) {
+                    Ok(pid) => {
+                        debug!(
+                            "{} is running with PID {pid}",
+                            service.service_data.service_name
+                        );
+                        service.on_start(Some(pid), full_refresh).await
+                    }
+                    Err(_) => match service.status() {
                         ServiceStatus::Added => {
-                            // If the service is still at `Added` status, there hasn't been an attempt
-                            // to start it since it was installed. It's useful to keep this status
-                            // rather than setting it to `STOPPED`, so that the user can differentiate.
                             debug!(
                                 "{} has not been started since it was installed",
                                 service.service_data.service_name
                             );
+                            Ok(())
                         }
                         ServiceStatus::Removed => {
-                            // In the case of the service being removed, we want to retain that state
-                            // and not have it marked `STOPPED`.
                             debug!("{} has been removed", service.service_data.service_name);
+                            Ok(())
                         }
                         _ => {
                             debug!(
                                 "Failed to retrieve PID for {}",
                                 service.service_data.service_name
                             );
-                            service.on_stop().await?;
+                            service.on_stop().await
                         }
-                    }
+                    },
                 }
             }
-        }
+        });
+
+        tasks.push(task);
+    }
+
+    // Wait for all tasks to complete
+    let results: Vec<Result<(), Error>> = try_join_all(tasks)
+                                            .await?.into_iter()
+                                            .map(|res| res.map_err(|e| e.into())).collect();
+
+    // Each task returns a Result<()>, so we propagate any inner error
+    for result in &results {
+        _ =result; // Prevents moving `result`
     }
     Ok(())
 }
+
 
 pub fn print_banner(text: &str) {
     let padding = 2;
@@ -673,8 +693,8 @@ mod tests {
     use ant_logging::LogFormat;
     use ant_service_management::{
         error::{Error as ServiceControlError, Result as ServiceControlResult},
+        metric::{NetworkInfo, NodeInfo},
         node::{NodeService, NodeServiceData},
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
         UpgradeOptions, UpgradeResult,
     };
     use assert_fs::prelude::*;
@@ -687,24 +707,19 @@ mod tests {
     use service_manager::ServiceInstallCtx;
     use std::{
         ffi::OsString,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
+        net::Ipv4Addr,
         path::{Path, PathBuf},
         str::FromStr,
         time::Duration,
     };
 
     mock! {
-        pub RpcClient {}
+        pub MetricClient {}
         #[async_trait]
-        impl RpcActions for RpcClient {
+        impl MetricActions for MetricClient {
             async fn node_info(&self) -> ServiceControlResult<NodeInfo>;
             async fn network_info(&self) -> ServiceControlResult<NetworkInfo>;
-            async fn record_addresses(&self) -> ServiceControlResult<Vec<RecordAddress>>;
-            async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> ServiceControlResult<()>;
-            async fn node_stop(&self, delay_millis: u64) -> ServiceControlResult<()>;
-            async fn node_update(&self, delay_millis: u64) -> ServiceControlResult<()>;
             async fn is_node_connected_to_network(&self, timeout: std::time::Duration) -> ServiceControlResult<()>;
-            async fn update_log_level(&self, log_levels: String) -> ServiceControlResult<()>;
         }
     }
 
@@ -725,7 +740,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_newly_installed_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -743,18 +758,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -797,7 +817,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -806,7 +826,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -840,7 +860,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_stopped_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -858,18 +878,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -912,7 +937,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Stopped,
@@ -921,7 +946,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -949,7 +974,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_not_attempt_to_start_a_running_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_get_process_pid()
@@ -990,7 +1015,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -999,7 +1024,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1027,7 +1052,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_service_marked_as_running_but_had_since_stopped() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_get_process_pid()
@@ -1054,18 +1079,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(1000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1108,7 +1138,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -1117,7 +1147,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1197,7 +1227,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -1206,7 +1236,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1228,7 +1258,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_start_a_user_mode_service() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -1246,18 +1276,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1298,7 +1333,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -1307,7 +1342,7 @@ mod tests {
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -1323,7 +1358,7 @@ mod tests {
     #[tokio::test]
     async fn start_should_use_dynamic_startup_delay_if_set() -> Result<()> {
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         mock_service_control
             .expect_start()
@@ -1340,22 +1375,27 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
-        mock_rpc_client
+        mock_metric_client
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 1000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 1000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: "0.98.1".to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1398,7 +1438,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -1407,7 +1447,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client))
             .with_connection_timeout(Duration::from_secs(
                 DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
             ));
@@ -1470,7 +1510,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -1479,7 +1519,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1530,7 +1570,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
@@ -1539,7 +1579,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1592,7 +1632,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Stopped,
@@ -1601,7 +1641,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1653,7 +1693,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Removed,
@@ -1662,7 +1702,7 @@ mod tests {
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(MockServiceControl::new()),
@@ -1729,7 +1769,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -1738,7 +1778,7 @@ mod tests {
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1771,7 +1811,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -1814,18 +1854,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -1868,7 +1913,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -1877,7 +1922,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -1933,7 +1978,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mock_service_control = MockServiceControl::new();
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_metric_client = MockMetricClient::new();
 
         let mut service_data = NodeServiceData {
             auto_restart: false,
@@ -1968,7 +2013,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -1977,7 +2022,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2016,7 +2061,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2059,18 +2104,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2113,7 +2163,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2122,7 +2172,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2179,7 +2229,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2216,18 +2266,23 @@ mod tests {
             .with(eq(3000))
             .times(0)
             .returning(|_| ());
-        mock_rpc_client.expect_node_info().times(0).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(0)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(0)
             .returning(|| {
@@ -2270,7 +2325,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2279,7 +2334,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2422,7 +2477,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2431,7 +2486,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -2478,7 +2533,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2521,18 +2576,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(2000));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2575,7 +2635,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2584,7 +2644,7 @@ mod tests {
             user_mode: true,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2641,7 +2701,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2666,8 +2726,6 @@ mod tests {
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -2708,18 +2766,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2762,7 +2825,7 @@ mod tests {
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2771,7 +2834,7 @@ mod tests {
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2810,7 +2873,7 @@ mod tests {
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -2835,8 +2898,6 @@ mod tests {
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -2880,18 +2941,23 @@ mod tests {
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -2937,7 +3003,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -2946,7 +3012,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -2990,7 +3056,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3015,8 +3081,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3058,18 +3122,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3104,7 +3173,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3113,7 +3182,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3152,7 +3221,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3177,8 +3246,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3219,18 +3286,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3273,7 +3345,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3282,7 +3354,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3321,7 +3393,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3346,8 +3418,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3389,18 +3459,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3446,7 +3521,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3455,7 +3530,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3502,7 +3577,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3527,8 +3602,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3569,18 +3642,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3623,7 +3701,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3632,7 +3710,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3677,7 +3755,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3702,8 +3780,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3744,18 +3820,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3798,7 +3879,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3807,7 +3888,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -3846,7 +3927,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -3871,8 +3952,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -3914,18 +3993,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -3970,7 +4054,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -3979,7 +4063,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4027,7 +4111,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4052,8 +4136,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4094,18 +4176,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4140,7 +4227,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4149,7 +4236,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4188,7 +4275,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4213,8 +4300,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4256,18 +4341,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4302,7 +4392,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4311,7 +4401,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4354,7 +4444,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4379,8 +4469,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4421,18 +4509,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4467,7 +4560,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4476,7 +4569,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4515,7 +4608,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4540,8 +4633,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4583,18 +4674,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4629,7 +4725,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4638,7 +4734,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4680,7 +4776,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4705,8 +4801,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4748,18 +4842,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4794,7 +4893,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4803,7 +4902,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -4842,7 +4941,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -4867,8 +4966,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -4910,18 +5007,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -4952,7 +5054,7 @@ network_id: None,
             peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -4965,7 +5067,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5007,7 +5109,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5032,8 +5134,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5075,18 +5175,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5117,7 +5222,7 @@ network_id: None,
             peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5130,7 +5235,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5169,7 +5274,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5194,8 +5299,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5237,18 +5340,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5283,7 +5391,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5292,7 +5400,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5334,7 +5442,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5359,8 +5467,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5402,18 +5508,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5448,7 +5559,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5457,7 +5568,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5476,10 +5587,7 @@ network_id: None,
             })
             .await?;
 
-        assert_eq!(
-            service_manager.service.service_data.rpc_socket_addr,
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081)
-        );
+        assert_eq!(service_manager.service.service_data.rpc_socket_addr, None);
 
         Ok(())
     }
@@ -5499,7 +5607,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5524,8 +5632,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5565,18 +5671,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5611,7 +5722,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5620,7 +5731,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5659,7 +5770,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5684,8 +5795,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5731,18 +5840,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5786,7 +5900,7 @@ network_id: None,
             )?,
             reward_balance: Some(AttoTokens::zero()),
 
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5795,7 +5909,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -5834,7 +5948,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -5859,8 +5973,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -5906,18 +6018,23 @@ network_id: None,
             .times(1)
             .returning(|_| Ok(100));
 
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -5961,7 +6078,7 @@ network_id: None,
             )?,
             reward_balance: Some(AttoTokens::zero()),
 
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -5970,7 +6087,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client));
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client));
 
         let mut service_manager = ServiceManager::new(
             service,
@@ -6009,7 +6126,7 @@ network_id: None,
         target_node_bin.write_binary(b"fake antnode binary")?;
 
         let mut mock_service_control = MockServiceControl::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metric_client = MockMetricClient::new();
 
         // before binary upgrade
         mock_service_control
@@ -6034,8 +6151,6 @@ network_id: None,
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from("127.0.0.1:8081"),
                         OsString::from("--root-dir"),
                         OsString::from("/var/antctl/services/antnode1"),
                         OsString::from("--log-output-dest"),
@@ -6075,22 +6190,27 @@ network_id: None,
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
-        mock_rpc_client
+        mock_metric_client
             .expect_is_node_connected_to_network()
             .times(1)
             .returning(|_| Ok(()));
-        mock_rpc_client.expect_node_info().times(1).returning(|| {
-            Ok(NodeInfo {
-                pid: 2000,
-                peer_id: PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?,
-                data_path: PathBuf::from("/var/antctl/services/antnode1"),
-                log_path: PathBuf::from("/var/log/antnode/antnode1"),
-                version: target_version.to_string(),
-                uptime: std::time::Duration::from_secs(1), // the service was just started
-                wallet_balance: 0,
-            })
-        });
-        mock_rpc_client
+        mock_metric_client
+            .expect_node_info()
+            .times(1)
+            .returning(|| {
+                Ok(NodeInfo {
+                    pid: 2000,
+                    peer_id: PeerId::from_str(
+                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+                    )?,
+                    data_path: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_path: PathBuf::from("/var/log/antnode/antnode1"),
+                    version: target_version.to_string(),
+                    uptime: std::time::Duration::from_secs(1), // the service was just started
+                    wallet_balance: 0,
+                })
+            });
+        mock_metric_client
             .expect_network_info()
             .times(1)
             .returning(|| {
@@ -6125,7 +6245,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: current_node_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -6134,7 +6254,7 @@ network_id: None,
             user_mode: false,
             version: current_version.to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
+        let service = NodeService::new(&mut service_data, Box::new(mock_metric_client))
             .with_connection_timeout(Duration::from_secs(
                 DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
             ));
@@ -6207,7 +6327,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: antnode_bin.to_path_buf(),
             status: ServiceStatus::Stopped,
             service_name: "antnode1".to_string(),
@@ -6216,7 +6336,7 @@ network_id: None,
             user: Some("ant".to_string()),
             user_mode: false,
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6277,7 +6397,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -6286,7 +6406,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6360,7 +6480,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Running,
@@ -6369,7 +6489,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6436,7 +6556,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: antnode_bin.to_path_buf(),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Stopped,
@@ -6445,7 +6565,7 @@ network_id: None,
             user_mode: false,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6512,7 +6632,7 @@ network_id: None,
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
             reward_balance: Some(AttoTokens::zero()),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
+            rpc_socket_addr: None,
             antnode_path: antnode_bin.to_path_buf(),
             status: ServiceStatus::Stopped,
             service_name: "antnode1".to_string(),
@@ -6521,7 +6641,7 @@ network_id: None,
             user_mode: true,
             version: "0.98.1".to_string(),
         };
-        let service = NodeService::new(&mut service_data, Box::new(MockRpcClient::new()));
+        let service = NodeService::new(&mut service_data, Box::new(MockMetricClient::new()));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),

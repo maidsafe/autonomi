@@ -45,6 +45,7 @@ use crossterm::event::KeyEvent;
 use ratatui::text::Span;
 use ratatui::{prelude::*, widgets::*};
 use std::fmt;
+use std::sync::Arc;
 use std::{
     path::PathBuf,
     time::{Duration, Instant},
@@ -161,7 +162,7 @@ impl Status<'_> {
         let mut node_registry = NodeRegistry::load(&get_node_registry_path()?)?;
         ant_node_manager::refresh_node_registry(
             &mut node_registry,
-            &ServiceController {},
+            Arc::new(ServiceController {}),
             false,
             true,
             false,

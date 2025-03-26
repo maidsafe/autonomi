@@ -22,7 +22,7 @@ use ant_service_management::{
     control::ServiceController, get_local_node_registry_path, NodeRegistry,
 };
 use color_eyre::{eyre::eyre, Help, Report, Result};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 pub async fn join(
     build: bool,
@@ -35,7 +35,6 @@ pub async fn join(
     node_version: Option<String>,
     log_format: Option<LogFormat>,
     _peers_args: InitialPeersConfig,
-    rpc_port: Option<PortRange>,
     rewards_address: RewardsAddress,
     evm_network: Option<EvmNetwork>,
     skip_validation: bool,
@@ -77,7 +76,6 @@ pub async fn join(
         node_count: count,
         node_port,
         peers: None,
-        rpc_port,
         skip_validation,
         log_format,
         rewards_address,
@@ -115,7 +113,6 @@ pub async fn run(
     node_port: Option<PortRange>,
     node_version: Option<String>,
     log_format: Option<LogFormat>,
-    rpc_port: Option<PortRange>,
     rewards_address: RewardsAddress,
     evm_network: Option<EvmNetwork>,
     skip_validation: bool,
@@ -183,7 +180,6 @@ pub async fn run(
         node_port,
         node_count: count,
         peers: None,
-        rpc_port,
         skip_validation,
         log_format,
         rewards_address,
@@ -202,7 +198,7 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
     }
     status_report(
         &mut local_node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         details,
         json,
         fail,
