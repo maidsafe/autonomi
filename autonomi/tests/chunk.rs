@@ -8,8 +8,10 @@
 
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
+use autonomi::self_encryption::encrypt;
 use autonomi::{client::chunk::Chunk, Client};
 use eyre::Result;
+use self_encryption::test_helpers::random_bytes;
 use serial_test::serial;
 use test_utils::{evm::get_funded_wallet, gen_random_data};
 
@@ -61,13 +63,15 @@ async fn chunk_put_1mb() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn chunk_put_max_size() -> Result<()> {
-    chunk_put_with_size(Chunk::MAX_ENCRYPTED_SIZE).await // 4MB + 16 bytes (encryption padding)
+    // 4MB + 16 bytes (Brotli compression overhead) + 16 bytes (encryption padding)
+    chunk_put_with_size(Chunk::MAX_SIZE).await
 }
 
 #[tokio::test]
 #[serial]
 async fn chunk_put_oversize() -> Result<()> {
-    let result = chunk_put_with_size(Chunk::MAX_ENCRYPTED_SIZE + 1).await; // 4MB + 16 bytes + 1 byte
+    // 4MB + 16 bytes (Brotli compression overhead) + 16 bytes (encryption padding) + 1 byte
+    let result = chunk_put_with_size(Chunk::MAX_SIZE + 1).await;
 
     // Verify we get the expected error
     match result {
@@ -83,6 +87,24 @@ async fn chunk_put_oversize() -> Result<()> {
         }
         Ok(_) => {
             panic!("Expected error for oversized chunk, but operation succeeded");
+        }
+    }
+}
+
+// Test needs to be run with `MAX_CHUNK_SIZE=4194304` to set the chunk size for `self_encryption`.
+#[test]
+fn chunk_max_size_after_encryption() {
+    const NUM_FILES: usize = 10;
+
+    for _ in 0..NUM_FILES {
+        // Generate random files of 3 * the max raw chunk size, so that we get 3 chunks at max capacity.
+        let random_file = random_bytes(Chunk::MAX_RAW_SIZE * 3);
+
+        let (_, chunks) = encrypt(random_file).unwrap();
+
+        for chunk in chunks {
+            // Make sure that after compression and encryption, the chunk sizes are acceptable.
+            assert!(chunk.size() <= Chunk::MAX_SIZE);
         }
     }
 }
