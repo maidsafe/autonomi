@@ -137,7 +137,7 @@ impl PublicArchive {
 }
 
 impl Client {
-    /// Fetch an archive from the network
+    /// Get a [`PublicArchive`] from the network.
     ///
     /// # Example
     ///
@@ -159,7 +159,7 @@ impl Client {
         Ok(PublicArchive::from_bytes(data)?)
     }
 
-    /// Upload an archive to the network
+    /// Upload a [`PublicArchive`] to the network.
     ///
     /// # Example
     ///
@@ -201,7 +201,7 @@ impl Client {
         result
     }
 
-    /// Get the cost to upload an archive
+    /// Get the cost of storing an archive on the network.
     pub async fn archive_cost(&self, archive: &PublicArchive) -> Result<AttoTokens, CostError> {
         let bytes = archive
             .to_bytes()

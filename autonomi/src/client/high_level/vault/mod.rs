@@ -123,7 +123,7 @@ impl Client {
         Ok((Bytes::from(decrypted_full_text.concat()), content_type))
     }
 
-    /// Get the cost of creating a new vault
+    /// Get the cost of creating a new vault.
     /// A quick estimation of cost:
     ///   num_of_graph_entry * graph_entry_cost + num_of_scratchpad * scratchpad_cost
     pub async fn vault_cost(
@@ -156,9 +156,9 @@ impl Client {
         }
     }
 
-    /// Put data into the client's VaultPacket
+    /// Put data into the client's vault.
     ///
-    /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
+    /// Dynamically expand the vault capacity by paying for more space ([`Scratchpad`]) when needed.
     ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
     pub async fn write_bytes_to_vault(
