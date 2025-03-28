@@ -62,6 +62,7 @@ pub async fn add(
     user: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
+    write_older_cache_files: bool,
 ) -> Result<Vec<String>> {
     let user_mode = !is_running_as_root();
 
@@ -111,7 +112,7 @@ pub async fn add(
 
     init_peers_config
         .addrs
-        .extend(InitialPeersConfig::read_addr_from_env());
+        .extend(InitialPeersConfig::read_bootstrap_addr_from_env());
     init_peers_config.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {
@@ -142,6 +143,7 @@ pub async fn add(
         user: service_user,
         user_mode,
         version,
+        write_older_cache_files,
     };
     info!("Adding node service(s)");
     let added_services_names =
@@ -611,6 +613,7 @@ pub async fn maintain_n_running_nodes(
     version: Option<String>,
     verbosity: VerbosityLevel,
     start_node_interval: Option<u64>,
+    write_older_cache_files: bool,
 ) -> Result<()> {
     let node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     let running_nodes = node_registry
@@ -714,6 +717,7 @@ pub async fn maintain_n_running_nodes(
                         user.clone(),
                         version.clone(),
                         verbosity,
+                        write_older_cache_files,
                     )
                     .await?;
 

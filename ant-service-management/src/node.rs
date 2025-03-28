@@ -115,6 +115,10 @@ impl ServiceStateActions for NodeService<'_> {
             self.service_data.rewards_address.to_string(),
         ));
 
+        if self.service_data.write_older_cache_files {
+            args.push(OsString::from("--write-older-cache-files"));
+        }
+
         args.push(OsString::from(self.service_data.evm_network.to_string()));
         if let EvmNetwork::Custom(custom_network) = &self.service_data.evm_network {
             args.push(OsString::from("--rpc-url"));
@@ -308,6 +312,7 @@ pub struct NodeServiceData {
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
+    pub write_older_cache_files: bool,
 }
 
 fn default_upnp() -> bool {
