@@ -7,9 +7,6 @@ pub(crate) enum EvmNetworkCommand {
     /// Use the Arbitrum One network
     EvmArbitrumOne,
 
-    /// Use the Arbitrum Sepolia network
-    EvmArbitrumSepolia,
-
     /// Use the Arbitrum Sepolia network with test contracts
     EvmArbitrumSepoliaTest,
 
@@ -34,7 +31,6 @@ impl Into<EvmNetwork> for EvmNetworkCommand {
     fn into(self) -> EvmNetwork {
         match self {
             Self::EvmArbitrumOne => EvmNetwork::ArbitrumOne,
-            Self::EvmArbitrumSepolia => EvmNetwork::ArbitrumSepolia,
             Self::EvmArbitrumSepoliaTest => EvmNetwork::ArbitrumSepoliaTest,
             Self::EvmCustom {
                 rpc_url,
