@@ -23,6 +23,7 @@ mod external_address;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
+mod nat_detection;
 mod network_builder;
 mod network_discovery;
 mod record_store;
@@ -40,6 +41,7 @@ pub use self::{
     driver::SwarmDriver,
     error::NetworkError,
     event::{MsgResponder, NetworkEvent},
+    nat_detection::NatStatus,
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
     record_store::NodeRecordStore,
 };
@@ -733,4 +735,16 @@ pub(crate) fn send_network_swarm_cmd(
             error!("Failed to send SwarmCmd: {}", error);
         }
     });
+}
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
 }
