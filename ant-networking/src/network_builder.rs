@@ -530,6 +530,7 @@ impl NetworkBuilder {
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
             initial_bootstrap_trigger: InitialBootstrapTrigger::new(self.upnp, is_client),
             bootstrap_cache: self.bootstrap_cache,
+            dial_queue: Default::default(),
             relay_manager,
             connected_relay_clients: Default::default(),
             external_address_manager,
