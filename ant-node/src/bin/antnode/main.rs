@@ -80,6 +80,8 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
+    #[clap(long, default_value_t = false)]
+    nat_detection: bool,
     /// Set to connect to the alpha network.
     #[clap(long)]
     alpha: bool,
@@ -332,6 +334,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_nat_detection(opt.nat_detection);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -383,6 +386,10 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
+    if node_builder.nat_detection {
+        let _status = node_builder.run_nat_det().await?;
+    }
+
     let running_node = node_builder.build_and_run()?;
 
     println!(
