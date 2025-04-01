@@ -18,6 +18,7 @@ mod interface;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
+mod nat_detection;
 mod network;
 mod record_store;
 mod relay_manager;
@@ -25,6 +26,7 @@ mod replication_fetcher;
 mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
+pub use self::nat_detection::NatStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue, SwarmLocalState},
