@@ -25,8 +25,12 @@ pub struct Chunk {
 }
 
 impl Chunk {
-    /// The maximum size of a chunk is 4MB
-    pub const MAX_SIZE: usize = 4 * 1024 * 1024;
+    /// The maximum size of a chunk is 4MB.
+    /// Note that due to encryption it can turn out bigger. See `Chunk::MAX_ENCRYPTED_SIZE`.
+    const MAX_SIZE: usize = 4 * 1024 * 1024;
+
+    /// The maximum size of an encrypted chunk is 4MB + 16 bytes due to Pkcs7 encryption padding.
+    pub const MAX_ENCRYPTED_SIZE: usize = Self::MAX_SIZE + 16;
 
     /// Creates a new instance of `Chunk`.
     pub fn new(value: Bytes) -> Self {
@@ -63,7 +67,7 @@ impl Chunk {
 
     /// Returns true if the chunk is too big
     pub fn is_too_big(&self) -> bool {
-        self.size() > Self::MAX_SIZE
+        self.size() > Self::MAX_ENCRYPTED_SIZE
     }
 }
 

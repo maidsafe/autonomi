@@ -433,13 +433,15 @@ impl Node {
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
         // reject if chunk is too large
-        if chunk.size() > Chunk::MAX_SIZE {
+        if chunk.size() > Chunk::MAX_ENCRYPTED_SIZE {
             warn!(
                 "Chunk at {pretty_key:?} is too large: {} bytes, when max size is {} bytes",
                 chunk.size(),
-                Chunk::MAX_SIZE
+                Chunk::MAX_ENCRYPTED_SIZE
             );
-            return Err(ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_SIZE).into());
+            return Err(
+                ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_ENCRYPTED_SIZE).into(),
+            );
         }
 
         let record = Record {

@@ -8,19 +8,22 @@
 
 use autonomi::client::config::ClientOperatingStrategy;
 use autonomi::{get_evm_network, Client, ClientConfig, InitialPeersConfig};
-use color_eyre::eyre::bail;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::eyre;
 use indicatif::ProgressBar;
 use std::time::Duration;
 
-pub async fn connect_to_network(init_peers_config: InitialPeersConfig) -> Result<Client> {
+use crate::exit_code::{connect_error_exit_code, evm_util_error_exit_code, ExitCodeError};
+
+pub async fn connect_to_network(
+    init_peers_config: InitialPeersConfig,
+) -> Result<Client, ExitCodeError> {
     connect_to_network_with_config(init_peers_config, Default::default()).await
 }
 
 pub async fn connect_to_network_with_config(
     init_peers_config: InitialPeersConfig,
     operation_config: ClientOperatingStrategy,
-) -> Result<Client> {
+) -> Result<Client, ExitCodeError> {
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(120));
     progress_bar.set_message("Connecting to The Autonomi Network...");
@@ -33,7 +36,10 @@ pub async fn connect_to_network_with_config(
         progress_bar.set_message("Connecting to The Autonomi Network...");
     };
 
-    let evm_network = get_evm_network(init_peers_config.local)?;
+    let evm_network = get_evm_network(init_peers_config.local).map_err(|err| {
+        let exit_code = evm_util_error_exit_code(&err);
+        (err.into(), exit_code)
+    })?;
 
     let config = ClientConfig {
         init_peers_config,
@@ -52,7 +58,11 @@ pub async fn connect_to_network_with_config(
         Err(e) => {
             error!("Failed to connect to the network: {e}");
             progress_bar.finish_with_message("Failed to connect to the network");
-            bail!("Failed to connect to the network: {e}")
+            let exit_code = connect_error_exit_code(&e);
+            Err((
+                eyre!(e).wrap_err("Failed to connect to the network"),
+                exit_code,
+            ))
         }
     }
 }

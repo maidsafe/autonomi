@@ -32,8 +32,9 @@ impl RegisterHistory {
         }
     }
 
-    /// Fetch and go to the next register value from the history
-    /// Returns `Ok(None)` when we reached the end
+    /// Fetch and go to the next register value from the history.
+    ///
+    /// Returns `Ok(None)` when we reached the end.
     pub async fn next(&mut self) -> Result<Option<RegisterValue>, RegisterError> {
         let (entry, next_derivation) = match self
             .client

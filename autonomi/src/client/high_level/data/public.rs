@@ -106,7 +106,7 @@ impl Client {
     }
 
     /// Get the estimated cost of storing a piece of data.
-    pub(crate) async fn data_cost(&self, data: Bytes) -> Result<AttoTokens, CostError> {
+    pub async fn data_cost(&self, data: Bytes) -> Result<AttoTokens, CostError> {
         let content_addrs = self.get_content_addrs(data)?;
         self.get_cost_estimation(content_addrs).await
     }

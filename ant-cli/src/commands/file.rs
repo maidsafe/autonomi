@@ -6,18 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::exit_code::{upload_exit_code, ExitCodeError, IO_ERROR};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::payment::PaymentOption;
 use autonomi::ResponseQuorum;
 use autonomi::{ClientOperatingStrategy, InitialPeersConfig, TransactionConfig};
-use color_eyre::eyre::Context;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, Context, Result};
 use color_eyre::Section;
 use std::path::PathBuf;
 
 pub async fn cost(file: &str, init_peers_config: InitialPeersConfig) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
 
     println!("Getting upload cost...");
     info!("Calculating cost for file: {file}");
@@ -38,7 +40,7 @@ pub async fn upload(
     init_peers_config: InitialPeersConfig,
     optional_verification_quorum: Option<ResponseQuorum>,
     max_fee_per_gas: Option<u128>,
-) -> Result<()> {
+) -> Result<(), ExitCodeError> {
     let mut config = ClientOperatingStrategy::new();
     if let Some(verification_quorum) = optional_verification_quorum {
         config.chunks.verification_quorum = verification_quorum;
@@ -46,7 +48,7 @@ pub async fn upload(
     let mut client =
         crate::actions::connect_to_network_with_config(init_peers_config, config).await?;
 
-    let mut wallet = load_wallet(client.evm_network())?;
+    let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
         wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
@@ -71,20 +73,35 @@ pub async fn upload(
     // upload dir
     let local_addr;
     let archive = if public {
-        let (_cost, xor_name) = client
-            .dir_upload_public(dir_path, payment.clone())
-            .await
-            .wrap_err("Failed to upload file")?;
-        local_addr = xor_name.to_hex();
-        local_addr.clone()
+        let result = client.dir_upload_public(dir_path, payment.clone()).await;
+        match result {
+            Ok((_cost, xor_name)) => {
+                local_addr = xor_name.to_hex();
+                local_addr.clone()
+            }
+            Err(err) => {
+                let exit_code = upload_exit_code(&err);
+                return Err((
+                    eyre!(err).wrap_err("Failed to upload file".to_string()),
+                    exit_code,
+                ));
+            }
+        }
     } else {
-        let (_cost, private_data_access) = client
-            .dir_upload(dir_path, payment)
-            .await
-            .wrap_err("Failed to upload dir and archive")?;
-
-        local_addr = private_data_access.address();
-        private_data_access.to_hex()
+        let result = client.dir_upload(dir_path, payment).await;
+        match result {
+            Ok((_cost, private_data_access)) => {
+                local_addr = private_data_access.address();
+                private_data_access.to_hex()
+            }
+            Err(err) => {
+                let exit_code = upload_exit_code(&err);
+                return Err((
+                    eyre!(err).wrap_err("Failed to upload file".to_string()),
+                    exit_code,
+                ));
+            }
+        }
     };
 
     // wait for upload to complete
@@ -94,7 +111,9 @@ pub async fn upload(
     }
 
     // get summary
-    let summary = upload_summary_thread.await?;
+    let summary = upload_summary_thread
+        .await
+        .map_err(|err| (eyre!(err), IO_ERROR))?;
     if summary.records_paid == 0 {
         println!("All chunks already exist on the network.");
     } else {
@@ -118,7 +137,9 @@ pub async fn upload(
     };
     writer
         .wrap_err("Failed to save file to local user data")
-        .with_suggestion(|| "Local user data saves the file address above to disk, without it you need to keep track of the address yourself")?;
+        .with_suggestion(|| "Local user data saves the file address above to disk, without it you need to keep track of the address yourself")
+        .map_err(|err| (err, IO_ERROR))?;
+
     info!("Saved file to local user data");
 
     Ok(())
@@ -129,7 +150,7 @@ pub async fn download(
     dest_path: &str,
     init_peers_config: InitialPeersConfig,
     quorum: Option<ResponseQuorum>,
-) -> Result<()> {
+) -> Result<(), ExitCodeError> {
     let mut config = ClientOperatingStrategy::new();
     if let Some(quorum) = quorum {
         config.chunks.get_quorum = quorum;

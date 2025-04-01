@@ -1,0 +1,188 @@
+name: JS tests
+env:
+  DEBUG: napi:*
+  APP_NAME: autonomi
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+permissions:
+  contents: write
+  id-token: write
+on:
+  # allow workflow to be used as part of other workflow
+  workflow_call:
+  # tests must run for a PR to be valid and pass merge queue muster
+  # on main, we want to know that all commits are passing at a glance, any deviation should help bisecting errors
+  # the merge run checks should show on master and enable this clear test/passing history
+  merge_group:
+    branches: [main, alpha*, beta*, rc*]
+  pull_request:
+    branches: ["*"]
+defaults:
+  run:
+    working-directory: ./nodejs/
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            build: yarn build --target x86_64-apple-darwin
+          - host: windows-latest
+            build: yarn build --target x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            build: yarn build --target x86_64-unknown-linux-gnu
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: yarn build --target aarch64-apple-darwin
+    name: Build (${{ matrix.settings.target }})
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        if: ${{ !matrix.settings.docker }}
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: 'nodejs/yarn.lock'
+      - name: Install
+        uses: dtolnay/rust-toolchain@stable
+        if: ${{ !matrix.settings.docker }}
+        with:
+          toolchain: stable
+          targets: ${{ matrix.settings.target }}
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            .cargo-cache
+            target/
+          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.host }}
+      - uses: goto-bus-stop/setup-zig@v2
+        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' || matrix.settings.target == 'armv7-unknown-linux-musleabihf' }}
+        with:
+          version: 0.13.0
+      - name: Setup toolchain
+        run: ${{ matrix.settings.setup }}
+        if: ${{ matrix.settings.setup }}
+        shell: bash
+      - name: Setup node x86
+        if: matrix.settings.target == 'i686-pc-windows-msvc'
+        run: yarn config set supportedArchitectures.cpu "ia32"
+        shell: bash
+      - name: Install dependencies
+        run: yarn install
+      - name: Setup node x86
+        uses: actions/setup-node@v4
+        if: matrix.settings.target == 'i686-pc-windows-msvc'
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: 'nodejs/yarn.lock'
+          architecture: x86
+      - name: Build in docker
+        uses: addnab/docker-run-action@v3
+        if: ${{ matrix.settings.docker }}
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache/git/db:/usr/local/cargo/git/db -v ${{ github.workspace }}/.cargo/registry/cache:/usr/local/cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/usr/local/cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
+          run: ${{ matrix.settings.build }}
+      - name: Build
+        run: ${{ matrix.settings.build }}
+        if: ${{ !matrix.settings.docker }}
+        shell: bash
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: nodejs/${{ env.APP_NAME }}.*.node
+          if-no-files-found: error
+  test-macOS-windows-binding:
+    name: Tests (${{ matrix.settings.target }})
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+          - host: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: 'nodejs/yarn.lock'
+          architecture: x64
+      - name: Install dependencies
+        run: yarn install
+      - name: Build node
+        run: cd ../ && cargo build --release --bin antnode
+        timeout-minutes: 30
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          platform: ${{ matrix.settings.host }}
+          build: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: nodejs/.
+      - name: List packages
+        run: ls -R .
+        shell: bash
+      - name: Test bindings
+        run: yarn test
+  test-linux-x64-gnu-binding:
+    name: Tests (linux-x64-gnu)
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: 'nodejs/yarn.lock'
+      - name: Install dependencies
+        run: yarn install
+      - name: Build node
+        run: cd ../ && cargo build --release --bin antnode
+        timeout-minutes: 30
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          platform: ubuntu-latest
+          build: true
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: bindings-x86_64-unknown-linux-gnu
+          path: nodejs/.
+      - name: List packages
+        run: ls -R .
+        shell: bash
+      - name: Test bindings
+        run: yarn test
