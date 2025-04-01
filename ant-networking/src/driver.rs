@@ -37,7 +37,10 @@ use futures::StreamExt;
 use libp2p::{
     kad::{self, KBucketDistance as Distance, QueryId, Record, RecordKey, K_VALUE},
     request_response::OutboundRequestId,
-    swarm::{ConnectionId, Swarm},
+    swarm::{
+        dial_opts::{DialOpts, PeerCondition},
+        ConnectionId, Swarm,
+    },
     Multiaddr, PeerId,
 };
 use libp2p::{
@@ -46,7 +49,7 @@ use libp2p::{
 };
 use rand::Rng;
 use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
+    collections::{btree_map::Entry, BTreeMap, HashMap, HashSet, VecDeque},
     net::IpAddr,
 };
 use tokio::sync::{mpsc, oneshot, watch};
@@ -64,6 +67,9 @@ pub(crate) const CLOSET_RECORD_CHECK_INTERVAL: Duration = Duration::from_secs(15
 
 /// Interval over which we query relay manager to check if we can make any more reservations.
 pub(crate) const RELAY_MANAGER_RESERVATION_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Interval over which we check if we could dial any peer in the dial queue.
+const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
@@ -148,6 +154,7 @@ pub struct SwarmDriver {
     pub(crate) pending_get_record: PendingGetRecord,
     /// A list of the most recent peers we have dialed ourselves. Old dialed peers are evicted once the vec fills up.
     pub(crate) dialed_peers: CircularVec<PeerId>,
+    pub(crate) dial_queue: VecDeque<(PeerId, Addresses, Instant)>,
     // Peers that having live connection to. Any peer got contacted during kad network query
     // will have live connection established. And they may not appear in the RT.
     pub(crate) live_connected_peers: BTreeMap<ConnectionId, (PeerId, Multiaddr, Instant)>,
@@ -186,6 +193,8 @@ impl SwarmDriver {
         let mut relay_manager_reservation_interval = interval(RELAY_MANAGER_RESERVATION_INTERVAL);
         let mut initial_bootstrap_trigger_check_interval =
             Some(interval(INITIAL_BOOTSTRAP_CHECK_INTERVAL));
+        let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
+        dial_queue_check_interval.tick().await; // first tick completes immediately
 
         let mut bootstrap_cache_save_interval = self.bootstrap_cache.as_ref().and_then(|cache| {
             if cache.config().disable_cache_writing {
@@ -270,6 +279,31 @@ impl SwarmDriver {
                     }
                 },
                 // thereafter we can check our intervals
+
+                _ = dial_queue_check_interval.tick() => {
+                    let now = Instant::now();
+                    let mut to_remove = vec![];
+                    // check if we can dial any peer in the dial queue
+                    // if we have no peers in the dial queue, skip this check
+                    for (idx, (peer_id, addrs, wait_time)) in self.dial_queue.iter().enumerate() {
+                        if now > *wait_time {
+                            info!("Dialing peer {peer_id:?} from dial queue with addresses {addrs:?}");
+                            to_remove.push(idx);
+                            if let Err(err) = self.swarm.dial(
+                                DialOpts::peer_id(*peer_id)
+                                    .condition(PeerCondition::NotDialing)
+                                    .addresses(addrs.0.clone())
+                                    .build(),
+                            ) {
+                                warn!(%peer_id, ?addrs, "dialing error: {err:?}");
+                            }
+                        }
+                    }
+
+                    for idx in to_remove.iter().rev() {
+                        self.dial_queue.remove(*idx);
+                    }
+                },
 
                 // check if we can trigger the initial bootstrap process
                 // once it is triggered, we don't re-trigger it
