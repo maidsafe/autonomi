@@ -7,14 +7,18 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::relay_manager::is_a_relayed_peer;
-use crate::{multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
+use crate::{multiaddr_strip_p2p, Addresses, NetworkEvent, SwarmDriver};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
-use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::Multiaddr;
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// The delay before we dial back a peer after receiving an identify event.
+/// 180s will most likely remove the UDP tuple from the remote's NAT table.
+/// This will make sure that the peer is reachable and that we can add it to the routing table.
+const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 impl SwarmDriver {
     pub(super) fn handle_identify_event(&mut self, identify_event: libp2p::identify::Event) {
@@ -120,15 +124,12 @@ impl SwarmDriver {
                 return;
             }
 
-            info!(%peer_id, ?addr, "received identify info from undialed peer for not full kbucket {ilog2:?}, dial back to confirm external accessible");
-            if let Err(err) = self.swarm.dial(
-                DialOpts::peer_id(peer_id)
-                    .condition(PeerCondition::NotDialing)
-                    .addresses(vec![addr.clone()])
-                    .build(),
-            ) {
-                warn!(%peer_id, ?addr, "dialing error: {err:?}");
-            }
+            info!(%peer_id, ?addr, "received identify info from undialed peer for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}");
+            self.dial_queue.push_front((
+                peer_id,
+                Addresses(vec![addr.clone()]),
+                Instant::now() + DIAL_BACK_DELAY,
+            ));
         } else {
             // We care only for peers that we dialed and thus are reachable.
             // Or if we are local, we can add the peer directly.
