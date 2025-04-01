@@ -13,7 +13,7 @@ use super::{
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, NetworkBuilder};
+use crate::networking::{Addresses, NatStatus, NetworkBuilder};
 use crate::networking::{Network, NetworkError, NetworkEvent, NodeIssue};
 use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::BootstrapCacheStore;
@@ -94,6 +94,8 @@ pub struct NodeBuilder {
     metrics_server_port: Option<u16>,
     no_upnp: bool,
     relay_client: bool,
+    /// Enable NAT detection
+    pub nat_detection: bool,
     root_dir: PathBuf,
 }
 
@@ -120,8 +122,14 @@ impl NodeBuilder {
             metrics_server_port: None,
             no_upnp: false,
             relay_client: false,
+            nat_detection: false,
             root_dir,
         }
+    }
+
+    /// Set to enable nat detection
+    pub fn with_nat_detection(&mut self, nat_detection: bool) {
+        self.nat_detection = nat_detection;
     }
 
     /// Set the flag to indicate if the node is running in local mode
@@ -148,6 +156,28 @@ impl NodeBuilder {
     /// Set the flag to disable UPnP for the node
     pub fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
+    }
+
+    /// Run nat detection
+    pub async fn run_nat_det(&self) -> Result<NatStatus> {
+        let mut network_builder = NetworkBuilder::new(
+            self.identity_keypair.clone(),
+            self.local,
+            self.initial_peers.clone(),
+        );
+
+        network_builder.listen_addr(self.addr);
+        #[cfg(feature = "open-metrics")]
+        network_builder.metrics_server_port(self.metrics_server_port);
+        network_builder.relay_client(self.relay_client);
+
+        network_builder.no_upnp(self.no_upnp);
+
+        let nat = network_builder.build_nat()?;
+
+        let status = nat.detect().await?;
+
+        Ok(status)
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,
