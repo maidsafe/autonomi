@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
+use crate::{multiaddr_get_p2p, multiaddr_pop_p2p};
 use libp2p::{
     core::ConnectedPoint,
     swarm::{
         dial_opts::{DialOpts, PeerCondition},
-        DialError,
+        DialError, NetworkBehaviour,
     },
     Multiaddr, PeerId, Swarm,
 };
@@ -26,8 +26,8 @@ pub(crate) const INITIAL_BOOTSTRAP_CHECK_INTERVAL: std::time::Duration =
 /// The max number of concurrent dials to be made during the initial bootstrap process.
 const CONCURRENT_DIALS: usize = 3;
 
-/// The max number of peers to be added to the routing table before stopping the initial bootstrap process.
-const MAX_PEERS_BEFORE_TERMINATION: usize = 5;
+/// The max number of success counts before stopping the initial bootstrap process.
+const MAX_SUCCESS_COUNT_BEFORE_TERMINATION: usize = 5;
 
 /// This is used to track the conditions that are required to trigger the initial bootstrap process once.
 pub(crate) struct InitialBootstrapTrigger {
@@ -69,16 +69,21 @@ impl InitialBootstrapTrigger {
     }
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct InitialBootstrap {
     initial_addrs: VecDeque<Multiaddr>,
     ongoing_dials: HashSet<Multiaddr>,
     bootstrap_completed: bool,
     /// This tracker is used by other components to avoid overloading the initial peers.
     initial_bootstrap_peer_ids: HashSet<PeerId>,
+    max_success_count_before_termination: usize,
 }
 
 impl InitialBootstrap {
-    pub(crate) fn new(mut initial_addrs: Vec<Multiaddr>) -> Self {
+    pub(crate) fn new(
+        mut initial_addrs: Vec<Multiaddr>,
+        max_success_count_before_termination: Option<usize>,
+    ) -> Self {
         let bootstrap_completed = if initial_addrs.is_empty() {
             info!("No initial addresses provided for bootstrap. Initial bootstrap process will not be triggered.");
             true
@@ -96,6 +101,8 @@ impl InitialBootstrap {
             ongoing_dials: Default::default(),
             bootstrap_completed,
             initial_bootstrap_peer_ids,
+            max_success_count_before_termination: max_success_count_before_termination
+                .unwrap_or(MAX_SUCCESS_COUNT_BEFORE_TERMINATION),
         }
     }
 
@@ -112,17 +119,18 @@ impl InitialBootstrap {
     /// Trigger the initial bootstrap process.
     ///
     /// This will start dialing CONCURRENT_DIALS peers at a time from the initial addresses. If we have a successful
-    /// dial and if a few peer are added to the routing table, we stop the initial bootstrap process.
+    /// dial and if a few peer are added to the routing table(i.e., considered as a success),
+    /// we will stop the initial bootstrap process.
     ///
     /// This should be called only ONCE and then the `on_connection_established` and `on_outgoing_connection_error`
     /// should be used to continue the process.
     /// Once the process is completed, the `bootstrap_completed` flag will be set to true, and this becomes a no-op.
-    pub(crate) fn trigger_bootstrapping_process(
+    pub(crate) fn trigger_bootstrapping_process<TBehaviour: NetworkBehaviour>(
         &mut self,
-        swarm: &mut Swarm<NodeBehaviour>,
-        peers_in_rt: usize,
+        swarm: &mut Swarm<TBehaviour>,
+        success_count: usize,
     ) {
-        if !self.should_we_continue_bootstrapping(peers_in_rt, true) {
+        if !self.should_we_continue_bootstrapping(success_count, true) {
             return;
         }
 
@@ -179,7 +187,7 @@ impl InitialBootstrap {
 
     /// Check if the initial bootstrap process should be triggered.
     /// Also update bootstrap_completed flag if the process is completed.
-    fn should_we_continue_bootstrapping(&mut self, peers_in_rt: usize, verbose: bool) -> bool {
+    fn should_we_continue_bootstrapping(&mut self, success_count: usize, verbose: bool) -> bool {
         if self.bootstrap_completed {
             if verbose {
                 info!("Initial bootstrap process has already completed successfully.");
@@ -189,16 +197,16 @@ impl InitialBootstrap {
             return false;
         }
 
-        if peers_in_rt >= MAX_PEERS_BEFORE_TERMINATION {
+        if success_count >= self.max_success_count_before_termination {
             // This will terminate the loop
             self.bootstrap_completed = true;
             self.initial_addrs.clear();
             self.ongoing_dials.clear();
 
             if verbose {
-                info!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+                info!("Initial bootstrap process completed successfully. We have {success_count} success counts.");
             } else {
-                trace!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+                trace!("Initial bootstrap process completed successfully. We have {success_count} success counts.");
             }
             return false;
         }
@@ -218,11 +226,13 @@ impl InitialBootstrap {
             return false;
         }
 
-        if peers_in_rt < MAX_PEERS_BEFORE_TERMINATION && self.initial_addrs.is_empty() {
+        if success_count < self.max_success_count_before_termination
+            && self.initial_addrs.is_empty()
+        {
             if verbose {
-                info!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+                info!("We have {success_count} success count, but no more addresses to dial. Stopping initial bootstrap.");
             } else {
-                debug!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+                debug!("We have {success_count} success count, but no more addresses to dial. Stopping initial bootstrap.");
             }
             return false;
         }
@@ -239,11 +249,11 @@ impl InitialBootstrap {
         true
     }
 
-    pub(crate) fn on_connection_established(
+    pub(crate) fn on_connection_established<TBehaviour: NetworkBehaviour>(
         &mut self,
         endpoint: &ConnectedPoint,
-        swarm: &mut Swarm<NodeBehaviour>,
-        peers_in_rt: usize,
+        swarm: &mut Swarm<TBehaviour>,
+        success_count: usize,
     ) {
         if self.bootstrap_completed {
             return;
@@ -266,14 +276,14 @@ impl InitialBootstrap {
             }
         }
 
-        self.trigger_bootstrapping_process(swarm, peers_in_rt);
+        self.trigger_bootstrapping_process(swarm, success_count);
     }
 
-    pub(crate) fn on_outgoing_connection_error(
+    pub(crate) fn on_outgoing_connection_error<TBehaviour: NetworkBehaviour>(
         &mut self,
         peer_id: Option<PeerId>,
-        swarm: &mut Swarm<NodeBehaviour>,
-        peers_in_rt: usize,
+        swarm: &mut Swarm<TBehaviour>,
+        success_count: usize,
     ) {
         if self.bootstrap_completed {
             return;
@@ -297,6 +307,6 @@ impl InitialBootstrap {
             }
         }
 
-        self.trigger_bootstrapping_process(swarm, peers_in_rt);
+        self.trigger_bootstrapping_process(swarm, success_count);
     }
 }

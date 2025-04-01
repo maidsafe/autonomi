@@ -67,6 +67,7 @@ impl SwarmDriver {
             return;
         }
 
+        // return early for client
         if info.agent_version.contains("client") {
             debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
             return;
@@ -90,6 +91,17 @@ impl SwarmDriver {
                 .map(|addr| multiaddr_strip_p2p(&addr))
                 .collect(),
         };
+
+        // return early for nat_detection
+        if info.agent_version.contains("nat_detection") {
+            debug!("Peer {peer_id:?} is a NAT detection peer. Adding it to the dial queue. Not adding to RT.");
+            self.dial_queue.push_front((
+                peer_id,
+                Addresses(addrs.iter().cloned().collect()),
+                Instant::now() + DIAL_BACK_DELAY,
+            ));
+            return;
+        }
 
         let is_relayed_peer = is_a_relayed_peer(addrs.iter());
 
