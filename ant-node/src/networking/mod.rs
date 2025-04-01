@@ -17,13 +17,17 @@ mod interface;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
+mod nat_detection;
 mod network;
 mod record_store;
 mod relay_manager;
 mod replication_fetcher;
 mod transport;
 
+use std::net::IpAddr;
+
 // re-export arch dependent deps for use in the crate, or above
+pub use self::nat_detection::NatStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue, SwarmLocalState},
@@ -148,6 +152,14 @@ pub(crate) fn multiaddr_get_p2p(multiaddr: &Multiaddr) -> Option<PeerId> {
 pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
     addr.iter().find_map(|p| match p {
         Protocol::Udp(port) => Some(port),
+        _ => None,
+    })
+}
+
+pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
+    addr.iter().find_map(|p| match p {
+        Protocol::Ip4(ip) => Some(IpAddr::V4(ip)),
+        Protocol::Ip6(ip) => Some(IpAddr::V6(ip)),
         _ => None,
     })
 }

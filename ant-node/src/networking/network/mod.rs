@@ -446,3 +446,15 @@ pub(crate) fn connection_action_logging(
     // ELK logging. Do not update without proper testing.
     info!("Action: {action_string}, performed on: {connection_id:?}, remote_peer_id: {remote_peer_id:?}, self_peer_id: {self_peer_id:?}");
 }
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
+}

@@ -11,7 +11,9 @@ use crate::networking::{
     craft_valid_multiaddr_without_p2p,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
-    multiaddr_is_global, NetworkEvent, NodeIssue, Result,
+    multiaddr_is_global,
+    network::endpoint_str,
+    NetworkEvent, NodeIssue, Result,
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
@@ -648,18 +650,6 @@ impl SwarmDriver {
             };
 
             let _ = self.latest_established_connection_ids.remove(&oldest_key);
-        }
-    }
-}
-
-/// Helper function to print formatted connection role info.
-fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
-    match endpoint {
-        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
-            format!("outgoing ({address})")
-        }
-        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
-            format!("incoming ({send_back_addr})")
         }
     }
 }
