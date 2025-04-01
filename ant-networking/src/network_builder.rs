@@ -551,6 +551,7 @@ impl NetworkBuilder {
             // We use 255 here which allows covering a network larger than 64k without any rotating.
             // This is based on the libp2p kad::kBuckets peers distribution.
             dialed_peers: CircularVec::new(255),
+            dial_queue: Default::default(),
             network_discovery: NetworkDiscovery::new(&peer_id),
             live_connected_peers: Default::default(),
             latest_established_connection_ids: Default::default(),
