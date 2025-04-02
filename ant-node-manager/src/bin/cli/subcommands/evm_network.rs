@@ -16,9 +16,6 @@ pub enum EvmNetworkCommand {
     /// Use the Arbitrum One network
     EvmArbitrumOne,
 
-    /// Use the Arbitrum Sepolia network
-    EvmArbitrumSepolia,
-
     /// Use the Arbitrum Sepolia network with test contracts
     EvmArbitrumSepoliaTest,
 
@@ -47,7 +44,6 @@ impl TryInto<EvmNetwork> for EvmNetworkCommand {
     fn try_into(self) -> Result<EvmNetwork> {
         match self {
             Self::EvmArbitrumOne => Ok(EvmNetwork::ArbitrumOne),
-            Self::EvmArbitrumSepolia => Ok(EvmNetwork::ArbitrumSepolia),
             Self::EvmArbitrumSepoliaTest => Ok(EvmNetwork::ArbitrumSepoliaTest),
             Self::EvmLocal => {
                 let network = get_evm_network(true)?;
