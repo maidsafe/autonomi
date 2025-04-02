@@ -1,31 +1,33 @@
 {
-  "name": "@withautonomi/core",
-  "version": "0.1.0",
+  "name": "@withautonomi/autonomi",
+  "version": "0.4.3",
   "description": "NodeJS bindings for Autonomi client",
   "main": "index.js",
   "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maidsafe/autonomi.git",
+    "directory": "nodejs"
+  },
   "napi": {
-    "name": "@withautonomi/core",
+    "name": "autonomi",
     "triples": {
       "additional": [
-        "aarch64-apple-darwin",
-        "x86_64-unknown-linux-gnu",
-        "x86_64-pc-windows-msvc"
+        "aarch64-apple-darwin"
       ]
     }
   },
   "license": "GPL-3.0",
   "devDependencies": {
-    "@napi-rs/cli": "^2.17.0",
+    "@napi-rs/cli": "^2.18.4",
     "@types/node": "^22.13.10",
-    "ava": "^5.1.1",
-    "typescript": "^5.3.3"
+    "ava": "^6.0.1"
   },
   "ava": {
     "timeout": "3m"
   },
   "engines": {
-    "node": ">= 14"
+    "node": ">= 10"
   },
   "scripts": {
     "artifacts": "napi artifacts",
@@ -44,6 +46,11 @@
     "pointer",
     "vault"
   ],
-  "author": "Safe Network",
-  "packageManager": "yarn@4.7.0"
+  "packageManager": "yarn@4.7.0",
+  "optionalDependencies": {
+    "@withautonomi/autonomi-darwin-arm64": "0.4.2",
+    "@withautonomi/autonomi-darwin-x64": "0.4.2",
+    "@withautonomi/autonomi-linux-x64-gnu": "0.4.2",
+    "@withautonomi/autonomi-win32-x64-msvc": "0.4.2"
+  }
 }

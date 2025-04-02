@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-04-01
+
+### Network
+
+#### Added
+
+- Improve logging for the addition and removal of peers from the routing table.
+
+#### Changed
+
+- Enhanced strategy for refreshing the node's routing table that aims to maintain an accurate
+  picture of the network. It incorporates periodic liveness checks and will remove inactive nodes.
+- Incorporate the use of distance range to verify payments. The payee could have been blocked or
+  churned out, but we should still consider the payment valid if the payee is close enough.
+- Stop logging too many faults on the node listeners. This produced a lot of spam in the logs.
+
+#### Fixed
+
+- Issue with version upgrades not being detected correctly during periodic version checks.
+- Do not add client peers to the routing table.
+- Only check the expiry date on quotes from the current node. Checking the date on a quote from
+  another node can fail due to differences in the operating system's clock.
+- During re-attempts for requests, when the address of the target is not provided, e.g., in 
+  replication-related requests, the addresses will be provided from the local node.
+
 ## 2025-03-20
 
 ### Client

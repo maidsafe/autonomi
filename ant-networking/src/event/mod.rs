@@ -173,6 +173,8 @@ pub enum NetworkEvent {
             Option<ProofOfPayment>,
         )>,
     },
+    /// Peers of picked bucket for version query.
+    PeersForVersionQuery(Vec<(PeerId, Addresses)>),
 }
 
 /// Terminate node for the following reason
@@ -242,6 +244,16 @@ impl Debug for NetworkEvent {
                 write!(
                     f,
                     "NetworkEvent::FreshReplicateToFetch({holder:?}, {keys:?})"
+                )
+            }
+            NetworkEvent::PeersForVersionQuery(peers) => {
+                write!(
+                    f,
+                    "NetworkEvent::PeersForVersionQuery({:?})",
+                    peers
+                        .iter()
+                        .map(|(peer, _addrs)| peer)
+                        .collect::<Vec<&PeerId>>()
                 )
             }
         }
@@ -316,11 +328,6 @@ impl SwarmDriver {
         #[cfg(feature = "open-metrics")]
         if self.metrics_recorder.is_some() {
             self.check_for_change_in_our_close_group();
-        }
-
-        #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &self.metrics_recorder {
-            metrics_recorder.update_node_versions(&self.peers_version);
         }
     }
 

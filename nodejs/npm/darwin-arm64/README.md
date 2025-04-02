@@ -1,3 +1,3 @@
-# `autonomi-darwin-arm64`
+# `@withautonomi/autonomi-darwin-arm64`
 
-This is the **aarch64-apple-darwin** binary for `autonomi`
+This is the **aarch64-apple-darwin** binary for `@withautonomi/autonomi`

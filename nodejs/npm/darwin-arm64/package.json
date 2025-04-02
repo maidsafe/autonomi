@@ -1,6 +1,6 @@
 {
-  "name": "@withautonomi/core-darwin-arm64",
-  "version": "0.0.0",
+  "name": "@withautonomi/autonomi-darwin-arm64",
+  "version": "0.4.3",
   "os": [
     "darwin"
   ],

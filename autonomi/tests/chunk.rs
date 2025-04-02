@@ -61,13 +61,13 @@ async fn chunk_put_1mb() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn chunk_put_max_size() -> Result<()> {
-    chunk_put_with_size(Chunk::MAX_SIZE).await // 4MB
+    chunk_put_with_size(Chunk::MAX_ENCRYPTED_SIZE).await // 4MB + 16 bytes (encryption padding)
 }
 
 #[tokio::test]
 #[serial]
 async fn chunk_put_oversize() -> Result<()> {
-    let result = chunk_put_with_size(Chunk::MAX_SIZE + 1).await; // 4MB + 1 byte
+    let result = chunk_put_with_size(Chunk::MAX_ENCRYPTED_SIZE + 1).await; // 4MB + 16 bytes + 1 byte
 
     // Verify we get the expected error
     match result {

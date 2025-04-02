@@ -164,9 +164,18 @@ impl Client {
             archive.map().len()
         );
 
-        let result = self.data_put(bytes, payment_option).await;
-        debug!("Uploaded private archive {archive:?} to the network and address is {result:?}");
-        result
+        let data_map_chunk = self
+            .data_put(bytes, payment_option)
+            .await
+            .inspect_err(|err| {
+                error!("Error uploading private archive: {archive:?} err: {err:?}");
+            })?;
+
+        debug!(
+            "Uploaded private archive {archive:?} to the network and the private address is {:?}",
+            data_map_chunk.1.address()
+        );
+        Ok(data_map_chunk)
     }
 }
 

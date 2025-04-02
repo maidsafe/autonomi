@@ -1,3 +1,3 @@
-# `autonomi-win32-x64-msvc`
+# `@withautonomi/autonomi-win32-x64-msvc`
 
-This is the **x86_64-pc-windows-msvc** binary for `autonomi`
+This is the **x86_64-pc-windows-msvc** binary for `@withautonomi/autonomi`

@@ -113,7 +113,7 @@ impl SwarmDriver {
                         .handle_get_closest_query(current_closest),
                     PendingGetClosestType::FunctionCall(sender) => {
                         tokio::spawn(async move {
-                            let _ = sender.send(current_closest);
+                            let _ = sender.send(vec![]);
                         });
                     }
                 }
@@ -257,7 +257,7 @@ impl SwarmDriver {
                     // This should only happen once
                     if self.network_discovery.notify_new_peer() {
                         info!("Performing the first bootstrap");
-                        self.trigger_network_discovery();
+                        self.trigger_network_discovery(0);
                     }
                 }
 

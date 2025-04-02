@@ -28,7 +28,9 @@ pub async fn analyze(
     println_if_verbose!("Analyzing address: {}", addr);
 
     // then connect to network and check data
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
 
     let analysis = client.analyze_address(addr, verbose).await;
     match analysis {

@@ -1,0 +1,49 @@
+name: JS publish to NPM
+env:
+  DEBUG: napi:*
+  APP_NAME: autonomi
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+permissions:
+  contents: write
+  id-token: write
+on:
+  workflow_dispatch:
+defaults:
+  run:
+    working-directory: ./nodejs/
+jobs:
+  build-and-test:
+    # Build Node.js bindings for all platforms
+    uses: ./.github/workflows/nodejs.yml
+  publish:
+    name: Publish
+    runs-on: ubuntu-latest
+    needs:
+      - build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: 'nodejs/yarn.lock'
+      - name: Install dependencies
+        run: yarn install
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./nodejs/artifacts
+      - name: Move artifacts
+        run: yarn artifacts
+      - name: List packages
+        run: ls -R ./npm
+        shell: bash
+      - name: Publish
+        run: |
+          npm config set provenance true
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
+          npm publish --tag latest --access public
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

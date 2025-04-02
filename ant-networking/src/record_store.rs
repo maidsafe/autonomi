@@ -425,8 +425,8 @@ impl NodeRecordStore {
         record_store
     }
 
-    /// Returns the current distance ilog2 (aka bucket) range of CLOSE_GROUP nodes.
-    pub fn get_responsible_distance_range(&self) -> Option<Distance> {
+    /// Returns the current responsible distance range.
+    pub(crate) fn get_responsible_distance_range(&self) -> Option<Distance> {
         self.responsible_distance_range
     }
 

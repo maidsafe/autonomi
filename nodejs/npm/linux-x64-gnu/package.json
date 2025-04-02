@@ -1,6 +1,6 @@
 {
-  "name": "@withautonomi/core-linux-x64-gnu",
-  "version": "0.0.0",
+  "name": "@withautonomi/autonomi-linux-x64-gnu",
+  "version": "0.4.3",
   "os": [
     "linux"
   ],

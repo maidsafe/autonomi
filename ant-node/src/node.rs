@@ -19,7 +19,8 @@ use ant_networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use ant_networking::MetricsRegistries;
 use ant_networking::{
-    time::sleep, Instant, Network, NetworkBuilder, NetworkEvent, NodeIssue, SwarmDriver,
+    time::sleep, Instant, Network, NetworkBuilder, NetworkError, NetworkEvent, NodeIssue,
+    SwarmDriver,
 };
 use ant_protocol::{
     error::Error as ProtocolError,
@@ -29,7 +30,7 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, Multiaddr, PeerId};
+use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -449,7 +450,7 @@ impl Node {
                 // try query peer version
                 let network = self.network().clone();
                 let _handle = spawn(async move {
-                    Self::try_query_peer_version(network, peer_id).await;
+                    Self::try_query_peer_version(network, peer_id, Default::default()).await;
                 });
 
                 // try replication here
@@ -463,6 +464,11 @@ impl Node {
                 event_header = "PeerRemoved";
                 self.record_metrics(Marker::PeersInRoutingTable(connected_peers));
                 self.record_metrics(Marker::PeerRemovedFromRoutingTable(&peer_id));
+
+                let self_id = self.network().peer_id();
+                let distance = NetworkAddress::from_peer(self_id)
+                    .distance(&NetworkAddress::from_peer(peer_id));
+                info!("Node {self_id:?} removed peer from routing table: {peer_id:?}. It has a {:?} distance to us.", distance.ilog2());
 
                 let network = self.network().clone();
                 self.record_metrics(Marker::IntervalReplicationTriggered);
@@ -562,6 +568,13 @@ impl Node {
             NetworkEvent::FreshReplicateToFetch { holder, keys } => {
                 event_header = "FreshReplicateToFetch";
                 self.fresh_replicate_to_fetch(holder, keys);
+            }
+            NetworkEvent::PeersForVersionQuery(peers) => {
+                event_header = "PeersForVersionQuery";
+                let network = self.network().clone();
+                let _handle = spawn(async move {
+                    Self::query_peers_version(network, peers).await;
+                });
             }
         }
 
@@ -973,6 +986,14 @@ impl Node {
         );
     }
 
+    /// Query peers' versions and update local knowledge.
+    async fn query_peers_version(network: Network, peers: Vec<(PeerId, Addresses)>) {
+        // To avoid choking, carry out the queries one by one
+        for (peer_id, addrs) in peers {
+            Self::try_query_peer_version(network.clone(), peer_id, addrs).await;
+        }
+    }
+
     /// Query peer's version and update local knowledge.
     async fn try_query_peer_version(network: Network, peer: PeerId) {
         let request = Request::Query(Query::GetVersion(NetworkAddress::from(peer)));
@@ -986,11 +1007,18 @@ impl Node {
                 version
             }
             Ok(other) => {
-                info!("Not a version fetched from peer {peer:?}, {other:?}");
+                info!("Not a fetched peer version {peer:?}, {other:?}");
                 "none".to_string()
             }
             Err(err) => {
-                info!("Failed to fetch version from peer {peer:?} with error {err:?}");
+                info!("Failed to fetch peer version {peer:?} with error {err:?}");
+                // Failed version fetch (which contains dial then re-attempt by itself)
+                // with error of `DialFailure` indicates the peer could be dead with high chance.
+                // In that case, the peer shall be removed from the routing table.
+                if let NetworkError::OutboundError(OutboundFailure::DialFailure) = err {
+                    network.remove_peer(peer);
+                    return;
+                }
                 "old".to_string()
             }
         };

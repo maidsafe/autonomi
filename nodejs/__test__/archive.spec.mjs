@@ -159,7 +159,7 @@ test('archive advanced use', async (t) => {
   t.true(typeof fileACost === 'string');
   
   // Also add this file to archive
-  const fileAMetadata = new Metadata(BigInt(13)); // size 13 bytes
+  const fileAMetadata = Metadata.newWithSize(BigInt(13)); // size 13 bytes
   archive.addFile("example_file_a", fileADataMap, fileAMetadata);
   
   // Check that we have the expected files in the archive

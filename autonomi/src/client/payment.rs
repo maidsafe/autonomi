@@ -1,3 +1,11 @@
+// Copyright 2024 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
 use crate::client::quote::{DataTypes, StoreQuote};
 use crate::Client;
 use ant_evm::{EncodedPeerId, EvmWallet, EvmWalletError, ProofOfPayment};
@@ -98,7 +106,7 @@ impl Client {
         }
     }
 
-    /// Pay for the chunks and get the proof of payment.
+    /// Pay for the content addrs and get the proof of payment.
     pub(crate) async fn pay(
         &self,
         data_type: DataTypes,
@@ -121,7 +129,7 @@ impl Client {
 
             // TODO: the error might contain some succeeded quote payments as well. These should be returned on err, so that they can be skipped when retrying.
             // TODO: retry when it fails?
-            // Execute chunk payments
+            // Execute payments
             let _payments = wallet
                 .pay_for_quotes(quotes.payments())
                 .await

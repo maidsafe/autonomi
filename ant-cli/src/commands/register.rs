@@ -39,7 +39,10 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
 pub async fn cost(name: &str, init_peers_config: InitialPeersConfig) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
+
     let key_for_name = Client::register_key_from_name(&main_registers_key, name);
 
     let cost = client
@@ -60,7 +63,10 @@ pub async fn create(
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
+
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -114,7 +120,10 @@ pub async fn edit(
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
+
     let mut wallet = load_wallet(client.evm_network())?;
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
@@ -168,7 +177,9 @@ pub async fn get(
     hex: bool,
     init_peers_config: InitialPeersConfig,
 ) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
 
     let addr = if name {
         let name_str = address.clone();
@@ -228,7 +239,9 @@ pub async fn history(
     hex: bool,
     init_peers_config: InitialPeersConfig,
 ) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config).await?;
+    let client = crate::actions::connect_to_network(init_peers_config)
+        .await
+        .map_err(|(err, _)| err)?;
 
     let addr = if name {
         let name_str = address.clone();

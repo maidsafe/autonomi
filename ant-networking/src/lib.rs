@@ -980,9 +980,32 @@ impl Network {
                         "Outbound failed for {req_str} .. {error:?}, dialing it then re-attempt."
                     );
 
+                    // Default Addresses will be used for request sent to close range.
+                    // For example: replication requests.
+                    // In that case, we shall get the proper addrs from local then re-dial.
+                    let dial_addrs = if addrs.0.is_empty() {
+                        debug!("Input addrs of {peer:?} is empty, lookup from local");
+                        let (sender, receiver) = oneshot::channel();
+
+                        self.send_local_swarm_cmd(LocalSwarmCmd::GetPeersWithMultiaddr { sender });
+                        let peers = receiver.await?;
+
+                        let Some(new_addrs) = peers
+                            .iter()
+                            .find(|(id, _addrs)| *id == peer)
+                            .map(|(_id, addrs)| addrs.clone())
+                        else {
+                            error!("Cann't find the addrs of peer {peer:?} from local, during the request reattempt of {req:?}.");
+                            return r;
+                        };
+                        Addresses(new_addrs)
+                    } else {
+                        addrs.clone()
+                    };
+
                     self.send_network_swarm_cmd(NetworkSwarmCmd::DialPeer {
                         peer,
-                        addrs: addrs.clone(),
+                        addrs: dial_addrs.clone(),
                     });
 
                     // Short wait to allow connection re-established.
@@ -993,7 +1016,7 @@ impl Network {
                     self.send_network_swarm_cmd(NetworkSwarmCmd::SendRequest {
                         req,
                         peer,
-                        addrs: Some(addrs),
+                        addrs: Some(dial_addrs),
                         sender: Some(sender),
                     });
 
@@ -1061,6 +1084,10 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::NotifyPeerVersion { peer, version })
     }
 
+    pub fn remove_peer(&self, peer: PeerId) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::RemovePeer { peer })
+    }
+
     /// Helper to send NetworkSwarmCmd
     fn send_network_swarm_cmd(&self, cmd: NetworkSwarmCmd) {
         send_network_swarm_cmd(self.network_swarm_cmd_sender().clone(), cmd);
@@ -1089,6 +1116,11 @@ impl Network {
         });
 
         let found_peers = receiver.await?;
+
+        // Error out when fetched result is empty, indicating a timed out network query.
+        if found_peers.is_empty() {
+            return Err(NetworkError::GetClosestTimedOut);
+        }
 
         // Count self in if among the CLOSE_GROUP_SIZE closest and sort the result
         let result_len = found_peers.len();
@@ -1162,6 +1194,17 @@ impl Network {
 
         debug!("Received all responses for {req:?}");
         responses
+    }
+
+    /// Get the estimated network density (i.e. the responsible_distance_range).
+    pub async fn get_network_density(&self) -> Result<Option<KBucketDistance>> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_local_swarm_cmd(LocalSwarmCmd::GetNetworkDensity { sender });
+
+        let density = receiver
+            .await
+            .map_err(|_e| NetworkError::InternalMsgChannelDropped)?;
+        Ok(density)
     }
 }
 

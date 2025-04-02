@@ -433,13 +433,15 @@ impl Node {
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
         // reject if chunk is too large
-        if chunk.size() > Chunk::MAX_SIZE {
+        if chunk.size() > Chunk::MAX_ENCRYPTED_SIZE {
             warn!(
                 "Chunk at {pretty_key:?} is too large: {} bytes, when max size is {} bytes",
                 chunk.size(),
-                Chunk::MAX_SIZE
+                Chunk::MAX_ENCRYPTED_SIZE
             );
-            return Err(ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_SIZE).into());
+            return Err(
+                ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_ENCRYPTED_SIZE).into(),
+            );
         }
 
         let record = Record {
@@ -652,8 +654,11 @@ impl Node {
             )));
         }
 
-        // verify quote expiration
-        if payment.has_expired() {
+        // verify quote expiration.
+        // Note there could be error when try to deduce elapsed time from other OS clock,
+        // hence here only verify the expiration of own quotes.
+        let own_quotes: Vec<_> = payment.quotes_by_peer(&self_peer_id);
+        if own_quotes.iter().any(|quote| quote.has_expired()) {
             warn!("Payment quote has expired for record {pretty_key}");
             return Err(Error::InvalidRequest(format!(
                 "Payment quote has expired for record {pretty_key}"
@@ -678,21 +683,26 @@ impl Node {
         let mut payees = payment.payees();
         payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
         if !payees.is_empty() {
-            warn!("Payment quote has out-of-range payees for record {pretty_key}");
-            return Err(Error::InvalidRequest(format!(
-                "Payment quote has out-of-range payees {payees:?}"
-            )));
-        }
+            // There might be payee got blocked by us or churned out from our perspective.
+            // We shall still consider the payment is valid whenever payees are close enough.
+            // In case we don't have enough knowledge of the network, we shall trust the payment.
+            if let Some(network_density) = self.network().get_network_density().await? {
+                payees.retain(|peer_id| {
+                    NetworkAddress::from_peer(*peer_id).distance(address) > network_density
+                });
 
-        let owned_payment_quotes: Vec<_> = payment
-            .quotes_by_peer(&self_peer_id)
-            .iter()
-            .map(|quote| quote.hash())
-            .collect();
+                if !payees.is_empty() {
+                    warn!("Payment quote has out-of-range payees for record {pretty_key}");
+                    return Err(Error::InvalidRequest(format!(
+                        "Payment quote has out-of-range payees {payees:?}"
+                    )));
+                }
+            }
+        }
 
         // check if payment is valid on chain
         let payments_to_verify = payment.digest();
-
+        let owned_payment_quotes: Vec<_> = own_quotes.iter().map(|quote| quote.hash()).collect();
         let reward_amount = match verify_data_payment(
             self.evm_network(),
             owned_payment_quotes.clone(),
