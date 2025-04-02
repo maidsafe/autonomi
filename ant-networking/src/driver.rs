@@ -128,13 +128,6 @@ const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(60);
 /// This is the max time it should take. Minimum interval at any node will be half this
 const PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S: u64 = 21600;
 
-// Init during compilation, instead of runtime error that should never happen
-// Option<T>::expect will be stabilised as const in the future (https://github.com/rust-lang/rust/issues/67441)
-const REPLICATION_FACTOR: NonZeroUsize = match NonZeroUsize::new(CLOSE_GROUP_SIZE + 2) {
-    Some(v) => v,
-    None => panic!("CLOSE_GROUP_SIZE should not be zero"),
-};
-
 impl From<std::convert::Infallible> for NodeEvent {
     fn from(_: std::convert::Infallible) -> Self {
         panic!("NodeBehaviour is not Infallible!")
@@ -263,14 +256,11 @@ impl NetworkBuilder {
             .set_publication_interval(None)
             // 1mb packet size
             .set_max_packet_size(MAX_PACKET_SIZE)
-            // How many nodes _should_ store data.
-            .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(KAD_QUERY_TIMEOUT_S)
             // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
             .disjoint_query_paths(true)
             // Records never expire
             .set_record_ttl(None)
-            .set_replication_factor(REPLICATION_FACTOR)
             .set_periodic_bootstrap_interval(Some(Duration::from_secs(bootstrap_interval)))
             // Emit PUT events for validation prior to insertion into the RecordStore.
             // This is no longer needed as the record_storage::put now can carry out validation.
@@ -344,12 +334,9 @@ impl NetworkBuilder {
         let _ = kad_cfg
             .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
             .set_max_packet_size(MAX_PACKET_SIZE)
-            .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
             // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            .disjoint_query_paths(true)
-            // How many nodes _should_ store data.
-            .set_replication_factor(REPLICATION_FACTOR);
+            .disjoint_query_paths(true);
 
         let (network, net_event_recv, driver) =
             self.build(kad_cfg, None, true, ProtocolSupport::Outbound, false);
