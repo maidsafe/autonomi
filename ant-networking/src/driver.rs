@@ -852,12 +852,13 @@ impl SwarmDriver {
 
                 // runs every bootstrap_interval time
                 _ = network_discover_interval.tick() => {
+                    round_robin_index += 1;
+                    if round_robin_index > 255 {
+                        round_robin_index = 0;
+                    }
+
                     if let Some(new_interval) = self.run_network_discover_continuously(network_discover_interval.period(), round_robin_index).await {
                         network_discover_interval = new_interval;
-                        round_robin_index += 1;
-                        if round_robin_index > 255 {
-                            round_robin_index = 0;
-                        }
                     }
 
                     #[cfg(feature = "open-metrics")]
