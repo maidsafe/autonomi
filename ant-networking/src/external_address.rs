@@ -184,8 +184,10 @@ impl ExternalAddressManager {
                 }
             }
 
-            if let Some((&&new_ip, count)) =
-                new_ip_map.iter().sorted_by_key(|(_, count)| *count).last()
+            if let Some((&&new_ip, count)) = new_ip_map
+                .iter()
+                .sorted_by_key(|(_, count)| *count)
+                .next_back()
             {
                 if *count >= MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP {
                     info!("New IP map as count>= {MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP}: {new_ip_map:?}");

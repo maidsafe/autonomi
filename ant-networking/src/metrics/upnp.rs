@@ -26,8 +26,8 @@ impl From<&libp2p::upnp::Event> for EventType {
         match event {
             libp2p::upnp::Event::NewExternalAddr { .. } => EventType::NewExternalAddr,
             libp2p::upnp::Event::ExpiredExternalAddr { .. } => EventType::ExpiredExternalAddr,
-            libp2p::upnp::Event::GatewayNotFound { .. } => EventType::GatewayNotFound,
-            libp2p::upnp::Event::NonRoutableGateway { .. } => EventType::NonRoutableGateway,
+            libp2p::upnp::Event::GatewayNotFound => EventType::GatewayNotFound,
+            libp2p::upnp::Event::NonRoutableGateway => EventType::NonRoutableGateway,
         }
     }
 }
