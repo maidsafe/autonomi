@@ -16,8 +16,7 @@ use libp2p::{
     kad::{KBucketKey, K_VALUE},
     PeerId,
 };
-use rand::rngs::OsRng;
-use rand::{thread_rng, Rng};
+use rand::{rngs::OsRng, Rng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::{btree_map::Entry, BTreeMap};
 use tokio::time::Duration;
@@ -38,7 +37,7 @@ pub(crate) const NETWORK_DISCOVER_INTERVAL: Duration = Duration::from_secs(10);
 const LAST_PEER_ADDED_TIME_LIMIT: Duration = Duration::from_secs(180);
 
 /// The network discovery interval to use if we haven't added any new peers in a while.
-const NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S: u64 = 600;
+const NO_PEER_ADDED_SLOWDOWN_INTERVAL_MAX_S: u64 = 1200;
 
 /// (get_closest_candidates, picked_non_full_bucket_peers, picked_full_bucket_peers)
 type RefreshTargets = (
@@ -113,20 +112,21 @@ impl SwarmDriver {
             .partition(|kb| kb.num_entries() >= K_VALUE.get());
 
         // Process non-full buckets, collect get_closest candidates
-        let non_full_buckets_indexes = non_full_buckets
+        let non_full_non_empty_buckets_indexes = non_full_buckets
             .iter()
             .filter_map(|kbucket| kbucket.range().0.ilog2())
             .collect::<Vec<_>>();
-        let min_full_bucket_index = full_buckets
+        let full_buckets_index = full_buckets
             .iter()
             .filter_map(|kbucket| kbucket.range().0.ilog2())
-            .min();
-        let get_closest_candidates = self
-            .network_discovery
-            .candidates
-            .get_candidates(non_full_buckets_indexes.clone(), min_full_bucket_index);
+            .collect::<Vec<_>>();
+        let get_closest_candidates = self.network_discovery.candidates.get_candidates(
+            non_full_non_empty_buckets_indexes.clone(),
+            full_buckets_index,
+            round_robin_index,
+        );
         info!(
-            "Going to undertake {} get_closest queries for non_full_buckets {non_full_buckets_indexes:?}",
+            "Going to undertake {} get_closest queries for non_full_buckets {non_full_non_empty_buckets_indexes:?}",
             get_closest_candidates.len(),
         );
 
@@ -290,15 +290,15 @@ impl NetworkDiscovery {
     }
 
     /// Returns an exponentially increasing interval based on the number of peers in the routing table.
-    /// Formula: y=30 * 1.00673^x
-    /// Caps out at 600s for 400+ peers
+    /// Formula: y=60 * 1.00673^x
+    /// Caps out at 1200s for 450+ peers
     fn scaled_duration(peers_in_rt: u32) -> Duration {
         if peers_in_rt >= 450 {
-            return Duration::from_secs(600);
+            return Duration::from_secs(1200);
         }
         let base: f64 = 1.00673;
 
-        Duration::from_secs_f64(30.0 * base.powi(peers_in_rt as i32))
+        Duration::from_secs_f64(60.0 * base.powi(peers_in_rt as i32))
     }
 }
 
@@ -307,6 +307,7 @@ impl NetworkDiscovery {
 #[derive(Debug, Clone)]
 struct NetworkDiscoveryCandidates {
     self_key: KBucketKey<PeerId>,
+    self_peer_id: PeerId,
     candidates: BTreeMap<u32, Vec<NetworkAddress>>,
 }
 
@@ -329,6 +330,7 @@ impl NetworkDiscoveryCandidates {
 
         Self {
             self_key,
+            self_peer_id: *self_peer_id,
             candidates,
         }
     }
@@ -366,39 +368,48 @@ impl NetworkDiscoveryCandidates {
     /// Returns one random candidate per non-full bucket. Also tries to refresh the candidate list.
     fn get_candidates(
         &mut self,
-        mut non_full_buckets: Vec<u32>,
-        min_full_bucket_index: Option<u32>,
+        non_full_non_empty_buckets: Vec<u32>,
+        full_buckets: Vec<u32>,
+        round_robin_index: usize,
     ) -> Vec<NetworkAddress> {
         self.try_refresh_candidates();
 
-        // As the `empty` buckets won't be returned by the libp2p, which may not have enough targets.
-        // Hence here need to insert extra potential targeted buckets in,
-        // to fill the gap from the min_full_bucket_index.
-        let mut candidate = min_full_bucket_index.unwrap_or(255);
+        // Always add self in
+        let mut targets = vec![NetworkAddress::from_peer(self.self_peer_id)];
 
-        // adding numbers in [min_full_bucket_index, 0) with downward
-        while non_full_buckets.len() < 10 && candidate > 0 {
-            if !non_full_buckets.contains(&candidate) {
-                non_full_buckets.push(candidate);
+        // Pick targets of non-full-non-empty buckets first
+        targets.extend(
+            non_full_non_empty_buckets
+                .iter()
+                .filter_map(|ilog2| {
+                    if let Some(candidates) = self.candidates.get(ilog2) {
+                        let index = round_robin_index % candidates.len();
+                        candidates.get(index).cloned()
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+
+        // Fill up targets with candidates of empty buckets, if has suitable candidate
+        for (ilog2, candidates) in self.candidates.iter() {
+            // Stop when got enough targets
+            if targets.len() >= 10 {
+                break;
             }
-            // Update candidate to continue filling downwards
-            candidate = candidate.saturating_sub(1);
+            // Skip non-empty buckets
+            if non_full_non_empty_buckets.contains(ilog2) || full_buckets.contains(ilog2) {
+                continue;
+            }
+
+            let index = round_robin_index % candidates.len();
+            if let Some(candidate) = candidates.get(index).cloned() {
+                targets.push(candidate);
+            }
         }
 
-        info!("With min_full_bucket_index of {min_full_bucket_index:?}, targeting buckets of {non_full_buckets:?}");
-
-        let mut rng = thread_rng();
-        self.candidates
-            .iter()
-            .filter_map(|(ilog2, candidates)| {
-                if non_full_buckets.contains(ilog2) {
-                    let random_index = rng.gen::<usize>() % candidates.len();
-                    candidates.get(random_index).cloned()
-                } else {
-                    None
-                }
-            })
-            .collect()
+        targets
     }
 
     /// Tries to refresh our current candidate list. We replace the old ones with new if we find any.
@@ -482,19 +493,19 @@ mod tests {
     #[test]
     fn test_scaled_interval() {
         let test_cases = vec![
-            (0, 30.0),
-            (50, 40.0),
-            (100, 60.0),
-            (150, 80.0),
-            (200, 115.0),
-            (220, 130.0),
-            (250, 160.0),
-            (300, 220.0),
-            (350, 313.0),
-            (400, 430.0),
-            (425, 520.0),
-            (449, 600.0),
-            (1000, 600.0),
+            (0, 60.0),
+            (50, 80.0),
+            (100, 120.0),
+            (150, 160.0),
+            (200, 230.0),
+            (220, 260.0),
+            (250, 320.0),
+            (300, 440.0),
+            (350, 626.0),
+            (400, 860.0),
+            (425, 1040.0),
+            (449, 1200.0),
+            (1000, 1200.0),
         ];
 
         for (peers, expected_secs) in test_cases {
