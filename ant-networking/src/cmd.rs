@@ -1049,25 +1049,6 @@ impl SwarmDriver {
 
     fn record_node_version(&mut self, peer_id: PeerId, version: String) {
         let _ = self.peers_version.insert(peer_id, version);
-
-        // Collect all peers_in_non_full_buckets
-        let mut peers_in_non_full_buckets = vec![];
-        for kbucket in self.swarm.behaviour_mut().kademlia.kbuckets() {
-            let num_entires = kbucket.num_entries();
-            if num_entires >= K_VALUE.get() {
-                continue;
-            } else {
-                let peers_in_kbucket = kbucket
-                    .iter()
-                    .map(|peer_entry| peer_entry.node.key.into_preimage())
-                    .collect::<Vec<PeerId>>();
-                peers_in_non_full_buckets.extend(peers_in_kbucket);
-            }
-        }
-
-        // Ensure all existing node_version records are for those peers_in_non_full_buckets
-        self.peers_version
-            .retain(|peer_id, _version| peers_in_non_full_buckets.contains(peer_id));
     }
 
     pub(crate) fn record_node_issue(&mut self, peer_id: PeerId, issue: NodeIssue) {
