@@ -14,6 +14,7 @@ use crate::helpers::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::{
     control::ServiceControl,
     rpc::{RpcActions, RpcClient},
@@ -438,6 +439,7 @@ pub async fn run_node(
         rewards_address: run_options.rewards_address,
         reward_balance: None,
         rpc_socket_addr: run_options.rpc_socket_addr,
+        schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         status: ServiceStatus::Running,
         service_name: format!("antnode-local{}", run_options.number),
         no_upnp: false,

@@ -20,8 +20,9 @@ use crate::{
     VerbosityLevel, DAEMON_SERVICE_NAME,
 };
 use ant_service_management::{
-    auditor::AuditorServiceData, control::ServiceControl, DaemonServiceData, FaucetServiceData,
-    NatDetectionStatus, NodeRegistry, NodeServiceData, ServiceStatus,
+    auditor::AuditorServiceData, control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
+    DaemonServiceData, FaucetServiceData, NatDetectionStatus, NodeRegistry, NodeServiceData,
+    ServiceStatus,
 };
 use color_eyre::{
     eyre::{eyre, OptionExt},
@@ -249,6 +250,7 @@ pub async fn add_node(
                     rpc_socket_addr,
                     peer_id: None,
                     pid: None,
+                    schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
                     service_name,
                     status: ServiceStatus::Added,
                     no_upnp: options.no_upnp,
