@@ -77,16 +77,33 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
-    /// Specify whether the node is operating from a home network and situated behind a NAT without port forwarding
-    /// capabilities. Setting this to true, activates hole-punching to facilitate direct connections from other nodes.
-    ///
-    /// If this not enabled and you're behind a NAT, the node is terminated.
-    #[clap(long, default_value_t = false)]
-    home_network: bool,
+    /// Print the crate version.
+    #[clap(long)]
+    crate_version: bool,
 
-    /// Try to use UPnP to open a port in the home router and allow incoming connections.
-    #[clap(long, default_value_t = false)]
-    upnp: bool,
+    #[cfg(feature = "open-metrics")]
+    /// Start the metrics server.
+    ///
+    /// This is automatically enabled if `metrics_server_port` is specified.
+    #[clap(
+        long,
+        default_value_t = false,
+        required_if_eq("metrics_server_port", "0")
+    )]
+    enable_metrics_server: bool,
+
+    /// Specify the EVM network to use.
+    /// The network can either be a pre-configured one or a custom network.
+    /// When setting a custom network, you must specify the RPC URL to a fully synced node and
+    /// the addresses of the network token and chunk payments contracts.
+    #[command(subcommand)]
+    evm_network: Option<EvmNetworkCommand>,
+
+    /// Specify the IP to listen on.
+    ///
+    /// The special value `0.0.0.0` binds to all network interfaces available.
+    #[clap(long, default_value_t = IpAddr::V4(Ipv4Addr::UNSPECIFIED))]
+    ip: IpAddr,
 
     /// Specify the logging output destination.
     ///
@@ -127,11 +144,37 @@ struct Opt {
     #[clap(long, verbatim_doc_comment)]
     max_archived_log_files: Option<usize>,
 
+    #[cfg(feature = "open-metrics")]
+    /// Specify the port for the OpenMetrics server.
+    ///
+    /// If set, `--enable-metrics-server` will automatically be set to true.
+    /// If not set, you must manually specify `--enable-metrics-server` and a port will be selected at random.
+    #[clap(long, default_value_t = 0)]
+    metrics_server_port: u16,
+
     /// Specify the network ID to use. This will allow you to run the node on a different network.
     ///
     /// By default, the network ID is set to 1, which represents the mainnet.
     #[clap(long, verbatim_doc_comment)]
     network_id: Option<u8>,
+
+    /// Print the package version.
+    #[cfg(not(feature = "nightly"))]
+    #[clap(long)]
+    package_version: bool,
+
+    #[command(flatten)]
+    peers: InitialPeersConfig,
+
+    /// Print the network protocol version.
+    #[clap(long)]
+    protocol_version: bool,
+
+    /// Specify the port to listen on.
+    ///
+    /// The special value `0` will cause the OS to assign a random port.
+    #[clap(long, default_value_t = 0)]
+    port: u16,
 
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
@@ -139,12 +182,9 @@ struct Opt {
     #[clap(long)]
     rewards_address: Option<String>,
 
-    /// Specify the EVM network to use.
-    /// The network can either be a pre-configured one or a custom network.
-    /// When setting a custom network, you must specify the RPC URL to a fully synced node and
-    /// the addresses of the network token and chunk payments contracts.
-    #[command(subcommand)]
-    evm_network: Option<EvmNetworkCommand>,
+    /// Enable the mode to run as a relay client if it is behind a NAT and is not externally reachable.
+    #[clap(long, default_value_t = false)]
+    relay: bool,
 
     /// Specify the node's data directory.
     ///
@@ -156,58 +196,15 @@ struct Opt {
     #[clap(long, verbatim_doc_comment)]
     root_dir: Option<PathBuf>,
 
-    /// Specify the port to listen on.
-    ///
-    /// The special value `0` will cause the OS to assign a random port.
-    #[clap(long, default_value_t = 0)]
-    port: u16,
-
-    /// Specify the IP to listen on.
-    ///
-    /// The special value `0.0.0.0` binds to all network interfaces available.
-    #[clap(long, default_value_t = IpAddr::V4(Ipv4Addr::UNSPECIFIED))]
-    ip: IpAddr,
-
-    #[command(flatten)]
-    peers: InitialPeersConfig,
-
     /// Enable the admin/control RPC service by providing an IP and port for it to listen on.
     ///
     /// The RPC service can be used for querying information about the running node.
     #[clap(long)]
     rpc: Option<SocketAddr>,
 
-    #[cfg(feature = "open-metrics")]
-    /// Specify the port for the OpenMetrics server.
-    ///
-    /// If set, `--enable-metrics-server` will automatically be set to true.
-    /// If not set, you must manually specify `--enable-metrics-server` and a port will be selected at random.
-    #[clap(long, default_value_t = 0)]
-    metrics_server_port: u16,
-
-    #[cfg(feature = "open-metrics")]
-    /// Start the metrics server.
-    ///
-    /// This is automatically enabled if `metrics_server_port` is specified.
-    #[clap(
-        long,
-        default_value_t = false,
-        required_if_eq("metrics_server_port", "0")
-    )]
-    enable_metrics_server: bool,
-
-    /// Print the crate version.
-    #[clap(long)]
-    crate_version: bool,
-
-    /// Print the network protocol version.
-    #[clap(long)]
-    protocol_version: bool,
-
-    /// Print the package version.
-    #[cfg(not(feature = "nightly"))]
-    #[clap(long)]
-    package_version: bool,
+    /// Try to use UPnP to open a port in the home router and allow incoming connections.
+    #[clap(long, default_value_t = false)]
+    upnp: bool,
 
     /// Print version information.
     #[clap(long)]
@@ -323,7 +320,7 @@ fn main() -> Result<()> {
         node_builder.local(opt.peers.local);
         node_builder.upnp(opt.upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
-        node_builder.is_behind_home_network(opt.home_network);
+        node_builder.relay_client(opt.relay);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;
         // if enable flag is provided or only if the port is specified then enable the server by setting Some()

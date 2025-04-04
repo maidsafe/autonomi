@@ -166,8 +166,8 @@ impl SwarmDriver {
                 }
 
                 // Trigger server mode if we're not a client and we should not add our own address if we're behind
-                // home network.
-                if !self.is_client && !self.is_behind_home_network {
+                // home network (is_relay_client).
+                if !self.is_client && !self.is_relay_client {
                     if self.local {
                         // all addresses are effectively external here...
                         // this is needed for Kad Mode::Server

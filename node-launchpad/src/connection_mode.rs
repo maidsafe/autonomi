@@ -68,7 +68,7 @@ pub enum NodeConnectionMode {
 
 impl From<&NodeServiceData> for NodeConnectionMode {
     fn from(nsd: &NodeServiceData) -> Self {
-        match (nsd.upnp, nsd.home_network) {
+        match (nsd.upnp, nsd.relay) {
             (true, false) => Self::UPnP,
             (false, true) => Self::Relay,
             (false, false) => Self::Manual,

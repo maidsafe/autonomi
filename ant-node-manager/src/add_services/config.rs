@@ -75,7 +75,6 @@ pub struct InstallNodeServiceCtxBuilder {
     pub data_dir_path: PathBuf,
     pub env_variables: Option<Vec<(String, String)>>,
     pub evm_network: EvmNetwork,
-    pub home_network: bool,
     pub log_dir_path: PathBuf,
     pub log_format: Option<LogFormat>,
     pub name: String,
@@ -87,6 +86,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub node_port: Option<u16>,
     pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
+    pub relay: bool,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
     pub upnp: bool,
@@ -109,8 +109,8 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
-        if self.home_network {
-            args.push(OsString::from("--home-network"));
+        if self.relay {
+            args.push(OsString::from("--relay"));
         }
         if let Some(log_format) = self.log_format {
             args.push(OsString::from("--log-format"));
@@ -314,7 +314,7 @@ mod tests {
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
             evm_network: EvmNetwork::ArbitrumOne,
-            home_network: false,
+            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -349,7 +349,7 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            home_network: false,
+            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -385,7 +385,7 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            home_network: false,
+            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: Some(10),
@@ -478,7 +478,7 @@ mod tests {
     #[test]
     fn build_should_assign_expected_values_when_all_options_are_enabled() {
         let mut builder = create_builder_with_all_options_enabled();
-        builder.home_network = true;
+        builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
         builder.upnp = true;
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
@@ -515,7 +515,7 @@ mod tests {
             "--ignore-cache",
             "--network-id",
             "5",
-            "--home-network",
+            "--relay",
             "--log-format",
             "json",
             "--upnp",

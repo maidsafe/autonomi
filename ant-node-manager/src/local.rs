@@ -413,7 +413,7 @@ pub async fn run_node(
         connected_peers,
         data_dir_path: node_info.data_path,
         evm_network: run_options.evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
-        home_network: false,
+        relay: false,
         listen_addr: Some(listen_addrs),
         log_dir_path: node_info.log_path,
         log_format: run_options.log_format,
