@@ -83,13 +83,13 @@ pub enum SubCmd {
         /// and they will need to be explicitly started again.
         #[clap(long, default_value_t = false)]
         auto_restart: bool,
-        /// Auto set NAT flags (--upnp or --relay) if our NAT status has been obtained by
+        /// Auto set NAT flags (--no-upnp or --relay) if our NAT status has been obtained by
         /// running the NAT detection command.
         ///
         /// Using the argument will cause an error if the NAT detection command has not already
         /// ran.
         ///
-        /// This will override any --upnp or --relay options.
+        /// This will override any --no-upnp or --relay options.
         #[clap(long, default_value_t = false)]
         auto_set_nat_flags: bool,
         /// The number of service instances.

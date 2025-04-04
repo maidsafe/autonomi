@@ -84,7 +84,7 @@ impl PyAntNode {
                 root_dir.unwrap_or_else(|| PathBuf::from(".")),
             );
             node_builder.local(local);
-            node_builder.upnp(false);
+            node_builder.no_upnp(false);
             node_builder.relay_client(relay);
 
             let running_node = node_builder
@@ -438,10 +438,10 @@ impl PyNodeSpawner {
         Ok(())
     }
 
-    /// Set the UPnP flag for the node.
-    pub fn with_upnp(&mut self, upnp: bool) -> PyResult<()> {
+    /// Set the flag to disable UPnP for the node.
+    pub fn with_no_upnp(&mut self, no_upnp: bool) -> PyResult<()> {
         if let Some(self_) = self.0.take() {
-            self.0 = Some(self_.with_upnp(upnp));
+            self.0 = Some(self_.with_no_upnp(no_upnp));
         } else {
             return Err(PyRuntimeError::new_err("NodeSpawner inner error"));
         }
@@ -490,7 +490,7 @@ impl PyNetworkSpawner {
     /// - `evm_network`: `EvmNetwork::default()`
     /// - `rewards_address`: `RewardsAddress::default()`
     /// - `local`: `false`
-    /// - `upnp`: `false`
+    /// - `no_upnp`: `false`
     /// - `root_dir`: `None`
     /// - `size`: `5`
     #[new]
@@ -531,10 +531,10 @@ impl PyNetworkSpawner {
         Ok(())
     }
 
-    /// Set the UPnP flag for the node.
-    pub fn with_upnp(&mut self, upnp: bool) -> PyResult<()> {
+    /// Set to disable UPnP for the node.
+    pub fn with_no_upnp(&mut self, no_upnp: bool) -> PyResult<()> {
         if let Some(self_) = self.0.take() {
-            self.0 = Some(self_.with_upnp(upnp));
+            self.0 = Some(self_.with_no_upnp(no_upnp));
         } else {
             return Err(PyRuntimeError::new_err("NetworkSpawner inner error"));
         }

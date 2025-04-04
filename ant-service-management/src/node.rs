@@ -81,8 +81,8 @@ impl ServiceStateActions for NodeService<'_> {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
-        if self.service_data.upnp {
-            args.push(OsString::from("--upnp"));
+        if self.service_data.no_upnp {
+            args.push(OsString::from("--no-upnp"));
         }
         if self.service_data.relay {
             args.push(OsString::from("--relay"));
@@ -288,6 +288,7 @@ pub struct NodeServiceData {
     pub node_ip: Option<Ipv4Addr>,
     #[serde(default)]
     pub node_port: Option<u16>,
+    pub no_upnp: bool,
     pub number: u16,
     #[serde(
         serialize_with = "serialize_peer_id",
@@ -303,15 +304,9 @@ pub struct NodeServiceData {
     pub rpc_socket_addr: SocketAddr,
     pub service_name: String,
     pub status: ServiceStatus,
-    #[serde(default = "default_upnp")]
-    pub upnp: bool,
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
-}
-
-fn default_upnp() -> bool {
-    false
 }
 
 fn serialize_peer_id<S>(value: &Option<PeerId>, serializer: S) -> Result<S::Ok, S::Error>

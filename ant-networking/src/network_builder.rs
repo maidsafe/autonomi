@@ -102,9 +102,9 @@ pub struct NetworkBuilder {
     metrics_registries: Option<MetricsRegistries>,
     #[cfg(feature = "open-metrics")]
     metrics_server_port: Option<u16>,
+    no_upnp: bool,
     relay_client: bool,
     request_timeout: Option<Duration>,
-    upnp: bool,
 }
 
 impl NetworkBuilder {
@@ -120,9 +120,9 @@ impl NetworkBuilder {
             metrics_registries: None,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
+            no_upnp: true,
             relay_client: false,
             request_timeout: None,
-            upnp: false,
         }
     }
 
@@ -159,8 +159,8 @@ impl NetworkBuilder {
         self.metrics_server_port = port;
     }
 
-    pub fn upnp(&mut self, upnp: bool) {
-        self.upnp = upnp;
+    pub fn no_upnp(&mut self, no_upnp: bool) {
+        self.no_upnp = no_upnp;
     }
 
     /// Creates a new `SwarmDriver` instance, along with a `Network` handle
@@ -248,10 +248,9 @@ impl NetworkBuilder {
         };
 
         let listen_addr = self.listen_addr;
-        let upnp = self.upnp;
 
         let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp);
+            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -284,7 +283,7 @@ impl NetworkBuilder {
             .set_replication_factor(REPLICATION_FACTOR);
 
         let (network, net_event_recv, driver) =
-            self.build(kad_cfg, None, true, ProtocolSupport::Outbound, false);
+            self.build(kad_cfg, None, true, ProtocolSupport::Outbound);
 
         (network, net_event_recv, driver)
     }
@@ -296,7 +295,6 @@ impl NetworkBuilder {
         record_store_cfg: Option<NodeRecordStoreConfig>,
         is_client: bool,
         req_res_protocol: ProtocolSupport,
-        upnp: bool,
     ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
@@ -452,7 +450,7 @@ impl NetworkBuilder {
             libp2p::identify::Behaviour::new(cfg)
         };
 
-        let upnp = if !self.local && !is_client && upnp {
+        let upnp = if !self.local && !is_client && !self.no_upnp && !self.relay_client {
             debug!("Enabling UPnP port opening behavior");
             Some(libp2p::upnp::tokio::Behaviour::default())
         } else {
@@ -529,7 +527,7 @@ impl NetworkBuilder {
             close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
             peers_in_rt: 0,
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
-            initial_bootstrap_trigger: InitialBootstrapTrigger::new(self.upnp, is_client),
+            initial_bootstrap_trigger: InitialBootstrapTrigger::new(!self.no_upnp, is_client),
             bootstrap_cache: self.bootstrap_cache,
             relay_manager,
             connected_relay_clients: Default::default(),

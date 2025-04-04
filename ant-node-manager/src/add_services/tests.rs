@@ -150,7 +150,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
     mock_service_control
@@ -183,7 +183,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -309,7 +309,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             status: ServiceStatus::Added,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -351,7 +351,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -440,7 +440,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -537,7 +537,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             .join(ANTNODE_FILE_NAME),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -585,7 +585,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             .join("antnode2")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -633,7 +633,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             .join("antnode3")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -667,7 +667,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -814,7 +814,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
     mock_service_control
@@ -847,7 +847,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -946,7 +946,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -999,7 +999,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             .join("antnode2")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -1033,7 +1033,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             antnode_dir_path: temp_dir.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1197,7 +1197,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1354,7 +1354,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1506,7 +1506,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1662,7 +1662,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1817,7 +1817,7 @@ async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -1969,7 +1969,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2122,7 +2122,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2268,7 +2268,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2412,7 +2412,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2510,7 +2510,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -2544,7 +2544,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2804,7 +2804,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -2883,7 +2883,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -2923,7 +2923,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3000,7 +3000,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -3040,7 +3040,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3118,7 +3118,7 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             antnode_dir_path: temp_dir.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3201,7 +3201,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3347,7 +3347,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3485,7 +3485,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3624,7 +3624,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3879,7 +3879,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -3955,7 +3955,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -3995,7 +3995,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -4073,7 +4073,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -4113,7 +4113,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -4351,7 +4351,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -4438,7 +4438,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -4478,7 +4478,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -4556,7 +4556,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
-            upnp: false,
+            no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
             version: "0.98.1".to_string(),
@@ -4596,7 +4596,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -4692,7 +4692,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: true,
     }
     .build()?;
     mock_service_control
@@ -4748,14 +4748,14 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
     )
     .await?;
 
-    assert!(!node_registry.nodes[0].upnp);
+    assert!(node_registry.nodes[0].no_upnp);
     assert!(!node_registry.nodes[0].relay);
 
     Ok(())
 }
 
 #[tokio::test]
-async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
+async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4818,7 +4818,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: true,
+        no_upnp: false,
     }
     .build()?;
     mock_service_control
@@ -4874,7 +4874,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
     )
     .await?;
 
-    assert!(node_registry.nodes[0].upnp);
+    assert!(!node_registry.nodes[0].no_upnp);
     assert!(!node_registry.nodes[0].relay);
 
     Ok(())
@@ -4944,7 +4944,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: true,
     }
     .build()?;
     mock_service_control
@@ -5000,7 +5000,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
     )
     .await?;
 
-    assert!(!node_registry.nodes[0].upnp);
+    assert!(node_registry.nodes[0].no_upnp);
     assert!(node_registry.nodes[0].relay);
 
     Ok(())
@@ -5063,7 +5063,7 @@ async fn add_node_should_return_an_error_if_nat_status_is_none_but_auto_set_nat_
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -5689,7 +5689,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -5723,7 +5723,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -5817,7 +5817,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -5851,7 +5851,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),
@@ -5945,7 +5945,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: false,
+        no_upnp: false,
     }
     .build()?;
 
@@ -5979,7 +5979,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: true,
             version: latest_version.to_string(),
@@ -6006,7 +6006,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
 }
 
 #[tokio::test]
-async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
+async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -6070,7 +6070,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             .join("antnode1")
             .join(ANTNODE_FILE_NAME),
         service_user: Some(get_username()),
-        upnp: true,
+        no_upnp: true,
     }
     .build()?;
 
@@ -6104,7 +6104,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
+            no_upnp: true,
             user: Some(get_username()),
             user_mode: true,
             version: latest_version.to_string(),
@@ -6128,7 +6128,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
     .await?;
 
     assert_eq!(node_registry.nodes.len(), 1);
-    assert!(node_registry.nodes[0].upnp);
+    assert!(node_registry.nodes[0].no_upnp);
 
     Ok(())
 }
@@ -6239,7 +6239,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
             service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: true,
+            no_upnp: false,
             user: Some(get_username()),
             user_mode: false,
             version: latest_version.to_string(),

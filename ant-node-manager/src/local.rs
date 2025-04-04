@@ -440,7 +440,7 @@ pub async fn run_node(
         rpc_socket_addr: run_options.rpc_socket_addr,
         status: ServiceStatus::Running,
         service_name: format!("antnode-local{}", run_options.number),
-        upnp: false,
+        no_upnp: false,
         user: None,
         user_mode: false,
         version: run_options.version.to_string(),

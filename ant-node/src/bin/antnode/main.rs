@@ -158,6 +158,12 @@ struct Opt {
     #[clap(long, verbatim_doc_comment)]
     network_id: Option<u8>,
 
+    /// By default, a node would use UPnP to open a port in the home router and allow incoming connections.
+    ///
+    /// Set to 'true' to disable UPnP.
+    #[clap(long, default_value_t = false)]
+    no_upnp: bool,
+
     /// Print the package version.
     #[cfg(not(feature = "nightly"))]
     #[clap(long)]
@@ -201,10 +207,6 @@ struct Opt {
     /// The RPC service can be used for querying information about the running node.
     #[clap(long)]
     rpc: Option<SocketAddr>,
-
-    /// Try to use UPnP to open a port in the home router and allow incoming connections.
-    #[clap(long, default_value_t = false)]
-    upnp: bool,
 
     /// Print version information.
     #[clap(long)]
@@ -318,7 +320,7 @@ fn main() -> Result<()> {
             root_dir,
         );
         node_builder.local(opt.peers.local);
-        node_builder.upnp(opt.upnp);
+        node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
         node_builder.relay_client(opt.relay);
         #[cfg(feature = "open-metrics")]
