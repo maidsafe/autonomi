@@ -72,7 +72,10 @@ impl ServiceStateActions for NodeService<'_> {
             OsString::from(self.service_data.log_dir_path.to_string_lossy().to_string()),
         ];
 
-        push_arguments_from_initial_peers_config(&self.service_data.peers_args, &mut args);
+        push_arguments_from_initial_peers_config(
+            &self.service_data.initial_peers_config,
+            &mut args,
+        );
         if let Some(log_fmt) = self.service_data.log_format {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_fmt.as_str()));
@@ -276,6 +279,7 @@ pub struct NodeServiceData {
     pub data_dir_path: PathBuf,
     #[serde(default)]
     pub evm_network: EvmNetwork,
+    pub initial_peers_config: InitialPeersConfig,
     pub listen_addr: Option<Vec<Multiaddr>>,
     pub log_dir_path: PathBuf,
     pub log_format: Option<LogFormat>,
@@ -295,7 +299,6 @@ pub struct NodeServiceData {
         deserialize_with = "deserialize_peer_id"
     )]
     pub peer_id: Option<PeerId>,
-    pub peers_args: InitialPeersConfig,
     pub pid: Option<u32>,
     pub relay: bool,
     #[serde(default)]

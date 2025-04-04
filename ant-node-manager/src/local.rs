@@ -414,6 +414,15 @@ pub async fn run_node(
         data_dir_path: node_info.data_path,
         evm_network: run_options.evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         relay: false,
+        initial_peers_config: InitialPeersConfig {
+            first: run_options.first,
+            addrs: vec![],
+            network_contacts_url: vec![],
+            local: true,
+            disable_mainnet_contacts: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: None,
+        },
         listen_addr: Some(listen_addrs),
         log_dir_path: node_info.log_path,
         log_format: run_options.log_format,
@@ -425,15 +434,6 @@ pub async fn run_node(
         node_port: run_options.node_port,
         number: run_options.number,
         peer_id: Some(peer_id),
-        peers_args: InitialPeersConfig {
-            first: run_options.first,
-            addrs: vec![],
-            network_contacts_url: vec![],
-            local: true,
-            disable_mainnet_contacts: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: None,
-        },
         pid: Some(node_info.pid),
         rewards_address: run_options.rewards_address,
         reward_balance: None,
@@ -599,7 +599,7 @@ mod tests {
         )
         .await?;
 
-        assert!(node.peers_args.first);
+        assert!(node.initial_peers_config.first);
         assert_eq!(node.version, "0.100.12");
         assert_eq!(node.service_name, "antnode-local1");
         assert_eq!(

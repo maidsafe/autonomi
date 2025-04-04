@@ -56,7 +56,10 @@ pub async fn add_node(
             }
         }
 
-        let genesis_node = node_registry.nodes.iter().find(|n| n.peers_args.first);
+        let genesis_node = node_registry
+            .nodes
+            .iter()
+            .find(|n| n.initial_peers_config.first);
         if genesis_node.is_some() {
             error!("A genesis node already exists");
             return Err(eyre!("A genesis node already exists"));
@@ -230,6 +233,7 @@ pub async fn add_node(
                     data_dir_path: service_data_dir_path.clone(),
                     evm_network: options.evm_network.clone(),
                     relay: options.relay,
+                    initial_peers_config: options.init_peers_config.clone(),
                     listen_addr: None,
                     log_dir_path: service_log_dir_path.clone(),
                     log_format: options.log_format,
@@ -244,7 +248,6 @@ pub async fn add_node(
                     reward_balance: None,
                     rpc_socket_addr,
                     peer_id: None,
-                    peers_args: options.init_peers_config.clone(),
                     pid: None,
                     service_name,
                     status: ServiceStatus::Added,

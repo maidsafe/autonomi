@@ -780,6 +780,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -791,7 +792,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -893,6 +893,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -906,7 +907,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -971,6 +971,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -984,7 +985,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1089,6 +1089,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1102,7 +1103,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1180,6 +1180,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1191,7 +1192,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1281,6 +1281,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1292,7 +1293,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1381,6 +1381,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1392,7 +1393,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1451,6 +1451,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1464,7 +1465,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1513,6 +1513,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1524,7 +1525,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1573,6 +1573,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1586,7 +1587,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1636,6 +1636,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1647,7 +1648,6 @@ mod tests {
             node_port: None,
             number: 1,
             peer_id: None,
-            peers_args: InitialPeersConfig::default(),
             pid: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1711,6 +1711,7 @@ mod tests {
             }),
             relay: false,
             listen_addr: None,
+            initial_peers_config: InitialPeersConfig::default(),
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
             max_archived_log_files: None,
@@ -1723,7 +1724,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1849,6 +1849,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1862,7 +1863,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1949,6 +1949,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -1962,7 +1963,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2094,6 +2094,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2107,7 +2108,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2251,6 +2251,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2264,7 +2265,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2403,6 +2403,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2416,7 +2417,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2556,6 +2556,7 @@ mod tests {
                 )?,
             }),
             relay: false,
+            initial_peers_config: InitialPeersConfig::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2569,7 +2570,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2735,6 +2735,15 @@ mod tests {
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: true,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                local: false,
+                disable_mainnet_contacts: false,
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2748,15 +2757,6 @@ mod tests {
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: true,
-                addrs: vec![],
-                network_contacts_url: vec![],
-                local: false,
-                disable_mainnet_contacts: false,
-                ignore_cache: false,
-                bootstrap_cache_dir: None,
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2790,7 +2790,13 @@ mod tests {
             })
             .await?;
 
-        assert!(service_manager.service.service_data.peers_args.first);
+        assert!(
+            service_manager
+                .service
+                .service_data
+                .initial_peers_config
+                .first
+        );
 
         Ok(())
     }
@@ -2907,6 +2913,18 @@ mod tests {
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config:  InitialPeersConfig {
+                first: false,
+                addrs: vec![
+                    "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+                        .parse()?,
+                ],
+                network_contacts_url: vec![],
+                local: false,
+                disable_mainnet_contacts: false,
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -2920,18 +2938,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args:  InitialPeersConfig {
-                first: false,
-                addrs: vec![
-                    "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
-                        .parse()?,
-                ],
-                network_contacts_url: vec![],
-                local: false,
-                disable_mainnet_contacts: false,
-                ignore_cache: false,
-        bootstrap_cache_dir: None,
-    },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2968,7 +2974,7 @@ network_id: None,
         assert!(!service_manager
             .service
             .service_data
-            .peers_args
+            .initial_peers_config
             .addrs
             .is_empty());
 
@@ -3085,6 +3091,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3098,7 +3105,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: Default::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3246,6 +3252,15 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                local: true,
+                disable_mainnet_contacts: false,
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3259,15 +3274,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: false,
-                addrs: vec![],
-                network_contacts_url: vec![],
-                local: true,
-                disable_mainnet_contacts: false,
-                ignore_cache: false,
-                bootstrap_cache_dir: None,
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3301,7 +3307,13 @@ network_id: None,
             })
             .await?;
 
-        assert!(service_manager.service.service_data.peers_args.local);
+        assert!(
+            service_manager
+                .service
+                .service_data
+                .initial_peers_config
+                .local
+        );
 
         Ok(())
     }
@@ -3416,6 +3428,18 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                addrs: vec![],
+                network_contacts_url: vec![
+                    "http://localhost:8080/contacts.json".to_string(),
+                    "http://localhost:8081/contacts.json".to_string(),
+                ],
+                local: false,
+                disable_mainnet_contacts: false,
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3429,18 +3453,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: false,
-                addrs: vec![],
-                network_contacts_url: vec![
-                    "http://localhost:8080/contacts.json".to_string(),
-                    "http://localhost:8081/contacts.json".to_string(),
-                ],
-                local: false,
-                disable_mainnet_contacts: false,
-                ignore_cache: false,
-                bootstrap_cache_dir: None,
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3478,7 +3490,7 @@ network_id: None,
             service_manager
                 .service
                 .service_data
-                .peers_args
+                .initial_peers_config
                 .network_contacts_url
                 .len(),
             2
@@ -3596,6 +3608,15 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                local: false,
+                disable_mainnet_contacts: true,
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3609,15 +3630,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: false,
-                addrs: vec![],
-                network_contacts_url: vec![],
-                local: false,
-                disable_mainnet_contacts: true,
-                ignore_cache: false,
-                bootstrap_cache_dir: None,
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3655,7 +3667,7 @@ network_id: None,
             service_manager
                 .service
                 .service_data
-                .peers_args
+                .initial_peers_config
                 .disable_mainnet_contacts
         );
 
@@ -3771,6 +3783,15 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                local: false,
+                disable_mainnet_contacts: false,
+                ignore_cache: true,
+                bootstrap_cache_dir: None,
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3784,15 +3805,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: false,
-                addrs: vec![],
-                network_contacts_url: vec![],
-                local: false,
-                disable_mainnet_contacts: false,
-                ignore_cache: true,
-                bootstrap_cache_dir: None,
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3826,7 +3838,13 @@ network_id: None,
             })
             .await?;
 
-        assert!(service_manager.service.service_data.peers_args.ignore_cache);
+        assert!(
+            service_manager
+                .service
+                .service_data
+                .initial_peers_config
+                .ignore_cache
+        );
 
         Ok(())
     }
@@ -3941,6 +3959,17 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                local: false,
+                disable_mainnet_contacts: false,
+                ignore_cache: false,
+                bootstrap_cache_dir: Some(PathBuf::from(
+                    "/var/antctl/services/antnode1/bootstrap_cache",
+                )),
+            },
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -3954,17 +3983,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig {
-                first: false,
-                addrs: vec![],
-                network_contacts_url: vec![],
-                local: false,
-                disable_mainnet_contacts: false,
-                ignore_cache: false,
-                bootstrap_cache_dir: Some(PathBuf::from(
-                    "/var/antctl/services/antnode1/bootstrap_cache",
-                )),
-            },
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4002,7 +4020,7 @@ network_id: None,
             service_manager
                 .service
                 .service_data
-                .peers_args
+                .initial_peers_config
                 .bootstrap_cache_dir,
             Some(PathBuf::from(
                 "/var/antctl/services/antnode1/bootstrap_cache"
@@ -4121,6 +4139,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4135,7 +4154,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4283,6 +4301,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: Some(LogFormat::Json),
@@ -4296,7 +4315,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4448,6 +4466,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: true,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4461,7 +4480,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4610,6 +4628,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4623,7 +4642,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4775,6 +4793,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4788,7 +4807,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4936,6 +4954,7 @@ network_id: None,
             connected_peers: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4949,7 +4968,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
@@ -5101,6 +5119,7 @@ network_id: None,
             connected_peers: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5114,7 +5133,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
@@ -5264,6 +5282,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5277,7 +5296,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5429,6 +5447,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5442,7 +5461,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5592,6 +5610,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5605,7 +5624,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5766,6 +5784,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5779,7 +5798,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5941,6 +5959,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -5954,7 +5973,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6105,6 +6123,7 @@ network_id: None,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::ArbitrumOne,
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -6118,7 +6137,6 @@ network_id: None,
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
             )?),
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6189,6 +6207,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: log_dir.to_path_buf(),
             log_format: None,
@@ -6199,7 +6218,6 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             pid: None,
             rewards_address: RewardsAddress::from_str(
@@ -6257,6 +6275,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -6267,7 +6286,6 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
@@ -6340,6 +6358,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -6350,7 +6369,6 @@ network_id: None,
             node_ip: None,
             node_port: None,
             number: 1,
-            peers_args: InitialPeersConfig::default(),
             pid: Some(1000),
             peer_id: Some(PeerId::from_str(
                 "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
@@ -6418,6 +6436,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: log_dir.to_path_buf(),
             log_format: None,
@@ -6429,7 +6448,6 @@ network_id: None,
             node_port: None,
             number: 1,
             pid: None,
-            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -6494,6 +6512,7 @@ network_id: None,
                 )?,
             }),
             relay: false,
+            initial_peers_config: Default::default(),
             listen_addr: None,
             log_dir_path: log_dir.to_path_buf(),
             log_format: None,
@@ -6505,7 +6524,6 @@ network_id: None,
             node_port: None,
             number: 1,
             pid: None,
-            peers_args: InitialPeersConfig::default(),
             peer_id: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
