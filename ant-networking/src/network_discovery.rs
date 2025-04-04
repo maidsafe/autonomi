@@ -58,7 +58,7 @@ impl SwarmDriver {
     ) -> Option<Interval> {
         let (should_discover, new_interval) = self
             .network_discovery
-            .should_we_discover(self.peers_in_rt as u32, current_interval)
+            .should_we_discover(self.peers_in_rt as u32, current_interval, self.is_client)
             .await;
         if should_discover {
             self.trigger_network_discovery(round_robin_index);
@@ -246,8 +246,15 @@ impl NetworkDiscovery {
         &self,
         peers_in_rt: u32,
         current_interval: Duration,
+        is_client: bool,
     ) -> (bool, Option<Interval>) {
         let should_network_discover = peers_in_rt >= 1;
+
+        // When being a client, no need to carry out periodic network_discover,
+        // once completed the initial run.
+        if is_client && self.initial_bootstrap_done {
+            return (false, None);
+        }
 
         // if it has been a while (LAST_PEER_ADDED_TIME_LIMIT) since we have added a new peer,
         // slowdown the network discovery process.
