@@ -18,7 +18,9 @@ use crate::{
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
-use ant_service_management::{auditor::AuditorServiceData, control::ServiceControl};
+use ant_service_management::{
+    auditor::AuditorServiceData, control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
+};
 use ant_service_management::{error::Result as ServiceControlResult, NatDetectionStatus};
 use ant_service_management::{
     DaemonServiceData, FaucetServiceData, NodeRegistry, NodeServiceData, ServiceStatus,
@@ -306,9 +308,10 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             )?,
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
-            status: ServiceStatus::Added,
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
+            status: ServiceStatus::Added,
             no_upnp: false,
             user: Some("ant".to_string()),
             user_mode: false,
@@ -944,6 +947,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -2911,6 +2915,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -3028,6 +3033,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -3983,6 +3989,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -4101,6 +4108,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -4466,6 +4474,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,
@@ -4584,6 +4593,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             reward_balance: Some(AttoTokens::zero()),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
             status: ServiceStatus::Added,
             no_upnp: false,

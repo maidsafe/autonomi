@@ -12,6 +12,7 @@ use crate::{
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
+    node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
     NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
 };
@@ -228,6 +229,7 @@ pub async fn restart_node_service(
             rewards_address: current_node_clone.rewards_address,
             reward_balance: current_node_clone.reward_balance,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: new_service_name.clone(),
             status: ServiceStatus::Added,
             user: current_node_clone.user.clone(),
