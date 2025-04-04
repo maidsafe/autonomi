@@ -297,11 +297,6 @@ fn main() -> Result<()> {
         ant_build_info::git_info()
     );
 
-    info!(
-        "Node started with bootstrap cache containing {} peers",
-        bootstrap_cache.peer_count()
-    );
-
     // Create a tokio runtime per `run_node` attempt, this ensures
     // any spawned tasks are closed before we would attempt to run
     // another process with these args.
@@ -310,6 +305,7 @@ fn main() -> Result<()> {
         rt.spawn(init_metrics(std::process::id()));
     }
     let initial_peers = rt.block_on(opt.peers.get_addrs(None, Some(100)))?;
+    info!("Initial peers len: {:?}", initial_peers.len());
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,

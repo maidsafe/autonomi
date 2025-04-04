@@ -517,6 +517,7 @@ impl NetworkBuilder {
             None
         };
 
+        let is_upnp_enabled = swarm.behaviour().upnp.is_enabled();
         let swarm_driver = SwarmDriver {
             swarm,
             self_peer_id: peer_id,
@@ -527,7 +528,7 @@ impl NetworkBuilder {
             close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
             peers_in_rt: 0,
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
-            initial_bootstrap_trigger: InitialBootstrapTrigger::new(!self.no_upnp, is_client),
+            initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled, is_client),
             bootstrap_cache: self.bootstrap_cache,
             relay_manager,
             connected_relay_clients: Default::default(),
