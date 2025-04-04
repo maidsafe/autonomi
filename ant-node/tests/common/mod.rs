@@ -189,9 +189,12 @@ impl NodeRestart {
                 {
                     let peer_id =
                         peer_id.ok_or_eyre("PeerId should be present for a local node")?;
-                    self.restart(peer_id, antnode_rpc_endpoint, progress_on_error)
-                        .await?;
-                    Some(antnode_rpc_endpoint)
+                    if let Some(endpoint) = antnode_rpc_endpoint {
+                        self.restart(peer_id, endpoint, progress_on_error).await?;
+                        Some(endpoint)
+                    } else {
+                        None
+                    }
                 } else {
                     warn!("We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now.");
                     None
