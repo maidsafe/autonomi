@@ -14,6 +14,7 @@ use crate::helpers::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::{
     control::ServiceControl,
     rpc::{RpcActions, RpcClient},
@@ -413,7 +414,16 @@ pub async fn run_node(
         connected_peers,
         data_dir_path: node_info.data_path,
         evm_network: run_options.evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
-        home_network: false,
+        relay: false,
+        initial_peers_config: InitialPeersConfig {
+            first: run_options.first,
+            addrs: vec![],
+            network_contacts_url: vec![],
+            local: true,
+            disable_mainnet_contacts: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: None,
+        },
         listen_addr: Some(listen_addrs),
         log_dir_path: node_info.log_path,
         log_format: run_options.log_format,
@@ -425,22 +435,14 @@ pub async fn run_node(
         node_port: run_options.node_port,
         number: run_options.number,
         peer_id: Some(peer_id),
-        peers_args: InitialPeersConfig {
-            first: run_options.first,
-            addrs: vec![],
-            network_contacts_url: vec![],
-            local: true,
-            disable_mainnet_contacts: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: None,
-        },
         pid: Some(node_info.pid),
         rewards_address: run_options.rewards_address,
         reward_balance: None,
         rpc_socket_addr: run_options.rpc_socket_addr,
+        schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         status: ServiceStatus::Running,
         service_name: format!("antnode-local{}", run_options.number),
-        upnp: false,
+        no_upnp: false,
         user: None,
         user_mode: false,
         version: run_options.version.to_string(),
@@ -599,7 +601,7 @@ mod tests {
         )
         .await?;
 
-        assert!(node.peers_args.first);
+        assert!(node.initial_peers_config.first);
         assert_eq!(node.version, "0.100.12");
         assert_eq!(node.service_name, "antnode-local1");
         assert_eq!(

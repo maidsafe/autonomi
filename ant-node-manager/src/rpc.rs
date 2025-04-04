@@ -12,6 +12,7 @@ use crate::{
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
+    node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
     NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
 };
@@ -67,7 +68,8 @@ pub async fn restart_node_service(
             data_dir_path: current_node_clone.data_dir_path.clone(),
             env_variables: node_registry.environment_variables.clone(),
             evm_network: current_node_clone.evm_network.clone(),
-            home_network: current_node_clone.home_network,
+            relay: current_node_clone.relay,
+            init_peers_config: current_node_clone.initial_peers_config.clone(),
             log_dir_path: current_node_clone.log_dir_path.clone(),
             log_format: current_node_clone.log_format,
             max_archived_log_files: current_node_clone.max_archived_log_files,
@@ -77,11 +79,10 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: current_node_clone.get_antnode_port(),
-            init_peers_config: current_node_clone.peers_args.clone(),
+            no_upnp: current_node_clone.no_upnp,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
-            upnp: current_node_clone.upnp,
         }
         .build()?;
         service_control.install(install_ctx, false).map_err(|err| {
@@ -182,7 +183,8 @@ pub async fn restart_node_service(
             data_dir_path: data_dir_path.clone(),
             env_variables: node_registry.environment_variables.clone(),
             evm_network: current_node_clone.evm_network.clone(),
-            home_network: current_node_clone.home_network,
+            relay: current_node_clone.relay,
+            init_peers_config: current_node_clone.initial_peers_config.clone(),
             log_dir_path: log_dir_path.clone(),
             log_format: current_node_clone.log_format,
             name: new_service_name.clone(),
@@ -192,12 +194,11 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: None,
-            init_peers_config: current_node_clone.peers_args.clone(),
+            no_upnp: current_node_clone.no_upnp,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),
             service_user: current_node_clone.user.clone(),
-            upnp: current_node_clone.upnp,
         }
         .build()?;
         service_control.install(install_ctx, false).map_err(|err| {
@@ -210,7 +211,8 @@ pub async fn restart_node_service(
             connected_peers: None,
             data_dir_path,
             evm_network: current_node_clone.evm_network,
-            home_network: current_node_clone.home_network,
+            relay: current_node_clone.relay,
+            initial_peers_config: current_node_clone.initial_peers_config.clone(),
             listen_addr: None,
             log_dir_path,
             log_format: current_node_clone.log_format,
@@ -220,16 +222,16 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: None,
+            no_upnp: current_node_clone.no_upnp,
             number: new_node_number as u16,
             peer_id: None,
-            peers_args: current_node_clone.peers_args.clone(),
             pid: None,
             rewards_address: current_node_clone.rewards_address,
             reward_balance: current_node_clone.reward_balance,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
+            schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: new_service_name.clone(),
             status: ServiceStatus::Added,
-            upnp: current_node_clone.upnp,
             user: current_node_clone.user.clone(),
             user_mode: false,
             version: current_node_clone.version.clone(),

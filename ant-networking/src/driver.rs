@@ -115,7 +115,7 @@ pub struct SwarmDriver {
     /// When true, we don't filter our local addresses
     pub(crate) local: bool,
     pub(crate) is_client: bool,
-    pub(crate) is_behind_home_network: bool,
+    pub(crate) is_relay_client: bool,
     #[cfg(feature = "open-metrics")]
     pub(crate) close_group: Vec<PeerId>,
     pub(crate) peers_in_rt: usize,

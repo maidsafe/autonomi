@@ -27,7 +27,7 @@ def demonstrate_basic_node_operations():
         initial_peers=initial_peers,
         local=True,
         root_dir=None,
-        home_network=False
+        relay=False
     )
 
     # Get node information
@@ -86,7 +86,7 @@ def demonstrate_directory_management(node, peer_id):
             initial_peers=initial_peers,
             local=True,
             root_dir=custom_dir,
-            home_network=False
+            relay=False
         )
         
         print(f"New node root directory: {new_node.get_root_dir()}")

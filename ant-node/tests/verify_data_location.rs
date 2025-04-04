@@ -163,7 +163,7 @@ async fn verify_data_location() -> Result<()> {
                 .with_rewards_address(funded_wallet.address())
                 .with_initial_peers(initial_peers)
                 .with_local(true)
-                .with_upnp(false)
+                .with_no_upnp(true)
                 .with_root_dir(None)
                 .spawn()
                 .await?;

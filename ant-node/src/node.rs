@@ -82,20 +82,19 @@ const NETWORK_DENSITY_SAMPLING_INTERVAL_MAX_S: u64 = 200;
 
 /// Helper to build and run a Node
 pub struct NodeBuilder {
+    addr: SocketAddr,
     bootstrap_cache: Option<BootstrapCacheStore>,
-    initial_peers: Vec<Multiaddr>,
-    identity_keypair: Keypair,
     evm_address: RewardsAddress,
     evm_network: EvmNetwork,
-    addr: SocketAddr,
+    initial_peers: Vec<Multiaddr>,
+    identity_keypair: Keypair,
     local: bool,
-    root_dir: PathBuf,
     #[cfg(feature = "open-metrics")]
     /// Set to Some to enable the metrics server
     metrics_server_port: Option<u16>,
-    /// Enable hole punching for nodes connecting from home networks.
-    is_behind_home_network: bool,
-    upnp: bool,
+    no_upnp: bool,
+    relay_client: bool,
+    root_dir: PathBuf,
 }
 
 impl NodeBuilder {
@@ -110,18 +109,18 @@ impl NodeBuilder {
         root_dir: PathBuf,
     ) -> Self {
         Self {
+            addr,
             bootstrap_cache: None,
-            initial_peers,
-            identity_keypair,
             evm_address,
             evm_network,
-            addr,
+            initial_peers,
+            identity_keypair,
             local: false,
-            root_dir,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
-            is_behind_home_network: false,
-            upnp: false,
+            no_upnp: false,
+            relay_client: false,
+            root_dir,
         }
     }
 
@@ -141,14 +140,14 @@ impl NodeBuilder {
         self.bootstrap_cache = Some(cache);
     }
 
-    /// Set the flag to indicate if the node is behind a home network
-    pub fn is_behind_home_network(&mut self, is_behind_home_network: bool) {
-        self.is_behind_home_network = is_behind_home_network;
+    /// Set the flag to make the node act as a relay client
+    pub fn relay_client(&mut self, relay_client: bool) {
+        self.relay_client = relay_client;
     }
 
-    /// Set the flag to enable UPnP for the node
-    pub fn upnp(&mut self, upnp: bool) {
-        self.upnp = upnp;
+    /// Set the flag to disable UPnP for the node
+    pub fn no_upnp(&mut self, no_upnp: bool) {
+        self.no_upnp = no_upnp;
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,
@@ -183,12 +182,12 @@ impl NodeBuilder {
         network_builder.listen_addr(self.addr);
         #[cfg(feature = "open-metrics")]
         network_builder.metrics_server_port(self.metrics_server_port);
-        network_builder.is_behind_home_network(self.is_behind_home_network);
+        network_builder.relay_client(self.relay_client);
         if let Some(cache) = self.bootstrap_cache {
             network_builder.bootstrap_cache(cache);
         }
 
-        network_builder.upnp(self.upnp);
+        network_builder.no_upnp(self.no_upnp);
 
         let (network, network_event_receiver, swarm_driver) =
             network_builder.build_node(self.root_dir.clone())?;

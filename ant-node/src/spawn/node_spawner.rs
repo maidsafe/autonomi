@@ -24,8 +24,8 @@ pub struct NodeSpawner {
     initial_peers: Vec<Multiaddr>,
     /// A boolean indicating whether the node should run in local mode.
     local: bool,
-    /// A boolean indicating whether UPnP should be enabled.
-    upnp: bool,
+    /// A boolean indicating whether UPnP should be disabled.
+    no_upnp: bool,
     /// An optional `PathBuf` representing the root directory for the node.
     root_dir: Option<PathBuf>,
 }
@@ -39,7 +39,7 @@ impl NodeSpawner {
             rewards_address: Default::default(),
             initial_peers: vec![],
             local: false,
-            upnp: false,
+            no_upnp: false,
             root_dir: None,
         }
     }
@@ -94,13 +94,13 @@ impl NodeSpawner {
         self
     }
 
-    /// Set the UPnP flag for the node.
+    /// Set the to disable UPnP on the node.
     ///
     /// # Arguments
     ///
-    /// * `upnp` - A boolean indicating whether UPnP should be enabled.
-    pub fn with_upnp(mut self, upnp: bool) -> Self {
-        self.upnp = upnp;
+    /// * `no_upnp` - A boolean indicating whether UPnP should be disabled.
+    pub fn with_no_upnp(mut self, no_upnp: bool) -> Self {
+        self.no_upnp = no_upnp;
         self
     }
 
@@ -126,7 +126,7 @@ impl NodeSpawner {
             self.rewards_address,
             self.initial_peers,
             self.local,
-            self.upnp,
+            self.no_upnp,
             &self.root_dir,
         )
         .await
@@ -145,7 +145,7 @@ async fn spawn_node(
     rewards_address: RewardsAddress,
     initial_peers: Vec<Multiaddr>,
     local: bool,
-    upnp: bool,
+    no_upnp: bool,
     root_dir: &Option<PathBuf>,
 ) -> eyre::Result<RunningNode> {
     let (root_dir, keypair) = get_root_dir_and_keypair(root_dir)?;
@@ -159,7 +159,7 @@ async fn spawn_node(
         root_dir,
     );
     node_builder.local(local);
-    node_builder.upnp(upnp);
+    node_builder.no_upnp(no_upnp);
 
     let running_node = node_builder.build_and_run()?;
 
