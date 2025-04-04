@@ -84,8 +84,8 @@ impl ServiceStateActions for NodeService<'_> {
         if self.service_data.upnp {
             args.push(OsString::from("--upnp"));
         }
-        if self.service_data.home_network {
-            args.push(OsString::from("--home-network"));
+        if self.service_data.relay {
+            args.push(OsString::from("--relay"));
         }
 
         if let Some(node_ip) = self.service_data.node_ip {
@@ -276,7 +276,6 @@ pub struct NodeServiceData {
     pub data_dir_path: PathBuf,
     #[serde(default)]
     pub evm_network: EvmNetwork,
-    pub home_network: bool,
     pub listen_addr: Option<Vec<Multiaddr>>,
     pub log_dir_path: PathBuf,
     pub log_format: Option<LogFormat>,
@@ -297,6 +296,7 @@ pub struct NodeServiceData {
     pub peer_id: Option<PeerId>,
     pub peers_args: InitialPeersConfig,
     pub pid: Option<u32>,
+    pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,

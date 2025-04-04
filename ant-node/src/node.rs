@@ -93,8 +93,7 @@ pub struct NodeBuilder {
     #[cfg(feature = "open-metrics")]
     /// Set to Some to enable the metrics server
     metrics_server_port: Option<u16>,
-    /// Enable hole punching for nodes connecting from home networks.
-    is_behind_home_network: bool,
+    relay_client: bool,
     upnp: bool,
 }
 
@@ -120,7 +119,7 @@ impl NodeBuilder {
             root_dir,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
-            is_behind_home_network: false,
+            relay_client: false,
             upnp: false,
         }
     }
@@ -141,9 +140,9 @@ impl NodeBuilder {
         self.bootstrap_cache = Some(cache);
     }
 
-    /// Set the flag to indicate if the node is behind a home network
-    pub fn is_behind_home_network(&mut self, is_behind_home_network: bool) {
-        self.is_behind_home_network = is_behind_home_network;
+    /// Set the flag to make the node act as a relay client
+    pub fn relay_client(&mut self, relay_client: bool) {
+        self.relay_client = relay_client;
     }
 
     /// Set the flag to enable UPnP for the node
@@ -183,7 +182,7 @@ impl NodeBuilder {
         network_builder.listen_addr(self.addr);
         #[cfg(feature = "open-metrics")]
         network_builder.metrics_server_port(self.metrics_server_port);
-        network_builder.is_behind_home_network(self.is_behind_home_network);
+        network_builder.relay_client(self.relay_client);
         if let Some(cache) = self.bootstrap_cache {
             network_builder.bootstrap_cache(cache);
         }

@@ -95,7 +95,6 @@ pub struct NetworkBuilder {
     bootstrap_cache: Option<BootstrapCacheStore>,
     concurrency_limit: Option<usize>,
     initial_contacts: Vec<Multiaddr>,
-    is_behind_home_network: bool,
     keypair: Keypair,
     listen_addr: Option<SocketAddr>,
     local: bool,
@@ -103,6 +102,7 @@ pub struct NetworkBuilder {
     metrics_registries: Option<MetricsRegistries>,
     #[cfg(feature = "open-metrics")]
     metrics_server_port: Option<u16>,
+    relay_client: bool,
     request_timeout: Option<Duration>,
     upnp: bool,
 }
@@ -113,7 +113,6 @@ impl NetworkBuilder {
             bootstrap_cache: None,
             concurrency_limit: None,
             initial_contacts,
-            is_behind_home_network: false,
             keypair,
             listen_addr: None,
             local,
@@ -121,6 +120,7 @@ impl NetworkBuilder {
             metrics_registries: None,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
+            relay_client: false,
             request_timeout: None,
             upnp: false,
         }
@@ -130,8 +130,8 @@ impl NetworkBuilder {
         self.bootstrap_cache = Some(bootstrap_cache);
     }
 
-    pub fn is_behind_home_network(&mut self, enable: bool) {
-        self.is_behind_home_network = enable;
+    pub fn relay_client(&mut self, relay_client: bool) {
+        self.relay_client = relay_client;
     }
 
     pub fn listen_addr(&mut self, listen_addr: SocketAddr) {
@@ -460,7 +460,7 @@ impl NetworkBuilder {
         }
         .into(); // Into `Toggle<T>`
 
-        let relay_server = if !is_client && !self.is_behind_home_network {
+        let relay_server = if !is_client && !self.relay_client {
             let relay_server_cfg = relay::Config {
                 max_reservations: 128,             // Amount of peers we are relaying for
                 max_circuits: 1024, // The total amount of relayed connections at any given moment.
@@ -478,6 +478,8 @@ impl NetworkBuilder {
 
         let behaviour = NodeBehaviour {
             blocklist: libp2p::allow_block_list::Behaviour::default(),
+            // `Relay client Behaviour` is enabled for all nodes. This is required for normal nodes to connect to relay
+            // clients.
             relay_client: relay_behaviour,
             relay_server,
             upnp,
@@ -493,8 +495,8 @@ impl NetworkBuilder {
 
         let replication_fetcher = ReplicationFetcher::new(peer_id, network_event_sender.clone());
 
-        // Enable relay manager for nodes behind home network
-        let relay_manager = if !is_client && self.is_behind_home_network {
+        // Enable relay manager to allow the node to act as a relay client and connect via relay servers to the network
+        let relay_manager = if !is_client && self.relay_client {
             let relay_manager = RelayManager::new(peer_id);
             #[cfg(feature = "open-metrics")]
             let mut relay_manager = relay_manager;
@@ -510,8 +512,7 @@ impl NetworkBuilder {
             None
         };
         // Enable external address manager for public nodes and not behind nat
-        let external_address_manager = if !is_client && !self.local && !self.is_behind_home_network
-        {
+        let external_address_manager = if !is_client && !self.local && !self.relay_client {
             Some(ExternalAddressManager::new(peer_id))
         } else {
             info!("External address manager is disabled for this node.");
@@ -523,7 +524,7 @@ impl NetworkBuilder {
             self_peer_id: peer_id,
             local: self.local,
             is_client,
-            is_behind_home_network: self.is_behind_home_network,
+            is_relay_client: self.relay_client,
             #[cfg(feature = "open-metrics")]
             close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
             peers_in_rt: 0,

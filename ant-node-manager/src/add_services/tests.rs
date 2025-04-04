@@ -132,7 +132,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -287,7 +287,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -519,7 +519,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -567,7 +567,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
         log_format: None,
         max_archived_log_files: None,
@@ -615,7 +615,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_format: None,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode3"),
         max_archived_log_files: None,
@@ -796,7 +796,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -924,7 +924,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -981,7 +981,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
         log_format: None,
         max_archived_log_files: None,
@@ -2492,7 +2492,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -2861,7 +2861,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_format: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
@@ -2978,7 +2978,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_format: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
@@ -3933,7 +3933,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4051,7 +4051,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4416,7 +4416,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4534,7 +4534,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
             }),
-            home_network: false,
+            relay: false,
             listen_addr: None,
             log_dir_path: PathBuf::from("/var/log/antnode/antnode1"),
             log_format: None,
@@ -4629,7 +4629,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
 }
 
 #[tokio::test]
-async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public() -> Result<()> {
+async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4674,7 +4674,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -4749,7 +4749,7 @@ async fn add_node_should_disable_upnp_and_home_network_if_nat_status_is_public()
     .await?;
 
     assert!(!node_registry.nodes[0].upnp);
-    assert!(!node_registry.nodes[0].home_network);
+    assert!(!node_registry.nodes[0].relay);
 
     Ok(())
 }
@@ -4800,7 +4800,7 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -4875,13 +4875,13 @@ async fn add_node_should_enable_upnp_if_nat_status_is_upnp() -> Result<()> {
     .await?;
 
     assert!(node_registry.nodes[0].upnp);
-    assert!(!node_registry.nodes[0].home_network);
+    assert!(!node_registry.nodes[0].relay);
 
     Ok(())
 }
 
 #[tokio::test]
-async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Result<()> {
+async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4926,7 +4926,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: true,
+        relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5001,7 +5001,7 @@ async fn add_node_should_enable_home_network_if_nat_status_is_private() -> Resul
     .await?;
 
     assert!(!node_registry.nodes[0].upnp);
-    assert!(node_registry.nodes[0].home_network);
+    assert!(node_registry.nodes[0].relay);
 
     Ok(())
 }
@@ -5671,7 +5671,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: false,
+        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5752,7 +5752,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
 }
 
 #[tokio::test]
-async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<()> {
+async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -5790,7 +5790,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
         autostart: false,
         data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
         env_variables: None,
-        home_network: true,
+        relay: true,
         evm_network: EvmNetwork::Custom(CustomNetwork {
             rpc_url_http: "http://localhost:8545".parse()?,
             payment_token_address: RewardsAddress::from_str(
@@ -5874,7 +5874,7 @@ async fn add_node_should_apply_the_home_network_flag_if_it_is_used() -> Result<(
     )
     .await?;
 
-    assert!(node_registry.nodes[0].home_network);
+    assert!(node_registry.nodes[0].relay);
 
     Ok(())
 }
@@ -5927,7 +5927,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: true,
+        relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -6052,7 +6052,7 @@ async fn add_node_should_add_the_node_with_upnp_enabled() -> Result<()> {
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        home_network: true,
+        relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
