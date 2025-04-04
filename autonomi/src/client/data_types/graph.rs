@@ -51,7 +51,7 @@ pub enum GraphError {
 }
 
 impl Client {
-    /// Fetches a GraphEntry from the network.
+    /// Fetches a [`GraphEntry`] from the network.
     pub async fn graph_entry_get(
         &self,
         address: &GraphEntryAddress,
@@ -74,7 +74,7 @@ impl Client {
         }
     }
 
-    /// Check if a graph_entry exists on the network
+    /// Check if a [`GraphEntry`] exists on the network.
     pub async fn graph_entry_check_existance(
         &self,
         address: &GraphEntryAddress,
@@ -95,7 +95,7 @@ impl Client {
         }
     }
 
-    /// Manually puts a GraphEntry to the network.
+    /// Manually puts a [`GraphEntry`] to the network.
     pub async fn graph_entry_put(
         &self,
         entry: GraphEntry,
@@ -167,7 +167,7 @@ impl Client {
         Ok((total_cost, address))
     }
 
-    /// Get the cost to create a GraphEntry
+    /// Get the cost to create a [`GraphEntry`].
     pub async fn graph_entry_cost(&self, key: &PublicKey) -> Result<AttoTokens, CostError> {
         trace!("Getting cost for GraphEntry of {key:?}");
         let address = GraphEntryAddress::new(*key);

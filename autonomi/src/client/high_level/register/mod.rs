@@ -116,7 +116,7 @@ impl Client {
         main_key.derive_key(&derivation_index).into()
     }
 
-    /// Create a new [`RegisterValue`] from bytes, make sure the bytes are not longer than [`REGISTER_VALUE_SIZE`]
+    /// Create a new [`RegisterValue`] from bytes, make sure the bytes are not longer than [`REGISTER_VALUE_SIZE`].
     pub fn register_value_from_bytes(bytes: &[u8]) -> Result<RegisterValue, RegisterError> {
         if bytes.len() > REGISTER_VALUE_SIZE {
             return Err(RegisterError::InvalidRegisterValueLength(bytes.len()));
@@ -128,7 +128,7 @@ impl Client {
 
     /// Create a new register with an initial value.
     ///
-    /// Note that two payments are required, one for the underlying [`GraphEntry`] and one for the [`crate::Pointer`]
+    /// Note that two payments are required, one for the underlying [`GraphEntry`] and one for the [`crate::Pointer`].
     pub async fn register_create(
         &self,
         owner: &SecretKey,
@@ -169,7 +169,7 @@ impl Client {
 
     /// Update the value of a register.
     ///
-    /// The register needs to be created first with [`Client::register_create`]
+    /// The register needs to be created first with [`Client::register_create`].
     pub async fn register_update(
         &self,
         owner: &SecretKey,
@@ -233,7 +233,7 @@ impl Client {
         Ok(cost)
     }
 
-    /// Get the current value of the register
+    /// Get the current value of the register.
     pub async fn register_get(
         &self,
         addr: &RegisterAddress,
@@ -264,7 +264,7 @@ impl Client {
     }
 
     /// Get the cost of a register operation.
-    /// Returns the cost of creation if it doesn't exist, else returns the cost of an update
+    /// Returns the cost of creation if it doesn't exist, else returns the cost of an update.
     pub async fn register_cost(&self, owner: &PublicKey) -> Result<AttoTokens, CostError> {
         let pointer_pk = register_head_pointer_pk(&RegisterAddress(*owner));
         let graph_entry_cost = self.graph_entry_cost(owner);

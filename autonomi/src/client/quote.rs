@@ -84,7 +84,7 @@ pub enum CostError {
 impl Client {
     /// Get raw quotes from nodes.
     /// These quotes do not include actual record prices.
-    /// You will likely want to use `get_store_quotes` instead.
+    /// You will likely want to use [`Client::get_store_quotes`] instead.
     pub async fn get_raw_quotes(
         &self,
         data_type: DataTypes,
