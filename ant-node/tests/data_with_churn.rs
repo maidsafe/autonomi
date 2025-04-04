@@ -455,7 +455,7 @@ async fn data_churn_with_network_restart(
                 .with_rewards_address(funded_wallet.address())
                 .with_initial_peers(initial_peers.clone())
                 .with_local(local)
-                .with_upnp(upnp)
+                .with_no_upnp(!upnp)
                 .with_root_dir(None)
                 .spawn()
                 .await?;

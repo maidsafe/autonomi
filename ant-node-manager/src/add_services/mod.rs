@@ -183,8 +183,8 @@ pub async fn add_node(
                 }
             }
             debug!(
-                "Auto-setting NAT flags: upnp={}, relay={}",
-                !options.no_upnp, options.relay
+                "Auto-setting NAT flags: no_upnp={}, relay={}",
+                options.no_upnp, options.relay
             );
         }
 
@@ -208,7 +208,7 @@ pub async fn add_node(
             rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
-            upnp: !options.no_upnp,
+            no_upnp: options.no_upnp,
         }
         .build()?;
 
@@ -248,7 +248,7 @@ pub async fn add_node(
                     pid: None,
                     service_name,
                     status: ServiceStatus::Added,
-                    upnp: !options.no_upnp,
+                    no_upnp: options.no_upnp,
                     user: options.user.clone(),
                     user_mode: options.user_mode,
                     version: options.version.clone(),

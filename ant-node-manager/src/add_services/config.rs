@@ -79,6 +79,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub log_format: Option<LogFormat>,
     pub name: String,
     pub network_id: Option<u8>,
+    pub no_upnp: bool,
     pub max_archived_log_files: Option<usize>,
     pub max_log_files: Option<usize>,
     pub metrics_port: Option<u16>,
@@ -89,7 +90,6 @@ pub struct InstallNodeServiceCtxBuilder {
     pub relay: bool,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
-    pub upnp: bool,
 }
 
 impl InstallNodeServiceCtxBuilder {
@@ -116,8 +116,8 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_format.as_str()));
         }
-        if self.upnp {
-            args.push(OsString::from("--upnp"));
+        if self.no_upnp {
+            args.push(OsString::from("--no-upnp"));
         }
         if let Some(node_ip) = self.node_ip {
             args.push(OsString::from("--ip"));
@@ -189,13 +189,13 @@ pub struct AddNodeServiceOptions {
     pub network_id: Option<u8>,
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<PortRange>,
+    pub no_upnp: bool,
     pub relay: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
     pub service_data_dir_path: PathBuf,
     pub service_log_dir_path: PathBuf,
-    pub no_upnp: bool,
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
@@ -329,7 +329,7 @@ mod tests {
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
-            upnp: false,
+            no_upnp: false,
         }
     }
 
@@ -365,7 +365,7 @@ mod tests {
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
-            upnp: false,
+            no_upnp: false,
         }
     }
 
@@ -401,7 +401,7 @@ mod tests {
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
-            upnp: false,
+            no_upnp: false,
         }
     }
 
@@ -480,7 +480,7 @@ mod tests {
         let mut builder = create_builder_with_all_options_enabled();
         builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
-        builder.upnp = true;
+        builder.no_upnp = true;
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
         builder.node_port = Some(12345);
         builder.metrics_port = Some(9090);
@@ -518,7 +518,7 @@ mod tests {
             "--relay",
             "--log-format",
             "json",
-            "--upnp",
+            "--no-upnp",
             "--ip",
             "192.168.1.1",
             "--port",

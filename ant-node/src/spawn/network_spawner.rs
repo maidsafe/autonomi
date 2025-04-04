@@ -22,8 +22,8 @@ pub struct NetworkSpawner {
     /// - `true`: Nodes listen on the local loopback address (`127.0.0.1`).
     /// - `false`: Nodes listen on all available interfaces (`0.0.0.0`).
     local: bool,
-    /// Enables or disables UPnP (automatic port forwarding).
-    upnp: bool,
+    /// Disables UPnP on the node (automatic port forwarding).
+    no_upnp: bool,
     /// Optional root directory to store node data and configurations.
     root_dir: Option<PathBuf>,
     /// Number of nodes to spawn in the network.
@@ -37,7 +37,7 @@ impl NetworkSpawner {
     /// - `evm_network`: `EvmNetwork::default()`
     /// - `rewards_address`: `RewardsAddress::default()`
     /// - `local`: `false`
-    /// - `upnp`: `false`
+    /// - `no_upnp`: `false`
     /// - `root_dir`: `None`
     /// - `size`: `5`
     pub fn new() -> Self {
@@ -45,7 +45,7 @@ impl NetworkSpawner {
             evm_network: Default::default(),
             rewards_address: Default::default(),
             local: false,
-            upnp: false,
+            no_upnp: false,
             root_dir: None,
             size: 5,
         }
@@ -82,13 +82,13 @@ impl NetworkSpawner {
         self
     }
 
-    /// Enables or disables UPnP for the nodes.
+    /// Disabled UPnP for the nodes.
     ///
     /// # Arguments
     ///
-    /// * `value` - If `true`, nodes will attempt automatic port forwarding using UPnP.
-    pub fn with_upnp(mut self, value: bool) -> Self {
-        self.upnp = value;
+    /// * `value` - If `false`, nodes will attempt automatic port forwarding using UPnP.
+    pub fn with_no_upnp(mut self, value: bool) -> Self {
+        self.no_upnp = value;
         self
     }
 
@@ -123,7 +123,7 @@ impl NetworkSpawner {
             self.evm_network,
             self.rewards_address,
             self.local,
-            self.upnp,
+            self.no_upnp,
             self.root_dir,
             self.size,
         )
@@ -185,7 +185,7 @@ async fn spawn_network(
     evm_network: EvmNetwork,
     rewards_address: RewardsAddress,
     local: bool,
-    upnp: bool,
+    no_upnp: bool,
     root_dir: Option<PathBuf>,
     size: usize,
 ) -> eyre::Result<RunningNetwork> {
@@ -214,7 +214,7 @@ async fn spawn_network(
             .with_rewards_address(rewards_address)
             .with_initial_peers(initial_peers)
             .with_local(local)
-            .with_upnp(upnp)
+            .with_no_upnp(no_upnp)
             .with_root_dir(root_dir.clone())
             .spawn()
             .await?;
@@ -246,6 +246,7 @@ mod tests {
         let running_network = NetworkSpawner::new()
             .with_evm_network(Default::default())
             .with_local(true)
+            .with_no_upnp(true)
             .with_size(network_size)
             .spawn()
             .await

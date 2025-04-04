@@ -77,11 +77,11 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: current_node_clone.get_antnode_port(),
+            no_upnp: current_node_clone.no_upnp,
             init_peers_config: current_node_clone.peers_args.clone(),
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
-            upnp: current_node_clone.upnp,
         }
         .build()?;
         service_control.install(install_ctx, false).map_err(|err| {
@@ -192,12 +192,12 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: None,
+            no_upnp: current_node_clone.no_upnp,
             init_peers_config: current_node_clone.peers_args.clone(),
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),
             service_user: current_node_clone.user.clone(),
-            upnp: current_node_clone.upnp,
         }
         .build()?;
         service_control.install(install_ctx, false).map_err(|err| {
@@ -220,6 +220,7 @@ pub async fn restart_node_service(
             network_id: current_node_clone.network_id,
             node_ip: current_node_clone.node_ip,
             node_port: None,
+            no_upnp: current_node_clone.no_upnp,
             number: new_node_number as u16,
             peer_id: None,
             peers_args: current_node_clone.peers_args.clone(),
@@ -229,7 +230,6 @@ pub async fn restart_node_service(
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_name: new_service_name.clone(),
             status: ServiceStatus::Added,
-            upnp: current_node_clone.upnp,
             user: current_node_clone.user.clone(),
             user_mode: false,
             version: current_node_clone.version.clone(),
