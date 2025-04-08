@@ -128,6 +128,10 @@ impl NodeBuilder {
         }
     }
 
+    pub fn with_socket_addr(&mut self, addr: SocketAddr) {
+        self.addr = addr;
+    }
+
     /// Set to enable nat detection
     pub fn with_nat_detection(&mut self, nat_detection: bool) {
         self.nat_detection = nat_detection;
