@@ -149,54 +149,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@withautonomi/autonomi-darwin-arm64@npm:0.4.2":
-  version: 0.4.2
-  resolution: "@withautonomi/autonomi-darwin-arm64@npm:0.4.2"
-  conditions: os=darwin & cpu=arm64
-  languageName: node
-  linkType: hard
-
-"@withautonomi/autonomi-darwin-x64@npm:0.4.2":
-  version: 0.4.2
-  resolution: "@withautonomi/autonomi-darwin-x64@npm:0.4.2"
-  conditions: os=darwin & cpu=x64
-  languageName: node
-  linkType: hard
-
-"@withautonomi/autonomi-linux-x64-gnu@npm:0.4.2":
-  version: 0.4.2
-  resolution: "@withautonomi/autonomi-linux-x64-gnu@npm:0.4.2"
-  conditions: os=linux & cpu=x64 & libc=glibc
-  languageName: node
-  linkType: hard
-
-"@withautonomi/autonomi-win32-x64-msvc@npm:0.4.2":
-  version: 0.4.2
-  resolution: "@withautonomi/autonomi-win32-x64-msvc@npm:0.4.2"
-  conditions: os=win32 & cpu=x64
-  languageName: node
-  linkType: hard
-
 "@withautonomi/autonomi@workspace:.":
   version: 0.0.0-use.local
   resolution: "@withautonomi/autonomi@workspace:."
   dependencies:
     "@napi-rs/cli": "npm:^2.18.4"
     "@types/node": "npm:^22.13.10"
-    "@withautonomi/autonomi-darwin-arm64": "npm:0.4.2"
-    "@withautonomi/autonomi-darwin-x64": "npm:0.4.2"
-    "@withautonomi/autonomi-linux-x64-gnu": "npm:0.4.2"
-    "@withautonomi/autonomi-win32-x64-msvc": "npm:0.4.2"
     ava: "npm:^6.0.1"
-  dependenciesMeta:
-    "@withautonomi/autonomi-darwin-arm64":
-      optional: true
-    "@withautonomi/autonomi-darwin-x64":
-      optional: true
-    "@withautonomi/autonomi-linux-x64-gnu":
-      optional: true
-    "@withautonomi/autonomi-win32-x64-msvc":
-      optional: true
   languageName: unknown
   linkType: soft
 

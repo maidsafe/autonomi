@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-node-manager"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.12.1"
+version = "0.12.2"
 
 [[bin]]
 name = "antctl"
@@ -31,11 +31,11 @@ websockets = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.0" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.26" }
-ant-evm = { path = "../ant-evm", version = "0.1.11" }
+ant-evm = { path = "../ant-evm", version = "0.1.12" }
 ant-logging = { path = "../ant-logging", version = "0.2.48" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.2" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.3" }
 ant-releases = { version = "0.4.0" }
-ant-service-management = { path = "../ant-service-management", version = "0.4.10" }
+ant-service-management = { path = "../ant-service-management", version = "0.4.11" }
 chrono = "~0.4.19"
 clap = { version = "4.4.6", features = ["derive", "env"] }
 colored = "2.0.4"

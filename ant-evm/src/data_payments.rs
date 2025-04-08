@@ -62,13 +62,6 @@ impl ProofOfPayment {
             .collect()
     }
 
-    /// has the quote expired
-    pub fn has_expired(&self) -> bool {
-        self.peer_quotes
-            .iter()
-            .any(|(_, quote)| quote.has_expired())
-    }
-
     /// Returns all quotes by given peer id
     pub fn quotes_by_peer(&self, peer_id: &PeerId) -> Vec<&PaymentQuote> {
         self.peer_quotes
@@ -225,7 +218,10 @@ impl PaymentQuote {
 
         let dur_s = match now.duration_since(self.timestamp) {
             Ok(dur) => dur.as_secs(),
-            Err(_) => return true,
+            Err(err) => {
+                error!("Can't deduce elapsed time of {self:?} with error {err:?}");
+                return true;
+            }
         };
         dur_s > QUOTE_EXPIRATION_SECS
     }

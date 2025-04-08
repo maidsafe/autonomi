@@ -2,7 +2,7 @@
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "TUI for running nodes on the Autonomi network"
 name = "node-launchpad"
-version = "0.5.6"
+version = "0.5.7"
 edition = "2021"
 license = "GPL-3.0"
 homepage = "https://maidsafe.net"
@@ -20,11 +20,11 @@ nightly = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.0" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.26" }
-ant-evm = { path = "../ant-evm", version = "0.1.11" }
-ant-node-manager = { version = "0.12.1", path = "../ant-node-manager" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.2" }
+ant-evm = { path = "../ant-evm", version = "0.1.12" }
+ant-node-manager = { version = "0.12.2", path = "../ant-node-manager" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.3" }
 ant-releases = { version = "0.4.0" }
-ant-service-management = { version = "0.4.10", path = "../ant-service-management" }
+ant-service-management = { version = "0.4.11", path = "../ant-service-management" }
 arboard = "3.4.1"
 atty = "0.2.14"
 better-panic = "0.3.0"

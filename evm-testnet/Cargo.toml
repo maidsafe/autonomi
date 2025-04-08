@@ -6,10 +6,10 @@ homepage = "https://maidsafe.net"
 license = "GPL-3.0"
 name = "evm-testnet"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.1.11"
+version = "0.1.12"
 
 [dependencies]
-ant-evm = { path = "../ant-evm", version = "0.1.11" }
+ant-evm = { path = "../ant-evm", version = "0.1.12" }
 clap = { version = "4.5", features = ["derive"] }
 dirs-next = "~2.0.0"
 evmlib = { path = "../evmlib", version = "0.2.1" }

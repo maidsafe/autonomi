@@ -146,6 +146,10 @@ pub enum NetworkError {
         source: std::io::Error,
     },
 
+    // ---------- Kad Network Errors
+    #[error("Network GetClosest TimedOut")]
+    GetClosestTimedOut,
+
     // ---------- Internal Network Errors
     #[error("Could not get enough peers ({required}) to satisfy the request, found {found}")]
     NotEnoughPeers { found: usize, required: usize },

@@ -1,6 +1,11 @@
 {
   "name": "@withautonomi/autonomi-linux-x64-gnu",
-  "version": "0.4.3",
+  "version": "0.4.4",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maidsafe/autonomi.git",
+    "directory": "nodejs/npm/linux-x64-gnu"
+  },
   "os": [
     "linux"
   ],

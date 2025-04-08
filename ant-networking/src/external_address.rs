@@ -184,8 +184,10 @@ impl ExternalAddressManager {
                 }
             }
 
-            if let Some((&&new_ip, count)) =
-                new_ip_map.iter().sorted_by_key(|(_, count)| *count).last()
+            if let Some((&&new_ip, count)) = new_ip_map
+                .iter()
+                .sorted_by_key(|(_, count)| *count)
+                .next_back()
             {
                 if *count >= MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP {
                     info!("New IP map as count>= {MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP}: {new_ip_map:?}");
@@ -340,7 +342,6 @@ impl ExternalAddressManager {
         stats.error = stats.error.saturating_add(1);
 
         if stats.is_faulty() {
-            info!("Connection on port {port} is considered as faulty. Removing all addresses with this port");
             // remove all the addresses with this port
             let mut removed_confirmed = Vec::new();
             let mut removed_candidates = Vec::new();
