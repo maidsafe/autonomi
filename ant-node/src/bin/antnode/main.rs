@@ -19,6 +19,7 @@ use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
+use ant_networking::NatStatus;
 use ant_node::utils::get_root_dir_and_keypair;
 use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
 use ant_protocol::{
@@ -368,7 +369,7 @@ fn main() -> Result<()> {
 /// - `Ok(None)` if we want to shutdown the node.
 /// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
-    node_builder: NodeBuilder,
+    mut node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
@@ -379,7 +380,20 @@ async fn run_node(
 
     info!("Starting node ...");
     if node_builder.nat_detection {
-        let _status = node_builder.run_nat_det().await?;
+        let status = node_builder.run_nat_det().await?;
+        match status {
+            NatStatus::Upnp => {
+                node_builder.upnp(true);
+            }
+            NatStatus::Public(mut socket_addr) => {
+                socket_addr.set_port(0);
+                node_builder.upnp(false);
+                node_builder.with_socket_addr(socket_addr);
+            }
+            NatStatus::NonPublic => {
+                node_builder.is_behind_home_network(true);
+            }
+        }
     }
 
     let running_node = node_builder.build_and_run()?;
