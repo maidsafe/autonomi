@@ -157,14 +157,18 @@ impl LogBuilder {
     pub fn initialize(self) -> Result<(ReloadHandle, Option<WorkerGuard>)> {
         let mut layers = TracingLayers::default();
 
-        let reload_handle = layers.fmt_layer(
-            self.default_logging_targets.clone(),
-            &self.output_dest,
-            self.format,
-            self.max_log_files,
-            self.max_archived_log_files,
-            self.print_updates_to_stdout,
-        )?;
+        let reload_handle = layers
+            .fmt_layer(
+                self.default_logging_targets.clone(),
+                &self.output_dest,
+                self.format,
+                self.max_log_files,
+                self.max_archived_log_files,
+                self.print_updates_to_stdout,
+            )
+            .inspect_err(|err| {
+                eprintln!("Failed to get TracingLayers: {err}");
+            })?;
 
         #[cfg(feature = "otlp")]
         {
