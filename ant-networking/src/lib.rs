@@ -59,6 +59,7 @@ use ant_protocol::{
     NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
 use futures::future::select_all;
+use libp2p::kad::K_VALUE;
 use libp2p::{
     identity::Keypair,
     kad::{KBucketDistance, KBucketKey, Record, RecordKey},
@@ -98,18 +99,8 @@ const MAX_WAIT_BEFORE_READING_A_PUT: Duration = Duration::from_millis(750);
 /// Min duration to wait for verification
 const MIN_WAIT_BEFORE_READING_A_PUT: Duration = Duration::from_millis(300);
 
-/// Sort the provided peers by their distance to the given `NetworkAddress`.
-/// Return with the closest expected number of entries if has.
-pub fn sort_peers_by_address(
-    peers: Vec<(PeerId, Addresses)>,
-    address: &NetworkAddress,
-    expected_entries: usize,
-) -> Result<Vec<(PeerId, Addresses)>> {
-    sort_peers_by_key(peers, &address.as_kbucket_key(), expected_entries)
-}
-
 /// Sort the provided peers by their distance to the given `KBucketKey`.
-/// Return with the closest expected number of entries if has.
+/// Return with the closest expected number of entries it has.
 pub fn sort_peers_by_key<T>(
     peers: Vec<(PeerId, Addresses)>,
     key: &KBucketKey<T>,
@@ -220,27 +211,6 @@ impl Network {
         self.keypair().public().encode_protobuf()
     }
 
-    /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
-    /// Excludes the client's `PeerId` while calculating the closest peers.
-    pub async fn client_get_all_close_peers_in_range_or_close_group(
-        &self,
-        key: &NetworkAddress,
-    ) -> Result<Vec<(PeerId, Addresses)>> {
-        self.get_all_close_peers_in_range_or_close_group(key, true)
-            .await
-    }
-
-    /// Returns the closest peers to the given `NetworkAddress`, sorted by their distance to the key.
-    ///
-    /// Includes our node's `PeerId` while calculating the closest peers.
-    pub async fn node_get_closest_peers(
-        &self,
-        key: &NetworkAddress,
-    ) -> Result<Vec<(PeerId, Addresses)>> {
-        self.get_all_close_peers_in_range_or_close_group(key, false)
-            .await
-    }
-
     /// Returns a list of peers in local RT and their correspondent Multiaddr.
     /// Does not include self
     pub async fn get_local_peers_with_multiaddr(&self) -> Result<Vec<(PeerId, Vec<Multiaddr>)>> {
@@ -323,9 +293,7 @@ impl Network {
                 // Do not query the closest_peers during every re-try attempt.
                 // The close_nodes don't change often and the previous set of close_nodes might be taking a while to write
                 // the Chunk, so query them again incase of a failure.
-                close_nodes = self
-                    .client_get_all_close_peers_in_range_or_close_group(&chunk_address)
-                    .await?;
+                close_nodes = self.client_get_close_group(&chunk_address).await?;
             }
             retry_attempts += 1;
             info!(
@@ -396,9 +364,7 @@ impl Network {
     ) -> Result<Vec<(PeerId, PaymentQuote)>> {
         // The requirement of having at least CLOSE_GROUP_SIZE
         // close nodes will be checked internally automatically.
-        let mut close_nodes = self
-            .client_get_all_close_peers_in_range_or_close_group(&record_address)
-            .await?;
+        let mut close_nodes = self.client_get_close_group(&record_address).await?;
         // Filter out results from the ignored peers.
         close_nodes.retain(|(peer_id, _)| !ignore_peers.contains(peer_id));
         info!(
@@ -1099,13 +1065,9 @@ impl Network {
     }
 
     /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
-    /// If `client` is false, then include `self` among the `closest_peers`
-    ///
-    /// If less than CLOSE_GROUP_SIZE peers are found, it will return all the peers.
-    pub async fn get_all_close_peers_in_range_or_close_group(
+    pub async fn get_closest_peers(
         &self,
         key: &NetworkAddress,
-        client: bool,
     ) -> Result<Vec<(PeerId, Addresses)>> {
         let pretty_key = PrettyPrintKBucketKey(key.as_kbucket_key());
         debug!("Getting the all closest peers in range of {pretty_key:?}");
@@ -1115,24 +1077,11 @@ impl Network {
             sender,
         });
 
-        let found_peers = receiver.await?;
+        let closest_peers = receiver.await?;
 
         // Error out when fetched result is empty, indicating a timed out network query.
-        if found_peers.is_empty() {
+        if closest_peers.is_empty() {
             return Err(NetworkError::GetClosestTimedOut);
-        }
-
-        // Count self in if among the CLOSE_GROUP_SIZE closest and sort the result
-        let result_len = found_peers.len();
-        let mut closest_peers = found_peers;
-
-        // ensure we're not including self here
-        if client {
-            // remove our peer id from the calculations here:
-            closest_peers.retain(|&(x, _)| x != self.peer_id());
-            if result_len != closest_peers.len() {
-                info!("Remove self client from the closest_peers");
-            }
         }
 
         if tracing::level_enabled!(tracing::Level::DEBUG) {
@@ -1151,8 +1100,53 @@ impl Network {
             );
         }
 
-        let expanded_close_group = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
-        let closest_peers = sort_peers_by_address(closest_peers, key, expanded_close_group)?;
+        Ok(closest_peers)
+    }
+
+    /// Returns the `n` closest peers to the given `XorName`, sorted by their distance to the xor_name.
+    pub async fn get_n_closest_peers(
+        &self,
+        key: &NetworkAddress,
+        n: usize,
+    ) -> Result<Vec<(PeerId, Addresses)>> {
+        assert!(n <= K_VALUE.get());
+
+        let mut closest_peers = self.get_closest_peers(key).await?;
+
+        // Check if we have enough results
+        if closest_peers.len() < n {
+            return Err(NetworkError::NotEnoughPeers {
+                found: closest_peers.len(),
+                required: n,
+            });
+        }
+
+        // Only need the `n` closest peers
+        closest_peers.truncate(n);
+
+        Ok(closest_peers)
+    }
+
+    /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
+    /// Excludes the client's `PeerId` while calculating the closest peers.
+    pub async fn client_get_close_group(
+        &self,
+        key: &NetworkAddress,
+    ) -> Result<Vec<(PeerId, Addresses)>> {
+        const EXPANDED_CLOSE_GROUP: usize = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
+
+        let mut closest_peers = self.get_n_closest_peers(key, EXPANDED_CLOSE_GROUP).await?;
+
+        let closest_peers_len = closest_peers.len();
+
+        // Although it is very unlikely that the client will be in the closest group (it shouldn't even be in a node's RT),
+        // we still filter its peer id from the results just to be sure.
+        closest_peers.retain(|(peer_id, _)| *peer_id != self.peer_id());
+
+        if closest_peers.len() != closest_peers_len {
+            info!("Removed client peer id from the closest peers");
+        }
+
         Ok(closest_peers)
     }
 

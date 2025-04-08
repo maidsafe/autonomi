@@ -466,8 +466,8 @@ impl Node {
                 self.record_metrics(Marker::PeerRemovedFromRoutingTable(&peer_id));
 
                 let self_id = self.network().peer_id();
-                let distance = NetworkAddress::from_peer(self_id)
-                    .distance(&NetworkAddress::from_peer(peer_id));
+                let distance =
+                    NetworkAddress::from(self_id).distance(&NetworkAddress::from(peer_id));
                 info!("Node {self_id:?} removed peer from routing table: {peer_id:?}. It has a {:?} distance to us.", distance.ilog2());
 
                 let network = self.network().clone();
@@ -748,11 +748,7 @@ impl Node {
         let signature = if sign_result {
             let mut bytes = rmp_serde::to_vec(&target).unwrap_or_default();
             bytes.extend_from_slice(&rmp_serde::to_vec(&peers).unwrap_or_default());
-            if let Ok(sig) = network.sign(&bytes) {
-                Some(sig)
-            } else {
-                None
-            }
+            network.sign(&bytes).ok()
         } else {
             None
         };
@@ -995,15 +991,12 @@ impl Node {
     }
 
     /// Query peer's version and update local knowledge.
-    async fn try_query_peer_version(network: Network, peer: PeerId) {
+    async fn try_query_peer_version(network: Network, peer: PeerId, addrs: Addresses) {
         let request = Request::Query(Query::GetVersion(NetworkAddress::from(peer)));
         // We can skip passing `addrs` here as the new peer should be part of the kad::RT and swarm can get the addr.
-        let version = match network
-            .send_request(request, peer, Default::default())
-            .await
-        {
+        let version = match network.send_request(request, peer, addrs).await {
             Ok((Response::Query(QueryResponse::GetVersion { version, .. }), _conn_info)) => {
-                info!("Fetched peer {peer:?} version as {version:?}");
+                info!("Fetched peer version {peer:?} as {version:?}");
                 version
             }
             Ok(other) => {
@@ -1030,7 +1023,7 @@ impl Node {
         for _ in 0..10 {
             let target = NetworkAddress::from(PeerId::random());
             // Result is sorted and only return CLOSE_GROUP_SIZE entries
-            let peers = network.node_get_closest_peers(&target).await;
+            let peers = network.get_n_closest_peers(&target, CLOSE_GROUP_SIZE).await;
             if let Ok(peers) = peers {
                 if peers.len() >= CLOSE_GROUP_SIZE {
                     // Calculate the distance to the farthest.

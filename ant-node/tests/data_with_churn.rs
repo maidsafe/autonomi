@@ -391,7 +391,7 @@ async fn data_availability_during_churn() -> Result<()> {
     );
 
     let failed = failures.read().await;
-    if failed.len() > 0 {
+    if !failed.is_empty() {
         bail!("{} failure/s in test: {:?}", failed.len(), failed.values());
     }
 

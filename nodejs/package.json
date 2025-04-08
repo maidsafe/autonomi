@@ -1,6 +1,6 @@
 {
   "name": "@withautonomi/autonomi",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "description": "NodeJS bindings for Autonomi client",
   "main": "index.js",
   "types": "index.d.ts",
@@ -33,7 +33,7 @@
     "artifacts": "napi artifacts",
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
-    "prepublishOnly": "napi prepublish -t npm",
+    "prepublishOnly": "napi prepublish --tagstyle npm --skip-gh-release",
     "test": "ava",
     "universal": "napi universal",
     "version": "napi version"
@@ -46,11 +46,5 @@
     "pointer",
     "vault"
   ],
-  "packageManager": "yarn@4.7.0",
-  "optionalDependencies": {
-    "@withautonomi/autonomi-darwin-arm64": "0.4.2",
-    "@withautonomi/autonomi-darwin-x64": "0.4.2",
-    "@withautonomi/autonomi-linux-x64-gnu": "0.4.2",
-    "@withautonomi/autonomi-win32-x64-msvc": "0.4.2"
-  }
+  "packageManager": "yarn@4.7.0"
 }

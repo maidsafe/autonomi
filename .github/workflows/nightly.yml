@@ -8,6 +8,7 @@ on:
 env:
   CARGO_INCREMENTAL: 0 # bookkeeping for incremental builds has overhead, not useful in CI.
   WORKFLOW_URL: https://github.com/maidsafe/stableset_net/actions/runs
+  MAX_CHUNK_SIZE: 4194304
 
 jobs:
   e2e:
@@ -224,7 +225,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
     steps:
       - uses: actions/checkout@v4
 
@@ -265,7 +266,7 @@ jobs:
       - name: Run logging tests
         timeout-minutes: 25
         run: cargo test --release --package ant-logging
-  
+
       - name: post notification to slack on failure
         if: ${{ failure() }}
         uses: bryannice/gitactions-slack-notification@2.0.0

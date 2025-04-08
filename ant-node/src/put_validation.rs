@@ -433,15 +433,13 @@ impl Node {
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
         // reject if chunk is too large
-        if chunk.size() > Chunk::MAX_ENCRYPTED_SIZE {
+        if chunk.size() > Chunk::MAX_SIZE {
             warn!(
                 "Chunk at {pretty_key:?} is too large: {} bytes, when max size is {} bytes",
                 chunk.size(),
-                Chunk::MAX_ENCRYPTED_SIZE
+                Chunk::MAX_SIZE
             );
-            return Err(
-                ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_ENCRYPTED_SIZE).into(),
-            );
+            return Err(ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_SIZE).into());
         }
 
         let record = Record {
@@ -688,7 +686,7 @@ impl Node {
             // In case we don't have enough knowledge of the network, we shall trust the payment.
             if let Some(network_density) = self.network().get_network_density().await? {
                 payees.retain(|peer_id| {
-                    NetworkAddress::from_peer(*peer_id).distance(address) > network_density
+                    NetworkAddress::from(*peer_id).distance(address) > network_density
                 });
 
                 if !payees.is_empty() {

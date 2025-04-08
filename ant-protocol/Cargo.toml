@@ -23,7 +23,6 @@ crdts = { version = "7.3", default-features = false, features = ["merkle"] }
 custom_debug = "~0.6.1"
 dirs-next = "~2.0.0"
 hex = "~0.4.3"
-lazy_static = "1.4.0"
 libp2p = { version = "0.55.0", features = ["identify", "kad"] }
 prometheus-client = { version = "0.22" }
 prost = { version = "0.9", optional = true }
