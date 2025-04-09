@@ -141,7 +141,7 @@ impl InitialBootstrap {
 
             match swarm.dial(opts) {
                 Ok(()) => {
-                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.ongoing_dials.len()+1);
+                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.ongoing_dials.len());
                     let _ = self.ongoing_dials.insert(addr_clone);
                 }
                 Err(err) => match err {
