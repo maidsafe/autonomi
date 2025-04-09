@@ -380,20 +380,19 @@ impl NatDetectionSwarmDriver {
                 NatStatus::Public(SocketAddr::new(IpAddr::V4(*ip), port))
             }
         } else if ips.len() > 1 {
-            // if mix of private and public IPs, pick the public one.
+            // if mix of private and public IPs, pick the private one (i.e,. on a local testnet on a public machine)
             // if all are private, prioritize localhost first
             let public_ip = ips
                 .iter()
-                .filter(|ip| !ip.is_private() || !ip.is_unspecified() || !ip.is_documentation())
+                .filter(|ip| {
+                    !ip.is_private()
+                        && !ip.is_unspecified()
+                        && !ip.is_documentation()
+                        && !ip.is_loopback()
+                })
                 .collect::<Vec<_>>();
 
             let private_ip = ips.iter().filter(|ip| ip.is_private()).collect::<Vec<_>>();
-
-            if !public_ip.is_empty() {
-                info!("We have multiple public IP addresses {public_ip:?}. NAT status is Public.");
-                // todo: return all?
-                return NatStatus::Public(SocketAddr::new(IpAddr::V4(*public_ip[0]), port));
-            }
 
             if !private_ip.is_empty() {
                 // try to pick localhost
@@ -407,6 +406,12 @@ impl NatDetectionSwarmDriver {
 
                 info!("We have multiple private IP addresses. NAT status is Public.");
                 return NatStatus::Public(SocketAddr::new(IpAddr::V4(*private_ip[0]), port));
+            }
+
+            if !public_ip.is_empty() {
+                info!("We have multiple public IP addresses {public_ip:?}. NAT status is Public.");
+                // todo: return all?
+                return NatStatus::Public(SocketAddr::new(IpAddr::V4(*public_ip[0]), port));
             }
 
             error!("We have multiple IP addresses, but none are private or public. NAT status is NonPublic.");
