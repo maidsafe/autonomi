@@ -145,7 +145,7 @@ impl BootstrapCacheStore {
             return Ok(());
         }
 
-        if self.data.peers.is_empty() {
+        if self.data.read().await.peers.is_empty() {
             info!("No peers to write to disk, skipping sync to disk");
             return Ok(());
         }
