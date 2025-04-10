@@ -47,7 +47,7 @@ pub enum PointerError {
 }
 
 impl Client {
-    /// Get a pointer from the network
+    /// Get a [`Pointer`] from the network.
     pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer, PointerError> {
         let key = NetworkAddress::from(*address).to_record_key();
         debug!("Fetching pointer from network at: {key:?}");
@@ -83,7 +83,7 @@ impl Client {
         Ok(pointer)
     }
 
-    /// Check if a pointer exists on the network
+    /// Check if a [`Pointer`] exists on the network.
     pub async fn pointer_check_existance(
         &self,
         address: &PointerAddress,
@@ -104,7 +104,7 @@ impl Client {
         }
     }
 
-    /// Verify a pointer
+    /// Verify a [`Pointer`].
     pub fn pointer_verify(pointer: &Pointer) -> Result<(), PointerError> {
         if !pointer.verify_signature() {
             return Err(PointerError::BadSignature);
@@ -112,7 +112,7 @@ impl Client {
         Ok(())
     }
 
-    /// Manually store a pointer on the network
+    /// Manually store a [`Pointer`] on the network.
     pub async fn pointer_put(
         &self,
         pointer: Pointer,
@@ -183,9 +183,9 @@ impl Client {
         Ok((total_cost, address))
     }
 
-    /// Create a new pointer on the network.
+    /// Create a new [`Pointer`] on the network.
     ///
-    /// Make sure that the owner key is not already used for another pointer as each key is associated with one pointer
+    /// Make sure that the owner key is not already used for another [`Pointer`] as each key is associated with one [`Pointer`].
     pub async fn pointer_create(
         &self,
         owner: &SecretKey,
@@ -202,11 +202,11 @@ impl Client {
         self.pointer_put(pointer, payment_option).await
     }
 
-    /// Update an existing pointer to point to a new target on the network.
+    /// Update an existing [`Pointer`] to point to a new target on the network.
     ///
-    /// The pointer needs to be created first with [`Client::pointer_put`].
-    /// This operation is free as the pointer was already paid for at creation.
-    /// Only the latest version of the pointer is kept on the Network, previous versions will be overwritten and unrecoverable.
+    /// The [`Pointer`] needs to be created first with [`Client::pointer_put`].
+    /// This operation is free as the [`Pointer`] was already paid for at creation.
+    /// Only the latest version of the [`Pointer`] is kept on the Network, previous versions will be overwritten and unrecoverable.
     pub async fn pointer_update(
         &self,
         owner: &SecretKey,
@@ -262,7 +262,7 @@ impl Client {
         Ok(())
     }
 
-    /// Calculate the cost of storing a pointer
+    /// Calculate the cost of storing a [`Pointer`].
     pub async fn pointer_cost(&self, key: &PublicKey) -> Result<AttoTokens, CostError> {
         trace!("Getting cost for pointer of {key:?}");
 

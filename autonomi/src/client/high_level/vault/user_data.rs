@@ -118,7 +118,7 @@ impl UserData {
 }
 
 impl Client {
-    /// Get the user data from the vault
+    /// Get the user data from the vault.
     pub async fn get_user_data_from_vault(
         &self,
         secret_key: &VaultSecretKey,
@@ -138,9 +138,9 @@ impl Client {
         Ok(vault)
     }
 
-    /// Put the user data to the vault
+    /// Put the user data to the vault.
     ///
-    /// Returns the total cost of the put operation
+    /// Returns the total cost of the put operation.
     pub async fn put_user_data_to_vault(
         &self,
         secret_key: &VaultSecretKey,

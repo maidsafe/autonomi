@@ -18,7 +18,7 @@ pub use crate::client::data_types::chunk::DataMapChunk;
 pub use crate::Bytes;
 
 impl Client {
-    /// Fetch a blob of (private) data from the network
+    /// Fetch a blob of private data from the network.
     ///
     /// # Example
     ///
