@@ -15,7 +15,7 @@ use libp2p::{
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
 use rand::Rng;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 #[cfg(feature = "open-metrics")]
 use std::sync::atomic::AtomicU64;
 use std::time::Instant;
@@ -136,23 +136,29 @@ impl RelayManager {
     pub(crate) fn add_potential_candidates(
         &mut self,
         peer_id: &PeerId,
-        addrs: &HashSet<Multiaddr>,
+        addr: &Multiaddr,
         stream_protocols: &Vec<StreamProtocol>,
     ) {
         if self.relay_server_candidates.len() >= MAX_POTENTIAL_CANDIDATES {
             return;
         }
 
+        if self
+            .relay_server_candidates
+            .iter()
+            .any(|(id, _)| id == peer_id)
+        {
+            debug!("Peer {peer_id:?} is already a potential candidate");
+            return;
+        }
+
         if Self::does_it_support_relay_server_protocol(stream_protocols) {
-            // todo: collect and manage multiple addrs
-            if let Some(addr) = addrs.iter().next() {
-                // The calling place shall already checked whether the peer is `relayed`.
-                // Hence here can add the addr directly.
-                if let Some(relay_addr) = Self::craft_relay_address(addr, Some(*peer_id)) {
-                    debug!("Adding {peer_id:?} with {relay_addr:?} as a potential relay candidate");
-                    self.relay_server_candidates
-                        .push_back((*peer_id, relay_addr));
-                }
+            // The calling place shall already checked whether the peer is `relayed`.
+            // Hence here can add the addr directly.
+            if let Some(relay_addr) = Self::craft_relay_address(addr, Some(*peer_id)) {
+                debug!("Adding {peer_id:?} with {relay_addr:?} as a potential relay candidate");
+                self.relay_server_candidates
+                    .push_back((*peer_id, relay_addr));
             }
         } else {
             debug!("Peer {peer_id:?} does not support relay server protocol");
