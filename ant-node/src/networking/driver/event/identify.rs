@@ -376,6 +376,7 @@ impl SwarmDriver {
                 warn!("Peer {peer_id:?} is not part of the RT. Cannot update addresses.");
                 return;
             };
+
             let existing_addrs = entry
                 .node
                 .value
