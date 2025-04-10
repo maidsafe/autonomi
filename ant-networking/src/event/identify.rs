@@ -7,11 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::relay_manager::is_a_relayed_peer;
-use crate::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
+use crate::{multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
-use libp2p::multiaddr::Protocol;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::Multiaddr;
 use std::collections::HashSet;
@@ -43,6 +42,12 @@ impl SwarmDriver {
         connection_id: libp2p::swarm::ConnectionId,
     ) {
         debug!(conn_id=%connection_id, %peer_id, ?info, "identify: received info");
+        // If the peer dials us with a different addr, we would add it to our RT via update_pre_existing_peer
+        let Some((_, addr, _)) = self.live_connected_peers.get(&connection_id) else {
+            warn!(conn_id=%connection_id, %peer_id, "identify: received info for a connection that is not in the live connected peers");
+            return;
+        };
+        let addr = multiaddr_strip_p2p(addr);
 
         let our_identify_protocol = IDENTIFY_PROTOCOL_STR.read().expect("IDENTIFY_PROTOCOL_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
 
@@ -70,30 +75,13 @@ impl SwarmDriver {
 
         let has_dialed = self.dialed_peers.contains(&peer_id);
 
-        // If we're not in local mode, only add globally reachable addresses.
-        // Strip the `/p2p/...` part of the multiaddresses.
-        // Collect into a HashSet directly to avoid multiple allocations and handle deduplication.
-        let mut addrs: HashSet<Multiaddr> = match self.local {
-            true => info
-                .listen_addrs
-                .into_iter()
-                .map(|addr| multiaddr_strip_p2p(&addr))
-                .collect(),
-            false => info
-                .listen_addrs
-                .into_iter()
-                .filter(multiaddr_is_global)
-                .map(|addr| multiaddr_strip_p2p(&addr))
-                .collect(),
-        };
-
-        let is_relayed_peer = is_a_relayed_peer(addrs.iter());
+        let is_relayed_peer = is_a_relayed_peer([addr.clone()].iter());
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
             if let Some(relay_manager) = self.relay_manager.as_mut() {
                 debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
-                relay_manager.add_potential_candidates(&peer_id, &addrs, &info.protocols);
+                relay_manager.add_potential_candidates(&peer_id, &addr, &info.protocols);
             }
         }
 
@@ -113,71 +101,56 @@ impl SwarmDriver {
                 return;
             };
 
-        // If the peer is part already of the RT, try updating the addresses based on the new push info.
-        // We don't have to dial it back.
         if already_present_in_rt {
-            debug!("Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new.");
+            // If the peer is part already of the RT, try updating the addresses based on the new push info.
+            // We don't have to dial it back.
 
-            self.update_pre_existing_peer(peer_id, addrs.clone());
-            return;
-        }
+            debug!("Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addr:?} are new.");
 
-        // When received an identify from un-dialed peer, try to dial it
-        // The dial shall trigger the same identify to be sent again and confirm
-        // peer is external accessible, hence safe to be added into RT.
-        // Client doesn't need to dial back.
-        if !self.is_client && !self.local && !has_dialed {
+            self.update_pre_existing_peer(peer_id, &addr);
+        } else if !self.is_client && !self.local && !has_dialed {
+            // When received an identify from un-dialed peer, try to dial it
+            // The dial shall trigger the same identify to be sent again and confirm
+            // peer is external accessible, hence safe to be added into RT.
+            // Client doesn't need to dial back.
+
             // Only need to dial back for not fulfilled kbucket
             if kbucket_full {
-                debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
+                debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addr:?}");
                 return;
             }
 
-            info!(%peer_id, ?addrs, "received identify info from undialed peer for not full kbucket {ilog2:?}, dial back to confirm external accessible");
+            info!(%peer_id, ?addr, "received identify info from undialed peer for not full kbucket {ilog2:?}, dial back to confirm external accessible");
             if let Err(err) = self.swarm.dial(
                 DialOpts::peer_id(peer_id)
                     .condition(PeerCondition::NotDialing)
-                    .addresses(addrs.iter().cloned().collect())
+                    .addresses(vec![addr.clone()])
                     .build(),
             ) {
-                warn!(%peer_id, ?addrs, "dialing error: {err:?}");
+                warn!(%peer_id, ?addr, "dialing error: {err:?}");
             }
-        } else
-        // We care only for peers that we dialed and thus are reachable.
-        // Or if we are local, we can add the peer directly.
-        {
+        } else {
+            // We care only for peers that we dialed and thus are reachable.
+            // Or if we are local, we can add the peer directly.
             // A bad node cannot establish a connection with us. So we can add it to the RT directly.
 
             // With the new bootstrap cache, the workload is distributed,
             // hence no longer need to replace bootstrap nodes for workload share.
             // self.remove_bootstrap_from_full(peer_id);
-
-            // Avoid have `direct link format` addrs co-exists with `relay` addr
-            if is_relayed_peer {
-                addrs.retain(|multiaddr| {
-                    multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit))
-                });
-            }
-
-            debug!(%peer_id, ?addrs, "identify: attempting to add addresses to routing table");
+            debug!(%peer_id, ?addr, "identify: attempting to add addresses to routing table");
 
             // Attempt to add the addresses to the routing table.
-            for multiaddr in addrs {
-                let _routing_update = self
-                    .swarm
-                    .behaviour_mut()
-                    .kademlia
-                    .add_address(&peer_id, multiaddr);
-            }
+            let _routing_update = self
+                .swarm
+                .behaviour_mut()
+                .kademlia
+                .add_address(&peer_id, addr);
         }
     }
 
     /// If the peer is part already of the RT, try updating the addresses based on the new push info.
-    fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addrs: HashSet<Multiaddr>) {
+    fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addr: &Multiaddr) {
         if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
-            let mut addresses_to_add = Vec::new();
-            let mut addresses_to_remove = Vec::new();
-
             let Some(entry) = kbucket
                 .iter()
                 .find(|entry| entry.node.key.preimage() == &peer_id)
@@ -185,35 +158,24 @@ impl SwarmDriver {
                 warn!("Peer {peer_id:?} is not part of the RT. Cannot update addresses.");
                 return;
             };
+
             let existing_addrs = entry
                 .node
                 .value
                 .iter()
                 .map(multiaddr_strip_p2p)
                 .collect::<HashSet<_>>();
-            addresses_to_add.extend(new_addrs.difference(&existing_addrs));
-            addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
 
-            if !addresses_to_remove.is_empty() {
-                debug!("Removing addresses from RT for {peer_id:?} as the new identify does not contain them: {addresses_to_remove:?}");
-                for multiaddr in addresses_to_remove {
-                    let _routing_update = self
-                        .swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .remove_address(&peer_id, multiaddr);
-                }
-            }
+            if !existing_addrs.contains(new_addr) {
+                debug!(
+                    "Adding new addr {new_addr:?} to RT for {peer_id:?} that already exists in RT"
+                );
 
-            if !addresses_to_add.is_empty() {
-                debug!("Adding addresses to RT for {peer_id:?} as the new identify contains them: {addresses_to_add:?}");
-                for multiaddr in addresses_to_add {
-                    let _routing_update = self
-                        .swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .add_address(&peer_id, multiaddr.clone());
-                }
+                let _routing_update = self
+                    .swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .add_address(&peer_id, new_addr.clone());
             }
         }
     }
