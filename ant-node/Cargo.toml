@@ -59,7 +59,7 @@ self_encryption = "~0.30.0"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 strum = { version = "0.26.2", features = ["derive"] }
 thiserror = "1.0.23"
-tokio = { version = "1.32.0", features = [
+tokio = { version = "1.43.1", features = [
     "io-util",
     "macros",
     "parking_lot",

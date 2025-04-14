@@ -39,7 +39,7 @@ rpassword = "7.0"
 serde = "1.0.210"
 serde_json = "1.0.132"
 thiserror = "1.0"
-tokio = { version = "1.32.0", features = [
+tokio = { version = "1.43.1", features = [
     "io-util",
     "macros",
     "parking_lot",
