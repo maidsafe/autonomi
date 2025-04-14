@@ -59,7 +59,7 @@ sha2 = "0.10"
 strum = { version = "0.26.2", features = ["derive"] }
 sysinfo = { version = "0.30.8", default-features = false, optional = true }
 thiserror = "1.0.23"
-tokio = { version = "1.32.0", features = [
+tokio = { version = "1.43.1", features = [
     "io-util",
     "macros",
     "rt-multi-thread",

@@ -30,7 +30,7 @@ tracing = { version = "~0.1.26" }
 xor_name = "5.0.0"
 
 [dev-dependencies]
-tokio = { version = "1.32.0", features = ["macros", "rt"] }
+tokio = { version = "1.43.1", features = ["macros", "rt"] }
 
 [lints]
 workspace = true

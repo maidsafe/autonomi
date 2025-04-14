@@ -33,7 +33,7 @@ thiserror = "1.0.23"
 # # watch out updating this, protoc compiler needs to be installed on all build systems
 # # arm builds + musl are very problematic
 tonic = { version = "0.6.2" }
-tokio = { version = "1.32.0", features = ["rt"] }
+tokio = { version = "1.43.1", features = ["rt"] }
 tokio-stream = { version = "~0.1.12" }
 tracing = { version = "~0.1.26" }
 tracing-core = "0.1.30"
