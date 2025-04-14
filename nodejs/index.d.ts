@@ -10,7 +10,6 @@ export interface ArchiveFile {
   size: bigint
   extra?: string
 }
-export type JsClient = Client
 /** Represents a client for the Autonomi network. */
 export declare class Client {
   /**
@@ -18,52 +17,52 @@ export declare class Client {
    *
    * See `init_with_config`.
    */
-  static init(): Promise<JsClient>
+  static init(): Promise<Client>
   /**
    * Initialize a client that is configured to be local.
    *
    * See `init_with_config`.
    */
-  static initLocal(): Promise<JsClient>
+  static initLocal(): Promise<Client>
   /**
    * Initialize a client that bootstraps from a list of peers.
    *
    * If any of the provided peers is a global address, the client will not be local.
    */
   static initWithPeers(peers: Array<string>): Promise<Client>
-  evmNetwork(): JsNetwork
+  evmNetwork(): Network
   /** Get a chunk from the network. */
-  chunkGet(addr: JsChunkAddress): Promise<Buffer>
+  chunkGet(addr: ChunkAddress): Promise<Buffer>
   /**
    * Manually upload a chunk to the network.
    *
    * It is recommended to use the `data_put` method instead to upload data.
    */
-  chunkPut(data: Buffer, paymentOption: JsPaymentOption): Promise<ChunkPut>
+  chunkPut(data: Buffer, paymentOption: PaymentOption): Promise<ChunkPut>
   /** Get the cost of a chunk. */
-  chunkCost(addr: JsChunkAddress): Promise<string>
+  chunkCost(addr: ChunkAddress): Promise<string>
   /** Fetches a GraphEntry from the network. */
-  graphEntryGet(address: JsGraphEntryAddress): Promise<JsGraphEntry>
+  graphEntryGet(address: GraphEntryAddress): Promise<GraphEntry>
   /** Check if a graph_entry exists on the network */
-  graphEntryCheckExistance(address: JsGraphEntryAddress): Promise<boolean>
+  graphEntryCheckExistance(address: GraphEntryAddress): Promise<boolean>
   /** Manually puts a GraphEntry to the network. */
-  graphEntryPut(entry: JsGraphEntry, paymentOption: JsPaymentOption): Promise<GraphEntryPut>
+  graphEntryPut(entry: GraphEntry, paymentOption: PaymentOption): Promise<GraphEntryPut>
   /** Get the cost to create a GraphEntry */
-  graphEntryCost(key: JsPublicKey): Promise<string>
+  graphEntryCost(key: PublicKey): Promise<string>
   /** Get a pointer from the network */
-  pointerGet(address: JsPointerAddress): Promise<JsPointer>
+  pointerGet(address: PointerAddress): Promise<Pointer>
   /** Check if a pointer exists on the network */
-  pointerCheckExistance(address: JsPointerAddress): Promise<boolean>
+  pointerCheckExistance(address: PointerAddress): Promise<boolean>
   /** Verify a pointer */
-  static pointerVerify(pointer: JsPointer): void
+  static pointerVerify(pointer: Pointer): void
   /** Manually store a pointer on the network */
-  pointerPut(pointer: JsPointer, paymentOption: JsPaymentOption): Promise<PointerPut>
+  pointerPut(pointer: Pointer, paymentOption: PaymentOption): Promise<PointerPut>
   /**
    * Create a new pointer on the network.
    *
    * Make sure that the owner key is not already used for another pointer as each key is associated with one pointer
    */
-  pointerCreate(owner: JsSecretKey, target: JsPointerTarget, paymentOption: JsPaymentOption): Promise<PointerPut>
+  pointerCreate(owner: SecretKey, target: PointerTarget, paymentOption: PaymentOption): Promise<PointerPut>
   /**
    * Update an existing pointer to point to a new target on the network.
    *
@@ -72,19 +71,19 @@ export declare class Client {
    * Only the latest version of the pointer is kept on the Network,
    * previous versions will be overwritten and unrecoverable.
    */
-  pointerUpdate(owner: JsSecretKey, target: JsPointerTarget): Promise<void>
+  pointerUpdate(owner: SecretKey, target: PointerTarget): Promise<void>
   /** Calculate the cost of storing a pointer */
-  pointerCost(key: JsPublicKey): Promise<string>
+  pointerCost(key: PublicKey): Promise<string>
   /** Get Scratchpad from the Network. A Scratchpad is stored at the owner's public key so we can derive the address from it. */
-  scratchpadGetFromPublicKey(publicKey: JsPublicKey): Promise<JsScratchpad>
+  scratchpadGetFromPublicKey(publicKey: PublicKey): Promise<Scratchpad>
   /** Get Scratchpad from the Network */
-  scratchpadGet(address: JsScratchpadAddress): Promise<JsScratchpad>
+  scratchpadGet(address: ScratchpadAddress): Promise<Scratchpad>
   /** Check if a scratchpad exists on the network */
-  scratchpadCheckExistance(address: JsScratchpadAddress): Promise<boolean>
+  scratchpadCheckExistance(address: ScratchpadAddress): Promise<boolean>
   /** Verify a scratchpad */
-  static scratchpadVerify(scratchpad: JsScratchpad): void
+  static scratchpadVerify(scratchpad: Scratchpad): void
   /** Manually store a scratchpad on the network */
-  scratchpadPut(scratchpad: JsScratchpad, paymentOption: JsPaymentOption): Promise<ScratchpadPut>
+  scratchpadPut(scratchpad: Scratchpad, paymentOption: PaymentOption): Promise<ScratchpadPut>
   /**
    * Create a new scratchpad to the network.
    *
@@ -92,7 +91,7 @@ export declare class Client {
    *
    * Returns the cost and the address of the scratchpad.
    */
-  scratchpadCreate(owner: JsSecretKey, contentType: bigint, initialData: Buffer, paymentOption: JsPaymentOption): Promise<ScratchpadPut>
+  scratchpadCreate(owner: SecretKey, contentType: bigint, initialData: Buffer, paymentOption: PaymentOption): Promise<ScratchpadPut>
   /**
    * Update an existing scratchpad to the network.
    * The scratchpad needs to be created first with Client::scratchpad_create.
@@ -100,42 +99,42 @@ export declare class Client {
    * Only the latest version of the scratchpad is kept on the Network,
    * previous versions will be overwritten and unrecoverable.
    */
-  scratchpadUpdate(owner: JsSecretKey, contentType: bigint, data: Buffer): Promise<void>
+  scratchpadUpdate(owner: SecretKey, contentType: bigint, data: Buffer): Promise<void>
   /** Get the cost of creating a new Scratchpad */
-  scratchpadCost(owner: JsPublicKey): Promise<string>
+  scratchpadCost(owner: PublicKey): Promise<string>
   /** Fetch a blob of (private) data from the network */
-  dataGet(dataMap: JsDataMapChunk): Promise<Buffer>
+  dataGet(dataMap: DataMapChunk): Promise<Buffer>
   /**
    * Upload a piece of private data to the network. This data will be self-encrypted.
    * The DataMapChunk is not uploaded to the network, keeping the data private.
    *
    * Returns the DataMapChunk containing the map to the encrypted chunks.
    */
-  dataPut(data: Buffer, paymentOption: JsPaymentOption): Promise<DataPutResult>
+  dataPut(data: Buffer, paymentOption: PaymentOption): Promise<DataPutResult>
   /** Fetch a blob of data from the network */
-  dataGetPublic(addr: JsDataAddress): Promise<Buffer>
+  dataGetPublic(addr: DataAddress): Promise<Buffer>
   /**
    * Upload a piece of data to the network. This data is publicly accessible.
    *
    * Returns the Data Address at which the data was stored.
    */
-  dataPutPublic(data: Buffer, paymentOption: JsPaymentOption): Promise<DataPutPublicResult>
+  dataPutPublic(data: Buffer, paymentOption: PaymentOption): Promise<DataPutPublicResult>
   /** Get the estimated cost of storing a piece of data. */
   dataCost(data: Buffer): Promise<string>
   /** Fetch a PrivateArchive from the network */
-  archiveGet(addr: JsPrivateArchiveDataMap): Promise<JsPrivateArchive>
+  archiveGet(addr: PrivateArchiveDataMap): Promise<PrivateArchive>
   /** Upload a PrivateArchive to the network */
-  archivePut(archive: JsPrivateArchive, paymentOption: JsPaymentOption): Promise<ArchivePutResult>
+  archivePut(archive: PrivateArchive, paymentOption: PaymentOption): Promise<ArchivePutResult>
   /** Fetch an archive from the network */
-  archiveGetPublic(addr: JsArchiveAddress): Promise<JsPublicArchive>
+  archiveGetPublic(addr: ArchiveAddress): Promise<PublicArchive>
   /** Upload an archive to the network */
-  archivePutPublic(archive: JsPublicArchive, paymentOption: JsPaymentOption): Promise<ArchivePutPublicResult>
+  archivePutPublic(archive: PublicArchive, paymentOption: PaymentOption): Promise<ArchivePutPublicResult>
   /** Get the cost to upload an archive */
-  archiveCost(archive: JsPublicArchive): Promise<string>
+  archiveCost(archive: PublicArchive): Promise<string>
   /** Download a private file from network to local file system */
-  fileDownload(dataMap: JsDataMapChunk, toDest: string): Promise<void>
+  fileDownload(dataMap: DataMapChunk, toDest: string): Promise<void>
   /** Download a private directory from network to local file system */
-  dirDownload(archiveAccess: JsPrivateArchiveDataMap, toDest: string): Promise<void>
+  dirDownload(archiveAccess: PrivateArchiveDataMap, toDest: string): Promise<void>
   /**
    * Upload the content of all files in a directory to the network.
    * The directory is recursively walked and each file is uploaded to the network.
@@ -143,22 +142,22 @@ export declare class Client {
    * The data maps of these (private) files are not uploaded but returned within
    * the PrivateArchive return type.
    */
-  dirContentUpload(dirPath: string, paymentOption: JsPaymentOption): Promise<DirContentUpload>
+  dirContentUpload(dirPath: string, paymentOption: PaymentOption): Promise<DirContentUpload>
   /**
    * Same as Client::dir_content_upload but also uploads the archive (privately) to the network.
    *
    * Returns the PrivateArchiveDataMap allowing the private archive to be downloaded from the network.
    */
-  dirUpload(dirPath: string, paymentOption: JsPaymentOption): Promise<DirUpload>
+  dirUpload(dirPath: string, paymentOption: PaymentOption): Promise<DirUpload>
   /**
    * Upload the content of a private file to the network. Reads file, splits into
    * chunks, uploads chunks, uploads datamap, returns DataMapChunk (pointing to the datamap)
    */
-  fileContentUpload(path: string, paymentOption: JsPaymentOption): Promise<FileContentUpload>
+  fileContentUpload(path: string, paymentOption: PaymentOption): Promise<FileContentUpload>
   /** Download file from network to local file system */
-  fileDownloadPublic(dataAddr: JsDataAddress, toDest: string): Promise<void>
+  fileDownloadPublic(dataAddr: DataAddress, toDest: string): Promise<void>
   /** Download directory from network to local file system */
-  dirDownloadPublic(archiveAddr: JsArchiveAddress, toDest: string): Promise<void>
+  dirDownloadPublic(archiveAddr: ArchiveAddress, toDest: string): Promise<void>
   /**
    * Upload the content of all files in a directory to the network. The directory is recursively walked and each file is uploaded to the network.
    *
@@ -166,39 +165,39 @@ export declare class Client {
    *
    * This returns, but does not upload (!),the PublicArchive containing the data maps of the uploaded files.
    */
-  dirContentUploadPublic(dirPath: string, paymentOption: JsPaymentOption): Promise<DirContentUploadPublic>
+  dirContentUploadPublic(dirPath: string, paymentOption: PaymentOption): Promise<DirContentUploadPublic>
   /**
    * Same as Client::dir_content_upload_public but also uploads the archive to the network.
    *
    * Returns the ArchiveAddress of the uploaded archive.
    */
-  dirUploadPublic(dirPath: string, paymentOption: JsPaymentOption): Promise<DirUploadPublic>
+  dirUploadPublic(dirPath: string, paymentOption: PaymentOption): Promise<DirUploadPublic>
   /**
    * Upload the content of a file to the network. Reads file, splits into chunks,
    * uploads chunks, uploads datamap, returns DataAddr (pointing to the datamap)
    */
-  fileContentUploadPublic(path: string, paymentOption: JsPaymentOption): Promise<FileContentUploadPublic>
+  fileContentUploadPublic(path: string, paymentOption: PaymentOption): Promise<FileContentUploadPublic>
   /** Get the cost to upload a file/dir to the network. quick and dirty implementation, please refactor once files are cleanly implemented */
   fileCost(path: string): Promise<string>
   /** Get the user data from the vault */
-  getUserDataFromVault(secretKey: JsVaultSecretKey): Promise<JsUserData>
+  getUserDataFromVault(secretKey: VaultSecretKey): Promise<UserData>
   /**
    * Put the user data to the vault
    *
    * Returns the total cost of the put operation
    */
-  putUserDataToVault(secretKey: JsVaultSecretKey, paymentOption: JsPaymentOption, userData: JsUserData): Promise<string>
+  putUserDataToVault(secretKey: VaultSecretKey, paymentOption: PaymentOption, userData: UserData): Promise<string>
   /**
    * Retrieves and returns a decrypted vault if one exists.
    *
    * Returns the content type of the bytes in the vault.
    */
-  fetchAndDecryptVault(secretKey: JsVaultSecretKey): Promise<FetchAndDecryptVault>
+  fetchAndDecryptVault(secretKey: VaultSecretKey): Promise<FetchAndDecryptVault>
   /**
    * Get the cost of creating a new vault A quick estimation of cost:
    * num_of_graph_entry * graph_entry_cost + num_of_scratchpad * scratchpad_cost
    */
-  vaultCost(owner: JsVaultSecretKey, maxSize: bigint): Promise<string>
+  vaultCost(owner: VaultSecretKey, maxSize: bigint): Promise<string>
   /**
    * Put data into the client’s VaultPacket
    *
@@ -206,7 +205,7 @@ export declare class Client {
    *
    * It is recommended to use the hash of the app name or unique identifier as the content type.
    */
-  writeBytesToVault(data: Buffer, paymentOption: JsPaymentOption, secretKey: JsVaultSecretKey, contentType: JsVaultContentType): Promise<string>
+  writeBytesToVault(data: Buffer, paymentOption: PaymentOption, secretKey: VaultSecretKey, contentType: VaultContentType): Promise<string>
   /**
    * Get the register history, starting from the root to the latest entry.
    *
@@ -215,13 +214,13 @@ export declare class Client {
    * RegisterHistory::next can be used to get the values one by one, from the first to the latest entry.
    * RegisterHistory::collect can be used to get all the register values from the history from the first to the latest entry.
    */
-  registerHistory(addr: JsRegisterAddress): JsRegisterHistory
+  registerHistory(addr: RegisterAddress): RegisterHistory
   /**
    * Create a new register key from a SecretKey and a name.
    *
    * This derives a new SecretKey from the owner’s SecretKey using the name. Note that you will need to keep track of the names you used to create the register key.
    */
-  static registerKeyFromName(owner: JsSecretKey, name: string): JsSecretKey
+  static registerKeyFromName(owner: SecretKey, name: string): SecretKey
   /** Create a new RegisterValue from bytes, make sure the bytes are not longer than REGISTER_VALUE_SIZE */
   static registerValueFromBytes(bytes: Uint8Array): Uint8Array
   /**
@@ -229,72 +228,72 @@ export declare class Client {
    *
    * Note that two payments are required, one for the underlying GraphEntry and one for the crate::Pointer
    */
-  registerCreate(owner: JsSecretKey, initialValue: Uint8Array, paymentOption: JsPaymentOption): Promise<RegisterCreate>
+  registerCreate(owner: SecretKey, initialValue: Uint8Array, paymentOption: PaymentOption): Promise<RegisterCreate>
   /**
    * Update the value of a register.
-   * The register needs to be created first with Client::register_create
+   * The register needs to be created first with autonomi::Client::register_create
    */
-  registerUpdate(owner: JsSecretKey, newValue: Uint8Array, paymentOption: JsPaymentOption): Promise<string>
+  registerUpdate(owner: SecretKey, newValue: Uint8Array, paymentOption: PaymentOption): Promise<string>
   /** Get the current value of the register */
-  registerGet(addr: JsRegisterAddress): Promise<Uint8Array>
+  registerGet(addr: RegisterAddress): Promise<Uint8Array>
   /** Get the cost of a register operation. Returns the cost of creation if it doesn’t exist, else returns the cost of an update */
-  registerCost(owner: JsPublicKey): Promise<string>
+  registerCost(owner: PublicKey): Promise<string>
 }
 export declare class ChunkPut {
   get cost(): string
-  get addr(): JsChunkAddress
+  get addr(): ChunkAddress
 }
 export declare class GraphEntryPut {
   get cost(): string
-  get addr(): JsGraphEntryAddress
+  get addr(): GraphEntryAddress
 }
 export declare class ScratchpadPut {
   get cost(): string
-  get addr(): JsScratchpadAddress
+  get addr(): ScratchpadAddress
 }
 export declare class PointerPut {
   get cost(): string
-  get addr(): JsPointerAddress
+  get addr(): PointerAddress
 }
 export declare class DataPutResult {
   get cost(): string
-  get dataMap(): JsDataMapChunk
+  get dataMap(): DataMapChunk
 }
 export declare class DataPutPublicResult {
   get cost(): string
-  get addr(): JsDataAddress
+  get addr(): DataAddress
 }
 export declare class ArchivePutResult {
   get cost(): string
-  get dataMap(): JsPrivateArchiveDataMap
+  get dataMap(): PrivateArchiveDataMap
 }
 export declare class ArchivePutPublicResult {
   get cost(): string
-  get addr(): JsDataAddress
+  get addr(): DataAddress
 }
 export declare class DirContentUpload {
   get cost(): string
-  get archive(): JsPrivateArchive
+  get archive(): PrivateArchive
 }
 export declare class DirUpload {
   get cost(): string
-  get dataMap(): JsDataMapChunk
+  get dataMap(): DataMapChunk
 }
 export declare class FileContentUpload {
   get cost(): string
-  get dataMap(): JsDataMapChunk
+  get dataMap(): DataMapChunk
 }
 export declare class DirContentUploadPublic {
   get cost(): string
-  get addr(): JsPublicArchive
+  get addr(): PublicArchive
 }
 export declare class DirUploadPublic {
   get cost(): string
-  get addr(): JsArchiveAddress
+  get addr(): ArchiveAddress
 }
 export declare class FileContentUploadPublic {
   get cost(): string
-  get addr(): JsPointerAddress
+  get addr(): PointerAddress
 }
 export declare class FetchAndDecryptVault {
   get data(): Buffer
@@ -302,13 +301,12 @@ export declare class FetchAndDecryptVault {
 }
 export declare class RegisterCreate {
   get cost(): string
-  get addr(): JsRegisterAddress
+  get addr(): RegisterAddress
 }
 export declare class GraphEntryDescendant {
-  get publicKey(): JsPublicKey
+  get publicKey(): PublicKey
   get content(): Uint8Array
 }
-export type JsXorName = XorName
 /**
  * A 256-bit number, viewed as a point in XOR space.
  *
@@ -321,11 +319,10 @@ export type JsXorName = XorName
  */
 export declare class XorName {
   /** Generate a XorName for the given content. */
-  static fromContent(content: Uint8Array): JsXorName
+  static fromContent(content: Uint8Array): XorName
   /** Generate a random XorName */
-  static random(): JsXorName
+  static random(): XorName
 }
-export type JsChunkAddress = ChunkAddress
 /**
  * Address of a chunk.
  *
@@ -339,9 +336,8 @@ export declare class ChunkAddress {
   /** Returns the hex string representation of the address. */
   toHex(): string
   /** Creates a new ChunkAddress from a hex string. */
-  static fromHex(hex: string): JsChunkAddress
+  static fromHex(hex: string): ChunkAddress
 }
-export type JsGraphEntryAddress = GraphEntryAddress
 /**
  * Address of a `GraphEntry`.
  *
@@ -349,7 +345,7 @@ export type JsGraphEntryAddress = GraphEntryAddress
  */
 export declare class GraphEntryAddress {
   /** Creates a new GraphEntryAddress. */
-  constructor(owner: JsPublicKey)
+  constructor(owner: PublicKey)
   /**
    * Return the network name of the scratchpad.
    * This is used to locate the scratchpad on the network.
@@ -358,9 +354,8 @@ export declare class GraphEntryAddress {
   /** Serialize this `GraphEntryAddress` into a hex-encoded string. */
   toHex(): string
   /** Parse a hex-encoded string into a `GraphEntryAddress`. */
-  static fromHex(hex: string): JsGraphEntryAddress
+  static fromHex(hex: string): GraphEntryAddress
 }
-export type JsDataAddress = DataAddress
 export declare class DataAddress {
   /** Creates a new DataAddress. */
   constructor(xorName: XorName)
@@ -369,9 +364,8 @@ export declare class DataAddress {
   /** Returns the hex string representation of the address. */
   toHex(): string
   /** Creates a new DataAddress from a hex string. */
-  static fromHex(hex: string): JsDataAddress
+  static fromHex(hex: string): DataAddress
 }
-export type JsArchiveAddress = ArchiveAddress
 export declare class ArchiveAddress {
   /** Creates a new ArchiveAddress. */
   constructor(xorName: XorName)
@@ -380,13 +374,12 @@ export declare class ArchiveAddress {
   /** Returns the hex string representation of the address. */
   toHex(): string
   /** Creates a new ArchiveAddress from a hex string. */
-  static fromHex(hex: string): JsArchiveAddress
+  static fromHex(hex: string): ArchiveAddress
 }
-export type JsWallet = Wallet
 /** A wallet for interacting with the network's payment system */
 export declare class Wallet {
   /** Creates a new Wallet based on the given Ethereum private key. It will fail with Error::PrivateKeyInvalid if private_key is invalid. */
-  static newFromPrivateKey(network: JsNetwork, privateKey: string): JsWallet
+  static newFromPrivateKey(network: Network, privateKey: string): Wallet
   /** Returns a string representation of the wallet's address */
   address(): string
   /** Returns the raw balance of payment tokens in the wallet */
@@ -394,48 +387,43 @@ export declare class Wallet {
   /** Returns the current balance of gas tokens in the wallet */
   balanceOfGas(): Promise<string>
 }
-export type JsPaymentOption = PaymentOption
 /** Options for making payments on the network */
 export declare class PaymentOption {
-  static fromWallet(wallet: Wallet): JsPaymentOption
-  static fromReceipt(): JsPaymentOption
+  static fromWallet(wallet: Wallet): PaymentOption
+  static fromReceipt(): PaymentOption
 }
-export type JsNetwork = Network
 export declare class Network {
   constructor(local: boolean)
 }
-export type JsPublicKey = PublicKey
 export declare class PublicKey {
   /** Returns a byte string representation of the public key. */
   toBytes(): Uint8Array
   /** Returns the key with the given representation, if valid. */
-  static fromBytes(bytes: Uint8Array): JsPublicKey
+  static fromBytes(bytes: Uint8Array): PublicKey
   /** Returns the hex string representation of the public key. */
   toHex(): string
   /** Creates a new PublicKey from a hex string. */
-  static fromHex(hex: string): JsPublicKey
+  static fromHex(hex: string): PublicKey
 }
-export type JsSecretKey = SecretKey
 export declare class SecretKey {
   /** Generate a random SecretKey */
-  static random(): JsSecretKey
+  static random(): SecretKey
   /** Returns the public key corresponding to this secret key. */
   publicKey(): PublicKey
   /** Converts the secret key to big endian bytes */
   toBytes(): Uint8Array
   /** Deserialize from big endian bytes */
-  static fromBytes(bytes: Uint8Array): JsSecretKey
+  static fromBytes(bytes: Uint8Array): SecretKey
   /** Returns the hex string representation of the secret key. */
   toHex(): string
   /** Creates a new SecretKey from a hex string. */
-  static fromHex(hex: string): JsSecretKey
+  static fromHex(hex: string): SecretKey
 }
-export type JsGraphEntry = GraphEntry
 export declare class GraphEntry {
   /** Create a new graph entry, signing it with the provided secret key. */
   constructor(owner: SecretKey, parents: Array<PublicKey>, content: Uint8Array, descendants: Array<[PublicKey, Uint8Array]>)
   /** Create a new graph entry with the signature already calculated. */
-  static newWithSignature(owner: PublicKey, parents: Array<PublicKey>, content: Uint8Array, descendants: Array<[PublicKey, Uint8Array]>, signature: Uint8Array): JsGraphEntry
+  static newWithSignature(owner: PublicKey, parents: Array<PublicKey>, content: Uint8Array, descendants: Array<[PublicKey, Uint8Array]>, signature: Uint8Array): GraphEntry
   /** Get the address of the graph entry */
   address(): GraphEntryAddress
   /** Get the owner of the graph entry */
@@ -456,20 +444,19 @@ export declare class GraphEntry {
   /** Returns true if the graph entry is too big */
   isTooBig(): boolean
 }
-export type JsPointer = Pointer
 export declare class Pointer {
   /**
    * Create a new pointer, signing it with the provided secret key.
    * This pointer would be stored on the network at the provided key's public key.
    * There can only be one pointer at a time at the same address (one per key).
    */
-  constructor(owner: SecretKey, counter: number, target: JsPointerTarget)
+  constructor(owner: SecretKey, counter: number, target: PointerTarget)
   /** Get the address of the pointer */
-  address(): JsPointerAddress
+  address(): PointerAddress
   /** Get the owner of the pointer */
   owner(): PublicKey
   /** Get the target of the pointer */
-  target(): JsPointerTarget
+  target(): PointerTarget
   /** Get the bytes that were signed for this pointer */
   bytesForSignature(): Buffer
   /** Get the xorname of the pointer target */
@@ -484,22 +471,20 @@ export declare class Pointer {
   /** Size of the pointer */
   static size(): bigint
 }
-export type JsPointerTarget = PointerTarget
 export declare class PointerTarget {
   /** Returns the xorname of the target */
   xorname(): XorName
   /** Returns the hex string representation of the target */
   toHex(): string
   /** Creates a new PointerTarget from a ChunkAddress */
-  static ChunkAddress(addr: ChunkAddress): JsPointerTarget
+  static ChunkAddress(addr: ChunkAddress): PointerTarget
   /** Creates a new PointerTarget from a GraphEntryAddress */
-  static GraphEntryAddress(addr: GraphEntryAddress): JsPointerTarget
+  static GraphEntryAddress(addr: GraphEntryAddress): PointerTarget
   /** Creates a new PointerTarget from a PointerAddress */
-  static PointerAddress(addr: JsPointerAddress): JsPointerTarget
+  static PointerAddress(addr: PointerAddress): PointerTarget
   /** Creates a new PointerTarget from a ScratchpadAddress */
-  static ScratchpadAddress(addr: JsScratchpadAddress): JsPointerTarget
+  static ScratchpadAddress(addr: ScratchpadAddress): PointerTarget
 }
-export type JsPointerAddress = PointerAddress
 export declare class PointerAddress {
   /** Creates a new PointerAddress. */
   constructor(owner: PublicKey)
@@ -513,14 +498,13 @@ export declare class PointerAddress {
   /** Serialize this PointerAddress into a hex-encoded string. */
   toHex(): string
   /** Parse a hex-encoded string into a PointerAddress. */
-  static fromHex(hex: string): JsPointerAddress
+  static fromHex(hex: string): PointerAddress
 }
-export type JsScratchpad = Scratchpad
 export declare class Scratchpad {
   /** Create a new scratchpad, signing it with the provided secret key. */
   constructor(owner: SecretKey, dataEncoding: bigint, data: Buffer, counter: bigint)
   /** Get the address of the scratchpad */
-  address(): JsScratchpadAddress
+  address(): ScratchpadAddress
   /** Get the owner of the scratchpad */
   owner(): PublicKey
   /** Get the data encoding (content type) of the scratchpad */
@@ -532,7 +516,6 @@ export declare class Scratchpad {
   /** Verify the signature of the scratchpad */
   verifySignature(): boolean
 }
-export type JsScratchpadAddress = ScratchpadAddress
 export declare class ScratchpadAddress {
   /** Creates a new ScratchpadAddress. */
   constructor(owner: PublicKey)
@@ -546,23 +529,20 @@ export declare class ScratchpadAddress {
   /** Serialize this ScratchpadAddress into a hex-encoded string. */
   toHex(): string
   /** Parse a hex-encoded string into a ScratchpadAddress. */
-  static fromHex(hex: string): JsScratchpadAddress
+  static fromHex(hex: string): ScratchpadAddress
 }
-export type JsDataMapChunk = DataMapChunk
 export declare class DataMapChunk { }
-export type JsPrivateArchiveDataMap = PrivateArchiveDataMap
 export declare class PrivateArchiveDataMap {
   /** Serialize this PrivateArchiveDataMap into a hex-encoded string. */
   toHex(): string
   /** Parse a hex-encoded string into a PrivateArchiveDataMap. */
-  static fromHex(hex: string): JsPrivateArchiveDataMap
+  static fromHex(hex: string): PrivateArchiveDataMap
 }
-export type JsPrivateArchive = PrivateArchive
 export declare class PrivateArchive {
   /** Create a new empty local archive */
   constructor()
   /** Add a file to a local archive */
-  addFile(path: string, dataMap: DataMapChunk, metadata: JsMetadata): void
+  addFile(path: string, dataMap: DataMapChunk, metadata: Metadata): void
   /** Rename a file in an archive */
   renameFile(oldPath: string, newPath: string): void
   /** List all files in the archive with their metadata */
@@ -572,25 +552,21 @@ export declare class PrivateArchive {
   /** Convert the archive to bytes */
   toBytes(): Buffer
   /** Create an archive from bytes */
-  static fromBytes(data: Buffer): JsPrivateArchive
+  static fromBytes(data: Buffer): PrivateArchive
   /** Merge with another archive */
   merge(other: PrivateArchive): void
 }
-export type JsVaultSecretKey = VaultSecretKey
 export declare class VaultSecretKey { }
-export type JsUserData = UserData
 export declare class UserData { }
-export type JsVaultContentType = VaultContentType
 export declare class VaultContentType { }
-export type JsMetadata = Metadata
 /** File metadata */
 export declare class Metadata {
   /** Create a new metadata struct with the current time as uploaded, created and modified. */
-  static newWithSize(size: bigint): JsMetadata
+  static newWithSize(size: bigint): Metadata
   /** Create new metadata with all custom fields */
-  static withCustomFields(created: bigint, modified: bigint, size: bigint, extra?: string | undefined | null): JsMetadata
+  static withCustomFields(created: bigint, modified: bigint, size: bigint, extra?: string | undefined | null): Metadata
   /** Create a new empty metadata struct with zeros */
-  static empty(): JsMetadata
+  static empty(): Metadata
   /** Get the creation timestamp */
   get created(): bigint
   /** Get the modification timestamp */
@@ -600,7 +576,6 @@ export declare class Metadata {
   /** Get the extra metadata */
   get extra(): string | null
 }
-export type JsRegisterAddress = RegisterAddress
 export declare class RegisterAddress {
   /** Creates a new RegisterAddress. */
   constructor(owner: PublicKey)
@@ -613,9 +588,8 @@ export declare class RegisterAddress {
   /** Serialize this RegisterAddress into a hex-encoded string. */
   toHex(): string
   /** Parse a hex-encoded string into a RegisterAddress. */
-  static fromHex(hex: string): JsRegisterAddress
+  static fromHex(hex: string): RegisterAddress
 }
-export type JsRegisterHistory = RegisterHistory
 export declare class RegisterHistory {
   constructor()
   /**
@@ -627,7 +601,6 @@ export declare class RegisterHistory {
   /** Get all the register values from the history, starting from the first to the latest entry */
   collect(): Promise<Array<Uint8Array>>
 }
-export type JsPublicArchive = PublicArchive
 export declare class PublicArchive {
   /** Create a new empty local archive */
   constructor()
@@ -642,7 +615,7 @@ export declare class PublicArchive {
   /** Convert the archive to bytes */
   toBytes(): Buffer
   /** Create an archive from bytes */
-  static fromBytes(data: Buffer): JsPublicArchive
+  static fromBytes(data: Buffer): PublicArchive
   /** Merge with another archive */
   merge(other: PublicArchive): void
 }

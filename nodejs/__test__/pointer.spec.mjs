@@ -1,6 +1,6 @@
 import test from 'ava'
 
-import { Client, Wallet, Network, PaymentOption, PointerAddress, PublicKey, SecretKey, PointerTarget, ChunkAddress, XorName } from '../index.js'
+import { Client, Wallet, Network, PaymentOption, PointerAddress, PublicKey, SecretKey, PointerTarget, ChunkAddress, XorName, GraphEntryAddress, ScratchpadAddress } from '../index.js'
 
 test('pointer put and get', async (t) => {
   const client = await Client.initLocal();
@@ -75,4 +75,10 @@ test('pointer address', async (t) => {
   t.true(typeof hex === 'string');
   const addr2 = PointerAddress.fromHex(hex);
   t.is(addr.toHex(), addr2.toHex());
+
+  // Test constructing `PointerTarget`s
+  const pointerTargetA = PointerTarget.ChunkAddress(new ChunkAddress(XorName.random()));
+  const pointerTargetB = PointerTarget.GraphEntryAddress(new GraphEntryAddress(SecretKey.random().publicKey()));
+  const pointerTargetC = PointerTarget.PointerAddress(new PointerAddress(SecretKey.random().publicKey()));
+  const pointerTargetD = PointerTarget.ScratchpadAddress(new ScratchpadAddress(SecretKey.random().publicKey()));
 })

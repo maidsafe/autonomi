@@ -1,19 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use autonomi::{
-    chunk::DataMapChunk,
-    client::{data::DataAddress, payment::PaymentOption},
-    files::{
-        archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress, Metadata,
-        PrivateArchive, PublicArchive,
-    },
-    pointer::PointerTarget,
-    register::{RegisterAddress, RegisterHistory},
-    vault::{UserData, VaultContentType, VaultSecretKey},
-    AttoTokens, Bytes, Chunk, ChunkAddress, Client, GraphEntry, GraphEntryAddress, Multiaddr,
-    Network, Pointer, PointerAddress, PublicKey, Scratchpad, ScratchpadAddress, SecretKey,
-    Signature, Wallet, XorName,
-};
+use autonomi::{AttoTokens, Bytes, Chunk, Multiaddr, Signature};
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
@@ -60,17 +47,17 @@ fn uint8_array_to_array<const LEN: usize>(value: Uint8Array, arg: &str) -> Resul
 }
 
 /// Represents a client for the Autonomi network.
-#[napi(js_name = "Client")]
-pub struct JsClient(Client);
+#[napi]
+pub struct Client(autonomi::Client);
 
 #[napi]
-impl JsClient {
+impl Client {
     /// Initialize the client with default configuration.
     ///
     /// See `init_with_config`.
     #[napi(factory)]
     pub async fn init() -> Result<Self> {
-        let client = Client::init().await.map_err(map_error)?;
+        let client = autonomi::Client::init().await.map_err(map_error)?;
 
         Ok(Self(client))
     }
@@ -80,7 +67,7 @@ impl JsClient {
     /// See `init_with_config`.
     #[napi(factory)]
     pub async fn init_local() -> Result<Self> {
-        let client = Client::init_local().await.map_err(map_error)?;
+        let client = autonomi::Client::init_local().await.map_err(map_error)?;
 
         Ok(Self(client))
     }
@@ -96,7 +83,9 @@ impl JsClient {
             .collect::<std::result::Result<Vec<Multiaddr>, _>>()
             .map_err(map_error)?;
 
-        let client = Client::init_with_peers(peers).await.map_err(map_error)?;
+        let client = autonomi::Client::init_with_peers(peers)
+            .await
+            .map_err(map_error)?;
 
         Ok(Self(client))
     }
@@ -112,15 +101,15 @@ impl JsClient {
     // }
 
     #[napi]
-    pub fn evm_network(&self) -> JsNetwork {
-        JsNetwork(self.0.evm_network().clone())
+    pub fn evm_network(&self) -> Network {
+        Network(self.0.evm_network().clone())
     }
 
     // Chunks
 
     /// Get a chunk from the network.
     #[napi]
-    pub async fn chunk_get(&self, addr: &JsChunkAddress) -> Result<Buffer> {
+    pub async fn chunk_get(&self, addr: &ChunkAddress) -> Result<Buffer> {
         let chunk = self.0.chunk_get(&addr.0).await.map_err(map_error)?;
 
         Ok(Buffer::from(chunk.value.to_vec()))
@@ -133,7 +122,7 @@ impl JsClient {
     pub async fn chunk_put(
         &self,
         data: Buffer,
-        payment_option: &JsPaymentOption,
+        payment_option: &PaymentOption,
     ) -> Result<tuple_result::ChunkPut> {
         let chunk = Chunk::new(Bytes::from(data.as_ref().to_vec()));
 
@@ -148,7 +137,7 @@ impl JsClient {
 
     /// Get the cost of a chunk.
     #[napi]
-    pub async fn chunk_cost(&self, addr: &JsChunkAddress) -> Result</* AttoTokens */ String> {
+    pub async fn chunk_cost(&self, addr: &ChunkAddress) -> Result</* AttoTokens */ String> {
         let cost = self.0.chunk_cost(&addr.0).await.map_err(map_error)?;
 
         Ok(cost.to_string())
@@ -164,19 +153,19 @@ impl JsClient {
 
     /// Fetches a GraphEntry from the network.
     #[napi]
-    pub async fn graph_entry_get(&self, address: &JsGraphEntryAddress) -> Result<JsGraphEntry> {
+    pub async fn graph_entry_get(&self, address: &GraphEntryAddress) -> Result<GraphEntry> {
         let graph_entry = self
             .0
             .graph_entry_get(&address.0)
             .await
             .map_err(map_error)?;
 
-        Ok(JsGraphEntry(graph_entry))
+        Ok(GraphEntry(graph_entry))
     }
 
     /// Check if a graph_entry exists on the network
     #[napi]
-    pub async fn graph_entry_check_existance(&self, address: &JsGraphEntryAddress) -> Result<bool> {
+    pub async fn graph_entry_check_existance(&self, address: &GraphEntryAddress) -> Result<bool> {
         let exists = self
             .0
             .graph_entry_check_existance(&address.0)
@@ -190,9 +179,9 @@ impl JsClient {
     #[napi]
     pub async fn graph_entry_put(
         &self,
-        entry: &JsGraphEntry,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsGraphEntryAddress) */ tuple_result::GraphEntryPut> {
+        entry: &GraphEntry,
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, GraphEntryAddress) */ tuple_result::GraphEntryPut> {
         let (cost, addr) = self
             .0
             .graph_entry_put(entry.0.clone(), payment_option.0.clone())
@@ -204,7 +193,7 @@ impl JsClient {
 
     /// Get the cost to create a GraphEntry
     #[napi]
-    pub async fn graph_entry_cost(&self, key: &JsPublicKey) -> Result</* AttoTokens */ String> {
+    pub async fn graph_entry_cost(&self, key: &PublicKey) -> Result</* AttoTokens */ String> {
         self.0
             .graph_entry_cost(&key.0)
             .await
@@ -216,17 +205,17 @@ impl JsClient {
 
     /// Get a pointer from the network
     #[napi]
-    pub async fn pointer_get(&self, address: &JsPointerAddress) -> Result<JsPointer> {
+    pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer> {
         self.0
             .pointer_get(&address.0)
             .await
-            .map(JsPointer)
+            .map(Pointer)
             .map_err(map_error)
     }
 
     /// Check if a pointer exists on the network
     #[napi]
-    pub async fn pointer_check_existance(&self, address: &JsPointerAddress) -> Result<bool> {
+    pub async fn pointer_check_existance(&self, address: &PointerAddress) -> Result<bool> {
         self.0
             .pointer_check_existance(&address.0)
             .await
@@ -235,17 +224,17 @@ impl JsClient {
 
     /// Verify a pointer
     #[napi]
-    pub fn pointer_verify(pointer: &JsPointer) -> Result<()> {
-        Client::pointer_verify(&pointer.0).map_err(map_error)
+    pub fn pointer_verify(pointer: &Pointer) -> Result<()> {
+        autonomi::Client::pointer_verify(&pointer.0).map_err(map_error)
     }
 
     /// Manually store a pointer on the network
     #[napi]
     pub async fn pointer_put(
         &self,
-        pointer: &JsPointer,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsPointerAddress) */ tuple_result::PointerPut> {
+        pointer: &Pointer,
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, PointerAddress) */ tuple_result::PointerPut> {
         let (cost, addr) = self
             .0
             .pointer_put(pointer.0.clone(), payment_option.0.clone())
@@ -261,10 +250,10 @@ impl JsClient {
     #[napi]
     pub async fn pointer_create(
         &self,
-        owner: &JsSecretKey,
-        target: &JsPointerTarget,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsPointerAddress) */ tuple_result::PointerPut> {
+        owner: &SecretKey,
+        target: &PointerTarget,
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, PointerAddress) */ tuple_result::PointerPut> {
         let (cost, addr) = self
             .0
             .pointer_create(&owner.0, target.0.clone(), payment_option.0.clone())
@@ -281,11 +270,7 @@ impl JsClient {
     /// Only the latest version of the pointer is kept on the Network,
     /// previous versions will be overwritten and unrecoverable.
     #[napi]
-    pub async fn pointer_update(
-        &self,
-        owner: &JsSecretKey,
-        target: &JsPointerTarget,
-    ) -> Result<()> {
+    pub async fn pointer_update(&self, owner: &SecretKey, target: &PointerTarget) -> Result<()> {
         self.0
             .pointer_update(&owner.0, target.0.clone())
             .await
@@ -294,7 +279,7 @@ impl JsClient {
 
     /// Calculate the cost of storing a pointer
     #[napi]
-    pub async fn pointer_cost(&self, key: &JsPublicKey) -> Result</* AttoTokens */ String> {
+    pub async fn pointer_cost(&self, key: &PublicKey) -> Result</* AttoTokens */ String> {
         let cost = self.0.pointer_cost(&key.0).await.map_err(map_error)?;
 
         Ok(cost.to_string())
@@ -306,28 +291,28 @@ impl JsClient {
     #[napi]
     pub async fn scratchpad_get_from_public_key(
         &self,
-        public_key: &JsPublicKey,
-    ) -> Result<JsScratchpad> {
+        public_key: &PublicKey,
+    ) -> Result<Scratchpad> {
         self.0
             .scratchpad_get_from_public_key(&public_key.0)
             .await
-            .map(JsScratchpad)
+            .map(Scratchpad)
             .map_err(map_error)
     }
 
     /// Get Scratchpad from the Network
     #[napi]
-    pub async fn scratchpad_get(&self, address: &JsScratchpadAddress) -> Result<JsScratchpad> {
+    pub async fn scratchpad_get(&self, address: &ScratchpadAddress) -> Result<Scratchpad> {
         self.0
             .scratchpad_get(&address.0)
             .await
-            .map(JsScratchpad)
+            .map(Scratchpad)
             .map_err(map_error)
     }
 
     /// Check if a scratchpad exists on the network
     #[napi]
-    pub async fn scratchpad_check_existance(&self, address: &JsScratchpadAddress) -> Result<bool> {
+    pub async fn scratchpad_check_existance(&self, address: &ScratchpadAddress) -> Result<bool> {
         self.0
             .scratchpad_check_existance(&address.0)
             .await
@@ -336,17 +321,17 @@ impl JsClient {
 
     /// Verify a scratchpad
     #[napi]
-    pub fn scratchpad_verify(scratchpad: &JsScratchpad) -> Result<()> {
-        Client::scratchpad_verify(&scratchpad.0).map_err(map_error)
+    pub fn scratchpad_verify(scratchpad: &Scratchpad) -> Result<()> {
+        autonomi::Client::scratchpad_verify(&scratchpad.0).map_err(map_error)
     }
 
     /// Manually store a scratchpad on the network
     #[napi]
     pub async fn scratchpad_put(
         &self,
-        scratchpad: &JsScratchpad,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsScratchpadAddress) */ tuple_result::ScratchpadPut> {
+        scratchpad: &Scratchpad,
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, ScratchpadAddress) */ tuple_result::ScratchpadPut> {
         let (cost, addr) = self
             .0
             .scratchpad_put(scratchpad.0.clone(), payment_option.0.clone())
@@ -364,11 +349,11 @@ impl JsClient {
     #[napi]
     pub async fn scratchpad_create(
         &self,
-        owner: &JsSecretKey,
+        owner: &SecretKey,
         content_type: BigInt, // `u64`
         initial_data: Buffer,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsScratchpadAddress) */ tuple_result::ScratchpadPut> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, ScratchpadAddress) */ tuple_result::ScratchpadPut> {
         let content_type = big_int_to_u64(content_type, "content_type")?;
 
         let (cost, addr) = self
@@ -393,7 +378,7 @@ impl JsClient {
     #[napi]
     pub async fn scratchpad_update(
         &self,
-        owner: &JsSecretKey,
+        owner: &SecretKey,
         content_type: BigInt, // `u64`
         data: Buffer,
     ) -> Result<()> {
@@ -407,7 +392,7 @@ impl JsClient {
 
     /// Get the cost of creating a new Scratchpad
     #[napi]
-    pub async fn scratchpad_cost(&self, owner: &JsPublicKey) -> Result</* AttoTokens */ String> {
+    pub async fn scratchpad_cost(&self, owner: &PublicKey) -> Result</* AttoTokens */ String> {
         let cost = self.0.scratchpad_cost(&owner.0).await.map_err(map_error)?;
 
         Ok(cost.to_string())
@@ -417,7 +402,7 @@ impl JsClient {
 
     /// Fetch a blob of (private) data from the network
     #[napi]
-    pub async fn data_get(&self, data_map: &JsDataMapChunk) -> Result<Buffer> {
+    pub async fn data_get(&self, data_map: &DataMapChunk) -> Result<Buffer> {
         let data = self.0.data_get(&data_map.0).await.map_err(map_error)?;
 
         Ok(Buffer::from(data.as_ref()))
@@ -431,8 +416,8 @@ impl JsClient {
     pub async fn data_put(
         &self,
         data: Buffer,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsDataMapChunk) */ tuple_result::DataPutResult> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, DataMapChunk) */ tuple_result::DataPutResult> {
         let data = Bytes::copy_from_slice(&data);
 
         let (cost, data_map) = self
@@ -446,7 +431,7 @@ impl JsClient {
 
     /// Fetch a blob of data from the network
     #[napi]
-    pub async fn data_get_public(&self, addr: &JsDataAddress) -> Result<Buffer> {
+    pub async fn data_get_public(&self, addr: &DataAddress) -> Result<Buffer> {
         let data = self.0.data_get_public(&addr.0).await.map_err(map_error)?;
 
         Ok(Buffer::from(data.as_ref()))
@@ -459,8 +444,8 @@ impl JsClient {
     pub async fn data_put_public(
         &self,
         data: Buffer,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsDataAddress) */ tuple_result::DataPutPublicResult> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, DataAddress) */ tuple_result::DataPutPublicResult> {
         let data = Bytes::copy_from_slice(&data);
 
         let (cost, addr) = self
@@ -488,19 +473,19 @@ impl JsClient {
 
     /// Fetch a PrivateArchive from the network
     #[napi]
-    pub async fn archive_get(&self, addr: &JsPrivateArchiveDataMap) -> Result<JsPrivateArchive> {
+    pub async fn archive_get(&self, addr: &PrivateArchiveDataMap) -> Result<PrivateArchive> {
         let archive = self.0.archive_get(&addr.0).await.map_err(map_error)?;
 
-        Ok(JsPrivateArchive(archive))
+        Ok(PrivateArchive(archive))
     }
 
     /// Upload a PrivateArchive to the network
     #[napi]
     pub async fn archive_put(
         &self,
-        archive: &JsPrivateArchive,
-        payment_option: &JsPaymentOption,
-    ) -> Result</*(AttoTokens, JsPrivateArchiveDataMap)*/ tuple_result::ArchivePutResult> {
+        archive: &PrivateArchive,
+        payment_option: &PaymentOption,
+    ) -> Result</*(AttoTokens, PrivateArchiveDataMap)*/ tuple_result::ArchivePutResult> {
         let (cost, data_map) = self
             .0
             .archive_put(&archive.0, payment_option.0.clone())
@@ -514,23 +499,23 @@ impl JsClient {
 
     /// Fetch an archive from the network
     #[napi]
-    pub async fn archive_get_public(&self, addr: &JsArchiveAddress) -> Result<JsPublicArchive> {
+    pub async fn archive_get_public(&self, addr: &ArchiveAddress) -> Result<PublicArchive> {
         let archive = self
             .0
             .archive_get_public(&addr.0)
             .await
             .map_err(map_error)?;
 
-        Ok(JsPublicArchive(archive))
+        Ok(PublicArchive(archive))
     }
 
     /// Upload an archive to the network
     #[napi]
     pub async fn archive_put_public(
         &self,
-        archive: &JsPublicArchive,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsArchiveAddress) */ tuple_result::ArchivePutPublicResult> {
+        archive: &PublicArchive,
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, ArchiveAddress) */ tuple_result::ArchivePutPublicResult> {
         let (cost, addr) = self
             .0
             .archive_put_public(&archive.0, payment_option.0.clone())
@@ -542,7 +527,7 @@ impl JsClient {
 
     /// Get the cost to upload an archive
     #[napi]
-    pub async fn archive_cost(&self, archive: &JsPublicArchive) -> Result</* AttoTokens */ String> {
+    pub async fn archive_cost(&self, archive: &PublicArchive) -> Result</* AttoTokens */ String> {
         let cost = self
             .0
             .archive_cost(&archive.0.clone())
@@ -558,7 +543,7 @@ impl JsClient {
     #[napi]
     pub async fn file_download(
         &self,
-        data_map: &JsDataMapChunk,
+        data_map: &DataMapChunk,
         to_dest: /* PathBuf */ String,
     ) -> Result<()> {
         let to_dest = PathBuf::from(to_dest);
@@ -573,7 +558,7 @@ impl JsClient {
     #[napi]
     pub async fn dir_download(
         &self,
-        archive_access: &JsPrivateArchiveDataMap,
+        archive_access: &PrivateArchiveDataMap,
         to_dest: /* PathBuf */ String,
     ) -> Result<()> {
         let to_dest = PathBuf::from(to_dest);
@@ -594,8 +579,8 @@ impl JsClient {
     pub async fn dir_content_upload(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsPrivateArchive) */ tuple_result::DirContentUpload> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, PrivateArchive) */ tuple_result::DirContentUpload> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, archive) = self
@@ -614,8 +599,8 @@ impl JsClient {
     pub async fn dir_upload(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsPrivateArchiveDataMap) */ tuple_result::DirUpload> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, PrivateArchiveDataMap) */ tuple_result::DirUpload> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, data_map) = self
@@ -633,8 +618,8 @@ impl JsClient {
     pub async fn file_content_upload(
         &self,
         path: /* PathBuf */ String,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsDataMapChunk) */ tuple_result::FileContentUpload> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, DataMapChunk) */ tuple_result::FileContentUpload> {
         let path = PathBuf::from(path);
 
         let (cost, data_map) = self
@@ -650,7 +635,7 @@ impl JsClient {
     #[napi]
     pub async fn file_download_public(
         &self,
-        data_addr: &JsDataAddress,
+        data_addr: &DataAddress,
         to_dest: /* PathBuf */ String,
     ) -> Result<()> {
         let to_dest = PathBuf::from(to_dest);
@@ -665,7 +650,7 @@ impl JsClient {
     #[napi]
     pub async fn dir_download_public(
         &self,
-        archive_addr: &JsArchiveAddress,
+        archive_addr: &ArchiveAddress,
         to_dest: /* PathBuf */ String,
     ) -> Result<()> {
         let to_dest = PathBuf::from(to_dest);
@@ -685,8 +670,8 @@ impl JsClient {
     pub async fn dir_content_upload_public(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsPublicArchive) */ tuple_result::DirContentUploadPublic> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, PublicArchive) */ tuple_result::DirContentUploadPublic> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, archive) = self
@@ -705,8 +690,8 @@ impl JsClient {
     pub async fn dir_upload_public(
         &self,
         dir_path: /* PathBuf */ String,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsArchiveAddress) */ tuple_result::DirUploadPublic> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, ArchiveAddress) */ tuple_result::DirUploadPublic> {
         let dir_path = PathBuf::from(dir_path);
 
         let (cost, addr) = self
@@ -724,8 +709,8 @@ impl JsClient {
     pub async fn file_content_upload_public(
         &self,
         _path: /* PathBuf */ String,
-        _payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsDataAddress) */ tuple_result::FileContentUploadPublic> {
+        _payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, DataAddress) */ tuple_result::FileContentUploadPublic> {
         todo!()
     }
 
@@ -745,14 +730,11 @@ impl JsClient {
 
     /// Get the user data from the vault
     #[napi]
-    pub async fn get_user_data_from_vault(
-        &self,
-        secret_key: &JsVaultSecretKey,
-    ) -> Result<JsUserData> {
+    pub async fn get_user_data_from_vault(&self, secret_key: &VaultSecretKey) -> Result<UserData> {
         self.0
             .get_user_data_from_vault(&secret_key.0)
             .await
-            .map(JsUserData)
+            .map(UserData)
             .map_err(map_error)
     }
 
@@ -762,9 +744,9 @@ impl JsClient {
     #[napi]
     pub async fn put_user_data_to_vault(
         &self,
-        secret_key: &JsVaultSecretKey,
-        payment_option: &JsPaymentOption,
-        user_data: &JsUserData,
+        secret_key: &VaultSecretKey,
+        payment_option: &PaymentOption,
+        user_data: &UserData,
     ) -> Result</* AttoTokens */ String> {
         self.0
             .put_user_data_to_vault(&secret_key.0, payment_option.0.clone(), user_data.0.clone())
@@ -779,8 +761,8 @@ impl JsClient {
     #[napi]
     pub async fn fetch_and_decrypt_vault(
         &self,
-        secret_key: &JsVaultSecretKey,
-    ) -> Result</* (Bytes, JsVaultContentType) */ tuple_result::FetchAndDecryptVault> {
+        secret_key: &VaultSecretKey,
+    ) -> Result</* (Bytes, VaultContentType) */ tuple_result::FetchAndDecryptVault> {
         let (data, content_type) = self
             .0
             .fetch_and_decrypt_vault(&secret_key.0)
@@ -795,7 +777,7 @@ impl JsClient {
     #[napi]
     pub async fn vault_cost(
         &self,
-        owner: &JsVaultSecretKey,
+        owner: &VaultSecretKey,
         max_size: /* u64 */ BigInt,
     ) -> Result</* AttoTokens */ String> {
         let max_size = big_int_to_u64(max_size, "max_size")?;
@@ -819,9 +801,9 @@ impl JsClient {
     pub async fn write_bytes_to_vault(
         &self,
         data: Buffer,
-        payment_option: &JsPaymentOption,
-        secret_key: &JsVaultSecretKey,
-        content_type: &JsVaultContentType,
+        payment_option: &PaymentOption,
+        secret_key: &VaultSecretKey,
+        content_type: &VaultContentType,
     ) -> Result</* AttoTokens */ String> {
         let data = Bytes::copy_from_slice(&data);
 
@@ -846,25 +828,25 @@ impl JsClient {
     /// RegisterHistory::next can be used to get the values one by one, from the first to the latest entry.
     /// RegisterHistory::collect can be used to get all the register values from the history from the first to the latest entry.
     #[napi]
-    pub fn register_history(&self, addr: &JsRegisterAddress) -> JsRegisterHistory {
+    pub fn register_history(&self, addr: &RegisterAddress) -> RegisterHistory {
         let history = self.0.register_history(&addr.0);
 
-        JsRegisterHistory(Mutex::new(history))
+        RegisterHistory(Mutex::new(history))
     }
 
     /// Create a new register key from a SecretKey and a name.
     ///
     /// This derives a new SecretKey from the owner’s SecretKey using the name. Note that you will need to keep track of the names you used to create the register key.
     #[napi]
-    pub fn register_key_from_name(owner: &JsSecretKey, name: String) -> JsSecretKey {
-        let key = Client::register_key_from_name(&owner.0, &name);
-        JsSecretKey(key)
+    pub fn register_key_from_name(owner: &SecretKey, name: String) -> SecretKey {
+        let key = autonomi::Client::register_key_from_name(&owner.0, &name);
+        SecretKey(key)
     }
 
     /// Create a new RegisterValue from bytes, make sure the bytes are not longer than REGISTER_VALUE_SIZE
     #[napi]
-    pub fn register_value_from_bytes(bytes: &[u8]) -> Result</* JsRegisterValue */ Uint8Array> {
-        Client::register_value_from_bytes(bytes)
+    pub fn register_value_from_bytes(bytes: &[u8]) -> Result</* RegisterValue */ Uint8Array> {
+        autonomi::Client::register_value_from_bytes(bytes)
             .map(Uint8Array::from)
             .map_err(map_error)
     }
@@ -875,10 +857,10 @@ impl JsClient {
     #[napi]
     pub async fn register_create(
         &self,
-        owner: &JsSecretKey,
+        owner: &SecretKey,
         initial_value: /* RegisterValue */ Uint8Array,
-        payment_option: &JsPaymentOption,
-    ) -> Result</* (AttoTokens, JsRegisterAddress) */ tuple_result::RegisterCreate> {
+        payment_option: &PaymentOption,
+    ) -> Result</* (AttoTokens, RegisterAddress) */ tuple_result::RegisterCreate> {
         let initial_value: [u8; 32] = uint8_array_to_array(initial_value, "initial_value")?;
 
         let (cost, addr) = self
@@ -892,13 +874,13 @@ impl JsClient {
 
     /// Update the value of a register.
     ////
-    /// The register needs to be created first with Client::register_create
+    /// The register needs to be created first with autonomi::Client::register_create
     #[napi]
     pub async fn register_update(
         &self,
-        owner: &JsSecretKey,
+        owner: &SecretKey,
         new_value: /* RegisterValue */ Uint8Array,
-        payment_option: &JsPaymentOption,
+        payment_option: &PaymentOption,
     ) -> Result</* AttoTokens */ String> {
         let new_value: [u8; 32] = uint8_array_to_array(new_value, "new_value")?;
         self.0
@@ -912,8 +894,8 @@ impl JsClient {
     #[napi]
     pub async fn register_get(
         &self,
-        addr: &JsRegisterAddress,
-    ) -> Result</* JsRegisterValue */ Uint8Array> {
+        addr: &RegisterAddress,
+    ) -> Result</* RegisterValue */ Uint8Array> {
         self.0
             .register_get(&addr.0)
             .await
@@ -923,7 +905,7 @@ impl JsClient {
 
     /// Get the cost of a register operation. Returns the cost of creation if it doesn’t exist, else returns the cost of an update
     #[napi]
-    pub async fn register_cost(&self, owner: &JsPublicKey) -> Result</* AttoTokens */ String> {
+    pub async fn register_cost(&self, owner: &PublicKey) -> Result</* AttoTokens */ String> {
         let cost = self
             .0
             .register_cost(&owner.0.clone())
@@ -956,14 +938,14 @@ impl JsClient {
     // }
 }
 
+// These types exists because NAPI-RS does not support returning tuples.
 pub mod tuple_result {
     use super::*;
 
-    // This type exists because NAPI-RS does not support returning tuples.
     #[napi]
     pub struct ChunkPut {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: ChunkAddress, // Can't be `JsChunkAddress` as NAPI-RS expects a reference in that case.
+        pub(crate) addr: autonomi::ChunkAddress, // Can not be `ChunkAddress` as NAPI-RS expects a reference in that case.
     }
     #[napi]
     impl ChunkPut {
@@ -972,15 +954,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsChunkAddress {
-            JsChunkAddress(self.addr)
+        pub fn addr(&self) -> ChunkAddress {
+            ChunkAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct GraphEntryPut {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: GraphEntryAddress,
+        pub(crate) addr: autonomi::GraphEntryAddress,
     }
     #[napi]
     impl GraphEntryPut {
@@ -989,15 +971,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsGraphEntryAddress {
-            JsGraphEntryAddress(self.addr)
+        pub fn addr(&self) -> GraphEntryAddress {
+            GraphEntryAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct ScratchpadPut {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: ScratchpadAddress,
+        pub(crate) addr: autonomi::ScratchpadAddress,
     }
     #[napi]
     impl ScratchpadPut {
@@ -1006,15 +988,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsScratchpadAddress {
-            JsScratchpadAddress(self.addr)
+        pub fn addr(&self) -> ScratchpadAddress {
+            ScratchpadAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct PointerPut {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: PointerAddress,
+        pub(crate) addr: autonomi::PointerAddress,
     }
     #[napi]
     impl PointerPut {
@@ -1023,15 +1005,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsPointerAddress {
-            JsPointerAddress(self.addr)
+        pub fn addr(&self) -> PointerAddress {
+            PointerAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct DataPutResult {
         pub(crate) cost: AttoTokens,
-        pub(crate) data_map: DataMapChunk,
+        pub(crate) data_map: autonomi::data::private::DataMapChunk,
     }
     #[napi]
     impl DataPutResult {
@@ -1040,15 +1022,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn data_map(&self) -> JsDataMapChunk {
-            JsDataMapChunk(self.data_map.clone())
+        pub fn data_map(&self) -> DataMapChunk {
+            DataMapChunk(self.data_map.clone())
         }
     }
 
     #[napi]
     pub struct DataPutPublicResult {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: DataAddress,
+        pub(crate) addr: autonomi::data::DataAddress,
     }
     #[napi]
     impl DataPutPublicResult {
@@ -1057,15 +1039,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsDataAddress {
-            JsDataAddress(self.addr)
+        pub fn addr(&self) -> DataAddress {
+            DataAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct ArchivePutResult {
         pub(crate) cost: AttoTokens,
-        pub(crate) data_map: PrivateArchiveDataMap,
+        pub(crate) data_map: autonomi::files::archive_private::PrivateArchiveDataMap,
     }
     #[napi]
     impl ArchivePutResult {
@@ -1074,15 +1056,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn data_map(&self) -> JsPrivateArchiveDataMap {
-            JsPrivateArchiveDataMap(self.data_map.clone())
+        pub fn data_map(&self) -> PrivateArchiveDataMap {
+            PrivateArchiveDataMap(self.data_map.clone())
         }
     }
 
     #[napi]
     pub struct ArchivePutPublicResult {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: DataAddress,
+        pub(crate) addr: autonomi::data::DataAddress,
     }
     #[napi]
     impl ArchivePutPublicResult {
@@ -1091,15 +1073,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsDataAddress {
-            JsDataAddress(self.addr)
+        pub fn addr(&self) -> DataAddress {
+            DataAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct DirContentUpload {
         pub(crate) cost: AttoTokens,
-        pub(crate) archive: PrivateArchive,
+        pub(crate) archive: autonomi::files::PrivateArchive,
     }
     #[napi]
     impl DirContentUpload {
@@ -1108,15 +1090,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn archive(&self) -> JsPrivateArchive {
-            JsPrivateArchive(self.archive.clone())
+        pub fn archive(&self) -> PrivateArchive {
+            PrivateArchive(self.archive.clone())
         }
     }
 
     #[napi]
     pub struct DirUpload {
         pub(crate) cost: AttoTokens,
-        pub(crate) data_map: DataMapChunk,
+        pub(crate) data_map: autonomi::data::private::DataMapChunk,
     }
     #[napi]
     impl DirUpload {
@@ -1125,15 +1107,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn data_map(&self) -> JsDataMapChunk {
-            JsDataMapChunk(self.data_map.clone())
+        pub fn data_map(&self) -> DataMapChunk {
+            DataMapChunk(self.data_map.clone())
         }
     }
 
     #[napi]
     pub struct FileContentUpload {
         pub(crate) cost: AttoTokens,
-        pub(crate) data_map: DataMapChunk,
+        pub(crate) data_map: autonomi::data::private::DataMapChunk,
     }
     #[napi]
     impl FileContentUpload {
@@ -1142,15 +1124,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn data_map(&self) -> JsDataMapChunk {
-            JsDataMapChunk(self.data_map.clone())
+        pub fn data_map(&self) -> DataMapChunk {
+            DataMapChunk(self.data_map.clone())
         }
     }
 
     #[napi]
     pub struct DirContentUploadPublic {
         pub(crate) cost: AttoTokens,
-        pub(crate) archive: PublicArchive,
+        pub(crate) archive: autonomi::files::PublicArchive,
     }
     #[napi]
     impl DirContentUploadPublic {
@@ -1159,15 +1141,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsPublicArchive {
-            JsPublicArchive(self.archive.clone())
+        pub fn addr(&self) -> PublicArchive {
+            PublicArchive(self.archive.clone())
         }
     }
 
     #[napi]
     pub struct DirUploadPublic {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: ArchiveAddress,
+        pub(crate) addr: autonomi::files::archive_public::ArchiveAddress,
     }
     #[napi]
     impl DirUploadPublic {
@@ -1176,15 +1158,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsArchiveAddress {
-            JsArchiveAddress(self.addr)
+        pub fn addr(&self) -> ArchiveAddress {
+            ArchiveAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct FileContentUploadPublic {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: PointerAddress,
+        pub(crate) addr: autonomi::PointerAddress,
     }
     #[napi]
     impl FileContentUploadPublic {
@@ -1193,15 +1175,15 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsPointerAddress {
-            JsPointerAddress(self.addr)
+        pub fn addr(&self) -> PointerAddress {
+            PointerAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct FetchAndDecryptVault {
         pub(crate) data: Bytes,
-        pub(crate) content_type: VaultContentType,
+        pub(crate) content_type: autonomi::vault::VaultContentType,
     }
     #[napi]
     impl FetchAndDecryptVault {
@@ -1218,7 +1200,7 @@ pub mod tuple_result {
     #[napi]
     pub struct RegisterCreate {
         pub(crate) cost: AttoTokens,
-        pub(crate) addr: RegisterAddress,
+        pub(crate) addr: autonomi::register::RegisterAddress,
     }
     #[napi]
     impl RegisterCreate {
@@ -1227,21 +1209,21 @@ pub mod tuple_result {
             self.cost.to_string()
         }
         #[napi(getter)]
-        pub fn addr(&self) -> JsRegisterAddress {
-            JsRegisterAddress(self.addr)
+        pub fn addr(&self) -> RegisterAddress {
+            RegisterAddress(self.addr)
         }
     }
 
     #[napi]
     pub struct GraphEntryDescendant {
-        pub(crate) public_key: PublicKey,
+        pub(crate) public_key: autonomi::PublicKey,
         pub(crate) content: [u8; 32],
     }
     #[napi]
     impl GraphEntryDescendant {
         #[napi(getter)]
-        pub fn public_key(&self) -> JsPublicKey {
-            JsPublicKey(self.public_key)
+        pub fn public_key(&self) -> PublicKey {
+            PublicKey(self.public_key)
         }
         #[napi(getter)]
         pub fn content(&self) -> Uint8Array {
@@ -1267,41 +1249,41 @@ pub mod tuple_result {
 /// i. e. the points with IDs `x` and `y` are considered to have distance `x xor y`.
 ///
 /// [1]: https://en.wikipedia.org/wiki/Kademlia#System_details
-#[napi(js_name = "XorName")]
-pub struct JsXorName(XorName);
 #[napi]
-impl JsXorName {
+pub struct XorName(autonomi::XorName);
+#[napi]
+impl XorName {
     /// Generate a XorName for the given content.
     #[napi(factory)]
     pub fn from_content(content: &[u8]) -> Self {
-        Self(XorName::from_content_parts(&[content]))
+        Self(autonomi::XorName::from_content_parts(&[content]))
     }
 
     /// Generate a random XorName
     #[napi(factory)]
     pub fn random() -> Self {
-        Self(XorName::random(&mut rand::thread_rng()))
+        Self(autonomi::XorName::random(&mut rand::thread_rng()))
     }
 }
 
 /// Address of a chunk.
 ///
 /// It is derived from the content of the chunk.
-#[napi(js_name = "ChunkAddress")]
-pub struct JsChunkAddress(ChunkAddress);
+#[napi]
+pub struct ChunkAddress(autonomi::ChunkAddress);
 
 #[napi]
-impl JsChunkAddress {
+impl ChunkAddress {
     /// Creates a new ChunkAddress.
     #[napi(constructor)]
-    pub fn new(xor_name: &JsXorName) -> Self {
-        Self(ChunkAddress::new(xor_name.0))
+    pub fn new(xor_name: &XorName) -> Self {
+        Self(autonomi::ChunkAddress::new(xor_name.0))
     }
 
     /// Returns the XorName.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(*self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(*self.0.xorname())
     }
 
     /// Returns the hex string representation of the address.
@@ -1313,7 +1295,7 @@ impl JsChunkAddress {
     /// Creates a new ChunkAddress from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = ChunkAddress::from_hex(&hex).map_err(map_error)?;
+        let addr = autonomi::ChunkAddress::from_hex(&hex).map_err(map_error)?;
 
         Ok(Self(addr))
     }
@@ -1322,22 +1304,22 @@ impl JsChunkAddress {
 /// Address of a `GraphEntry`.
 ///
 /// It is derived from the owner's unique public key
-#[napi(js_name = "GraphEntryAddress")]
-pub struct JsGraphEntryAddress(GraphEntryAddress);
+#[napi]
+pub struct GraphEntryAddress(autonomi::GraphEntryAddress);
 
 #[napi]
-impl JsGraphEntryAddress {
+impl GraphEntryAddress {
     /// Creates a new GraphEntryAddress.
     #[napi(constructor)]
-    pub fn new(owner: &JsPublicKey) -> Self {
-        Self(GraphEntryAddress::new(owner.0))
+    pub fn new(owner: &PublicKey) -> Self {
+        Self(autonomi::GraphEntryAddress::new(owner.0))
     }
 
     /// Return the network name of the scratchpad.
     /// This is used to locate the scratchpad on the network.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(self.0.xorname())
     }
 
     /// Serialize this `GraphEntryAddress` into a hex-encoded string.
@@ -1349,27 +1331,27 @@ impl JsGraphEntryAddress {
     /// Parse a hex-encoded string into a `GraphEntryAddress`.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = GraphEntryAddress::from_hex(&hex).map_err(map_error)?;
+        let addr = autonomi::GraphEntryAddress::from_hex(&hex).map_err(map_error)?;
 
         Ok(Self(addr))
     }
 }
 
-#[napi(js_name = "DataAddress")]
-pub struct JsDataAddress(DataAddress);
+#[napi]
+pub struct DataAddress(autonomi::data::DataAddress);
 
 #[napi]
-impl JsDataAddress {
+impl DataAddress {
     /// Creates a new DataAddress.
     #[napi(constructor)]
-    pub fn new(xor_name: &JsXorName) -> Self {
-        Self(DataAddress::new(xor_name.0))
+    pub fn new(xor_name: &XorName) -> Self {
+        Self(autonomi::data::DataAddress::new(xor_name.0))
     }
 
     /// Returns the XorName.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(*self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(*self.0.xorname())
     }
 
     /// Returns the hex string representation of the address.
@@ -1381,25 +1363,29 @@ impl JsDataAddress {
     /// Creates a new DataAddress from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        DataAddress::from_hex(&hex).map(Self).map_err(map_error)
+        autonomi::data::DataAddress::from_hex(&hex)
+            .map(Self)
+            .map_err(map_error)
     }
 }
 
-#[napi(js_name = "ArchiveAddress")]
-pub struct JsArchiveAddress(ArchiveAddress);
+#[napi]
+pub struct ArchiveAddress(autonomi::files::archive_public::ArchiveAddress);
 
 #[napi]
-impl JsArchiveAddress {
+impl ArchiveAddress {
     /// Creates a new ArchiveAddress.
     #[napi(constructor)]
-    pub fn new(xor_name: &JsXorName) -> Self {
-        Self(ArchiveAddress::new(xor_name.0))
+    pub fn new(xor_name: &XorName) -> Self {
+        Self(autonomi::files::archive_public::ArchiveAddress::new(
+            xor_name.0,
+        ))
     }
 
     /// Returns the XorName.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(*self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(*self.0.xorname())
     }
 
     /// Returns the hex string representation of the address.
@@ -1411,26 +1397,28 @@ impl JsArchiveAddress {
     /// Creates a new ArchiveAddress from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        ArchiveAddress::from_hex(&hex).map(Self).map_err(map_error)
+        autonomi::files::archive_public::ArchiveAddress::from_hex(&hex)
+            .map(Self)
+            .map_err(map_error)
     }
 }
 
 /// A wallet for interacting with the network's payment system
-#[napi(js_name = "Wallet")]
-pub struct JsWallet(Wallet);
+#[napi]
+pub struct Wallet(autonomi::Wallet);
 
 #[napi]
-impl JsWallet {
+impl Wallet {
     /// Convenience function that creates a new Wallet with a random EthereumWallet.
-    pub fn new_with_random_wallet(network: Network) -> Self {
-        JsWallet(Wallet::new_with_random_wallet(network))
+    pub fn new_with_random_wallet(network: autonomi::Network) -> Self {
+        Wallet(autonomi::Wallet::new_with_random_wallet(network))
     }
 
     /// Creates a new Wallet based on the given Ethereum private key. It will fail with Error::PrivateKeyInvalid if private_key is invalid.
     #[napi(factory)]
-    pub fn new_from_private_key(network: &JsNetwork, private_key: String) -> Result<Self> {
-        let wallet =
-            Wallet::new_from_private_key(network.0.clone(), &private_key).map_err(map_error)?;
+    pub fn new_from_private_key(network: &Network, private_key: String) -> Result<Self> {
+        let wallet = autonomi::Wallet::new_from_private_key(network.0.clone(), &private_key)
+            .map_err(map_error)?;
 
         Ok(Self(wallet))
     }
@@ -1442,8 +1430,8 @@ impl JsWallet {
     }
 
     /// Returns the `Network` of this wallet.
-    pub fn network(&self) -> JsNetwork {
-        JsNetwork(self.0.network().clone())
+    pub fn network(&self) -> Network {
+        Network(self.0.network().clone())
     }
 
     /// Returns the raw balance of payment tokens in the wallet
@@ -1464,14 +1452,14 @@ impl JsWallet {
 }
 
 /// Options for making payments on the network
-#[napi(js_name = "PaymentOption")]
-pub struct JsPaymentOption(PaymentOption);
+#[napi]
+pub struct PaymentOption(autonomi::client::payment::PaymentOption);
 
 #[napi]
-impl JsPaymentOption {
+impl PaymentOption {
     #[napi(factory)]
-    pub fn from_wallet(wallet: &JsWallet) -> Self {
-        Self(PaymentOption::from(&wallet.0))
+    pub fn from_wallet(wallet: &Wallet) -> Self {
+        Self(autonomi::client::payment::PaymentOption::from(&wallet.0))
     }
 
     #[napi(factory)]
@@ -1480,23 +1468,23 @@ impl JsPaymentOption {
     }
 }
 
-#[napi(js_name = "Network")]
-pub struct JsNetwork(Network);
+#[napi]
+pub struct Network(autonomi::Network);
 
 #[napi]
-impl JsNetwork {
+impl Network {
     #[napi(constructor)]
     pub fn new(local: bool) -> Result<Self> {
-        let network = Network::new(local).map_err(map_error)?;
+        let network = autonomi::Network::new(local).map_err(map_error)?;
         Ok(Self(network))
     }
 }
 
-#[napi(js_name = "PublicKey")]
-pub struct JsPublicKey(PublicKey);
+#[napi]
+pub struct PublicKey(autonomi::PublicKey);
 
 #[napi]
-impl JsPublicKey {
+impl PublicKey {
     /// Returns a byte string representation of the public key.
     #[napi]
     pub fn to_bytes(&self) -> Uint8Array {
@@ -1507,7 +1495,7 @@ impl JsPublicKey {
     #[napi(factory)]
     pub fn from_bytes(bytes: Uint8Array) -> Result<Self> {
         let bytes = uint8_array_to_array(bytes, "bytes")?;
-        let key = PublicKey::from_bytes(bytes).map_err(map_error)?;
+        let key = autonomi::PublicKey::from_bytes(bytes).map_err(map_error)?;
         Ok(Self(key))
     }
 
@@ -1520,26 +1508,26 @@ impl JsPublicKey {
     /// Creates a new PublicKey from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let key = PublicKey::from_hex(&hex).map_err(map_error)?;
+        let key = autonomi::PublicKey::from_hex(&hex).map_err(map_error)?;
         Ok(Self(key))
     }
 }
 
-#[napi(js_name = "SecretKey")]
-pub struct JsSecretKey(SecretKey);
+#[napi]
+pub struct SecretKey(autonomi::SecretKey);
 
 #[napi]
-impl JsSecretKey {
+impl SecretKey {
     /// Generate a random SecretKey
     #[napi(factory)]
     pub fn random() -> Self {
-        Self(SecretKey::random())
+        Self(autonomi::SecretKey::random())
     }
 
     /// Returns the public key corresponding to this secret key.
     #[napi]
-    pub fn public_key(&self) -> JsPublicKey {
-        JsPublicKey(self.0.public_key())
+    pub fn public_key(&self) -> PublicKey {
+        PublicKey(self.0.public_key())
     }
 
     /// Converts the secret key to big endian bytes
@@ -1552,7 +1540,7 @@ impl JsSecretKey {
     #[napi(factory)]
     pub fn from_bytes(bytes: Uint8Array) -> Result<Self> {
         let bytes = uint8_array_to_array(bytes, "bytes")?;
-        let key = SecretKey::from_bytes(bytes).map_err(map_error)?;
+        let key = autonomi::SecretKey::from_bytes(bytes).map_err(map_error)?;
         Ok(Self(key))
     }
 
@@ -1565,23 +1553,23 @@ impl JsSecretKey {
     /// Creates a new SecretKey from a hex string.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let key = SecretKey::from_hex(&hex).map_err(map_error)?;
+        let key = autonomi::SecretKey::from_hex(&hex).map_err(map_error)?;
         Ok(Self(key))
     }
 }
 
-#[napi(js_name = "GraphEntry")]
-pub struct JsGraphEntry(GraphEntry);
+#[napi]
+pub struct GraphEntry(autonomi::GraphEntry);
 
 #[napi]
-impl JsGraphEntry {
+impl GraphEntry {
     /// Create a new graph entry, signing it with the provided secret key.
     #[napi(constructor)]
     pub fn new(
-        owner: &JsSecretKey,
-        parents: Vec<&JsPublicKey>,
+        owner: &SecretKey,
+        parents: Vec<&PublicKey>,
         content: Uint8Array,
-        descendants: Vec<(&JsPublicKey, Uint8Array)>,
+        descendants: Vec<(&PublicKey, Uint8Array)>,
     ) -> Result<Self> {
         let content: [u8; 32] = uint8_array_to_array(content, "content")?;
 
@@ -1593,9 +1581,9 @@ impl JsGraphEntry {
                 let content_array: [u8; 32] = uint8_array_to_array(content.clone(), "content")?;
                 Ok((pk.0, content_array))
             })
-            .collect::<Result<Vec<(PublicKey, [u8; 32])>>>()?;
+            .collect::<Result<Vec<(autonomi::PublicKey, [u8; 32])>>>()?;
 
-        Ok(Self(GraphEntry::new(
+        Ok(Self(autonomi::GraphEntry::new(
             &owner.0,
             parents,
             content,
@@ -1606,17 +1594,17 @@ impl JsGraphEntry {
     /// Create a new graph entry with the signature already calculated.
     #[napi(factory)]
     pub fn new_with_signature(
-        owner: &JsPublicKey,
-        parents: Vec<&JsPublicKey>,
+        owner: &PublicKey,
+        parents: Vec<&PublicKey>,
         content: Uint8Array,
-        descendants: Vec<(&JsPublicKey, Uint8Array)>,
+        descendants: Vec<(&PublicKey, Uint8Array)>,
         signature: Uint8Array,
     ) -> Result<Self> {
         let content: [u8; 32] = uint8_array_to_array(content, "content")?;
 
         let parents = parents.iter().map(|p| p.0).collect();
 
-        let descendants_result: Result<Vec<(PublicKey, [u8; 32])>> = descendants
+        let descendants_result: Result<Vec<(autonomi::PublicKey, [u8; 32])>> = descendants
             .iter()
             .map(|(pk, content)| {
                 let content_array: [u8; 32] = uint8_array_to_array(content.clone(), "content")?;
@@ -1629,7 +1617,7 @@ impl JsGraphEntry {
         let signature = uint8_array_to_array(signature, "signature")?;
         let signature = Signature::from_bytes(signature).map_err(map_error)?;
 
-        Ok(Self(GraphEntry::new_with_signature(
+        Ok(Self(autonomi::GraphEntry::new_with_signature(
             owner.0,
             parents,
             content,
@@ -1640,20 +1628,20 @@ impl JsGraphEntry {
 
     /// Get the address of the graph entry
     #[napi]
-    pub fn address(&self) -> JsGraphEntryAddress {
-        JsGraphEntryAddress(self.0.address())
+    pub fn address(&self) -> GraphEntryAddress {
+        GraphEntryAddress(self.0.address())
     }
 
     /// Get the owner of the graph entry
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(self.0.owner)
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(self.0.owner)
     }
 
     /// Get the parents of the graph entry
     #[napi]
-    pub fn parents(&self) -> Vec<JsPublicKey> {
-        self.0.parents.iter().map(|p| JsPublicKey(*p)).collect()
+    pub fn parents(&self) -> Vec<PublicKey> {
+        self.0.parents.iter().map(|p| PublicKey(*p)).collect()
     }
 
     /// Get the content of the graph entry
@@ -1705,35 +1693,35 @@ impl JsGraphEntry {
     }
 }
 
-#[napi(js_name = "Pointer")]
-pub struct JsPointer(Pointer);
+#[napi]
+pub struct Pointer(autonomi::Pointer);
 
 #[napi]
-impl JsPointer {
+impl Pointer {
     /// Create a new pointer, signing it with the provided secret key.
     /// This pointer would be stored on the network at the provided key's public key.
     /// There can only be one pointer at a time at the same address (one per key).
     #[napi(constructor)]
-    pub fn new(owner: &JsSecretKey, counter: u32, target: &JsPointerTarget) -> Self {
-        JsPointer(Pointer::new(&owner.0, counter, target.0.clone()))
+    pub fn new(owner: &SecretKey, counter: u32, target: &PointerTarget) -> Self {
+        Pointer(autonomi::Pointer::new(&owner.0, counter, target.0.clone()))
     }
 
     /// Get the address of the pointer
     #[napi]
-    pub fn address(&self) -> JsPointerAddress {
-        JsPointerAddress(self.0.address())
+    pub fn address(&self) -> PointerAddress {
+        PointerAddress(self.0.address())
     }
 
     /// Get the owner of the pointer
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(*self.0.owner())
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(*self.0.owner())
     }
 
     /// Get the target of the pointer
     #[napi]
-    pub fn target(&self) -> JsPointerTarget {
-        JsPointerTarget(self.0.target().clone())
+    pub fn target(&self) -> PointerTarget {
+        PointerTarget(self.0.target().clone())
     }
 
     /// Get the bytes that were signed for this pointer
@@ -1744,8 +1732,8 @@ impl JsPointer {
 
     /// Get the xorname of the pointer target
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(self.0.xorname())
     }
 
     /// Get the counter of the pointer, the higher the counter, the more recent the pointer is
@@ -1764,19 +1752,19 @@ impl JsPointer {
     /// Size of the pointer
     #[napi]
     pub fn size() -> usize {
-        Pointer::size()
+        autonomi::Pointer::size()
     }
 }
 
-#[napi(js_name = "PointerTarget")]
-pub struct JsPointerTarget(PointerTarget);
+#[napi]
+pub struct PointerTarget(autonomi::pointer::PointerTarget);
 
 #[napi]
-impl JsPointerTarget {
+impl PointerTarget {
     /// Returns the xorname of the target
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(self.0.xorname())
     }
 
     /// Returns the hex string representation of the target
@@ -1787,51 +1775,51 @@ impl JsPointerTarget {
 
     /// Creates a new PointerTarget from a ChunkAddress
     #[napi(factory, js_name = "ChunkAddress")]
-    pub fn from_chunk_address(addr: &JsChunkAddress) -> Self {
-        Self(PointerTarget::ChunkAddress(addr.0))
+    pub fn from_chunk_address(addr: &ChunkAddress) -> Self {
+        Self(autonomi::pointer::PointerTarget::ChunkAddress(addr.0))
     }
 
     /// Creates a new PointerTarget from a GraphEntryAddress
     #[napi(factory, js_name = "GraphEntryAddress")]
-    pub fn from_graph_entry_address(addr: &JsGraphEntryAddress) -> Self {
-        Self(PointerTarget::GraphEntryAddress(addr.0))
+    pub fn from_graph_entry_address(addr: &GraphEntryAddress) -> Self {
+        Self(autonomi::pointer::PointerTarget::GraphEntryAddress(addr.0))
     }
 
     /// Creates a new PointerTarget from a PointerAddress
     #[napi(factory, js_name = "PointerAddress")]
-    pub fn from_pointer_address(addr: &JsPointerAddress) -> Self {
-        Self(PointerTarget::PointerAddress(addr.0))
+    pub fn from_pointer_address(addr: &PointerAddress) -> Self {
+        Self(autonomi::pointer::PointerTarget::PointerAddress(addr.0))
     }
 
     /// Creates a new PointerTarget from a ScratchpadAddress
     #[napi(factory, js_name = "ScratchpadAddress")]
-    pub fn from_scratchpad_address(addr: &JsScratchpadAddress) -> Self {
-        Self(PointerTarget::ScratchpadAddress(addr.0))
+    pub fn from_scratchpad_address(addr: &ScratchpadAddress) -> Self {
+        Self(autonomi::pointer::PointerTarget::ScratchpadAddress(addr.0))
     }
 }
 
-#[napi(js_name = "PointerAddress")]
-pub struct JsPointerAddress(PointerAddress);
+#[napi]
+pub struct PointerAddress(autonomi::PointerAddress);
 
 #[napi]
-impl JsPointerAddress {
+impl PointerAddress {
     /// Creates a new PointerAddress.
     #[napi(constructor)]
-    pub fn new(owner: &JsPublicKey) -> Self {
-        Self(PointerAddress::new(owner.0))
+    pub fn new(owner: &PublicKey) -> Self {
+        Self(autonomi::PointerAddress::new(owner.0))
     }
 
     /// Return the network name of the pointer.
     /// This is used to locate the pointer on the network.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(self.0.xorname())
     }
 
     /// Return the owner.
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(*self.0.owner())
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(*self.0.owner())
     }
 
     /// Serialize this PointerAddress into a hex-encoded string.
@@ -1843,20 +1831,20 @@ impl JsPointerAddress {
     /// Parse a hex-encoded string into a PointerAddress.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = PointerAddress::from_hex(&hex).map_err(map_error)?;
+        let addr = autonomi::PointerAddress::from_hex(&hex).map_err(map_error)?;
         Ok(Self(addr))
     }
 }
 
-#[napi(js_name = "Scratchpad")]
-pub struct JsScratchpad(Scratchpad);
+#[napi]
+pub struct Scratchpad(autonomi::Scratchpad);
 
 #[napi]
-impl JsScratchpad {
+impl Scratchpad {
     /// Create a new scratchpad, signing it with the provided secret key.
     #[napi(constructor)]
     pub fn new(
-        owner: &JsSecretKey,
+        owner: &SecretKey,
         data_encoding: BigInt, // `u64`
         data: Buffer,
         counter: BigInt, // `u64`
@@ -1865,7 +1853,7 @@ impl JsScratchpad {
         let counter = big_int_to_u64(counter, "counter")?;
         let data = Bytes::copy_from_slice(&data);
 
-        Ok(Self(Scratchpad::new(
+        Ok(Self(autonomi::Scratchpad::new(
             &owner.0,
             data_encoding,
             &data,
@@ -1875,14 +1863,14 @@ impl JsScratchpad {
 
     /// Get the address of the scratchpad
     #[napi]
-    pub fn address(&self) -> JsScratchpadAddress {
-        JsScratchpadAddress(*self.0.address())
+    pub fn address(&self) -> ScratchpadAddress {
+        ScratchpadAddress(*self.0.address())
     }
 
     /// Get the owner of the scratchpad
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(*self.0.owner())
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(*self.0.owner())
     }
 
     /// Get the data encoding (content type) of the scratchpad
@@ -1893,7 +1881,7 @@ impl JsScratchpad {
 
     /// Decrypt the data of the scratchpad
     #[napi]
-    pub fn decrypt_data(&self, key: &JsSecretKey) -> Result<Buffer> {
+    pub fn decrypt_data(&self, key: &SecretKey) -> Result<Buffer> {
         let data = self.0.decrypt_data(&key.0).map_err(map_error)?;
         Ok(Buffer::from(data.to_vec()))
     }
@@ -1911,28 +1899,28 @@ impl JsScratchpad {
     }
 }
 
-#[napi(js_name = "ScratchpadAddress")]
-pub struct JsScratchpadAddress(ScratchpadAddress);
+#[napi]
+pub struct ScratchpadAddress(autonomi::ScratchpadAddress);
 
 #[napi]
-impl JsScratchpadAddress {
+impl ScratchpadAddress {
     /// Creates a new ScratchpadAddress.
     #[napi(constructor)]
-    pub fn new(owner: &JsPublicKey) -> Self {
-        Self(ScratchpadAddress::new(owner.0))
+    pub fn new(owner: &PublicKey) -> Self {
+        Self(autonomi::ScratchpadAddress::new(owner.0))
     }
 
     /// Return the network name of the scratchpad.
     /// This is used to locate the scratchpad on the network.
     #[napi]
-    pub fn xorname(&self) -> JsXorName {
-        JsXorName(self.0.xorname())
+    pub fn xorname(&self) -> XorName {
+        XorName(self.0.xorname())
     }
 
     /// Return the owner.
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(*self.0.owner())
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(*self.0.owner())
     }
 
     /// Serialize this ScratchpadAddress into a hex-encoded string.
@@ -1944,19 +1932,19 @@ impl JsScratchpadAddress {
     /// Parse a hex-encoded string into a ScratchpadAddress.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = ScratchpadAddress::from_hex(&hex).map_err(map_error)?;
+        let addr = autonomi::ScratchpadAddress::from_hex(&hex).map_err(map_error)?;
         Ok(Self(addr))
     }
 }
 
-#[napi(js_name = "DataMapChunk")]
-pub struct JsDataMapChunk(DataMapChunk);
-
-#[napi(js_name = "PrivateArchiveDataMap")]
-pub struct JsPrivateArchiveDataMap(PrivateArchiveDataMap);
+#[napi]
+pub struct DataMapChunk(autonomi::data::private::DataMapChunk);
 
 #[napi]
-impl JsPrivateArchiveDataMap {
+pub struct PrivateArchiveDataMap(autonomi::files::archive_private::PrivateArchiveDataMap);
+
+#[napi]
+impl PrivateArchiveDataMap {
     /// Serialize this PrivateArchiveDataMap into a hex-encoded string.
     #[napi]
     pub fn to_hex(&self) -> String {
@@ -1966,26 +1954,27 @@ impl JsPrivateArchiveDataMap {
     /// Parse a hex-encoded string into a PrivateArchiveDataMap.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let data_map = PrivateArchiveDataMap::from_hex(&hex).map_err(map_error)?;
+        let data_map = autonomi::files::archive_private::PrivateArchiveDataMap::from_hex(&hex)
+            .map_err(map_error)?;
         Ok(Self(data_map))
     }
 }
 
-#[napi(js_name = "PrivateArchive")]
-pub struct JsPrivateArchive(PrivateArchive);
+#[napi]
+pub struct PrivateArchive(autonomi::files::PrivateArchive);
 
 #[napi]
-impl JsPrivateArchive {
+impl PrivateArchive {
     /// Create a new empty local archive
     #[napi(constructor)]
     #[allow(clippy::new_without_default, reason = "`Default` not useful")]
     pub fn new() -> Self {
-        Self(PrivateArchive::new())
+        Self(autonomi::files::PrivateArchive::new())
     }
 
     /// Add a file to a local archive
     #[napi]
-    pub fn add_file(&mut self, path: String, data_map: &JsDataMapChunk, metadata: &JsMetadata) {
+    pub fn add_file(&mut self, path: String, data_map: &DataMapChunk, metadata: &Metadata) {
         self.0
             .add_file(PathBuf::from(path), data_map.0.clone(), metadata.0.clone());
     }
@@ -2016,8 +2005,8 @@ impl JsPrivateArchive {
 
     /// List all data maps of the files in the archive
     #[napi]
-    pub fn data_maps(&self) -> Vec<JsDataMapChunk> {
-        self.0.data_maps().into_iter().map(JsDataMapChunk).collect()
+    pub fn data_maps(&self) -> Vec<DataMapChunk> {
+        self.0.data_maps().into_iter().map(DataMapChunk).collect()
     }
 
     /// Convert the archive to bytes
@@ -2037,7 +2026,7 @@ impl JsPrivateArchive {
     #[napi(factory)]
     pub fn from_bytes(data: Buffer) -> Result<Self> {
         let bytes = Bytes::from(data.as_ref().to_vec());
-        let archive = PrivateArchive::from_bytes(bytes).map_err(|e| {
+        let archive = autonomi::files::PrivateArchive::from_bytes(bytes).map_err(|e| {
             napi::Error::new(
                 Status::GenericFailure,
                 format!("Failed to deserialize archive: {e:?}"),
@@ -2049,31 +2038,31 @@ impl JsPrivateArchive {
 
     /// Merge with another archive
     #[napi]
-    pub fn merge(&mut self, other: &JsPrivateArchive) {
+    pub fn merge(&mut self, other: &PrivateArchive) {
         self.0.merge(&other.0);
     }
 }
 
-#[napi(js_name = "VaultSecretKey")]
-pub struct JsVaultSecretKey(VaultSecretKey);
-
-#[napi(js_name = "UserData")]
-pub struct JsUserData(UserData);
-
-#[napi(js_name = "VaultContentType")]
-pub struct JsVaultContentType(VaultContentType);
-
-/// File metadata
-#[napi(js_name = "Metadata")]
-pub struct JsMetadata(Metadata);
+#[napi]
+pub struct VaultSecretKey(autonomi::vault::VaultSecretKey);
 
 #[napi]
-impl JsMetadata {
+pub struct UserData(autonomi::vault::UserData);
+
+#[napi]
+pub struct VaultContentType(autonomi::vault::VaultContentType);
+
+/// File metadata
+#[napi]
+pub struct Metadata(autonomi::files::Metadata);
+
+#[napi]
+impl Metadata {
     /// Create a new metadata struct with the current time as uploaded, created and modified.
     #[napi(factory)]
     pub fn new_with_size(size: BigInt) -> Result<Self> {
         let size = big_int_to_u64(size, "size")?;
-        Ok(Self(Metadata::new_with_size(size)))
+        Ok(Self(autonomi::files::Metadata::new_with_size(size)))
     }
 
     /// Create new metadata with all custom fields
@@ -2099,7 +2088,7 @@ impl JsMetadata {
     /// Create a new empty metadata struct with zeros
     #[napi(factory)]
     pub fn empty() -> Self {
-        Self(Metadata::empty())
+        Self(autonomi::files::Metadata::empty())
     }
 
     /// Get the creation timestamp
@@ -2127,33 +2116,33 @@ impl JsMetadata {
     }
 }
 
-#[napi(js_name = "RegisterAddress")]
-pub struct JsRegisterAddress(RegisterAddress);
+#[napi]
+pub struct RegisterAddress(autonomi::register::RegisterAddress);
 
 #[napi]
-impl JsRegisterAddress {
+impl RegisterAddress {
     /// Creates a new RegisterAddress.
     #[napi(constructor)]
-    pub fn new(owner: &JsPublicKey) -> Self {
-        Self(RegisterAddress::new(owner.0))
+    pub fn new(owner: &PublicKey) -> Self {
+        Self(autonomi::register::RegisterAddress::new(owner.0))
     }
 
     /// Get the owner of the register
     #[napi]
-    pub fn owner(&self) -> JsPublicKey {
-        JsPublicKey(self.0.owner())
+    pub fn owner(&self) -> PublicKey {
+        PublicKey(self.0.owner())
     }
 
     /// Get the underlying graph root address
     #[napi]
-    pub fn to_underlying_graph_root(&self) -> JsGraphEntryAddress {
-        JsGraphEntryAddress(self.0.to_underlying_graph_root())
+    pub fn to_underlying_graph_root(&self) -> GraphEntryAddress {
+        GraphEntryAddress(self.0.to_underlying_graph_root())
     }
 
     /// Get the underlying head pointer address
     #[napi]
-    pub fn to_underlying_head_pointer(&self) -> JsPointerAddress {
-        JsPointerAddress(self.0.to_underlying_head_pointer())
+    pub fn to_underlying_head_pointer(&self) -> PointerAddress {
+        PointerAddress(self.0.to_underlying_head_pointer())
     }
 
     /// Serialize this RegisterAddress into a hex-encoded string.
@@ -2165,16 +2154,16 @@ impl JsRegisterAddress {
     /// Parse a hex-encoded string into a RegisterAddress.
     #[napi(factory)]
     pub fn from_hex(hex: String) -> Result<Self> {
-        let addr = RegisterAddress::from_hex(&hex).map_err(map_error)?;
+        let addr = autonomi::register::RegisterAddress::from_hex(&hex).map_err(map_error)?;
         Ok(Self(addr))
     }
 }
 
-#[napi(js_name = "RegisterHistory")]
-pub struct JsRegisterHistory(Mutex<RegisterHistory>);
+#[napi]
+pub struct RegisterHistory(Mutex<autonomi::register::RegisterHistory>);
 
 #[napi]
-impl JsRegisterHistory {
+impl RegisterHistory {
     // Somehow without this stub, NAPI-RS fails to create this object with an error:
     // error: `Failed to get constructor of class`
     #[allow(clippy::new_without_default, reason = "`Default` not useful")]
@@ -2206,21 +2195,21 @@ impl JsRegisterHistory {
     }
 }
 
-#[napi(js_name = "PublicArchive")]
-pub struct JsPublicArchive(PublicArchive);
+#[napi]
+pub struct PublicArchive(autonomi::files::PublicArchive);
 
 #[napi]
-impl JsPublicArchive {
+impl PublicArchive {
     /// Create a new empty local archive
     #[napi(constructor)]
     #[allow(clippy::new_without_default, reason = "`Default` not useful")]
     pub fn new() -> Self {
-        Self(PublicArchive::new())
+        Self(autonomi::files::PublicArchive::new())
     }
 
     /// Add a file to a local archive
     #[napi]
-    pub fn add_file(&mut self, path: String, data_addr: &JsDataAddress, metadata: &JsMetadata) {
+    pub fn add_file(&mut self, path: String, data_addr: &DataAddress, metadata: &Metadata) {
         self.0
             .add_file(PathBuf::from(path), data_addr.0, metadata.0.clone());
     }
@@ -2251,8 +2240,8 @@ impl JsPublicArchive {
 
     /// List all data addresses of the files in the archive
     #[napi]
-    pub fn addresses(&self) -> Vec<JsDataAddress> {
-        self.0.addresses().into_iter().map(JsDataAddress).collect()
+    pub fn addresses(&self) -> Vec<DataAddress> {
+        self.0.addresses().into_iter().map(DataAddress).collect()
     }
 
     /// Convert the archive to bytes
@@ -2272,7 +2261,7 @@ impl JsPublicArchive {
     #[napi(factory)]
     pub fn from_bytes(data: Buffer) -> Result<Self> {
         let bytes = Bytes::from(data.as_ref().to_vec());
-        let archive = PublicArchive::from_bytes(bytes).map_err(|e| {
+        let archive = autonomi::files::PublicArchive::from_bytes(bytes).map_err(|e| {
             napi::Error::new(
                 Status::GenericFailure,
                 format!("Failed to deserialize archive: {e:?}"),
@@ -2284,7 +2273,7 @@ impl JsPublicArchive {
 
     /// Merge with another archive
     #[napi]
-    pub fn merge(&mut self, other: &JsPublicArchive) {
+    pub fn merge(&mut self, other: &PublicArchive) {
         self.0.merge(&other.0);
     }
 }

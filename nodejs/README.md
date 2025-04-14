@@ -27,7 +27,7 @@ $ node main.js
 > 
 > For general guides and usage, see the [Developer Documentation](https://docs.autonomi.com/developers). This is currently worked on specifically to include Node.js usage.
 
-For example usage, see the [`__test__`](./__test__/) directory. Replace `import { .. } from '../index.js'` to import from `@withautonomi/autonomi` instead.
+For example usage, see the [`__test__`](./__test__) directory. Replace `import { .. } from '../index.js'` to import from `@withautonomi/autonomi` instead.
 
 # Contributing, compilation and publishing
 
