@@ -118,7 +118,7 @@ async fn test_deploy() {
 
 #[tokio::test]
 async fn test_get_quote_on_arb_sepolia() {
-    let network = Network::ArbitrumSepolia;
+    let network = Network::ArbitrumSepoliaTest;
     let provider = http_provider(network.rpc_url().clone());
     let payment_vault = PaymentVaultHandler::new(*network.data_payments_address(), provider);
 
