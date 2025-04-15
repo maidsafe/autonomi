@@ -10924,3 +10924,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "libp2p"
+version = "0.55.1"
+source = "git+https://github.com/mickvandijke/rust-libp2p.git?branch=k-8#7e0434fd51e41c90d147ae5a1d734f2318975173"
