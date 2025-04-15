@@ -103,7 +103,7 @@ pub fn get_all_rpc_addresses(_skip_genesis_for_droplet: bool) -> Result<Vec<Sock
             let rpc_endpoints = local_node_registry
                 .nodes
                 .iter()
-                .map(|n| n.rpc_socket_addr)
+                .filter_map(|n| n.rpc_socket_addr)
                 .collect::<Vec<SocketAddr>>();
             Ok(rpc_endpoints)
         }
