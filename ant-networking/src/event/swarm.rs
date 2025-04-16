@@ -14,7 +14,6 @@ use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
 use libp2p::{
-    core::ConnectedPoint,
     multiaddr::Protocol,
     swarm::{ConnectionId, DialError, SwarmEvent},
     Multiaddr, TransportError,
@@ -168,37 +167,28 @@ impl SwarmDriver {
                 // Trigger server mode if we're not a client and we should not add our own address if we're behind
                 // home network.
                 if !self.is_client && !self.is_behind_home_network {
-                    if self.local {
-                        // all addresses are effectively external here...
-                        // this is needed for Kad Mode::Server
-                        self.swarm.add_external_address(address.clone());
+                    // Others won't read our advertised external address, but use the addr from connection info.
+                    // this is needed for Kad Mode::Server
+                    self.swarm.add_external_address(address.clone());
 
-                        // If we are local, add our own address(es) to cache
-                        if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
-                            tracing::info!("Adding listen address to bootstrap cache");
+                    // If we are local, add our own address(es) to cache
+                    if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
+                        tracing::info!("Adding listen address to bootstrap cache");
 
-                            let config = bootstrap_cache.config().clone();
-                            let mut old_cache = bootstrap_cache.clone();
+                        let config = bootstrap_cache.config().clone();
+                        let mut old_cache = bootstrap_cache.clone();
 
-                            if let Ok(new) = BootstrapCacheStore::new(config) {
-                                self.bootstrap_cache = Some(new);
-                                old_cache.add_addr(address.clone());
+                        if let Ok(new) = BootstrapCacheStore::new(config) {
+                            self.bootstrap_cache = Some(new);
+                            old_cache.add_addr(address.clone());
 
-                                // Save cache to disk.
-                                crate::time::spawn(async move {
-                                    if let Err(err) = old_cache.sync_and_flush_to_disk(true) {
-                                        error!("Failed to save bootstrap cache: {err}");
-                                    }
-                                });
-                            }
+                            // Save cache to disk.
+                            crate::time::spawn(async move {
+                                if let Err(err) = old_cache.sync_and_flush_to_disk(true) {
+                                    error!("Failed to save bootstrap cache: {err}");
+                                }
+                            });
                         }
-                    } else if let Some(external_add_manager) =
-                        self.external_address_manager.as_mut()
-                    {
-                        external_add_manager.on_new_listen_addr(address.clone(), &mut self.swarm);
-                    } else {
-                        // just for future reference.
-                        warn!("External address manager is not enabled for a public node. This should not happen.");
                     }
                 }
 
@@ -256,13 +246,6 @@ impl SwarmDriver {
                     &mut self.swarm,
                     self.peers_in_rt,
                 );
-
-                if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
-                    if let ConnectedPoint::Listener { local_addr, .. } = &endpoint {
-                        external_addr_manager
-                            .on_established_incoming_connection(local_addr.clone());
-                    }
-                }
 
                 #[cfg(feature = "open-metrics")]
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
@@ -494,12 +477,6 @@ impl SwarmDriver {
                         "Node {:?} Remote {remote_peer_id:?} - Incoming Connection Error",
                         self.self_peer_id
                     );
-                    // This is best approximation that we can do to prevent harmless errors from affecting the external
-                    // address health.
-                    if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
-                        external_addr_manager
-                            .on_incoming_connection_error(local_addr.clone(), &mut self.swarm);
-                    }
                 } else {
                     debug!("IncomingConnectionError InValid from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
                 }
@@ -521,10 +498,7 @@ impl SwarmDriver {
             }
             SwarmEvent::NewExternalAddrCandidate { address } => {
                 event_string = "NewExternalAddrCandidate";
-
-                if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
-                    external_addr_manager.add_external_address_candidate(address, &mut self.swarm);
-                }
+                info!(?address, "new external address candidate");
             }
             SwarmEvent::ExternalAddrConfirmed { address } => {
                 event_string = "ExternalAddrConfirmed";
@@ -540,9 +514,6 @@ impl SwarmDriver {
             } => {
                 event_string = "ExpiredListenAddr";
                 info!("Listen address has expired. {listener_id:?} on {address:?}");
-                if let Some(external_addr_manager) = self.external_address_manager.as_mut() {
-                    external_addr_manager.on_expired_listen_addr(address, &self.swarm);
-                }
             }
             SwarmEvent::ListenerError { listener_id, error } => {
                 event_string = "ListenerError";

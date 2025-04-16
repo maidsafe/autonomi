@@ -12,7 +12,6 @@ use crate::{
     driver::NodeBehaviour,
     error::{NetworkError, Result},
     event::NetworkEvent,
-    external_address::ExternalAddressManager,
     fifo_register::FifoRegister,
     network_discovery::NetworkDiscovery,
     record_store::{ClientRecordStore, NodeRecordStore, NodeRecordStoreConfig},
@@ -509,14 +508,6 @@ impl NetworkBuilder {
             info!("Relay manager is disabled for this node.");
             None
         };
-        // Enable external address manager for public nodes and not behind nat
-        let external_address_manager = if !is_client && !self.local && !self.is_behind_home_network
-        {
-            Some(ExternalAddressManager::new(peer_id))
-        } else {
-            info!("External address manager is disabled for this node.");
-            None
-        };
 
         let swarm_driver = SwarmDriver {
             swarm,
@@ -533,7 +524,6 @@ impl NetworkBuilder {
             dial_queue: Default::default(),
             relay_manager,
             connected_relay_clients: Default::default(),
-            external_address_manager,
             replication_fetcher,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
