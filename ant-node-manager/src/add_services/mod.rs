@@ -20,8 +20,9 @@ use crate::{
     VerbosityLevel, DAEMON_SERVICE_NAME,
 };
 use ant_service_management::{
-    auditor::AuditorServiceData, control::ServiceControl, DaemonServiceData, FaucetServiceData,
-    NatDetectionStatus, NodeRegistry, NodeServiceData, ServiceStatus,
+    auditor::AuditorServiceData, control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
+    DaemonServiceData, FaucetServiceData, NatDetectionStatus, NodeRegistry, NodeServiceData,
+    ServiceStatus,
 };
 use color_eyre::{
     eyre::{eyre, OptionExt},
@@ -56,7 +57,10 @@ pub async fn add_node(
             }
         }
 
-        let genesis_node = node_registry.nodes.iter().find(|n| n.peers_args.first);
+        let genesis_node = node_registry
+            .nodes
+            .iter()
+            .find(|n| n.initial_peers_config.first);
         if genesis_node.is_some() {
             error!("A genesis node already exists");
             return Err(eyre!("A genesis node already exists"));
@@ -183,8 +187,8 @@ pub async fn add_node(
                 }
             }
             debug!(
-                "Auto-setting NAT flags: upnp={}, relay={}",
-                !options.no_upnp, options.relay
+                "Auto-setting NAT flags: no_upnp={}, relay={}",
+                options.no_upnp, options.relay
             );
         }
 
@@ -193,7 +197,7 @@ pub async fn add_node(
             data_dir_path: service_data_dir_path.clone(),
             env_variables: options.env_variables.clone(),
             evm_network: options.evm_network.clone(),
-            home_network: options.relay,
+            relay: options.relay,
             log_dir_path: service_log_dir_path.clone(),
             log_format: options.log_format,
             max_archived_log_files: options.max_archived_log_files,
@@ -208,7 +212,7 @@ pub async fn add_node(
             rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
-            upnp: !options.no_upnp,
+            no_upnp: options.no_upnp,
         }
         .build()?;
 
@@ -229,7 +233,8 @@ pub async fn add_node(
                     connected_peers: None,
                     data_dir_path: service_data_dir_path.clone(),
                     evm_network: options.evm_network.clone(),
-                    home_network: options.relay,
+                    relay: options.relay,
+                    initial_peers_config: options.init_peers_config.clone(),
                     listen_addr: None,
                     log_dir_path: service_log_dir_path.clone(),
                     log_format: options.log_format,
@@ -244,11 +249,11 @@ pub async fn add_node(
                     reward_balance: None,
                     rpc_socket_addr,
                     peer_id: None,
-                    peers_args: options.init_peers_config.clone(),
                     pid: None,
+                    schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
                     service_name,
                     status: ServiceStatus::Added,
-                    upnp: !options.no_upnp,
+                    no_upnp: options.no_upnp,
                     user: options.user.clone(),
                     user_mode: options.user_mode,
                     version: options.version.clone(),

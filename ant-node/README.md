@@ -58,7 +58,7 @@ node.run(
     ],
     local=False,
     root_dir=None,  # Uses default directory
-    home_network=False
+    relay=False
 )
 ```
 

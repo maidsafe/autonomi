@@ -95,7 +95,6 @@ pub struct NetworkBuilder {
     bootstrap_cache: Option<BootstrapCacheStore>,
     concurrency_limit: Option<usize>,
     initial_contacts: Vec<Multiaddr>,
-    is_behind_home_network: bool,
     keypair: Keypair,
     listen_addr: Option<SocketAddr>,
     local: bool,
@@ -103,8 +102,9 @@ pub struct NetworkBuilder {
     metrics_registries: Option<MetricsRegistries>,
     #[cfg(feature = "open-metrics")]
     metrics_server_port: Option<u16>,
+    no_upnp: bool,
+    relay_client: bool,
     request_timeout: Option<Duration>,
-    upnp: bool,
 }
 
 impl NetworkBuilder {
@@ -113,7 +113,6 @@ impl NetworkBuilder {
             bootstrap_cache: None,
             concurrency_limit: None,
             initial_contacts,
-            is_behind_home_network: false,
             keypair,
             listen_addr: None,
             local,
@@ -121,8 +120,9 @@ impl NetworkBuilder {
             metrics_registries: None,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
+            no_upnp: true,
+            relay_client: false,
             request_timeout: None,
-            upnp: false,
         }
     }
 
@@ -130,8 +130,8 @@ impl NetworkBuilder {
         self.bootstrap_cache = Some(bootstrap_cache);
     }
 
-    pub fn is_behind_home_network(&mut self, enable: bool) {
-        self.is_behind_home_network = enable;
+    pub fn relay_client(&mut self, relay_client: bool) {
+        self.relay_client = relay_client;
     }
 
     pub fn listen_addr(&mut self, listen_addr: SocketAddr) {
@@ -159,8 +159,8 @@ impl NetworkBuilder {
         self.metrics_server_port = port;
     }
 
-    pub fn upnp(&mut self, upnp: bool) {
-        self.upnp = upnp;
+    pub fn no_upnp(&mut self, no_upnp: bool) {
+        self.no_upnp = no_upnp;
     }
 
     /// Creates a new `SwarmDriver` instance, along with a `Network` handle
@@ -248,10 +248,9 @@ impl NetworkBuilder {
         };
 
         let listen_addr = self.listen_addr;
-        let upnp = self.upnp;
 
         let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full, upnp);
+            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -284,7 +283,7 @@ impl NetworkBuilder {
             .set_replication_factor(REPLICATION_FACTOR);
 
         let (network, net_event_recv, driver) =
-            self.build(kad_cfg, None, true, ProtocolSupport::Outbound, false);
+            self.build(kad_cfg, None, true, ProtocolSupport::Outbound);
 
         (network, net_event_recv, driver)
     }
@@ -296,7 +295,6 @@ impl NetworkBuilder {
         record_store_cfg: Option<NodeRecordStoreConfig>,
         is_client: bool,
         req_res_protocol: ProtocolSupport,
-        upnp: bool,
     ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
@@ -452,7 +450,7 @@ impl NetworkBuilder {
             libp2p::identify::Behaviour::new(cfg)
         };
 
-        let upnp = if !self.local && !is_client && upnp {
+        let upnp = if !self.local && !is_client && !self.no_upnp && !self.relay_client {
             debug!("Enabling UPnP port opening behavior");
             Some(libp2p::upnp::tokio::Behaviour::default())
         } else {
@@ -460,7 +458,7 @@ impl NetworkBuilder {
         }
         .into(); // Into `Toggle<T>`
 
-        let relay_server = if !is_client && !self.is_behind_home_network {
+        let relay_server = if !is_client && !self.relay_client {
             let relay_server_cfg = relay::Config {
                 max_reservations: 128,             // Amount of peers we are relaying for
                 max_circuits: 1024, // The total amount of relayed connections at any given moment.
@@ -478,6 +476,8 @@ impl NetworkBuilder {
 
         let behaviour = NodeBehaviour {
             blocklist: libp2p::allow_block_list::Behaviour::default(),
+            // `Relay client Behaviour` is enabled for all nodes. This is required for normal nodes to connect to relay
+            // clients.
             relay_client: relay_behaviour,
             relay_server,
             upnp,
@@ -493,8 +493,8 @@ impl NetworkBuilder {
 
         let replication_fetcher = ReplicationFetcher::new(peer_id, network_event_sender.clone());
 
-        // Enable relay manager for nodes behind home network
-        let relay_manager = if !is_client && self.is_behind_home_network {
+        // Enable relay manager to allow the node to act as a relay client and connect via relay servers to the network
+        let relay_manager = if !is_client && self.relay_client {
             let relay_manager = RelayManager::new(peer_id);
             #[cfg(feature = "open-metrics")]
             let mut relay_manager = relay_manager;
@@ -510,25 +510,25 @@ impl NetworkBuilder {
             None
         };
         // Enable external address manager for public nodes and not behind nat
-        let external_address_manager = if !is_client && !self.local && !self.is_behind_home_network
-        {
+        let external_address_manager = if !is_client && !self.local && !self.relay_client {
             Some(ExternalAddressManager::new(peer_id))
         } else {
             info!("External address manager is disabled for this node.");
             None
         };
 
+        let is_upnp_enabled = swarm.behaviour().upnp.is_enabled();
         let swarm_driver = SwarmDriver {
             swarm,
             self_peer_id: peer_id,
             local: self.local,
             is_client,
-            is_behind_home_network: self.is_behind_home_network,
+            is_relay_client: self.relay_client,
             #[cfg(feature = "open-metrics")]
             close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
             peers_in_rt: 0,
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
-            initial_bootstrap_trigger: InitialBootstrapTrigger::new(self.upnp, is_client),
+            initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled, is_client),
             bootstrap_cache: self.bootstrap_cache,
             relay_manager,
             connected_relay_clients: Default::default(),
