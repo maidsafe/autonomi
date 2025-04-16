@@ -748,11 +748,7 @@ impl Node {
         let signature = if sign_result {
             let mut bytes = rmp_serde::to_vec(&target).unwrap_or_default();
             bytes.extend_from_slice(&rmp_serde::to_vec(&peers).unwrap_or_default());
-            if let Ok(sig) = network.sign(&bytes) {
-                Some(sig)
-            } else {
-                None
-            }
+            network.sign(&bytes).ok()
         } else {
             None
         };
