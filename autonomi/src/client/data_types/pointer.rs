@@ -243,11 +243,18 @@ impl Client {
             expires: None,
         };
 
+        // get nodes responsible for the scratchpad
+        let nodes = self
+            .network
+            .get_closest_peers(NetworkAddress::from(address))
+            .await?;
+        let nodes = nodes.iter().map(|node| node.peer_id).collect();
+
         // store the pointer on the network
         debug!("Updating pointer at address {address:?} to the network");
 
         self.network
-            .put_record_with_retries(record, Default::default(), &self.config.pointer)
+            .put_record_with_retries(record, nodes, &self.config.pointer)
             .await
             .inspect_err(|err| {
                 error!("Failed to update pointer at address {address:?} to the network: {err}")
