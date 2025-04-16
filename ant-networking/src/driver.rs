@@ -16,7 +16,6 @@ use crate::{
     driver::kad::U256,
     error::Result,
     event::{NetworkEvent, NodeEvent},
-    external_address::ExternalAddressManager,
     fifo_register::FifoRegister,
     log_markers::Marker,
     network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL},
@@ -129,7 +128,6 @@ pub struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
-    pub(crate) external_address_manager: Option<ExternalAddressManager>,
     pub(crate) relay_manager: Option<RelayManager>,
     /// The peers that are using our relay service.
     pub(crate) connected_relay_clients: HashSet<PeerId>,
