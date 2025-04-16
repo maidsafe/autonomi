@@ -64,6 +64,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use rand::Rng;
+use std::num::NonZeroUsize;
 use std::{
     collections::{BTreeMap, HashMap},
     net::IpAddr,
@@ -1101,8 +1102,10 @@ impl Network {
         let pretty_key = PrettyPrintKBucketKey(key.as_kbucket_key());
         debug!("Getting the all closest peers in range of {pretty_key:?}");
         let (sender, receiver) = oneshot::channel();
+        let expanded_close_group = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
         self.send_network_swarm_cmd(NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork {
             key: key.clone(),
+            n: NonZeroUsize::new(expanded_close_group).expect("n must be > 0"),
             sender,
         });
 
@@ -1142,7 +1145,6 @@ impl Network {
             );
         }
 
-        let expanded_close_group = CLOSE_GROUP_SIZE + CLOSE_GROUP_SIZE / 2;
         let closest_peers = sort_peers_by_address(closest_peers, key, expanded_close_group)?;
         Ok(closest_peers)
     }
