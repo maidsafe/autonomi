@@ -27,6 +27,7 @@ fn schema_v1_value() -> u32 {
 #[derive(Clone, Debug, Serialize)]
 pub struct NodeServiceDataV1 {
     #[serde(default = "schema_v1_value")]
+    /// Added schema version to the struct to handle future changes.
     pub schema_version: u32,
     pub antnode_path: PathBuf,
     #[serde(default)]
@@ -36,6 +37,7 @@ pub struct NodeServiceDataV1 {
     pub data_dir_path: PathBuf,
     #[serde(default)]
     pub evm_network: EvmNetwork,
+    /// Renamed `peers_args` to `initial_peers_config` for clarity.
     pub initial_peers_config: InitialPeersConfig,
     pub listen_addr: Option<Vec<Multiaddr>>,
     pub log_dir_path: PathBuf,
@@ -49,11 +51,13 @@ pub struct NodeServiceDataV1 {
     pub node_ip: Option<Ipv4Addr>,
     #[serde(default)]
     pub node_port: Option<u16>,
+    /// Renamed `upnp` to `no_upnp`.
     pub no_upnp: bool,
     pub number: u16,
     #[serde(serialize_with = "NodeServiceData::serialize_peer_id")]
     pub peer_id: Option<PeerId>,
     pub pid: Option<u32>,
+    /// Renamed `home_network` to `relay`.
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
