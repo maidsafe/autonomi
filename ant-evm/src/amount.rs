@@ -134,7 +134,7 @@ impl Display for AttoTokens {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         let unit = self.0 / Amount::from(TOKEN_TO_RAW_CONVERSION);
         let remainder = self.0 % Amount::from(TOKEN_TO_RAW_CONVERSION);
-        write!(formatter, "{unit}.{remainder:032}")
+        write!(formatter, "{unit}.{remainder:018}")
     }
 }
 
@@ -224,27 +224,27 @@ mod tests {
     #[test]
     fn display() {
         assert_eq!(
-            "0.00000000000000000000000000000000",
+            "0.000000000000000000",
             format!("{}", AttoTokens::from_u64(0))
         );
         assert_eq!(
-            "0.00000000000000000000000000000001",
+            "0.000000000000000001",
             format!("{}", AttoTokens::from_u64(1))
         );
         assert_eq!(
-            "0.00000000000000000000000000000010",
+            "0.000000000000000010",
             format!("{}", AttoTokens::from_u64(10))
         );
         assert_eq!(
-            "1.00000000000000000000000000000000",
+            "1.000000000000000000",
             format!("{}", AttoTokens::from_u64(1_000_000_000_000_000_000))
         );
         assert_eq!(
-            "1.00000000000000000000000000000001",
+            "1.000000000000000001",
             format!("{}", AttoTokens::from_u64(1_000_000_000_000_000_001))
         );
         assert_eq!(
-            "4.00000000000000294967295000000000",
+            "4.294967295000000000",
             format!("{}", AttoTokens::from_u64(4_294_967_295_000_000_000))
         );
     }
