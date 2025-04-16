@@ -16,7 +16,6 @@ mod config;
 mod driver;
 mod error;
 mod event;
-mod external_address;
 mod fifo_register;
 mod graph;
 mod log_markers;
@@ -1274,6 +1273,7 @@ pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
     })
 }
 
+#[allow(dead_code)]
 pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
     addr.iter().find_map(|p| match p {
         Protocol::Udp(port) => Some(port),
