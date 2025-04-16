@@ -7,7 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    event::NodeEvent, multiaddr_get_ip, time::Instant, NetworkEvent, NodeIssue, Result, SwarmDriver,
+    error::{dial_error_to_str, listen_error_to_str},
+    event::NodeEvent,
+    multiaddr_get_ip,
+    time::Instant,
+    NetworkEvent, NodeIssue, Result, SwarmDriver,
 };
 use ant_bootstrap::{multiaddr_get_peer_id, BootstrapCacheStore};
 use itertools::Itertools;
@@ -303,10 +307,13 @@ impl SwarmDriver {
                 event_string = "OutgoingConnErrWithoutPeerId";
                 warn!("OutgoingConnectionError on {connection_id:?} - {error:?}");
                 let remote_peer = "";
-                error!(
-                    "Node {:?} Remote {remote_peer:?} - Outgoing Connection Error",
-                    self.self_peer_id,
-                );
+                for error_str in dial_error_to_str(&error) {
+                    error!(
+                        "Node {:?} Remote {remote_peer:?} - Outgoing Connection Error - {error_str:?}",
+                        self.self_peer_id,
+                    );
+                }
+
                 self.record_connection_metrics();
 
                 self.initial_bootstrap.on_outgoing_connection_error(
@@ -322,10 +329,13 @@ impl SwarmDriver {
             } => {
                 event_string = "OutgoingConnErr";
                 warn!("OutgoingConnectionError to {failed_peer_id:?} on {connection_id:?} - {error:?}");
-                error!(
-                    "Node {:?} Remote {failed_peer_id:?} - Outgoing Connection Error",
-                    self.self_peer_id,
-                );
+                for error_str in dial_error_to_str(&error) {
+                    error!(
+                        "Node {:?} Remote {failed_peer_id:?} - Outgoing Connection Error - {error_str:?}",
+                        self.self_peer_id,
+                    );
+                }
+
                 let connection_details = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
 
@@ -474,8 +484,9 @@ impl SwarmDriver {
                     };
                     error!("IncomingConnectionError Valid from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
                     error!(
-                        "Node {:?} Remote {remote_peer_id:?} - Incoming Connection Error",
-                        self.self_peer_id
+                        "Node {:?} Remote {remote_peer_id} - Incoming Connection Error - {:?}",
+                        self.self_peer_id,
+                        listen_error_to_str(&error)
                     );
                 } else {
                     debug!("IncomingConnectionError InValid from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
