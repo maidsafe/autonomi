@@ -8,6 +8,7 @@
 
 use ant_protocol::storage::GraphEntryAddress;
 use ant_protocol::{messages::Response, storage::RecordKind, NetworkAddress, PrettyPrintRecordKey};
+use libp2p::swarm::ListenError;
 use libp2p::{
     kad::{self, QueryId, Record},
     request_response::{OutboundFailure, OutboundRequestId},
@@ -182,6 +183,76 @@ pub enum NetworkError {
 
     #[error("Error setting up behaviour: {0}")]
     BehaviourErr(String),
+}
+
+/// Return a list of error strings for the DialError type
+pub fn dial_error_to_str(err: &DialError) -> Vec<String> {
+    match err {
+        DialError::LocalPeerId { .. } => vec!["DialError::LocalPeerId".to_string()],
+        DialError::NoAddresses => vec!["DialError::NoAddresses".to_string()],
+        DialError::DialPeerConditionFalse(peer_condition) => {
+            vec![format!(
+                "DialError::DialPeerConditionFalse::{peer_condition:?}"
+            )]
+        }
+        DialError::Aborted => vec!["DialError::Aborted".to_string()],
+        DialError::WrongPeerId { .. } => vec!["DialError::WrongPeerId".to_string()],
+        DialError::Denied { .. } => vec!["DialError::Denied".to_string()],
+        DialError::Transport(items) => items
+            .iter()
+            .map(|(_, error)| format!("DialError::{}", transport_err_to_str(error)))
+            .collect(),
+    }
+}
+
+/// Return a string for the ListenError type
+pub fn listen_error_to_str(err: &ListenError) -> String {
+    match err {
+        ListenError::Aborted => "ListenError::Aborted".to_string(),
+        ListenError::WrongPeerId { .. } => "ListenError::WrongPeerId".to_string(),
+        ListenError::LocalPeerId { .. } => "ListenError::LocalPeerId".to_string(),
+        ListenError::Denied { .. } => "ListenError::Denied".to_string(),
+        ListenError::Transport(transport_error) => {
+            format!("ListenError::{}", transport_err_to_str(transport_error))
+        }
+    }
+}
+
+/// Return a string for the TransportError type
+pub fn transport_err_to_str(err: &TransportError<std::io::Error>) -> String {
+    match err {
+        TransportError::MultiaddrNotSupported { .. } => {
+            "TransportError::MultiaddrNotSupported".to_string()
+        }
+        TransportError::Other(err) => {
+            let some_known_errors = HashMap::from([
+                ("ConnectionRefused", "ConnectionRefused"),
+                ("HostUnreachable", "HostUnreachable"),
+                ("HandshakeTimedOut", "HandshakeTimedOut"),
+                ("TimedOut", "TimedOut"),
+                (
+                    "ResponseFromBehaviourCanceled",
+                    "ResponseFromBehaviourCanceled",
+                ),
+                ("ConnectionLost", "ConnectionLost"),
+                ("ConnectionClosed", "ConnectionClosed"),
+                ("ConnectionFailed", "ConnectionFailed"),
+                ("MALFORMED_MESSAGE", "MalformedMessage"),
+                ("UnexpectedEof", "UnexpectedEof"),
+                ("Select(Failed)", "Failed"),
+            ]);
+
+            let mut err_str = None;
+            for (err_substr, err_display) in some_known_errors.iter() {
+                if format!("{err:?}").contains(err_substr) {
+                    err_str = Some(format!("TransportError::{err_display}"));
+                    break;
+                }
+            }
+
+            err_str.unwrap_or_else(|| "TransportError::Other".to_string())
+        }
+    }
 }
 
 #[cfg(test)]
