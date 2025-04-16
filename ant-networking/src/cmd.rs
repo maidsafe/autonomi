@@ -30,6 +30,7 @@ use libp2p::{
     swarm::dial_opts::{DialOpts, PeerCondition},
     Multiaddr, PeerId,
 };
+use std::num::NonZeroUsize;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
@@ -194,6 +195,8 @@ pub enum NetworkSwarmCmd {
     // Get closest peers from the network
     GetClosestPeersToAddressFromNetwork {
         key: NetworkAddress,
+        /// Amount of results.
+        n: NonZeroUsize,
         sender: oneshot::Sender<Vec<(PeerId, Addresses)>>,
     },
 
@@ -538,13 +541,13 @@ impl SwarmDriver {
                     error!("Could not send response to PutRecordTo cmd: {:?}", err);
                 }
             }
-            NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork { key, sender } => {
+            NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork { key, n, sender } => {
                 cmd_string = "GetClosestPeersToAddressFromNetwork";
                 let query_id = self
                     .swarm
                     .behaviour_mut()
                     .kademlia
-                    .get_closest_peers(key.as_bytes());
+                    .get_n_closest_peers(key.as_bytes(), n);
                 let _ = self.pending_get_closest_peers.insert(
                     query_id,
                     (
