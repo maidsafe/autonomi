@@ -43,7 +43,7 @@ pub use self::{
     error::{GetRecordError, NetworkError},
     event::{MsgResponder, NetworkEvent},
     graph::get_graph_entry_from_record,
-    nat_detection::NatStatus,
+    nat_detection::ReachabilityStatus,
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
     record_store::NodeRecordStore,
 };
@@ -72,7 +72,7 @@ use libp2p::{
 use rand::Rng;
 use std::{
     collections::{BTreeMap, HashMap},
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
 };
 use tokio::sync::{
@@ -1268,6 +1268,13 @@ pub(crate) fn multiaddr_strip_p2p(multiaddr: &Multiaddr) -> Multiaddr {
             .filter(|p| !matches!(p, Protocol::P2p(_)))
             .collect()
     }
+}
+
+/// Get the `SocketAddr` from the `Multiaddr`
+pub(crate) fn multiaddr_get_socket_addr(addr: &Multiaddr) -> Option<SocketAddr> {
+    let ip = multiaddr_get_ip(addr)?;
+    let port = multiaddr_get_port(addr)?;
+    Some(SocketAddr::new(ip, port))
 }
 
 /// Get the `IpAddr` from the `Multiaddr`

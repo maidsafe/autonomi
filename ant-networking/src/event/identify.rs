@@ -16,9 +16,9 @@ use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 /// The delay before we dial back a peer after receiving an identify event.
-/// 120s will most likely remove the UDP tuple from the remote's NAT table.
+/// 180s will most likely remove the UDP tuple from the remote's NAT table.
 /// This will make sure that the peer is reachable and that we can add it to the routing table.
-const DIAL_BACK_DELAY: Duration = Duration::from_secs(120);
+pub const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 impl SwarmDriver {
     pub(super) fn handle_identify_event(&mut self, identify_event: libp2p::identify::Event) {
