@@ -18,10 +18,9 @@ use crate::client::key_derivation::{DerivationIndex, MainSecretKey};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::utils::process_tasks_with_max_concurrency;
-use crate::client::Client;
+use crate::client::{Client, GetError};
 use crate::graph::GraphError;
 use ant_evm::{AttoTokens, U256};
-use ant_networking::{GetRecordError, NetworkError};
 use ant_protocol::storage::{
     GraphContent, GraphEntry, GraphEntryAddress, Scratchpad, ScratchpadAddress,
 };
@@ -220,7 +219,7 @@ impl Client {
 
                 async move {
                     let target_addr = ScratchpadAddress::new(sp_secret_key.public_key().into());
-                    let already_exists = self.scratchpad_check_existance(&target_addr).await?;
+                    let already_exists = self.scratchpad_check_existence(&target_addr).await?;
 
                     if already_exists {
                         info!(
@@ -360,9 +359,7 @@ impl Client {
                         DerivationIndex::from_bytes(entry.descendants[0].1);
                     scratchpad_derivations.extend(&entry.descendants[1..]);
                 }
-                Err(GraphError::Network(NetworkError::GetRecordError(
-                    GetRecordError::RecordNotFound,
-                ))) => {
+                Err(GraphError::GetError(GetError::RecordNotFound)) => {
                     // GraphEntry not existed, return the current snapshot.
                     info!(
                         "vault capacity is successfully fetched, with {} scratchpads",

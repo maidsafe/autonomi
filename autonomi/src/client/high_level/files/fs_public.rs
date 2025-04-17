@@ -16,10 +16,11 @@ use crate::client::{high_level::data::DataAddress, utils::process_tasks_with_max
 use crate::client::{Client, PutError};
 use crate::self_encryption::encrypt;
 use crate::AttoTokens;
-use ant_networking::time::{Duration, SystemTime};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::path::PathBuf;
+use std::time;
+use std::time::{Duration, SystemTime};
 use xor_name::XorName;
 
 impl Client {
@@ -101,7 +102,7 @@ impl Client {
                     return Err(err_msg);
                 }
 
-                let now = ant_networking::time::Instant::now();
+                let now = time::Instant::now();
 
                 let (data_map_chunk, mut chunks) = encrypt(data).map_err(|err| err.to_string())?;
 

@@ -179,7 +179,7 @@ impl JsClient {
     pub async fn graph_entry_check_existance(&self, address: &JsGraphEntryAddress) -> Result<bool> {
         let exists = self
             .0
-            .graph_entry_check_existance(&address.0)
+            .graph_entry_check_existence(&address.0)
             .await
             .map_err(map_error)?;
 
@@ -228,7 +228,7 @@ impl JsClient {
     #[napi]
     pub async fn pointer_check_existance(&self, address: &JsPointerAddress) -> Result<bool> {
         self.0
-            .pointer_check_existance(&address.0)
+            .pointer_check_existence(&address.0)
             .await
             .map_err(map_error)
     }
@@ -329,7 +329,7 @@ impl JsClient {
     #[napi]
     pub async fn scratchpad_check_existance(&self, address: &JsScratchpadAddress) -> Result<bool> {
         self.0
-            .scratchpad_check_existance(&address.0)
+            .scratchpad_check_existence(&address.0)
             .await
             .map_err(map_error)
     }

@@ -8,6 +8,7 @@
 
 use ant_protocol::storage::DataTypes;
 use bytes::Bytes;
+use std::time::Instant;
 
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
@@ -39,7 +40,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), PutError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunk, chunks) = encrypt(data)?;
         let data_map_addr = data_map_chunk.address();
         debug!("Encryption took: {:.2?}", now.elapsed());
@@ -116,7 +117,7 @@ impl Client {
         &self,
         data: Bytes,
     ) -> Result<Vec<(XorName, usize)>, CostError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunks, chunks) = encrypt(data)?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());
