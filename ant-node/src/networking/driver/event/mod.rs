@@ -11,6 +11,8 @@ mod kad;
 mod request_response;
 mod swarm;
 
+pub use identify::DIAL_BACK_DELAY;
+
 use crate::networking::NetworkEvent;
 use crate::networking::{
     driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
