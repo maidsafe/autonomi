@@ -24,6 +24,12 @@ const TRACING_ERROR_LEVEL: Level = Level::ERROR;
 
 pub(super) type Result<T, E = NetworkError> = std::result::Result<T, E>;
 
+#[derive(Error, Debug)]
+pub enum NatDetectionError {
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+}
+
 /// Network Errors
 #[derive(Debug, Error)]
 pub enum NetworkError {
@@ -47,6 +53,9 @@ pub enum NetworkError {
 
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
+
+    #[error("Nat detection error: {0}")]
+    NatDetectionError(#[from] NatDetectionError),
 
     // ---------- Record Errors
     #[error("Record not stored by nodes, it could be invalid, else you should retry: {0:?}")]
