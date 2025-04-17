@@ -13,7 +13,7 @@ use super::{
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, NatStatus, NetworkBuilder};
+use crate::networking::{Addresses, NetworkBuilder, ReachabilityStatus};
 use crate::networking::{Network, NetworkError, NetworkEvent, NodeIssue};
 use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::BootstrapCacheStore;
@@ -127,6 +127,7 @@ impl NodeBuilder {
         }
     }
 
+    /// Set the socket address for the node to listen on.
     pub fn with_socket_addr(&mut self, addr: SocketAddr) {
         self.addr = addr;
     }
@@ -163,7 +164,7 @@ impl NodeBuilder {
     }
 
     /// Run nat detection
-    pub async fn run_nat_det(&self) -> Result<NatStatus> {
+    pub async fn run_nat_det(&self) -> Result<ReachabilityStatus> {
         let mut network_builder = NetworkBuilder::new(
             self.identity_keypair.clone(),
             self.local,

@@ -27,7 +27,7 @@ mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
 pub use self::interface::SwarmLocalState;
-pub use self::nat_detection::NatStatus;
+pub use self::nat_detection::ReachabilityStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue},
@@ -48,6 +48,7 @@ use libp2p::{
     multiaddr::Protocol,
 };
 use std::net::IpAddr;
+use std::net::SocketAddr;
 use tokio::sync::mpsc::Sender;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
@@ -186,4 +187,11 @@ pub(crate) fn send_network_swarm_cmd(
             error!("Failed to send SwarmCmd: {}", error);
         }
     });
+}
+
+/// Get the `SocketAddr` from the `Multiaddr`
+pub(crate) fn multiaddr_get_socket_addr(addr: &Multiaddr) -> Option<SocketAddr> {
+    let ip = multiaddr_get_ip(addr)?;
+    let port = multiaddr_get_port(addr)?;
+    Some(SocketAddr::new(ip, port))
 }
