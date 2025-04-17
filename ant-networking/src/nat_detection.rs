@@ -6,13 +6,18 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::bootstrap::InitialBootstrap;
-use crate::error::Result;
-use crate::{endpoint_str, multiaddr_get_ip, multiaddr_get_port};
+use crate::error::NatDetectionError;
+use crate::event::DIAL_BACK_DELAY;
+use crate::{
+    endpoint_str, multiaddr_get_ip, multiaddr_get_p2p, multiaddr_get_socket_addr, multiaddr_pop_p2p,
+};
 use custom_debug::Debug as CustomDebug;
 use futures::StreamExt;
+use libp2p::core::transport::ListenerId;
+use libp2p::core::ConnectedPoint;
 use libp2p::multiaddr::Protocol;
-use libp2p::swarm::ConnectionId;
+use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
+use libp2p::swarm::{ConnectionId, DialError};
 use libp2p::{identify, Multiaddr, PeerId};
 use libp2p::{
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -22,7 +27,8 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Instant;
-pub(crate) const NAT_DETECTION_MAX_SUCCESSFUL_DIALS: usize = 5;
+pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
+const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 
 /// The behaviors are polled in the order they are defined.
 /// The first struct member is polled until it returns Poll::Pending before moving on to later members.
@@ -57,13 +63,14 @@ pub struct NatDetectionSwarmDriver {
     pub(crate) swarm: Swarm<NatDetectionBehaviour>,
     pub(crate) state: NatDetectionState,
     pub(crate) initial_contacts: Vec<Multiaddr>,
+    pub(crate) initial_listener: HashMap<ListenerId, HashSet<IpAddr>>,
 }
 
 #[derive(Debug, Clone)]
-pub enum NatStatus {
+pub enum ReachabilityStatus {
     Upnp,
-    Public(SocketAddr),
-    NonPublic,
+    Reachable { local_adapter: SocketAddr },
+    Unreachable { retry: bool },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -71,25 +78,68 @@ pub enum NatStatus {
 pub enum NatDetectionState {
     WaitingForUpnp,
     WaitingForExternalAddr {
-        /// List of our observed (IP, port) by various peers
-        our_observed_addresses: HashMap<PeerId, Vec<(Ipv4Addr, u16)>>,
-        incoming_connections: HashSet<ConnectionId>,
-        initial_bootstrap: InitialBootstrap,
+        // The number of attempts/retries we have made using this state.
+        current_workflow_attempt: usize,
+        ongoing_dial_attempts: HashMap<PeerId, (DialAttemptState, Instant)>,
+
+        listeners: HashMap<ListenerId, HashSet<IpAddr>>,
+        identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+        incoming_connection_ids: HashSet<ConnectionId>,
+        incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
     },
 }
 
-impl NatDetectionSwarmDriver {
-    pub fn new(swarm: Swarm<NatDetectionBehaviour>, initial_contacts: Vec<Multiaddr>) -> Self {
-        let swarm = swarm;
-        let initial_bootstrap = InitialBootstrap::new(initial_contacts.clone());
+impl NatDetectionState {
+    pub fn new_waiting_for_external_addr(
+        listeners: HashMap<ListenerId, HashSet<IpAddr>>,
+        attempt: usize,
+    ) -> Self {
+        NatDetectionState::WaitingForExternalAddr {
+            current_workflow_attempt: attempt,
+            ongoing_dial_attempts: Default::default(),
+            listeners,
+            identify_observed_external_addr: Default::default(),
+            incoming_connection_ids: Default::default(),
+            incoming_connection_local_adapter_map: Default::default(),
+        }
+    }
+}
 
+#[derive(Debug, Clone)]
+pub enum DialAttemptState {
+    /// We have initiated a dial attempt.
+    InitialDialAttempted,
+    /// We got a successful response from the remote peer. We can now wait for them to contact us back after the
+    /// DIAL_BACK_DELAY.
+    InitialSuccessfulResponseReceived,
+    /// We have received a response from the remote peer after the DIAL_BACK_DELAY.
+    DialedBackAfterWait,
+}
+
+impl NatDetectionSwarmDriver {
+    pub fn new(
+        swarm: Swarm<NatDetectionBehaviour>,
+        initial_contacts: Vec<Multiaddr>,
+        listen_socket_addr: SocketAddr,
+    ) -> Self {
+        let mut swarm = swarm;
+
+        // Listen on QUIC
+        let addr_quic = Multiaddr::from(listen_socket_addr.ip())
+            .with(Protocol::Udp(listen_socket_addr.port()))
+            .with(Protocol::QuicV1);
+        let listen_id = swarm
+            .listen_on(addr_quic.clone())
+            .expect("Multiaddr should be supported by our configured transports");
+
+        info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
+
+        let initial_listener =
+            HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
         Self {
             swarm,
-            state: NatDetectionState::WaitingForExternalAddr {
-                our_observed_addresses: Default::default(),
-                incoming_connections: Default::default(),
-                initial_bootstrap,
-            },
+            state: NatDetectionState::new_waiting_for_external_addr(initial_listener.clone(), 1),
+            initial_listener,
             initial_contacts,
         }
     }
@@ -100,7 +150,9 @@ impl NatDetectionSwarmDriver {
     /// The `tokio::select` macro is used to concurrently process swarm events
     /// and command receiver messages, ensuring efficient handling of multiple
     /// asynchronous tasks.
-    pub async fn detect(mut self) -> Result<NatStatus> {
+    pub async fn detect(mut self) -> Result<ReachabilityStatus, crate::NetworkError> {
+        let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
+        dial_check_interval.tick().await; // first tick is immediate
         loop {
             tokio::select! {
                 // next take and react to external swarm events
@@ -109,23 +161,69 @@ impl NatDetectionSwarmDriver {
                     // otherwise we're rewriting match statements etc around this anwyay
                     match self.handle_swarm_events(swarm_event) {
                         Ok(Some(status)) => {
-                            info!("NAT status has been found to be: {status:?}");
-                            return Ok(status);
+                            info!("Reachability status has been found to be: {status:?}");
+                            if let Some(status) = self.retry_if_possible(status) {
+                                return Ok(status);
+                            } else {
+                               info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                            }
                         }
                         Ok(None) => {}
                         Err(err) => {
-                            warn!("Error while handling swarm event: {err}");
+                            error!("Error while handling swarm event: {err}");
+                            return Err(err.into());
+                        }
+                    }
+                }
+                _ = dial_check_interval.tick() => {
+                    // check if we have any ongoing dial attempts
+                    match &mut self.state {
+                        NatDetectionState::WaitingForUpnp => {}
+                        NatDetectionState::WaitingForExternalAddr {
+                            ongoing_dial_attempts,
+                            identify_observed_external_addr,
+                            incoming_connection_local_adapter_map,
+                            listeners,
+                            ..
+                        } => {
+                            Self::cleanup_dial_attempts(ongoing_dial_attempts);
+                            if let Err(err) = Self::trigger_dial(&mut self.initial_contacts, ongoing_dial_attempts, &mut self.swarm) {
+                                warn!("Error while triggering dial: {err}");
+                            }
+
+                            if Self::has_dialing_completed(ongoing_dial_attempts) {
+                                info!("Dialing completed. We have received enough observed addresses.");
+                                match Self::get_reachability_status(
+                                    identify_observed_external_addr,
+                                    incoming_connection_local_adapter_map,
+                                    listeners,
+                                ) {
+                                    Ok(status) => {
+                                        info!("Reachability status has been found to be: {status:?}");
+                                        if let Some(status) = self.retry_if_possible(status) {
+                                            return Ok(status);
+                                        } else {
+                                           info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                                        }
+                                    }
+                                    Err(err) => {
+                                        warn!("Error while getting reachability status: {err}");
+                                        return Err(err.into());
+                                    }
+                                }
+                            }
                         }
                     }
 
-            }   }
+                }
+            }
         }
     }
 
     fn handle_swarm_events(
         &mut self,
         event: SwarmEvent<NatDetectionEvent>,
-    ) -> Result<Option<NatStatus>> {
+    ) -> Result<Option<ReachabilityStatus>, NatDetectionError> {
         let start = Instant::now();
         let event_string;
 
@@ -138,15 +236,15 @@ impl NatDetectionSwarmDriver {
                         match upnp_event {
                             libp2p::upnp::Event::GatewayNotFound => {
                                 info!("UPnP gateway not found. Switching state to WaitingForExternalAddr");
-                                self.on_upnp_result();
+                                self.on_upnp_result()?;
                             }
                             libp2p::upnp::Event::NewExternalAddr(addr) => {
                                 info!("UPnP: New external address: {addr:?}");
-                                return Ok(Some(NatStatus::Upnp));
+                                return Ok(Some(ReachabilityStatus::Upnp));
                             }
                             libp2p::upnp::Event::NonRoutableGateway => {
                                 warn!("UPnP gateway is not routable. Switching state to WaitingForExternalAddr");
-                                self.on_upnp_result();
+                                self.on_upnp_result()?;
                             }
                             _ => {
                                 info!("UPnP event (ignored): {upnp_event:?}");
@@ -161,9 +259,12 @@ impl NatDetectionSwarmDriver {
                 }
             }
             NatDetectionState::WaitingForExternalAddr {
-                our_observed_addresses,
-                incoming_connections: incomming_connections,
-                initial_bootstrap,
+                current_workflow_attempt: _,
+                ongoing_dial_attempts,
+                incoming_connection_ids,
+                identify_observed_external_addr,
+                incoming_connection_local_adapter_map,
+                listeners,
             } => match event {
                 SwarmEvent::NewListenAddr {
                     mut address,
@@ -171,15 +272,45 @@ impl NatDetectionSwarmDriver {
                 } => {
                     event_string = "new listen addr";
 
+                    let ip_addr = multiaddr_get_ip(&address);
+                    if let Some(ip_addr) = ip_addr {
+                        listeners.entry(listener_id).or_default().insert(ip_addr);
+                        debug!(
+                            "Added new listen ip address {ip_addr:?} to listener {listener_id:?}"
+                        );
+                    } else {
+                        warn!("Unable to get socket address from: {address:?}");
+                    }
+
                     let local_peer_id = *self.swarm.local_peer_id();
                     if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
                         address.push(Protocol::P2p(local_peer_id));
                     }
 
-                    initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, 0);
-
                     info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
                     self.swarm.add_external_address(address.clone());
+                }
+                SwarmEvent::IncomingConnection {
+                    connection_id,
+                    local_addr,
+                    send_back_addr,
+                } => {
+                    event_string = "incoming";
+                    debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+
+                    let socket_addr = multiaddr_get_socket_addr(&local_addr);
+
+                    match socket_addr {
+                        Some(socket_addr) => {
+                            incoming_connection_local_adapter_map
+                                .insert(connection_id, socket_addr);
+                        }
+                        _ => {
+                            warn!(
+                                "Unable to get socket_addr from local_addr address: {local_addr:?}"
+                            );
+                        }
+                    }
                 }
                 SwarmEvent::ConnectionEstablished {
                     peer_id,
@@ -192,17 +323,30 @@ impl NatDetectionSwarmDriver {
                     event_string = "ConnectionEstablished";
                     debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
-                    initial_bootstrap.on_connection_established(
-                        &endpoint,
-                        &mut self.swarm,
-                        our_observed_addresses.len(),
-                    );
-
-                    if endpoint.is_listener() {
-                        incomming_connections.insert(connection_id);
+                    if let ConnectedPoint::Dialer { address, .. } = endpoint {
+                        if let Some(peer_id) = multiaddr_get_p2p(&address) {
+                            ongoing_dial_attempts
+                                .entry(peer_id)
+                                .and_modify(|(state, time)| {
+                                    *state = DialAttemptState::InitialSuccessfulResponseReceived;
+                                    *time = Instant::now();
+                                    info!("Dial attempt for a previous {peer_id:?} has been established. State: {state:?}");
+                                })
+                                .or_insert_with(|| {
+                                    let state = DialAttemptState::InitialDialAttempted;
+                                    info!("Dial attempt for a new {peer_id:?} has been established. State: {state:?}");
+                                    (
+                                        state,
+                                        Instant::now(),
+                                    )
+                                });
+                        } else {
+                            warn!("Dialer address does not contain peer id: {address:?}");
+                        }
+                    } else {
+                        incoming_connection_ids.insert(connection_id);
                     }
                 }
-
                 SwarmEvent::OutgoingConnectionError {
                     connection_id,
                     peer_id,
@@ -213,13 +357,20 @@ impl NatDetectionSwarmDriver {
                         "OutgoingConnectionError on {connection_id:?} for {peer_id:?} - {error:?}"
                     );
 
-                    initial_bootstrap.on_outgoing_connection_error(
-                        None,
-                        &mut self.swarm,
-                        our_observed_addresses.len(),
-                    );
+                    // drop the state for the peer
+                    if let Some(peer_id) = peer_id {
+                        warn!("Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts.");
+                        ongoing_dial_attempts.remove(&peer_id);
+                        Self::trigger_dial(
+                            &mut self.initial_contacts,
+                            ongoing_dial_attempts,
+                            &mut self.swarm,
+                        )?;
+                    } else {
+                        warn!("OutgoingConnectionError: Peer ID not found");
+                    };
 
-                    if incomming_connections.remove(&connection_id) {
+                    if incoming_connection_ids.remove(&connection_id) {
                         debug!("Removed connection {connection_id:?} from incomming_connections");
                     }
                 }
@@ -233,7 +384,7 @@ impl NatDetectionSwarmDriver {
                     event_string = "ConnectionClosed";
                     debug!(%peer_id, num_established, ?cause, "ConnectionClosed ({connection_id:?}) in {endpoint:?}");
 
-                    if incomming_connections.remove(&connection_id) {
+                    if incoming_connection_ids.remove(&connection_id) {
                         debug!("Removed connection {connection_id:?} from incomming_connections");
                     }
                 }
@@ -245,22 +396,41 @@ impl NatDetectionSwarmDriver {
                             info,
                             connection_id,
                         } => {
-                            debug!(conn_id=%connection_id, %peer_id, ?info, "identify: received info");
-                            if incomming_connections.contains(&connection_id) {
+                            debug!(%peer_id, ?info, "identify: received info on {connection_id:?}");
+                            if incoming_connection_ids.contains(&connection_id) {
                                 debug!("Received identify info from incoming connection {connection_id:?}. Adding observed address to our list.");
                                 Self::insert_observed_address(
-                                    our_observed_addresses,
+                                    identify_observed_external_addr,
                                     peer_id,
                                     info.observed_addr,
+                                    connection_id,
                                 );
+
+                                ongoing_dial_attempts
+                                    .entry(peer_id)
+                                    .and_modify(|(state, time)| {
+                                        let new_state = DialAttemptState::DialedBackAfterWait;
+                                        if matches!(
+                                            state,
+                                            DialAttemptState::InitialSuccessfulResponseReceived
+                                        ) {
+                                            if time.elapsed() > DIAL_BACK_DELAY {
+                                                info!("State for peer {peer_id:?} has been updated to {new_state:?}");
+                                                *state = new_state;
+                                                *time = Instant::now();
+                                            } else {
+                                                warn!("State for peer {peer_id:?} has not been updated to {new_state:?}. We got the response too early.");
+                                            }
+                                        }
+                                    });
                             }
-                            if our_observed_addresses.len() > NAT_DETECTION_MAX_SUCCESSFUL_DIALS {
-                                info!(
-                                    "Received enough observed addresses. Determining NAT status."
-                                );
-                                return Ok(Some(Self::determine_nat_status_on_external_addr(
-                                    our_observed_addresses,
-                                )));
+                            if Self::has_dialing_completed(ongoing_dial_attempts) {
+                                info!("Dialing completed. We have received enough observed addresses.");
+                                return Ok(Some(Self::get_reachability_status(
+                                    identify_observed_external_addr,
+                                    incoming_connection_local_adapter_map,
+                                    listeners,
+                                )?));
                             }
                         }
                         libp2p::identify::Event::Sent { .. } => {
@@ -291,92 +461,321 @@ impl NatDetectionSwarmDriver {
         Ok(None)
     }
 
-    fn on_upnp_result(&mut self) {
-        let mut initial_bootstrap = InitialBootstrap::new(self.initial_contacts.clone());
+    fn trigger_dial(
+        initial_contacts: &mut Vec<Multiaddr>,
+        ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
+        swarm: &mut Swarm<NatDetectionBehaviour>,
+    ) -> Result<(), NatDetectionError> {
+        while ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS {
+            // get the first contact with peer id present in it and remove it
+            let index = initial_contacts
+                .iter()
+                .position(|addr| matches!(addr.iter().last(), Some(Protocol::P2p(_))));
 
-        initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, 0);
+            if let Some(index) = index {
+                let mut addr = initial_contacts.remove(index);
+                let addr_clone = addr.clone();
+                let peer_id = multiaddr_pop_p2p(&mut addr).ok_or(
+                    NatDetectionError::InvalidState("PeerId should always be present".to_string()),
+                )?;
 
-        self.state = NatDetectionState::WaitingForExternalAddr {
-            our_observed_addresses: Default::default(),
-            incoming_connections: Default::default(),
-            initial_bootstrap,
-        };
+                let opts = DialOpts::peer_id(peer_id)
+                    // If we have a peer ID, we can prevent simultaneous dials.
+                    .condition(PeerCondition::NotDialing)
+                    .addresses(vec![addr])
+                    .build();
+
+                info!("Trying to dial peer with address: {addr_clone}",);
+
+                match swarm.dial(opts) {
+                    Ok(()) => {
+                        ongoing_dial_attempts.insert(
+                            peer_id,
+                            (DialAttemptState::InitialDialAttempted, Instant::now()),
+                        );
+                        info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", ongoing_dial_attempts.len());
+                    }
+                    Err(err) => match err {
+                        DialError::LocalPeerId { .. } => {
+                            warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
+                        }
+                        DialError::NoAddresses => {
+                            error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
+                        }
+                        DialError::DialPeerConditionFalse(_) => {
+                            warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
+                        }
+                        DialError::Aborted => {
+                            error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
+                        }
+                        DialError::WrongPeerId { obtained, .. } => {
+                            error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
+                        }
+                        DialError::Denied { cause } => {
+                            error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
+                        }
+                        DialError::Transport(items) => {
+                            error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
+                        }
+                    },
+                }
+            } else {
+                // todo: go for contact without peer id
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    // cleanup dial attempts if we're stuck in InitialDialAttempted state for too long
+    fn cleanup_dial_attempts(
+        ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
+    ) {
+        ongoing_dial_attempts.retain(|peer, (state, time)| {
+            if matches!(state, DialAttemptState::InitialDialAttempted) {
+                let elapsed = time.elapsed();
+                if elapsed.as_secs() > 30 {
+                    info!("Dial attempt for {peer:?} with state {state:?} has timed out. Cleaning up.");
+                    false
+                } else {
+                    true
+                }
+            } else {
+               true
+            }
+        });
+    }
+
+    /// Dialing has completed if:
+    /// 1. We still have peers that we haven't successfully connected to yet.
+    /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
+    fn has_dialing_completed(
+        ongoing_dial_attempts: &HashMap<PeerId, (DialAttemptState, Instant)>,
+    ) -> bool {
+        let mut still_waiting_for_dial_back = false;
+        debug!(
+            "Checking if dialing has completed. Ongoing dial attempts: {ongoing_dial_attempts:?}"
+        );
+        for (state, instant) in ongoing_dial_attempts.values() {
+            match state {
+                DialAttemptState::InitialDialAttempted => {
+                    // this state should eventually be cleaned up by `cleanup_dial_attempts`
+                    still_waiting_for_dial_back = true;
+                }
+                DialAttemptState::InitialSuccessfulResponseReceived => {
+                    if instant.elapsed() < DIAL_BACK_DELAY {
+                        still_waiting_for_dial_back = true;
+                    }
+                }
+                DialAttemptState::DialedBackAfterWait => {}
+            }
+        }
+        !still_waiting_for_dial_back
+    }
+
+    fn on_upnp_result(&mut self) -> Result<(), NatDetectionError> {
+        let mut ongoing_dial_attempts = HashMap::new();
+        Self::trigger_dial(
+            &mut self.initial_contacts,
+            &mut ongoing_dial_attempts,
+            &mut self.swarm,
+        )?;
+
+        self.state =
+            NatDetectionState::new_waiting_for_external_addr(self.initial_listener.clone(), 1);
+
+        Ok(())
     }
 
     fn insert_observed_address(
-        our_observed_addresses: &mut HashMap<PeerId, Vec<(Ipv4Addr, u16)>>,
+        identify_observed_external_addr: &mut HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
         src_peer: PeerId,
         address: Multiaddr,
+        connection_id: ConnectionId,
     ) {
-        let ip = multiaddr_get_ip(&address);
-        let port = multiaddr_get_port(&address);
+        let Some(socket_addr) = multiaddr_get_socket_addr(&address) else {
+            warn!("Unable to get socket address from: {address:?}");
+            return;
+        };
 
-        match (ip, port) {
-            (Some(IpAddr::V4(ip)), Some(port)) => {
-                let address = (ip, port);
+        match identify_observed_external_addr.entry(src_peer) {
+            Entry::Occupied(mut entry) => {
+                let addresses = entry.get_mut();
 
-                match our_observed_addresses.entry(src_peer) {
-                    Entry::Occupied(mut entry) => {
-                        let addresses = entry.get_mut();
-                        if addresses.contains(&address) {
-                            info!(
-                                "Observed Address: Peer {src_peer:?} has already observed us at: {address:?}, skipping."
-                            );
-                        } else {
-                            info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
-                            addresses.push(address);
-                        }
-                    }
-                    Entry::Vacant(entry) => {
-                        info!(
-                            "Observed Address: Peer {src_peer:?} has observed us at: {address:?}"
-                        );
-                        entry.insert(vec![address]);
-                    }
-                }
+                info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
+                addresses.push((socket_addr, connection_id));
             }
-            _ => {
-                warn!("Unable to parse observed address: {address:?}");
+            Entry::Vacant(entry) => {
+                info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
+                entry.insert(vec![(socket_addr, connection_id)]);
             }
         }
     }
 
-    fn determine_nat_status_on_external_addr(
-        our_observed_addresses: &HashMap<PeerId, Vec<(Ipv4Addr, u16)>>,
-    ) -> NatStatus {
-        info!("Determining NAT status based on observed addresses: {our_observed_addresses:?}");
+    /// First we try to determine if we are reachable or not.
+    ///
+    /// And then we map the external address to the local adapter address.
+    /// If the local adapter is unspecified, we can use any address from the same ListenerId.
+    fn get_reachability_status(
+        identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+        incoming_connection_local_adapter_map: &HashMap<ConnectionId, SocketAddr>,
+        listeners: &HashMap<ListenerId, HashSet<IpAddr>>,
+    ) -> Result<ReachabilityStatus, NatDetectionError> {
+        let (reachable_addresses, retry) =
+            Self::determine_reachability_via_external_addr(identify_observed_external_addr)?;
+        if reachable_addresses.is_empty() {
+            debug!("No reachable addresses found. We are unreachable.");
+            return Ok(ReachabilityStatus::Unreachable { retry });
+        }
+
+        // find all connection ids for the reachable addresses
+        let mut reachable_connection_ids = HashMap::new();
+        for reachable_addr in &reachable_addresses {
+            for addrs in identify_observed_external_addr.values() {
+                for (addr, connection_id) in addrs {
+                    if addr == reachable_addr {
+                        reachable_connection_ids
+                            .entry(*reachable_addr)
+                            .or_insert(vec![])
+                            .push(*connection_id);
+                    }
+                }
+            }
+        }
+
+        info!("Reachable addresses: {reachable_addresses:?}");
+        info!("Reachable connection ids: {reachable_connection_ids:?}");
+
+        let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> =
+            HashMap::new();
+        for (reachable_addr, connection_ids) in reachable_connection_ids {
+            for connection_id in connection_ids {
+                if let Some(local_adapter_addr) =
+                    incoming_connection_local_adapter_map.get(&connection_id)
+                {
+                    if let IpAddr::V4(local_adapter_ip) = local_adapter_addr.ip() {
+                        if local_adapter_ip.is_unspecified()
+                            || local_adapter_ip.is_documentation()
+                            || local_adapter_ip.is_broadcast()
+                        {
+                            info!("Local adapter address {local_adapter_addr:?} is unspecified. Fetching another local adapter address from the listener.");
+                            for (listener_id, listener_ip_addrs) in listeners {
+                                if listener_ip_addrs
+                                    .iter()
+                                    .any(|addr| addr == &IpAddr::V4(local_adapter_ip))
+                                {
+                                    info!("Listener {listener_id:?} has local adapter address {local_adapter_addr:?} in it's list {listener_ip_addrs:?}");
+                                    // get a listener that is not the current local_adapter_addr
+                                    if let Some(another_listener_ip) = listener_ip_addrs
+                                        .iter()
+                                        .find(|&addr| addr != &IpAddr::V4(local_adapter_ip))
+                                    {
+                                        info!("Using {another_listener_ip:?} as the local adapter address, instead of {local_adapter_addr:?} for the reachable address {reachable_addr:?}");
+                                        external_to_local_addr_map
+                                            .entry(reachable_addr)
+                                            .or_default()
+                                            .insert(SocketAddr::new(
+                                                *another_listener_ip,
+                                                local_adapter_addr.port(),
+                                            ));
+                                    }
+                                    break;
+                                } else {
+                                    debug!("Listener {listener_id:?} does not have local adapter address {local_adapter_addr:?} in it's list {listener_ip_addrs:?}");
+                                }
+                            }
+                        } else {
+                            external_to_local_addr_map
+                                .entry(reachable_addr)
+                                .or_default()
+                                .insert(*local_adapter_addr);
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        info!("External address to local adapter map: {external_to_local_addr_map:?}");
+
+        // pop first one
+        let (reachable_addr, local_adapter_addrs) =
+            external_to_local_addr_map.into_iter().next().ok_or(
+                NatDetectionError::InvalidState("No reachable addresses found".to_string()),
+            )?;
+
+        info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}");
+
+        Ok(ReachabilityStatus::Reachable {
+            local_adapter: *local_adapter_addrs.iter().next().ok_or(
+                NatDetectionError::InvalidState("No local adapter addresses found".to_string()),
+            )?,
+        })
+    }
+
+    /// We received our observed addrs via identify. We would now determine if we're reachable/unreachable via the
+    /// identify external addr.
+    ///
+    /// Returns a vector of addresses that are reachable and a boolean to retry the entire process.
+    fn determine_reachability_via_external_addr(
+        identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+    ) -> Result<(Vec<SocketAddr>, bool), NatDetectionError> {
+        info!("Determining NAT status based on observed addresses: {identify_observed_external_addr:?}");
+
+        if identify_observed_external_addr.is_empty() {
+            info!("No observed addresses found. We're unreachable.");
+            return Ok((vec![], false));
+        } else if identify_observed_external_addr.len() < 3 {
+            info!("Not enough observed addresses found. Retrying.");
+            return Ok((vec![], true));
+        }
+
         let mut ports = HashSet::new();
         let mut ips = HashSet::new();
-        for addresses in our_observed_addresses.values() {
-            for (ip, port) in addresses {
-                ports.insert(*port);
-                ips.insert(*ip);
+        for addresses in identify_observed_external_addr.values() {
+            for (addr, _id) in addresses {
+                ports.insert(addr.port());
+                if let IpAddr::V4(ip) = addr.ip() {
+                    ips.insert(ip);
+                }
             }
         }
 
         if ports.len() != 1 {
-            info!("Multiple ports observed. NAT status is NonPublic.");
-            return NatStatus::NonPublic;
+            info!("Multiple ports observed. Reachability status is Unreachable. This should not happen as symmetric NATs should not get a response back.");
+            return Ok((vec![], false));
         }
 
-        let port = *ports.iter().next().expect("ports should not be empty");
+        let port = *ports.iter().next().ok_or(NatDetectionError::InvalidState(
+            "Ports should not be empty".to_string(),
+        ))?;
         if port == 0 {
-            info!("Observed port is 0. NAT status is NonPublic.");
-            return NatStatus::NonPublic;
+            info!("Observed port is 0. Reachability status is Unreachable.");
+            return Ok((vec![], false));
         }
 
         #[allow(clippy::comparison_chain)]
         if ips.len() == 1 {
-            let ip = ips.iter().next().expect("ips should not be empty");
+            let ip = ips.iter().next().ok_or(NatDetectionError::InvalidState(
+                "IPs should not be empty".to_string(),
+            ))?;
             if ip.is_unspecified() || ip.is_documentation() || ip.is_broadcast() {
-                info!("Observed address {ip:?} is unspecified. NAT status is NonPublic.");
-                NatStatus::NonPublic
+                info!(
+                    "Observed address {ip:?} is unspecified. Reachability status is Unreachable."
+                );
+                Ok((vec![], false))
             } else if ip.is_private() {
-                info!("Observed IP address {ip:?} is non-global. NAT status is Pubic.");
-                NatStatus::Public(SocketAddr::new(IpAddr::V4(*ip), port))
+                let addr = SocketAddr::new(IpAddr::V4(*ip), port);
+                info!(
+                    "Observed IP address {addr:?} is non-global. Reachability status is Reachable."
+                );
+                Ok((vec![addr], false))
             } else {
-                info!("Observed IP address {ip:?} is global. NAT status is Public.");
-                NatStatus::Public(SocketAddr::new(IpAddr::V4(*ip), port))
+                let addr = SocketAddr::new(IpAddr::V4(*ip), port);
+                info!("Observed IP address {addr:?} is global. Reachability status is Reachable.");
+                Ok((vec![addr], false))
             }
         } else if ips.len() > 1 {
             // if mix of private and public IPs, pick the private one (i.e,. on a local testnet on a public machine)
@@ -391,33 +790,96 @@ impl NatDetectionSwarmDriver {
                 })
                 .collect::<Vec<_>>();
 
-            let private_ip = ips.iter().filter(|ip| ip.is_private()).collect::<Vec<_>>();
+            let private_ip = ips
+                .iter()
+                .filter(|ip| ip.is_private() || ip.is_loopback())
+                .collect::<Vec<_>>();
 
             if !private_ip.is_empty() {
                 // try to pick localhost
                 if private_ip.iter().any(|ip| ip.is_loopback()) {
-                    info!("We have multiple private IP addresses, picking localhost. NAT status is Public.");
-                    return NatStatus::Public(SocketAddr::new(
-                        IpAddr::V4(Ipv4Addr::LOCALHOST),
-                        port,
-                    ));
+                    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
+                    info!("We have multiple private IP addresses, picking localhost: {addr:?}. Reachability status is Reachable.");
+                    return Ok((vec![addr], false));
                 }
 
-                info!("We have multiple private IP addresses. NAT status is Public.");
-                return NatStatus::Public(SocketAddr::new(IpAddr::V4(*private_ip[0]), port));
+                let addrs = private_ip
+                    .iter()
+                    .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
+                    .collect::<Vec<_>>();
+                info!("We have multiple private IP addresses {addrs:?}. Reachability status is Reachable.");
+                return Ok((addrs, false));
             }
 
             if !public_ip.is_empty() {
-                info!("We have multiple public IP addresses {public_ip:?}. NAT status is Public.");
-                // todo: return all?
-                return NatStatus::Public(SocketAddr::new(IpAddr::V4(*public_ip[0]), port));
+                let addrs = public_ip
+                    .iter()
+                    .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
+                    .collect::<Vec<_>>();
+                info!("We have multiple public IP addresses {addrs:?}. Reachability status is Reachable.");
+                return Ok((addrs, false));
             }
 
-            error!("We have multiple IP addresses, but none are private or public. NAT status is NonPublic.");
-            NatStatus::NonPublic
+            error!("We have multiple IP addresses, but none are private or public. Reachability status is Unreachable.");
+            return Ok((vec![], false));
         } else {
             error!("We have no IP addresses. NAT status is NonPublic.");
-            NatStatus::NonPublic
+            return Ok((vec![], false));
         }
+    }
+
+    // consumes status if we are retrying the WaitingForExternalAddr workflow and would reset the states.
+    fn retry_if_possible(&mut self, status: ReachabilityStatus) -> Option<ReachabilityStatus> {
+        let current_workflow_attempt = match &self.state {
+            NatDetectionState::WaitingForExternalAddr {
+                current_workflow_attempt,
+                ..
+            } => *current_workflow_attempt,
+            // no retry
+            NatDetectionState::WaitingForUpnp => return Some(status),
+        };
+
+        let mut should_retry = false;
+        match status {
+            ReachabilityStatus::Unreachable { retry } => {
+                if retry {
+                    if current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
+                        info!(
+                            "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                            current_workflow_attempt + 1
+                        );
+                        should_retry = true;
+                    } else {
+                        info!(
+                            "Max WaitingForExternalAddr workflow attempts reached. Not retrying."
+                        );
+                    }
+                } else {
+                    info!("No retry needed.");
+                }
+            }
+            ReachabilityStatus::Reachable { .. } => {
+                debug!("We are reachable. No retry needed.");
+            }
+            ReachabilityStatus::Upnp => {
+                debug!("We are reachable via UPnP. No retry needed.");
+            }
+        }
+
+        if !should_retry {
+            return Some(status);
+        }
+
+        info!(
+            "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+            current_workflow_attempt + 1
+        );
+
+        self.state = NatDetectionState::new_waiting_for_external_addr(
+            self.initial_listener.clone(),
+            current_workflow_attempt + 1,
+        );
+
+        None
     }
 }
