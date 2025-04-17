@@ -18,7 +18,7 @@ use ant_evm::RewardsAddress;
 use ant_networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use ant_networking::MetricsRegistries;
-use ant_networking::NatStatus;
+use ant_networking::ReachabilityStatus;
 use ant_networking::{
     Instant, Network, NetworkBuilder, NetworkError, NetworkEvent, NodeIssue, SwarmDriver,
 };
@@ -124,6 +124,7 @@ impl NodeBuilder {
         }
     }
 
+    /// Set the socket address for the node to listen on.
     pub fn with_socket_addr(&mut self, addr: SocketAddr) {
         self.addr = addr;
     }
@@ -160,7 +161,7 @@ impl NodeBuilder {
     }
 
     /// Run nat detection
-    pub async fn run_nat_det(&self) -> Result<NatStatus> {
+    pub async fn run_nat_det(&self) -> Result<ReachabilityStatus> {
         let mut network_builder = NetworkBuilder::new(
             self.identity_keypair.clone(),
             self.local,
