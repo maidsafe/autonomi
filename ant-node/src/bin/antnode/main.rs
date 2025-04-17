@@ -24,7 +24,7 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
+use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, ReachabilityStatus};
 use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
@@ -389,16 +389,18 @@ async fn run_node(
     if node_builder.nat_detection {
         let status = node_builder.run_nat_det().await?;
         match status {
-            NatStatus::Upnp => {
-                node_builder.upnp(true);
+            ReachabilityStatus::Upnp => {
+                node_builder.no_upnp(false);
             }
-            NatStatus::Public(mut socket_addr) => {
+            ReachabilityStatus::Reachable {
+                local_adapter: mut socket_addr,
+            } => {
                 socket_addr.set_port(0);
-                node_builder.upnp(false);
+                node_builder.no_upnp(true);
                 node_builder.with_socket_addr(socket_addr);
             }
-            NatStatus::NonPublic => {
-                node_builder.is_behind_home_network(true);
+            ReachabilityStatus::Unreachable { .. } => {
+                node_builder.relay_client(true);
             }
         }
     }
