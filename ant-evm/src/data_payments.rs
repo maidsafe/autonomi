@@ -11,7 +11,7 @@ use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
     quoting_metrics::QuotingMetrics,
 };
-use libp2p::{identity::PublicKey, PeerId};
+use libp2p::{identity::PublicKey, Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 pub use std::time::SystemTime;
 use xor_name::XorName;
@@ -38,7 +38,39 @@ impl From<PeerId> for EncodedPeerId {
     }
 }
 
-/// The proof of payment for a data payment
+/// The proof of payment for a data payment, only to be used on client side
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub struct ClientProofOfPayment {
+    pub peer_quotes: Vec<(EncodedPeerId, Vec<Multiaddr>, PaymentQuote)>,
+}
+
+impl ClientProofOfPayment {
+    /// returns the list of payees
+    pub fn payees(&self) -> Vec<(PeerId, Vec<Multiaddr>)> {
+        self.peer_quotes
+            .iter()
+            .filter_map(|(peer_id, addrs, _)| {
+                if let Ok(peer_id) = peer_id.to_peer_id() {
+                    Some((peer_id, addrs.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Convert to ProofOfPayment
+    pub fn to_proof_of_payment(&self) -> ProofOfPayment {
+        let peer_quotes = self
+            .peer_quotes
+            .iter()
+            .map(|(peer_id, _addrs, quote)| (peer_id.clone(), quote.clone()))
+            .collect();
+        ProofOfPayment { peer_quotes }
+    }
+}
+
+/// The proof of payment for a data payment, only to be used on node side
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct ProofOfPayment {
     pub peer_quotes: Vec<(EncodedPeerId, PaymentQuote)>,

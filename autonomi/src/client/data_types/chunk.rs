@@ -16,8 +16,8 @@ use crate::{
     self_encryption::DataMapLevel,
     Client,
 };
-use ant_evm::{Amount, AttoTokens, ProofOfPayment};
-use ant_networking::NetworkError;
+use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
+use ant_networking::{Addresses, NetworkError};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
@@ -165,11 +165,15 @@ impl Client {
         };
         let total_cost = *price;
 
-        let payees = proof.payees();
+        let payees = proof
+            .payees()
+            .iter()
+            .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+            .collect();
         let record = Record {
             key: address.to_record_key(),
             value: try_serialize_record(
-                &(proof, chunk),
+                &(proof.to_proof_of_payment(), chunk),
                 RecordKind::DataWithPayment(DataTypes::Chunk),
             )
             .map_err(|_| {
@@ -288,9 +292,13 @@ impl Client {
     pub(crate) async fn chunk_upload_with_payment(
         &self,
         chunk: &Chunk,
-        payment: ProofOfPayment,
+        payment: ClientProofOfPayment,
     ) -> Result<ChunkAddress, PutError> {
-        let storing_nodes = payment.payees();
+        let storing_nodes: Vec<_> = payment
+            .payees()
+            .iter()
+            .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
+            .collect();
 
         if storing_nodes.is_empty() {
             return Err(PutError::PayeesMissing);
@@ -303,13 +311,14 @@ impl Client {
         let record_kind = RecordKind::DataWithPayment(DataTypes::Chunk);
         let record = Record {
             key: key.clone(),
-            value: try_serialize_record(&(payment, chunk.clone()), record_kind)
-                .map_err(|e| {
-                    PutError::Serialization(format!(
-                        "Failed to serialize chunk with payment: {e:?}"
-                    ))
-                })?
-                .to_vec(),
+            value: try_serialize_record(
+                &(payment.to_proof_of_payment(), chunk.clone()),
+                record_kind,
+            )
+            .map_err(|e| {
+                PutError::Serialization(format!("Failed to serialize chunk with payment: {e:?}"))
+            })?
+            .to_vec(),
             publisher: None,
             expires: None,
         };
