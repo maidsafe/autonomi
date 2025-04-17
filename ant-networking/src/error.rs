@@ -85,6 +85,12 @@ impl Debug for GetRecordError {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum NatDetectionError {
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+}
+
 /// Network Errors
 #[derive(Debug, Error)]
 pub enum NetworkError {
@@ -108,6 +114,9 @@ pub enum NetworkError {
 
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
+
+    #[error("Nat detection error: {0}")]
+    NatDetectionError(#[from] NatDetectionError),
 
     // ---------- Record Errors
     // GetRecord query errors
