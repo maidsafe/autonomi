@@ -362,18 +362,8 @@ impl NetworkBuilder {
 
         let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
-        let mut swarm_driver = NatDetectionSwarmDriver::new(swarm, self.initial_contacts);
-
-        // Listen on QUIC
-        let addr_quic = Multiaddr::from(listen_socket_addr.ip())
-            .with(Protocol::Udp(listen_socket_addr.port()))
-            .with(Protocol::QuicV1);
-        let listen_id = swarm_driver
-            .swarm
-            .listen_on(addr_quic.clone())
-            .expect("Multiaddr should be supported by our configured transports");
-
-        info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
+        let swarm_driver =
+            NatDetectionSwarmDriver::new(swarm, self.initial_contacts, listen_socket_addr);
 
         Ok(swarm_driver)
     }
