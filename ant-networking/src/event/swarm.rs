@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    event::NodeEvent, multiaddr_get_ip, time::Instant, NetworkEvent, NodeIssue, Result, SwarmDriver,
+    endpoint_str, event::NodeEvent, multiaddr_get_ip, time::Instant, NetworkEvent, NodeIssue,
+    Result, SwarmDriver,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use itertools::Itertools;
@@ -684,17 +685,5 @@ impl SwarmDriver {
         }
 
         true
-    }
-}
-
-/// Helper function to print formatted connection role info.
-fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
-    match endpoint {
-        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
-            format!("outgoing ({address})")
-        }
-        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
-            format!("incoming ({send_back_addr})")
-        }
     }
 }

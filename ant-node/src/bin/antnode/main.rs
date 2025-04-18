@@ -19,6 +19,7 @@ use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
+use ant_networking::ReachabilityStatus;
 use ant_node::utils::get_root_dir_and_keypair;
 use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
 use ant_protocol::{
@@ -77,6 +78,8 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
+    #[clap(long, default_value_t = false)]
+    nat_detection: bool,
     /// Specify whether the node is operating from a home network and situated behind a NAT without port forwarding
     /// capabilities. Setting this to true, activates hole-punching to facilitate direct connections from other nodes.
     ///
@@ -320,6 +323,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_nat_detection(opt.nat_detection);
         node_builder.local(opt.peers.local);
         node_builder.upnp(opt.upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -361,7 +365,7 @@ fn main() -> Result<()> {
 /// - `Ok(None)` if we want to shutdown the node.
 /// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
-    node_builder: NodeBuilder,
+    mut node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
@@ -371,6 +375,25 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
+    if node_builder.nat_detection {
+        let status = node_builder.run_nat_det().await?;
+        match status {
+            ReachabilityStatus::Upnp => {
+                node_builder.upnp(true);
+            }
+            ReachabilityStatus::Reachable {
+                local_adapter: mut socket_addr,
+            } => {
+                socket_addr.set_port(0);
+                node_builder.upnp(false);
+                node_builder.with_socket_addr(socket_addr);
+            }
+            ReachabilityStatus::Unreachable { .. } => {
+                node_builder.is_behind_home_network(true);
+            }
+        }
+    }
+
     let running_node = node_builder.build_and_run()?;
 
     println!(
