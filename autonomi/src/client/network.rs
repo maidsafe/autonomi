@@ -17,6 +17,8 @@ impl Client {
         &self,
         network_address: impl Into<NetworkAddress>,
     ) -> Result<Vec<PeerInfo>, NetworkError> {
-        self.network.get_closest_peers(network_address.into()).await
+        self.network
+            .get_closest_peers_with_retries(network_address.into())
+            .await
     }
 }

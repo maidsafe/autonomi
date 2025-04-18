@@ -214,7 +214,7 @@ async fn fetch_store_quote(
     data_size: usize,
 ) -> Result<(XorName, Vec<(PeerId, PaymentQuote)>), CostError> {
     let maybe_quotes = network
-        .get_quotes(
+        .get_quotes_with_retries(
             NetworkAddress::from(ChunkAddress::new(content_addr)),
             data_type,
             data_size,

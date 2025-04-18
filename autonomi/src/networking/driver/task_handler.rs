@@ -95,9 +95,14 @@ impl TaskHandler {
                     .send(Ok(peers))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(e) => {
+            Err(kad::GetClosestPeersError::Timeout { key, peers }) => {
+                debug!(
+                    "QueryId({id}): GetClosestPeersError::Timeout {:?}, peers: {:?}",
+                    hex::encode(key),
+                    peers
+                );
                 responder
-                    .send(Err(NetworkError::ClosestPeersError(e.to_string())))
+                    .send(Err(NetworkError::GetClosestPeersTimeout))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
         }

@@ -93,14 +93,14 @@ test('graph entry put and get', async (t) => {
   t.true(typeof putCost === 'string');
   t.true(addr instanceof GraphEntryAddress);
   
-  // Check existence
-  const exists = await client.graphEntryCheckExistance(addr);
-  t.true(exists);
-  
   // Get the graph entry
   const retrievedEntry = await client.graphEntryGet(addr);
   t.true(retrievedEntry instanceof GraphEntry);
   t.true(retrievedEntry.verifySignature());
+
+  // Check existence
+  const exists = await client.graphEntryCheckExistance(addr);
+  t.true(exists);
   
   // Verify content matches
   const retrievedContent = retrievedEntry.content();

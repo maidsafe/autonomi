@@ -128,7 +128,7 @@ impl Client {
 
         let record = self
             .network
-            .get_record(key, self.config.chunks.get_quorum)
+            .get_record_with_retries(key, &self.config.chunks)
             .await
             .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?
             .ok_or(GetError::RecordNotFound)?;
@@ -207,7 +207,7 @@ impl Client {
         debug!("Storing chunk at address: {address:?} to the network");
 
         self.network
-            .put_record(record, payees, self.config.chunks.put_quorum)
+            .put_record_with_retries(record, payees, &self.config.chunks)
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - chunk {address:?} to the network: {err}")
@@ -247,7 +247,7 @@ impl Client {
             let mut upload_tasks = vec![];
             #[cfg(feature = "loud")]
             let total_chunks = chunks.len();
-            for (_i, &chunk) in chunks.iter().enumerate() {
+            for (i, &chunk) in chunks.iter().enumerate() {
                 let self_clone = self.clone();
                 let address = *chunk.address();
 
@@ -256,7 +256,7 @@ impl Client {
                     #[cfg(feature = "loud")]
                     println!(
                         "({}/{}) Chunk stored at: {} (skipping, already exists)",
-                        _i + 1,
+                        i + 1,
                         chunks.len(),
                         chunk.address().to_hex()
                     );
@@ -276,7 +276,7 @@ impl Client {
                         Ok(_addr) => {
                             println!(
                                 "({}/{}) Chunk stored at: {}",
-                                _i + 1,
+                                i + 1,
                                 total_chunks,
                                 chunk.address().to_hex()
                             );
@@ -284,7 +284,7 @@ impl Client {
                         Err((_chunk, ref err)) => {
                             println!(
                                 "({}/{}) Chunk failed to be stored at: {} ({err})",
-                                _i + 1,
+                                i + 1,
                                 total_chunks,
                                 chunk.address().to_hex()
                             );

@@ -58,7 +58,7 @@ impl Client {
 
         let pointer = match self
             .network
-            .get_record(key.clone(), self.config.pointer.get_quorum)
+            .get_record_with_retries(key.clone(), &self.config.pointer)
             .await
         {
             Ok(Some(r)) => pointer_from_record(r)?,
@@ -79,6 +79,8 @@ impl Client {
     }
 
     /// Check if a pointer exists on the network
+    /// This method is much faster than [`Client::pointer_get`]
+    /// This may fail if called immediately after creating the pointer, as nodes sometimes take longer to store the pointer than this request takes to execute!
     pub async fn pointer_check_existence(
         &self,
         address: &PointerAddress,
@@ -171,7 +173,7 @@ impl Client {
         let target_nodes = payees.unwrap_or_default();
 
         self.network
-            .put_record(record, target_nodes, self.config.pointer.put_quorum)
+            .put_record_with_retries(record, target_nodes, &self.config.pointer)
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - pointer {address:?} to the network: {err}")
@@ -245,7 +247,7 @@ impl Client {
         debug!("Updating pointer at address {address:?} to the network");
 
         self.network
-            .put_record(record, Default::default(), self.config.pointer.put_quorum)
+            .put_record_with_retries(record, Default::default(), &self.config.pointer)
             .await
             .inspect_err(|err| {
                 error!("Failed to update pointer at address {address:?} to the network: {err}")

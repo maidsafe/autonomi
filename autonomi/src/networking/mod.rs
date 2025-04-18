@@ -10,6 +10,7 @@
 mod config;
 mod driver;
 mod interface;
+mod retries;
 mod utils;
 
 // export the utils
@@ -18,7 +19,7 @@ pub(crate) use utils::multiaddr_is_global;
 // re-export the types our API exposes to avoid dependency version conflicts
 pub use ant_evm::PaymentQuote;
 pub use ant_protocol::NetworkAddress;
-pub use config::{GetRecordCfg, PutRecordCfg, RetryStrategy, VerificationKind};
+pub use config::{RetryStrategy, Strategy};
 pub use libp2p::kad::PeerInfo;
 pub use libp2p::{
     kad::{Quorum, Record},
@@ -58,8 +59,14 @@ pub enum NetworkError {
     NetworkDriverReceive(#[from] tokio::sync::oneshot::error::RecvError),
 
     /// Error getting closest peers
-    #[error("Failed to get closest peers: {0}")]
-    ClosestPeersError(String),
+    #[error("Get closest peers request timeout")]
+    GetClosestPeersTimeout,
+    #[error("Received {got_peers} closest peers, expected at least {expected_peers}")]
+    InsufficientPeers {
+        got_peers: usize,
+        expected_peers: usize,
+        peers: Vec<PeerInfo>,
+    },
 
     /// Error putting record
     #[error("Failed to put record: {0}")]
@@ -89,6 +96,20 @@ pub enum NetworkError {
     SplitRecord(HashMap<PeerId, Record>),
     #[error("Get record timed out, peers found holding the record at timeout: {0:?}")]
     GetRecordTimeout(Vec<PeerId>),
+
+    /// Invalid retry strategy
+    #[error("Invalid retry strategy, check your config or use the default")]
+    InvalidRetryStrategy,
+}
+
+impl NetworkError {
+    /// When encountering these, create a new [`Network`] instance
+    pub fn is_fatal(&self) -> bool {
+        matches!(
+            self,
+            NetworkError::NetworkDriverOffline | NetworkError::NetworkDriverReceive(_)
+        )
+    }
 }
 
 /// The Client interface to the Autonomi Network
@@ -201,12 +222,22 @@ impl Network {
             .send(task)
             .await
             .map_err(|_| NetworkError::NetworkDriverOffline)?;
-        rx.await?.map(|mut peers| {
-            debug_assert!(peers.len() >= n.get());
-            // We sometimes receive more peers than requested (with empty addrs)
-            peers.truncate(n.get());
-            peers
-        })
+
+        match rx.await? {
+            Ok(mut peers) => {
+                if peers.len() < n.get() {
+                    return Err(NetworkError::InsufficientPeers {
+                        got_peers: peers.len(),
+                        expected_peers: n.get(),
+                        peers,
+                    });
+                }
+                // We sometimes receive more peers than requested (with empty addrs)
+                peers.truncate(n.get());
+                Ok(peers)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Get a quote for a record from a Peer on the Network
