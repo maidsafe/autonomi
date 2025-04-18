@@ -796,7 +796,6 @@ impl NodeRecordStore {
             info!("Basing cost of _total_ records stored.");
         };
 
-        // NB TODO tell happybeing!
         // vdash metric (if modified please notify at https://github.com/happybeing/vdash/issues):
         info!("Quoting_metrics {quoting_metrics:?}");
 

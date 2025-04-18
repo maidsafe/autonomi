@@ -6,13 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::exit_code::{connect_error_exit_code, evm_util_error_exit_code, ExitCodeError};
 use autonomi::client::config::ClientOperatingStrategy;
 use autonomi::{get_evm_network, Client, ClientConfig, InitialPeersConfig};
 use color_eyre::eyre::eyre;
 use indicatif::ProgressBar;
 use std::time::Duration;
-
-use crate::exit_code::{connect_error_exit_code, evm_util_error_exit_code, ExitCodeError};
 
 pub async fn connect_to_network(
     init_peers_config: InitialPeersConfig,

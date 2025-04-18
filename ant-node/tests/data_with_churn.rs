@@ -111,7 +111,7 @@ async fn data_availability_during_churn() -> Result<()> {
             network_contacts_url: vec![],
         },
         evm_network: evm_network.clone(),
-        strategy: autonomi::ClientOperatingStrategy::default(),
+        strategy: Default::default(),
     };
     let client = Client::init_with_config(config).await.unwrap();
 

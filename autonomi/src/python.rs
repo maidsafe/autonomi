@@ -168,7 +168,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .graph_entry_check_existance(&addr.inner)
+                .graph_entry_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get graph entry: {e}")))?;
             Ok(exists)
@@ -255,7 +255,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .scratchpad_check_existance(&addr.inner)
+                .scratchpad_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
 
@@ -978,7 +978,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .pointer_check_existance(&addr.inner)
+                .pointer_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get pointer: {e}")))?;
 

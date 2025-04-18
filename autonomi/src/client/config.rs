@@ -6,15 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_evm::EvmNetwork;
-use ant_networking::{GetRecordCfg, PutRecordCfg, VerificationKind};
-use ant_protocol::messages::ChunkProof;
-use libp2p::{kad::Record, PeerId};
-use rand::{thread_rng, Rng};
-use std::{collections::HashSet, num::NonZero};
-
+#![allow(dead_code)]
+use crate::networking::{
+    GetRecordCfg, PeerId, PutRecordCfg, Quorum, Record, RetryStrategy, VerificationKind,
+};
 pub use ant_bootstrap::{error::Error as BootstrapError, InitialPeersConfig};
-pub use ant_networking::{ResponseQuorum, RetryStrategy};
+use ant_evm::EvmNetwork;
+use ant_protocol::messages::ChunkProof;
+use rand::{thread_rng, Rng};
+use std::collections::HashSet;
+use std::num::NonZero;
 
 /// Configuration for the [`crate::Client`] which can be provided through: [`crate::Client::init_with_config`].
 #[derive(Debug, Clone, Default)]
@@ -56,38 +57,38 @@ impl Default for ClientOperatingStrategy {
         let two = NonZero::new(2).expect("2 is non 0");
         Self {
             chunks: Strategy {
-                put_quorum: ResponseQuorum::N(two),
+                put_quorum: Quorum::N(two),
                 put_retry: RetryStrategy::Balanced,
-                verification_quorum: ResponseQuorum::N(two),
+                verification_quorum: Quorum::N(two),
                 verification_retry: RetryStrategy::Balanced,
-                get_quorum: ResponseQuorum::One, // chunks are content addressed so one is enough as there is no fork possible
+                get_quorum: Quorum::One, // chunks are content addressed so one is enough as there is no fork possible
                 get_retry: RetryStrategy::Quick,
                 verification_kind: VerificationKind::Network, // it is recommended to use [`Strategy::chunk_put_cfg`] for chunks to benefit from the chunk proof
             },
             graph_entry: Strategy {
-                put_quorum: ResponseQuorum::Majority,
+                put_quorum: Quorum::Majority,
                 put_retry: RetryStrategy::Balanced,
-                verification_quorum: ResponseQuorum::Majority,
+                verification_quorum: Quorum::N(two),
                 verification_retry: RetryStrategy::Quick, // verification should be quick
-                get_quorum: ResponseQuorum::N(two), // forks are rare but possible, balance between resilience and speed
+                get_quorum: Quorum::N(two), // forks are rare but possible, balance between resilience and speed
                 get_retry: RetryStrategy::Quick,
                 verification_kind: VerificationKind::Crdt, // forks are possible
             },
             pointer: Strategy {
-                put_quorum: ResponseQuorum::Majority,
+                put_quorum: Quorum::Majority,
                 put_retry: RetryStrategy::Balanced,
-                verification_quorum: ResponseQuorum::Majority,
+                verification_quorum: Quorum::N(two),
                 verification_retry: RetryStrategy::Quick, // verification should be quick
-                get_quorum: ResponseQuorum::Majority, // majority to catch possible differences in versions
+                get_quorum: Quorum::Majority, // majority to catch possible differences in versions
                 get_retry: RetryStrategy::Quick,
                 verification_kind: VerificationKind::Crdt, // forks are possible
             },
             scratchpad: Strategy {
-                put_quorum: ResponseQuorum::Majority,
+                put_quorum: Quorum::Majority,
                 put_retry: RetryStrategy::Balanced,
-                verification_quorum: ResponseQuorum::Majority,
+                verification_quorum: Quorum::N(two),
                 verification_retry: RetryStrategy::Quick, // verification should be quick
-                get_quorum: ResponseQuorum::Majority, // majority to catch possible differences in versions
+                get_quorum: Quorum::Majority, // majority to catch possible differences in versions
                 get_retry: RetryStrategy::Quick,
                 verification_kind: VerificationKind::Crdt, // forks are possible
             },
@@ -101,15 +102,15 @@ impl Default for ClientOperatingStrategy {
 #[derive(Debug, Clone)]
 pub struct Strategy {
     /// The number of responses to wait for before considering the put operation successful
-    pub put_quorum: ResponseQuorum,
+    pub put_quorum: Quorum,
     /// The retry strategy to use if we fail to store a piece of data
     pub put_retry: RetryStrategy,
     /// The number of responses to wait for before considering the verification to be successful
-    pub verification_quorum: ResponseQuorum,
+    pub verification_quorum: Quorum,
     /// The retry strategy for verification
     pub verification_retry: RetryStrategy,
     /// The number of responses to wait for before considering the get operation successful
-    pub get_quorum: ResponseQuorum,
+    pub get_quorum: Quorum,
     /// The retry strategy to use if the get operation fails
     pub get_retry: RetryStrategy,
     /// Verification kind

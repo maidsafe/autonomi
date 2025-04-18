@@ -110,7 +110,7 @@ async fn verify_data_location() -> Result<()> {
             network_contacts_url: vec![],
         },
         evm_network: evm_network.clone(),
-        strategy: autonomi::ClientOperatingStrategy::default(),
+        strategy: Default::default(),
     };
     let client = Client::init_with_config(config).await.unwrap();
 
