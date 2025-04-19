@@ -27,7 +27,7 @@ bls = { package = "blsttc", version = "8.0.1" }
 clap = { version = "4.2.1", features = ["derive"] }
 color-eyre = "0.6.3"
 hex = "~0.4.3"
-libp2p = { version = "0.55.0", features = ["kad"]}
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "extra_distance_info_during_query", features = ["kad"]}
 libp2p-identity = { version="0.2.7", features = ["rand"] }
 thiserror = "1.0.23"
 # # watch out updating this, protoc compiler needs to be installed on all build systems

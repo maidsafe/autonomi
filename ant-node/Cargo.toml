@@ -44,7 +44,7 @@ file-rotate = "0.7.3"
 futures = "~0.3.13"
 hex = "~0.4.3"
 itertools = "~0.12.1"
-libp2p = { version = "0.55.0", features = ["tokio", "dns", "kad", "macros"] }
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "extra_distance_info_during_query", features = ["tokio", "dns", "kad", "macros"] }
 num-traits = "0.2"
 prometheus-client = { version = "0.22", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems

@@ -24,7 +24,7 @@ clap = { version = "4.5.4", features = ["derive"] }
 clap-verbosity-flag = "2.2.0"
 color-eyre = { version = "0.6", default-features = false }
 futures = "~0.3.13"
-libp2p = { version = "0.55.0", features = [
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "extra_distance_info_during_query", features = [
     "tokio",
     "tcp",
     "noise",

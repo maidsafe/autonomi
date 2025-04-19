@@ -34,7 +34,7 @@ hyper = { version = "0.14", features = [
     "http1",
 ], optional = true }
 itertools = "~0.12.1"
-libp2p = { version = "0.55.0", features = [
+libp2p = { git = "https://github.com/maqi/rust-libp2p.git", branch = "extra_distance_info_during_query", features = [
     "tokio",
     "dns",
     "upnp",
