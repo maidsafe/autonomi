@@ -188,37 +188,37 @@ impl Debug for NetworkAddress {
         let name_str = match self {
             NetworkAddress::PeerId(_) => {
                 if let Some(peer_id) = self.as_peer_id() {
-                    format!("NetworkAddress::PeerId({peer_id} - ")
+                    format!("NetworkAddress::{peer_id:?} - (")
                 } else {
                     "NetworkAddress::PeerId(".to_string()
                 }
             }
             NetworkAddress::ChunkAddress(chunk_address) => {
                 format!(
-                    "NetworkAddress::ChunkAddress({} - ",
+                    "NetworkAddress::ChunkAddress({}) - (",
                     &chunk_address.to_hex()
                 )
             }
             NetworkAddress::GraphEntryAddress(graph_entry_address) => {
                 format!(
-                    "NetworkAddress::GraphEntryAddress({} - ",
+                    "NetworkAddress::GraphEntryAddress({}) - (",
                     &graph_entry_address.to_hex()
                 )
             }
             NetworkAddress::ScratchpadAddress(scratchpad_address) => {
                 format!(
-                    "NetworkAddress::ScratchpadAddress({} - ",
+                    "NetworkAddress::ScratchpadAddress({}) - (",
                     &scratchpad_address.to_hex()
                 )
             }
             NetworkAddress::PointerAddress(pointer_address) => {
                 format!(
-                    "NetworkAddress::PointerAddress({} - ",
+                    "NetworkAddress::PointerAddress({}) - (",
                     &pointer_address.to_hex()
                 )
             }
             NetworkAddress::RecordKey(bytes) => {
-                format!("NetworkAddress::RecordKey({:?} - ", hex::encode(bytes))
+                format!("NetworkAddress::RecordKey({:?}) - (", hex::encode(bytes))
             }
         };
 
