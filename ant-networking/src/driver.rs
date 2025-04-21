@@ -266,8 +266,9 @@ impl NetworkBuilder {
             // How many nodes _should_ store data.
             .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(KAD_QUERY_TIMEOUT_S)
-            // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            .disjoint_query_paths(true)
+            // TODO: may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
+            //       however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
+            // .disjoint_query_paths(true)
             // Records never expire
             .set_record_ttl(None)
             .set_replication_factor(REPLICATION_FACTOR)
@@ -340,14 +341,14 @@ impl NetworkBuilder {
         // to outbound-only mode and don't listen on any address
         let mut kad_cfg = kad::Config::new(KAD_STREAM_PROTOCOL_ID); // default query timeout is 60 secs
 
-        // 1mb packet size
         let _ = kad_cfg
             .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
             .set_max_packet_size(MAX_PACKET_SIZE)
             .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
-            // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            .disjoint_query_paths(true)
+            // TODO: may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
+            //       however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
+            // .disjoint_query_paths(true)
             // How many nodes _should_ store data.
             .set_replication_factor(REPLICATION_FACTOR);
 
