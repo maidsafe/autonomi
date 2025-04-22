@@ -214,15 +214,22 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
 
     match cmd {
         Some(SubCmd::File { command }) => match command {
-            FileCmd::Cost { file } => file::cost(&file, opt.peers).await,
+            FileCmd::Cost { file } => file::cost(&file, opt.peers, opt.network_id).await,
             FileCmd::Upload {
                 file,
                 public,
                 quorum,
                 max_fee_per_gas,
             } => {
-                if let Err((err, exit_code)) =
-                    file::upload(&file, public, opt.peers, quorum, max_fee_per_gas).await
+                if let Err((err, exit_code)) = file::upload(
+                    &file,
+                    public,
+                    opt.peers,
+                    quorum,
+                    max_fee_per_gas,
+                    opt.network_id,
+                )
+                .await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
@@ -236,7 +243,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 quorum,
             } => {
                 if let Err((err, exit_code)) =
-                    file::download(&addr, &dest_file, opt.peers, quorum).await
+                    file::download(&addr, &dest_file, opt.peers, quorum, opt.network_id).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
@@ -248,26 +255,42 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         },
         Some(SubCmd::Register { command }) => match command {
             RegisterCmd::GenerateKey { overwrite } => register::generate_key(overwrite),
-            RegisterCmd::Cost { name } => register::cost(&name, opt.peers).await,
+            RegisterCmd::Cost { name } => register::cost(&name, opt.peers, opt.network_id).await,
             RegisterCmd::Create {
                 name,
                 value,
                 max_fee_per_gas,
-            } => register::create(&name, &value, opt.peers, max_fee_per_gas).await,
+            } => register::create(&name, &value, opt.peers, max_fee_per_gas, opt.network_id).await,
             RegisterCmd::Edit {
                 address,
                 name,
                 value,
                 max_fee_per_gas,
-            } => register::edit(address, name, &value, opt.peers, max_fee_per_gas).await,
-            RegisterCmd::Get { address, name } => register::get(address, name, opt.peers).await,
+            } => {
+                register::edit(
+                    address,
+                    name,
+                    &value,
+                    opt.peers,
+                    max_fee_per_gas,
+                    opt.network_id,
+                )
+                .await
+            }
+            RegisterCmd::Get { address, name } => {
+                register::get(address, name, opt.peers, opt.network_id).await
+            }
             RegisterCmd::List => register::list(),
         },
         Some(SubCmd::Vault { command }) => match command {
-            VaultCmd::Cost { expected_max_size } => vault::cost(opt.peers, expected_max_size).await,
-            VaultCmd::Create { max_fee_per_gas } => vault::create(opt.peers, max_fee_per_gas).await,
-            VaultCmd::Load => vault::load(opt.peers).await,
-            VaultCmd::Sync { force } => vault::sync(force, opt.peers).await,
+            VaultCmd::Cost { expected_max_size } => {
+                vault::cost(opt.peers, expected_max_size, opt.network_id).await
+            }
+            VaultCmd::Create { max_fee_per_gas } => {
+                vault::create(opt.peers, max_fee_per_gas, opt.network_id).await
+            }
+            VaultCmd::Load => vault::load(opt.peers, opt.network_id).await,
+            VaultCmd::Sync { force } => vault::sync(force, opt.peers, opt.network_id).await,
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {

@@ -36,10 +36,14 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn cost(name: &str, init_peers_config: InitialPeersConfig) -> Result<()> {
+pub async fn cost(
+    name: &str,
+    init_peers_config: InitialPeersConfig,
+    network_id: Option<u8>,
+) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config)
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -59,10 +63,11 @@ pub async fn create(
     value: &str,
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
+    network_id: Option<u8>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config)
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -102,10 +107,11 @@ pub async fn edit(
     value: &str,
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
+    network_id: Option<u8>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config)
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -149,8 +155,13 @@ pub async fn edit(
     Ok(())
 }
 
-pub async fn get(address: String, name: bool, init_peers_config: InitialPeersConfig) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config)
+pub async fn get(
+    address: String,
+    name: bool,
+    init_peers_config: InitialPeersConfig,
+    network_id: Option<u8>,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 

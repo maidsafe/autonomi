@@ -12,8 +12,12 @@ use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::Section;
 
-pub async fn cost(init_peers_config: InitialPeersConfig, expected_max_size: u64) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config)
+pub async fn cost(
+    init_peers_config: InitialPeersConfig,
+    expected_max_size: u64,
+    network_id: Option<u8>,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -33,8 +37,9 @@ pub async fn cost(init_peers_config: InitialPeersConfig, expected_max_size: u64)
 pub async fn create(
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
+    network_id: Option<u8>,
 ) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config)
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -70,8 +75,12 @@ pub async fn create(
     Ok(())
 }
 
-pub async fn sync(force: bool, init_peers_config: InitialPeersConfig) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config)
+pub async fn sync(
+    force: bool,
+    init_peers_config: InitialPeersConfig,
+    network_id: Option<u8>,
+) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -109,8 +118,8 @@ pub async fn sync(force: bool, init_peers_config: InitialPeersConfig) -> Result<
     Ok(())
 }
 
-pub async fn load(init_peers_config: InitialPeersConfig) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config)
+pub async fn load(init_peers_config: InitialPeersConfig, network_id: Option<u8>) -> Result<()> {
+    let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;
 

@@ -28,6 +28,10 @@ pub struct ClientConfig {
 
     /// Strategy for data operations by the client.
     pub strategy: ClientOperatingStrategy,
+
+    /// The network ID to use for the client.
+    /// This is used to differentiate between different networks.
+    pub network_id: Option<u8>,
 }
 
 /// Strategy configuration for data operations by the client.
