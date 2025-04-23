@@ -80,8 +80,6 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
-    #[clap(long, default_value_t = false)]
-    nat_detection: bool,
     /// Set to connect to the alpha network.
     #[clap(long)]
     alpha: bool,
@@ -190,6 +188,12 @@ struct Opt {
     /// The special value `0` will cause the OS to assign a random port.
     #[clap(long, default_value_t = 0)]
     port: u16,
+
+    /// Enabling this will run an optional reachability check before starting the node.
+    ///
+    /// Enabling this will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
+    #[clap(long, default_value_t = false)]
+    reachability_check: bool,
 
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
@@ -334,7 +338,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
-        node_builder.with_nat_detection(opt.nat_detection);
+        node_builder.with_reachability_check(opt.reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -386,20 +390,24 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
-    if node_builder.nat_detection {
-        let status = node_builder.run_nat_det().await?;
+    if node_builder.reachability_check {
+        info!("Running reachability check ...");
+        let status = node_builder.run_reachability_check().await?;
         match status {
             ReachabilityStatus::Upnp => {
+                info!("Reachability check: UPnP detected. Starting node with UPnP enabled.");
                 node_builder.no_upnp(false);
             }
             ReachabilityStatus::Reachable {
                 local_adapter: mut socket_addr,
             } => {
+                info!("Reachability check: Reachable. Starting node with socket addr: {socket_addr} and UPnP disabled.");
                 socket_addr.set_port(0);
                 node_builder.no_upnp(true);
                 node_builder.with_socket_addr(socket_addr);
             }
             ReachabilityStatus::Unreachable { .. } => {
+                info!("Reachability check: Unreachable. Starting node in Relay mode.");
                 node_builder.relay_client(true);
             }
         }
