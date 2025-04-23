@@ -14,7 +14,7 @@ use crate::networking::{
     driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
-    nat_detection::{NatDetectionBehaviour, NatDetectionSwarmDriver},
+    reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
@@ -26,7 +26,10 @@ use crate::networking::{
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
-    version::{get_network_id_str, IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR},
+    version::{
+        get_network_id_str, IDENTIFY_PROTOCOL_STR, IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR,
+        REQ_RESPONSE_VERSION_STR,
+    },
     NetworkAddress, PrettyPrintKBucketKey,
 };
 use futures::future::Either;
@@ -255,7 +258,8 @@ impl NetworkBuilder {
         Ok((network, events_receiver))
     }
 
-    pub fn build_nat(self) -> Result<NatDetectionSwarmDriver> {
+    /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
+    pub fn build_reachability_check_swarm(self) -> Result<ReachabilityCheckSwarmDriver> {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
             .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -307,17 +311,21 @@ impl NetworkBuilder {
             .ok_or(NetworkError::ListenAddressNotProvided)?;
 
         // Identify Behaviour
+        let agent_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR")
+            .clone();
         info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
         let identify = {
             let cfg = libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
-                .with_agent_version("nat_detection".to_string())
+                .with_agent_version(agent_version)
                 // Enlength the identify interval from default 5 mins to 1 hour.
                 .with_interval(RESEND_IDENTIFY_INVERVAL)
                 .with_hide_listen_addrs(true);
             libp2p::identify::Behaviour::new(cfg)
         };
 
-        let behaviour = NatDetectionBehaviour {
+        let behaviour = ReachabilityCheckBehaviour {
             upnp: libp2p::upnp::tokio::Behaviour::default(),
             identify,
         };
@@ -328,7 +336,7 @@ impl NetworkBuilder {
         let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
         let swarm_driver =
-            NatDetectionSwarmDriver::new(swarm, self.initial_contacts, listen_socket_addr);
+            ReachabilityCheckSwarmDriver::new(swarm, self.initial_contacts, listen_socket_addr);
 
         Ok(swarm_driver)
     }
