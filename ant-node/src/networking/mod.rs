@@ -17,8 +17,8 @@ mod interface;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
-mod nat_detection;
 mod network;
+mod reachability_check;
 mod record_store;
 mod relay_manager;
 mod replication_fetcher;
@@ -27,7 +27,7 @@ mod transport;
 use std::net::IpAddr;
 
 // re-export arch dependent deps for use in the crate, or above
-pub use self::nat_detection::ReachabilityStatus;
+pub use self::reachability_check::ReachabilityStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue, SwarmLocalState},

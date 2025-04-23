@@ -93,8 +93,8 @@ pub struct NodeBuilder {
     metrics_server_port: Option<u16>,
     no_upnp: bool,
     relay_client: bool,
-    /// Enable NAT detection
-    pub nat_detection: bool,
+    /// Perform reachability check on the node and auto set networking flags if needed.
+    pub reachability_check: bool,
     root_dir: PathBuf,
 }
 
@@ -121,7 +121,7 @@ impl NodeBuilder {
             metrics_server_port: None,
             no_upnp: false,
             relay_client: false,
-            nat_detection: false,
+            reachability_check: false,
             root_dir,
         }
     }
@@ -131,9 +131,10 @@ impl NodeBuilder {
         self.addr = addr;
     }
 
-    /// Set to enable nat detection
-    pub fn with_nat_detection(&mut self, nat_detection: bool) {
-        self.nat_detection = nat_detection;
+    /// Enabling this would run external reachability check before starting the node.
+    /// This would override some of the networking flags, like `upnp` and `is_behind_home_network`, etc.
+    pub fn with_reachability_check(&mut self, enable: bool) {
+        self.reachability_check = enable;
     }
 
     /// Set the flag to indicate if the node is running in local mode
@@ -162,8 +163,8 @@ impl NodeBuilder {
         self.no_upnp = no_upnp;
     }
 
-    /// Run nat detection
-    pub async fn run_nat_det(&self) -> Result<ReachabilityStatus> {
+    /// Check if the node is publicly reachable.
+    pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
         let mut network_builder = NetworkBuilder::new(
             self.identity_keypair.clone(),
             self.local,
@@ -177,7 +178,7 @@ impl NodeBuilder {
 
         network_builder.no_upnp(self.no_upnp);
 
-        let nat = network_builder.build_nat()?;
+        let nat = network_builder.build_reachability_check_swarm()?;
 
         let status = nat.detect().await?;
 

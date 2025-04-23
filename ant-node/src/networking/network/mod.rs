@@ -6,9 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
@@ -17,6 +14,8 @@ use futures::future::select_all;
 use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use libp2p::swarm::ConnectionId;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 use super::driver::event::MsgResponder;

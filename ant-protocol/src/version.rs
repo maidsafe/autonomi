@@ -62,6 +62,17 @@ pub fn construct_client_user_agent(client_version: String) -> String {
     )
 }
 
+pub static IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR: LazyLock<RwLock<String>> =
+    LazyLock::new(|| {
+        RwLock::new(format!(
+            "ant/reachability-check-client/{}/{}",
+            get_truncate_version_str(),
+            *NETWORK_ID
+                .read()
+                .expect("Failed to obtain read lock for NETWORK_ID"),
+        ))
+    });
+
 /// The req/response protocol version
 ///
 /// Defines the protocol identifier used for libp2p request-response communication that is used during
