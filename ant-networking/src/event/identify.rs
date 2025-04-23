@@ -125,11 +125,25 @@ impl SwarmDriver {
             }
 
             info!(%peer_id, ?addr, "received identify info from undialed peer for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}");
-            self.dial_queue.push_front((
-                peer_id,
-                Addresses(vec![addr.clone()]),
-                Instant::now() + DIAL_BACK_DELAY,
-            ));
+            match self.dial_queue.entry(peer_id) {
+                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                    let (addrs, time) = entry.get_mut();
+                    if !addrs.0.contains(&addr) {
+                        debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}. Resetting dial time.");
+                        addrs.0.push(addr.clone());
+                        *time = Instant::now() + DIAL_BACK_DELAY;
+                    } else {
+                        debug!("Already have addr {addr:?} in dial queue for {peer_id:?}. Not adding again.");
+                    }
+                }
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}");
+                    entry.insert((
+                        Addresses(vec![addr.clone()]),
+                        Instant::now() + DIAL_BACK_DELAY,
+                    ));
+                }
+            }
         } else {
             // We care only for peers that we dialed and thus are reachable.
             // Or if we are local, we can add the peer directly.
