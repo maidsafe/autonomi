@@ -46,11 +46,11 @@ impl SwarmDriver {
         info: Info,
         connection_id: libp2p::swarm::ConnectionId,
     ) {
-        debug!(conn_id=%connection_id, %peer_id, ?info, "identify: received info");
+        debug!("identify: received info from {peer_id:?} on {connection_id:?}. Info: {info:?}");
         // If the peer dials us with a different addr, we would add it to our RT via update_pre_existing_peer
         let Some((_, addr_fom_connection, _)) = self.live_connected_peers.get(&connection_id)
         else {
-            warn!(conn_id=%connection_id, %peer_id, "identify: received info for a connection that is not in the live connected peers");
+            warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
             return;
         };
         let mut addrs = vec![multiaddr_strip_p2p(addr_fom_connection)];
@@ -58,7 +58,7 @@ impl SwarmDriver {
         let our_identify_protocol = IDENTIFY_PROTOCOL_STR.read().expect("IDENTIFY_PROTOCOL_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
 
         if info.protocol_version != our_identify_protocol {
-            warn!(?info.protocol_version, "identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}");
+            warn!("identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}. Their protocol version: {:?}",info.protocol_version);
 
             self.send_event(NetworkEvent::PeerWithUnsupportedProtocol {
                 our_protocol: our_identify_protocol,
@@ -136,7 +136,7 @@ impl SwarmDriver {
                 return;
             }
 
-            info!(%peer_id, ?addrs, "received identify info from undialed peer for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}");
+            info!("received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}");
             match self.dial_queue.entry(peer_id) {
                 std::collections::hash_map::Entry::Occupied(mut entry) => {
                     let (old_addrs, time) = entry.get_mut();
@@ -178,7 +178,7 @@ impl SwarmDriver {
             // With the new bootstrap cache, the workload is distributed,
             // hence no longer need to replace bootstrap nodes for workload share.
             // self.remove_bootstrap_from_full(peer_id);
-            debug!(%peer_id, ?addrs, "identify: attempting to add addresses to routing table");
+            debug!("identify: attempting to add addresses to routing table for {peer_id:?}. Addrs: {addrs:?}");
 
             // Attempt to add the addresses to the routing table.
             for addr in addrs.into_iter() {
