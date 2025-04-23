@@ -24,9 +24,9 @@ mod external_address;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
-mod nat_detection;
 mod network_builder;
 mod network_discovery;
+mod reachability_check;
 mod record_store;
 mod relay_manager;
 mod replication_fetcher;
@@ -42,8 +42,8 @@ pub use self::{
     driver::SwarmDriver,
     error::NetworkError,
     event::{MsgResponder, NetworkEvent},
-    nat_detection::ReachabilityStatus,
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
+    reachability_check::ReachabilityStatus,
     record_store::NodeRecordStore,
 };
 #[cfg(feature = "open-metrics")]
