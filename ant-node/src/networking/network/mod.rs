@@ -6,9 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
@@ -17,12 +14,14 @@ use futures::future::select_all;
 use libp2p::kad::{K_VALUE, KBucketDistance, Record, RecordKey};
 use libp2p::swarm::ConnectionId;
 use libp2p::{Multiaddr, PeerId, identity::Keypair};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
 use super::interface::{LocalSwarmCmd, NetworkSwarmCmd};
-use super::{send_local_swarm_cmd, send_network_swarm_cmd, Addresses, NodeIssue, SwarmLocalState};
+use super::{Addresses, NodeIssue, SwarmLocalState, send_local_swarm_cmd, send_network_swarm_cmd};
 
 mod init;
 
