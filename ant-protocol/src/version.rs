@@ -37,6 +37,17 @@ pub static IDENTIFY_CLIENT_VERSION_STR: LazyLock<RwLock<String>> = LazyLock::new
     ))
 });
 
+pub static IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR: LazyLock<RwLock<String>> =
+    LazyLock::new(|| {
+        RwLock::new(format!(
+            "ant/reachability-check-client/{}/{}",
+            get_truncate_version_str(),
+            *NETWORK_ID
+                .read()
+                .expect("Failed to obtain read lock for NETWORK_ID"),
+        ))
+    });
+
 /// The req/response protocol version
 pub static REQ_RESPONSE_VERSION_STR: LazyLock<RwLock<String>> = LazyLock::new(|| {
     RwLock::new(format!(
