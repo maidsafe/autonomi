@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::NatDetectionError;
+use crate::error::ReachabilityCheckError;
 use crate::event::DIAL_BACK_DELAY;
 use crate::{
     endpoint_str, multiaddr_get_ip, multiaddr_get_p2p, multiaddr_get_socket_addr, multiaddr_pop_p2p,
@@ -34,34 +34,34 @@ const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 /// The first struct member is polled until it returns Poll::Pending before moving on to later members.
 /// Prioritize the behaviors related to connection handling.
 #[derive(NetworkBehaviour)]
-#[behaviour(to_swarm = "NatDetectionEvent")]
-pub struct NatDetectionBehaviour {
+#[behaviour(to_swarm = "ReachabilityCheckEvent")]
+pub struct ReachabilityCheckBehaviour {
     pub(super) upnp: libp2p::upnp::tokio::Behaviour,
     pub(super) identify: libp2p::identify::Behaviour,
 }
 
-/// NatDetectionEvent enum
+/// ReachabilityCheckEvent enum
 #[derive(CustomDebug)]
-pub enum NatDetectionEvent {
+pub enum ReachabilityCheckEvent {
     Upnp(libp2p::upnp::Event),
     Identify(Box<libp2p::identify::Event>),
 }
 
-impl From<libp2p::upnp::Event> for NatDetectionEvent {
+impl From<libp2p::upnp::Event> for ReachabilityCheckEvent {
     fn from(event: libp2p::upnp::Event) -> Self {
-        NatDetectionEvent::Upnp(event)
+        ReachabilityCheckEvent::Upnp(event)
     }
 }
 
-impl From<libp2p::identify::Event> for NatDetectionEvent {
+impl From<libp2p::identify::Event> for ReachabilityCheckEvent {
     fn from(event: libp2p::identify::Event) -> Self {
-        NatDetectionEvent::Identify(Box::new(event))
+        ReachabilityCheckEvent::Identify(Box::new(event))
     }
 }
 
-pub struct NatDetectionSwarmDriver {
-    pub(crate) swarm: Swarm<NatDetectionBehaviour>,
-    pub(crate) state: NatDetectionState,
+pub struct ReachabilityCheckSwarmDriver {
+    pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
+    pub(crate) state: ReachabilityCheckState,
     pub(crate) initial_contacts: Vec<Multiaddr>,
     pub(crate) initial_listener: HashMap<ListenerId, HashSet<IpAddr>>,
 }
@@ -75,7 +75,7 @@ pub enum ReachabilityStatus {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
-pub enum NatDetectionState {
+pub enum ReachabilityCheckState {
     WaitingForUpnp,
     WaitingForExternalAddr {
         // The number of attempts/retries we have made using this state.
@@ -89,12 +89,12 @@ pub enum NatDetectionState {
     },
 }
 
-impl NatDetectionState {
+impl ReachabilityCheckState {
     pub fn new_waiting_for_external_addr(
         listeners: HashMap<ListenerId, HashSet<IpAddr>>,
         attempt: usize,
     ) -> Self {
-        NatDetectionState::WaitingForExternalAddr {
+        ReachabilityCheckState::WaitingForExternalAddr {
             current_workflow_attempt: attempt,
             ongoing_dial_attempts: Default::default(),
             listeners,
@@ -116,9 +116,9 @@ pub enum DialAttemptState {
     DialedBackAfterWait,
 }
 
-impl NatDetectionSwarmDriver {
+impl ReachabilityCheckSwarmDriver {
     pub fn new(
-        swarm: Swarm<NatDetectionBehaviour>,
+        swarm: Swarm<ReachabilityCheckBehaviour>,
         initial_contacts: Vec<Multiaddr>,
         listen_socket_addr: SocketAddr,
     ) -> Self {
@@ -138,7 +138,7 @@ impl NatDetectionSwarmDriver {
             HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
         Self {
             swarm,
-            state: NatDetectionState::new_waiting_for_external_addr(initial_listener.clone(), 1),
+            state: ReachabilityCheckState::WaitingForUpnp,
             initial_listener,
             initial_contacts,
         }
@@ -178,8 +178,8 @@ impl NatDetectionSwarmDriver {
                 _ = dial_check_interval.tick() => {
                     // check if we have any ongoing dial attempts
                     match &mut self.state {
-                        NatDetectionState::WaitingForUpnp => {}
-                        NatDetectionState::WaitingForExternalAddr {
+                        ReachabilityCheckState::WaitingForUpnp => {}
+                        ReachabilityCheckState::WaitingForExternalAddr {
                             ongoing_dial_attempts,
                             identify_observed_external_addr,
                             incoming_connection_local_adapter_map,
@@ -222,15 +222,15 @@ impl NatDetectionSwarmDriver {
 
     fn handle_swarm_events(
         &mut self,
-        event: SwarmEvent<NatDetectionEvent>,
-    ) -> Result<Option<ReachabilityStatus>, NatDetectionError> {
+        event: SwarmEvent<ReachabilityCheckEvent>,
+    ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
         let start = Instant::now();
         let event_string;
 
         match &mut self.state {
-            NatDetectionState::WaitingForUpnp => {
+            ReachabilityCheckState::WaitingForUpnp => {
                 match event {
-                    SwarmEvent::Behaviour(NatDetectionEvent::Upnp(upnp_event)) => {
+                    SwarmEvent::Behaviour(ReachabilityCheckEvent::Upnp(upnp_event)) => {
                         event_string = "upnp_event";
                         info!(?upnp_event, "UPnP event");
                         match upnp_event {
@@ -258,7 +258,7 @@ impl NatDetectionSwarmDriver {
                     }
                 }
             }
-            NatDetectionState::WaitingForExternalAddr {
+            ReachabilityCheckState::WaitingForExternalAddr {
                 current_workflow_attempt: _,
                 ongoing_dial_attempts,
                 incoming_connection_ids,
@@ -388,7 +388,7 @@ impl NatDetectionSwarmDriver {
                         debug!("Removed connection {connection_id:?} from incomming_connections");
                     }
                 }
-                SwarmEvent::Behaviour(NatDetectionEvent::Identify(identify_event)) => {
+                SwarmEvent::Behaviour(ReachabilityCheckEvent::Identify(identify_event)) => {
                     event_string = "Identify";
                     match *identify_event {
                         identify::Event::Received {
@@ -464,8 +464,8 @@ impl NatDetectionSwarmDriver {
     fn trigger_dial(
         initial_contacts: &mut Vec<Multiaddr>,
         ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
-        swarm: &mut Swarm<NatDetectionBehaviour>,
-    ) -> Result<(), NatDetectionError> {
+        swarm: &mut Swarm<ReachabilityCheckBehaviour>,
+    ) -> Result<(), ReachabilityCheckError> {
         while ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS {
             // get the first contact with peer id present in it and remove it
             let index = initial_contacts
@@ -475,9 +475,8 @@ impl NatDetectionSwarmDriver {
             if let Some(index) = index {
                 let mut addr = initial_contacts.remove(index);
                 let addr_clone = addr.clone();
-                let peer_id = multiaddr_pop_p2p(&mut addr).ok_or(
-                    NatDetectionError::InvalidState("PeerId should always be present".to_string()),
-                )?;
+                let peer_id =
+                    multiaddr_pop_p2p(&mut addr).ok_or(ReachabilityCheckError::EmptyPeerId)?;
 
                 let opts = DialOpts::peer_id(peer_id)
                     // If we have a peer ID, we can prevent simultaneous dials.
@@ -564,7 +563,7 @@ impl NatDetectionSwarmDriver {
                     still_waiting_for_dial_back = true;
                 }
                 DialAttemptState::InitialSuccessfulResponseReceived => {
-                    if instant.elapsed() < DIAL_BACK_DELAY {
+                    if instant.elapsed().as_secs() < (DIAL_BACK_DELAY.as_secs() + 20) {
                         still_waiting_for_dial_back = true;
                     }
                 }
@@ -574,7 +573,7 @@ impl NatDetectionSwarmDriver {
         !still_waiting_for_dial_back
     }
 
-    fn on_upnp_result(&mut self) -> Result<(), NatDetectionError> {
+    fn on_upnp_result(&mut self) -> Result<(), ReachabilityCheckError> {
         let mut ongoing_dial_attempts = HashMap::new();
         Self::trigger_dial(
             &mut self.initial_contacts,
@@ -583,7 +582,7 @@ impl NatDetectionSwarmDriver {
         )?;
 
         self.state =
-            NatDetectionState::new_waiting_for_external_addr(self.initial_listener.clone(), 1);
+            ReachabilityCheckState::new_waiting_for_external_addr(self.initial_listener.clone(), 1);
 
         Ok(())
     }
@@ -621,7 +620,7 @@ impl NatDetectionSwarmDriver {
         identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
         incoming_connection_local_adapter_map: &HashMap<ConnectionId, SocketAddr>,
         listeners: &HashMap<ListenerId, HashSet<IpAddr>>,
-    ) -> Result<ReachabilityStatus, NatDetectionError> {
+    ) -> Result<ReachabilityStatus, ReachabilityCheckError> {
         let (reachable_addresses, retry) =
             Self::determine_reachability_via_external_addr(identify_observed_external_addr)?;
         if reachable_addresses.is_empty() {
@@ -702,16 +701,18 @@ impl NatDetectionSwarmDriver {
 
         // pop first one
         let (reachable_addr, local_adapter_addrs) =
-            external_to_local_addr_map.into_iter().next().ok_or(
-                NatDetectionError::InvalidState("No reachable addresses found".to_string()),
-            )?;
+            external_to_local_addr_map
+                .into_iter()
+                .next()
+                .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
 
         info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}");
 
         Ok(ReachabilityStatus::Reachable {
-            local_adapter: *local_adapter_addrs.iter().next().ok_or(
-                NatDetectionError::InvalidState("No local adapter addresses found".to_string()),
-            )?,
+            local_adapter: *local_adapter_addrs
+                .iter()
+                .next()
+                .ok_or(ReachabilityCheckError::LocalAdapterShouldNotBeEmpty)?,
         })
     }
 
@@ -721,8 +722,8 @@ impl NatDetectionSwarmDriver {
     /// Returns a vector of addresses that are reachable and a boolean to retry the entire process.
     fn determine_reachability_via_external_addr(
         identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
-    ) -> Result<(Vec<SocketAddr>, bool), NatDetectionError> {
-        info!("Determining NAT status based on observed addresses: {identify_observed_external_addr:?}");
+    ) -> Result<(Vec<SocketAddr>, bool), ReachabilityCheckError> {
+        info!("Determining reachability status based on observed addresses: {identify_observed_external_addr:?}");
 
         if identify_observed_external_addr.is_empty() {
             info!("No observed addresses found. We're unreachable.");
@@ -748,9 +749,10 @@ impl NatDetectionSwarmDriver {
             return Ok((vec![], false));
         }
 
-        let port = *ports.iter().next().ok_or(NatDetectionError::InvalidState(
-            "Ports should not be empty".to_string(),
-        ))?;
+        let port = *ports
+            .iter()
+            .next()
+            .ok_or(ReachabilityCheckError::EmptyPort)?;
         if port == 0 {
             info!("Observed port is 0. Reachability status is Unreachable.");
             return Ok((vec![], false));
@@ -758,9 +760,10 @@ impl NatDetectionSwarmDriver {
 
         #[allow(clippy::comparison_chain)]
         if ips.len() == 1 {
-            let ip = ips.iter().next().ok_or(NatDetectionError::InvalidState(
-                "IPs should not be empty".to_string(),
-            ))?;
+            let ip = ips
+                .iter()
+                .next()
+                .ok_or(ReachabilityCheckError::EmptyIpAddrs)?;
             if ip.is_unspecified() || ip.is_documentation() || ip.is_broadcast() {
                 info!(
                     "Observed address {ip:?} is unspecified. Reachability status is Unreachable."
@@ -823,7 +826,7 @@ impl NatDetectionSwarmDriver {
             error!("We have multiple IP addresses, but none are private or public. Reachability status is Unreachable.");
             return Ok((vec![], false));
         } else {
-            error!("We have no IP addresses. NAT status is NonPublic.");
+            error!("We have no IP addresses. Reachability status is Unreachable.");
             return Ok((vec![], false));
         }
     }
@@ -831,12 +834,12 @@ impl NatDetectionSwarmDriver {
     // consumes status if we are retrying the WaitingForExternalAddr workflow and would reset the states.
     fn retry_if_possible(&mut self, status: ReachabilityStatus) -> Option<ReachabilityStatus> {
         let current_workflow_attempt = match &self.state {
-            NatDetectionState::WaitingForExternalAddr {
+            ReachabilityCheckState::WaitingForExternalAddr {
                 current_workflow_attempt,
                 ..
             } => *current_workflow_attempt,
             // no retry
-            NatDetectionState::WaitingForUpnp => return Some(status),
+            ReachabilityCheckState::WaitingForUpnp => return Some(status),
         };
 
         let mut should_retry = false;
@@ -875,7 +878,7 @@ impl NatDetectionSwarmDriver {
             current_workflow_attempt + 1
         );
 
-        self.state = NatDetectionState::new_waiting_for_external_addr(
+        self.state = ReachabilityCheckState::new_waiting_for_external_addr(
             self.initial_listener.clone(),
             current_workflow_attempt + 1,
         );
