@@ -136,12 +136,16 @@ impl RelayManager {
     pub(crate) fn add_potential_candidates(
         &mut self,
         peer_id: &PeerId,
-        addr: &Multiaddr,
+        addrs: &[Multiaddr],
         stream_protocols: &Vec<StreamProtocol>,
     ) {
         if self.relay_server_candidates.len() >= MAX_POTENTIAL_CANDIDATES {
             return;
         }
+
+        let Some(addr) = addrs.iter().next() else {
+            return;
+        };
 
         if self
             .relay_server_candidates
