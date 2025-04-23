@@ -86,9 +86,17 @@ impl Debug for GetRecordError {
 }
 
 #[derive(Error, Debug)]
-pub enum NatDetectionError {
-    #[error("Invalid state: {0}")]
-    InvalidState(String),
+pub enum ReachabilityCheckError {
+    #[error("Port not found")]
+    EmptyPort,
+    #[error("Ip address not found")]
+    EmptyIpAddrs,
+    #[error("PeerId not found")]
+    EmptyPeerId,
+    #[error("Local adapter not found")]
+    LocalAdapterShouldNotBeEmpty,
+    #[error("External address not found")]
+    ExternalAddrsShouldNotBeEmpty,
 }
 
 /// Network Errors
@@ -115,8 +123,8 @@ pub enum NetworkError {
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
 
-    #[error("Nat detection error: {0}")]
-    NatDetectionError(#[from] NatDetectionError),
+    #[error("Reachability check error: {0}")]
+    ReachabilityCheckError(#[from] ReachabilityCheckError),
 
     // ---------- Record Errors
     // GetRecord query errors
