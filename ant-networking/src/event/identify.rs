@@ -6,14 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::relay_manager::is_a_relayed_peer;
+use crate::relay_manager::{is_a_relayed_peer, RelayManager};
 use crate::{multiaddr_strip_p2p, Addresses, NetworkEvent, SwarmDriver};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
-use std::collections::HashSet;
+use std::collections::{hash_map, HashSet};
 use std::time::{Duration, Instant};
 
 /// The delay before we dial back a peer after receiving an identify event.
@@ -81,7 +81,7 @@ impl SwarmDriver {
 
         let has_dialed = self.dialed_peers.contains(&peer_id);
 
-        let is_relayed_peer = is_a_relayed_peer(addrs.iter());
+        let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
@@ -95,8 +95,7 @@ impl SwarmDriver {
             let p2p_addrs = info
                 .listen_addrs
                 .iter()
-                .filter(|addr| addr.iter().any(|seg| matches!(seg, Protocol::P2pCircuit)))
-                .cloned()
+                .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
                 .collect::<Vec<_>>();
             debug!("Peer {peer_id:?} is a relayed peer. Not using {addrs:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
             addrs = p2p_addrs;
@@ -130,23 +129,28 @@ impl SwarmDriver {
             // peer is external accessible, hence safe to be added into RT.
             // Client doesn't need to dial back.
 
+            let exists_in_dial_queue = self.dial_queue.contains_key(&peer_id);
+
             // Only need to dial back for not fulfilled kbucket
-            if kbucket_full {
+            if kbucket_full && !exists_in_dial_queue {
                 debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
                 return;
             }
 
             info!("received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}");
             match self.dial_queue.entry(peer_id) {
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                hash_map::Entry::Occupied(mut entry) => {
                     let (old_addrs, time) = entry.get_mut();
+
+                    debug!("Resetting dial time for {peer_id:?}");
+                    *time = Instant::now() + DIAL_BACK_DELAY;
+
                     for addr in addrs.iter() {
                         if !old_addrs.0.contains(addr) {
-                            debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}. Resetting dial time.");
+                            debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}");
                             old_addrs.0.push(addr.clone());
-                            *time = Instant::now() + DIAL_BACK_DELAY;
                         } else {
-                            debug!("Already have addr {addr:?} in dial queue for {peer_id:?}. Not adding again.");
+                            debug!("Already have addr {addr:?} in dial queue for {peer_id:?}.");
                         }
                     }
 
@@ -165,7 +169,7 @@ impl SwarmDriver {
                         }
                     }
                 }
-                std::collections::hash_map::Entry::Vacant(entry) => {
+                hash_map::Entry::Vacant(entry) => {
                     debug!("Adding new addr {addrs:?} to dial queue for {peer_id:?}");
                     entry.insert((Addresses(addrs), Instant::now() + DIAL_BACK_DELAY));
                 }
