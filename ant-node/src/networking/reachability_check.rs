@@ -71,7 +71,7 @@ pub struct ReachabilityCheckSwarmDriver {
 #[derive(Debug, Clone)]
 pub enum ReachabilityStatus {
     Upnp,
-    Reachable { local_adapter: SocketAddr },
+    Reachable { addr: SocketAddr },
     Unreachable { retry: bool },
 }
 
@@ -699,9 +699,15 @@ impl ReachabilityCheckSwarmDriver {
             }
         }
 
-        info!("External address to local adapter map: {external_to_local_addr_map:?}");
+        if external_to_local_addr_map.is_empty() {
+            info!("No local adapter mapping found for the reachable addresses. Returning the first external address instead.");
+            let addr = reachable_addresses
+                .get(0)
+                .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
+            return Ok(ReachabilityStatus::Reachable { addr: *addr });
+        }
 
-        // pop first one
+        info!("External address to local adapter map exists: {external_to_local_addr_map:?}");
         let (reachable_addr, local_adapter_addrs) =
             external_to_local_addr_map
                 .into_iter()
@@ -711,7 +717,7 @@ impl ReachabilityCheckSwarmDriver {
         info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}");
 
         Ok(ReachabilityStatus::Reachable {
-            local_adapter: *local_adapter_addrs
+            addr: *local_adapter_addrs
                 .iter()
                 .next()
                 .ok_or(ReachabilityCheckError::LocalAdapterShouldNotBeEmpty)?,
