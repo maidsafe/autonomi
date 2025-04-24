@@ -186,7 +186,7 @@ impl SwarmDriver {
 
                                 // Save cache to disk.
                                 crate::time::spawn(async move {
-                                    if let Err(err) = old_cache.sync_and_flush_to_disk(true) {
+                                    if let Err(err) = old_cache.sync_and_flush_to_disk() {
                                         error!("Failed to save bootstrap cache: {err}");
                                     }
                                 });
@@ -278,10 +278,6 @@ impl SwarmDriver {
                     ),
                 );
 
-                if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
-                    bootstrap_cache.update_addr_status(endpoint.get_remote_address(), true);
-                }
-
                 self.insert_latest_established_connection_ids(
                     connection_id,
                     endpoint.get_remote_address(),
@@ -334,7 +330,6 @@ impl SwarmDriver {
             } => {
                 event_string = "OutgoingConnErr";
                 warn!("OutgoingConnectionError to {failed_peer_id:?} on {connection_id:?} - {error:?}");
-                let connection_details = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
 
                 self.initial_bootstrap.on_outgoing_connection_error(
@@ -448,12 +443,6 @@ impl SwarmDriver {
                 if is_critical_error {
                     warn!("Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an issue.");
                     self.record_node_issue(failed_peer_id, NodeIssue::ConnectionIssue);
-
-                    if let (Some((_, failed_addr, _)), Some(bootstrap_cache)) =
-                        (connection_details, self.bootstrap_cache.as_mut())
-                    {
-                        bootstrap_cache.update_addr_status(&failed_addr, false);
-                    }
                 }
             }
             SwarmEvent::IncomingConnectionError {

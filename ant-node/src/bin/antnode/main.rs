@@ -15,7 +15,7 @@ mod subcommands;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
-use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
+use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
@@ -171,6 +171,10 @@ struct Opt {
     #[command(flatten)]
     peers: InitialPeersConfig,
 
+    /// Set this to true if you want the node to write the cache files in the older formats.
+    #[clap(long, default_value_t = false)]
+    write_older_cache_files: bool,
+
     /// Enable the admin/control RPC service by providing an IP and port for it to listen on.
     ///
     /// The RPC service can be used for querying information about the running node.
@@ -276,13 +280,17 @@ fn main() -> Result<()> {
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
         init_logging(&opt, keypair.public().to_peer_id())?;
 
-    let mut bootstrap_cache = BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, None)?;
+    let mut bootstrap_config = BootstrapCacheConfig::new(opt.peers.local)?;
+    bootstrap_config.backwards_compatible_writes = opt.write_older_cache_files;
+    let mut bootstrap_cache =
+        BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, Some(bootstrap_config))?;
+
     // If we are the first node, write initial cache to disk.
     if opt.peers.first {
         bootstrap_cache.write()?;
     } else {
         // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk(true)?;
+        bootstrap_cache.sync_and_flush_to_disk()?;
     }
 
     let msg = format!(
@@ -310,7 +318,7 @@ fn main() -> Result<()> {
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
-    let initial_peers = rt.block_on(opt.peers.get_addrs(None, Some(100)))?;
+    let initial_peers = rt.block_on(opt.peers.get_bootstrap_addr(None, Some(100)))?;
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,

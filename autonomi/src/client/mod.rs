@@ -213,7 +213,11 @@ impl Client {
     /// # }
     /// ```
     pub async fn init_with_config(config: ClientConfig) -> Result<Self, ConnectError> {
-        let initial_peers = match config.init_peers_config.get_addrs(None, None).await {
+        let initial_peers = match config
+            .init_peers_config
+            .get_bootstrap_addr(None, None)
+            .await
+        {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };
