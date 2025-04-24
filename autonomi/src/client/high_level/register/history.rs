@@ -6,14 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_networking::{GetRecordError, NetworkError};
-
 use crate::client::data_types::graph::{GraphEntryAddress, GraphError};
 use crate::client::high_level::register::{
     PublicKey, RegisterAddress, RegisterError, RegisterValue,
 };
 use crate::client::key_derivation::MainPubkey;
-use crate::client::Client;
+use crate::client::{Client, GetError};
 
 /// A handle to the register history
 #[derive(Clone)]
@@ -42,9 +40,9 @@ impl RegisterHistory {
             .await
         {
             Ok(res) => res,
-            Err(RegisterError::GraphError(GraphError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            )))) => return Ok(None),
+            Err(RegisterError::GraphError(GraphError::GetError(GetError::RecordNotFound))) => {
+                return Ok(None)
+            }
             Err(e) => return Err(e),
         };
         let next_entry_pk: PublicKey = MainPubkey::from(self.register_owner)

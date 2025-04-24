@@ -1152,7 +1152,6 @@ impl Network {
 
     /// Send a `Request` to the provided set of peers and wait for their responses concurrently.
     /// If `get_all_responses` is true, we wait for the responses from all the peers.
-    /// NB TODO: Will return an error if the request timeouts.
     /// If `get_all_responses` is false, we return the first successful response that we get
     pub async fn send_and_get_responses(
         &self,

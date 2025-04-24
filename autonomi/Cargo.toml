@@ -28,7 +28,6 @@ loud = []
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.1" }
 ant-evm = { path = "../ant-evm", version = "0.1.13" }
-ant-networking = { path = "../ant-networking", version = "0.3.10" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.4" }
 bip39 = "2.0.0"
 blst = "0.3.13"
@@ -36,10 +35,27 @@ blstrs = "0.7.1"
 bls = { package = "blsttc", version = "8.0.1" }
 bytes = { version = "1.0.1", features = ["serde"] }
 const-hex = "1.12.0"
+custom_debug = "~0.6.1"
+exponential-backoff = "2.0.0"
 eyre = "0.6.5"
 futures = "0.3.30"
 hex = "~0.4.3"
-libp2p = "0.55.0"
+libp2p = { version = "0.55.0", features = [
+    "tokio",
+    "dns",
+    "upnp",
+    "kad",
+    "macros",
+    "request-response",
+    "cbor",
+    "identify",
+    "quic",
+    "relay",
+    "noise",
+    "tcp",
+    "yamux",
+    "websocket",
+] }
 pyo3 = { version = "0.23.4", optional = true, features = ["extension-module", "abi3-py38"] }
 pyo3-async-runtimes = { version = "0.23", optional = true, features = ["tokio-runtime"] }
 rand = "0.8.5"

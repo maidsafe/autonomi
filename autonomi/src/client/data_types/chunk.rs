@@ -17,7 +17,6 @@ use crate::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, ProofOfPayment};
-use ant_networking::NetworkError;
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
@@ -113,15 +112,17 @@ impl Client {
     pub async fn chunk_get(&self, addr: &ChunkAddress) -> Result<Chunk, GetError> {
         info!("Getting chunk: {addr:?}");
 
-        let key = NetworkAddress::from(*addr).to_record_key();
+        let key = NetworkAddress::from(*addr);
+
         debug!("Fetching chunk from network at: {key:?}");
 
-        let get_cfg = self.config.chunks.get_cfg();
         let record = self
             .network
-            .get_record_from_network(key, &get_cfg)
+            .get_record_with_retries(key, &self.config.chunks)
             .await
-            .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?;
+            .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?
+            .ok_or(GetError::RecordNotFound)?;
+
         let header = RecordHeader::from_record(&record)?;
 
         if let Ok(true) = RecordHeader::is_record_of_type_chunk(&record) {
@@ -132,7 +133,9 @@ impl Client {
                 "Record kind mismatch: expected Chunk, got {:?}",
                 header.kind
             );
-            Err(NetworkError::RecordKindMismatch(RecordKind::DataOnly(DataTypes::Chunk)).into())
+            Err(GetError::RecordKindMismatch(RecordKind::DataOnly(
+                DataTypes::Chunk,
+            )))
         }
     }
 
@@ -190,21 +193,11 @@ impl Client {
             expires: None,
         };
 
-        let stored_on_node = try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))
-            .map_err(|e| PutError::Serialization(format!("Failed to serialize chunk: {e:?}")))?
-            .to_vec();
-        let target_record = Record {
-            key: address.to_record_key(),
-            value: stored_on_node,
-            publisher: None,
-            expires: None,
-        };
-
         // store the chunk on the network
         debug!("Storing chunk at address: {address:?} to the network");
-        let put_cfg = self.config.chunks.chunk_put_cfg(target_record, payees);
+
         self.network
-            .put_record(record, &put_cfg)
+            .put_record_with_retries(record, payees, &self.config.chunks)
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - chunk {address:?} to the network: {err}")
@@ -244,7 +237,7 @@ impl Client {
             let mut upload_tasks = vec![];
             #[cfg(feature = "loud")]
             let total_chunks = chunks.len();
-            for (_i, &chunk) in chunks.iter().enumerate() {
+            for (i, &chunk) in chunks.iter().enumerate() {
                 let self_clone = self.clone();
                 let address = *chunk.address();
 
@@ -253,7 +246,7 @@ impl Client {
                     #[cfg(feature = "loud")]
                     println!(
                         "({}/{}) Chunk stored at: {} (skipping, already exists)",
-                        _i + 1,
+                        i + 1,
                         chunks.len(),
                         chunk.address().to_hex()
                     );
@@ -273,7 +266,7 @@ impl Client {
                         Ok(_addr) => {
                             println!(
                                 "({}/{}) Chunk stored at: {}",
-                                _i + 1,
+                                i + 1,
                                 total_chunks,
                                 chunk.address().to_hex()
                             );
@@ -281,7 +274,7 @@ impl Client {
                         Err((_chunk, ref err)) => {
                             println!(
                                 "({}/{}) Chunk failed to be stored at: {} ({err})",
-                                _i + 1,
+                                i + 1,
                                 total_chunks,
                                 chunk.address().to_hex()
                             );
@@ -351,21 +344,9 @@ impl Client {
             expires: None,
         };
 
-        let stored_on_node = try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))
-            .map_err(|e| PutError::Serialization(format!("Failed to serialize chunk: {e:?}")))?
-            .to_vec();
-        let target_record = Record {
-            key,
-            value: stored_on_node,
-            publisher: None,
-            expires: None,
-        };
-
-        let put_cfg = self
-            .config
-            .chunks
-            .chunk_put_cfg(target_record, storing_nodes.clone());
-        self.network.put_record(record, &put_cfg).await?;
+        self.network
+            .put_record(record, storing_nodes.clone(), self.config.chunks.put_quorum)
+            .await?;
         debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}");
         Ok(*chunk.address())
     }

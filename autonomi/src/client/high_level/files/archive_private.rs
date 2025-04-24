@@ -6,13 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_evm::AttoTokens;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-use ant_evm::AttoTokens;
-use ant_networking::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::{
     client::{

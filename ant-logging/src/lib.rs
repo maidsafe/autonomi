@@ -235,10 +235,13 @@ impl LogBuilder {
         if disable_networking_logs {
             std::env::set_var(
                 "ANT_LOG",
-                format!("{test_file_name}=TRACE,all,ant_networking=WARN,all"),
+                format!("{test_file_name}=TRACE,all,ant_networking=WARN,all,autonomi=DEBUG,all"),
             );
         } else {
-            std::env::set_var("ANT_LOG", format!("{test_file_name}=TRACE,all"));
+            std::env::set_var(
+                "ANT_LOG",
+                format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all"),
+            );
         }
 
         let output_dest = match dirs_next::data_dir() {

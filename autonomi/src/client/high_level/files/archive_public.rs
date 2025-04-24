@@ -6,16 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::{client::payment::PaymentOption, AttoTokens};
+use bytes::Bytes;
+use serde::{Deserialize, Serialize};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-use ant_networking::time::{Duration, SystemTime, UNIX_EPOCH};
-
-use crate::{client::payment::PaymentOption, AttoTokens};
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     client::{

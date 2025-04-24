@@ -6,6 +6,7 @@ use ant_evm::QuotePayment;
 use ant_protocol::storage::Chunk;
 use bytes::Bytes;
 use std::collections::HashMap;
+use std::time::Instant;
 use xor_name::XorName;
 
 #[allow(unused_imports)]
@@ -49,7 +50,7 @@ impl Client {
 ///
 /// Returns the data map chunk and file chunks.
 pub fn encrypt_data(data: Bytes) -> Result<(Chunk, Vec<Chunk>), PutError> {
-    let now = ant_networking::time::Instant::now();
+    let now = Instant::now();
     let result = encrypt(data)?;
 
     debug!("Encryption took: {:.2?}", now.elapsed());

@@ -11,9 +11,8 @@ use crate::client::data_types::pointer::{PointerAddress, PointerError, PointerTa
 use crate::client::key_derivation::{DerivationIndex, MainPubkey, MainSecretKey};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::Client;
+use crate::client::{Client, GetError};
 use crate::AttoTokens;
-use ant_networking::{GetRecordError, NetworkError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xor_name::XorName;
@@ -182,9 +181,9 @@ impl Client {
         debug!("Getting pointer of register head at {pointer_addr:?}");
         let pointer = match self.pointer_get(&pointer_addr).await {
             Ok(pointer) => pointer,
-            Err(PointerError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            ))) => return Err(RegisterError::CannotUpdateNewRegister),
+            Err(PointerError::GetError(GetError::RecordNotFound)) => {
+                return Err(RegisterError::CannotUpdateNewRegister)
+            }
             Err(err) => return Err(err.into()),
         };
         let graph_entry_addr = match pointer.target() {

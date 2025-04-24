@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_protocol::storage::DataTypes;
+use std::time::Instant;
 
 use crate::client::payment::PaymentOption;
 use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
@@ -68,7 +69,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunk, chunks) = encrypt(data)?;
         debug!("Encryption took: {:.2?}", now.elapsed());
 
