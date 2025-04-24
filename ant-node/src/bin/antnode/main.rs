@@ -399,7 +399,7 @@ async fn run_node(
                 node_builder.no_upnp(false);
             }
             ReachabilityStatus::Reachable {
-                local_adapter: mut socket_addr,
+                addr: mut socket_addr,
             } => {
                 info!("Reachability check: Reachable. Starting node with socket addr: {socket_addr} and UPnP disabled.");
                 socket_addr.set_port(0);
