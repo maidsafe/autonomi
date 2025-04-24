@@ -13,7 +13,7 @@ use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
-use std::collections::HashSet;
+use std::collections::{hash_map, HashSet};
 use std::time::{Duration, Instant};
 
 /// The delay before we dial back a peer after receiving an identify event.
@@ -130,23 +130,28 @@ impl SwarmDriver {
             // peer is external accessible, hence safe to be added into RT.
             // Client doesn't need to dial back.
 
+            let exists_in_dial_queue = self.dial_queue.contains_key(&peer_id);
+
             // Only need to dial back for not fulfilled kbucket
-            if kbucket_full {
+            if kbucket_full && !exists_in_dial_queue {
                 debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
                 return;
             }
 
             info!("received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}");
             match self.dial_queue.entry(peer_id) {
-                std::collections::hash_map::Entry::Occupied(mut entry) => {
+                hash_map::Entry::Occupied(mut entry) => {
                     let (old_addrs, time) = entry.get_mut();
+
+                    debug!("Resetting dial time for {peer_id:?}");
+                    *time = Instant::now() + DIAL_BACK_DELAY;
+
                     for addr in addrs.iter() {
                         if !old_addrs.0.contains(addr) {
-                            debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}. Resetting dial time.");
+                            debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}");
                             old_addrs.0.push(addr.clone());
-                            *time = Instant::now() + DIAL_BACK_DELAY;
                         } else {
-                            debug!("Already have addr {addr:?} in dial queue for {peer_id:?}. Not adding again.");
+                            debug!("Already have addr {addr:?} in dial queue for {peer_id:?}.");
                         }
                     }
 
@@ -165,7 +170,7 @@ impl SwarmDriver {
                         }
                     }
                 }
-                std::collections::hash_map::Entry::Vacant(entry) => {
+                hash_map::Entry::Vacant(entry) => {
                     debug!("Adding new addr {addrs:?} to dial queue for {peer_id:?}");
                     entry.insert((Addresses(addrs), Instant::now() + DIAL_BACK_DELAY));
                 }
