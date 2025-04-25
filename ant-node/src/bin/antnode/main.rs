@@ -281,7 +281,7 @@ fn main() -> Result<()> {
         bootstrap_cache.write()?;
     } else {
         // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk(true)?;
+        bootstrap_cache.sync_and_flush_to_disk()?;
     }
 
     let msg = format!(

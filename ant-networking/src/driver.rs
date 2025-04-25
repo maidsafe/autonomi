@@ -402,7 +402,7 @@ impl SwarmDriver {
 
                     // save the cache to disk
                     spawn(async move {
-                        if let Err(err) = old_cache.sync_and_flush_to_disk(true) {
+                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
                             error!("Failed to save bootstrap cache: {err}");
                         }
                     });
