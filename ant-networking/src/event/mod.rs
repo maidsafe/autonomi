@@ -45,6 +45,7 @@ pub(crate) struct KBucketStatus {
     pub(crate) total_peers: usize,
     pub(crate) total_relay_peers: usize,
     pub(crate) peers_in_non_full_buckets: usize,
+    #[cfg(feature = "open-metrics")]
     pub(crate) relay_peers_in_non_full_buckets: usize,
     pub(crate) num_of_full_buckets: usize,
     pub(crate) kbucket_table_stats: Vec<(usize, usize, u32)>,
@@ -405,6 +406,7 @@ impl SwarmDriver {
             total_peers,
             total_relay_peers,
             peers_in_non_full_buckets,
+            #[cfg(feature = "open-metrics")]
             relay_peers_in_non_full_buckets,
             num_of_full_buckets,
             kbucket_table_stats,
