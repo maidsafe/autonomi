@@ -431,7 +431,7 @@ impl Node {
         let start = Instant::now();
         let event_string = format!("{event:?}");
         let event_header;
-        debug!("Handling NetworkEvent {event_string:?}");
+        debug!("Handling {event_string}");
 
         match event {
             NetworkEvent::PeerAdded(peer_id, connected_peers) => {
