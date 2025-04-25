@@ -24,8 +24,8 @@ const MAX_ADDRS_PER_PEER: usize = 6;
 // Min time until we save the bootstrap cache to disk. 5 mins
 const MIN_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
 
-// Max time until we save the bootstrap cache to disk. 24 hours
-const MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+// Max time until we save the bootstrap cache to disk. 3 hours
+const MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(3 * 60 * 60);
 
 /// Configuration for the bootstrap cache
 #[derive(Clone, Debug)]
