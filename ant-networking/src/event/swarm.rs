@@ -111,7 +111,7 @@ impl SwarmDriver {
 
                 event_string = "relay_server_event";
 
-                info!(?event, "relay server event");
+                debug!(?event, "relay server event");
 
                 match *event {
                     libp2p::relay::Event::ReservationReqAccepted {
