@@ -73,6 +73,9 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
 
+/// Client requires a super long time when have get_closest query against production network
+const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
+
 // Init during compilation, instead of runtime error that should never happen
 // Option<T>::expect will be stabilised as const in the future (https://github.com/rust-lang/rust/issues/67441)
 const REPLICATION_FACTOR: NonZeroUsize = match NonZeroUsize::new(CLOSE_GROUP_SIZE + 2) {
@@ -204,7 +207,6 @@ impl NetworkBuilder {
             // .disjoint_query_paths(true)
             // Records never expire
             .set_record_ttl(None)
-            .set_replication_factor(REPLICATION_FACTOR)
             .set_periodic_bootstrap_interval(Some(Duration::from_secs(bootstrap_interval)))
             // Emit PUT events for validation prior to insertion into the RecordStore.
             // This is no longer needed as the record_storage::put now can carry out validation.
@@ -276,7 +278,7 @@ impl NetworkBuilder {
         let _ = kad_cfg
             .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
             .set_max_packet_size(MAX_PACKET_SIZE)
-            .set_replication_factor(REPLICATION_FACTOR)
+            .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
             // may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
             // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
             // .disjoint_query_paths(true)
