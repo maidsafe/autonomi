@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::Client;
-use crate::client::high_level::files::FILE_UPLOAD_BATCH_SIZE;
+use crate::client::data_types::chunk::CHUNK_UPLOAD_BATCH_SIZE;
 use crate::client::utils::process_tasks_with_max_concurrency;
 use ant_evm::payment_vault::get_market_price;
 use ant_evm::{Amount, PaymentQuote, QuotePayment, QuotingMetrics};
@@ -102,7 +102,9 @@ impl Client {
             })
             .collect();
 
-        process_tasks_with_max_concurrency(futures, *FILE_UPLOAD_BATCH_SIZE).await
+        let parallism = std::cmp::min(*CHUNK_UPLOAD_BATCH_SIZE * 8, 128);
+
+        process_tasks_with_max_concurrency(futures, parallism).await
     }
 
     pub async fn get_store_quotes(
