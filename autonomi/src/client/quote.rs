@@ -249,8 +249,9 @@ async fn fetch_store_quote_with_retries(
                             required: CLOSE_GROUP_SIZE,
                         });
                     }
+                } else {
+                    break Ok((content_addr, quote));
                 }
-                break Ok((content_addr, quote));
             }
             Err(err) if retries < 2 => {
                 retries += 1;
