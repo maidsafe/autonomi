@@ -31,6 +31,9 @@ async fn test_analyze_chunk() -> Result<()> {
     let chunk_addr = addr.to_hex();
     println!("Chunk: {chunk_addr}");
 
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let analysis = client.analyze_address(&chunk_addr, true).await?;
     assert_eq!(analysis, Analysis::Chunk(chunk));
     Ok(())
@@ -49,6 +52,9 @@ async fn test_analyze_data() -> Result<()> {
     let (_cost, addr) = client.data_put(data, payment_option).await?;
     let data_addr = addr.to_hex();
     println!("Private Data (hex DataMapChunk): {data_addr}");
+
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let analysis = client.analyze_address(&data_addr, true).await?;
     println!("Analysis: {analysis}");
@@ -70,6 +76,9 @@ async fn test_analyze_public_data() -> Result<()> {
     let (_cost, addr) = client.data_put_public(data, payment_option).await?;
     let public_data_addr = addr.to_hex();
     println!("Public Data (XorName): {public_data_addr}");
+
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let analysis = client.analyze_address(&public_data_addr, true).await?;
     println!("Analysis: {analysis}");
@@ -104,6 +113,9 @@ async fn test_analyze_graph_entry() -> Result<()> {
     let graph_entry_bls_pubkey = key.public_key().to_hex();
     println!("Graph Entry (bls pubkey): {graph_entry_bls_pubkey}");
 
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let analysis = client.analyze_address(&graph_entry_addr, true).await?;
     assert_eq!(analysis, Analysis::GraphEntry(graph_entry));
     Ok(())
@@ -126,6 +138,9 @@ async fn test_analyze_pointer() -> Result<()> {
     println!("Pointer: {pointer_addr}");
     let pointer_bls_pubkey = key.public_key().to_hex();
     println!("Pointer (bls pubkey): {pointer_bls_pubkey}");
+
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let analysis = client.analyze_address(&pointer_addr, true).await?;
     assert_eq!(analysis, Analysis::Pointer(pointer));
@@ -152,6 +167,9 @@ async fn test_analyze_scratchpad() -> Result<()> {
     let scratchpad_bls_pubkey = key.public_key().to_hex();
     println!("Scratchpad (bls pubkey): {scratchpad_bls_pubkey}");
 
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let analysis = client.analyze_address(&scratchpad_addr, true).await?;
     assert_eq!(analysis, Analysis::Scratchpad(scratchpad));
     Ok(())
@@ -175,6 +193,9 @@ async fn test_analyze_register() -> Result<()> {
     let register_bls_pubkey = key.public_key().to_hex();
     println!("Register (bls pubkey): {register_bls_pubkey}");
 
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let analysis = client.analyze_address(&register_addr, true).await?;
     println!("Analysis: {analysis}");
     assert!(matches!(analysis, Analysis::Register { .. }));
@@ -196,6 +217,9 @@ async fn test_analyze_private_dir() -> Result<()> {
     let archive_datamap_addr = archive_datamap.to_hex();
     println!("Private Archive (DataMap): {archive_datamap_addr}");
 
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     let analysis = client.analyze_address(&archive_datamap_addr, true).await?;
     println!("Analysis: {analysis}");
     assert!(matches!(analysis, Analysis::PrivateArchive { .. }));
@@ -216,6 +240,9 @@ async fn test_analyze_public_dir() -> Result<()> {
     let (_cost, archive_addr) = client.dir_upload_public(path, payment_option).await?;
     let archive_addr_str = archive_addr.to_hex();
     println!("Public Archive (XorName): {archive_addr_str}");
+
+    // sleep to ensure data is replicated
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
     let analysis = client.analyze_address(&archive_addr_str, true).await?;
     println!("Analysis: {analysis}");

@@ -9,14 +9,13 @@
 use crate::client::payment::PayError;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::Client;
 use crate::client::ClientEvent;
 use crate::client::UploadSummary;
+use crate::client::{Client, GetError};
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_networking::get_graph_entry_from_record;
-use ant_networking::GetRecordError;
-use ant_networking::NetworkError;
+use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::RecordHeader;
 use ant_protocol::PrettyPrintRecordKey;
 use ant_protocol::{
     storage::{try_serialize_record, DataTypes, RecordKind},
@@ -25,6 +24,7 @@ use ant_protocol::{
 use bls::PublicKey;
 use libp2p::kad::Record;
 
+use crate::networking::NetworkError;
 pub use crate::SecretKey;
 pub use ant_protocol::storage::{GraphContent, GraphEntry, GraphEntryAddress};
 
@@ -34,8 +34,10 @@ pub enum GraphError {
     Cost(#[from] CostError),
     #[error("Network error")]
     Network(#[from] NetworkError),
-    #[error("Serialization error")]
-    Serialization,
+    #[error(transparent)]
+    GetError(#[from] GetError),
+    #[error("Serialization error {0}")]
+    Serialization(String),
     #[error("Verification failed (corrupt)")]
     FailedVerification,
     #[error("Payment failure occurred during creation.")]
@@ -56,12 +58,14 @@ impl Client {
         &self,
         address: &GraphEntryAddress,
     ) -> Result<GraphEntry, GraphError> {
-        let key = NetworkAddress::from(*address).to_record_key();
-        let get_cfg = self.config.graph_entry.get_cfg();
+        let key = NetworkAddress::from(*address);
+
         let record = self
             .network
-            .get_record_from_network(key.clone(), &get_cfg)
-            .await?;
+            .get_record_with_retries(key.clone(), &self.config.graph_entry)
+            .await?
+            .ok_or(GetError::RecordNotFound)?;
+
         debug!(
             "Got record from the network, {:?}",
             PrettyPrintRecordKey::from(&record.key)
@@ -75,23 +79,25 @@ impl Client {
     }
 
     /// Check if a graph_entry exists on the network
-    pub async fn graph_entry_check_existance(
+    /// This method is much faster than [`Client::graph_entry_get`]
+    /// This may fail if called immediately after creating the graph_entry, as nodes sometimes take longer to store the graph_entry than this request takes to execute!
+    pub async fn graph_entry_check_existence(
         &self,
         address: &GraphEntryAddress,
     ) -> Result<bool, GraphError> {
-        let key = NetworkAddress::from(*address).to_record_key();
-        debug!("Checking graph_entry existance at: {key:?}");
-        let get_cfg = self.config.graph_entry.verification_cfg();
+        let key = NetworkAddress::from(*address);
+        debug!("Checking graph_entry existence at: {key:?}");
+
         match self
             .network
-            .get_record_from_network(key.clone(), &get_cfg)
+            .get_record(key.clone(), self.config.graph_entry.verification_quorum)
             .await
         {
-            Ok(_) => Ok(true),
-            Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. })) => Ok(true),
-            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => Ok(false),
+            Ok(None) => Ok(false),
+            Ok(Some(_)) => Ok(true),
+            Err(NetworkError::SplitRecord(..)) => Ok(true),
             Err(err) => Err(GraphError::Network(err))
-                .inspect_err(|err| error!("Error checking graph_entry existance: {err:?}")),
+                .inspect_err(|err| error!("Error checking graph_entry existence: {err:?}")),
         }
     }
 
@@ -136,17 +142,16 @@ impl Client {
                 &(proof, &entry),
                 RecordKind::DataWithPayment(DataTypes::GraphEntry),
             )
-            .map_err(|_| GraphError::Serialization)?
+            .map_err(|err| GraphError::Serialization(err.to_string()))?
             .to_vec(),
             publisher: None,
             expires: None,
         };
-        let put_cfg = self.config.graph_entry.put_cfg(Some(payees));
 
         // put the record to the network
         debug!("Storing GraphEntry at address {address:?} to the network");
         self.network
-            .put_record(record, &put_cfg)
+            .put_record_with_retries(record, payees, &self.config.graph_entry)
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - GraphEntry {address:?} to the network: {err}")
@@ -187,5 +192,32 @@ impl Client {
         );
         debug!("Calculated the cost to create GraphEntry of {key:?} is {total_cost}");
         Ok(total_cost)
+    }
+}
+
+pub fn get_graph_entry_from_record(record: &Record) -> Result<Vec<GraphEntry>, GraphError> {
+    let header = RecordHeader::from_record(record).map_err(|_| {
+        GraphError::Serialization(format!(
+            "Failed to deserialize record header {:?}",
+            PrettyPrintRecordKey::from(&record.key)
+        ))
+    })?;
+    if let RecordKind::DataOnly(DataTypes::GraphEntry) = header.kind {
+        let entry = try_deserialize_record::<Vec<GraphEntry>>(record).map_err(|_| {
+            GraphError::Serialization(format!(
+                "Failed to deserialize record value {:?}",
+                PrettyPrintRecordKey::from(&record.key)
+            ))
+        })?;
+        Ok(entry)
+    } else {
+        warn!(
+            "RecordKind mismatch while trying to retrieve graph_entry from record {:?}",
+            PrettyPrintRecordKey::from(&record.key)
+        );
+        Err(GraphError::Serialization(format!(
+            "RecordKind mismatch while trying to retrieve graph_entry from record {:?}",
+            PrettyPrintRecordKey::from(&record.key)
+        )))
     }
 }

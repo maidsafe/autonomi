@@ -13,11 +13,13 @@ use autonomi::{
 use color_eyre::eyre::Result;
 use std::str::FromStr;
 
+use crate::opt::NetworkId;
+
 pub async fn analyze(
     addr: &str,
     verbose: bool,
     init_peers_config: InitialPeersConfig,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     macro_rules! println_if_verbose {
         ($($arg:tt)*) => {

@@ -8,6 +8,7 @@
 
 #![allow(deprecated)]
 
+use crate::opt::NetworkId;
 use crate::wallet::load_wallet;
 use autonomi::client::register::RegisterAddress;
 use autonomi::client::register::SecretKey as RegisterSecretKey;
@@ -39,7 +40,7 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
 pub async fn cost(
     name: &str,
     init_peers_config: InitialPeersConfig,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
@@ -64,7 +65,7 @@ pub async fn create(
     hex: bool,
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
@@ -122,7 +123,7 @@ pub async fn edit(
     hex: bool,
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
@@ -182,7 +183,7 @@ pub async fn get(
     name: bool,
     hex: bool,
     init_peers_config: InitialPeersConfig,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
@@ -245,7 +246,7 @@ pub async fn history(
     name: bool,
     hex: bool,
     init_peers_config: InitialPeersConfig,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await

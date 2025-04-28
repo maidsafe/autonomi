@@ -26,6 +26,7 @@ use crate::{AttoTokens, Client};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::path::PathBuf;
+use std::time::Instant;
 use xor_name::XorName;
 
 impl Client {
@@ -100,7 +101,7 @@ impl Client {
                     return Err(err_msg);
                 }
 
-                let now = ant_networking::time::Instant::now();
+                let now = Instant::now();
 
                 let (data_map_chunk, chunks) = encrypt(data).map_err(|err| err.to_string())?;
 

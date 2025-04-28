@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::opt::NetworkId;
 use crate::wallet::load_wallet;
 use autonomi::{InitialPeersConfig, TransactionConfig};
 use color_eyre::eyre::Context;
@@ -15,7 +16,7 @@ use color_eyre::Section;
 pub async fn cost(
     init_peers_config: InitialPeersConfig,
     expected_max_size: u64,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
@@ -37,7 +38,7 @@ pub async fn cost(
 pub async fn create(
     init_peers_config: InitialPeersConfig,
     max_fee_per_gas: Option<u128>,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
@@ -78,7 +79,7 @@ pub async fn create(
 pub async fn sync(
     force: bool,
     init_peers_config: InitialPeersConfig,
-    network_id: Option<u8>,
+    network_id: NetworkId,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
@@ -118,7 +119,7 @@ pub async fn sync(
     Ok(())
 }
 
-pub async fn load(init_peers_config: InitialPeersConfig, network_id: Option<u8>) -> Result<()> {
+pub async fn load(init_peers_config: InitialPeersConfig, network_id: NetworkId) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
         .await
         .map_err(|(err, _)| err)?;

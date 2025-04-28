@@ -8,13 +8,56 @@
 
 use crate::commands::SubCmd;
 use ant_logging::{LogFormat, LogOutputDest};
+use autonomi::get_evm_network;
 use autonomi::InitialPeersConfig;
+use autonomi::Network as EvmNetwork;
 use clap::Parser;
 use color_eyre::Result;
 use std::time::Duration;
 
 // Please do not remove the blank lines in these doc comments.
 // They are used for inserting line breaks when the help menu is rendered in the UI.
+
+#[derive(Parser, Clone, Copy, Debug)]
+#[repr(u8)]
+pub enum NetworkId {
+    /// Local Network
+    Local = 0,
+    /// Mainnet
+    Main = 1,
+    /// Alpha Network
+    Alpha = 2,
+    /// Custom Network (obtained through environment variables)
+    Custom = 3,
+}
+
+impl NetworkId {
+    pub fn evm_network(&self, local: bool) -> Result<EvmNetwork> {
+        match self {
+            NetworkId::Local => Ok(EvmNetwork::new(true)?),
+            NetworkId::Main => Ok(EvmNetwork::default()),
+            NetworkId::Alpha => Ok(EvmNetwork::ArbitrumSepoliaTest),
+            NetworkId::Custom => Ok(get_evm_network(local)?),
+        }
+    }
+}
+
+impl std::str::FromStr for NetworkId {
+    type Err = color_eyre::eyre::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "0" => Ok(NetworkId::Local),
+            "1" => Ok(NetworkId::Main),
+            "2" => Ok(NetworkId::Alpha),
+            "3" => Ok(NetworkId::Custom),
+            _ => Err(color_eyre::eyre::eyre!(
+                "Invalid network ID. Valid values are 0, 1, 2 or 3"
+            )),
+        }
+    }
+}
+
 #[derive(Parser)]
 #[command(disable_version_flag = true)]
 #[command(author, version, about, long_about = None)]
@@ -54,10 +97,15 @@ pub(crate) struct Opt {
     pub log_output_dest: LogOutputDest,
 
     /// Specify the network ID to use. This will allow you to run the CLI on a different network.
+    /// Note that this overrides all other network config options (except in the Custom Network case).
     ///
-    /// By default, the network ID is set to 1, which represents the mainnet.
-    #[clap(long, verbatim_doc_comment)]
-    pub network_id: Option<u8>,
+    /// Valid values are:
+    ///  - 0: Local Network
+    ///  - 1: Mainnet (default)
+    ///  - 2: Alpha Network
+    ///  - 3: Custom Network (obtained through environment variables and other network config flags)
+    #[clap(long, verbatim_doc_comment, default_value = "1")]
+    pub network_id: NetworkId,
 
     /// Prevent verification of data storage on the network.
     ///
