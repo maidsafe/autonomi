@@ -818,7 +818,7 @@ dependencies = [
 
 [[package]]
 name = "ant-bootstrap"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "ant-logging",
  "ant-protocol",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "ant-cli"
-version = "0.3.12"
+version = "0.3.13"
 dependencies = [
  "ant-build-info",
  "ant-logging",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "ant-networking"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "aes-gcm-siv",
  "ant-bootstrap",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "ant-node"
-version = "0.3.10"
+version = "0.3.11"
 dependencies = [
  "ant-bootstrap",
  "ant-build-info",
@@ -1630,7 +1630,7 @@ checksum = "ace50bade8e6234aa140d9a2f552bbee1db4d353f69b8217bc503490fc1a9f26"
 
 [[package]]
 name = "autonomi"
-version = "0.4.4"
+version = "0.4.5"
 dependencies = [
  "alloy",
  "ant-bootstrap",

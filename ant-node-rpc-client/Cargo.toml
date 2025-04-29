@@ -20,7 +20,7 @@ nightly = []
 ant-build-info = { path = "../ant-build-info", version = "0.1.27" }
 ant-logging = { path = "../ant-logging", version = "0.2.49" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.4", features=["rpc"] }
-ant-node = { path = "../ant-node", version = "0.3.10" }
+ant-node = { path = "../ant-node", version = "0.3.11" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.12" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }

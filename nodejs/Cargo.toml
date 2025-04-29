@@ -9,7 +9,7 @@ license = "GPL-3.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-autonomi = { path = "../autonomi", version = "0.4.4" }
+autonomi = { path = "../autonomi", version = "0.4.5" }
 bytes = { version = "1.0.1", features = ["serde"] }
 eyre = "0.6.12"
 futures = "0.3"
