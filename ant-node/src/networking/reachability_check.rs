@@ -232,6 +232,33 @@ impl ReachabilityCheckSwarmDriver {
         match &mut self.state {
             ReachabilityCheckState::WaitingForUpnp => {
                 match event {
+                    SwarmEvent::NewListenAddr {
+                        mut address,
+                        listener_id,
+                    } => {
+                        event_string = "new listen addr";
+
+                        let ip_addr = multiaddr_get_ip(&address);
+                        if let Some(ip_addr) = ip_addr {
+                            self.initial_listener
+                                .entry(listener_id)
+                                .or_default()
+                                .insert(ip_addr);
+                            debug!(
+                                "Added new listen ip address {ip_addr:?} to initial_listener {listener_id:?}"
+                            );
+                        } else {
+                            warn!("Unable to get socket address from: {address:?}");
+                        }
+
+                        let local_peer_id = *self.swarm.local_peer_id();
+                        if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
+                            address.push(Protocol::P2p(local_peer_id));
+                        }
+
+                        info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
+                        self.swarm.add_external_address(address.clone());
+                    }
                     SwarmEvent::Behaviour(ReachabilityCheckEvent::Upnp(upnp_event)) => {
                         event_string = "upnp_event";
                         info!(?upnp_event, "UPnP event");
