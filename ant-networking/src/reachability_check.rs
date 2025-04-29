@@ -672,54 +672,100 @@ impl ReachabilityCheckSwarmDriver {
 
         info!("Reachable addresses: {reachable_addresses:?}");
         info!("Reachable connection ids: {reachable_connection_ids:?}");
+        info!("Incoming connection local adapter map: {incoming_connection_local_adapter_map:?}");
 
         let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> =
             HashMap::new();
         for (reachable_addr, connection_ids) in reachable_connection_ids {
+            let IpAddr::V4(reachable_addr_ip) = reachable_addr.ip() else {
+                warn!("Reachable address {reachable_addr:?} is not an IPv4 address. Skipping.");
+                continue;
+            };
             for connection_id in connection_ids {
-                if let Some(local_adapter_addr) =
+                let Some(local_adapter_addr) =
                     incoming_connection_local_adapter_map.get(&connection_id)
+                else {
+                    warn!(
+                        "Unable to get local adapter address for connection id {connection_id:?}"
+                    );
+                    continue;
+                };
+                info!("Local adapter address for connection id {connection_id:?} is {local_adapter_addr:?}");
+
+                let IpAddr::V4(local_adapter_ip) = local_adapter_addr.ip() else {
+                    warn!("Local adapter address {local_adapter_addr:?} is not an IPv4 address. Skipping.");
+                    continue;
+                };
+
+                if local_adapter_ip.is_unspecified() // 0.0.0.0
+                    || local_adapter_ip.is_documentation()
+                    || local_adapter_ip.is_broadcast()
                 {
-                    if let IpAddr::V4(local_adapter_ip) = local_adapter_addr.ip() {
-                        if local_adapter_ip.is_unspecified()
-                            || local_adapter_ip.is_documentation()
-                            || local_adapter_ip.is_broadcast()
+                    info!("Local adapter address {local_adapter_ip:?} is unspecified. Fetching another local adapter address from the listener.");
+                    for (listener_id, listener_ip_addrs) in listeners {
+                        if listener_ip_addrs
+                            .iter()
+                            .any(|addr| addr == &IpAddr::V4(local_adapter_ip))
                         {
-                            info!("Local adapter address {local_adapter_addr:?} is unspecified. Fetching another local adapter address from the listener.");
-                            for (listener_id, listener_ip_addrs) in listeners {
-                                if listener_ip_addrs
-                                    .iter()
-                                    .any(|addr| addr == &IpAddr::V4(local_adapter_ip))
-                                {
-                                    info!("Listener {listener_id:?} has local adapter address {local_adapter_addr:?} in it's list {listener_ip_addrs:?}");
-                                    // get a listener that is not the current local_adapter_addr
-                                    if let Some(another_listener_ip) = listener_ip_addrs
-                                        .iter()
-                                        .find(|&addr| addr != &IpAddr::V4(local_adapter_ip))
-                                    {
-                                        info!("Using {another_listener_ip:?} as the local adapter address, instead of {local_adapter_addr:?} for the reachable address {reachable_addr:?}");
-                                        external_to_local_addr_map
-                                            .entry(reachable_addr)
-                                            .or_default()
-                                            .insert(SocketAddr::new(
-                                                *another_listener_ip,
-                                                local_adapter_addr.port(),
-                                            ));
-                                    }
-                                    break;
-                                } else {
-                                    debug!("Listener {listener_id:?} does not have local adapter address {local_adapter_addr:?} in it's list {listener_ip_addrs:?}");
-                                }
+                            info!("Listener {listener_id:?} has local adapter address {local_adapter_ip:?} in it's list {listener_ip_addrs:?}. Now fetching another local address insetad of {local_adapter_ip:?} from this list.");
+                            // 1. try to first find the listener == reachable_addr
+                            if let Some(another_listener_ip) = listener_ip_addrs
+                                .iter()
+                                .find(|&addr| addr == &reachable_addr_ip)
+                            {
+                                info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is the same as the reachable address {reachable_addr_ip:?}. Using it instead of {local_adapter_ip:?}");
+                                external_to_local_addr_map
+                                    .entry(reachable_addr)
+                                    .or_default()
+                                    .insert(SocketAddr::new(
+                                        *another_listener_ip,
+                                        local_adapter_addr.port(),
+                                    ));
                             }
+
+                            // 2. else try to find 10.0.0.0 address
+                            if let Some(another_listener_ip) =
+                                listener_ip_addrs.iter().find(|&addr| {
+                                    let IpAddr::V4(addr) = addr else { return false };
+                                    matches!(addr.octets(), [10, ..])
+                                })
+                            {
+                                info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is private (10.0.0.0)");
+                                external_to_local_addr_map
+                                    .entry(reachable_addr)
+                                    .or_default()
+                                    .insert(SocketAddr::new(
+                                        *another_listener_ip,
+                                        local_adapter_addr.port(),
+                                    ));
+                            }
+
+                            // 3. else find anything that is not unspecified (local_adapter_ip)
+                            if let Some(another_listener_ip) = listener_ip_addrs
+                                .iter()
+                                .find(|&addr| addr != &IpAddr::V4(local_adapter_ip))
+                            {
+                                info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is not unspecified)");
+                                external_to_local_addr_map
+                                    .entry(reachable_addr)
+                                    .or_default()
+                                    .insert(SocketAddr::new(
+                                        *another_listener_ip,
+                                        local_adapter_addr.port(),
+                                    ));
+                            }
+
+                            break;
                         } else {
-                            external_to_local_addr_map
-                                .entry(reachable_addr)
-                                .or_default()
-                                .insert(*local_adapter_addr);
+                            debug!("Listener {listener_id:?} does not have local adapter address {local_adapter_ip:?} in it's list {listener_ip_addrs:?}");
                         }
-                    } else {
-                        continue;
                     }
+                } else {
+                    info!("Local adapter address {local_adapter_ip:?} is valid. Adding it to the external to local address map.");
+                    external_to_local_addr_map
+                        .entry(reachable_addr)
+                        .or_default()
+                        .insert(*local_adapter_addr);
                 }
             }
         }
@@ -727,19 +773,40 @@ impl ReachabilityCheckSwarmDriver {
         if external_to_local_addr_map.is_empty() {
             info!("No local adapter mapping found for the reachable addresses. Returning the first external address instead.");
             let addr = reachable_addresses
-                .get(0)
+                .first()
                 .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
             return Ok(ReachabilityStatus::Reachable { addr: *addr });
         }
 
         info!("External address to local adapter map exists: {external_to_local_addr_map:?}");
+
+        // prioritize the case where reachable address is the same as local adapter address
+        // if not, pick the first one
+
+        if let Some((reachable_addr, _)) =
+            external_to_local_addr_map
+                .iter()
+                .find(|(reachable_addr, local_adapter_addrs)| {
+                    local_adapter_addrs
+                        .iter()
+                        .any(|addr| addr.ip() == reachable_addr.ip())
+                })
+        {
+            info!("Found a reachable address {reachable_addr:?} that is the same as the local adapter address.");
+            return Ok(ReachabilityStatus::Reachable {
+                addr: *reachable_addr,
+            });
+        }
+
+        info!("No reachable address found that is the same as the local adapter address. Picking the first external address & its first local adapter address.");
+
         let (reachable_addr, local_adapter_addrs) =
             external_to_local_addr_map
                 .into_iter()
                 .next()
                 .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
 
-        info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}");
+        info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}. Returning the first local adapter address.");
 
         Ok(ReachabilityStatus::Reachable {
             addr: *local_adapter_addrs
