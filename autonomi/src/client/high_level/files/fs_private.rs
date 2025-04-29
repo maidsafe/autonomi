@@ -15,19 +15,16 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::archive_private::{PrivateArchive, PrivateArchiveDataMap};
-use super::{get_relative_file_path_from_abs_file_and_folder_path, FILE_UPLOAD_BATCH_SIZE};
-use super::{DownloadError, UploadError};
+use super::{get_relative_file_path_from_abs_file_and_folder_path, FILE_ENCRYPT_BATCH_SIZE};
+use super::{CombinedChunks, DownloadError, UploadError};
 
 use crate::client::payment::PaymentOption;
-use crate::client::PutError;
 use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
 use crate::self_encryption::encrypt;
 use crate::{AttoTokens, Client};
-use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::path::PathBuf;
 use std::time::Instant;
-use xor_name::XorName;
 
 impl Client {
     /// Download a private file from network to local file system
@@ -70,8 +67,6 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PrivateArchive), UploadError> {
         info!("Uploading directory as private: {dir_path:?}");
-        let start = tokio::time::Instant::now();
-
         let mut encryption_tasks = vec![];
 
         for entry in walkdir::WalkDir::new(&dir_path) {
@@ -107,11 +102,6 @@ impl Client {
 
                 debug!("Encryption of {file_path:?} took: {:.2?}", now.elapsed());
 
-                let xor_names: Vec<_> = chunks
-                    .iter()
-                    .map(|chunk| (*chunk.name(), chunk.size()))
-                    .collect();
-
                 let metadata = super::fs_public::metadata_from_entry(&entry);
 
                 let relative_path =
@@ -119,29 +109,26 @@ impl Client {
 
                 Ok((
                     file_path.to_string_lossy().to_string(),
-                    xor_names,
                     chunks,
                     (relative_path, DataMapChunk::from(data_map_chunk), metadata),
                 ))
             });
         }
 
-        let mut combined_xor_names: Vec<(XorName, usize)> = vec![];
-        let mut combined_chunks: Vec<(String, Vec<Chunk>)> = vec![];
+        let mut combined_chunks: CombinedChunks = vec![];
         let mut private_archive = PrivateArchive::new();
 
         let encryption_results =
-            process_tasks_with_max_concurrency(encryption_tasks, *FILE_UPLOAD_BATCH_SIZE).await;
+            process_tasks_with_max_concurrency(encryption_tasks, *FILE_ENCRYPT_BATCH_SIZE).await;
 
         for encryption_result in encryption_results {
             match encryption_result {
-                Ok((file_path, xor_names, chunked_file, file_data)) => {
+                Ok((file_path, chunked_file, file_data)) => {
                     info!("Successfully encrypted file: {file_path:?}");
                     #[cfg(feature = "loud")]
                     println!("Successfully encrypted file: {file_path:?}");
 
-                    combined_xor_names.extend(xor_names);
-                    combined_chunks.push((file_path, chunked_file));
+                    combined_chunks.push(((file_path, None), chunked_file));
                     let (relative_path, data_map_chunk, file_metadata) = file_data;
                     private_archive.add_file(relative_path, data_map_chunk, file_metadata);
                 }
@@ -151,68 +138,7 @@ impl Client {
             }
         }
 
-        info!("Quoting for {} chunks..", combined_xor_names.len());
-        #[cfg(feature = "loud")]
-        println!("Quoting for {} chunks..", combined_xor_names.len());
-
-        let (receipt, skipped_payments_amount) = self
-            .pay_for_content_addrs(
-                DataTypes::Chunk,
-                combined_xor_names.into_iter(),
-                payment_option,
-            )
-            .await
-            .inspect_err(|err| error!("Error paying for data: {err:?}"))
-            .map_err(PutError::from)?;
-
-        info!("{skipped_payments_amount} chunks were free");
-
-        let files_to_upload_amount = combined_chunks.len();
-
-        let mut upload_tasks = vec![];
-
-        for (name, chunks) in combined_chunks {
-            let receipt_clone = receipt.clone();
-
-            upload_tasks.push(async move {
-                info!("Uploading file: {name} ({} chunks)..", chunks.len());
-                #[cfg(feature = "loud")]
-                println!("Uploading file: {name} ({} chunks)..", chunks.len());
-
-                match self
-                    .chunk_batch_upload(chunks.iter().collect(), &receipt_clone)
-                    .await
-                {
-                    Ok(_) => {
-                        info!("Successfully uploaded {name} ({} chunks)", chunks.len());
-                        #[cfg(feature = "loud")]
-                        println!("Successfully uploaded {name} ({} chunks)", chunks.len());
-                        (name, Ok(chunks.len()))
-                    }
-                    Err(err) => (name, Err(UploadError::from(err))),
-                }
-            });
-        }
-
-        let uploads =
-            process_tasks_with_max_concurrency(upload_tasks, *FILE_UPLOAD_BATCH_SIZE).await;
-
-        info!(
-            "Upload of {} files completed in {:?}",
-            files_to_upload_amount,
-            start.elapsed()
-        );
-
-        #[cfg(feature = "loud")]
-        println!(
-            "Upload of {} files completed in {:?}",
-            files_to_upload_amount,
-            start.elapsed()
-        );
-
-        let total_cost = self
-            .process_upload_results(uploads, receipt, skipped_payments_amount)
-            .await?;
+        let total_cost = self.pay_and_upload(payment_option, combined_chunks).await?;
 
         Ok((total_cost, private_archive))
     }
