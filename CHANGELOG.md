@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-04-29
+
+### Network
+
+#### Changed
+
+- Disable `libp2p` `disjoint_query_path`. This improves resolving the closest nodes in the network.
+- Reduce logging by changing the level of some messages. These were generating a lot of traffic and
+  making life difficult for our ELK setup.
+
+### API / Client
+
+These changes were implemented in the API but are also manifest in the `ant` client.
+
+#### Added
+
+- The "Paying for X chunks" output was moved and added to the payment process.
+
+#### Changed
+
+- The number of quotes we attempt to obtain in parallel is reduced to the value of
+  `CHUNK_UPLOAD_BATCH_SIZE` multiplied by `8`, and capped at `128`. Recently the default value of
+  `CHUNK_UPLOAD_BATCH_SIZE` was changed to `1`, so in in turn the new default for how many quotes we
+  obtain in parallel is significantly reduced. This works much better for poorer connections. Users
+  with better connections can experiment with slightly larger values for `CHUNK_UPLOAD_BATCH_SIZE`.
+- The `FILE_UPLOAD_BATCH_SIZE` variable now defaults to `1` rather than being based on the number of
+  available threads. This means when a directory is being uploaded, only a single file will be
+  uploaded at a time. This proved to be much better for poorer connections. Users with better
+  connections can experiment and adjust the value as they see fit; for easier control we will probably
+  add it as an argument on the `file upload` command.
+- The "Paying for X chunks" output is changed to "Quoting for X chunks". The previous message was
+  misleading because the payment doesn't take place until the chunk is uploaded.
+
+#### Fixed
+
+- Obtaining quotes will now have retries when there is a failure resolving the closest nodes.
+
+### Client
+
+#### Changed
+
+- Increase the default query timeout from 60 to 120 seconds. On the production network we need more
+  time for queries.
+
 ## 2025-04-22
 
 ### Network
