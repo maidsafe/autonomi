@@ -78,8 +78,8 @@ pub use ant_evm::EvmNetwork as Network;
 pub use ant_evm::EvmWallet as Wallet;
 pub use ant_evm::QuoteHash;
 pub use ant_evm::RewardsAddress;
-pub use ant_evm::TransactionConfig;
 pub use ant_evm::{Amount, AttoTokens};
+pub use ant_evm::{MaxFeePerGas, TransactionConfig};
 
 // Re-exports of address related types
 pub use ant_protocol::storage::AddressParseError;

@@ -71,6 +71,7 @@ where
             transaction_config,
         )
         .await
+        .map_err(Error::from)
     }
 
     /// Returns the pay for quotes transaction calldata.

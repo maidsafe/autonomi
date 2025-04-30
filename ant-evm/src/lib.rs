@@ -18,7 +18,7 @@ pub use evmlib::contract::payment_vault;
 pub use evmlib::cryptography;
 #[cfg(feature = "external-signer")]
 pub use evmlib::external_signer;
-pub use evmlib::transaction_config::TransactionConfig;
+pub use evmlib::transaction_config::{MaxFeePerGas, TransactionConfig};
 pub use evmlib::utils;
 pub use evmlib::utils::get_evm_network;
 pub use evmlib::utils::{DATA_PAYMENTS_ADDRESS, PAYMENT_TOKEN_ADDRESS, RPC_URL};

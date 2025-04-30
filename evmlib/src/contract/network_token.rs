@@ -8,6 +8,7 @@
 
 use crate::common::{Address, Calldata, TxHash, U256};
 use crate::contract::network_token::NetworkTokenContract::NetworkTokenContractInstance;
+use crate::retry;
 use crate::retry::{retry, send_transaction_with_retries};
 use crate::transaction_config::TransactionConfig;
 use alloy::providers::{Network, Provider};
@@ -32,6 +33,8 @@ pub enum Error {
     PendingTransactionError(#[from] alloy::providers::PendingTransactionError),
     #[error("Timeout: {0:?}")]
     Timeout(#[from] tokio::time::error::Elapsed),
+    #[error(transparent)]
+    Transaction(#[from] retry::TransactionError),
 }
 
 pub struct NetworkToken<P: Provider<N>, N: Network> {
@@ -106,6 +109,7 @@ where
             transaction_config,
         )
         .await
+        .map_err(Error::from)
     }
 
     /// Approve spender to spend a raw amount of tokens.
@@ -132,6 +136,7 @@ where
             transaction_config,
         )
         .await
+        .map_err(Error::from)
     }
 
     /// Transfer a raw amount of tokens.
