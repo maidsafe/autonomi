@@ -15,21 +15,6 @@ pub enum MaxFeePerGasParam {
 }
 
 impl MaxFeePerGasParam {
-    pub fn into_max_fee_per_gas(self, network: &Network) -> color_eyre::Result<MaxFeePerGas> {
-        match self {
-            Self::Low => Ok(MaxFeePerGas::LimitedAuto(
-                Self::get_network_average_gas_fee(network)?,
-            )),
-            Self::Market => Ok(MaxFeePerGas::LimitedAuto(
-                Self::get_network_average_gas_fee(network)? * 4,
-            )),
-            Self::Auto => Ok(MaxFeePerGas::Auto),
-            Self::LimitedAuto(value) => Ok(MaxFeePerGas::LimitedAuto(value)),
-            Self::Unlimited => Ok(MaxFeePerGas::Unlimited),
-            Self::Custom(value) => Ok(MaxFeePerGas::Custom(value)),
-        }
-    }
-
     fn get_network_average_gas_fee(network: &Network) -> color_eyre::Result<u128> {
         match network {
             Network::ArbitrumOne => Ok(AVERAGE_GAS_FEE_ARBITRUM_ONE),
@@ -79,5 +64,29 @@ impl std::fmt::Display for MaxFeePerGasParam {
             Self::Unlimited => write!(f, "MaxFeePerGas::Unlimited"),
             Self::Custom(value) => write!(f, "MaxFeePerGas::Custom({value})"),
         }
+    }
+}
+
+pub fn get_max_fee_per_gas_from_opt_param(
+    param: Option<MaxFeePerGasParam>,
+    network: &Network,
+) -> color_eyre::Result<MaxFeePerGas> {
+    let param = match (param, network) {
+        (None, Network::Custom(_)) => MaxFeePerGasParam::Auto,
+        (None, _) => MaxFeePerGasParam::Market,
+        (Some(p), _) => p,
+    };
+
+    match param {
+        MaxFeePerGasParam::Low => Ok(MaxFeePerGas::LimitedAuto(
+            MaxFeePerGasParam::get_network_average_gas_fee(network)?,
+        )),
+        MaxFeePerGasParam::Market => Ok(MaxFeePerGas::LimitedAuto(
+            MaxFeePerGasParam::get_network_average_gas_fee(network)? * 4,
+        )),
+        MaxFeePerGasParam::Auto => Ok(MaxFeePerGas::Auto),
+        MaxFeePerGasParam::LimitedAuto(value) => Ok(MaxFeePerGas::LimitedAuto(value)),
+        MaxFeePerGasParam::Unlimited => Ok(MaxFeePerGas::Unlimited),
+        MaxFeePerGasParam::Custom(value) => Ok(MaxFeePerGas::Custom(value)),
     }
 }

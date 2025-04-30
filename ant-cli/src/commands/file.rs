@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::args::max_fee_per_gas::MaxFeePerGasParam;
+use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
 use crate::exit_code::{upload_exit_code, ExitCodeError, IO_ERROR};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
@@ -44,7 +44,7 @@ pub async fn upload(
     public: bool,
     init_peers_config: InitialPeersConfig,
     optional_verification_quorum: Option<ResponseQuorum>,
-    max_fee_per_gas_param: MaxFeePerGasParam,
+    max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     network_id: Option<u8>,
 ) -> Result<(), ExitCodeError> {
     let mut config = ClientOperatingStrategy::new();
@@ -60,9 +60,9 @@ pub async fn upload(
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 
     // todo: @roland which exit code should be used here?
-    let max_fee_per_gas = max_fee_per_gas_param
-        .into_max_fee_per_gas(client.evm_network())
-        .map_err(|err| (err, 61))?;
+    let max_fee_per_gas =
+        get_max_fee_per_gas_from_opt_param(max_fee_per_gas_param, client.evm_network())
+            .map_err(|err| (err, 61))?;
     wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas));
 
     let payment = PaymentOption::Wallet(wallet);

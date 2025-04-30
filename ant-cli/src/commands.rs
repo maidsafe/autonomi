@@ -245,12 +245,12 @@ pub(crate) struct TransactionOpt {
     /// Options:
     /// - `low`: Use the average max gas price bid.
     /// - `market`: Use the current max gas price bid, with a max of 4 * the average gas price bid. (default)
-    /// - `auto`: Use the current max gas price bid. WARNING: Can result in high gas fees!
+    /// - `auto`: Use the current max gas price bid. WARNING: Can result in high gas fees! (default: when using custom EVM network)
     /// - `limited-auto:<WEI AMOUNT>`: Use the current max gas price bid, with a specified upper limit.
     /// - `unlimited`: Do not use a limit for the gas price bid. WARNING: Can result in high gas fees!
     /// - `<WEI AMOUNT>`: Set a custom max gas price bid.
-    #[clap(long, verbatim_doc_comment, default_value = "market")]
-    pub max_fee_per_gas: MaxFeePerGasParam,
+    #[clap(long, verbatim_doc_comment)]
+    pub max_fee_per_gas: Option<MaxFeePerGasParam>,
 }
 
 pub async fn handle_subcommand(opt: Opt) -> Result<()> {
