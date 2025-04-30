@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
-use crate::exit_code::{upload_exit_code, ExitCodeError, IO_ERROR};
+use crate::exit_code::{upload_exit_code, ExitCodeError, FEES_ERROR, IO_ERROR};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::payment::PaymentOption;
@@ -62,7 +62,7 @@ pub async fn upload(
     // todo: @roland which exit code should be used here?
     let max_fee_per_gas =
         get_max_fee_per_gas_from_opt_param(max_fee_per_gas_param, client.evm_network())
-            .map_err(|err| (err, 61))?;
+            .map_err(|err| (err, FEES_ERROR))?;
     wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas));
 
     let payment = PaymentOption::Wallet(wallet);
