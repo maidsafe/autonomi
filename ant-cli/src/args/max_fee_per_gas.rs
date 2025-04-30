@@ -62,7 +62,7 @@ impl std::str::FromStr for MaxFeePerGasParam {
                 } else {
                     s.parse::<u128>()
                         .map(MaxFeePerGasParam::Custom)
-                        .map_err(|_| format!("Invalid custom value: {rest}"))
+                        .map_err(|_| format!("Invalid custom value: {s}"))
                 }
             }
         }
