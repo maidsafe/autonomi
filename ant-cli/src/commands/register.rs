@@ -8,6 +8,7 @@
 
 #![allow(deprecated)]
 
+use crate::args::max_fee_per_gas::MaxFeePerGasParam;
 use crate::wallet::load_wallet;
 use autonomi::client::register::RegisterAddress;
 use autonomi::client::register::SecretKey as RegisterSecretKey;
@@ -63,7 +64,7 @@ pub async fn create(
     value: &str,
     hex: bool,
     init_peers_config: InitialPeersConfig,
-    max_fee_per_gas: Option<u128>,
+    max_fee_per_gas_param: MaxFeePerGasParam,
     network_id: Option<u8>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
@@ -74,9 +75,8 @@ pub async fn create(
 
     let mut wallet = load_wallet(client.evm_network())?;
 
-    if let Some(max_fee_per_gas) = max_fee_per_gas {
-        wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
-    }
+    let max_fee_per_gas = max_fee_per_gas_param.into_max_fee_per_gas(client.evm_network())?;
+    wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas));
 
     let register_key = Client::register_key_from_name(&main_registers_key, name);
 
@@ -121,7 +121,7 @@ pub async fn edit(
     value: &str,
     hex: bool,
     init_peers_config: InitialPeersConfig,
-    max_fee_per_gas: Option<u128>,
+    max_fee_per_gas_param: MaxFeePerGasParam,
     network_id: Option<u8>,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
@@ -132,9 +132,8 @@ pub async fn edit(
 
     let mut wallet = load_wallet(client.evm_network())?;
 
-    if let Some(max_fee_per_gas) = max_fee_per_gas {
-        wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
-    }
+    let max_fee_per_gas = max_fee_per_gas_param.into_max_fee_per_gas(client.evm_network())?;
+    wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas));
 
     let value_bytes = if hex {
         hex::decode(value.trim_start_matches("0x"))

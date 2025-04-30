@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::args::max_fee_per_gas::MaxFeePerGasParam;
 use crate::wallet::load_wallet;
 use autonomi::{InitialPeersConfig, TransactionConfig};
 use color_eyre::eyre::Context;
@@ -36,7 +37,7 @@ pub async fn cost(
 
 pub async fn create(
     init_peers_config: InitialPeersConfig,
-    max_fee_per_gas: Option<u128>,
+    max_fee_per_gas_param: MaxFeePerGasParam,
     network_id: Option<u8>,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(init_peers_config, network_id)
@@ -45,9 +46,8 @@ pub async fn create(
 
     let mut wallet = load_wallet(client.evm_network())?;
 
-    if let Some(max_fee_per_gas) = max_fee_per_gas {
-        wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
-    }
+    let max_fee_per_gas = max_fee_per_gas_param.into_max_fee_per_gas(client.evm_network())?;
+    wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas));
 
     let vault_sk = crate::keys::get_vault_secret_key()?;
 

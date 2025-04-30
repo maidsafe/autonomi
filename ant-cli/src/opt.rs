@@ -24,7 +24,8 @@ pub(crate) struct Opt {
     pub command: Option<SubCmd>,
 
     /// The maximum duration to wait for a connection to the network before timing out.
-    #[clap(long = "timeout", global = true, value_parser = |t: &str| -> Result<Duration> { Ok(t.parse().map(Duration::from_secs)?) })]
+    #[clap(long = "timeout", global = true, value_parser = |t: &str| -> Result<Duration> { Ok(t.parse().map(Duration::from_secs)?) }
+    )]
     pub connection_timeout: Option<Duration>,
 
     /// Print the crate version.
@@ -50,7 +51,8 @@ pub(crate) struct Opt {
     ///  - macOS: $HOME/Library/Application Support/autonomi/client/logs
     ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\client\logs
     #[allow(rustdoc::invalid_html_tags)]
-    #[clap(long, value_parser = LogOutputDest::parse_from_str, verbatim_doc_comment, default_value = "data-dir")]
+    #[clap(long, value_parser = LogOutputDest::parse_from_str, verbatim_doc_comment, default_value = "data-dir"
+    )]
     pub log_output_dest: LogOutputDest,
 
     /// Specify the network ID to use. This will allow you to run the CLI on a different network.
