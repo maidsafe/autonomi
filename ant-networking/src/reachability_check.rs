@@ -1,4 +1,4 @@
-// Copyright 2024 MaidSafe.net limited.
+// Copyright 2025 MaidSafe.net limited.
 //
 // This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
 // Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
@@ -144,12 +144,7 @@ impl ReachabilityCheckSwarmDriver {
         }
     }
 
-    /// Asynchronously drives the swarm event loop. This function will run indefinitely,
-    /// until the command channel is closed.
-    ///
-    /// The `tokio::select` macro is used to concurrently process swarm events
-    /// and command receiver messages, ensuring efficient handling of multiple
-    /// asynchronous tasks.
+    /// Runs the reachability check workflow.
     pub async fn detect(mut self) -> Result<ReachabilityStatus, crate::NetworkError> {
         let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
         dial_check_interval.tick().await; // first tick is immediate
@@ -176,45 +171,9 @@ impl ReachabilityCheckSwarmDriver {
                     }
                 }
                 _ = dial_check_interval.tick() => {
-                    // check if we have any ongoing dial attempts
-                    match &mut self.state {
-                        ReachabilityCheckState::WaitingForUpnp => {}
-                        ReachabilityCheckState::WaitingForExternalAddr {
-                            ongoing_dial_attempts,
-                            identify_observed_external_addr,
-                            incoming_connection_local_adapter_map,
-                            listeners,
-                            ..
-                        } => {
-                            Self::cleanup_dial_attempts(ongoing_dial_attempts);
-                            if let Err(err) = Self::trigger_dial(&mut self.initial_contacts, ongoing_dial_attempts, &mut self.swarm) {
-                                warn!("Error while triggering dial: {err}");
-                            }
-
-                            if Self::has_dialing_completed(ongoing_dial_attempts) {
-                                info!("Dialing completed. We have received enough observed addresses.");
-                                match Self::get_reachability_status(
-                                    identify_observed_external_addr,
-                                    incoming_connection_local_adapter_map,
-                                    listeners,
-                                ) {
-                                    Ok(status) => {
-                                        info!("Reachability status has been found to be: {status:?}");
-                                        if let Some(status) = self.retry_if_possible(status) {
-                                            return Ok(status);
-                                        } else {
-                                           info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
-                                        }
-                                    }
-                                    Err(err) => {
-                                        warn!("Error while getting reachability status: {err}");
-                                        return Err(err.into());
-                                    }
-                                }
-                            }
-                        }
+                    if let Some(status) = self.handle_dial_check_interval()? {
+                        return Ok(status)
                     }
-
                 }
             }
         }
@@ -488,6 +447,56 @@ impl ReachabilityCheckSwarmDriver {
         Ok(None)
     }
 
+    fn handle_dial_check_interval(
+        &mut self,
+    ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
+        // check if we have any ongoing dial attempts
+        match &mut self.state {
+            ReachabilityCheckState::WaitingForUpnp => return Ok(None),
+            ReachabilityCheckState::WaitingForExternalAddr {
+                ongoing_dial_attempts,
+                identify_observed_external_addr,
+                incoming_connection_local_adapter_map,
+                listeners,
+                ..
+            } => {
+                Self::cleanup_dial_attempts(ongoing_dial_attempts);
+                if let Err(err) = Self::trigger_dial(
+                    &mut self.initial_contacts,
+                    ongoing_dial_attempts,
+                    &mut self.swarm,
+                ) {
+                    warn!("Error while triggering dial: {err}");
+                }
+
+                if Self::has_dialing_completed(ongoing_dial_attempts) {
+                    info!("Dialing completed. We have received enough observed addresses.");
+                    match Self::get_reachability_status(
+                        identify_observed_external_addr,
+                        incoming_connection_local_adapter_map,
+                        listeners,
+                    ) {
+                        Ok(status) => {
+                            info!("Reachability status has been found to be: {status:?}");
+                            if let Some(status) = self.retry_if_possible(status) {
+                                return Ok(Some(status));
+                            } else {
+                                info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                                return Ok(None);
+                            }
+                        }
+                        Err(err) => {
+                            warn!("Error while getting reachability status: {err}");
+                            return Err(err.into());
+                        }
+                    }
+                } else {
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
     fn trigger_dial(
         initial_contacts: &mut Vec<Multiaddr>,
         ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
@@ -723,7 +732,7 @@ impl ReachabilityCheckSwarmDriver {
                                     ));
                             }
 
-                            // 2. else try to find 10.0.0.0 address
+                            // 2. prioritize 10.x.x.x address
                             if let Some(another_listener_ip) =
                                 listener_ip_addrs.iter().find(|&addr| {
                                     let IpAddr::V4(addr) = addr else { return false };
