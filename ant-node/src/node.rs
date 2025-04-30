@@ -172,15 +172,8 @@ impl NodeBuilder {
         );
 
         network_builder.listen_addr(self.addr);
-        #[cfg(feature = "open-metrics")]
-        network_builder.metrics_server_port(self.metrics_server_port);
-        network_builder.relay_client(self.relay_client);
-
-        network_builder.no_upnp(self.no_upnp);
-
-        let nat = network_builder.build_reachability_check_swarm()?;
-
-        let status = nat.detect().await?;
+        let swarm_driver = network_builder.build_reachability_check_swarm()?;
+        let status = swarm_driver.detect().await?;
 
         Ok(status)
     }
