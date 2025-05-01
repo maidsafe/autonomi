@@ -61,48 +61,38 @@ impl From<libp2p::identify::Event> for ReachabilityCheckEvent {
 
 pub struct ReachabilityCheckSwarmDriver {
     pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
-    pub(crate) state: ReachabilityCheckState,
+    pub(crate) upnp_supported: bool,
+    pub(crate) dialer: Dialer,
+    pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
     pub(crate) initial_contacts: Vec<Multiaddr>,
-    pub(crate) initial_listener: HashMap<ListenerId, HashSet<IpAddr>>,
+}
+
+pub struct Dialer {
+    // The number of attempts/retries we have made with the entire Dialer workflow.
+    current_workflow_attempt: usize,
+    ongoing_dial_attempts: HashMap<PeerId, (DialAttemptState, Instant)>,
+    identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+    incoming_connection_ids: HashSet<ConnectionId>,
+    incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
+}
+
+impl Dialer {
+    fn new(attempt: usize) -> Self {
+        Self {
+            current_workflow_attempt: attempt,
+            ongoing_dial_attempts: HashMap::new(),
+            identify_observed_external_addr: HashMap::new(),
+            incoming_connection_ids: HashSet::new(),
+            incoming_connection_local_adapter_map: HashMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum ReachabilityStatus {
     Upnp,
     Reachable { addr: SocketAddr },
-    Unreachable { retry: bool },
-}
-
-#[allow(clippy::large_enum_variant)]
-#[derive(Debug, Clone)]
-pub enum ReachabilityCheckState {
-    WaitingForUpnp,
-    WaitingForExternalAddr {
-        // The number of attempts/retries we have made using this state.
-        current_workflow_attempt: usize,
-        ongoing_dial_attempts: HashMap<PeerId, (DialAttemptState, Instant)>,
-
-        listeners: HashMap<ListenerId, HashSet<IpAddr>>,
-        identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
-        incoming_connection_ids: HashSet<ConnectionId>,
-        incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
-    },
-}
-
-impl ReachabilityCheckState {
-    pub fn new_waiting_for_external_addr(
-        listeners: HashMap<ListenerId, HashSet<IpAddr>>,
-        attempt: usize,
-    ) -> Self {
-        ReachabilityCheckState::WaitingForExternalAddr {
-            current_workflow_attempt: attempt,
-            ongoing_dial_attempts: Default::default(),
-            listeners,
-            identify_observed_external_addr: Default::default(),
-            incoming_connection_ids: Default::default(),
-            incoming_connection_local_adapter_map: Default::default(),
-        }
-    }
+    Unreachable { retry: bool, terminate: bool },
 }
 
 #[derive(Debug, Clone)]
@@ -134,12 +124,12 @@ impl ReachabilityCheckSwarmDriver {
 
         info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
 
-        let initial_listener =
-            HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
+        let listeners = HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
         Self {
             swarm,
-            state: ReachabilityCheckState::WaitingForUpnp,
-            initial_listener,
+            dialer: Dialer::new(1),
+            upnp_supported: false,
+            listeners,
             initial_contacts,
         }
     }
@@ -186,132 +176,96 @@ impl ReachabilityCheckSwarmDriver {
         let start = Instant::now();
         let event_string;
 
-        match &mut self.state {
-            ReachabilityCheckState::WaitingForUpnp => {
-                match event {
-                    SwarmEvent::NewListenAddr {
-                        mut address,
-                        listener_id,
-                    } => {
-                        event_string = "new listen addr";
+        match event {
+            SwarmEvent::NewListenAddr {
+                mut address,
+                listener_id,
+            } => {
+                event_string = "new listen addr";
 
-                        let ip_addr = multiaddr_get_ip(&address);
-                        if let Some(ip_addr) = ip_addr {
-                            self.initial_listener
-                                .entry(listener_id)
-                                .or_default()
-                                .insert(ip_addr);
-                            debug!(
-                                "Added new listen ip address {ip_addr:?} to initial_listener {listener_id:?}"
-                            );
-                        } else {
-                            warn!("Unable to get socket address from: {address:?}");
-                        }
+                let ip_addr = multiaddr_get_ip(&address);
+                if let Some(ip_addr) = ip_addr {
+                    self.listeners
+                        .entry(listener_id)
+                        .or_default()
+                        .insert(ip_addr);
+                    debug!("Added new listen ip address {ip_addr:?} to listener {listener_id:?}");
+                } else {
+                    warn!("Unable to get socket address from: {address:?}");
+                }
 
-                        let local_peer_id = *self.swarm.local_peer_id();
-                        if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
-                            address.push(Protocol::P2p(local_peer_id));
-                        }
+                let local_peer_id = *self.swarm.local_peer_id();
+                if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
+                    address.push(Protocol::P2p(local_peer_id));
+                }
 
-                        info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
-                        self.swarm.add_external_address(address.clone());
+                info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
+                self.swarm.add_external_address(address.clone());
+            }
+            SwarmEvent::Behaviour(ReachabilityCheckEvent::Upnp(upnp_event)) => {
+                event_string = "upnp_event";
+                info!(?upnp_event, "UPnP event");
+                let mut upnp_result_obtained = false;
+                match upnp_event {
+                    libp2p::upnp::Event::GatewayNotFound => {
+                        info!("UPnP gateway not found. Trying to dial peers.");
+                        self.upnp_supported = false;
+                        upnp_result_obtained = true;
                     }
-                    SwarmEvent::Behaviour(ReachabilityCheckEvent::Upnp(upnp_event)) => {
-                        event_string = "upnp_event";
-                        info!(?upnp_event, "UPnP event");
-                        match upnp_event {
-                            libp2p::upnp::Event::GatewayNotFound => {
-                                info!("UPnP gateway not found. Switching state to WaitingForExternalAddr");
-                                self.on_upnp_result()?;
-                            }
-                            libp2p::upnp::Event::NewExternalAddr(addr) => {
-                                info!("UPnP: New external address: {addr:?}");
-                                return Ok(Some(ReachabilityStatus::Upnp));
-                            }
-                            libp2p::upnp::Event::NonRoutableGateway => {
-                                warn!("UPnP gateway is not routable. Switching state to WaitingForExternalAddr");
-                                self.on_upnp_result()?;
-                            }
-                            _ => {
-                                info!("UPnP event (ignored): {upnp_event:?}");
-                            }
-                        }
+                    libp2p::upnp::Event::NewExternalAddr(addr) => {
+                        info!("UPnP: New external address: {addr:?}. Trying to dial peers to confirm reachability.");
+                        self.upnp_supported = true;
+                        upnp_result_obtained = false;
                     }
-                    other => {
-                        event_string = "Other";
+                    libp2p::upnp::Event::NonRoutableGateway => {
+                        warn!("UPnP gateway is not routable. Trying to dial peers.");
+                        self.upnp_supported = false;
+                        upnp_result_obtained = true;
+                    }
+                    _ => {
+                        info!("UPnP event (ignored): {upnp_event:?}");
+                    }
+                }
 
-                        debug!("SwarmEvent has been ignored, we are waiting for UPnP result: {other:?}")
+                if upnp_result_obtained {
+                    self.trigger_dial()?;
+                }
+            }
+            SwarmEvent::IncomingConnection {
+                connection_id,
+                local_addr,
+                send_back_addr,
+            } => {
+                event_string = "incoming";
+                debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+
+                let socket_addr = multiaddr_get_socket_addr(&local_addr);
+
+                match socket_addr {
+                    Some(socket_addr) => {
+                        self.dialer
+                            .incoming_connection_local_adapter_map
+                            .insert(connection_id, socket_addr);
+                    }
+                    _ => {
+                        warn!("Unable to get socket_addr from local_addr address: {local_addr:?}");
                     }
                 }
             }
-            ReachabilityCheckState::WaitingForExternalAddr {
-                current_workflow_attempt: _,
-                ongoing_dial_attempts,
-                incoming_connection_ids,
-                identify_observed_external_addr,
-                incoming_connection_local_adapter_map,
-                listeners,
-            } => match event {
-                SwarmEvent::NewListenAddr {
-                    mut address,
-                    listener_id,
-                } => {
-                    event_string = "new listen addr";
+            SwarmEvent::ConnectionEstablished {
+                peer_id,
+                connection_id,
+                endpoint,
+                num_established,
+                concurrent_dial_errors,
+                established_in,
+            } => {
+                event_string = "ConnectionEstablished";
+                debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
-                    let ip_addr = multiaddr_get_ip(&address);
-                    if let Some(ip_addr) = ip_addr {
-                        listeners.entry(listener_id).or_default().insert(ip_addr);
-                        debug!(
-                            "Added new listen ip address {ip_addr:?} to listener {listener_id:?}"
-                        );
-                    } else {
-                        warn!("Unable to get socket address from: {address:?}");
-                    }
-
-                    let local_peer_id = *self.swarm.local_peer_id();
-                    if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
-                        address.push(Protocol::P2p(local_peer_id));
-                    }
-
-                    info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
-                    self.swarm.add_external_address(address.clone());
-                }
-                SwarmEvent::IncomingConnection {
-                    connection_id,
-                    local_addr,
-                    send_back_addr,
-                } => {
-                    event_string = "incoming";
-                    debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
-
-                    let socket_addr = multiaddr_get_socket_addr(&local_addr);
-
-                    match socket_addr {
-                        Some(socket_addr) => {
-                            incoming_connection_local_adapter_map
-                                .insert(connection_id, socket_addr);
-                        }
-                        _ => {
-                            warn!(
-                                "Unable to get socket_addr from local_addr address: {local_addr:?}"
-                            );
-                        }
-                    }
-                }
-                SwarmEvent::ConnectionEstablished {
-                    peer_id,
-                    connection_id,
-                    endpoint,
-                    num_established,
-                    concurrent_dial_errors,
-                    established_in,
-                } => {
-                    event_string = "ConnectionEstablished";
-                    debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
-
-                    if let ConnectedPoint::Dialer { address, .. } = endpoint {
-                        if let Some(peer_id) = multiaddr_get_p2p(&address) {
-                            ongoing_dial_attempts
+                if let ConnectedPoint::Dialer { address, .. } = endpoint {
+                    if let Some(peer_id) = multiaddr_get_p2p(&address) {
+                        self.dialer.ongoing_dial_attempts
                                 .entry(peer_id)
                                 .and_modify(|(state, time)| {
                                     *state = DialAttemptState::InitialSuccessfulResponseReceived;
@@ -326,73 +280,66 @@ impl ReachabilityCheckSwarmDriver {
                                         Instant::now(),
                                     )
                                 });
-                        } else {
-                            warn!("Dialer address does not contain peer id: {address:?}");
-                        }
                     } else {
-                        incoming_connection_ids.insert(connection_id);
+                        warn!("Dialer address does not contain peer id: {address:?}");
                     }
+                } else {
+                    self.dialer.incoming_connection_ids.insert(connection_id);
                 }
-                SwarmEvent::OutgoingConnectionError {
-                    connection_id,
-                    peer_id,
-                    error,
-                } => {
-                    event_string = "OutgoingConnErr";
-                    warn!(
-                        "OutgoingConnectionError on {connection_id:?} for {peer_id:?} - {error:?}"
-                    );
+            }
+            SwarmEvent::OutgoingConnectionError {
+                connection_id,
+                peer_id,
+                error,
+            } => {
+                event_string = "OutgoingConnErr";
+                warn!("OutgoingConnectionError on {connection_id:?} for {peer_id:?} - {error:?}");
 
-                    // drop the state for the peer
-                    if let Some(peer_id) = peer_id {
-                        warn!("Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts.");
-                        ongoing_dial_attempts.remove(&peer_id);
-                        Self::trigger_dial(
-                            &mut self.initial_contacts,
-                            ongoing_dial_attempts,
-                            &mut self.swarm,
-                        )?;
-                    } else {
-                        warn!("OutgoingConnectionError: Peer ID not found");
-                    };
+                // drop the state for the peer
+                if let Some(peer_id) = peer_id {
+                    warn!("Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts.");
+                    self.dialer.ongoing_dial_attempts.remove(&peer_id);
+                    self.trigger_dial()?;
+                } else {
+                    warn!("OutgoingConnectionError: Peer ID not found");
+                };
 
-                    if incoming_connection_ids.remove(&connection_id) {
-                        debug!("Removed connection {connection_id:?} from incomming_connections");
-                    }
+                if self.dialer.incoming_connection_ids.remove(&connection_id) {
+                    debug!("Removed connection {connection_id:?} from incomming_connections");
                 }
-                SwarmEvent::ConnectionClosed {
-                    peer_id,
-                    connection_id,
-                    endpoint,
-                    num_established,
-                    cause,
-                } => {
-                    event_string = "ConnectionClosed";
-                    debug!(%peer_id, num_established, ?cause, "ConnectionClosed ({connection_id:?}) in {endpoint:?}");
+            }
+            SwarmEvent::ConnectionClosed {
+                peer_id,
+                connection_id,
+                endpoint,
+                num_established,
+                cause,
+            } => {
+                event_string = "ConnectionClosed";
+                debug!(%peer_id, num_established, ?cause, "ConnectionClosed ({connection_id:?}) in {endpoint:?}");
 
-                    if incoming_connection_ids.remove(&connection_id) {
-                        debug!("Removed connection {connection_id:?} from incomming_connections");
-                    }
+                if self.dialer.incoming_connection_ids.remove(&connection_id) {
+                    debug!("Removed connection {connection_id:?} from incomming_connections");
                 }
-                SwarmEvent::Behaviour(ReachabilityCheckEvent::Identify(identify_event)) => {
-                    event_string = "Identify";
-                    match *identify_event {
-                        identify::Event::Received {
-                            peer_id,
-                            info,
-                            connection_id,
-                        } => {
-                            debug!(%peer_id, ?info, "identify: received info on {connection_id:?}");
-                            if incoming_connection_ids.contains(&connection_id) {
-                                debug!("Received identify info from incoming connection {connection_id:?}. Adding observed address to our list.");
-                                Self::insert_observed_address(
-                                    identify_observed_external_addr,
-                                    peer_id,
-                                    info.observed_addr,
-                                    connection_id,
-                                );
+            }
+            SwarmEvent::Behaviour(ReachabilityCheckEvent::Identify(identify_event)) => {
+                event_string = "Identify";
+                match *identify_event {
+                    identify::Event::Received {
+                        peer_id,
+                        info,
+                        connection_id,
+                    } => {
+                        debug!(%peer_id, ?info, "identify: received info on {connection_id:?}");
+                        if self.dialer.incoming_connection_ids.contains(&connection_id) {
+                            debug!("Received identify info from incoming connection {connection_id:?}. Adding observed address to our list.");
+                            self.insert_observed_address(
+                                peer_id,
+                                info.observed_addr,
+                                connection_id,
+                            );
 
-                                ongoing_dial_attempts
+                            self.dialer.ongoing_dial_attempts
                                     .entry(peer_id)
                                     .and_modify(|(state, time)| {
                                         let new_state = DialAttemptState::DialedBackAfterWait;
@@ -409,34 +356,29 @@ impl ReachabilityCheckSwarmDriver {
                                             }
                                         }
                                     });
-                            }
-                            if Self::has_dialing_completed(ongoing_dial_attempts) {
-                                info!("Dialing completed. We have received enough observed addresses.");
-                                return Ok(Some(Self::get_reachability_status(
-                                    identify_observed_external_addr,
-                                    incoming_connection_local_adapter_map,
-                                    listeners,
-                                )?));
-                            }
                         }
-                        libp2p::identify::Event::Sent { .. } => {
-                            debug!("identify: {identify_event:?}")
-                        }
-                        libp2p::identify::Event::Pushed { .. } => {
-                            debug!("identify: {identify_event:?}")
-                        }
-                        libp2p::identify::Event::Error { .. } => {
-                            warn!("identify: {identify_event:?}")
+                        if self.has_dialing_completed() {
+                            info!("Dialing completed. We have received enough observed addresses.");
+                            return Ok(Some(self.get_reachability_status()?));
                         }
                     }
+                    libp2p::identify::Event::Sent { .. } => {
+                        debug!("identify: {identify_event:?}")
+                    }
+                    libp2p::identify::Event::Pushed { .. } => {
+                        debug!("identify: {identify_event:?}")
+                    }
+                    libp2p::identify::Event::Error { .. } => {
+                        warn!("identify: {identify_event:?}")
+                    }
                 }
+            }
 
-                other => {
-                    event_string = "Other";
+            other => {
+                event_string = "Other";
 
-                    debug!("SwarmEvent has been ignored: {other:?}")
-                }
-            },
+                debug!("SwarmEvent has been ignored: {other:?}")
+            }
         }
 
         trace!(
@@ -451,65 +393,43 @@ impl ReachabilityCheckSwarmDriver {
         &mut self,
     ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
         // check if we have any ongoing dial attempts
-        match &mut self.state {
-            ReachabilityCheckState::WaitingForUpnp => return Ok(None),
-            ReachabilityCheckState::WaitingForExternalAddr {
-                ongoing_dial_attempts,
-                identify_observed_external_addr,
-                incoming_connection_local_adapter_map,
-                listeners,
-                ..
-            } => {
-                Self::cleanup_dial_attempts(ongoing_dial_attempts);
-                if let Err(err) = Self::trigger_dial(
-                    &mut self.initial_contacts,
-                    ongoing_dial_attempts,
-                    &mut self.swarm,
-                ) {
-                    warn!("Error while triggering dial: {err}");
-                }
+        self.cleanup_dial_attempts();
+        if let Err(err) = self.trigger_dial() {
+            warn!("Error while triggering dial: {err}");
+        }
 
-                if Self::has_dialing_completed(ongoing_dial_attempts) {
-                    info!("Dialing completed. We have received enough observed addresses.");
-                    match Self::get_reachability_status(
-                        identify_observed_external_addr,
-                        incoming_connection_local_adapter_map,
-                        listeners,
-                    ) {
-                        Ok(status) => {
-                            info!("Reachability status has been found to be: {status:?}");
-                            if let Some(status) = self.retry_if_possible(status) {
-                                return Ok(Some(status));
-                            } else {
-                                info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
-                                return Ok(None);
-                            }
-                        }
-                        Err(err) => {
-                            warn!("Error while getting reachability status: {err}");
-                            return Err(err.into());
-                        }
+        if self.has_dialing_completed() {
+            info!("Dialing completed. We have received enough observed addresses.");
+            match self.get_reachability_status() {
+                Ok(status) => {
+                    info!("Reachability status has been found to be: {status:?}");
+                    if let Some(status) = self.retry_if_possible(status) {
+                        Ok(Some(status))
+                    } else {
+                        info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                        Ok(None)
                     }
-                } else {
-                    return Ok(None);
+                }
+                Err(err) => {
+                    warn!("Error while getting reachability status: {err}");
+                    Err(err)
                 }
             }
+        } else {
+            Ok(None)
         }
     }
 
-    fn trigger_dial(
-        initial_contacts: &mut Vec<Multiaddr>,
-        ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
-        swarm: &mut Swarm<ReachabilityCheckBehaviour>,
-    ) -> Result<(), ReachabilityCheckError> {
-        while ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS {
+    fn trigger_dial(&mut self) -> Result<(), ReachabilityCheckError> {
+        while self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS {
             // get the first contact with peer id present in it and remove it
-            let index = initial_contacts
+            let index = self
+                .initial_contacts
                 .iter()
                 .position(|addr| matches!(addr.iter().last(), Some(Protocol::P2p(_))));
 
             if let Some(index) = index {
-                let mut addr = initial_contacts.remove(index);
+                let mut addr = self.initial_contacts.remove(index);
                 let addr_clone = addr.clone();
                 let peer_id =
                     multiaddr_pop_p2p(&mut addr).ok_or(ReachabilityCheckError::EmptyPeerId)?;
@@ -522,13 +442,13 @@ impl ReachabilityCheckSwarmDriver {
 
                 info!("Trying to dial peer with address: {addr_clone}",);
 
-                match swarm.dial(opts) {
+                match self.swarm.dial(opts) {
                     Ok(()) => {
-                        ongoing_dial_attempts.insert(
+                        self.dialer.ongoing_dial_attempts.insert(
                             peer_id,
                             (DialAttemptState::InitialDialAttempted, Instant::now()),
                         );
-                        info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", ongoing_dial_attempts.len());
+                        info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.dialer.ongoing_dial_attempts.len());
                     }
                     Err(err) => match err {
                         DialError::LocalPeerId { .. } => {
@@ -564,10 +484,8 @@ impl ReachabilityCheckSwarmDriver {
     }
 
     // cleanup dial attempts if we're stuck in InitialDialAttempted state for too long
-    fn cleanup_dial_attempts(
-        ongoing_dial_attempts: &mut HashMap<PeerId, (DialAttemptState, Instant)>,
-    ) {
-        ongoing_dial_attempts.retain(|peer, (state, time)| {
+    fn cleanup_dial_attempts(&mut self) {
+        self.dialer.ongoing_dial_attempts.retain(|peer, (state, time)| {
             if matches!(state, DialAttemptState::InitialDialAttempted) {
                 let elapsed = time.elapsed();
                 if elapsed.as_secs() > 30 {
@@ -585,14 +503,13 @@ impl ReachabilityCheckSwarmDriver {
     /// Dialing has completed if:
     /// 1. We still have peers that we haven't successfully connected to yet.
     /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
-    fn has_dialing_completed(
-        ongoing_dial_attempts: &HashMap<PeerId, (DialAttemptState, Instant)>,
-    ) -> bool {
+    fn has_dialing_completed(&self) -> bool {
         let mut still_waiting_for_dial_back = false;
         debug!(
-            "Checking if dialing has completed. Ongoing dial attempts: {ongoing_dial_attempts:?}"
+            "Checking if dialing has completed. Ongoing dial attempts: {:?}",
+            self.dialer.ongoing_dial_attempts
         );
-        for (state, instant) in ongoing_dial_attempts.values() {
+        for (state, instant) in self.dialer.ongoing_dial_attempts.values() {
             match state {
                 DialAttemptState::InitialDialAttempted => {
                     // this state should eventually be cleaned up by `cleanup_dial_attempts`
@@ -609,22 +526,8 @@ impl ReachabilityCheckSwarmDriver {
         !still_waiting_for_dial_back
     }
 
-    fn on_upnp_result(&mut self) -> Result<(), ReachabilityCheckError> {
-        let mut ongoing_dial_attempts = HashMap::new();
-        Self::trigger_dial(
-            &mut self.initial_contacts,
-            &mut ongoing_dial_attempts,
-            &mut self.swarm,
-        )?;
-
-        self.state =
-            ReachabilityCheckState::new_waiting_for_external_addr(self.initial_listener.clone(), 1);
-
-        Ok(())
-    }
-
     fn insert_observed_address(
-        identify_observed_external_addr: &mut HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+        &mut self,
         src_peer: PeerId,
         address: Multiaddr,
         connection_id: ConnectionId,
@@ -634,7 +537,7 @@ impl ReachabilityCheckSwarmDriver {
             return;
         };
 
-        match identify_observed_external_addr.entry(src_peer) {
+        match self.dialer.identify_observed_external_addr.entry(src_peer) {
             Entry::Occupied(mut entry) => {
                 let addresses = entry.get_mut();
 
@@ -652,22 +555,20 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// And then we map the external address to the local adapter address.
     /// If the local adapter is unspecified, we can use any address from the same ListenerId.
-    fn get_reachability_status(
-        identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
-        incoming_connection_local_adapter_map: &HashMap<ConnectionId, SocketAddr>,
-        listeners: &HashMap<ListenerId, HashSet<IpAddr>>,
-    ) -> Result<ReachabilityStatus, ReachabilityCheckError> {
-        let (reachable_addresses, retry) =
-            Self::determine_reachability_via_external_addr(identify_observed_external_addr)?;
+    fn get_reachability_status(&self) -> Result<ReachabilityStatus, ReachabilityCheckError> {
+        let (reachable_addresses, retry) = self.determine_reachability_via_external_addr()?;
         if reachable_addresses.is_empty() {
             debug!("No reachable addresses found. We are unreachable.");
-            return Ok(ReachabilityStatus::Unreachable { retry });
+            return Ok(ReachabilityStatus::Unreachable {
+                retry,
+                terminate: false,
+            });
         }
 
         // find all connection ids for the reachable addresses
         let mut reachable_connection_ids = HashMap::new();
         for reachable_addr in &reachable_addresses {
-            for addrs in identify_observed_external_addr.values() {
+            for addrs in self.dialer.identify_observed_external_addr.values() {
                 for (addr, connection_id) in addrs {
                     if addr == reachable_addr {
                         reachable_connection_ids
@@ -681,7 +582,10 @@ impl ReachabilityCheckSwarmDriver {
 
         info!("Reachable addresses: {reachable_addresses:?}");
         info!("Reachable connection ids: {reachable_connection_ids:?}");
-        info!("Incoming connection local adapter map: {incoming_connection_local_adapter_map:?}");
+        info!(
+            "Incoming connection local adapter map: {:?}",
+            self.dialer.incoming_connection_local_adapter_map
+        );
 
         let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> =
             HashMap::new();
@@ -691,8 +595,10 @@ impl ReachabilityCheckSwarmDriver {
                 continue;
             };
             for connection_id in connection_ids {
-                let Some(local_adapter_addr) =
-                    incoming_connection_local_adapter_map.get(&connection_id)
+                let Some(local_adapter_addr) = self
+                    .dialer
+                    .incoming_connection_local_adapter_map
+                    .get(&connection_id)
                 else {
                     warn!(
                         "Unable to get local adapter address for connection id {connection_id:?}"
@@ -711,7 +617,7 @@ impl ReachabilityCheckSwarmDriver {
                     || local_adapter_ip.is_broadcast()
                 {
                     info!("Local adapter address {local_adapter_ip:?} is unspecified. Fetching another local adapter address from the listener.");
-                    for (listener_id, listener_ip_addrs) in listeners {
+                    for (listener_id, listener_ip_addrs) in self.listeners.iter() {
                         if listener_ip_addrs
                             .iter()
                             .any(|addr| addr == &IpAddr::V4(local_adapter_ip))
@@ -830,21 +736,24 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// Returns a vector of addresses that are reachable and a boolean to retry the entire process.
     fn determine_reachability_via_external_addr(
-        identify_observed_external_addr: &HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+        &self,
     ) -> Result<(Vec<SocketAddr>, bool), ReachabilityCheckError> {
-        info!("Determining reachability status based on observed addresses: {identify_observed_external_addr:?}");
+        info!(
+            "Determining reachability status based on observed addresses: {:?}",
+            self.dialer.identify_observed_external_addr
+        );
 
-        if identify_observed_external_addr.is_empty() {
+        if self.dialer.identify_observed_external_addr.is_empty() {
             info!("No observed addresses found. We're unreachable.");
             return Ok((vec![], false));
-        } else if identify_observed_external_addr.len() < 3 {
+        } else if self.dialer.identify_observed_external_addr.len() < 3 {
             info!("Not enough observed addresses found. Retrying.");
             return Ok((vec![], true));
         }
 
         let mut ports = HashSet::new();
         let mut ips = HashSet::new();
-        for addresses in identify_observed_external_addr.values() {
+        for addresses in self.dialer.identify_observed_external_addr.values() {
             for (addr, _id) in addresses {
                 ports.insert(addr.port());
                 if let IpAddr::V4(ip) = addr.ip() {
@@ -942,23 +851,14 @@ impl ReachabilityCheckSwarmDriver {
 
     // consumes status if we are retrying the WaitingForExternalAddr workflow and would reset the states.
     fn retry_if_possible(&mut self, status: ReachabilityStatus) -> Option<ReachabilityStatus> {
-        let current_workflow_attempt = match &self.state {
-            ReachabilityCheckState::WaitingForExternalAddr {
-                current_workflow_attempt,
-                ..
-            } => *current_workflow_attempt,
-            // no retry
-            ReachabilityCheckState::WaitingForUpnp => return Some(status),
-        };
-
         let mut should_retry = false;
         match status {
-            ReachabilityStatus::Unreachable { retry } => {
+            ReachabilityStatus::Unreachable { retry, .. } => {
                 if retry {
-                    if current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
+                    if self.dialer.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
                         info!(
                             "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-                            current_workflow_attempt + 1
+                            self.dialer.current_workflow_attempt + 1
                         );
                         should_retry = true;
                     } else {
@@ -984,13 +884,10 @@ impl ReachabilityCheckSwarmDriver {
 
         info!(
             "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-            current_workflow_attempt + 1
+            self.dialer.current_workflow_attempt + 1
         );
 
-        self.state = ReachabilityCheckState::new_waiting_for_external_addr(
-            self.initial_listener.clone(),
-            current_workflow_attempt + 1,
-        );
+        self.dialer = Dialer::new(self.dialer.current_workflow_attempt + 1);
 
         None
     }
