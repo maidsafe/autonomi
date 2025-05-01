@@ -43,6 +43,7 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
         let (_temp_dir, _config) = setup().await; // Fresh config for each test case
         let addr = addr_str.parse::<Multiaddr>()?;
         let args = InitialPeersConfig {
+            alpha: false,
             first: false,
             addrs: vec![addr.clone()],
             network_contacts_url: vec![],
@@ -80,6 +81,7 @@ async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>
         .await;
 
     let args = InitialPeersConfig {
+        alpha: false,
         first: false,
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],

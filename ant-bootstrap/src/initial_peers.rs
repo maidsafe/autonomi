@@ -12,7 +12,7 @@ use crate::{
     error::{Error, Result},
     BootstrapAddr, BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
 };
-use ant_protocol::version::{get_network_id, MAINNET_ID};
+use ant_protocol::version::{get_network_id, ALPHANET_ID, MAINNET_ID};
 use clap::Args;
 use libp2p::Multiaddr;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -80,12 +80,6 @@ pub struct InitialPeersConfigV0 {
 /// Latest version of InitialPeersConfig without the disable_mainnet_contacts field
 #[derive(Args, Debug, Clone, Default, PartialEq, Serialize)]
 pub struct InitialPeersConfigV1 {
-    /// Set to indicate this is the first node in a new network
-    ///
-    /// If this argument is used, any others will be ignored because they do not apply to the first
-    /// node.
-    #[clap(long, default_value = "false")]
-    pub first: bool,
     /// Addr(s) to use for bootstrap, in a 'multiaddr' format containing the peer ID.
     ///
     /// A multiaddr looks like
@@ -103,18 +97,9 @@ pub struct InitialPeersConfigV1 {
         conflicts_with = "first"
     )]
     pub addrs: Vec<Multiaddr>,
-    /// Specify the URL to fetch the network contacts from.
-    ///
-    /// The URL can point to a text file containing Multiaddresses separated by newline character, or
-    /// a bootstrap cache JSON file.
-    #[clap(long, conflicts_with = "first", value_delimiter = ',')]
-    pub network_contacts_url: Vec<String>,
-    /// Set to indicate this is a local network.
-    #[clap(long, conflicts_with = "network_contacts_url", default_value = "false")]
-    pub local: bool,
-    /// Set to not load the bootstrap addresses from the local cache.
+    /// Set to connect to the alpha network.
     #[clap(long, default_value = "false")]
-    pub ignore_cache: bool,
+    pub alpha: bool,
     /// The directory to load and store the bootstrap cache. If not provided, the default path will be used.
     ///
     /// The JSON filename will be derived automatically from the network ID
@@ -125,11 +110,30 @@ pub struct InitialPeersConfigV1 {
     ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\bootstrap_cache/bootstrap_cache_<network_id>.json
     #[clap(long)]
     pub bootstrap_cache_dir: Option<PathBuf>,
+    /// Set to indicate this is the first node in a new network
+    ///
+    /// If this argument is used, any others will be ignored because they do not apply to the first
+    /// node.
+    #[clap(long, default_value = "false")]
+    pub first: bool,
+    /// Set to not load the bootstrap addresses from the local cache.
+    #[clap(long, default_value = "false")]
+    pub ignore_cache: bool,
+    /// Set to indicate this is a local network.
+    #[clap(long, conflicts_with = "network_contacts_url", default_value = "false")]
+    pub local: bool,
+    /// Specify the URL to fetch the network contacts from.
+    ///
+    /// The URL can point to a text file containing Multiaddresses separated by newline character, or
+    /// a bootstrap cache JSON file.
+    #[clap(long, conflicts_with = "first", value_delimiter = ',')]
+    pub network_contacts_url: Vec<String>,
 }
 
 impl From<InitialPeersConfigV0> for InitialPeersConfigV1 {
     fn from(v0: InitialPeersConfigV0) -> Self {
         Self {
+            alpha: false,
             first: v0.first,
             addrs: v0.addrs,
             network_contacts_url: v0.network_contacts_url,
@@ -270,6 +274,13 @@ impl InitialPeersConfig {
             }
             let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
             bootstrap_addresses.extend(addrs);
+        } else if !self.local && get_network_id() == ALPHANET_ID {
+            let mut contacts_fetcher = ContactsFetcher::with_alphanet_endpoints()?;
+            if let Some(count) = count {
+                contacts_fetcher.set_max_addrs(count);
+            }
+            let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
+            bootstrap_addresses.extend(addrs);
         }
 
         if !bootstrap_addresses.is_empty() {
@@ -333,6 +344,8 @@ impl<'de> Deserialize<'de> for InitialPeersConfig {
     {
         #[derive(Deserialize)]
         struct InitialPeersConfigHelper {
+            #[serde(default)]
+            alpha: bool,
             first: bool,
             addrs: Vec<Multiaddr>,
             network_contacts_url: Vec<String>,
@@ -344,6 +357,7 @@ impl<'de> Deserialize<'de> for InitialPeersConfig {
         let helper = InitialPeersConfigHelper::deserialize(deserializer)?;
 
         Ok(InitialPeersConfigV1 {
+            alpha: helper.alpha,
             first: helper.first,
             addrs: helper.addrs,
             network_contacts_url: helper.network_contacts_url,
@@ -373,6 +387,7 @@ mod tests {
 
         let v1: InitialPeersConfigV1 = v0.clone().into();
 
+        assert!(!v1.alpha);
         assert_eq!(v1.first, v0.first);
         assert_eq!(v1.addrs, v0.addrs);
         assert_eq!(v1.network_contacts_url, v0.network_contacts_url);
@@ -420,6 +435,7 @@ mod tests {
     #[test]
     fn test_serialize_deserialize_v1() {
         let v1 = InitialPeersConfigV1 {
+            alpha: true,
             first: true,
             addrs: vec![],
             network_contacts_url: vec!["https://example.org".to_string()],
@@ -431,6 +447,7 @@ mod tests {
         let json_str = serde_json::to_string(&v1).unwrap();
         let v1_deserialized: InitialPeersConfigV1 = serde_json::from_str(&json_str).unwrap();
 
+        assert!(v1_deserialized.alpha);
         assert_eq!(v1_deserialized.first, v1.first);
         assert_eq!(v1_deserialized.addrs, v1.addrs);
         assert_eq!(
@@ -456,6 +473,7 @@ mod tests {
 
         let config: InitialPeersConfig = serde_json::from_value(json).unwrap();
 
+        assert!(!config.alpha, "alpha should default to false for v0");
         assert!(!config.first);
         assert_eq!(config.addrs.len(), 0);
         assert_eq!(config.network_contacts_url, vec!["https://example.com"]);
@@ -470,6 +488,7 @@ mod tests {
     #[test]
     fn test_deserialize_v1_as_initial_peers_config() {
         let json = json!({
+            "alpha": true,
             "first": true,
             "addrs": [],
             "network_contacts_url": ["https://example.org"],
@@ -480,6 +499,7 @@ mod tests {
 
         let config: InitialPeersConfig = serde_json::from_value(json).unwrap();
 
+        assert!(config.alpha);
         assert!(config.first);
         assert_eq!(config.addrs.len(), 0);
         assert_eq!(config.network_contacts_url, vec!["https://example.org"]);

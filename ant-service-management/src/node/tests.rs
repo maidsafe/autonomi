@@ -80,6 +80,7 @@ fn create_test_v2_struct() -> NodeServiceDataV2 {
         data_dir_path: v1_struct.data_dir_path,
         evm_network: v1_struct.evm_network,
         initial_peers_config: InitialPeersConfig {
+            alpha: false,
             first: false,
             local: false,
             addrs: vec![],
@@ -406,6 +407,7 @@ fn test_v1_to_v2_conversion() {
     let v2_config = &v2_struct.initial_peers_config;
 
     // The disable_mainnet_contacts field from V1 is not present in V2
+    assert!(!v2_config.alpha);
     assert_eq!(v2_config.first, v1_config.first);
     assert_eq!(v2_config.local, v1_config.local);
     assert_eq!(v2_config.addrs, v1_config.addrs);

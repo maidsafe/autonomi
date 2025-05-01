@@ -416,6 +416,7 @@ pub async fn run_node(
         evm_network: run_options.evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         relay: false,
         initial_peers_config: InitialPeersConfig {
+            alpha: false,
             first: run_options.first,
             addrs: vec![],
             network_contacts_url: vec![],

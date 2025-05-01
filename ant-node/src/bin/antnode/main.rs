@@ -217,7 +217,9 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let opt = Opt::parse();
 
-    if let Some(network_id) = opt.network_id {
+    if opt.peers.alpha {
+        version::set_network_id(version::ALPHANET_ID);
+    } else if let Some(network_id) = opt.network_id {
         version::set_network_id(network_id);
     }
 

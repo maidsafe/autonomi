@@ -29,6 +29,7 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
     let (_temp_dir, config) = setup().await;
 
     let args = InitialPeersConfig {
+        alpha: false,
         first: true,
         addrs: vec![],
         network_contacts_url: vec![],
@@ -54,6 +55,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
             .parse()?;
 
     let args = InitialPeersConfig {
+        alpha: false,
         first: false,
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],
@@ -88,6 +90,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
         .await;
 
     let args = InitialPeersConfig {
+        alpha: false,
         first: false,
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],
@@ -120,6 +123,7 @@ async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
     let config = BootstrapCacheConfig::empty().with_cache_path(&cache_path);
 
     let args = InitialPeersConfig {
+        alpha: false,
         first: false,
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],

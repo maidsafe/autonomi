@@ -272,6 +272,9 @@ pub fn push_arguments_from_initial_peers_config(
     init_peers_config: &InitialPeersConfig,
     args: &mut Vec<OsString>,
 ) {
+    if init_peers_config.alpha {
+        args.push(OsString::from("--alpha"));
+    }
     if init_peers_config.first {
         args.push(OsString::from("--first"));
     }
