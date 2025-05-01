@@ -395,9 +395,7 @@ impl ReachabilityCheckSwarmDriver {
     ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
         // check if we have any ongoing dial attempts
         self.cleanup_dial_attempts();
-        if let Err(err) = self.trigger_dial() {
-            warn!("Error while triggering dial: {err}");
-        }
+        self.trigger_dial()?;
 
         if self.has_dialing_completed() {
             info!("Dialing completed. We have received enough observed addresses.");
@@ -476,8 +474,8 @@ impl ReachabilityCheckSwarmDriver {
                     },
                 }
             } else {
-                // todo: go for contact without peer id
-                break;
+                error!("Dialer has no more contacts to dial.");
+                return Err(ReachabilityCheckError::NoMoreContacts);
             }
         }
 
