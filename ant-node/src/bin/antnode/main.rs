@@ -385,23 +385,23 @@ async fn run_node(
     info!("Starting node ...");
     if node_builder.reachability_check {
         info!("Running reachability check ... This might take a few minutes to complete.");
-        let status = node_builder.run_reachability_check().await?;
+        let status = node_builder.run_reachability_check().await;
         match status {
-            ReachabilityStatus::Upnp => {
+            Ok(ReachabilityStatus::Upnp) => {
                 info!("Reachability check: UPnP detected. Starting node with UPnP enabled.");
                 println!("Reachability check: UPnP detected. Starting node with UPnP enabled.");
                 node_builder.no_upnp(false);
             }
-            ReachabilityStatus::Reachable {
+            Ok(ReachabilityStatus::Reachable {
                 addr: mut socket_addr,
-            } => {
+            }) => {
                 info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP disabled.", socket_addr.ip());
                 println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP disabled.", socket_addr.ip());
                 socket_addr.set_port(0);
                 node_builder.no_upnp(true);
                 node_builder.with_socket_addr(socket_addr);
             }
-            ReachabilityStatus::Unreachable { terminate, .. } => {
+            Ok(ReachabilityStatus::Unreachable { terminate, .. }) => {
                 if terminate {
                     info!("Reachability check: Unreachable. The node will be unreachable even with Relay mode. Terminating node.");
                     println!("Reachability check: Unreachable. The node will be unreachable even with Relay mode. Terminating node.");
@@ -412,6 +412,10 @@ async fn run_node(
                 info!("Reachability check: Unreachable. Starting node in Relay mode.");
                 println!("Reachability check: Unreachable. Starting node in Relay mode.");
                 node_builder.relay_client(true);
+            }
+            Err(err) => {
+                info!("Reachability check error: {err}, using the provided network settings.");
+                println!("Reachability check error: {err}, using the provided network settings.");
             }
         }
     }
