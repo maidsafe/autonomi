@@ -27,7 +27,7 @@ pub mod contacts;
 pub mod error;
 mod initial_peers;
 
-use ant_protocol::version::{get_network_id, get_truncate_version_str};
+use ant_protocol::version::{get_network_id_str, get_truncate_version_str};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
@@ -37,7 +37,9 @@ pub use cache_store::BootstrapCacheStore;
 pub use config::BootstrapCacheConfig;
 pub use contacts::ContactsFetcher;
 pub use error::{Error, Result};
-pub use initial_peers::{InitialPeersConfig, ANT_PEERS_ENV};
+pub use initial_peers::{
+    InitialPeersConfig, InitialPeersConfigV0, InitialPeersConfigV1, ANT_PEERS_ENV,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Set of addresses for a particular PeerId
@@ -255,5 +257,5 @@ pub fn multiaddr_get_peer_id(addr: &Multiaddr) -> Option<PeerId> {
 }
 
 pub fn get_network_version() -> String {
-    format!("{}_{}", get_network_id(), get_truncate_version_str())
+    format!("{}_{}", get_network_id_str(), get_truncate_version_str())
 }

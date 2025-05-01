@@ -420,7 +420,6 @@ pub async fn run_node(
             addrs: vec![],
             network_contacts_url: vec![],
             local: true,
-            disable_mainnet_contacts: true,
             ignore_cache: true,
             bootstrap_cache_dir: None,
         },

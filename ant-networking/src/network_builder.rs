@@ -29,7 +29,7 @@ use crate::{
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
     version::{
-        get_network_id, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
+        get_network_id_str, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
         IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR,
     },
     NetworkAddress, PrettyPrintKBucketKey,
@@ -222,7 +222,7 @@ impl NetworkBuilder {
             check_and_wipe_storage_dir_if_necessary(
                 root_dir.clone(),
                 storage_dir_path.clone(),
-                get_network_id(),
+                get_network_id_str(),
             )?;
 
             // Configures the disk_store to store records under the provided path and increase the max record size

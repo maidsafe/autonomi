@@ -116,7 +116,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -267,7 +266,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -406,7 +404,6 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -1113,7 +1110,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -1271,7 +1267,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
         ],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -1428,7 +1423,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
         addrs: vec![],
         network_contacts_url: vec![],
         local: true,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -1586,7 +1580,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             "http://localhost:8081/contacts".to_string(),
         ],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -1719,165 +1712,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
 }
 
 #[tokio::test]
-async fn add_node_should_create_service_file_with_testnet_arg() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let mut mock_service_control = MockServiceControl::new();
-
-    let mut node_registry = NodeRegistry {
-        auditor: None,
-        faucet: None,
-        save_path: node_reg_path.to_path_buf(),
-        nat_status: None,
-        nodes: vec![],
-        environment_variables: None,
-        daemon: None,
-    };
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let node_data_dir = temp_dir.child("data");
-    node_data_dir.create_dir_all()?;
-    let node_logs_dir = temp_dir.child("logs");
-    node_logs_dir.create_dir_all()?;
-    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
-    antnode_download_path.write_binary(b"fake antnode bin")?;
-
-    let init_peers_config = InitialPeersConfig {
-        first: false,
-        addrs: vec![],
-        network_contacts_url: vec![],
-        local: false,
-        disable_mainnet_contacts: true,
-        ignore_cache: false,
-        bootstrap_cache_dir: None,
-    };
-
-    let mut seq = Sequence::new();
-
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(12001))
-        .in_sequence(&mut seq);
-
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(
-            eq(ServiceInstallCtx {
-                args: vec![
-                    OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
-                    OsString::from("--root-dir"),
-                    OsString::from(
-                        node_data_dir
-                            .to_path_buf()
-                            .join("antnode1")
-                            .to_string_lossy()
-                            .to_string(),
-                    ),
-                    OsString::from("--log-output-dest"),
-                    OsString::from(
-                        node_logs_dir
-                            .to_path_buf()
-                            .join("antnode1")
-                            .to_string_lossy()
-                            .to_string(),
-                    ),
-                    OsString::from("--testnet"),
-                    OsString::from("--rewards-address"),
-                    OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
-                    OsString::from("evm-custom"),
-                    OsString::from("--rpc-url"),
-                    OsString::from("http://localhost:8545/"),
-                    OsString::from("--payment-token-address"),
-                    OsString::from("0x5FbDB2315678afecb367f032d93F642f64180aa3"),
-                    OsString::from("--data-payments-address"),
-                    OsString::from("0x8464135c8F25Da09e49BC8782676a84730C318bC"),
-                ],
-                autostart: false,
-                contents: None,
-                environment: None,
-                label: "antnode1".parse()?,
-                program: node_data_dir
-                    .to_path_buf()
-                    .join("antnode1")
-                    .join(ANTNODE_FILE_NAME),
-                username: Some(get_username()),
-                working_directory: None,
-                disable_restart_on_failure: true,
-            }),
-            eq(false),
-        )
-        .returning(|_, _| Ok(()))
-        .in_sequence(&mut seq);
-
-    add_node(
-        AddNodeServiceOptions {
-            auto_restart: false,
-            auto_set_nat_flags: false,
-            count: None,
-            delete_antnode_src: true,
-            enable_metrics_server: false,
-            env_variables: None,
-            relay: false,
-            log_format: None,
-            max_archived_log_files: None,
-            max_log_files: None,
-            metrics_port: None,
-            network_id: None,
-            node_ip: None,
-            node_port: None,
-            init_peers_config: init_peers_config.clone(),
-            rpc_address: None,
-            rpc_port: None,
-            antnode_dir_path: temp_dir.to_path_buf(),
-            antnode_src_path: antnode_download_path.to_path_buf(),
-            service_data_dir_path: node_data_dir.to_path_buf(),
-            service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
-            user: Some(get_username()),
-            user_mode: false,
-            version: latest_version.to_string(),
-            evm_network: EvmNetwork::Custom(CustomNetwork {
-                rpc_url_http: "http://localhost:8545".parse()?,
-                payment_token_address: RewardsAddress::from_str(
-                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                )?,
-                data_payments_address: RewardsAddress::from_str(
-                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-                )?,
-            }),
-            rewards_address: RewardsAddress::from_str(
-                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
-            )?,
-        },
-        &mut node_registry,
-        &mock_service_control,
-        VerbosityLevel::Normal,
-    )
-    .await?;
-
-    antnode_download_path.assert(predicate::path::missing());
-    node_data_dir.assert(predicate::path::is_dir());
-    node_logs_dir.assert(predicate::path::is_dir());
-    assert_eq!(node_registry.nodes.len(), 1);
-    assert_eq!(node_registry.nodes[0].version, latest_version);
-    assert_eq!(
-        node_registry.nodes[0].initial_peers_config,
-        init_peers_config
-    );
-    assert!(
-        node_registry.nodes[0]
-            .initial_peers_config
-            .disable_mainnet_contacts
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
@@ -1907,7 +1741,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: true,
         bootstrap_cache_dir: None,
     };
@@ -2062,7 +1895,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: Some(PathBuf::from("/path/to/bootstrap/cache")),
     };

@@ -8,6 +8,9 @@
 
 use std::sync::{LazyLock, RwLock};
 
+pub const MAINNET_ID: u8 = 1;
+pub const ALPHANET_ID: u8 = 2;
+
 /// The network_id is used to differentiate between different networks.
 /// The default is set to 1 and it represents the mainnet.
 pub static NETWORK_ID: LazyLock<RwLock<u8>> = LazyLock::new(|| RwLock::new(1));
@@ -70,8 +73,14 @@ pub fn set_network_id(id: u8) {
     info!("Network id set to: {id}");
 }
 
+pub fn get_network_id() -> u8 {
+    *NETWORK_ID
+        .read()
+        .expect("Failed to obtain read lock for NETWORK_ID")
+}
+
 /// Get the current NETWORK_ID as string.
-pub fn get_network_id() -> String {
+pub fn get_network_id_str() -> String {
     format!(
         "{}",
         *NETWORK_ID
@@ -129,7 +138,7 @@ mod tests {
         println!("\nTruncated version: {truncated}");
 
         // Test network id string
-        let network_id = get_network_id();
+        let network_id = get_network_id_str();
         println!("Network ID string: {network_id}");
 
         Ok(())

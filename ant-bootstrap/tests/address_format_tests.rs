@@ -47,7 +47,6 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
             addrs: vec![addr.clone()],
             network_contacts_url: vec![],
             local: false,
-            disable_mainnet_contacts: true,
             ignore_cache: true,
             bootstrap_cache_dir: None,
         };
@@ -85,7 +84,6 @@ async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],
         local: false,
-        disable_mainnet_contacts: true,
         ignore_cache: true,
         bootstrap_cache_dir: None,
     };

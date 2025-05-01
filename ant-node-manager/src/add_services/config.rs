@@ -493,7 +493,6 @@ mod tests {
         builder.init_peers_config.network_contacts_url =
             vec!["http://localhost:8080".parse().unwrap()];
         builder.init_peers_config.ignore_cache = true;
-        builder.init_peers_config.disable_mainnet_contacts = true;
         builder.service_user = Some("antnode-user".to_string());
 
         let result = builder.build().unwrap();
@@ -511,7 +510,6 @@ mod tests {
             "/ip4/127.0.0.1/tcp/8080,/ip4/192.168.1.1/tcp/8081",
             "--network-contacts-url",
             "http://localhost:8080",
-            "--testnet",
             "--ignore-cache",
             "--network-id",
             "5",

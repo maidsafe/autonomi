@@ -9,7 +9,7 @@
 use super::node_service_data_v1::{NodeServiceDataV1, NODE_SERVICE_DATA_SCHEMA_V1};
 use super::NodeServiceData;
 use crate::ServiceStatus;
-use ant_bootstrap::InitialPeersConfig;
+use ant_bootstrap::InitialPeersConfigV0;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
@@ -46,7 +46,7 @@ pub(super) struct NodeServiceDataV0 {
     pub number: u16,
     #[serde(deserialize_with = "NodeServiceData::deserialize_peer_id")]
     pub peer_id: Option<PeerId>,
-    pub peers_args: InitialPeersConfig,
+    pub peers_args: InitialPeersConfigV0,
     pub pid: Option<u32>,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
@@ -74,7 +74,7 @@ impl From<NodeServiceDataV0> for NodeServiceDataV1 {
             connected_peers: v0.connected_peers,
             data_dir_path: v0.data_dir_path,
             evm_network: v0.evm_network,
-            // Renamed field
+            // Renamed field and convert InitialPeersConfigV0 to InitialPeersConfigV1
             initial_peers_config: v0.peers_args,
             listen_addr: v0.listen_addr,
             log_dir_path: v0.log_dir_path,

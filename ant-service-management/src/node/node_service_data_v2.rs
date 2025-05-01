@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::NodeServiceData;
+use super::{node_service_data_v1::NodeServiceDataV1, NodeServiceData};
 use crate::{error::Result, ServiceStatus};
-use ant_bootstrap::InitialPeersConfigV0;
+use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
@@ -18,16 +18,15 @@ use std::{
     path::PathBuf,
 };
 
-pub const NODE_SERVICE_DATA_SCHEMA_V1: u32 = 1;
+pub const NODE_SERVICE_DATA_SCHEMA_V2: u32 = 2;
 
-fn schema_v1_value() -> u32 {
-    NODE_SERVICE_DATA_SCHEMA_V1
+fn schema_v2_value() -> u32 {
+    NODE_SERVICE_DATA_SCHEMA_V2
 }
 
 #[derive(Clone, Debug, Serialize)]
-pub struct NodeServiceDataV1 {
-    #[serde(default = "schema_v1_value")]
-    /// Added schema version to the struct to handle future changes.
+pub struct NodeServiceDataV2 {
+    #[serde(default = "schema_v2_value")]
     pub schema_version: u32,
     pub antnode_path: PathBuf,
     #[serde(default)]
@@ -37,8 +36,8 @@ pub struct NodeServiceDataV1 {
     pub data_dir_path: PathBuf,
     #[serde(default)]
     pub evm_network: EvmNetwork,
-    /// Renamed `peers_args` to `initial_peers_config` for clarity.
-    pub initial_peers_config: InitialPeersConfigV0,
+    /// This version of InitialPeersConfig does not have the disable_mainnet_contacts field.
+    pub initial_peers_config: InitialPeersConfig,
     pub listen_addr: Option<Vec<Multiaddr>>,
     pub log_dir_path: PathBuf,
     pub log_format: Option<LogFormat>,
@@ -51,13 +50,11 @@ pub struct NodeServiceDataV1 {
     pub node_ip: Option<Ipv4Addr>,
     #[serde(default)]
     pub node_port: Option<u16>,
-    /// Renamed `upnp` to `no_upnp`.
     pub no_upnp: bool,
     pub number: u16,
     #[serde(serialize_with = "NodeServiceData::serialize_peer_id")]
     pub peer_id: Option<PeerId>,
     pub pid: Option<u32>,
-    /// Renamed `home_network` to `relay`.
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
@@ -70,26 +67,52 @@ pub struct NodeServiceDataV1 {
     pub version: String,
 }
 
-// Add Deserialize implementation
-impl<'de> Deserialize<'de> for NodeServiceDataV1 {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::deserialize_v1(deserializer)
+impl From<NodeServiceDataV1> for NodeServiceDataV2 {
+    fn from(v1: NodeServiceDataV1) -> Self {
+        Self {
+            schema_version: NODE_SERVICE_DATA_SCHEMA_V2,
+            antnode_path: v1.antnode_path,
+            auto_restart: v1.auto_restart,
+            connected_peers: v1.connected_peers,
+            data_dir_path: v1.data_dir_path,
+            evm_network: v1.evm_network,
+            initial_peers_config: v1.initial_peers_config.into(),
+            listen_addr: v1.listen_addr,
+            log_dir_path: v1.log_dir_path,
+            log_format: v1.log_format,
+            max_archived_log_files: v1.max_archived_log_files,
+            max_log_files: v1.max_log_files,
+            metrics_port: v1.metrics_port,
+            network_id: v1.network_id,
+            node_ip: v1.node_ip,
+            node_port: v1.node_port,
+            no_upnp: v1.no_upnp,
+            number: v1.number,
+            peer_id: v1.peer_id,
+            pid: v1.pid,
+            relay: v1.relay,
+            rewards_address: v1.rewards_address,
+            reward_balance: v1.reward_balance,
+            rpc_socket_addr: v1.rpc_socket_addr,
+            service_name: v1.service_name,
+            status: v1.status,
+            user: v1.user,
+            user_mode: v1.user_mode,
+            version: v1.version,
+        }
     }
 }
 
-// Helper method for direct V1 deserialization
-impl NodeServiceDataV1 {
-    pub fn deserialize_v1<'de, D>(deserializer: D) -> Result<Self, D::Error>
+// Helper method for direct V2 deserialization
+impl NodeServiceDataV2 {
+    pub fn deserialize_v2<'de, D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        // Define a helper struct that matches V1 exactly
+        // Define a helper struct that matches V2 exactly
         #[derive(Deserialize)]
-        struct NodeServiceDataV1Helper {
-            #[serde(default = "schema_v1_value")]
+        struct NodeServiceDataV2Helper {
+            #[serde(default = "schema_v2_value")]
             schema_version: u32,
             antnode_path: PathBuf,
             #[serde(default)]
@@ -99,7 +122,7 @@ impl NodeServiceDataV1 {
             data_dir_path: PathBuf,
             #[serde(default)]
             evm_network: EvmNetwork,
-            initial_peers_config: InitialPeersConfigV0,
+            initial_peers_config: InitialPeersConfig,
             listen_addr: Option<Vec<Multiaddr>>,
             log_dir_path: PathBuf,
             log_format: Option<LogFormat>,
@@ -129,7 +152,7 @@ impl NodeServiceDataV1 {
             version: String,
         }
 
-        let helper = NodeServiceDataV1Helper::deserialize(deserializer)?;
+        let helper = NodeServiceDataV2Helper::deserialize(deserializer)?;
 
         Ok(Self {
             schema_version: helper.schema_version,
