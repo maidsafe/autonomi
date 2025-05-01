@@ -408,7 +408,14 @@ async fn run_node(
                 node_builder.no_upnp(true);
                 node_builder.with_socket_addr(socket_addr);
             }
-            ReachabilityStatus::Unreachable { .. } => {
+            ReachabilityStatus::Unreachable { terminate, .. } => {
+                if terminate {
+                    info!("Reachability check: Unreachable. The node will be unreachable even with Relay mode. Terminating node.");
+                    println!("Reachability check: Unreachable. The node will be unreachable even with Relay mode. Terminating node.");
+                    return Err(eyre!(
+                        "The node will be unreachable even with Relay mode. Terminating node."
+                    ));
+                }
                 info!("Reachability check: Unreachable. Starting node in Relay mode.");
                 println!("Reachability check: Unreachable. Starting node in Relay mode.");
                 node_builder.relay_client(true);
