@@ -1,3 +1,12 @@
+// Copyright 2025 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
+use ant_protocol::storage::Chunk;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
@@ -7,6 +16,7 @@ use std::{
 use thiserror::Error;
 
 use crate::client::{quote::CostError, GetError, PutError};
+use crate::data::DataAddress;
 
 pub mod archive_private;
 pub mod archive_public;
@@ -17,6 +27,8 @@ mod fs_shared;
 pub use archive_private::PrivateArchive;
 pub use archive_public::PublicArchive;
 
+pub(crate) type CombinedChunks = Vec<((String, Option<DataAddress>), Vec<Chunk>)>;
+
 /// Number of files to upload in parallel.
 ///
 /// Can be overridden by the `FILE_UPLOAD_BATCH_SIZE` environment variable.
@@ -26,6 +38,23 @@ pub static FILE_UPLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
         .and_then(|s| s.parse().ok())
         .unwrap_or(1);
     info!("File upload batch size: {}", batch_size);
+    batch_size
+});
+
+/// Number of files to encrypt in parallel.
+///
+/// Can be overridden by the `FILE_ENCRYPT_BATCH_SIZE` environment variable.
+pub static FILE_ENCRYPT_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
+    let batch_size = std::env::var("FILE_ENCRYPT_BATCH_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(
+            std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1)
+                * 8,
+        );
+    info!("File encryption batch size: {}", batch_size);
     batch_size
 });
 
