@@ -81,8 +81,8 @@ pub fn export() -> Result<()> {
     Ok(())
 }
 
-pub async fn balance(local: bool) -> Result<()> {
-    let network = get_evm_network(local)?;
+pub async fn balance(local: bool, network_id: Option<u8>) -> Result<()> {
+    let network = get_evm_network(local, network_id)?;
     let wallet = crate::wallet::load_wallet(&network)?;
 
     let token_balance = wallet.balance_of_tokens().await?;

@@ -261,7 +261,7 @@ fn main() -> Result<()> {
 
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
         Some(evm_network) => Ok(evm_network.clone().into()),
-        None => match get_evm_network(opt.peers.local) {
+        None => match get_evm_network(opt.peers.local, opt.network_id) {
             Ok(net) => Ok(net),
             Err(_) => Err(eyre!(
                 "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."

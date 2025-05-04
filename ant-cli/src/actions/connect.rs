@@ -38,16 +38,30 @@ pub async fn connect_to_network_with_config(
         progress_bar.set_message("Connecting to The Autonomi Network...");
     };
 
-    let evm_network = get_evm_network(init_peers_config.local).map_err(|err| {
-        let exit_code = evm_util_error_exit_code(&err);
-        (err.into(), exit_code)
-    })?;
+    let effective_network_id = if init_peers_config.alpha {
+        info!("Alpha flag is set. Network ID will be set to 2 for the connection.");
+        Some(2)
+    } else if !init_peers_config.local && network_id.is_none() {
+        info!(
+            "Network ID not provided and a local network is not being used.
+            Network ID will be set to 1 for the connection."
+        );
+        Some(1)
+    } else {
+        network_id
+    };
+
+    let evm_network =
+        get_evm_network(init_peers_config.local, effective_network_id).map_err(|err| {
+            let exit_code = evm_util_error_exit_code(&err);
+            (err.into(), exit_code)
+        })?;
 
     let config = ClientConfig {
         init_peers_config,
         evm_network,
         strategy: operation_config,
-        network_id,
+        network_id: effective_network_id,
     };
 
     let res = Client::init_with_config(config).await;

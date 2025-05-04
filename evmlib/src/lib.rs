@@ -119,7 +119,7 @@ impl std::str::FromStr for Network {
 
 impl Network {
     pub fn new(local: bool) -> Result<Self, utils::Error> {
-        get_evm_network(local).inspect_err(|err| {
+        get_evm_network(local, None).inspect_err(|err| {
             warn!("Failed to select EVM network from ENV: {err}");
         })
     }

@@ -172,11 +172,11 @@ impl Client {
     pub async fn init_alpha() -> Result<Self, ConnectError> {
         let client_config = ClientConfig {
             init_peers_config: InitialPeersConfig {
+                alpha: true,
                 first: false,
                 addrs: vec![],
-                network_contacts_url: vec!["http://146.190.225.26/bootstrap_cache.json".to_string()],
+                network_contacts_url: vec![],
                 local: false,
-                disable_mainnet_contacts: true,
                 ignore_cache: false,
                 bootstrap_cache_dir: None,
             },

@@ -64,7 +64,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(None, None).await?;
+    let addrs = args.get_addrs(None, Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have one addr");
     assert_eq!(addrs[0], peer_addr, "Should have the correct address");
@@ -99,7 +99,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), None).await?;
+    let addrs = args.get_addrs(Some(config), Some(2)).await?;
     assert_eq!(
         addrs.len(),
         2,
@@ -110,7 +110,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
-async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
 
     let temp_dir = TempDir::new()?;
@@ -132,7 +132,7 @@ async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), None).await?;
+    let addrs = args.get_addrs(Some(config), Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have exactly one test network peer");
     assert_eq!(

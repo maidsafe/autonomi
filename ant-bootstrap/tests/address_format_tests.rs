@@ -47,7 +47,7 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
             first: false,
             addrs: vec![addr.clone()],
             network_contacts_url: vec![],
-            local: false,
+            local: true,
             ignore_cache: true,
             bootstrap_cache_dir: None,
         };
@@ -90,7 +90,9 @@ async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_bootstrap_addr(None, None).await?;
+    // Without specifying the count the code will not return early and will then add contacts from
+    // the production environment.
+    let addrs = args.get_bootstrap_addr(None, Some(2)).await?;
     assert_eq!(
         addrs.len(),
         2,

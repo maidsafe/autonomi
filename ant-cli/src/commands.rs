@@ -352,7 +352,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 password,
             } => wallet::import(private_key, no_password, password),
             WalletCmd::Export => wallet::export(),
-            WalletCmd::Balance => wallet::balance(opt.peers.local).await,
+            WalletCmd::Balance => wallet::balance(opt.peers.local, opt.network_id).await,
         },
         Some(SubCmd::Analyze { addr, verbose }) => {
             analyze::analyze(&addr, verbose, opt.peers, opt.network_id).await

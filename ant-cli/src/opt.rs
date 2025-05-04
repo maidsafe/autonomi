@@ -53,9 +53,14 @@ pub(crate) struct Opt {
     #[clap(long, value_parser = LogOutputDest::parse_from_str, verbatim_doc_comment, default_value = "data-dir")]
     pub log_output_dest: LogOutputDest,
 
-    /// Specify the network ID to use. This will allow you to run the CLI on a different network.
+    /// Specify the ID of the network to connect to.
     ///
-    /// By default, the network ID is set to 1, which represents the mainnet.
+    /// By default, the ID is set to 1 for the mainnet.
+    ///
+    /// If the --alpha argument is used, the ID will automatically be set to 2.
+    ///
+    /// Otherwise, if you are connecting to a testnet, supply the ID of the testnet using this
+    /// argument. It will be a value between 3 and 255.
     #[clap(long, verbatim_doc_comment)]
     pub network_id: Option<u8>,
 
