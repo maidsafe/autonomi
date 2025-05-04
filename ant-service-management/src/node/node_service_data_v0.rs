@@ -13,13 +13,13 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub(super) struct NodeServiceDataV0 {
     pub antnode_path: PathBuf,
     #[serde(default)]
@@ -101,5 +101,184 @@ impl From<NodeServiceDataV0> for NodeServiceDataV1 {
             user_mode: v0.user_mode,
             version: v0.version,
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::super::node_service_data::NodeServiceData;
+    use super::super::node_service_data_v1::NodeServiceDataV1;
+    use super::*;
+    use crate::{node::NODE_SERVICE_DATA_SCHEMA_LATEST, ServiceStatus};
+    use ant_bootstrap::InitialPeersConfig;
+    use ant_evm::EvmNetwork;
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+    };
+
+    #[test]
+    fn test_v0_conversion_to_latest() {
+        let v0_data = NodeServiceDataV0 {
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            upnp: true,
+            home_network: false,
+            // Add other required fields
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            peers_args: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v0_json = serde_json::to_value(&v0_data).unwrap();
+        let latest: NodeServiceData = serde_json::from_value(v0_json).unwrap();
+
+        // Verify it's the latest version
+        assert_eq!(latest.schema_version, NODE_SERVICE_DATA_SCHEMA_LATEST);
+    }
+
+    #[test]
+    fn test_v0_to_v1_conversion() {
+        let v0_data = NodeServiceDataV0 {
+            upnp: false,        // Should become !no_upnp in V1
+            home_network: true, // Should become relay in V1
+            peers_args: InitialPeersConfig {
+                first: true,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            // Add minimal required fields
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v1: NodeServiceDataV1 = v0_data.into();
+
+        // Check field transformations
+        assert!(v1.no_upnp); // V0 upnp: false → V1 no_upnp: true
+        assert!(v1.relay); // V0 home_network: true → V1 relay: true
+        assert!(v1.initial_peers_config.first); // peers_args became initial_peers_config
+    }
+
+    #[test]
+    fn test_backward_compatibility_with_deprecated_fields() {
+        let json_with_deprecated_field = serde_json::json!({
+            "schema_version": NODE_SERVICE_DATA_SCHEMA_V1,
+            "antnode_path": "/usr/bin/antnode",
+            "auto_restart": true,
+            "connected_peers": [
+                "12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+            ],
+            "data_dir_path": "/home/user/.local/share/safe/node/1",
+            "evm_network": "ArbitrumSepoliaTest",
+            "initial_peers_config": {
+                "first": false,
+                "local": false,
+                "addrs": [],
+                "network_contacts_url": [],
+                "disable_mainnet_contacts": false,
+                "ignore_cache": false,
+                "bootstrap_cache_dir": null
+            },
+            "listen_addr": [
+                "/ip4/127.0.0.1/udp/56215/quic-v1/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+            ],
+            "log_dir_path": "/home/user/.local/share/safe/node/1/logs",
+            "log_format": "Default",
+            "max_archived_log_files": 5,
+            "max_log_files": 10,
+            "metrics_port": 8080,
+            "network_id": 1,
+            "node_ip": "127.0.0.1",
+            "node_port": 56215,
+            "no_upnp": false,
+            "number": 1,
+            "peer_id": "12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN",
+            "pid": 12345,
+            "relay": true,
+            "rewards_address": "0x1234567890123456789012345678901234567890",
+            "reward_balance": "1000000000000000000",
+            "rpc_socket_addr": "127.0.0.1:8000",
+            "service_name": "safenode-1",
+            "status": "Running",
+            "user": "safe",
+            "user_mode": true,
+            "version": "0.1.0"
+        });
+
+        let service_data: Result<NodeServiceDataV1, _> =
+            serde_json::from_value(json_with_deprecated_field);
+
+        assert!(
+            service_data.is_ok(),
+            "Failed to deserialize data with deprecated field 'disable_mainnet_contacts': {:?}",
+            service_data.err()
+        );
+
+        let data = service_data.unwrap();
+
+        assert_eq!(data.schema_version, NODE_SERVICE_DATA_SCHEMA_V1);
+        assert_eq!(data.service_name, "safenode-1");
+        assert_eq!(data.node_port, Some(56215));
+
+        assert!(!data.initial_peers_config.first);
+        assert!(!data.initial_peers_config.local);
+        assert!(data.initial_peers_config.addrs.is_empty());
+        assert!(data.initial_peers_config.network_contacts_url.is_empty());
+        assert!(!data.initial_peers_config.ignore_cache);
+        assert!(data.initial_peers_config.bootstrap_cache_dir.is_none());
     }
 }
