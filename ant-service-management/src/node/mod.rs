@@ -10,6 +10,7 @@ mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
 mod node_service_data_v2;
+mod node_service_data_v3;
 
 // Re-export types
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
@@ -80,6 +81,9 @@ impl ServiceStateActions for NodeService {
         if let Some(id) = service_data.network_id {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
+        }
+        if service_data.reachability_check {
+            args.push(OsString::from("--reachability-check"));
         }
         if service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));

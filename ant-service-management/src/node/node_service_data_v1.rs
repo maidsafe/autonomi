@@ -29,9 +29,6 @@ fn schema_v1_value() -> u32 {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct NodeServiceDataV1 {
-    #[serde(default = "schema_v1_value")]
-    /// Added schema version to the struct to handle future changes.
-    pub schema_version: u32,
     pub antnode_path: PathBuf,
     #[serde(default)]
     pub auto_restart: bool,
@@ -72,6 +69,9 @@ pub struct NodeServiceDataV1 {
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
     pub rpc_socket_addr: SocketAddr,
+    #[serde(default = "schema_v1_value")]
+    /// Added schema version to the struct to handle future changes.
+    pub schema_version: u32,
     pub service_name: String,
     pub status: ServiceStatus,
     pub user: Option<String>,
