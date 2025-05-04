@@ -200,6 +200,11 @@ pub enum SubCmd {
         path: Option<PathBuf>,
         #[command(flatten)]
         peers: InitialPeersConfig,
+        /// Enabling this will run an optional reachability check before starting the node.
+        ///
+        /// This will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
+        #[clap(long, default_value_t = false)]
+        reachability_check: bool,
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
@@ -846,6 +851,7 @@ async fn main() -> Result<()> {
             node_port,
             path,
             peers,
+            reachability_check,
             rewards_address,
             rpc_address,
             rpc_port,
@@ -875,6 +881,7 @@ async fn main() -> Result<()> {
                 node_registry,
                 peers,
                 relay,
+                reachability_check,
                 rewards_address,
                 rpc_address,
                 rpc_port,
