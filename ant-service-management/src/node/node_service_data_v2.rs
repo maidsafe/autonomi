@@ -6,14 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::node_service_data_v1::NodeServiceDataV1;
+use super::node_service_data_v3::NodeServiceDataV3;
+use super::node_service_data_v3::NODE_SERVICE_DATA_SCHEMA_V3;
 use super::NodeServiceData;
-use crate::{error::Result, ServiceStatus};
+use crate::ServiceStatus;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -25,7 +26,7 @@ fn schema_v2_value() -> u32 {
     NODE_SERVICE_DATA_SCHEMA_V2
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodeServiceDataV2 {
     /// New field in V2: indicates if the node is running in alpha mode
     #[serde(default)]
@@ -70,127 +71,157 @@ pub struct NodeServiceDataV2 {
     pub version: String,
 }
 
-// Helper method for direct V2 deserialization
-impl NodeServiceDataV2 {
-    pub fn deserialize_v2<'de, D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Define a helper struct that matches V2 exactly
-        #[derive(Deserialize)]
-        struct NodeServiceDataV2Helper {
-            #[serde(default = "schema_v2_value")]
-            schema_version: u32,
-            antnode_path: PathBuf,
-            #[serde(default)]
-            auto_restart: bool,
-            #[serde(deserialize_with = "NodeServiceData::deserialize_connected_peers")]
-            connected_peers: Option<Vec<PeerId>>,
-            data_dir_path: PathBuf,
-            #[serde(default)]
-            evm_network: EvmNetwork,
-            initial_peers_config: InitialPeersConfig,
-            listen_addr: Option<Vec<Multiaddr>>,
-            log_dir_path: PathBuf,
-            log_format: Option<LogFormat>,
-            max_archived_log_files: Option<usize>,
-            max_log_files: Option<usize>,
-            #[serde(default)]
-            metrics_port: Option<u16>,
-            network_id: Option<u8>,
-            #[serde(default)]
-            node_ip: Option<Ipv4Addr>,
-            #[serde(default)]
-            node_port: Option<u16>,
-            no_upnp: bool,
-            number: u16,
-            #[serde(deserialize_with = "NodeServiceData::deserialize_peer_id")]
-            peer_id: Option<PeerId>,
-            pid: Option<u32>,
-            relay: bool,
-            #[serde(default)]
-            rewards_address: RewardsAddress,
-            reward_balance: Option<AttoTokens>,
-            rpc_socket_addr: SocketAddr,
-            service_name: String,
-            status: ServiceStatus,
-            user: Option<String>,
-            user_mode: bool,
-            version: String,
-            #[serde(default)]
-            alpha: bool,
+impl From<NodeServiceDataV2> for NodeServiceDataV3 {
+    fn from(v2: NodeServiceDataV2) -> Self {
+        NodeServiceDataV3 {
+            alpha: v2.alpha,
+            antnode_path: v2.antnode_path,
+            auto_restart: v2.auto_restart,
+            connected_peers: v2.connected_peers,
+            data_dir_path: v2.data_dir_path,
+            evm_network: v2.evm_network,
+            initial_peers_config: v2.initial_peers_config,
+            listen_addr: v2.listen_addr,
+            log_dir_path: v2.log_dir_path,
+            log_format: v2.log_format,
+            max_archived_log_files: v2.max_archived_log_files,
+            max_log_files: v2.max_log_files,
+            metrics_port: v2.metrics_port,
+            network_id: v2.network_id,
+            node_ip: v2.node_ip,
+            node_port: v2.node_port,
+            no_upnp: v2.no_upnp,
+            number: v2.number,
+            peer_id: v2.peer_id,
+            pid: v2.pid,
+            reachability_check: false, // Default value for upgraded instances
+            relay: v2.relay,
+            rewards_address: v2.rewards_address,
+            reward_balance: v2.reward_balance,
+            rpc_socket_addr: v2.rpc_socket_addr,
+            schema_version: NODE_SERVICE_DATA_SCHEMA_V3,
+            service_name: v2.service_name,
+            status: v2.status,
+            user: v2.user,
+            user_mode: v2.user_mode,
+            version: v2.version,
         }
-
-        let helper = NodeServiceDataV2Helper::deserialize(deserializer)?;
-
-        Ok(Self {
-            schema_version: helper.schema_version,
-            antnode_path: helper.antnode_path,
-            auto_restart: helper.auto_restart,
-            connected_peers: helper.connected_peers,
-            data_dir_path: helper.data_dir_path,
-            evm_network: helper.evm_network,
-            initial_peers_config: helper.initial_peers_config,
-            listen_addr: helper.listen_addr,
-            log_dir_path: helper.log_dir_path,
-            log_format: helper.log_format,
-            max_archived_log_files: helper.max_archived_log_files,
-            max_log_files: helper.max_log_files,
-            metrics_port: helper.metrics_port,
-            network_id: helper.network_id,
-            node_ip: helper.node_ip,
-            node_port: helper.node_port,
-            no_upnp: helper.no_upnp,
-            number: helper.number,
-            peer_id: helper.peer_id,
-            pid: helper.pid,
-            relay: helper.relay,
-            rewards_address: helper.rewards_address,
-            reward_balance: helper.reward_balance,
-            rpc_socket_addr: helper.rpc_socket_addr,
-            service_name: helper.service_name,
-            status: helper.status,
-            user: helper.user,
-            user_mode: helper.user_mode,
-            version: helper.version,
-            alpha: helper.alpha,
-        })
     }
 }
 
-impl From<NodeServiceDataV1> for NodeServiceDataV2 {
-    fn from(v1: NodeServiceDataV1) -> Self {
-        NodeServiceDataV2 {
+#[cfg(test)]
+mod tests {
+    use super::super::node_service_data::NodeServiceData;
+    use super::super::node_service_data_v2::NodeServiceDataV2;
+    use super::*;
+    use crate::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+    use crate::ServiceStatus;
+    use ant_bootstrap::InitialPeersConfig;
+    use ant_evm::EvmNetwork;
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+    };
+
+    #[test]
+    fn test_v2_conversion_to_latest() {
+        let v2_data = NodeServiceDataV2 {
+            alpha: true,
             schema_version: NODE_SERVICE_DATA_SCHEMA_V2,
-            antnode_path: v1.antnode_path,
-            auto_restart: v1.auto_restart,
-            connected_peers: v1.connected_peers,
-            data_dir_path: v1.data_dir_path,
-            evm_network: v1.evm_network,
-            initial_peers_config: v1.initial_peers_config,
-            listen_addr: v1.listen_addr,
-            log_dir_path: v1.log_dir_path,
-            log_format: v1.log_format,
-            max_archived_log_files: v1.max_archived_log_files,
-            max_log_files: v1.max_log_files,
-            metrics_port: v1.metrics_port,
-            network_id: v1.network_id,
-            node_ip: v1.node_ip,
-            node_port: v1.node_port,
-            no_upnp: v1.no_upnp,
-            number: v1.number,
-            peer_id: v1.peer_id,
-            pid: v1.pid,
-            relay: v1.relay,
-            rewards_address: v1.rewards_address,
-            reward_balance: v1.reward_balance,
-            rpc_socket_addr: v1.rpc_socket_addr,
-            service_name: v1.service_name,
-            status: v1.status,
-            user: v1.user,
-            user_mode: v1.user_mode,
-            version: v1.version,
-            alpha: false, // Default value for upgraded instances
-        }
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            no_upnp: false,
+            relay: true,
+            // Add other required fields
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v2_json = serde_json::to_value(&v2_data).unwrap();
+        let latest: NodeServiceData = serde_json::from_value(v2_json).unwrap();
+
+        // Verify it's the latest version
+        assert_eq!(latest.schema_version, NODE_SERVICE_DATA_SCHEMA_LATEST);
+    }
+
+    #[test]
+    fn test_v2_to_v3_conversion() {
+        let v2_data = NodeServiceDataV2 {
+            alpha: true,
+            schema_version: NODE_SERVICE_DATA_SCHEMA_V2,
+            relay: false,
+            no_upnp: true,
+            // Add minimal required fields
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v3: NodeServiceDataV3 = v2_data.into();
+
+        // Check field transformations
+        assert!(!v3.reachability_check); // V3 adds reachability_check field and sets it to false
+        assert!(!v3.relay); // V2 field preserved
+        assert!(v3.alpha); // V2 field preserved
+        assert!(v3.no_upnp); // V2 field preserved
     }
 }
