@@ -87,6 +87,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<u16>,
     pub init_peers_config: InitialPeersConfig,
+    pub reachability_check: bool,
     pub rewards_address: RewardsAddress,
     pub relay: bool,
     pub rpc_socket_addr: SocketAddr,
@@ -113,6 +114,11 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
+
+        if self.reachability_check {
+            args.push(OsString::from("--reachability-check"));
+        }
+
         if self.relay {
             args.push(OsString::from("--relay"));
         }
@@ -195,6 +201,7 @@ pub struct AddNodeServiceOptions {
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<PortRange>,
     pub no_upnp: bool,
+    pub reachability_check: bool,
     pub relay: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
@@ -230,7 +237,6 @@ mod tests {
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
             evm_network: EvmNetwork::ArbitrumOne,
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -241,6 +247,8 @@ mod tests {
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            reachability_check: false,
+            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -266,7 +274,6 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -277,6 +284,8 @@ mod tests {
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            reachability_check: false,
+            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -303,7 +312,6 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: Some(10),
@@ -314,6 +322,8 @@ mod tests {
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            reachability_check: false,
+            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -400,6 +410,7 @@ mod tests {
         builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
         builder.no_upnp = true;
+        builder.reachability_check = true;
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
         builder.node_port = Some(12345);
         builder.metrics_port = Some(9090);
@@ -433,6 +444,7 @@ mod tests {
             "--alpha",
             "--network-id",
             "5",
+            "--reachability-check",
             "--relay",
             "--log-format",
             "json",
