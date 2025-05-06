@@ -1277,6 +1277,23 @@ pub(crate) fn multiaddr_strip_p2p(multiaddr: &Multiaddr) -> Multiaddr {
     }
 }
 
+/// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
+/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
+pub(crate) fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
+    let mut new_multiaddr = Multiaddr::empty();
+    let ip = addr.iter().find_map(|p| match p {
+        Protocol::Ip4(addr) => Some(addr),
+        _ => None,
+    })?;
+    let port = multiaddr_get_port(addr)?;
+
+    new_multiaddr.push(Protocol::Ip4(ip));
+    new_multiaddr.push(Protocol::Udp(port));
+    new_multiaddr.push(Protocol::QuicV1);
+
+    Some(new_multiaddr)
+}
+
 /// Get the `IpAddr` from the `Multiaddr`
 pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
     addr.iter().find_map(|p| match p {
