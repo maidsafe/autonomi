@@ -290,8 +290,8 @@ pub async fn reset(
 }
 
 pub async fn start(
-    connection_timeout_s: u64,
-    fixed_interval: Option<u64>,
+    connection_timeout_s: Option<u64>,
+    fixed_interval: u64,
     node_registry: NodeRegistryManager,
     peer_ids: Vec<String>,
     service_names: Vec<String>,
@@ -329,8 +329,9 @@ pub async fn start(
         let service = NodeService::new(node.clone(), Box::new(rpc_client));
 
         // set dynamic startup delay if fixed_interval is not set
-        let service = if fixed_interval.is_none() {
-            service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
+        let service = if let Some(timeout) = connection_timeout_s {
+            debug!("Setting connection timeout to {timeout} seconds");
+            service.with_connection_timeout(Duration::from_secs(timeout))
         } else {
             service
         };
@@ -342,9 +343,9 @@ pub async fn start(
             // continue without applying the delay. The reason for not doing so is because when
             // `start` is called below, the user will get a message to say the service was already
             // started, which I think is useful behaviour to retain.
-            if let Some(interval) = fixed_interval {
-                debug!("Sleeping for {} milliseconds", interval);
-                std::thread::sleep(std::time::Duration::from_millis(interval));
+            if connection_timeout_s.is_none() {
+                debug!("Sleeping for {} milliseconds", fixed_interval);
+                std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
             }
         }
         match service_manager.start().await {
@@ -448,11 +449,11 @@ pub async fn stop(
 }
 
 pub async fn upgrade(
-    connection_timeout_s: u64,
+    connection_timeout_s: Option<u64>,
     do_not_start: bool,
     custom_bin_path: Option<PathBuf>,
     force: bool,
-    fixed_interval: Option<u64>,
+    fixed_interval: u64,
     node_registry: NodeRegistryManager,
     peer_ids: Vec<String>,
     provided_env_variables: Option<Vec<(String, String)>>,
@@ -542,9 +543,9 @@ pub async fn upgrade(
 
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
         let service = NodeService::new(node.clone(), Box::new(rpc_client));
-        // set dynamic startup delay if fixed_interval is not set
-        let service = if fixed_interval.is_none() {
-            service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
+        let service = if let Some(timeout) = connection_timeout_s {
+            debug!("Setting connection timeout to {timeout} seconds");
+            service.with_connection_timeout(Duration::from_secs(timeout))
         } else {
             service
         };
@@ -556,11 +557,11 @@ pub async fn upgrade(
             Ok(upgrade_result) => {
                 info!("Service: {service_name} has been upgraded, result: {upgrade_result:?}",);
                 if upgrade_result != UpgradeResult::NotRequired {
-                    // It doesn't seem useful to apply the interval if there was no upgrade
+                    // It doesn't seem useful to apply the fixed_interval if there was no upgrade
                     // required for the previous service.
-                    if let Some(interval) = fixed_interval {
-                        debug!("Sleeping for {interval} milliseconds",);
-                        std::thread::sleep(std::time::Duration::from_millis(interval));
+                    if connection_timeout_s.is_none() {
+                        debug!("Sleeping for {fixed_interval} milliseconds",);
+                        std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
                     }
                 }
                 upgrade_summary.push((service_name.clone(), upgrade_result));
@@ -600,7 +601,7 @@ pub async fn maintain_n_running_nodes(
     alpha: bool,
     auto_restart: bool,
     auto_set_nat_flags: bool,
-    connection_timeout_s: u64,
+    connection_timeout_s: Option<u64>,
     max_nodes_to_run: u16,
     data_dir_path: Option<PathBuf>,
     enable_metrics_server: bool,
@@ -616,8 +617,8 @@ pub async fn maintain_n_running_nodes(
     node_port: Option<PortRange>,
     node_registry: NodeRegistryManager,
     peers_args: InitialPeersConfig,
-    relay: bool,
     reachability_check: bool,
+    relay: bool,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,
@@ -627,7 +628,7 @@ pub async fn maintain_n_running_nodes(
     user: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
-    start_node_interval: Option<u64>,
+    start_node_interval: u64,
     write_older_cache_files: bool,
 ) -> Result<()> {
     let mut running_nodes = Vec::new();
