@@ -485,8 +485,7 @@ async fn start_nodes(
     node_registry: NodeRegistryManager,
 ) {
     debug!("Starting node {:?}", services);
-    if let Err(err) = ant_node_manager::cmd::node::start(
-        None,
+    if let Err(err) = ant_node_manager::cmd::node::start_batch(
         FIXED_INTERVAL,
         node_registry.clone(),
         vec![],
@@ -665,7 +664,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         false,
         false,
         config.auto_set_nat_flags,
-        None,
         count,
         config.data_dir_path.clone(),
         true,
@@ -742,7 +740,6 @@ async fn add_nodes(
             false,
             false,
             config.auto_set_nat_flags,
-            None,
             config.count,
             config.data_dir_path.clone(),
             true,
