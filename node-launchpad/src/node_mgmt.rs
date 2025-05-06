@@ -445,8 +445,7 @@ async fn add_node(args: MaintainNodesArgs) {
 
 async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
     debug!("Starting node {:?}", services);
-    if let Err(err) = ant_node_manager::cmd::node::start(
-        None,
+    if let Err(err) = ant_node_manager::cmd::node::start_batch(
         FIXED_INTERVAL,
         vec![],
         services.clone(),
@@ -653,7 +652,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         false,
         false,
         config.auto_set_nat_flags,
-        None,
         count,
         config.data_dir_path.clone(),
         true,
@@ -728,7 +726,6 @@ async fn add_nodes(
             false,
             false,
             config.auto_set_nat_flags,
-            None,
             config.count,
             config.data_dir_path.clone(),
             true,
