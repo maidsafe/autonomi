@@ -15,7 +15,7 @@ use ant_logging::{LogBuilder, LogFormat};
 use ant_node_manager::{
     add_services::config::PortRange,
     cmd::{self},
-    VerbosityLevel, DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
+    VerbosityLevel, DEFAULT_NODE_STARTUP_INTERVAL_MS,
 };
 use clap::{Parser, Subcommand};
 use color_eyre::{eyre::eyre, Result};
@@ -327,18 +327,16 @@ pub enum SubCmd {
         /// network within this time, the node is considered failed.
         ///
         /// This argument is mutually exclusive with the 'interval' argument.
-        ///
-        /// Defaults to 300s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, conflicts_with = "interval")]
-        connection_timeout: u64,
+        #[clap(long, conflicts_with = "interval")]
+        connection_timeout: Option<u64>,
         /// An interval applied between launching each service.
         ///
         /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
         /// 'connection-timeout' argument.
         ///
-        /// Units are milliseconds.
-        #[clap(long, conflicts_with = "connection_timeout")]
-        interval: Option<u64>,
+        /// Units are milliseconds. Defaults to 10s.
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS, conflicts_with = "connection_timeout")]
+        interval: u64,
         /// The peer ID of the service to start.
         ///
         /// The argument can be used multiple times to start many services.
@@ -404,10 +402,8 @@ pub enum SubCmd {
         /// network within this time, the node is considered failed.
         ///
         /// This argument is mutually exclusive with the 'interval' argument.
-        ///
-        /// Defaults to 300s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, conflicts_with = "interval")]
-        connection_timeout: u64,
+        #[clap(long, conflicts_with = "interval")]
+        connection_timeout: Option<u64>,
         /// Set this flag to upgrade the nodes without automatically starting them.
         ///
         /// Can be useful for testing scenarios.
@@ -434,9 +430,9 @@ pub enum SubCmd {
         /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
         /// 'connection-timeout' argument.
         ///
-        /// Units are milliseconds.
-        #[clap(long, conflicts_with = "connection_timeout")]
-        interval: Option<u64>,
+        /// Units are milliseconds. Defaults to 10s.
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS, conflicts_with = "connection_timeout")]
+        interval: u64,
         /// Provide a path for the antnode binary to be used by the service.
         ///
         /// Useful for upgrading the service using a custom built binary.
