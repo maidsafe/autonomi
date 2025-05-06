@@ -18,7 +18,7 @@ pub mod local;
 pub mod rpc;
 pub mod rpc_client;
 
-pub const DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S: u64 = 300;
+pub const DEFAULT_NODE_STARTUP_INTERVAL_MS: u64 = 10000;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum VerbosityLevel {
@@ -1429,9 +1429,7 @@ mod tests {
             version: "0.98.1".to_string(),
         };
         let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
-            .with_connection_timeout(Duration::from_secs(
-                DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
-            ));
+            .with_connection_timeout(Duration::from_secs(300));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(mock_service_control),
@@ -6248,9 +6246,7 @@ rewards_address: RewardsAddress::from_str(
             version: current_version.to_string(),
         };
         let service = NodeService::new(&mut service_data, Box::new(mock_rpc_client))
-            .with_connection_timeout(Duration::from_secs(
-                DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
-            ));
+            .with_connection_timeout(Duration::from_secs(300));
 
         let mut service_manager = ServiceManager::new(
             service,
