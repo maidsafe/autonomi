@@ -1020,20 +1020,13 @@ async fn main() -> Result<()> {
         }
         Some(SubCmd::Reset { force }) => cmd::node::reset(force, node_registry, verbosity).await,
         Some(SubCmd::Start {
-            connection_timeout,
+            connection_timeout: _,
             interval,
             peer_id: peer_ids,
             service_name: service_names,
         }) => {
-            cmd::node::start(
-                connection_timeout,
-                interval,
-                node_registry,
-                peer_ids,
-                service_names,
-                verbosity,
-            )
-            .await
+            cmd::node::start_batch(interval, node_registry, peer_ids, service_names, verbosity)
+                .await
         }
         Some(SubCmd::Status {
             details,
