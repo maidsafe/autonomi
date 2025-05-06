@@ -1146,20 +1146,11 @@ async fn main() -> Result<()> {
         }) => cmd::node::remove(keep_directories, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Reset { force }) => cmd::node::reset(force, verbosity).await,
         Some(SubCmd::Start {
-            connection_timeout,
+            connection_timeout: _,
             interval,
             peer_id: peer_ids,
             service_name: service_names,
-        }) => {
-            cmd::node::start(
-                connection_timeout,
-                interval,
-                peer_ids,
-                service_names,
-                verbosity,
-            )
-            .await
-        }
+        }) => cmd::node::start_batch(interval, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Status {
             details,
             fail,
