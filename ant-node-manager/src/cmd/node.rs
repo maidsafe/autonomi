@@ -14,6 +14,7 @@ use crate::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
+    cmd::node_batch_manager::NodeBatchServiceManager,
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
@@ -289,8 +290,7 @@ pub async fn reset(
     Ok(())
 }
 
-pub async fn start(
-    connection_timeout_s: Option<u64>,
+pub async fn start_batch(
     fixed_interval: u64,
     node_registry: NodeRegistryManager,
     peer_ids: Vec<String>,
@@ -298,9 +298,9 @@ pub async fn start(
     verbosity: VerbosityLevel,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
-        print_banner("Start Antnode Services");
+        print_banner("Start Antnode Services (Batch Mode)");
     }
-    info!("Starting antnode services for: {peer_ids:?}, {service_names:?}");
+    info!("Starting antnode services in batch for: {peer_ids:?}, {service_names:?}");
 
     refresh_node_registry(
         node_registry.clone(),
@@ -314,52 +314,31 @@ pub async fn start(
     let services_for_ops = get_services_for_ops(&node_registry, peer_ids, service_names).await?;
     if services_for_ops.is_empty() {
         info!("No services are eligible to be started");
-        // This could be the case if all services are at `Removed` status.
         if verbosity != VerbosityLevel::Minimal {
             println!("No services were eligible to be started");
         }
         return Ok(());
     }
 
-    let mut failed_services = Vec::new();
-    for node in &services_for_ops {
-        let service_name = node.read().await.service_name.clone();
+    let batch_manager =
+        NodeBatchServiceManager::new(services_for_ops, Box::new(ServiceController {}), verbosity);
 
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client));
+    let start_results = batch_manager.start_all(fixed_interval).await;
 
-        // set dynamic startup delay if fixed_interval is not set
-        let service = if let Some(timeout) = connection_timeout_s {
-            debug!("Setting connection timeout to {timeout} seconds");
-            service.with_connection_timeout(Duration::from_secs(timeout))
-        } else {
-            service
-        };
+    // 12 minutes for the reachability check to complete.
+    batch_manager
+        .poll_services(Duration::from_secs(12 * 60))
+        .await;
 
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        if service_manager.service.status().await != ServiceStatus::Running {
-            // It would be possible here to check if the service *is* running and then just
-            // continue without applying the delay. The reason for not doing so is because when
-            // `start` is called below, the user will get a message to say the service was already
-            // started, which I think is useful behaviour to retain.
-            if connection_timeout_s.is_none() {
-                debug!("Sleeping for {} milliseconds", fixed_interval);
-                std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
-            }
-        }
-        match service_manager.start().await {
-            Ok(start_duration) => {
-                debug!("Started service {service_name} in {start_duration:?}",);
+    node_registry.save().await?;
 
-                node_registry.save().await?;
-            }
-            Err(err) => {
-                error!("Failed to start service {service_name}: {err}");
-                failed_services.push((service_name.clone(), err.to_string()))
-            }
-        }
-    }
+    let failed_services: Vec<(String, String)> = start_results
+        .into_iter()
+        .filter_map(|(name, result)| match result {
+            Err(err) => Some((name, err)),
+            _ => None,
+        })
+        .collect();
 
     summarise_any_failed_ops(failed_services, "start", verbosity)
 }
@@ -601,7 +580,6 @@ pub async fn maintain_n_running_nodes(
     alpha: bool,
     auto_restart: bool,
     auto_set_nat_flags: bool,
-    connection_timeout_s: Option<u64>,
     max_nodes_to_run: u16,
     data_dir_path: Option<PathBuf>,
     enable_metrics_server: bool,
@@ -688,8 +666,7 @@ pub async fn maintain_n_running_nodes(
                     "Starting {} existing inactive nodes: {:?}",
                     to_start_count, nodes_to_start
                 );
-                start(
-                    connection_timeout_s,
+                start_batch(
                     start_node_interval,
                     node_registry.clone(),
                     vec![],
@@ -749,8 +726,7 @@ pub async fn maintain_n_running_nodes(
                     .await?;
 
                     if i == 0 {
-                        start(
-                            connection_timeout_s,
+                        start_batch(
                             start_node_interval,
                             node_registry.clone(),
                             vec![],
@@ -762,8 +738,7 @@ pub async fn maintain_n_running_nodes(
                 }
 
                 if !inactive_nodes.is_empty() {
-                    start(
-                        connection_timeout_s,
+                    start_batch(
                         start_node_interval,
                         node_registry.clone(),
                         vec![],
