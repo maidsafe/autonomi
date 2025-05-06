@@ -14,6 +14,7 @@ use crate::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
+    batch::BatchServiceManager,
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
@@ -355,6 +356,78 @@ pub async fn start(
             }
         }
     }
+
+    summarise_any_failed_ops(failed_services, "start", verbosity)
+}
+
+pub async fn start_batch(
+    fixed_interval: u64,
+    peer_ids: Vec<String>,
+    service_names: Vec<String>,
+    verbosity: VerbosityLevel,
+) -> Result<()> {
+    if verbosity != VerbosityLevel::Minimal {
+        print_banner("Start Antnode Services (Batch Mode)");
+    }
+    info!("Starting antnode services in batch for: {peer_ids:?}, {service_names:?}");
+
+    let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
+    refresh_node_registry(
+        &mut node_registry,
+        &ServiceController {},
+        verbosity != VerbosityLevel::Minimal,
+        false,
+        false,
+    )
+    .await?;
+
+    let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
+    if service_indices.is_empty() {
+        info!("No services are eligible to be started");
+        if verbosity != VerbosityLevel::Minimal {
+            println!("No services were eligible to be started");
+        }
+        return Ok(());
+    }
+
+    // Create batch manager
+    let batch_manager = BatchServiceManager::new(
+        &node_registry,
+        &service_indices,
+        Box::new(ServiceController {}),
+        verbosity,
+    );
+
+    // Start all services
+    let start_results = batch_manager.start_all(fixed_interval).await;
+
+    // Wait for connection timeout duration
+    let poll_results = batch_manager
+        .poll_services(Duration::from_secs(10 * 60))
+        .await;
+
+    // Update node registry with poll results
+    for (service_name, updated_data) in poll_results {
+        if let Some(index) = node_registry
+            .nodes
+            .iter()
+            .position(|n| n.service_name == service_name)
+        {
+            node_registry.nodes[index] = updated_data;
+        }
+    }
+
+    // Save the updated registry
+    node_registry.save()?;
+
+    // Report failures
+    let failed_services: Vec<(String, String)> = start_results
+        .into_iter()
+        .filter_map(|(name, result)| match result {
+            Err(err) => Some((name, err)),
+            _ => None,
+        })
+        .collect();
 
     summarise_any_failed_ops(failed_services, "start", verbosity)
 }
