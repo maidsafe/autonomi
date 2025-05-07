@@ -6,26 +6,25 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-mod node_service_data;
-mod node_service_data_v0;
-mod node_service_data_v1;
-#[cfg(test)]
-mod tests;
-
-pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
-
-use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::{
+    error::Result, metric::MetricActions, ServiceStateActions, ServiceStatus, UpgradeOptions,
+};
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::de::Error as DeError;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::EvmNetwork;
+use ant_evm::{EvmNetwork, RewardsAddress, AttoTokens};
 use ant_protocol::get_port_from_multiaddr;
+use ant_logging::LogFormat;
 use libp2p::multiaddr::Protocol;
+use libp2p::{PeerId, Multiaddr};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{ffi::OsString, path::PathBuf, time::Duration};
 use tonic::async_trait;
-
+use std::net::{Ipv4Addr, SocketAddr};
+use std::str::FromStr;
 pub struct NodeService<'a> {
     pub service_data: &'a mut NodeServiceData,
-    pub rpc_actions: Box<dyn RpcActions + Send>,
+    pub metric_actions: Box<dyn MetricActions + Send>,
     /// Used to enable dynamic startup delay based on the time it takes for a node to connect to the network.
     pub connection_timeout: Option<Duration>,
 }
@@ -33,10 +32,10 @@ pub struct NodeService<'a> {
 impl<'a> NodeService<'a> {
     pub fn new(
         service_data: &'a mut NodeServiceData,
-        rpc_actions: Box<dyn RpcActions + Send>,
+        metric_actions: Box<dyn MetricActions + Send>,
     ) -> NodeService<'a> {
         NodeService {
-            rpc_actions,
+            metric_actions,
             service_data,
             connection_timeout: None,
         }
@@ -58,9 +57,8 @@ impl ServiceStateActions for NodeService<'_> {
 
     fn build_upgrade_install_context(&self, options: UpgradeOptions) -> Result<ServiceInstallCtx> {
         let label: ServiceLabel = self.service_data.service_name.parse()?;
+
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(self.service_data.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(
                 self.service_data
@@ -180,18 +178,18 @@ impl ServiceStateActions for NodeService<'_> {
                     "Performing dynamic startup delay for {}",
                     self.service_data.service_name
                 );
-                self.rpc_actions
+                self.metric_actions
                     .is_node_connected_to_network(connection_timeout)
                     .await?;
             }
 
             let node_info = self
-                .rpc_actions
+                .metric_actions
                 .node_info()
                 .await
                 .inspect_err(|err| error!("Error obtaining node_info via RPC: {err:?}"))?;
             let network_info = self
-                .rpc_actions
+                .metric_actions
                 .network_info()
                 .await
                 .inspect_err(|err| error!("Error obtaining network_info via RPC: {err:?}"))?;
@@ -263,6 +261,152 @@ impl ServiceStateActions for NodeService<'_> {
 
     fn version(&self) -> String {
         self.service_data.version.clone()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NodeServiceData {
+    pub antnode_path: PathBuf,
+    #[serde(default)]
+    pub auto_restart: bool,
+    #[serde(
+        serialize_with = "serialize_connected_peers",
+        deserialize_with = "deserialize_connected_peers"
+    )]
+    pub connected_peers: Option<Vec<PeerId>>,
+    pub data_dir_path: PathBuf,
+    #[serde(default)]
+    pub evm_network: EvmNetwork,
+    pub relay: bool,
+    pub listen_addr: Option<Vec<Multiaddr>>,
+    pub log_dir_path: PathBuf,
+    pub log_format: Option<LogFormat>,
+    pub max_archived_log_files: Option<usize>,
+    pub max_log_files: Option<usize>,
+    #[serde(default)]
+    pub metrics_port: Option<u16>,
+    pub network_id: Option<u8>,
+    #[serde(default)]
+    pub node_ip: Option<Ipv4Addr>,
+    #[serde(default)]
+    pub node_port: Option<u16>,
+    pub number: u16,
+    #[serde(
+        serialize_with = "serialize_peer_id",
+        deserialize_with = "deserialize_peer_id"
+    )]
+    pub peer_id: Option<PeerId>,
+    pub initial_peers_config: InitialPeersConfig,
+    pub pid: Option<u32>,
+    #[serde(default)]
+    pub rewards_address: RewardsAddress,
+    pub reward_balance: Option<AttoTokens>,
+    pub rpc_socket_addr: Option<SocketAddr>,
+    pub service_name: String,
+    pub status: ServiceStatus,
+    #[serde(default = "default_upnp")]
+    pub no_upnp: bool,
+    pub user: Option<String>,
+    pub user_mode: bool,
+    pub version: String,
+}
+
+fn default_upnp() -> bool {
+    false
+}
+
+fn serialize_peer_id<S>(value: &Option<PeerId>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    if let Some(peer_id) = value {
+        return serializer.serialize_str(&peer_id.to_string());
+    }
+    serializer.serialize_none()
+}
+
+fn deserialize_peer_id<'de, D>(deserializer: D) -> Result<Option<PeerId>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    if let Some(peer_id_str) = s {
+        PeerId::from_str(&peer_id_str)
+            .map(Some)
+            .map_err(DeError::custom)
+    } else {
+        Ok(None)
+    }
+}
+
+fn serialize_connected_peers<S>(
+    connected_peers: &Option<Vec<PeerId>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match connected_peers {
+        Some(peers) => {
+            let peer_strs: Vec<String> = peers.iter().map(|p| p.to_string()).collect();
+            serializer.serialize_some(&peer_strs)
+        }
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_connected_peers<'de, D>(deserializer: D) -> Result<Option<Vec<PeerId>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let vec: Option<Vec<String>> = Option::deserialize(deserializer)?;
+    match vec {
+        Some(peer_strs) => {
+            let peers: Result<Vec<PeerId>, _> = peer_strs
+                .into_iter()
+                .map(|s| PeerId::from_str(&s).map_err(DeError::custom))
+                .collect();
+            peers.map(Some)
+        }
+        None => Ok(None),
+    }
+}
+
+impl NodeServiceData {
+    /// Returns the UDP port from our node's listen address.
+    pub fn get_antnode_port(&self) -> Option<u16> {
+        // assuming the listening addr contains /ip4/127.0.0.1/udp/56215/quic-v1/p2p/<peer_id>
+        if let Some(multi_addrs) = &self.listen_addr {
+            println!("Listening addresses are defined");
+            for addr in multi_addrs {
+                if let Some(port) = get_port_from_multiaddr(addr) {
+                    println!("Found port: {}", port);
+                    return Some(port);
+                }
+            }
+        }
+        None
+    }
+
+    /// Returns an optional critical failure of the node.
+    pub fn get_critical_failure(&self) -> Option<(chrono::DateTime<chrono::Utc>, String)> {
+        const CRITICAL_FAILURE_LOG_FILE: &str = "critical_failure.log";
+
+        let log_path = self.log_dir_path.join(CRITICAL_FAILURE_LOG_FILE);
+
+        if let Ok(content) = std::fs::read_to_string(log_path) {
+            if let Some((timestamp, message)) = content.split_once(']') {
+                let timestamp_trimmed = timestamp.trim_start_matches('[').trim();
+                if let Ok(datetime) = timestamp_trimmed.parse::<chrono::DateTime<chrono::Utc>>() {
+                    let message_trimmed = message
+                        .trim()
+                        .trim_start_matches("Node terminated due to: ");
+                    return Some((datetime, message_trimmed.to_string()));
+                }
+            }
+        }
+
+        None
     }
 }
 

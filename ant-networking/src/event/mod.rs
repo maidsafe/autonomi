@@ -156,6 +156,8 @@ pub enum NetworkEvent {
     KeysToFetchForReplication(Vec<(PeerId, RecordKey)>),
     /// Started listening on a new address
     NewListenAddr(Multiaddr),
+    /// stopped Listening from a address
+    ClosedListenAddr(Vec<Multiaddr>),
     /// Report unverified record
     UnverifiedRecord(Record),
     /// Terminate Node on unrecoverable errors
@@ -216,6 +218,9 @@ impl Debug for NetworkEvent {
             }
             NetworkEvent::NewListenAddr(addr) => {
                 write!(f, "NetworkEvent::NewListenAddr({addr:?})")
+            }
+            NetworkEvent::ClosedListenAddr(addr) => {
+                write!(f, "NetworkEvent::ClosedListenAddr({addr:?})")
             }
             NetworkEvent::UnverifiedRecord(record) => {
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);
