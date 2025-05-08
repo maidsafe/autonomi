@@ -47,10 +47,7 @@ use libp2p::{
     swarm::{behaviour::toggle::Toggle, NetworkBehaviour, SwarmEvent},
 };
 use rand::Rng;
-use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
-    net::IpAddr,
-};
+use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Duration;
 use tracing::warn;
@@ -158,7 +155,7 @@ pub struct SwarmDriver {
     pub(crate) live_connected_peers: BTreeMap<ConnectionId, (PeerId, Multiaddr, Instant)>,
     /// The list of recently established connections ids.
     /// This is used to prevent log spamming.
-    pub(crate) latest_established_connection_ids: HashMap<usize, (IpAddr, Instant)>,
+    pub(crate) latest_established_connection_ids: HashMap<usize, (Multiaddr, Instant)>,
     // Record the handling time of the recent 10 for each handling kind.
     pub(crate) handling_statistics: BTreeMap<String, Vec<Duration>>,
     pub(crate) handled_times: usize,
