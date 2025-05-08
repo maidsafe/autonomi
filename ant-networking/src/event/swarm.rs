@@ -634,13 +634,10 @@ impl SwarmDriver {
         let Ok(id) = format!("{id}").parse::<usize>() else {
             return;
         };
-        let Some(ip_addr) = multiaddr_get_ip(addr) else {
-            return;
-        };
 
         let _ = self
             .latest_established_connection_ids
-            .insert(id, (ip_addr, Instant::now()));
+            .insert(id, (addr.clone(), Instant::now()));
 
         while self.latest_established_connection_ids.len() >= 50 {
             // remove the oldest entry
@@ -657,13 +654,27 @@ impl SwarmDriver {
         }
     }
 
-    // Do not log IncomingConnectionError if the ConnectionId is adjacent to an already established connection.
+    // Do not log IncomingConnectionError if the the send_back_addr is the same on the adjacent established connections.
+    //
+    // We either check by IP address or by `/p2p/<peer_id>` for relayed nodes.
     fn is_incoming_connection_error_valid(&self, id: ConnectionId, addr: &Multiaddr) -> bool {
         let Ok(id) = format!("{id}").parse::<usize>() else {
             return true;
         };
-        let Some(ip_addr) = multiaddr_get_ip(addr) else {
-            return true;
+
+        let is_valid_error = |established_ip_addr: &Multiaddr| -> bool {
+            // this should cover the /p2p/<peer_id> case
+            if established_ip_addr == addr {
+                return false;
+            } else if let Some(ip_addr) = multiaddr_get_ip(addr) {
+                if let Some(established_ip_addr) = multiaddr_get_ip(established_ip_addr) {
+                    if established_ip_addr == ip_addr {
+                        return false;
+                    }
+                }
+            }
+
+            true
         };
 
         // This should prevent most of the cases where we get an IncomingConnectionError for a peer with multiple
@@ -671,15 +682,11 @@ impl SwarmDriver {
         if let Some((established_ip_addr, _)) =
             self.latest_established_connection_ids.get(&(id - 1))
         {
-            if established_ip_addr == &ip_addr {
-                return false;
-            }
+            return is_valid_error(established_ip_addr);
         } else if let Some((established_ip_addr, _)) =
             self.latest_established_connection_ids.get(&(id + 1))
         {
-            if established_ip_addr == &ip_addr {
-                return false;
-            }
+            return is_valid_error(established_ip_addr);
         }
 
         true
