@@ -1,8 +1,14 @@
 // Standard library imports
-use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 // External dependencies
 use ant_bootstrap::BootstrapCacheConfig;
+use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
 use ant_protocol::storage::DataTypes; //TODOv: add NetworkAddress for PyANTNetwork
 use bls::{PublicKey, SecretKey, PK_SIZE};
 use bytes::Bytes;
@@ -34,7 +40,7 @@ use crate::{
         ClientEvent, UploadSummary,
     },
     files::{Metadata, PrivateArchive, PublicArchive},
-    networking::{Quorum, RetryStrategy, Strategy},
+    networking::{PeerId, Quorum, RetryStrategy, Strategy},
     //TODOv: add Network as ANTNetwork, PeerId, PeerInfo, Record for PyANTNetwork
     register::{RegisterAddress, RegisterHistory},
     Amount,
@@ -1325,25 +1331,29 @@ impl PyClient {
                 .into_iter()
                 .map(|result| match result {
                     Ok((xor_name, quotes)) => {
-                        let xor_name_str = xor_name.to_string();
-                        let quote_data: Vec<_> = quotes
+                        let py_xor_name = PyXorName { inner: xor_name };
+
+                        let py_quotes: Vec<_> = quotes
                             .into_iter()
                             .map(|(peer_id, quote)| {
-                                (
-                                    peer_id.to_string(),
-                                    quote.content.to_string(),
-                                    format!("{:?}", quote.timestamp),
-                                    format!("{:?}", quote.quoting_metrics),
-                                    format!("0x{}", hex::encode(quote.rewards_address.as_slice())),
-                                    hex::encode(&quote.pub_key),
-                                    hex::encode(&quote.signature),
-                                )
+                                let peer_id_str = peer_id.to_string();
+                                let py_payment_quote = PyPaymentQuote { inner: quote };
+                                (peer_id_str, py_payment_quote)
                             })
                             .collect();
 
-                        (xor_name_str, quote_data)
+                        (py_xor_name, py_quotes)
                     }
-                    Err(err) => (err.to_string(), Vec::new()),
+                    Err(err) => {
+                        error!("Error in get_raw_quotes: {}", err);
+
+                        let empty_xor = PyXorName {
+                            inner: XorName::default(),
+                        };
+                        let empty_quotes: Vec<(String, PyPaymentQuote)> = Vec::new();
+
+                        (empty_xor, empty_quotes)
+                    }
                 })
                 .collect();
 
@@ -1730,6 +1740,13 @@ impl PyChunkAddress {
         })
     }
 
+    /// Returns the XorName
+    pub fn xorname(&self) -> PyXorName {
+        PyXorName {
+            inner: *self.inner.xorname(),
+        }
+    }
+
     /// Generate a chunk address for the given content (for content-addressable-storage).
     #[staticmethod]
     fn from_content(data: Vec<u8>) -> PyResult<Self> {
@@ -1749,6 +1766,14 @@ impl PyChunkAddress {
     #[getter]
     fn hex(&self) -> String {
         self.inner.to_hex()
+    }
+
+    /// Create a ChunkAddress from a hex string.
+    #[staticmethod]
+    fn from_hex(hex: &str) -> PyResult<Self> {
+        Ok(Self {
+            inner: ChunkAddress::from_hex(hex).map_err(|e| PyValueError::new_err(e.to_string()))?,
+        })
     }
 
     fn __str__(&self) -> PyResult<String> {
@@ -2916,6 +2941,342 @@ impl PyQuoteForAddress {
     }
 }
 
+#[pyclass(name = "QuotingMetrics")]
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PyQuotingMetrics {
+    inner: QuotingMetrics,
+}
+
+#[pymethods]
+impl PyQuotingMetrics {
+    #[new]
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (data_type, data_size, close_records_stored, records_per_type, max_records, received_payment_count, live_time, network_density=None, network_size=None))]
+    fn new(
+        data_type: u32,
+        data_size: usize,
+        close_records_stored: usize,
+        records_per_type: Vec<(u32, u32)>,
+        max_records: usize,
+        received_payment_count: usize,
+        live_time: u64,
+        network_density: Option<Vec<u8>>,
+        network_size: Option<u64>,
+    ) -> PyResult<Self> {
+        // Convert network_density from Option<Vec<u8>> to Option<[u8; 32]>
+        let network_density = if let Some(density) = network_density {
+            if density.len() != 32 {
+                return Err(PyValueError::new_err(
+                    "network_density must be 32 bytes if provided",
+                ));
+            }
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&density);
+            Some(array)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            inner: QuotingMetrics {
+                data_type,
+                data_size,
+                close_records_stored,
+                records_per_type,
+                max_records,
+                received_payment_count,
+                live_time,
+                network_density,
+                network_size,
+            },
+        })
+    }
+
+    // Getters
+    #[getter]
+    fn data_type(&self) -> u32 {
+        self.inner.data_type
+    }
+
+    #[setter]
+    fn set_data_type(&mut self, value: u32) {
+        self.inner.data_type = value;
+    }
+
+    #[getter]
+    fn data_size(&self) -> usize {
+        self.inner.data_size
+    }
+
+    #[setter]
+    fn set_data_size(&mut self, value: usize) {
+        self.inner.data_size = value;
+    }
+
+    #[getter]
+    fn close_records_stored(&self) -> usize {
+        self.inner.close_records_stored
+    }
+
+    #[setter]
+    fn set_close_records_stored(&mut self, value: usize) {
+        self.inner.close_records_stored = value;
+    }
+
+    #[getter]
+    fn records_per_type(&self) -> Vec<(u32, u32)> {
+        self.inner.records_per_type.clone()
+    }
+
+    #[setter]
+    fn set_records_per_type(&mut self, value: Vec<(u32, u32)>) {
+        self.inner.records_per_type = value;
+    }
+
+    #[getter]
+    fn max_records(&self) -> usize {
+        self.inner.max_records
+    }
+
+    #[setter]
+    fn set_max_records(&mut self, value: usize) {
+        self.inner.max_records = value;
+    }
+
+    #[getter]
+    fn received_payment_count(&self) -> usize {
+        self.inner.received_payment_count
+    }
+
+    #[setter]
+    fn set_received_payment_count(&mut self, value: usize) {
+        self.inner.received_payment_count = value;
+    }
+
+    #[getter]
+    fn live_time(&self) -> u64 {
+        self.inner.live_time
+    }
+
+    #[setter]
+    fn set_live_time(&mut self, value: u64) {
+        self.inner.live_time = value;
+    }
+
+    #[getter]
+    fn network_density(&self) -> Option<Vec<u8>> {
+        self.inner.network_density.map(|array| array.to_vec())
+    }
+
+    #[setter]
+    fn set_network_density(&mut self, value: Option<Vec<u8>>) -> PyResult<()> {
+        self.inner.network_density = if let Some(density) = value {
+            if density.len() != 32 {
+                return Err(PyValueError::new_err(
+                    "network_density must be 32 bytes if provided",
+                ));
+            }
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&density);
+            Some(array)
+        } else {
+            None
+        };
+        Ok(())
+    }
+
+    #[getter]
+    fn network_size(&self) -> Option<u64> {
+        self.inner.network_size
+    }
+
+    #[setter]
+    fn set_network_size(&mut self, value: Option<u64>) {
+        self.inner.network_size = value;
+    }
+
+    fn __str__(&self) -> String {
+        format!("{:?}", self.inner)
+    }
+
+    fn __repr__(&self) -> String {
+        self.__str__()
+    }
+}
+
+#[pyclass(name = "PaymentQuote")]
+#[derive(Clone)]
+pub struct PyPaymentQuote {
+    inner: PaymentQuote,
+}
+
+#[pymethods]
+impl PyPaymentQuote {
+    /// Creates a new PaymentQuote with the provided values
+    #[new]
+    #[pyo3(signature = (content, timestamp, quoting_metrics, rewards_address, pub_key, signature))]
+    fn new(
+        content: PyXorName,
+        timestamp: u64, // seconds since UNIX_EPOCH
+        quoting_metrics: PyQuotingMetrics,
+        rewards_address: String, // hex string with optional 0x prefix
+        pub_key: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> PyResult<Self> {
+        // Convert timestamp from u64 to SystemTime
+        let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
+
+        // Convert rewards address from hex string to RewardsAddress
+        let rewards_address = RewardsAddress::from_slice(
+            &hex::decode(rewards_address.trim_start_matches("0x"))
+                .map_err(|e| PyValueError::new_err(format!("Invalid rewards address: {e}")))?,
+        );
+
+        Ok(Self {
+            inner: PaymentQuote {
+                content: content.inner,
+                timestamp,
+                quoting_metrics: quoting_metrics.inner,
+                rewards_address,
+                pub_key,
+                signature,
+            },
+        })
+    }
+
+    /// Returns the hash of the quote
+    fn hash(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.hash().0))
+    }
+
+    /// Returns the bytes that would be signed for the given parameters
+    #[staticmethod]
+    fn bytes_for_signing(
+        xorname: PyXorName,
+        timestamp: u64,
+        quoting_metrics: PyQuotingMetrics,
+        rewards_address: String,
+    ) -> PyResult<Vec<u8>> {
+        // Convert timestamp from u64 to SystemTime
+        let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
+
+        // Convert rewards address from hex string to RewardsAddress
+        let rewards_address = RewardsAddress::from_slice(
+            &hex::decode(rewards_address.trim_start_matches("0x"))
+                .map_err(|e| PyValueError::new_err(format!("Invalid rewards address: {e}")))?,
+        );
+
+        Ok(PaymentQuote::bytes_for_signing(
+            xorname.inner,
+            timestamp,
+            &quoting_metrics.inner,
+            &rewards_address,
+        ))
+    }
+
+    /// Returns the bytes to be signed from self
+    fn bytes_for_sig(&self) -> Vec<u8> {
+        self.inner.bytes_for_sig()
+    }
+
+    /// Returns the peer id of the node that created the quote
+    fn peer_id(&self) -> PyResult<String> {
+        match self.inner.peer_id() {
+            Ok(peer_id) => Ok(peer_id.to_string()),
+            Err(e) => Err(PyRuntimeError::new_err(format!(
+                "Failed to get peer id: {e}"
+            ))),
+        }
+    }
+
+    /// Check if self is signed by the claimed peer
+    fn check_is_signed_by_claimed_peer(&self, claimed_peer: String) -> PyResult<bool> {
+        let peer_id = match PeerId::from_str(&claimed_peer) {
+            Ok(id) => id,
+            Err(e) => return Err(PyValueError::new_err(format!("Invalid peer ID: {e}"))),
+        };
+
+        Ok(self.inner.check_is_signed_by_claimed_peer(peer_id))
+    }
+
+    /// Returns true if the quote has expired
+    fn has_expired(&self) -> bool {
+        self.inner.has_expired()
+    }
+
+    /// Check whether self is newer than the target quote
+    fn is_newer_than(&self, other: &PyPaymentQuote) -> bool {
+        self.inner.is_newer_than(&other.inner)
+    }
+
+    /// Check against a new quote, verify whether it is a valid one from self perspective
+    fn historical_verify(&self, other: &PyPaymentQuote) -> bool {
+        self.inner.historical_verify(&other.inner)
+    }
+
+    /// Returns the content of the quote
+    #[getter]
+    fn content(&self) -> PyXorName {
+        PyXorName {
+            inner: self.inner.content,
+        }
+    }
+
+    /// Returns the timestamp of the quote as seconds since UNIX epoch
+    #[getter]
+    fn timestamp(&self) -> PyResult<u64> {
+        self.inner
+            .timestamp
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to get timestamp: {e}")))
+    }
+
+    /// Returns the quoting metrics
+    #[getter]
+    fn quoting_metrics(&self) -> PyQuotingMetrics {
+        PyQuotingMetrics {
+            inner: self.inner.quoting_metrics.clone(),
+        }
+    }
+
+    /// Returns the rewards address as a hex string
+    #[getter]
+    fn rewards_address(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.rewards_address.as_slice()))
+    }
+
+    /// Returns the public key as bytes
+    #[getter]
+    fn pub_key(&self) -> Vec<u8> {
+        self.inner.pub_key.clone()
+    }
+
+    /// Returns the signature as bytes
+    #[getter]
+    fn signature(&self) -> Vec<u8> {
+        self.inner.signature.clone()
+    }
+
+    /// Returns the string representation
+    fn __str__(&self) -> String {
+        format!(
+            "PaymentQuote(content={}, timestamp={})",
+            self.inner.content,
+            self.inner
+                .timestamp
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        )
+    }
+
+    /// Returns the debug representation
+    fn __repr__(&self) -> String {
+        self.__str__()
+    }
+}
+
 /// Contains the proof of payments for each XorName and the amount paid
 #[pyclass(name = "Receipt")]
 #[derive(Clone)]
@@ -3831,6 +4192,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMainSecretKey>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyPaymentOption>()?;
+    m.add_class::<PyPaymentQuote>()?;
     m.add_class::<PyPointer>()?;
     m.add_class::<PyPointerAddress>()?;
     m.add_class::<PyPointerTarget>()?;
@@ -3840,6 +4202,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPublicKey>()?;
     m.add_class::<PyQuorum>()?;
     m.add_class::<PyQuoteForAddress>()?;
+    m.add_class::<PyQuotingMetrics>()?;
     m.add_class::<PyReceipt>()?;
     m.add_class::<PyRegisterAddress>()?;
     m.add_class::<PyRegisterHistory>()?;
