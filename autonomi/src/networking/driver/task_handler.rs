@@ -33,11 +33,19 @@ type RecordAndHolders = (Option<Record>, Vec<PeerId>);
 /// Once a task is completed, the [`TaskHandler`] will send the result to the client [`crate::Network`] via the oneshot channel provided when the task was created
 ///
 /// All fields in this struct are private so we know that only the code in this module can MUTATE them
+#[allow(clippy::type_complexity)]
 #[derive(Default)]
 pub(crate) struct TaskHandler {
     closest_peers: HashMap<QueryId, OneShotTaskResult<Vec<PeerInfo>>>,
     put_record: HashMap<QueryId, OneShotTaskResult<()>>,
-    get_cost: HashMap<OutboundRequestId, (OneShotTaskResult<Option<PaymentQuote>>, QuoteDataType)>,
+    get_cost: HashMap<
+        OutboundRequestId,
+        (
+            OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
+            QuoteDataType,
+            PeerInfo,
+        ),
+    >,
     get_record: HashMap<QueryId, OneShotTaskResult<RecordAndHolders>>,
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
 }
@@ -72,10 +80,13 @@ impl TaskHandler {
     pub fn insert_query(&mut self, id: OutboundRequestId, task: NetworkTask) {
         info!("New query: with OutboundRequestId({id}): {task:?}");
         if let NetworkTask::GetQuote {
-            resp, data_type, ..
+            resp,
+            data_type,
+            peer,
+            ..
         } = task
         {
-            self.get_cost.insert(id, (resp, data_type));
+            self.get_cost.insert(id, (resp, data_type, peer));
         }
     }
 
@@ -238,17 +249,17 @@ impl TaskHandler {
         quote_res: Result<PaymentQuote, ant_protocol::error::Error>,
         peer_address: NetworkAddress,
     ) -> Result<(), TaskHandlerError> {
-        let (resp, data_type) = self
-            .get_cost
-            .remove(&id)
-            .ok_or(TaskHandlerError::UnknownQuery(format!(
-                "OutboundRequestId {id:?}"
-            )))?;
+        let (resp, data_type, peer) =
+            self.get_cost
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
 
         match verify_quote(quote_res, peer_address.clone(), data_type) {
             Ok(Some(quote)) => {
                 trace!("OutboundRequestId({id}): got quote from peer {peer_address:?}");
-                resp.send(Ok(Some(quote)))
+                resp.send(Ok(Some((peer, quote))))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
                 Ok(())
             }

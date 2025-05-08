@@ -17,12 +17,13 @@ use crate::{Network, TX_TIMEOUT};
 use alloy::hex::ToHexExt;
 use alloy::network::{Ethereum, EthereumWallet, NetworkWallet, TransactionBuilder};
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    SimpleNonceManager, WalletFiller,
 };
-use alloy::providers::{Identity, Provider, ProviderBuilder, ReqwestProvider};
+use alloy::providers::{Identity, Provider, ProviderBuilder, RootProvider};
 use alloy::rpc::types::TransactionRequest;
 use alloy::signers::local::{LocalSigner, PrivateKeySigner};
-use alloy::transports::http::{reqwest, Client, Http};
+use alloy::transports::http::reqwest;
 use alloy::transports::{RpcError, TransportErrorKind};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -195,21 +196,23 @@ fn from_private_key(private_key: &str) -> Result<EthereumWallet, Error> {
 pub type ProviderWithWallet = FillProvider<
     JoinFill<
         JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            NonceFiller<SimpleNonceManager>,
         >,
         WalletFiller<EthereumWallet>,
     >,
-    ReqwestProvider,
-    Http<Client>,
+    RootProvider,
     Ethereum,
 >;
 
 fn http_provider_with_wallet(rpc_url: reqwest::Url, wallet: EthereumWallet) -> ProviderWithWallet {
     ProviderBuilder::new()
-        .with_recommended_fillers()
+        .with_simple_nonce_management()
         .wallet(wallet)
-        .on_http(rpc_url)
+        .connect_http(rpc_url)
 }
 
 /// Returns the address of this wallet.

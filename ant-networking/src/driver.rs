@@ -402,7 +402,7 @@ impl SwarmDriver {
 
                     // save the cache to disk
                     spawn(async move {
-                        if let Err(err) = old_cache.sync_and_flush_to_disk(true) {
+                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
                             error!("Failed to save bootstrap cache: {err}");
                         }
                     });
@@ -591,9 +591,10 @@ impl SwarmDriver {
 
     /// Returns a new duration that is within +/- variance of the provided duration.
     fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
-        let actual_variance = duration / variance;
+        let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
+
         let random_adjustment =
-            Duration::from_secs(rand::thread_rng().gen_range(0..actual_variance.as_secs()));
+            Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
         if random_adjustment.as_secs() % 2 == 0 {
             duration - random_adjustment
         } else {
@@ -619,12 +620,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_duration_variance_fn() {
-        let duration = Duration::from_secs(100);
+        let duration = Duration::from_secs(150);
         let variance = 10;
+        let expected_variance = Duration::from_secs(15); // 10% of 150
         for _ in 0..10000 {
             let new_duration = crate::SwarmDriver::duration_with_variance(duration, variance);
-            if new_duration < duration - duration / variance
-                || new_duration > duration + duration / variance
+            println!("new_duration: {new_duration:?}");
+            if new_duration < duration - expected_variance
+                || new_duration > duration + expected_variance
             {
                 panic!("new_duration: {new_duration:?} is not within the expected range",);
             }

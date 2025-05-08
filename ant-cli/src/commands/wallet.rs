@@ -6,11 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::opt::NetworkId;
 use crate::wallet::fs::{select_wallet_private_key, store_private_key};
 use crate::wallet::input::request_password;
 use crate::wallet::DUMMY_NETWORK;
-use autonomi::Wallet;
+use autonomi::{get_evm_network, Wallet};
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use prettytable::{Cell, Row, Table};
@@ -81,8 +80,8 @@ pub fn export() -> Result<()> {
     Ok(())
 }
 
-pub async fn balance(local: bool, network_id: NetworkId) -> Result<()> {
-    let network = network_id.evm_network(local)?;
+pub async fn balance(local: bool) -> Result<()> {
+    let network = get_evm_network(local, None)?;
     let wallet = crate::wallet::load_wallet(&network)?;
 
     let token_balance = wallet.balance_of_tokens().await?;

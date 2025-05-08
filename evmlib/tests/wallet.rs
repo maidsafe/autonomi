@@ -41,9 +41,9 @@ async fn funded_wallet(network: &Network, genesis_wallet: EthereumWallet) -> Wal
     let account = wallet_address(&wallet);
 
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+        .with_simple_nonce_management()
         .wallet(genesis_wallet.clone())
-        .on_http(network.rpc_url().clone());
+        .connect_http(network.rpc_url().clone());
 
     // Fund the wallet with plenty of gas tokens
     provider

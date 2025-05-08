@@ -193,6 +193,7 @@ pub async fn add_node(
         }
 
         let install_ctx = InstallNodeServiceCtxBuilder {
+            alpha: options.alpha,
             autostart: options.auto_restart,
             data_dir_path: service_data_dir_path.clone(),
             env_variables: options.env_variables.clone(),
@@ -228,6 +229,7 @@ pub async fn add_node(
                 ));
 
                 node_registry.nodes.push(NodeServiceData {
+                    alpha: options.alpha,
                     antnode_path: service_antnode_path,
                     auto_restart: options.auto_restart,
                     connected_peers: None,

@@ -24,12 +24,7 @@ pub static FILE_UPLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
     let batch_size = std::env::var("FILE_UPLOAD_BATCH_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                * 8,
-        );
+        .unwrap_or(1);
     info!("File upload batch size: {}", batch_size);
     batch_size
 });

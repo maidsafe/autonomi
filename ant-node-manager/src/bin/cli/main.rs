@@ -77,6 +77,9 @@ pub enum SubCmd {
     /// distributions, however, use Systemd, which *does* support user-mode services.
     #[clap(name = "add")]
     Add {
+        /// Set if you want the service to connect to the alpha network.
+        #[clap(long, default_value_t = false)]
+        alpha: bool,
         /// Set to automatically restart antnode services upon OS reboot.
         ///
         /// If not used, any added services will *not* restart automatically when the OS reboots
@@ -923,6 +926,7 @@ async fn main() -> Result<()> {
 
     match args.cmd {
         Some(SubCmd::Add {
+            alpha,
             auto_restart,
             auto_set_nat_flags,
             count,
@@ -950,6 +954,7 @@ async fn main() -> Result<()> {
             version,
         }) => {
             cmd::node::add(
+                alpha,
                 auto_restart,
                 auto_set_nat_flags,
                 count,

@@ -139,14 +139,21 @@ impl Client {
                 (None, &AttoTokens::zero())
             }
         };
+
         let total_cost = *price;
 
         let (record, payees) = if let Some(proof) = proof {
-            let payees = Some(proof.payees());
+            let payees = Some(
+                proof
+                    .payees()
+                    .iter()
+                    .map(|(peer_id, _addrs)| *peer_id)
+                    .collect(),
+            );
             let record = Record {
                 key: NetworkAddress::from(address).to_record_key(),
                 value: try_serialize_record(
-                    &(proof, &pointer),
+                    &(proof.to_proof_of_payment(), &pointer),
                     RecordKind::DataWithPayment(DataTypes::Pointer),
                 )
                 .map_err(|_| PointerError::Serialization)?

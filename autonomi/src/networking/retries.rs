@@ -94,7 +94,7 @@ impl Network {
         addr: NetworkAddress,
         data_type: u32,
         data_size: usize,
-    ) -> Result<Option<Vec<PaymentQuote>>, NetworkError> {
+    ) -> Result<Option<Vec<(PeerInfo, PaymentQuote)>>, NetworkError> {
         let mut errors = vec![];
         for duration in RetryStrategy::Balanced.backoff() {
             match self.get_quotes(addr.clone(), data_type, data_size).await {

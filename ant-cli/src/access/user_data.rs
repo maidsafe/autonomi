@@ -16,6 +16,7 @@ use autonomi::{
     },
     data::DataAddress,
 };
+use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 
 use super::data_dir::get_client_data_dir_path;
@@ -32,11 +33,15 @@ pub fn get_local_user_data() -> Result<UserData> {
     let file_archives = get_local_public_file_archives()?;
     let private_file_archives = get_local_private_file_archives()?;
     let registers = get_local_registers()?;
+    let register_key = super::keys::get_register_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
 
     let user_data = UserData {
         file_archives,
         private_file_archives,
         register_addresses: registers,
+        register_key,
     };
     Ok(user_data)
 }
@@ -135,6 +140,14 @@ pub fn write_local_user_data(user_data: &UserData) -> Result<()> {
 
     for (register, name) in user_data.register_addresses.iter() {
         write_local_register(register, name)?;
+    }
+
+    if let Some(register_key) = &user_data.register_key {
+        let key = super::keys::parse_register_signing_key(register_key)
+            .wrap_err("Failed to parse register signing key while writing to local user data")?;
+        super::keys::create_register_signing_key_file(key).wrap_err(
+            "Failed to create register signing key file while writing to local user data",
+        )?;
     }
 
     Ok(())

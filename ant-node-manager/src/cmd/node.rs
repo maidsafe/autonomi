@@ -36,6 +36,7 @@ use tracing::debug;
 
 /// Returns the added service names
 pub async fn add(
+    alpha: bool,
     auto_restart: bool,
     auto_set_nat_flags: bool,
     count: Option<u16>,
@@ -115,6 +116,7 @@ pub async fn add(
     init_peers_config.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {
+        alpha,
         auto_restart,
         auto_set_nat_flags,
         count,
@@ -583,6 +585,7 @@ pub async fn upgrade(
 ///
 /// The arguments here are mostly mirror those used in `add`.
 pub async fn maintain_n_running_nodes(
+    alpha: bool,
     auto_restart: bool,
     auto_set_nat_flags: bool,
     connection_timeout_s: u64,
@@ -688,6 +691,7 @@ pub async fn maintain_n_running_nodes(
 
                 for (i, port) in ports_to_use.into_iter().enumerate() {
                     let added_service = add(
+                        alpha,
                         auto_restart,
                         auto_set_nat_flags,
                         Some(1),

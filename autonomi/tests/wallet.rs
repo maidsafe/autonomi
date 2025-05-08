@@ -17,7 +17,7 @@ use test_utils::evm::get_funded_wallet;
 async fn from_private_key() {
     let private_key = "0xdb1049e76a813c94be0df47ec3e20533ca676b1b9fef2ddbce9daa117e4da4aa";
     let network =
-        get_evm_network(true).expect("Could not get EVM network from environment variables");
+        get_evm_network(true, None).expect("Could not get EVM network from environment variables");
     let wallet = Wallet::new_from_private_key(network, private_key).unwrap();
 
     assert_eq!(
@@ -31,7 +31,7 @@ async fn send_tokens() {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("wallet", false);
 
     let network =
-        get_evm_network(true).expect("Could not get EVM network from environment variables");
+        get_evm_network(true, None).expect("Could not get EVM network from environment variables");
     let wallet = get_funded_wallet();
 
     let receiving_wallet = Wallet::new_with_random_wallet(network);

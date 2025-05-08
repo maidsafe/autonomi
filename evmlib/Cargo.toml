@@ -12,9 +12,7 @@ version = "0.3.0"
 external-signer = []
 
 [dependencies]
-alloy = { version = "0.7.3", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
-# Remove me once dependency `alloy` is updated. ^0.8.18 supports `0x` `prefix in address!` macro.
-alloy-primitives = "0.8.18"
+alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 dirs-next = "~2.0.0"
 serde = "1"
 serde_with = { version = "3.11.0", features = ["macros"] }

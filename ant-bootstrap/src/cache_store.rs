@@ -56,42 +56,6 @@ impl CacheData {
         self.last_updated = SystemTime::now();
     }
 
-    /// Perform cleanup on the Peers
-    /// - Removes all the unreliable addrs for a peer
-    /// - Removes all the expired addrs for a peer
-    /// - Removes all peers with empty addrs set
-    /// - Maintains `max_addr` per peer by removing the addr with the lowest success rate
-    /// - Maintains `max_peers` in the list by removing the peer with the oldest last_seen
-    pub fn perform_cleanup(&mut self, cfg: &BootstrapCacheConfig) {
-        self.peers.values_mut().for_each(|bootstrap_addresses| {
-            bootstrap_addresses.0.retain(|bootstrap_addr| {
-                let now = SystemTime::now();
-                let has_not_expired =
-                    if let Ok(duration) = now.duration_since(bootstrap_addr.last_seen) {
-                        duration < cfg.addr_expiry_duration
-                    } else {
-                        false
-                    };
-                bootstrap_addr.is_reliable() && has_not_expired
-            })
-        });
-
-        self.peers
-            .retain(|_, bootstrap_addresses| !bootstrap_addresses.0.is_empty());
-
-        self.peers.values_mut().for_each(|bootstrap_addresses| {
-            if bootstrap_addresses.0.len() > cfg.max_addrs_per_peer {
-                // sort by lowest failure rate first
-                bootstrap_addresses
-                    .0
-                    .sort_by_key(|addr| addr.failure_rate() as u64);
-                bootstrap_addresses.0.truncate(cfg.max_addrs_per_peer);
-            }
-        });
-
-        self.try_remove_oldest_peers(cfg);
-    }
-
     /// Remove the oldest peers until we're under the max_peers limit
     pub fn try_remove_oldest_peers(&mut self, cfg: &BootstrapCacheConfig) {
         if self.peers.len() > cfg.max_peers {
@@ -222,7 +186,7 @@ impl BootstrapCacheStore {
             Error::FailedToParseCacheData
         })?;
 
-        data.perform_cleanup(cfg);
+        data.try_remove_oldest_peers(cfg);
 
         Ok(data)
     }
@@ -296,7 +260,7 @@ impl BootstrapCacheStore {
         }
 
         debug!("Added new peer {addr:?}, performing cleanup of old addrs");
-        self.perform_cleanup();
+        self.try_remove_oldest_peers();
     }
 
     /// Remove a single address for a peer.
@@ -312,13 +276,12 @@ impl BootstrapCacheStore {
         }
     }
 
-    pub fn perform_cleanup(&mut self) {
-        self.data.perform_cleanup(&self.config);
+    pub fn try_remove_oldest_peers(&mut self) {
+        self.data.try_remove_oldest_peers(&self.config);
     }
 
     /// Flush the cache to disk after syncing with the CacheData from the file.
-    /// Do not perform cleanup when `data` is fetched from the network. The SystemTime might not be accurate.
-    pub fn sync_and_flush_to_disk(&mut self, with_cleanup: bool) -> Result<()> {
+    pub fn sync_and_flush_to_disk(&mut self) -> Result<()> {
         if self.config.disable_cache_writing {
             info!("Cache writing is disabled, skipping sync to disk");
             return Ok(());
@@ -335,10 +298,7 @@ impl BootstrapCacheStore {
             warn!("Failed to load cache data from file, overwriting with new data");
         }
 
-        if with_cleanup {
-            self.data.perform_cleanup(&self.config);
-            self.data.try_remove_oldest_peers(&self.config);
-        }
+        self.data.try_remove_oldest_peers(&self.config);
 
         self.write().inspect_err(|e| {
             error!("Failed to save cache to disk: {e}");
@@ -376,78 +336,5 @@ impl BootstrapCacheStore {
         info!("Cache written to disk: {:?}", self.cache_path);
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::tempdir;
-
-    async fn create_test_store() -> (BootstrapCacheStore, PathBuf) {
-        let temp_dir = tempdir().unwrap();
-        let cache_file = temp_dir.path().join("cache.json");
-
-        let config = crate::BootstrapCacheConfig::empty().with_cache_path(&cache_file);
-
-        let store = BootstrapCacheStore::new(config).unwrap();
-        (store.clone(), store.cache_path.clone())
-    }
-
-    #[tokio::test]
-    async fn test_peer_cleanup() {
-        let (mut store, _) = create_test_store().await;
-        let good_addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
-                .parse()
-                .unwrap();
-        let bad_addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8081/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
-                .parse()
-                .unwrap();
-
-        // Add peers
-        store.add_addr(good_addr.clone());
-        store.add_addr(bad_addr.clone());
-
-        // Make one peer reliable and one unreliable
-        store.update_addr_status(&good_addr, true);
-
-        // Fail the bad peer more times than max_retries
-        for _ in 0..5 {
-            store.update_addr_status(&bad_addr, false);
-        }
-
-        // Clean up unreliable peers
-        store.perform_cleanup();
-
-        // Get all peers (not just reliable ones)
-        let peers = store.get_all_addrs().collect::<Vec<_>>();
-        assert_eq!(peers.len(), 1);
-        assert_eq!(peers[0].addr, good_addr);
-    }
-
-    #[tokio::test]
-    async fn test_peer_not_removed_if_successful() {
-        let (mut store, _) = create_test_store().await;
-        let addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
-                .parse()
-                .unwrap();
-
-        // Add a peer and make it successful
-        store.add_addr(addr.clone());
-        store.update_addr_status(&addr, true);
-
-        // Wait a bit
-        tokio::time::sleep(Duration::from_millis(100)).await;
-
-        // Run cleanup
-        store.perform_cleanup();
-
-        // Verify peer is still there
-        let peers = store.get_all_addrs().collect::<Vec<_>>();
-        assert_eq!(peers.len(), 1);
-        assert_eq!(peers[0].addr, addr);
     }
 }

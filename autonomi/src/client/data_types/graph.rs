@@ -135,11 +135,16 @@ impl Client {
         let total_cost = *price;
 
         // prepare the record for network storage
-        let payees = proof.payees();
+        let payees = proof
+            .payees()
+            .iter()
+            .map(|(peer_id, _addrs)| *peer_id)
+            .collect();
+
         let record = Record {
             key: NetworkAddress::from(address).to_record_key(),
             value: try_serialize_record(
-                &(proof, &entry),
+                &(proof.to_proof_of_payment(), &entry),
                 RecordKind::DataWithPayment(DataTypes::GraphEntry),
             )
             .map_err(|err| GraphError::Serialization(err.to_string()))?

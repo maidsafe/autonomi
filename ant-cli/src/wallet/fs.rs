@@ -11,7 +11,7 @@ use crate::wallet::input::{get_password_input, get_wallet_selection_input};
 use crate::wallet::DUMMY_NETWORK;
 use autonomi::{Network, RewardsAddress, Wallet};
 use color_eyre::eyre::{bail, eyre, Context};
-use color_eyre::Result;
+use color_eyre::{Result, Section};
 use const_hex::traits::FromHex;
 use prettytable::{Cell, Row, Table};
 use std::ffi::OsString;
@@ -136,7 +136,10 @@ pub(crate) fn select_local_wallet_address() -> Result<String> {
     let wallet_files = get_wallet_files(&wallets_folder)?;
 
     let wallet_address = match wallet_files.len() {
-        0 => bail!("No local wallets found."),
+        0 => {
+            return Err(eyre!("No local wallets found."))
+                .with_suggestion(|| "Providing SECRET_KEY as an environment variable also works!")
+        }
         1 => Ok(filter_wallet_file_extension(&wallet_files[0])),
         _ => get_wallet_selection(wallet_files),
     }?;

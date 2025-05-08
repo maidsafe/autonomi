@@ -9,9 +9,11 @@
 mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
+mod node_service_data_v2;
 #[cfg(test)]
 mod tests;
 
+// Re-export types
 pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
 
 use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
@@ -89,6 +91,10 @@ impl ServiceStateActions for NodeService<'_> {
         }
         if self.service_data.relay {
             args.push(OsString::from("--relay"));
+        }
+
+        if self.service_data.alpha {
+            args.push(OsString::from("--alpha"));
         }
 
         if let Some(node_ip) = self.service_data.node_ip {
@@ -297,9 +303,6 @@ pub fn push_arguments_from_initial_peers_config(
                 .collect::<Vec<_>>()
                 .join(","),
         ));
-    }
-    if init_peers_config.disable_mainnet_contacts {
-        args.push(OsString::from("--testnet"));
     }
     if init_peers_config.ignore_cache {
         args.push(OsString::from("--ignore-cache"));

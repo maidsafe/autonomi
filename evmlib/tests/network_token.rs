@@ -4,11 +4,11 @@ use alloy::network::{Ethereum, EthereumWallet, NetworkWallet};
 use alloy::node_bindings::AnvilInstance;
 use alloy::primitives::U256;
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    SimpleNonceManager, WalletFiller,
 };
-use alloy::providers::{Identity, ReqwestProvider, WalletProvider};
+use alloy::providers::{Identity, RootProvider, WalletProvider};
 use alloy::signers::local::PrivateKeySigner;
-use alloy::transports::http::{Client, Http};
 use evmlib::contract::network_token::NetworkToken;
 use evmlib::testnet::{deploy_network_token_contract, start_node};
 use evmlib::transaction_config::TransactionConfig;
@@ -18,20 +18,21 @@ use std::str::FromStr;
 async fn setup() -> (
     AnvilInstance,
     NetworkToken<
-        Http<Client>,
         FillProvider<
             JoinFill<
                 JoinFill<
-                    Identity,
                     JoinFill<
-                        GasFiller,
-                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        Identity,
+                        JoinFill<
+                            GasFiller,
+                            JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        >,
                     >,
+                    NonceFiller<SimpleNonceManager>,
                 >,
                 WalletFiller<EthereumWallet>,
             >,
-            ReqwestProvider,
-            Http<Client>,
+            RootProvider,
             Ethereum,
         >,
         Ethereum,
@@ -92,8 +93,7 @@ async fn test_approve() {
         .allowance(account, spender.address())
         .call()
         .await
-        .unwrap()
-        ._0;
+        .unwrap();
 
     assert_eq!(allowance, transaction_value);
 }

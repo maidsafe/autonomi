@@ -12,7 +12,7 @@ use crate::retry::{retry, send_transaction_with_retries};
 use crate::transaction_config::TransactionConfig;
 use alloy::providers::{Network, Provider};
 use alloy::sol;
-use alloy::transports::{RpcError, Transport, TransportErrorKind};
+use alloy::transports::{RpcError, TransportErrorKind};
 
 sol!(
     #[allow(clippy::too_many_arguments)]
@@ -34,14 +34,13 @@ pub enum Error {
     Timeout(#[from] tokio::time::error::Elapsed),
 }
 
-pub struct NetworkToken<T: Transport + Clone, P: Provider<T, N>, N: Network> {
-    pub contract: NetworkTokenContractInstance<T, P, N>,
+pub struct NetworkToken<P: Provider<N>, N: Network> {
+    pub contract: NetworkTokenContractInstance<P, N>,
 }
 
-impl<T, P, N> NetworkToken<T, P, N>
+impl<P, N> NetworkToken<P, N>
 where
-    T: Transport + Clone,
-    P: Provider<T, N>,
+    P: Provider<N>,
     N: Network,
 {
     /// Create a new NetworkToken contract instance.
@@ -72,8 +71,7 @@ where
             "balanceOf",
             None,
         )
-        .await?
-        ._0;
+        .await?;
         debug!("Balance of account {account} is {balance}");
         Ok(balance)
     }
@@ -86,8 +84,7 @@ where
             "allowance",
             None,
         )
-        .await?
-        ._0;
+        .await?;
         debug!("Allowance of owner: {owner} for spender: {spender} is: {allowance}");
         Ok(allowance)
     }

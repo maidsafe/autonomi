@@ -49,6 +49,11 @@ ant [OPTIONS] <COMMAND>
 
 [Reference : Wallet](#wallet-operations)
 
+## Analyze
+- `analyze <address>`
+
+[Reference : Analyze](#analyze-operations)
+
 ### Help
 - `help`
 - `help <COMMAND>`
@@ -313,6 +318,14 @@ This will display both the token and gas balances.
 wallet export
 ```
 This will display both the address and private key of the wallet.
+
+### Analyze Operations
+
+Analyze an address to get the address type, and visualize the content.
+
+```
+analyze <address>
+```
 
 
 ## Error Handling

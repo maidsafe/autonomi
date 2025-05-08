@@ -29,7 +29,7 @@ use crate::{
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
     version::{
-        get_network_id, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
+        get_network_id_str, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
         IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR,
     },
     NetworkAddress, PrettyPrintKBucketKey,
@@ -72,6 +72,9 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
+
+/// Client requires a super long time when have get_closest query against production network
+const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
 
 // Init during compilation, instead of runtime error that should never happen
 // Option<T>::expect will be stabilised as const in the future (https://github.com/rust-lang/rust/issues/67441)
@@ -199,11 +202,11 @@ impl NetworkBuilder {
             // How many nodes _should_ store data.
             .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(KAD_QUERY_TIMEOUT_S)
-            // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            .disjoint_query_paths(true)
+            // may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
+            // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
+            // .disjoint_query_paths(true)
             // Records never expire
             .set_record_ttl(None)
-            .set_replication_factor(REPLICATION_FACTOR)
             .set_periodic_bootstrap_interval(Some(Duration::from_secs(bootstrap_interval)))
             // Emit PUT events for validation prior to insertion into the RecordStore.
             // This is no longer needed as the record_storage::put now can carry out validation.
@@ -219,7 +222,7 @@ impl NetworkBuilder {
             check_and_wipe_storage_dir_if_necessary(
                 root_dir.clone(),
                 storage_dir_path.clone(),
-                get_network_id(),
+                get_network_id_str(),
             )?;
 
             // Configures the disk_store to store records under the provided path and increase the max record size
@@ -272,13 +275,13 @@ impl NetworkBuilder {
         // to outbound-only mode and don't listen on any address
         let mut kad_cfg = kad::Config::new(KAD_STREAM_PROTOCOL_ID); // default query timeout is 60 secs
 
-        // 1mb packet size
         let _ = kad_cfg
             .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
             .set_max_packet_size(MAX_PACKET_SIZE)
-            .set_replication_factor(REPLICATION_FACTOR)
-            // Require iterative queries to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            .disjoint_query_paths(true)
+            .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
+            // may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
+            // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
+            // .disjoint_query_paths(true)
             // How many nodes _should_ store data.
             .set_replication_factor(REPLICATION_FACTOR);
 

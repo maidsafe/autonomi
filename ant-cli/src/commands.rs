@@ -12,6 +12,7 @@ mod register;
 mod vault;
 mod wallet;
 
+use crate::actions::NetworkContext;
 use crate::opt::Opt;
 use autonomi::networking::Quorum;
 use clap::{error::ErrorKind, CommandFactory as _, Subcommand};
@@ -69,6 +70,11 @@ pub enum FileCmd {
         /// Upload the file as public. Everyone can see public data on the Network.
         #[arg(short, long)]
         public: bool,
+        /// Experimental: Optionally specify the quorum for the verification of the upload.
+        ///
+        /// Possible values are: "one", "majority", "all", n (where n is a number greater than 0)
+        #[arg(short, long, value_parser = parse_quorum)]
+        quorum: Option<Quorum>,
         /// Optional: Specify the maximum fee per gas in u128.
         #[arg(long)]
         max_fee_per_gas: Option<u128>,
@@ -241,16 +247,19 @@ pub enum WalletCmd {
 pub async fn handle_subcommand(opt: Opt) -> Result<()> {
     let cmd = opt.command;
 
+    let network_context = NetworkContext::new(opt.peers, opt.network_id as u8);
+
     match cmd {
         Some(SubCmd::File { command }) => match command {
-            FileCmd::Cost { file } => file::cost(&file, opt.peers, opt.network_id).await,
+            FileCmd::Cost { file } => file::cost(&file, network_context).await,
             FileCmd::Upload {
                 file,
                 public,
+                quorum,
                 max_fee_per_gas,
             } => {
                 if let Err((err, exit_code)) =
-                    file::upload(&file, public, opt.peers, max_fee_per_gas, opt.network_id).await
+                    file::upload(&file, public, network_context, quorum, max_fee_per_gas).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
@@ -264,7 +273,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 quorum,
             } => {
                 if let Err((err, exit_code)) =
-                    file::download(&addr, &dest_file, opt.peers, quorum, opt.network_id).await
+                    file::download(&addr, &dest_file, network_context, quorum).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
@@ -276,58 +285,37 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         },
         Some(SubCmd::Register { command }) => match command {
             RegisterCmd::GenerateKey { overwrite } => register::generate_key(overwrite),
-            RegisterCmd::Cost { name } => register::cost(&name, opt.peers, opt.network_id).await,
+            RegisterCmd::Cost { name } => register::cost(&name, network_context).await,
             RegisterCmd::Create {
                 name,
                 value,
                 hex,
                 max_fee_per_gas,
-            } => {
-                register::create(
-                    &name,
-                    &value,
-                    hex,
-                    opt.peers,
-                    max_fee_per_gas,
-                    opt.network_id,
-                )
-                .await
-            }
+            } => register::create(&name, &value, hex, network_context, max_fee_per_gas).await,
             RegisterCmd::Edit {
                 address,
                 name,
                 value,
                 hex,
                 max_fee_per_gas,
-            } => {
-                register::edit(
-                    address,
-                    name,
-                    &value,
-                    hex,
-                    opt.peers,
-                    max_fee_per_gas,
-                    opt.network_id,
-                )
-                .await
-            }
+            } => register::edit(address, name, &value, hex, network_context, max_fee_per_gas).await,
             RegisterCmd::Get { address, name, hex } => {
-                register::get(address, name, hex, opt.peers, opt.network_id).await
+                register::get(address, name, hex, network_context).await
             }
             RegisterCmd::History { address, name, hex } => {
-                register::history(address, name, hex, opt.peers, opt.network_id).await
+                register::history(address, name, hex, network_context).await
             }
             RegisterCmd::List => register::list(),
         },
         Some(SubCmd::Vault { command }) => match command {
             VaultCmd::Cost { expected_max_size } => {
-                vault::cost(opt.peers, expected_max_size, opt.network_id).await
+                vault::cost(network_context, expected_max_size).await
             }
             VaultCmd::Create { max_fee_per_gas } => {
-                vault::create(opt.peers, max_fee_per_gas, opt.network_id).await
+                vault::create(network_context, max_fee_per_gas).await
             }
-            VaultCmd::Load => vault::load(opt.peers, opt.network_id).await,
-            VaultCmd::Sync { force } => vault::sync(force, opt.peers, opt.network_id).await,
+            VaultCmd::Load => vault::load(network_context).await,
+            VaultCmd::Sync { force } => vault::sync(force, network_context).await,
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {
@@ -340,10 +328,10 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 password,
             } => wallet::import(private_key, no_password, password),
             WalletCmd::Export => wallet::export(),
-            WalletCmd::Balance => wallet::balance(opt.peers.local, opt.network_id).await,
+            WalletCmd::Balance => wallet::balance(network_context.peers.local).await,
         },
         Some(SubCmd::Analyze { addr, verbose }) => {
-            analyze::analyze(&addr, verbose, opt.peers, opt.network_id).await
+            analyze::analyze(&addr, verbose, network_context).await
         }
         None => {
             // If no subcommand is given, default to clap's error behaviour.

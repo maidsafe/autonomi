@@ -425,7 +425,7 @@ jobs:
           }
         env:
           ANT_LOG: "v"
-        timeout-minutes: 25
+        timeout-minutes: 35
 
       - name: sync the vault
         run: ./target/release/ant --log-output-dest data-dir --local vault sync

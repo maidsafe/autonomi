@@ -151,9 +151,9 @@ impl Client {
             }
         }
 
-        info!("Paying for {} chunks..", combined_xor_names.len());
+        info!("Quoting for {} chunks..", combined_xor_names.len());
         #[cfg(feature = "loud")]
-        println!("Paying for {} chunks..", combined_xor_names.len());
+        println!("Quoting for {} chunks..", combined_xor_names.len());
 
         let (receipt, skipped_payments_amount) = self
             .pay_for_content_addrs(

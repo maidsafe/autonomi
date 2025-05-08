@@ -13,13 +13,17 @@ use crate::{CustomNetwork, Network};
 use alloy::network::Ethereum;
 use alloy::providers::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    SimpleNonceManager,
 };
-use alloy::providers::{Identity, ProviderBuilder, ReqwestProvider};
-use alloy::transports::http::{reqwest, Client, Http};
+use alloy::providers::{Identity, ProviderBuilder, RootProvider};
+use alloy::transports::http::reqwest;
 use dirs_next::data_dir;
 use rand::Rng;
 use std::env;
 use std::path::PathBuf;
+
+const MAINNET_ID: u8 = 1;
+const ALPHANET_ID: u8 = 2;
 
 pub const EVM_TESTNET_CSV_FILENAME: &str = "evm_testnet_data.csv";
 
@@ -51,12 +55,19 @@ use std::sync::OnceLock;
 
 static EVM_NETWORK: OnceLock<Network> = OnceLock::new();
 
-/// Initialize the EVM Network parameters from environment variables or local CSV file.
+/// Initialize the EVM Network.
 ///
-/// It will first try to get the network from the environment variables.
-/// If it fails and `local` is true, it will try to get the network from the local CSV file.
-/// If both fail, it will return the default network.
-pub fn get_evm_network(local: bool) -> Result<Network, Error> {
+/// Try to obtain it first from environment variables. If that fails and `local` is true,
+/// try to get it from the local CSV file. Lastly, attempt to obtain it based on the network ID,
+/// where 1 is reserved for the mainnet, 2 is reserved for the alpha network, and any other value
+/// between 3 and 255 is reserved for testnets. In the case of a testnet, the network to use must
+/// be configured via the environment variables. We can't just default to Sepolia because sometimes
+/// we want to use Anvil.
+///
+/// If all of these fail an error will be returned. It doesn't really make sense to have a default
+/// for the EVM network. Doing so actually results in confusion for users where sometimes payments
+/// can be rejected because they are on the wrong network.
+pub fn get_evm_network(local: bool, network_id: Option<u8>) -> Result<Network, Error> {
     if let Some(network) = EVM_NETWORK.get() {
         return Ok(network.clone());
     }
@@ -65,7 +76,31 @@ pub fn get_evm_network(local: bool) -> Result<Network, Error> {
         Ok(evm_network) => Ok(evm_network),
         Err(_) if local => Ok(local_evm_network_from_csv()
             .map_err(|e| Error::FailedToGetEvmNetwork(e.to_string()))?),
-        Err(_) => Ok(Network::default()),
+        Err(_) => {
+            if let Some(id) = network_id {
+                match id {
+                    MAINNET_ID => {
+                        info!("Using Arbitrum One based on network ID {}", id);
+                        Ok(Network::ArbitrumOne)
+                    }
+                    ALPHANET_ID => {
+                        info!("Using Arbitrum Sepolia Test based on network ID {}", id);
+                        Ok(Network::ArbitrumSepoliaTest)
+                    }
+                    _ => {
+                        error!("Network ID {} requires EVM network configuration via environment variables", id);
+                        Err(Error::FailedToGetEvmNetwork(format!(
+                            "Network ID {id} requires EVM network to be configured via environment variables" 
+                        )))
+                    }
+                }
+            } else {
+                error!("Failed to obtain the desired EVM network via any means");
+                Err(Error::FailedToGetEvmNetwork(
+                    "Failed to obtain the desired EVM network via any means".to_string(),
+                ))
+            }
+        }
     };
 
     if let Ok(network) = res.as_ref() {
@@ -119,10 +154,6 @@ fn get_evm_network_from_env() -> Result<Network, Error> {
         .map(|v| v == "arbitrum-one")
         .unwrap_or(false);
 
-    let use_arbitrum_sepolia = std::env::var("EVM_NETWORK")
-        .map(|v| v == "arbitrum-sepolia")
-        .unwrap_or(false);
-
     let use_arbitrum_sepolia_test = std::env::var("EVM_NETWORK")
         .map(|v| v == "arbitrum-sepolia-test")
         .unwrap_or(false);
@@ -130,9 +161,6 @@ fn get_evm_network_from_env() -> Result<Network, Error> {
     if use_arbitrum_one {
         info!("Using Arbitrum One EVM network as EVM_NETWORK is set to 'arbitrum-one'");
         Ok(Network::ArbitrumOne)
-    } else if use_arbitrum_sepolia {
-        info!("Using Arbitrum Sepolia EVM network as EVM_NETWORK is set to 'arbitrum-sepolia'");
-        Ok(Network::ArbitrumSepolia)
     } else if use_arbitrum_sepolia_test {
         info!("Using Arbitrum Sepolia Test EVM network as EVM_NETWORK is set to 'arbitrum-sepolia-test'");
         Ok(Network::ArbitrumSepoliaTest)
@@ -146,9 +174,9 @@ fn get_evm_network_from_env() -> Result<Network, Error> {
     } else if use_local_evm {
         local_evm_network_from_csv()
     } else {
-        error!("Failed to obtain EVM Network through any means");
+        error!("Failed to obtain the desired EVM Network through environment variables");
         Err(Error::FailedToGetEvmNetwork(
-            "Failed to obtain EVM Network through any means".to_string(),
+            "Failed to obtain the desired EVM Network through environment variables".to_string(),
         ))
     }
 }
@@ -187,14 +215,16 @@ pub fn http_provider(
     rpc_url: reqwest::Url,
 ) -> FillProvider<
     JoinFill<
-        Identity,
-        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        NonceFiller<SimpleNonceManager>,
     >,
-    ReqwestProvider,
-    Http<Client>,
+    RootProvider,
     Ethereum,
 > {
     ProviderBuilder::new()
-        .with_recommended_fillers()
-        .on_http(rpc_url)
+        .with_simple_nonce_management()
+        .connect_http(rpc_url)
 }

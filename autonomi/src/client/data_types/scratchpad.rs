@@ -190,11 +190,17 @@ impl Client {
 
         let net_addr = NetworkAddress::from(*address);
         let (record, payees) = if let Some(proof) = proof {
-            let payees = Some(proof.payees());
+            let payees = Some(
+                proof
+                    .payees()
+                    .iter()
+                    .map(|(peer_id, _addrs)| *peer_id)
+                    .collect(),
+            );
             let record = Record {
                 key: net_addr.to_record_key(),
                 value: try_serialize_record(
-                    &(proof, &scratchpad),
+                    &(proof.to_proof_of_payment(), &scratchpad),
                     RecordKind::DataWithPayment(DataTypes::Scratchpad),
                 )
                 .map_err(|_| ScratchpadError::Serialization)?

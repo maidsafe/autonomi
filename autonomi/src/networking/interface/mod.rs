@@ -57,6 +57,6 @@ pub(super) enum NetworkTask {
         data_type: u32,
         data_size: usize,
         #[debug(skip)]
-        resp: OneShotTaskResult<Option<PaymentQuote>>,
+        resp: OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
     },
 }

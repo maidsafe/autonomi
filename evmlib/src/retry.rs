@@ -3,7 +3,6 @@ use crate::transaction_config::TransactionConfig;
 use crate::TX_TIMEOUT;
 use alloy::network::{Network, TransactionBuilder};
 use alloy::providers::{PendingTransactionBuilder, Provider};
-use alloy::transports::Transport;
 use std::time::Duration;
 
 pub(crate) const MAX_RETRIES: u8 = 3;
@@ -49,7 +48,7 @@ where
 }
 
 /// Generic function to send a transaction with retries.
-pub(crate) async fn send_transaction_with_retries<P, T, N, E>(
+pub(crate) async fn send_transaction_with_retries<P, N, E>(
     provider: &P,
     calldata: Calldata,
     to: Address,
@@ -57,8 +56,7 @@ pub(crate) async fn send_transaction_with_retries<P, T, N, E>(
     transaction_config: &TransactionConfig,
 ) -> Result<TxHash, E>
 where
-    T: Transport + Clone,
-    P: Provider<T, N>,
+    P: Provider<N>,
     N: Network,
     E: From<alloy::transports::RpcError<alloy::transports::TransportErrorKind>>
         + From<alloy::providers::PendingTransactionError>

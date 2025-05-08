@@ -33,7 +33,6 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
         addrs: vec![],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: false,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
@@ -59,12 +58,11 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: true,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(None, None).await?;
+    let addrs = args.get_addrs(None, Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have one addr");
     assert_eq!(addrs[0], peer_addr, "Should have the correct address");
@@ -94,12 +92,11 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
         addrs: vec![],
         network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],
         local: false,
-        disable_mainnet_contacts: true,
         ignore_cache: true,
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), None).await?;
+    let addrs = args.get_addrs(Some(config), Some(2)).await?;
     assert_eq!(
         addrs.len(),
         2,
@@ -110,7 +107,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
 }
 
 #[tokio::test]
-async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
     let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
 
     let temp_dir = TempDir::new()?;
@@ -127,12 +124,11 @@ async fn test_test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
         addrs: vec![peer_addr.clone()],
         network_contacts_url: vec![],
         local: false,
-        disable_mainnet_contacts: true,
         ignore_cache: false,
         bootstrap_cache_dir: None,
     };
 
-    let addrs = args.get_addrs(Some(config), None).await?;
+    let addrs = args.get_addrs(Some(config), Some(1)).await?;
 
     assert_eq!(addrs.len(), 1, "Should have exactly one test network peer");
     assert_eq!(

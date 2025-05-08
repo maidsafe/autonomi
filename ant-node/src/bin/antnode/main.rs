@@ -77,6 +77,10 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
+    /// Set to connect to the alpha network.
+    #[clap(long)]
+    alpha: bool,
+
     /// Print the crate version.
     #[clap(long)]
     crate_version: bool,
@@ -217,9 +221,14 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let opt = Opt::parse();
 
-    if let Some(network_id) = opt.network_id {
-        version::set_network_id(network_id);
-    }
+    let network_id = if let Some(network_id) = opt.network_id {
+        network_id
+    } else if opt.alpha {
+        2
+    } else {
+        1
+    };
+    version::set_network_id(network_id);
 
     let identify_protocol_str = version::IDENTIFY_PROTOCOL_STR
         .read()
@@ -259,7 +268,7 @@ fn main() -> Result<()> {
 
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
         Some(evm_network) => Ok(evm_network.clone().into()),
-        None => match get_evm_network(opt.peers.local) {
+        None => match get_evm_network(opt.peers.local, Some(network_id)) {
             Ok(net) => Ok(net),
             Err(_) => Err(eyre!(
                 "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
@@ -281,7 +290,7 @@ fn main() -> Result<()> {
         bootstrap_cache.write()?;
     } else {
         // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk(true)?;
+        bootstrap_cache.sync_and_flush_to_disk()?;
     }
 
     let msg = format!(

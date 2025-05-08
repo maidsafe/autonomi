@@ -6,16 +6,14 @@ use crate::retry::{retry, send_transaction_with_retries};
 use crate::transaction_config::TransactionConfig;
 use alloy::network::Network;
 use alloy::providers::Provider;
-use alloy::transports::Transport;
 
-pub struct PaymentVaultHandler<T: Transport + Clone, P: Provider<T, N>, N: Network> {
-    pub contract: IPaymentVaultInstance<T, P, N>,
+pub struct PaymentVaultHandler<P: Provider<N>, N: Network> {
+    pub contract: IPaymentVaultInstance<P, N>,
 }
 
-impl<T, P, N> PaymentVaultHandler<T, P, N>
+impl<P, N> PaymentVaultHandler<P, N>
 where
-    T: Transport + Clone,
-    P: Provider<T, N>,
+    P: Provider<N>,
     N: Network,
 {
     /// Create a new PaymentVaultHandler instance from a (proxy) contract's address
@@ -44,8 +42,7 @@ where
             "getQuote",
             None,
         )
-        .await?
-        .prices;
+        .await?;
 
         // FIXME: temporary logic until the local smart contract gets updated
         if amounts.len() == 1 {
@@ -115,8 +112,7 @@ where
             "verifyPayment",
             None,
         )
-        .await?
-        .verificationResults;
+        .await?;
 
         debug!("Payment verification results: {:?}", results);
 

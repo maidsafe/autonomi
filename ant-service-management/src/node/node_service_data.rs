@@ -13,13 +13,13 @@ use serde::{de::Error as DeError, Deserialize, Deserializer, Serializer};
 use std::str::FromStr;
 
 /// Type alias for the latest version of the node service data structure.
-pub type NodeServiceData = super::node_service_data_v1::NodeServiceDataV1;
+pub type NodeServiceData = super::node_service_data_v2::NodeServiceDataV2;
 /// Type alias for the latest node service data schema version.
 pub const NODE_SERVICE_DATA_SCHEMA_LATEST: u32 =
-    super::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1;
+    super::node_service_data_v2::NODE_SERVICE_DATA_SCHEMA_V2;
 
 /// Custom deserialization for NodeServiceData.
-/// This will perform conversion from V0 to V1 if needed.
+/// This will perform conversion from V0 or V1 to V2 if needed.
 impl<'de> Deserialize<'de> for NodeServiceData {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -27,36 +27,51 @@ impl<'de> Deserialize<'de> for NodeServiceData {
     {
         let json_value = serde_json::Value::deserialize(deserializer)?;
 
-        let is_v1 = match &json_value {
-            serde_json::Value::Object(obj) => obj.contains_key("schema_version"),
-            _ => false,
+        let schema_version = match &json_value {
+            serde_json::Value::Object(obj) => obj.get("schema_version").and_then(|v| v.as_u64()),
+            _ => None,
         };
 
-        if is_v1 {
-            // It's V1 format - use NodeServiceDataV1's helper method
-            match super::node_service_data_v1::NodeServiceDataV1::deserialize_v1(
-                &mut serde_json::de::Deserializer::from_str(&json_value.to_string()),
-            ) {
-                Ok(v1) => Ok(v1),
-                Err(e) => Err(D::Error::custom(format!(
-                    "Failed to deserialize as V1: {}",
-                    e
-                ))),
-            }
-        } else {
-            // It's V0 format - deserialize and convert
-            match serde_json::from_value::<super::node_service_data_v0::NodeServiceDataV0>(
-                json_value,
-            ) {
-                Ok(v0) => {
-                    // Convert V0 to V1
-                    let v1: super::node_service_data_v1::NodeServiceDataV1 = v0.into();
-                    Ok(v1)
+        match schema_version {
+            Some(2) => {
+                match super::node_service_data_v2::NodeServiceDataV2::deserialize_v2(
+                    &mut serde_json::de::Deserializer::from_str(&json_value.to_string()),
+                ) {
+                    Ok(v2) => Ok(v2),
+                    Err(e) => Err(D::Error::custom(format!(
+                        "Failed to deserialize as V2: {}",
+                        e
+                    ))),
                 }
-                Err(e) => Err(D::Error::custom(format!(
-                    "Failed to deserialize as V0: {}",
-                    e
-                ))),
+            }
+            Some(1) => {
+                match serde_json::from_value::<super::node_service_data_v1::NodeServiceDataV1>(
+                    json_value,
+                ) {
+                    Ok(v1) => {
+                        let v2: super::node_service_data_v2::NodeServiceDataV2 = v1.into();
+                        Ok(v2)
+                    }
+                    Err(e) => Err(D::Error::custom(format!(
+                        "Failed to deserialize as V1: {}",
+                        e
+                    ))),
+                }
+            }
+            _ => {
+                match serde_json::from_value::<super::node_service_data_v0::NodeServiceDataV0>(
+                    json_value,
+                ) {
+                    Ok(v0) => {
+                        let v1: super::node_service_data_v1::NodeServiceDataV1 = v0.into();
+                        let v2: super::node_service_data_v2::NodeServiceDataV2 = v1.into();
+                        Ok(v2)
+                    }
+                    Err(e) => Err(D::Error::custom(format!(
+                        "Failed to deserialize as V0: {}",
+                        e
+                    ))),
+                }
             }
         }
     }

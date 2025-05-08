@@ -32,12 +32,13 @@ pub enum NetworkId {
 }
 
 impl NetworkId {
+    #[allow(dead_code)]
     pub fn evm_network(&self, local: bool) -> Result<EvmNetwork> {
         match self {
             NetworkId::Local => Ok(EvmNetwork::new(true)?),
             NetworkId::Main => Ok(EvmNetwork::default()),
             NetworkId::Alpha => Ok(EvmNetwork::ArbitrumSepoliaTest),
-            NetworkId::Custom => Ok(get_evm_network(local)?),
+            NetworkId::Custom => Ok(get_evm_network(local, Some(*self as u8))?),
         }
     }
 }
@@ -62,6 +63,10 @@ impl std::str::FromStr for NetworkId {
 #[command(disable_version_flag = true)]
 #[command(author, version, about, long_about = None)]
 pub(crate) struct Opt {
+    /// Set to connect to the alpha network.
+    #[clap(long)]
+    pub alpha: bool,
+
     // Available subcommands. This is optional to allow `--version` to work without a subcommand.
     #[clap(subcommand)]
     pub command: Option<SubCmd>,

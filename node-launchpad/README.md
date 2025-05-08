@@ -41,12 +41,11 @@ pre-built node binary and connect it to a network with a custom network ID.
 | Option | Description |
 |--------|-------------|
 | `--network-id <ID>` | Specify the network ID to connect to. Default is 1 for mainnet |
-| `--testnet` | Disable mainnet contacts (for test networks) |
 | `--antnode-path <PATH>` | Path to the pre-built node binary |
 | `--network-contacts-url <URL>` | Comma-separated list of URL containing the bootstrap cache. Can be ignored if `--peer` is used |
 | `--peer <MULTIADDR>` | Comma-separated list of peer multiaddresses. Can be ignored if `--network-contacts-url` is used |
 
 
 ```bash
-./node-launchpad --network-id 2 --testnet --antnode-path /path/to/antnode --peer /ip4/1.2.3.4/tcp/12000/p2p/12D3KooWAbCxMV2Zm3Pe4HcAokWDG9w8UMLpDiKpMxwLK3mixpkL
+./node-launchpad --network-id 2 --antnode-path /path/to/antnode --peer /ip4/1.2.3.4/tcp/12000/p2p/12D3KooWAbCxMV2Zm3Pe4HcAokWDG9w8UMLpDiKpMxwLK3mixpkL
 ```

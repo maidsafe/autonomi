@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-networking"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.3.10"
+version = "0.3.11"
 
 [features]
 default = []
@@ -16,7 +16,7 @@ open-metrics = ["libp2p/metrics", "prometheus-client", "hyper", "sysinfo"]
 
 [dependencies]
 aes-gcm-siv = "0.11.1"
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.1" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.2" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.27" }
 ant-evm = { path = "../ant-evm", version = "0.1.13" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.4" }

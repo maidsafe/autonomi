@@ -431,7 +431,17 @@ impl Node {
         let start = Instant::now();
         let event_string = format!("{event:?}");
         let event_header;
-        debug!("Handling NetworkEvent {event_string:?}");
+
+        // Reducing non-mandatory logging
+        if let NetworkEvent::QueryRequestReceived {
+            query: Query::GetVersion { .. },
+            ..
+        } = event
+        {
+            trace!("Handling NetworkEvent {event_string}");
+        } else {
+            debug!("Handling NetworkEvent {event_string}");
+        }
 
         match event {
             NetworkEvent::PeerAdded(peer_id, connected_peers) => {
@@ -502,7 +512,13 @@ impl Node {
 
                 let _handle = spawn(async move {
                     let res = Self::handle_query(&network, query, payment_address).await;
-                    debug!("Sending response {res:?}");
+
+                    // Reducing non-mandatory logging
+                    if let Response::Query(QueryResponse::GetVersion { .. }) = res {
+                        trace!("Sending response {res:?}");
+                    } else {
+                        debug!("Sending response {res:?}");
+                    }
 
                     network.send_response(res, channel);
                 });
@@ -995,7 +1011,7 @@ impl Node {
         // We can skip passing `addrs` here as the new peer should be part of the kad::RT and swarm can get the addr.
         let version = match network.send_request(request, peer, addrs).await {
             Ok((Response::Query(QueryResponse::GetVersion { version, .. }), _conn_info)) => {
-                info!("Fetched peer version {peer:?} as {version:?}");
+                trace!("Fetched peer version {peer:?} as {version:?}");
                 version
             }
             Ok(other) => {

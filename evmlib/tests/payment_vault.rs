@@ -6,11 +6,11 @@ use alloy::node_bindings::AnvilInstance;
 use alloy::primitives::utils::parse_ether;
 use alloy::providers::ext::AnvilApi;
 use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller, WalletFiller,
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+    SimpleNonceManager, WalletFiller,
 };
-use alloy::providers::{Identity, ProviderBuilder, ReqwestProvider, WalletProvider};
+use alloy::providers::{Identity, ProviderBuilder, RootProvider, WalletProvider};
 use alloy::signers::local::{LocalSigner, PrivateKeySigner};
-use alloy::transports::http::{Client, Http};
 use evmlib::common::U256;
 use evmlib::contract::network_token::NetworkToken;
 use evmlib::contract::payment_vault::handler::PaymentVaultHandler;
@@ -25,39 +25,41 @@ use evmlib::Network;
 async fn setup() -> (
     AnvilInstance,
     NetworkToken<
-        Http<Client>,
         FillProvider<
             JoinFill<
                 JoinFill<
-                    Identity,
                     JoinFill<
-                        GasFiller,
-                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        Identity,
+                        JoinFill<
+                            GasFiller,
+                            JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        >,
                     >,
+                    NonceFiller<SimpleNonceManager>,
                 >,
                 WalletFiller<EthereumWallet>,
             >,
-            ReqwestProvider,
-            Http<Client>,
+            RootProvider,
             Ethereum,
         >,
         Ethereum,
     >,
     PaymentVaultHandler<
-        Http<Client>,
         FillProvider<
             JoinFill<
                 JoinFill<
-                    Identity,
                     JoinFill<
-                        GasFiller,
-                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        Identity,
+                        JoinFill<
+                            GasFiller,
+                            JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                        >,
                     >,
+                    NonceFiller<SimpleNonceManager>,
                 >,
                 WalletFiller<EthereumWallet>,
             >,
-            ReqwestProvider,
-            Http<Client>,
+            RootProvider,
             Ethereum,
         >,
         Ethereum,
@@ -81,13 +83,15 @@ async fn provider_with_gas_funded_wallet(
 ) -> FillProvider<
     JoinFill<
         JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            NonceFiller<SimpleNonceManager>,
         >,
         WalletFiller<EthereumWallet>,
     >,
-    ReqwestProvider,
-    Http<Client>,
+    RootProvider,
     Ethereum,
 > {
     let signer: PrivateKeySigner = LocalSigner::random();
@@ -96,9 +100,9 @@ async fn provider_with_gas_funded_wallet(
     let rpc_url = anvil.endpoint().parse().unwrap();
 
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+        .with_simple_nonce_management()
         .wallet(wallet)
-        .on_http(rpc_url);
+        .connect_http(rpc_url);
 
     let account = wallet_address(provider.wallet());
 
@@ -118,7 +122,7 @@ async fn test_deploy() {
 
 #[tokio::test]
 async fn test_get_quote_on_arb_sepolia() {
-    let network = Network::ArbitrumSepolia;
+    let network = Network::ArbitrumSepoliaTest;
     let provider = http_provider(network.rpc_url().clone());
     let payment_vault = PaymentVaultHandler::new(*network.data_payments_address(), provider);
 

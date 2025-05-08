@@ -51,7 +51,7 @@ pub fn create_register_signing_key_file(key: RegisterSecretKey) -> Result<PathBu
     Ok(file_path)
 }
 
-fn parse_register_signing_key(key_hex: &str) -> Result<RegisterSecretKey> {
+pub fn parse_register_signing_key(key_hex: &str) -> Result<RegisterSecretKey> {
     RegisterSecretKey::from_hex(key_hex)
         .wrap_err("Failed to parse register signing key")
         .with_suggestion(|| {

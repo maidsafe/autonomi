@@ -72,6 +72,14 @@ impl Client {
         Ok(Self(client))
     }
 
+    /// Initialize a client that is configured to be connected to the alpha network.
+    #[napi(factory)]
+    pub async fn init_alpha() -> Result<Self> {
+        let client = autonomi::Client::init_alpha().await.map_err(map_error)?;
+
+        Ok(Self(client))
+    }
+
     /// Initialize a client that bootstraps from a list of peers.
     ///
     /// If any of the provided peers is a global address, the client will not be local.

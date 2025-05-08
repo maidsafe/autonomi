@@ -11,7 +11,7 @@ use evmlib::{utils::get_evm_network, wallet::Wallet, Network};
 use std::env;
 
 pub fn get_funded_wallet() -> evmlib::wallet::Wallet {
-    let network = get_evm_network(true).expect("Failed to get local EVM network from CSV");
+    let network = get_evm_network(true, None).expect("Failed to get local EVM network from CSV");
     if matches!(network, Network::ArbitrumOne) {
         panic!("You're trying to use ArbitrumOne network. Use a custom network for testing.");
     }
@@ -25,7 +25,7 @@ pub fn get_funded_wallet() -> evmlib::wallet::Wallet {
 }
 
 pub fn get_new_wallet() -> Result<Wallet> {
-    let network = get_evm_network(true).expect("Failed to get local EVM network from CSV");
+    let network = get_evm_network(true, None).expect("Failed to get local EVM network from CSV");
     if matches!(network, Network::ArbitrumOne) {
         bail!("You're trying to use ArbitrumOne network. Use a custom network for testing.");
     }

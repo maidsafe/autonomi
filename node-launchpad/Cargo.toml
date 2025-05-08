@@ -18,7 +18,7 @@ path = "src/bin/tui/main.rs"
 nightly = []
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.1" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.2" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.27" }
 ant-evm = { path = "../ant-evm", version = "0.1.13" }
 ant-node-manager = { version = "0.12.3", path = "../ant-node-manager" }

@@ -14,7 +14,7 @@ pub(crate) mod encryption;
 pub(crate) mod fs;
 pub(crate) mod input;
 
-pub const DUMMY_NETWORK: Network = Network::ArbitrumSepolia;
+pub const DUMMY_NETWORK: Network = Network::ArbitrumSepoliaTest;
 
 /// Load wallet from ENV or disk
 pub(crate) fn load_wallet(evm_network: &Network) -> color_eyre::Result<Wallet> {

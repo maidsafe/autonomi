@@ -8,7 +8,7 @@
 
 use crate::client::quote::{DataTypes, StoreQuote};
 use crate::Client;
-use ant_evm::{EncodedPeerId, EvmWallet, EvmWalletError, ProofOfPayment};
+use ant_evm::{ClientProofOfPayment, EncodedPeerId, EvmWallet, EvmWalletError};
 use std::collections::HashMap;
 use xor_name::XorName;
 
@@ -17,7 +17,7 @@ use super::quote::CostError;
 pub use crate::{Amount, AttoTokens};
 
 /// Contains the proof of payments for each XOR address and the amount paid
-pub type Receipt = HashMap<XorName, (ProofOfPayment, AttoTokens)>;
+pub type Receipt = HashMap<XorName, (ClientProofOfPayment, AttoTokens)>;
 
 pub type AlreadyPaidAddressesCount = usize;
 
@@ -38,18 +38,17 @@ pub enum PayError {
 
 pub fn receipt_from_store_quotes(quotes: StoreQuote) -> Receipt {
     let mut receipt = Receipt::new();
-
     for (content_addr, quote_for_address) in quotes.0 {
         let price = AttoTokens::from_atto(quote_for_address.price());
 
-        let mut proof_of_payment = ProofOfPayment {
+        let mut proof_of_payment = ClientProofOfPayment {
             peer_quotes: vec![],
         };
 
-        for (peer_id, quote, _amount) in quote_for_address.0 {
+        for (peer_id, addrs, quote, _amount) in quote_for_address.0 {
             proof_of_payment
                 .peer_quotes
-                .push((EncodedPeerId::from(peer_id), quote));
+                .push((EncodedPeerId::from(peer_id), addrs.0, quote));
         }
 
         // skip empty proofs
@@ -121,6 +120,10 @@ impl Client {
         let number_of_content_addrs = content_addrs.clone().count();
         let quotes = self.get_store_quotes(data_type, content_addrs).await?;
 
+        info!("Paying for {} chunks..", quotes.len());
+        #[cfg(feature = "loud")]
+        println!("Paying for {} chunks..", quotes.len());
+
         if !quotes.is_empty() {
             // Make sure nobody else can use the wallet while we are paying
             debug!("Waiting for wallet lock");
@@ -141,7 +144,13 @@ impl Client {
         }
 
         let skipped_chunks = number_of_content_addrs - quotes.len();
-        trace!(
+        info!(
+            "Chunk payments of {} chunks completed. {} chunks were free / already paid for",
+            quotes.len(),
+            skipped_chunks
+        );
+        #[cfg(feature = "loud")]
+        println!(
             "Chunk payments of {} chunks completed. {} chunks were free / already paid for",
             quotes.len(),
             skipped_chunks

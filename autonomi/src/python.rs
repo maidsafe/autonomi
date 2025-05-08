@@ -64,6 +64,17 @@ impl PyClient {
         })
     }
 
+    /// Initialize a client that is configured to be connected to the alpha network.
+    #[staticmethod]
+    fn init_alpha(py: Python) -> PyResult<Bound<PyAny>> {
+        future_into_py(py, async {
+            let inner = Client::init_alpha()
+                .await
+                .map_err(|e| PyConnectionError::new_err(format!("Failed to connect: {e}")))?;
+            Ok(PyClient { inner })
+        })
+    }
+
     /// Initialize a client that bootstraps from a list of peers.
     ///
     /// If any of the provided peers is a global address, the client will not be local.

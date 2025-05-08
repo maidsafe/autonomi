@@ -382,6 +382,7 @@ async fn add_node(args: MaintainNodesArgs) {
 
     let port_range = Some(PortRange::Single(current_port));
     match ant_node_manager::cmd::node::add(
+        false, // alpha,
         false, // auto_restart,
         config.auto_set_nat_flags,
         Some(config.count),
@@ -631,6 +632,7 @@ fn get_port_range(custom_ports: &Option<PortRange>) -> (u16, u16) {
 async fn scale_down_nodes(config: &NodeConfig, count: u16) {
     match ant_node_manager::cmd::node::maintain_n_running_nodes(
         false,
+        false,
         config.auto_set_nat_flags,
         CONNECTION_TIMEOUT_START,
         count,
@@ -703,6 +705,7 @@ async fn add_nodes(
 
         let port_range = Some(PortRange::Single(*current_port));
         match ant_node_manager::cmd::node::maintain_n_running_nodes(
+            false,
             false,
             config.auto_set_nat_flags,
             CONNECTION_TIMEOUT_START,

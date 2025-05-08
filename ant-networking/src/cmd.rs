@@ -590,7 +590,7 @@ impl SwarmDriver {
 
                             match self.swarm.dial(opts) {
                                 Ok(()) => {
-                                    info!("Dialing peer {peer:?} for req_resp with address: {addrs:?}",);
+                                    debug!("Dialing peer {peer:?} for req_resp with address: {addrs:?}",);
                                 }
                                 Err(err) => {
                                     error!("Failed to dial peer {peer:?} for req_resp with address: {addrs:?} error: {err}",);

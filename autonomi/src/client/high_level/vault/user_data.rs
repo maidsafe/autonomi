@@ -25,11 +25,13 @@ use super::{app_name_to_vault_content_type, VaultContentType, VaultError, VaultS
 pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =
     LazyLock::new(|| app_name_to_vault_content_type("UserData"));
 
+pub type RegisterSecretKeyHex = String;
+
 /// UserData is stored in Vaults and contains most of a user's private data:
 /// It allows users to keep track of only the key to their User Data Vault
 /// while having the rest kept on the Network encrypted in a Vault for them
 /// Using User Data Vault is optional, one can decide to keep all their data locally instead.
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Default, PartialEq, Eq, Deserialize)]
 pub struct UserData {
     /// Owned file archive addresses, along with their names (can be empty)
     pub file_archives: HashMap<ArchiveAddress, String>,
@@ -37,6 +39,10 @@ pub struct UserData {
     pub private_file_archives: HashMap<PrivateArchiveDataMap, String>,
     /// Owned register addresses, along with their names (can be empty)
     pub register_addresses: HashMap<RegisterAddress, String>,
+    /// Register key
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub register_key: Option<RegisterSecretKeyHex>,
 }
 
 /// Errors that can occur during the get operation.
@@ -56,6 +62,20 @@ impl UserData {
     /// Create a new empty UserData
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Set the register key
+    /// Returns Some(old register key) if it was already set and was different from the new one
+    pub fn set_register_key(
+        &mut self,
+        register_key: RegisterSecretKeyHex,
+    ) -> Option<RegisterSecretKeyHex> {
+        let mut old_key = self.register_key.clone();
+        if old_key == Some(register_key.clone()) {
+            old_key = None;
+        }
+        self.register_key = Some(register_key);
+        old_key
     }
 
     /// Add a register. Returning `Option::Some` with the old name if the register was already in the set.
@@ -115,6 +135,22 @@ impl UserData {
         let vault_content = rmp_serde::from_slice(&bytes)?;
         Ok(vault_content)
     }
+
+    /// Display content
+    pub fn display_stats(&self) {
+        let file_archives_len = self.file_archives.len();
+        let private_file_archives_len = self.private_file_archives.len();
+        let registers_len = self.register_addresses.len();
+        let register_key = match self.register_key.is_some() {
+            true => "1",
+            false => "0",
+        };
+
+        println!("{file_archives_len} public file archive(s)");
+        println!("{private_file_archives_len} private file archive(s)");
+        println!("{registers_len} register(s)");
+        println!("{register_key} register key");
+    }
 }
 
 impl Client {
@@ -159,5 +195,63 @@ impl Client {
             )
             .await?;
         Ok(total_cost)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::XorName;
+    use bls::SecretKey;
+
+    use super::*;
+
+    // simulate how the previous version of UserData looked like
+    #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+    struct UserDataV1 {
+        pub file_archives: HashMap<ArchiveAddress, String>,
+        pub private_file_archives: HashMap<PrivateArchiveDataMap, String>,
+        pub register_addresses: HashMap<RegisterAddress, String>,
+    }
+
+    #[test]
+    fn test_user_data_v1_deserialization() {
+        // Create a V1 instance with some test data
+        let v1_data = UserDataV1 {
+            file_archives: HashMap::from([(ArchiveAddress::new(XorName::random(&mut rand::thread_rng())), "test_archive".to_string())]),
+            private_file_archives: HashMap::from([(
+                PrivateArchiveDataMap::from_hex("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef").unwrap(),
+                "test_private".to_string(),
+            )]),
+            register_addresses: HashMap::from([(RegisterAddress::new(SecretKey::random().public_key()), "test_register".to_string())]),
+        };
+
+        // Serialize V1 data
+        let serialized = rmp_serde::to_vec(&v1_data).unwrap();
+
+        // Deserialize into current UserData
+        let deserialized: UserData = rmp_serde::from_slice(&serialized).unwrap();
+
+        // Verify the conversion was successful
+        assert_eq!(deserialized.file_archives, v1_data.file_archives);
+        assert_eq!(
+            deserialized.private_file_archives,
+            v1_data.private_file_archives
+        );
+        assert_eq!(deserialized.register_addresses, v1_data.register_addresses);
+        assert_eq!(deserialized.register_key, None);
+
+        // Test current version serialization/deserialization
+        let current_data = UserData {
+            file_archives: v1_data.file_archives.clone(),
+            private_file_archives: v1_data.private_file_archives.clone(),
+            register_addresses: v1_data.register_addresses.clone(),
+            register_key: Some("test_key".to_string()),
+        };
+
+        let serialized = rmp_serde::to_vec(&current_data).unwrap();
+        let deserialized: UserData = rmp_serde::from_slice(&serialized).unwrap();
+
+        // Verify current version maintains all fields
+        assert_eq!(deserialized, current_data);
     }
 }

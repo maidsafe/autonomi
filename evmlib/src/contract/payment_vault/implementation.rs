@@ -2,7 +2,6 @@ use crate::common::Address;
 use alloy::network::Network;
 use alloy::providers::Provider;
 use alloy::sol;
-use alloy::transports::Transport;
 
 sol!(
     #[allow(missing_docs)]
@@ -12,10 +11,9 @@ sol!(
 );
 
 /// Deploys the payment vault contract and returns the contract address
-pub async fn deploy<T, P, N>(provider: &P, network_token_address: Address) -> Address
+pub async fn deploy<P, N>(provider: &P, network_token_address: Address) -> Address
 where
-    T: Transport + Clone,
-    P: Provider<T, N>,
+    P: Provider<N>,
     N: Network,
 {
     let contract = PaymentVaultImplementation::deploy(provider, network_token_address)

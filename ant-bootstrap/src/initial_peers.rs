@@ -12,6 +12,7 @@ use crate::{
     error::{Error, Result},
     BootstrapAddr, BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
 };
+use ant_protocol::version::{get_network_id, ALPHANET_ID, MAINNET_ID};
 use clap::Args;
 use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
@@ -57,11 +58,6 @@ pub struct InitialPeersConfig {
     /// Set to indicate this is a local network.
     #[clap(long, conflicts_with = "network_contacts_url", default_value = "false")]
     pub local: bool,
-    /// Set to indicate this is a testnet.
-    ///
-    /// This disables fetching peers from the mainnet network contacts.
-    #[clap(name = "testnet", long)]
-    pub disable_mainnet_contacts: bool,
     /// Set to not load the bootstrap addresses from the local cache.
     #[clap(long, default_value = "false")]
     pub ignore_cache: bool,
@@ -78,8 +74,9 @@ pub struct InitialPeersConfig {
 }
 
 impl InitialPeersConfig {
-    /// Get bootstrap peers sorted by the failure rate. The peer with the lowest failure rate will be
-    /// the first in the list.
+    /// Get bootstrap peers sorted by the failure rate.
+    ///
+    /// The peer with the lowest failure rate will be the first in the list.
     pub async fn get_addrs(
         &self,
         config: Option<BootstrapCacheConfig>,
@@ -93,8 +90,9 @@ impl InitialPeersConfig {
             .collect())
     }
 
-    /// Get bootstrap peers sorted by the failure rate. The peer with the lowest failure rate will be
-    /// the first in the list.
+    /// Get bootstrap peers sorted by the failure rate.
+    ///
+    /// The peer with the lowest failure rate will be the first in the list.
     pub async fn get_bootstrap_addr(
         &self,
         config: Option<BootstrapCacheConfig>,
@@ -197,8 +195,15 @@ impl InitialPeersConfig {
             }
         }
 
-        if !self.local && !self.disable_mainnet_contacts {
+        if !self.local && get_network_id() == MAINNET_ID {
             let mut contacts_fetcher = ContactsFetcher::with_mainnet_endpoints()?;
+            if let Some(count) = count {
+                contacts_fetcher.set_max_addrs(count);
+            }
+            let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
+            bootstrap_addresses.extend(addrs);
+        } else if !self.local && get_network_id() == ALPHANET_ID {
+            let mut contacts_fetcher = ContactsFetcher::with_alphanet_endpoints()?;
             if let Some(count) = count {
                 contacts_fetcher.set_max_addrs(count);
             }

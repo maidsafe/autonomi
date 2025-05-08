@@ -250,7 +250,7 @@ impl Network {
         peer: PeerInfo,
         data_type: u32,
         data_size: usize,
-    ) -> Result<Option<PaymentQuote>, NetworkError> {
+    ) -> Result<Option<(PeerInfo, PaymentQuote)>, NetworkError> {
         let (tx, rx) = oneshot::channel();
         let task = NetworkTask::GetQuote {
             addr,
@@ -275,7 +275,7 @@ impl Network {
         addr: NetworkAddress,
         data_type: u32,
         data_size: usize,
-    ) -> Result<Option<Vec<PaymentQuote>>, NetworkError> {
+    ) -> Result<Option<Vec<(PeerInfo, PaymentQuote)>>, NetworkError> {
         // request 7 quotes, hope that at least 5 respond
         let minimum_quotes = CLOSE_GROUP_SIZE;
         let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?;

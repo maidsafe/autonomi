@@ -200,7 +200,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_launch_node() {
-        let evm_network = EvmNetwork::ArbitrumSepolia;
+        let evm_network = EvmNetwork::ArbitrumSepoliaTest;
 
         let running_node = NodeSpawner::new()
             .with_evm_network(evm_network)

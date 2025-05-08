@@ -8,11 +8,11 @@
 
 #![allow(deprecated)]
 
-use crate::opt::NetworkId;
+use crate::actions::NetworkContext;
 use crate::wallet::load_wallet;
 use autonomi::client::register::RegisterAddress;
 use autonomi::client::register::SecretKey as RegisterSecretKey;
-use autonomi::{Client, InitialPeersConfig, TransactionConfig};
+use autonomi::{Client, TransactionConfig};
 use color_eyre::eyre::eyre;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -37,14 +37,10 @@ pub fn generate_key(overwrite: bool) -> Result<()> {
     Ok(())
 }
 
-pub async fn cost(
-    name: &str,
-    init_peers_config: InitialPeersConfig,
-    network_id: NetworkId,
-) -> Result<()> {
+pub async fn cost(name: &str, network_context: NetworkContext) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config, network_id)
+    let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -63,13 +59,12 @@ pub async fn create(
     name: &str,
     value: &str,
     hex: bool,
-    init_peers_config: InitialPeersConfig,
+    network_context: NetworkContext,
     max_fee_per_gas: Option<u128>,
-    network_id: NetworkId,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config, network_id)
+    let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -110,7 +105,7 @@ pub async fn create(
 
     crate::user_data::write_local_register(&address, name)
         .wrap_err("Failed to save register to local user data")
-        .with_suggestion(|| "Local user data saves the register address above to disk, without it you need to keep track of the address yourself")?;
+        .with_suggestion(|| "Local user data saves the register address above to disk (for the register list command), without it you need to keep track of the address yourself")?;
     info!("Saved register to local user data");
 
     Ok(())
@@ -121,13 +116,12 @@ pub async fn edit(
     name: bool,
     value: &str,
     hex: bool,
-    init_peers_config: InitialPeersConfig,
+    network_context: NetworkContext,
     max_fee_per_gas: Option<u128>,
-    network_id: NetworkId,
 ) -> Result<()> {
     let main_registers_key = crate::keys::get_register_signing_key()
         .wrap_err("The register key is required to perform this action")?;
-    let client = crate::actions::connect_to_network(init_peers_config, network_id)
+    let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -175,6 +169,13 @@ pub async fn edit(
     println!("Total cost: {cost} AttoTokens");
     info!("Successfully updated register at address: {address}");
 
+    if name {
+        let addr = RegisterAddress::new(register_key.public_key());
+        crate::user_data::write_local_register(&addr, &address)
+            .wrap_err("Failed to save register to local user data")
+            .with_suggestion(|| "Local user data saves the register address above to disk (for the register list command), without it you need to keep track of the address yourself")?;
+        info!("Saved register to local user data");
+    }
     Ok(())
 }
 
@@ -182,10 +183,9 @@ pub async fn get(
     address: String,
     name: bool,
     hex: bool,
-    init_peers_config: InitialPeersConfig,
-    network_id: NetworkId,
+    network_context: NetworkContext,
 ) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config, network_id)
+    let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
@@ -228,6 +228,12 @@ pub async fn get(
         info!("With value: [{value}]");
     }
 
+    if name {
+        crate::user_data::write_local_register(&addr, &address)
+            .wrap_err("Failed to save register to local user data")
+            .with_suggestion(|| "Local user data saves the register address above to disk (for the register list command), without it you need to keep track of the address yourself")?;
+        info!("Saved register to local user data");
+    }
     Ok(())
 }
 
@@ -245,10 +251,9 @@ pub async fn history(
     address: String,
     name: bool,
     hex: bool,
-    init_peers_config: InitialPeersConfig,
-    network_id: NetworkId,
+    network_context: NetworkContext,
 ) -> Result<()> {
-    let client = crate::actions::connect_to_network(init_peers_config, network_id)
+    let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
 
