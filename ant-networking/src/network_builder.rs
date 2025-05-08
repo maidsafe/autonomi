@@ -76,6 +76,9 @@ const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
 /// Client requires a super long time when have get_closest query against production network
 const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
 
+/// Client with poor connection requires a longer time to transmit large sized recrod to production network, via put_record_to
+const CLIENT_OUTBOUND_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
+
 // Init during compilation, instead of runtime error that should never happen
 // Option<T>::expect will be stabilised as const in the future (https://github.com/rust-lang/rust/issues/67441)
 const REPLICATION_FACTOR: NonZeroUsize = match NonZeroUsize::new(CLOSE_GROUP_SIZE + 2) {
@@ -283,7 +286,10 @@ impl NetworkBuilder {
             // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
             // .disjoint_query_paths(true)
             // How many nodes _should_ store data.
-            .set_replication_factor(REPLICATION_FACTOR);
+            .set_replication_factor(REPLICATION_FACTOR)
+            // Extend outbound_substreams timeout to allow client with poor connection
+            // still able to up upload large sized record with higher success rate.
+            .set_outbound_substreams_timeout(CLIENT_OUTBOUND_SUBSTREAMS_TIMEOUT_S);
 
         let (network, net_event_recv, driver) =
             self.build(kad_cfg, None, true, ProtocolSupport::Outbound);
