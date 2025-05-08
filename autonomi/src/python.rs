@@ -1,4 +1,9 @@
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use crate::client::data::DataAddress;
 use crate::client::files::archive_private::PrivateArchiveDataMap;
@@ -7,34 +12,52 @@ use crate::client::pointer::PointerTarget;
 use crate::{
     client::{
         chunk::DataMapChunk,
-        payment::PaymentOption,
+        payment::{PaymentOption, Receipt},
+        quote::StoreQuote,
         vault::{UserData, VaultSecretKey},
+        ClientEvent, UploadSummary,
     },
     files::{Metadata, PrivateArchive, PublicArchive},
     register::{RegisterAddress, RegisterHistory},
     Client, ClientConfig,
 };
-use crate::{Bytes, Network, Wallet};
+use crate::{Bytes, Network as EVMNetwork, Wallet};
 use crate::{
     Chunk, ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
     ScratchpadAddress,
 };
 
+use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
+use ant_protocol::storage::DataTypes;
 use bls::{PublicKey, SecretKey};
-use libp2p::Multiaddr;
+use libp2p::{Multiaddr, PeerId};
 use pyo3::exceptions::{PyConnectionError, PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
+use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 use xor_name::XorName;
 
-/// Represents a client for the Autonomi network.
-// Missing methods:
-// - upload_chunks_with_retries
-// - enable_client_events
-// - evm_network
-// - get_store_quotes
-// - pointer_verify
-// - scratchpad_verify
+#[pyclass(name = "DataTypes", eq, eq_int)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PyDataTypes {
+    Chunk = 0,
+    GraphEntry = 1,
+    Pointer = 2,
+    Scratchpad = 3,
+}
+
+impl From<PyDataTypes> for DataTypes {
+    fn from(py_data_type: PyDataTypes) -> Self {
+        match py_data_type {
+            PyDataTypes::Chunk => DataTypes::Chunk,
+            PyDataTypes::GraphEntry => DataTypes::GraphEntry,
+            PyDataTypes::Pointer => DataTypes::Pointer,
+            PyDataTypes::Scratchpad => DataTypes::Scratchpad,
+        }
+    }
+}
+
 #[pyclass(name = "Client")]
 pub(crate) struct PyClient {
     inner: Client,
@@ -58,17 +81,6 @@ impl PyClient {
     fn init_local(py: Python) -> PyResult<Bound<PyAny>> {
         future_into_py(py, async {
             let inner = Client::init_local()
-                .await
-                .map_err(|e| PyConnectionError::new_err(format!("Failed to connect: {e}")))?;
-            Ok(PyClient { inner })
-        })
-    }
-
-    /// Initialize a client that is configured to be connected to the alpha network.
-    #[staticmethod]
-    fn init_alpha(py: Python) -> PyResult<Bound<PyAny>> {
-        future_into_py(py, async {
-            let inner = Client::init_alpha()
                 .await
                 .map_err(|e| PyConnectionError::new_err(format!("Failed to connect: {e}")))?;
             Ok(PyClient { inner })
@@ -103,6 +115,20 @@ impl PyClient {
                 .map_err(|e| PyConnectionError::new_err(format!("Failed to connect: {e}")))?;
             Ok(PyClient { inner })
         })
+    }
+
+    fn enable_client_events(&mut self) -> PyClientEventReceiver {
+        let receiver = self.inner.enable_client_events();
+        PyClientEventReceiver {
+            inner: Arc::new(futures::lock::Mutex::new(receiver)),
+        }
+    }
+
+    /// Returns the EVM network used by this client.
+    fn evm_network(&self) -> PyEVMNetwork {
+        PyEVMNetwork {
+            inner: self.inner.evm_network().clone(),
+        }
     }
 
     /// Get the cost of storing a chunk on the network
@@ -149,6 +175,38 @@ impl PyClient {
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to put chunk: {e}")))?;
             Ok((cost.to_string(), PyChunkAddress { inner: addr }))
+        })
+    }
+
+    fn upload_chunks_with_retries<'a>(
+        &self,
+        py: Python<'a>,
+        chunks: Vec<PyChunk>, // Vec<&PyChunk> to match original code is not supported by PyO3
+        receipt: PyReceipt,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let inner_client = self.inner.clone();
+        let inner_receipt = receipt.inner;
+
+        future_into_py(py, async move {
+            let inner_chunks: Vec<Chunk> = chunks.into_iter().map(|chunk| chunk.inner).collect();
+            let chunk_refs: Vec<&Chunk> = inner_chunks.iter().collect();
+            let result = inner_client
+                .upload_chunks_with_retries(chunk_refs, &inner_receipt)
+                .await;
+
+            let py_failures = result
+                .into_iter()
+                .map(|(chunk, err)| {
+                    (
+                        PyChunk {
+                            inner: chunk.clone(),
+                        },
+                        err.to_string(),
+                    )
+                })
+                .collect::<Vec<_>>();
+
+            Ok(py_failures)
         })
     }
 
@@ -374,6 +432,13 @@ impl PyClient {
         })
     }
 
+    /// Verify a scratchpad
+    #[staticmethod]
+    fn scratchpad_verify(scratchpad: &PyScratchpad) -> PyResult<()> {
+        Client::scratchpad_verify(&scratchpad.inner)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to verify scratchpad: {e}")))
+    }
+
     /// Get the cost of storing an archive on the network
     fn archive_cost<'a>(
         &self,
@@ -564,6 +629,44 @@ impl PyClient {
                 cost.to_string(),
                 PyPrivateArchiveDataMap { inner: data_map },
             ))
+        })
+    }
+
+    /// Upload the content of a private file to the network.
+    /// Reads file, splits into chunks, uploads chunks, returns [`DataMapChunk`]
+    fn file_content_upload<'a>(
+        &self,
+        py: Python<'a>,
+        path: PathBuf,
+        payment: PyPaymentOption,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            let (cost, data_map) = client
+                .file_content_upload(path, payment.inner)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload file: {e}")))?;
+            Ok((cost.to_string(), PyDataMapChunk { inner: data_map }))
+        })
+    }
+
+    /// Upload the content of a public file to the network.
+    /// Reads file, splits into chunks, uploads chunks, uploads datamap, returns DataAddr (pointing to the datamap)
+    fn file_content_upload_public<'a>(
+        &self,
+        py: Python<'a>,
+        path: PathBuf,
+        payment: PyPaymentOption,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            let (cost, data_addr) = client
+                .file_content_upload_public(path, payment.inner)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload file: {e}")))?;
+            Ok((cost.to_string(), PyDataAddress { inner: data_addr }))
         })
     }
 
@@ -1078,6 +1181,143 @@ impl PyClient {
             }
         })
     }
+
+    /// Verify a pointer
+    #[staticmethod]
+    fn pointer_verify(pointer: &PyPointer) -> PyResult<()> {
+        Client::pointer_verify(&pointer.inner)
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to verify pointer: {e}")))
+    }
+
+    fn get_raw_quotes<'a>(
+        &self,
+        py: Python<'a>,
+        data_type: PyDataTypes,
+        content_addrs: Vec<(PyXorName, usize)>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let data_type: DataTypes = data_type.into();
+        let client = self.inner.clone();
+        let content_addrs_iter = content_addrs
+            .into_iter()
+            .map(|(xor_name, size)| (xor_name.inner, size));
+
+        future_into_py(py, async move {
+            let results = client.get_raw_quotes(data_type, content_addrs_iter).await;
+
+            let py_results: Vec<_> = results
+                .into_iter()
+                .map(|result| match result {
+                    Ok((xor_name, quotes)) => {
+                        let py_xor_name = PyXorName { inner: xor_name };
+
+                        let py_quotes: Vec<_> = quotes
+                            .into_iter()
+                            .map(|(peer_id, addresses, quote)| {
+                                let peer_id_str = peer_id.to_string();
+                                // Access the inner Vec<Multiaddr> and convert each to String
+                                let address_strs: Vec<String> =
+                                    addresses.0.iter().map(|addr| addr.to_string()).collect();
+                                let py_payment_quote = PyPaymentQuote { inner: quote };
+                                (peer_id_str, address_strs, py_payment_quote)
+                            })
+                            .collect();
+
+                        (py_xor_name, py_quotes)
+                    }
+                    Err(err) => {
+                        error!("Error in get_raw_quotes: {}", err);
+
+                        let empty_xor = PyXorName {
+                            inner: XorName::default(),
+                        };
+                        let empty_quotes: Vec<(String, Vec<String>, PyPaymentQuote)> = Vec::new();
+
+                        (empty_xor, empty_quotes)
+                    }
+                })
+                .collect();
+
+            Ok(py_results)
+        })
+    }
+
+    fn get_store_quotes<'a>(
+        &self,
+        py: Python<'a>,
+        data_type: PyDataTypes,
+        content_addrs: Vec<(PyXorName, usize)>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let data_type: DataTypes = data_type.into();
+
+        let client = self.inner.clone();
+
+        let content_addrs_iter = content_addrs
+            .into_iter()
+            .map(|(xor_name, size)| (xor_name.inner, size));
+
+        future_into_py(py, async move {
+            match client.get_store_quotes(data_type, content_addrs_iter).await {
+                Ok(quotes) => {
+                    let py_store_quote = PyStoreQuote { inner: quotes };
+                    Ok(py_store_quote)
+                }
+                Err(err) => Err(PyErr::new::<PyValueError, _>(format!("{err:?}"))),
+            }
+        })
+    }
+}
+
+#[pyclass(name = "ClientEvent")]
+#[derive(Debug, Clone)]
+pub struct PyClientEvent {
+    inner: ClientEvent,
+}
+
+#[pymethods]
+impl PyClientEvent {
+    #[getter]
+    fn event_type(&self) -> &'static str {
+        match self.inner {
+            ClientEvent::UploadComplete(_) => "UploadComplete",
+        }
+    }
+
+    #[getter]
+    fn upload_summary(&self) -> Option<PyUploadSummary> {
+        match &self.inner {
+            ClientEvent::UploadComplete(summary) => Some(PyUploadSummary {
+                inner: summary.clone(),
+            }),
+        }
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!("{:?}", self.inner))
+    }
+}
+
+#[pyclass(name = "ClientEventReceiver")]
+pub struct PyClientEventReceiver {
+    inner: Arc<futures::lock::Mutex<mpsc::Receiver<ClientEvent>>>,
+}
+
+#[pymethods]
+impl PyClientEventReceiver {
+    /// Receive the next client event, returning None if the channel is closed
+    fn recv<'a>(&self, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
+        let inner = Arc::clone(&self.inner);
+
+        future_into_py(py, async move {
+            let mut receiver = inner.lock().await;
+
+            let result = receiver
+                .recv()
+                .await
+                .map(|event| PyClientEvent { inner: event });
+
+            Ok(result)
+        })
+    }
 }
 
 /// Address of a Pointer, is derived from the owner's unique public key.
@@ -1224,6 +1464,83 @@ impl PyPointerTarget {
 
     fn __str__(&self) -> PyResult<String> {
         Ok(format!("PointerTarget('{}')", self.hex()))
+    }
+}
+
+#[pyclass(name = "Chunk", eq, ord)]
+#[derive(Hash, Eq, PartialEq, PartialOrd, Ord, Clone, Debug)]
+pub struct PyChunk {
+    inner: Chunk,
+}
+
+#[pymethods]
+impl PyChunk {
+    /// Creates a new instance of `Chunk`.
+    #[new]
+    fn new(value: Vec<u8>) -> Self {
+        Self {
+            inner: Chunk::new(Bytes::from(value)),
+        }
+    }
+
+    /// Returns the value of the chunk.
+    #[getter]
+    fn value(&self) -> Vec<u8> {
+        self.inner.value().to_vec()
+    }
+
+    /// Returns the address of the chunk.
+    #[getter]
+    fn address(&self) -> PyChunkAddress {
+        PyChunkAddress {
+            inner: *self.inner.address(),
+        }
+    }
+
+    /// Returns the network address.
+    fn network_address(&self) -> String {
+        self.inner.network_address().to_string()
+    }
+
+    /// Returns the name of the chunk.
+    fn name(&self) -> PyXorName {
+        PyXorName {
+            inner: *self.inner.name(),
+        }
+    }
+
+    /// Returns size of this chunk after serialisation.
+    fn size(&self) -> usize {
+        self.inner.size()
+    }
+
+    /// Returns true if the chunk is too big
+    fn is_too_big(&self) -> bool {
+        self.inner.is_too_big()
+    }
+
+    /// The maximum size of an unencrypted/raw chunk (4MB).
+    #[classattr]
+    fn max_raw_size() -> usize {
+        Chunk::MAX_RAW_SIZE
+    }
+
+    /// The maximum size of an encrypted chunk (4MB + 32 bytes).
+    #[classattr]
+    fn max_size() -> usize {
+        Chunk::MAX_SIZE
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!("Chunk(size={})", self.inner.size()))
+    }
+
+    fn __repr__(&self) -> PyResult<String> {
+        Ok(format!(
+            "Chunk(address='{}', size={})",
+            self.inner.address().to_hex(),
+            self.inner.size()
+        ))
     }
 }
 
@@ -1491,7 +1808,7 @@ impl PyWallet {
     #[new]
     fn new(private_key: String) -> PyResult<Self> {
         let wallet = Wallet::new_from_private_key(
-            Network::ArbitrumOne, // TODO: Make this configurable
+            EVMNetwork::ArbitrumOne, // TODO: Make this configurable
             &private_key,
         )
         .map_err(|e| PyValueError::new_err(format!("`private_key` invalid: {e}")))?;
@@ -1501,7 +1818,7 @@ impl PyWallet {
 
     /// Convenience function that creates a new Wallet with a random EthereumWallet.
     #[staticmethod]
-    fn new_with_random_wallet(network: PyNetwork) -> Self {
+    fn new_with_random_wallet(network: PyEVMNetwork) -> Self {
         Self {
             inner: Wallet::new_with_random_wallet(network.inner),
         }
@@ -1509,7 +1826,7 @@ impl PyWallet {
 
     /// Creates a new wallet from a private key string with a specified network.
     #[staticmethod]
-    fn new_from_private_key(network: PyNetwork, private_key: &str) -> PyResult<Self> {
+    fn new_from_private_key(network: PyEVMNetwork, private_key: &str) -> PyResult<Self> {
         let inner = Wallet::new_from_private_key(network.inner, private_key)
             .map_err(|e| PyValueError::new_err(format!("`private_key` invalid: {e}")))?;
 
@@ -1522,8 +1839,8 @@ impl PyWallet {
     }
 
     /// Returns the `Network` of this wallet.
-    fn network(&self) -> PyNetwork {
-        PyNetwork {
+    fn network(&self) -> PyEVMNetwork {
+        PyEVMNetwork {
             inner: self.inner.network().clone(),
         }
     }
@@ -1618,6 +1935,37 @@ impl PySecretKey {
     }
 }
 
+#[pyclass(name = "UploadSummary")]
+#[derive(Debug, Clone)]
+pub struct PyUploadSummary {
+    inner: UploadSummary,
+}
+
+#[pymethods]
+impl PyUploadSummary {
+    #[getter]
+    fn records_paid(&self) -> usize {
+        self.inner.records_paid
+    }
+
+    #[getter]
+    fn records_already_paid(&self) -> usize {
+        self.inner.records_already_paid
+    }
+
+    #[getter]
+    fn tokens_spent(&self) -> String {
+        self.inner.tokens_spent.to_string()
+    }
+
+    fn __str__(&self) -> PyResult<String> {
+        Ok(format!(
+            "UploadSummary {{ records_paid: {}, records_already_paid: {}, tokens_spent: {} }}",
+            self.inner.records_paid, self.inner.records_already_paid, self.inner.tokens_spent
+        ))
+    }
+}
+
 /// A cryptographic public key derived from a secret key.
 #[pyclass(name = "PublicKey")]
 #[derive(Debug, Clone)]
@@ -1647,6 +1995,408 @@ impl PyPublicKey {
     /// Returns the hex string representation of the public key.
     fn hex(&self) -> String {
         self.inner.to_hex()
+    }
+}
+
+#[pyclass(name = "QuotingMetrics")]
+#[derive(Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PyQuotingMetrics {
+    inner: QuotingMetrics,
+}
+
+#[pymethods]
+impl PyQuotingMetrics {
+    #[new]
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (data_type, data_size, close_records_stored, records_per_type, max_records, received_payment_count, live_time, network_density=None, network_size=None))]
+    fn new(
+        data_type: u32,
+        data_size: usize,
+        close_records_stored: usize,
+        records_per_type: Vec<(u32, u32)>,
+        max_records: usize,
+        received_payment_count: usize,
+        live_time: u64,
+        network_density: Option<Vec<u8>>,
+        network_size: Option<u64>,
+    ) -> PyResult<Self> {
+        // Convert network_density from Option<Vec<u8>> to Option<[u8; 32]>
+        let network_density = if let Some(density) = network_density {
+            if density.len() != 32 {
+                return Err(PyValueError::new_err(
+                    "network_density must be 32 bytes if provided",
+                ));
+            }
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&density);
+            Some(array)
+        } else {
+            None
+        };
+
+        Ok(Self {
+            inner: QuotingMetrics {
+                data_type,
+                data_size,
+                close_records_stored,
+                records_per_type,
+                max_records,
+                received_payment_count,
+                live_time,
+                network_density,
+                network_size,
+            },
+        })
+    }
+
+    // Getters
+    #[getter]
+    fn data_type(&self) -> u32 {
+        self.inner.data_type
+    }
+
+    #[setter]
+    fn set_data_type(&mut self, value: u32) {
+        self.inner.data_type = value;
+    }
+
+    #[getter]
+    fn data_size(&self) -> usize {
+        self.inner.data_size
+    }
+
+    #[setter]
+    fn set_data_size(&mut self, value: usize) {
+        self.inner.data_size = value;
+    }
+
+    #[getter]
+    fn close_records_stored(&self) -> usize {
+        self.inner.close_records_stored
+    }
+
+    #[setter]
+    fn set_close_records_stored(&mut self, value: usize) {
+        self.inner.close_records_stored = value;
+    }
+
+    #[getter]
+    fn records_per_type(&self) -> Vec<(u32, u32)> {
+        self.inner.records_per_type.clone()
+    }
+
+    #[setter]
+    fn set_records_per_type(&mut self, value: Vec<(u32, u32)>) {
+        self.inner.records_per_type = value;
+    }
+
+    #[getter]
+    fn max_records(&self) -> usize {
+        self.inner.max_records
+    }
+
+    #[setter]
+    fn set_max_records(&mut self, value: usize) {
+        self.inner.max_records = value;
+    }
+
+    #[getter]
+    fn received_payment_count(&self) -> usize {
+        self.inner.received_payment_count
+    }
+
+    #[setter]
+    fn set_received_payment_count(&mut self, value: usize) {
+        self.inner.received_payment_count = value;
+    }
+
+    #[getter]
+    fn live_time(&self) -> u64 {
+        self.inner.live_time
+    }
+
+    #[setter]
+    fn set_live_time(&mut self, value: u64) {
+        self.inner.live_time = value;
+    }
+
+    #[getter]
+    fn network_density(&self) -> Option<Vec<u8>> {
+        self.inner.network_density.map(|array| array.to_vec())
+    }
+
+    #[setter]
+    fn set_network_density(&mut self, value: Option<Vec<u8>>) -> PyResult<()> {
+        self.inner.network_density = if let Some(density) = value {
+            if density.len() != 32 {
+                return Err(PyValueError::new_err(
+                    "network_density must be 32 bytes if provided",
+                ));
+            }
+            let mut array = [0u8; 32];
+            array.copy_from_slice(&density);
+            Some(array)
+        } else {
+            None
+        };
+        Ok(())
+    }
+
+    #[getter]
+    fn network_size(&self) -> Option<u64> {
+        self.inner.network_size
+    }
+
+    #[setter]
+    fn set_network_size(&mut self, value: Option<u64>) {
+        self.inner.network_size = value;
+    }
+
+    fn __str__(&self) -> String {
+        format!("{:?}", self.inner)
+    }
+
+    fn __repr__(&self) -> String {
+        self.__str__()
+    }
+}
+
+#[pyclass(name = "PaymentQuote")]
+#[derive(Clone)]
+pub struct PyPaymentQuote {
+    inner: PaymentQuote,
+}
+
+#[pymethods]
+impl PyPaymentQuote {
+    /// Creates a new PaymentQuote with the provided values
+    #[new]
+    #[pyo3(signature = (content, timestamp, quoting_metrics, rewards_address, pub_key, signature))]
+    fn new(
+        content: PyXorName,
+        timestamp: u64, // seconds since UNIX_EPOCH
+        quoting_metrics: PyQuotingMetrics,
+        rewards_address: String, // hex string with optional 0x prefix
+        pub_key: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> PyResult<Self> {
+        // Convert timestamp from u64 to SystemTime
+        let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
+
+        // Convert rewards address from hex string to RewardsAddress
+        let rewards_address = RewardsAddress::from_slice(
+            &hex::decode(rewards_address.trim_start_matches("0x"))
+                .map_err(|e| PyValueError::new_err(format!("Invalid rewards address: {e}")))?,
+        );
+
+        Ok(Self {
+            inner: PaymentQuote {
+                content: content.inner,
+                timestamp,
+                quoting_metrics: quoting_metrics.inner,
+                rewards_address,
+                pub_key,
+                signature,
+            },
+        })
+    }
+
+    /// Returns the hash of the quote
+    fn hash(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.hash().0))
+    }
+
+    /// Returns the bytes that would be signed for the given parameters
+    #[staticmethod]
+    fn bytes_for_signing(
+        xorname: PyXorName,
+        timestamp: u64,
+        quoting_metrics: PyQuotingMetrics,
+        rewards_address: String,
+    ) -> PyResult<Vec<u8>> {
+        // Convert timestamp from u64 to SystemTime
+        let timestamp = SystemTime::UNIX_EPOCH + Duration::from_secs(timestamp);
+
+        // Convert rewards address from hex string to RewardsAddress
+        let rewards_address = RewardsAddress::from_slice(
+            &hex::decode(rewards_address.trim_start_matches("0x"))
+                .map_err(|e| PyValueError::new_err(format!("Invalid rewards address: {e}")))?,
+        );
+
+        Ok(PaymentQuote::bytes_for_signing(
+            xorname.inner,
+            timestamp,
+            &quoting_metrics.inner,
+            &rewards_address,
+        ))
+    }
+
+    /// Returns the bytes to be signed from self
+    fn bytes_for_sig(&self) -> Vec<u8> {
+        self.inner.bytes_for_sig()
+    }
+
+    /// Returns the peer id of the node that created the quote
+    fn peer_id(&self) -> PyResult<String> {
+        match self.inner.peer_id() {
+            Ok(peer_id) => Ok(peer_id.to_string()),
+            Err(e) => Err(PyRuntimeError::new_err(format!(
+                "Failed to get peer id: {e}"
+            ))),
+        }
+    }
+
+    /// Check if self is signed by the claimed peer
+    fn check_is_signed_by_claimed_peer(&self, claimed_peer: String) -> PyResult<bool> {
+        let peer_id = match PeerId::from_str(&claimed_peer) {
+            Ok(id) => id,
+            Err(e) => return Err(PyValueError::new_err(format!("Invalid peer ID: {e}"))),
+        };
+
+        Ok(self.inner.check_is_signed_by_claimed_peer(peer_id))
+    }
+
+    /// Returns true if the quote has expired
+    fn has_expired(&self) -> bool {
+        self.inner.has_expired()
+    }
+
+    /// Check whether self is newer than the target quote
+    fn is_newer_than(&self, other: &PyPaymentQuote) -> bool {
+        self.inner.is_newer_than(&other.inner)
+    }
+
+    /// Check against a new quote, verify whether it is a valid one from self perspective
+    fn historical_verify(&self, other: &PyPaymentQuote) -> bool {
+        self.inner.historical_verify(&other.inner)
+    }
+
+    /// Returns the content of the quote
+    #[getter]
+    fn content(&self) -> PyXorName {
+        PyXorName {
+            inner: self.inner.content,
+        }
+    }
+
+    /// Returns the timestamp of the quote as seconds since UNIX epoch
+    #[getter]
+    fn timestamp(&self) -> PyResult<u64> {
+        self.inner
+            .timestamp
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .map_err(|e| PyRuntimeError::new_err(format!("Failed to get timestamp: {e}")))
+    }
+
+    /// Returns the quoting metrics
+    #[getter]
+    fn quoting_metrics(&self) -> PyQuotingMetrics {
+        PyQuotingMetrics {
+            inner: self.inner.quoting_metrics.clone(),
+        }
+    }
+
+    /// Returns the rewards address as a hex string
+    #[getter]
+    fn rewards_address(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.rewards_address.as_slice()))
+    }
+
+    /// Returns the public key as bytes
+    #[getter]
+    fn pub_key(&self) -> Vec<u8> {
+        self.inner.pub_key.clone()
+    }
+
+    /// Returns the signature as bytes
+    #[getter]
+    fn signature(&self) -> Vec<u8> {
+        self.inner.signature.clone()
+    }
+
+    /// Returns the string representation
+    fn __str__(&self) -> String {
+        format!(
+            "PaymentQuote(content={}, timestamp={})",
+            self.inner.content,
+            self.inner
+                .timestamp
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        )
+    }
+
+    /// Returns the debug representation
+    fn __repr__(&self) -> String {
+        self.__str__()
+    }
+}
+
+/// Contains the proof of payments for each XorName and the amount paid
+#[pyclass(name = "Receipt")]
+#[derive(Clone)]
+pub struct PyReceipt {
+    pub(crate) inner: Receipt,
+}
+
+#[pymethods]
+impl PyReceipt {
+    /// Creates a new empty receipt
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: Receipt::new(),
+        }
+    }
+
+    /// Returns the number of entries in the receipt
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns true if the receipt has no entries
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
+#[pyclass(name = "StoreQuote")]
+pub struct PyStoreQuote {
+    inner: StoreQuote,
+}
+
+#[pymethods]
+impl PyStoreQuote {
+    /// Returns the total price of all quotes
+    pub fn price(&self) -> String {
+        self.inner.price().to_string()
+    }
+
+    /// Returns the number of quotes
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// Returns true if there are no quotes
+    pub fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
+    /// Returns a list of payment details (hash, rewards_address, price)
+    pub fn payments(&self) -> Vec<(String, String, String)> {
+        self.inner
+            .payments()
+            .into_iter()
+            .map(|(hash, rewards_address, price)| {
+                (
+                    format!("0x{}", hex::encode(hash.0)),
+                    format!("0x{}", hex::encode(rewards_address.0)),
+                    price.to_string(),
+                )
+            })
+            .collect()
     }
 }
 
@@ -1765,20 +2515,21 @@ fn encrypt(data: Vec<u8>) -> PyResult<(Vec<u8>, Vec<Vec<u8>>)> {
     Ok((data_map_bytes, chunks_bytes))
 }
 
-#[pyclass(name = "Network", eq)]
+#[pyclass(name = "EVMNetwork", eq)]
 #[derive(Debug, Clone, PartialEq)]
-pub struct PyNetwork {
-    inner: Network,
+pub struct PyEVMNetwork {
+    inner: EVMNetwork,
 }
 
 #[pymethods]
-impl PyNetwork {
+impl PyEVMNetwork {
     /// Creates a new network configuration.
     ///
     /// If `local` is true, configures for local network connections.
     #[new]
     fn new(local: bool) -> PyResult<Self> {
-        let inner = Network::new(local).map_err(|e| PyRuntimeError::new_err(format!("{e:?}")))?;
+        let inner =
+            EVMNetwork::new(local).map_err(|e| PyRuntimeError::new_err(format!("{e:?}")))?;
         Ok(Self { inner })
     }
 }
@@ -2145,15 +2896,15 @@ impl PyClientConfig {
 
     /// EVM network to use for quotations and payments.
     #[getter]
-    fn get_network(&self) -> PyNetwork {
-        PyNetwork {
+    fn get_network(&self) -> PyEVMNetwork {
+        PyEVMNetwork {
             inner: self.inner.evm_network.clone(),
         }
     }
 
     /// EVM network to use for quotations and payments.
     #[setter]
-    fn set_network(&mut self, network: PyNetwork) {
+    fn set_network(&mut self, network: PyEVMNetwork) {
         self.inner.evm_network = network.inner;
     }
 
@@ -2180,6 +2931,15 @@ fn random_xor() -> PyXorName {
 #[pyo3(name = "autonomi_client")]
 fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyClient>()?;
+    m.add_class::<PyClientEvent>()?;
+    m.add_class::<PyClientEventReceiver>()?;
+    m.add_class::<PyDataTypes>()?;
+    m.add_class::<PyChunk>()?;
+    m.add_class::<PyUploadSummary>()?;
+    m.add_class::<PyQuotingMetrics>()?;
+    m.add_class::<PyPaymentQuote>()?;
+    m.add_class::<PyReceipt>()?;
+    m.add_class::<PyStoreQuote>()?;
     m.add_class::<PyWallet>()?;
     m.add_class::<PyPaymentOption>()?;
     m.add_class::<PyVaultSecretKey>()?;
@@ -2197,7 +2957,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyXorName>()?;
     m.add_class::<PySecretKey>()?;
     m.add_class::<PyPublicKey>()?;
-    m.add_class::<PyNetwork>()?;
+    m.add_class::<PyEVMNetwork>()?;
     m.add_class::<PyMetadata>()?;
     m.add_class::<PyPublicArchive>()?;
     m.add_class::<PyPrivateArchive>()?;
