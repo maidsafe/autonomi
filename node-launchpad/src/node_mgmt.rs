@@ -20,7 +20,6 @@ pub const PORT_MIN: u32 = 1024;
 const NODE_ADD_MAX_RETRIES: u32 = 5;
 
 pub const FIXED_INTERVAL: u64 = 60_000;
-pub const CONNECTION_TIMEOUT_START: u64 = 120;
 
 pub const NODES_ALL: &str = "NODES_ALL";
 
@@ -269,11 +268,11 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
     }
 
     if let Err(err) = ant_node_manager::cmd::node::upgrade(
-        0, // will be overwrite by FIXED_INTERVAL
+        None,
         args.do_not_start,
         args.custom_bin_path,
         args.force,
-        Some(FIXED_INTERVAL),
+        FIXED_INTERVAL,
         args.peer_ids,
         args.provided_env_variables,
         args.service_names,
@@ -400,6 +399,7 @@ async fn add_node(args: MaintainNodesArgs) {
         port_range, // node_port
         config.init_peers_config.clone(),
         config.relay, // relay,
+        false,        // reachability_check,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
@@ -438,8 +438,8 @@ async fn add_node(args: MaintainNodesArgs) {
 async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
     debug!("Starting node {:?}", services);
     if let Err(err) = ant_node_manager::cmd::node::start(
-        CONNECTION_TIMEOUT_START,
         None,
+        FIXED_INTERVAL,
         vec![],
         services.clone(),
         VerbosityLevel::Minimal,
@@ -634,7 +634,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         false,
         false,
         config.auto_set_nat_flags,
-        CONNECTION_TIMEOUT_START,
+        None,
         count,
         config.data_dir_path.clone(),
         true,
@@ -649,6 +649,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         None,
         None, // We don't care about the port, as we are scaling down
         config.init_peers_config.clone(),
+        false,
         config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,
@@ -659,7 +660,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         None,
         None,
         VerbosityLevel::Minimal,
-        None,
+        FIXED_INTERVAL,
     )
     .await
     {
@@ -708,7 +709,7 @@ async fn add_nodes(
             false,
             false,
             config.auto_set_nat_flags,
-            CONNECTION_TIMEOUT_START,
+            None,
             config.count,
             config.data_dir_path.clone(),
             true,
@@ -723,6 +724,7 @@ async fn add_nodes(
             None,
             port_range,
             config.init_peers_config.clone(),
+            false,
             config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
             None,
@@ -733,7 +735,7 @@ async fn add_nodes(
             None,
             None,
             VerbosityLevel::Minimal,
-            None,
+            FIXED_INTERVAL,
         )
         .await
         {
