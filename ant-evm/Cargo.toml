@@ -19,7 +19,7 @@ evmlib = { path = "../evmlib", version = "0.4.0" }
 hex = "~0.4.3"
 libp2p = { version = "0.55.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }
-ring = "0.17.12"
+ring = "0.17.13"
 rmp-serde = "1.1.1"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 serde_json = "1.0.108"
