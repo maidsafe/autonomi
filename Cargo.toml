@@ -53,3 +53,7 @@ tag = false
 
 [workspace.dependencies]
 backtrace = "=0.3.71"
+
+[patch.crates-io]
+libp2p = { git = "https://github.com/mickvandijke/rust-libp2p.git", branch = "k-8" }
+
