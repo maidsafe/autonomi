@@ -102,12 +102,6 @@ pub enum UploadError {
     IoError(#[from] std::io::Error),
     #[error("Failed to upload file")]
     PutError(#[from] PutError),
-    #[error("Failed to fetch file")]
-    GetError(#[from] GetError),
-    #[error("Failed to serialize")]
-    Serialization(#[from] rmp_serde::encode::Error),
-    #[error("Failed to deserialize")]
-    Deserialization(#[from] rmp_serde::decode::Error),
 }
 
 /// Errors that can occur during the download operation.

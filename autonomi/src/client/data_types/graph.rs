@@ -10,6 +10,7 @@ use crate::client::payment::PayError;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::ClientEvent;
+use crate::client::PutError;
 use crate::client::UploadSummary;
 use crate::client::{Client, GetError};
 
@@ -30,10 +31,10 @@ pub use ant_protocol::storage::{GraphContent, GraphEntry, GraphEntryAddress};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {
+    #[error("Failed to put graph entry: {0}")]
+    PutError(#[from] PutError),
     #[error("Cost error: {0}")]
     Cost(#[from] CostError),
-    #[error("Network error")]
-    Network(#[from] NetworkError),
     #[error(transparent)]
     GetError(#[from] GetError),
     #[error("Serialization error {0}")]
@@ -63,7 +64,8 @@ impl Client {
         let record = self
             .network
             .get_record_with_retries(key.clone(), &self.config.graph_entry)
-            .await?
+            .await
+            .map_err(|err| GraphError::GetError(GetError::Network(err)))?
             .ok_or(GetError::RecordNotFound)?;
 
         debug!(
@@ -96,7 +98,7 @@ impl Client {
             Ok(None) => Ok(false),
             Ok(Some(_)) => Ok(true),
             Err(NetworkError::SplitRecord(..)) => Ok(true),
-            Err(err) => Err(GraphError::Network(err))
+            Err(err) => Err(GraphError::GetError(GetError::Network(err)))
                 .inspect_err(|err| error!("Error checking graph_entry existence: {err:?}")),
         }
     }
@@ -155,6 +157,13 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - GraphEntry {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                GraphError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err.clone(),
+                    payment: Some(payment_proofs.clone()),
+                })
             })?;
 
         // send client event

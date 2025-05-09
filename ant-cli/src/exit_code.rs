@@ -29,9 +29,6 @@ pub(crate) fn upload_exit_code(err: &UploadError) -> i32 {
         UploadError::WalkDir(_) => IO_ERROR,
         UploadError::IoError(_) => IO_ERROR,
         UploadError::PutError(err) => put_error_exit_code(err),
-        UploadError::GetError(err) => get_error_exit_code(err),
-        UploadError::Serialization(_) => SERIALIZATION_ERROR,
-        UploadError::Deserialization(_) => SERIALIZATION_ERROR,
     }
 }
 
@@ -74,13 +71,12 @@ pub(crate) fn analysis_exit_code(err: &AnalysisError) -> i32 {
 pub(crate) fn put_error_exit_code(err: &PutError) -> i32 {
     match err {
         PutError::SelfEncryption(_) => SELF_ENCRYPTION_ERROR,
-        PutError::Network(_) => NETWORK_ERROR,
+        PutError::Network { .. } => NETWORK_ERROR,
         PutError::CostError(_) => 41,
         PutError::PayError(pay_error) => pay_error_exit_code(pay_error),
         PutError::Serialization(_) => SERIALIZATION_ERROR,
         PutError::Wallet(_) => 42,
-        PutError::ScratchpadBadOwner => 43,
-        PutError::PaymentUnexpectedlyInvalid(_) => 44,
+        PutError::Batch(_) => 44,
         PutError::PayeesMissing => 45,
     }
 }

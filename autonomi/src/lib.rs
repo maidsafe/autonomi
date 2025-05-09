@@ -77,6 +77,7 @@ pub use ant_evm::EvmWallet as Wallet;
 pub use ant_evm::QuoteHash;
 pub use ant_evm::RewardsAddress;
 pub use ant_evm::TransactionConfig;
+pub use ant_evm::QUOTE_EXPIRATION_SECS;
 pub use ant_evm::{Amount, AttoTokens};
 
 // Re-exports of address related types

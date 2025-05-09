@@ -29,7 +29,6 @@ use xor_name::XorName;
 
 /// Represents a client for the Autonomi network.
 // Missing methods:
-// - upload_chunks_with_retries
 // - enable_client_events
 // - evm_network
 // - get_store_quotes

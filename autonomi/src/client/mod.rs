@@ -15,8 +15,6 @@
 /// - Pointer
 /// - Scratchpad
 pub mod data_types;
-use std::collections::HashSet;
-
 pub use data_types::chunk;
 pub use data_types::graph;
 pub use data_types::pointer;
@@ -42,16 +40,21 @@ pub mod external_signer;
 
 // private module with utility functions
 mod network;
+mod put_error_state;
 mod utils;
 
+use payment::Receipt;
+pub use put_error_state::ChunkBatchUploadState;
+
 use crate::networking::Multiaddr;
+use crate::networking::NetworkAddress;
 use ant_bootstrap::InitialPeersConfig;
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
-use ant_protocol::NetworkAddress;
 use config::ClientConfig;
 use payment::PayError;
 use quote::CostError;
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 
 /// Time before considering the connection timed out.
@@ -121,8 +124,6 @@ pub enum ConnectError {
 pub enum PutError {
     #[error("Failed to self-encrypt data.")]
     SelfEncryption(#[from] crate::self_encryption::Error),
-    #[error("A network error occurred: {0}")]
-    Network(#[from] NetworkError),
     #[error("Error occurred during cost estimation: {0}")]
     CostError(#[from] CostError),
     #[error("Error occurred during payment: {0}")]
@@ -131,12 +132,17 @@ pub enum PutError {
     Serialization(String),
     #[error("A wallet error occurred: {0}")]
     Wallet(#[from] ant_evm::EvmError),
-    #[error("The owner key does not match the client's public key")]
-    ScratchpadBadOwner,
-    #[error("Payment unexpectedly invalid for {0:?}")]
-    PaymentUnexpectedlyInvalid(NetworkAddress),
     #[error("The payment proof contains no payees.")]
     PayeesMissing,
+    #[error("A network error occurred for {address}: {network_error}")]
+    Network {
+        address: NetworkAddress,
+        network_error: NetworkError,
+        /// if a payment was made, it will be returned here so it can be reused
+        payment: Option<Receipt>,
+    },
+    #[error("Batch upload: {0}")]
+    Batch(ChunkBatchUploadState),
 }
 
 /// Errors that can occur during the get operation.

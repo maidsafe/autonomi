@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::client::{
     payment::{PayError, PaymentOption},
     quote::CostError,
-    Client, GetError,
+    Client, GetError, PutError,
 };
 use crate::networking::{PeerId, Record};
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
@@ -28,8 +28,8 @@ pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
 /// Errors that can occur when dealing with Pointers
 #[derive(Debug, thiserror::Error)]
 pub enum PointerError {
-    #[error("Network error")]
-    Network(#[from] NetworkError),
+    #[error("Failed to put pointer: {0}")]
+    PutError(#[from] PutError),
     #[error(transparent)]
     GetError(#[from] GetError),
     #[error("Serialization error")]
@@ -69,7 +69,7 @@ impl Client {
             }
             Err(err) => {
                 error!("Error fetching pointer: {err:?}");
-                Err(err)?
+                return Err(PointerError::GetError(err.into()));
             }
         };
 
@@ -96,7 +96,7 @@ impl Client {
             Ok(None) => Ok(false),
             Ok(Some(_)) => Ok(true),
             Err(NetworkError::SplitRecord(..)) => Ok(true),
-            Err(err) => Err(PointerError::Network(err))
+            Err(err) => Err(PointerError::GetError(GetError::Network(err)))
                 .inspect_err(|err| error!("Error checking pointer existence: {err:?}")),
         }
     }
@@ -177,6 +177,13 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - pointer {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                PointerError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err,
+                    payment: Some(payment_proofs),
+                })
             })?;
 
         Ok((total_cost, address))
@@ -215,7 +222,9 @@ impl Client {
         info!("Updating pointer at address {address:?} to {target:?}");
         let current = match self.pointer_get(&address).await {
             Ok(pointer) => Some(pointer),
-            Err(PointerError::Network(NetworkError::SplitRecord(result_map))) => result_map
+            Err(PointerError::GetError(GetError::Network(NetworkError::SplitRecord(
+                result_map,
+            )))) => result_map
                 .values()
                 .filter_map(|record| try_deserialize_record::<Pointer>(record).ok())
                 .max_by_key(|pointer: &Pointer| pointer.counter()),
@@ -251,6 +260,13 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to update pointer at address {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                PointerError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err,
+                    payment: None,
+                })
             })?;
 
         Ok(())

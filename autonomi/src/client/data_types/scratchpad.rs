@@ -16,7 +16,7 @@ use ant_protocol::{
 };
 use libp2p::kad::Record;
 
-use crate::client::GetError;
+use crate::client::{GetError, PutError};
 use crate::networking::NetworkError;
 pub use crate::Bytes;
 pub use ant_protocol::storage::{Scratchpad, ScratchpadAddress};
@@ -27,14 +27,14 @@ const SCRATCHPAD_MAX_SIZE: usize = Scratchpad::MAX_SIZE;
 /// Errors that can occur when dealing with Scratchpads
 #[derive(Debug, thiserror::Error)]
 pub enum ScratchpadError {
+    #[error("Failed to put scratchpad: {0}")]
+    PutError(#[from] PutError),
     #[error("Payment failure occurred during scratchpad creation.")]
     Pay(#[from] PayError),
     #[error(transparent)]
     GetError(#[from] GetError),
     #[error("Scratchpad found at {0:?} was not a valid record.")]
     Corrupt(ScratchpadAddress),
-    #[error("Network: {0}")]
-    Network(#[from] NetworkError),
     #[error("Serialization error")]
     Serialization,
     #[error("Scratchpad already exists at this address: {0:?}")]
@@ -113,7 +113,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Failed to fetch scratchpad {network_address:?} from network: {e}");
-                return Err(e)?;
+                return Err(ScratchpadError::GetError(e.into()));
             }
         };
 
@@ -139,7 +139,7 @@ impl Client {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(NetworkError::SplitRecord(..)) => Ok(true),
-            Err(err) => Err(ScratchpadError::Network(err))
+            Err(err) => Err(ScratchpadError::GetError(err.into()))
                 .inspect_err(|err| error!("Error checking scratchpad existence: {err:?}")),
         }
     }
@@ -228,6 +228,13 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - scratchpad {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                ScratchpadError::PutError(PutError::Network {
+                    address: NetworkAddress::from(*address),
+                    network_error: err.clone(),
+                    payment: Some(payment_proofs),
+                })
             })?;
 
         Ok((total_cost, *address))
@@ -272,7 +279,9 @@ impl Client {
         let current = match self.scratchpad_get(&address).await {
             Ok(scratchpad) => Some(scratchpad),
             Err(ScratchpadError::GetError(GetError::RecordNotFound)) => None,
-            Err(ScratchpadError::Network(NetworkError::SplitRecord(result_map))) => result_map
+            Err(ScratchpadError::GetError(GetError::Network(NetworkError::SplitRecord(
+                result_map,
+            )))) => result_map
                 .values()
                 .filter_map(|record| try_deserialize_record::<Scratchpad>(record).ok())
                 .max_by_key(|scratchpad: &Scratchpad| scratchpad.counter()),
@@ -309,6 +318,13 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to update scratchpad at address {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                ScratchpadError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err,
+                    payment: None,
+                })
             })?;
 
         Ok(())

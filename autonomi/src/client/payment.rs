@@ -8,13 +8,14 @@
 
 use crate::client::quote::{DataTypes, StoreQuote};
 use crate::Client;
-use ant_evm::{EncodedPeerId, EvmWallet, EvmWalletError, ProofOfPayment};
+use ant_evm::{EncodedPeerId, EvmWallet, EvmWalletError};
 use std::collections::HashMap;
 use xor_name::XorName;
 
 use super::quote::CostError;
 
 pub use crate::{Amount, AttoTokens};
+pub use ant_evm::ProofOfPayment;
 
 /// Contains the proof of payments for each XOR address and the amount paid
 pub type Receipt = HashMap<XorName, (ProofOfPayment, AttoTokens)>;

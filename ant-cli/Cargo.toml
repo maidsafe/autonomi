@@ -38,6 +38,7 @@ ring = "0.17.12"
 rpassword = "7.0"
 serde = "1.0.210"
 serde_json = "1.0.132"
+sha256 = "1.6.0"
 thiserror = "1.0"
 tokio = { version = "1.43.1", features = [
     "io-util",

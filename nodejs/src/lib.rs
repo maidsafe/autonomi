@@ -143,12 +143,6 @@ impl Client {
         Ok(cost.to_string())
     }
 
-    // /// Upload chunks and retry failed uploads up to RETRY_ATTEMPTS times.
-    // #[napi]
-    // pub async fn upload_chunks_with_retries(&self, chunks: Vec<Chunk>, receipt: &Receipt) -> Vec<(Chunk, PutError)> {
-    //     todo!()
-    // }
-
     // Graph entries
 
     /// Fetches a GraphEntry from the network.

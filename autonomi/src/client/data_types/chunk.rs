@@ -11,7 +11,7 @@ use crate::{
         payment::{PaymentOption, Receipt},
         quote::CostError,
         utils::process_tasks_with_max_concurrency,
-        GetError, PutError,
+        ChunkBatchUploadState, GetError, PutError,
     },
     self_encryption::DataMapLevel,
     Client,
@@ -26,14 +26,12 @@ use libp2p::kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     sync::LazyLock,
 };
 
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
-
-/// Number of retries to upload chunks.
-pub(crate) const RETRY_ATTEMPTS: usize = 3;
 
 /// Number of chunks to upload in parallel.
 ///
@@ -42,7 +40,7 @@ pub(crate) static CHUNK_UPLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
     let batch_size = std::env::var("CHUNK_UPLOAD_BATCH_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
+        .unwrap_or(8);
     info!("Chunk upload batch size: {}", batch_size);
     batch_size
 });
@@ -201,6 +199,11 @@ impl Client {
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - chunk {address:?} to the network: {err}")
+            })
+            .map_err(|err| PutError::Network {
+                address: address.clone(),
+                network_error: err.clone(),
+                payment: Some(payment_proofs),
             })?;
 
         Ok((total_cost, *chunk.address()))
@@ -225,100 +228,82 @@ impl Client {
         Ok(total_cost)
     }
 
-    /// Upload chunks and retry failed uploads up to `RETRY_ATTEMPTS` times.
-    pub async fn upload_chunks_with_retries<'a>(
+    /// Upload chunks in batches
+    pub(crate) async fn chunk_batch_upload(
         &self,
-        mut chunks: Vec<&'a Chunk>,
+        chunks: Vec<&Chunk>,
         receipt: &Receipt,
-    ) -> Vec<(&'a Chunk, PutError)> {
-        let mut current_attempt: usize = 1;
+    ) -> Result<(), PutError> {
+        let mut upload_tasks = vec![];
+        #[cfg(feature = "loud")]
+        let total_chunks = chunks.len();
+        for (_i, &chunk) in chunks.iter().enumerate() {
+            let self_clone = self.clone();
+            let address = *chunk.address();
 
-        loop {
-            let mut upload_tasks = vec![];
-            #[cfg(feature = "loud")]
-            let total_chunks = chunks.len();
-            for (_i, &chunk) in chunks.iter().enumerate() {
-                let self_clone = self.clone();
-                let address = *chunk.address();
+            let Some((proof, price)) = receipt.get(chunk.name()) else {
+                debug!("Chunk at {address:?} was already paid for so skipping");
+                #[cfg(feature = "loud")]
+                println!(
+                    "({}/{}) Chunk stored at: {} (skipping, already exists)",
+                    _i + 1,
+                    chunks.len(),
+                    chunk.address().to_hex()
+                );
+                continue;
+            };
 
-                let Some((proof, _)) = receipt.get(chunk.name()) else {
-                    debug!("Chunk at {address:?} was already paid for so skipping");
-                    #[cfg(feature = "loud")]
-                    println!(
-                        "({}/{}) Chunk stored at: {} (skipping, already exists)",
-                        _i + 1,
-                        chunks.len(),
-                        chunk.address().to_hex()
-                    );
-                    continue;
-                };
-
-                upload_tasks.push(async move {
-                    let res = self_clone
-                        .chunk_upload_with_payment(chunk, proof.clone())
-                        .await
-                        .inspect_err(|err| error!("Error uploading chunk {address:?} :{err:?}"))
-                        .inspect(|_addr| {})
-                        // Return chunk reference too, to re-use it next attempt/iteration
-                        .map_err(|err| (chunk, err));
-                    #[cfg(feature = "loud")]
-                    match res {
-                        Ok(_addr) => {
-                            println!(
-                                "({}/{}) Chunk stored at: {}",
-                                _i + 1,
-                                total_chunks,
-                                chunk.address().to_hex()
-                            );
-                        }
-                        Err((_chunk, ref err)) => {
-                            println!(
-                                "({}/{}) Chunk failed to be stored at: {} ({err})",
-                                _i + 1,
-                                total_chunks,
-                                chunk.address().to_hex()
-                            );
-                        }
+            upload_tasks.push(async move {
+                let res = self_clone
+                    .chunk_upload_with_payment(chunk, proof.clone(), *price)
+                    .await
+                    .inspect_err(|err| error!("Error uploading chunk {address:?} :{err:?}"))
+                    .map_err(|e| (chunk, e));
+                #[cfg(feature = "loud")]
+                match &res {
+                    Ok(_addr) => {
+                        println!(
+                            "({}/{}) Chunk stored at: {}",
+                            _i + 1,
+                            total_chunks,
+                            chunk.address().to_hex()
+                        );
                     }
-                    res
-                });
-            }
-            let uploads =
-                process_tasks_with_max_concurrency(upload_tasks, *CHUNK_UPLOAD_BATCH_SIZE).await;
-
-            // Check for errors.
-            let total_uploads = uploads.len();
-            let uploads_failed: Vec<_> = uploads.into_iter().filter_map(|up| up.err()).collect();
-            info!(
-                "Uploaded {} chunks out of {total_uploads}",
-                total_uploads - uploads_failed.len()
-            );
-
-            // All uploads succeeded.
-            if uploads_failed.is_empty() {
-                return vec![];
-            }
-
-            // Max retries reached.
-            if current_attempt > RETRY_ATTEMPTS {
-                return uploads_failed;
-            }
-
-            tracing::info!(
-                "Retrying putting {} failed chunks (attempt {current_attempt}/3)",
-                uploads_failed.len()
-            );
-
-            // Re-iterate over the failed chunks
-            chunks = uploads_failed.into_iter().map(|(chunk, _)| chunk).collect();
-            current_attempt += 1;
+                    Err((_, err)) => {
+                        println!(
+                            "({}/{}) Chunk failed to be stored at: {} ({err})",
+                            _i + 1,
+                            total_chunks,
+                            chunk.address().to_hex()
+                        );
+                    }
+                }
+                res
+            });
         }
+        let uploads =
+            process_tasks_with_max_concurrency(upload_tasks, *CHUNK_UPLOAD_BATCH_SIZE).await;
+
+        // return errors
+        if uploads.iter().any(|res| res.is_err()) {
+            let mut state = ChunkBatchUploadState::default();
+            for res in uploads.into_iter() {
+                match res {
+                    Ok(addr) => state.successful.push(addr),
+                    Err((chunk, err)) => state.push_error(*chunk.address(), err),
+                }
+            }
+            return Err(PutError::Batch(state));
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn chunk_upload_with_payment(
         &self,
         chunk: &Chunk,
         payment: ProofOfPayment,
+        price: AttoTokens,
     ) -> Result<ChunkAddress, PutError> {
         let storing_nodes = payment.payees();
 
@@ -333,7 +318,7 @@ impl Client {
         let record_kind = RecordKind::DataWithPayment(DataTypes::Chunk);
         let record = Record {
             key: key.clone(),
-            value: try_serialize_record(&(payment, chunk.clone()), record_kind)
+            value: try_serialize_record(&(payment.clone(), chunk.clone()), record_kind)
                 .map_err(|e| {
                     PutError::Serialization(format!(
                         "Failed to serialize chunk with payment: {e:?}"
@@ -345,8 +330,16 @@ impl Client {
         };
 
         self.network
-            .put_record(record, storing_nodes.clone(), self.config.chunks.put_quorum)
-            .await?;
+            .put_record_with_retries(record, storing_nodes.clone(), &self.config.chunks)
+            .await
+            .map_err(|err| {
+                let receipt = HashMap::from_iter([(*chunk.name(), (payment, price))]);
+                PutError::Network {
+                    address: NetworkAddress::from(*chunk.address()),
+                    network_error: err,
+                    payment: Some(receipt),
+                }
+            })?;
         debug!("Successfully stored chunk: {chunk:?} to {storing_nodes:?}");
         Ok(*chunk.address())
     }

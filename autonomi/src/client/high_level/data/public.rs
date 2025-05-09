@@ -63,25 +63,14 @@ impl Client {
         // Upload all the chunks in parallel including the data map chunk
         debug!("Uploading {} chunks", chunks.len());
 
-        let mut failed_uploads = self
-            .upload_chunks_with_retries(
-                chunks
-                    .iter()
-                    .chain(std::iter::once(&data_map_chunk))
-                    .collect(),
-                &receipt,
-            )
-            .await;
-
-        // Return the last chunk upload error
-        if let Some(last_chunk_fail) = failed_uploads.pop() {
-            tracing::error!(
-                "Error uploading chunk ({:?}): {:?}",
-                last_chunk_fail.0.address(),
-                last_chunk_fail.1
-            );
-            return Err(last_chunk_fail.1);
-        }
+        self.chunk_batch_upload(
+            chunks
+                .iter()
+                .chain(std::iter::once(&data_map_chunk))
+                .collect(),
+            &receipt,
+        )
+        .await?;
 
         let record_count = (chunks.len() + 1) - skipped_payments;
 

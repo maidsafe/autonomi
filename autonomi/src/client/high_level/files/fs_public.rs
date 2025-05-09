@@ -184,36 +184,26 @@ impl Client {
                 #[cfg(feature = "loud")]
                 println!("Uploading file: {name} ({} chunks)..", chunks.len());
 
-                // todo: handle failed uploads
-                let mut failed_uploads = self
-                    .upload_chunks_with_retries(chunks.iter().collect(), &receipt_clone)
-                    .await;
+                match self
+                    .chunk_batch_upload(chunks.iter().collect(), &receipt_clone)
+                    .await
+                {
+                    Ok(()) => {
+                        info!(
+                            "Successfully uploaded {name} ({} chunks) to: {}",
+                            chunks.len(),
+                            hex::encode(data_address.xorname())
+                        );
+                        #[cfg(feature = "loud")]
+                        println!(
+                            "Successfully uploaded {name} ({} chunks) to: {}",
+                            chunks.len(),
+                            hex::encode(data_address.xorname())
+                        );
 
-                let chunks_uploaded = chunks.len() - failed_uploads.len();
-
-                // Return the last chunk upload error
-                if let Some(last_chunk_fail) = failed_uploads.pop() {
-                    error!(
-                        "Error uploading chunk ({:?}): {:?}",
-                        last_chunk_fail.0.address(),
-                        last_chunk_fail.1
-                    );
-
-                    (name, Err(UploadError::from(last_chunk_fail.1)))
-                } else {
-                    info!(
-                        "Successfully uploaded {name} ({} chunks) to: {}",
-                        chunks.len(),
-                        hex::encode(data_address.xorname())
-                    );
-                    #[cfg(feature = "loud")]
-                    println!(
-                        "Successfully uploaded {name} ({} chunks) to: {}",
-                        chunks.len(),
-                        hex::encode(data_address.xorname())
-                    );
-
-                    (name, Ok(chunks_uploaded))
+                        (name, Ok(chunks.len()))
+                    }
+                    Err(err) => (name, Err(UploadError::from(err))),
                 }
             });
         }
@@ -308,8 +298,8 @@ impl Client {
             archive.add_file(path, DataAddress::new(map_xor_name), metadata);
         }
 
-        let root_serialized = rmp_serde::to_vec(&archive)?;
-        content_addrs.extend(self.get_content_addrs(Bytes::from(root_serialized))?);
+        let serialized = archive.to_bytes()?;
+        content_addrs.extend(self.get_content_addrs(serialized)?);
 
         let total_cost = self.get_cost_estimation(content_addrs).await?;
         debug!("Total cost for the directory: {total_cost:?}");
