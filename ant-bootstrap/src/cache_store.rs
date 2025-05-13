@@ -235,7 +235,7 @@ impl BootstrapCacheStore {
     /// Add a set of addresses to the cache.
     pub fn add_addr(&mut self, addr: Multiaddr) {
         debug!("Trying to add new addr: {addr}");
-        let Some(addr) = craft_valid_multiaddr(&addr, false) else {
+        let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
         let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
