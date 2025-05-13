@@ -101,7 +101,7 @@ impl BootstrapCacheStore {
 
     /// Add an address to the cache
     pub fn add_addr(&mut self, addr: Multiaddr) {
-        let Some(addr) = craft_valid_multiaddr(&addr, false) else {
+        let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
         let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {

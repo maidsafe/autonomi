@@ -48,8 +48,6 @@ pub struct ContactsFetcher {
     endpoints: Vec<Url>,
     /// Reqwest Client
     request_client: Client,
-    /// Ignore PeerId in the multiaddr if not present. This is only useful for fetching nat detection contacts
-    ignore_peer_id: bool,
 }
 
 impl ContactsFetcher {
@@ -68,7 +66,6 @@ impl ContactsFetcher {
             max_addrs: usize::MAX,
             endpoints,
             request_client,
-            ignore_peer_id: false,
         })
     }
 
@@ -103,10 +100,6 @@ impl ContactsFetcher {
         self.endpoints.push(endpoint);
     }
 
-    pub fn ignore_peer_id(&mut self, ignore_peer_id: bool) {
-        self.ignore_peer_id = ignore_peer_id;
-    }
-
     /// Fetch the list of bootstrap addresses from all configured endpoints
     pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<Multiaddr>> {
         Ok(self.fetch_addrs().await?.into_iter().collect())
@@ -128,12 +121,7 @@ impl ContactsFetcher {
                     endpoint
                 );
                 (
-                    Self::fetch_from_endpoint(
-                        self.request_client.clone(),
-                        &endpoint,
-                        self.ignore_peer_id,
-                    )
-                    .await,
+                    Self::fetch_from_endpoint(self.request_client.clone(), &endpoint).await,
                     endpoint,
                 )
             })
@@ -178,11 +166,7 @@ impl ContactsFetcher {
     }
 
     /// Fetch the list of multiaddrs from a single endpoint
-    async fn fetch_from_endpoint(
-        request_client: Client,
-        endpoint: &Url,
-        ignore_peer_id: bool,
-    ) -> Result<Vec<Multiaddr>> {
+    async fn fetch_from_endpoint(request_client: Client, endpoint: &Url) -> Result<Vec<Multiaddr>> {
         let mut retries = 0;
 
         let bootstrap_addresses = loop {
@@ -197,7 +181,7 @@ impl ContactsFetcher {
                     if response.status().is_success() {
                         let text = response.text().await?;
 
-                        match Self::try_parse_response(&text, ignore_peer_id) {
+                        match Self::try_parse_response(&text) {
                             Ok(addrs) => break addrs,
                             Err(err) => {
                                 warn!("Failed to parse response with err: {err:?}");
@@ -242,7 +226,7 @@ impl ContactsFetcher {
     }
 
     /// Try to parse a response from an endpoint
-    fn try_parse_response(response: &str, ignore_peer_id: bool) -> Result<Vec<Multiaddr>> {
+    fn try_parse_response(response: &str) -> Result<Vec<Multiaddr>> {
         let cache_data = if let Ok(data) =
             serde_json::from_str::<super::cache_store::cache_data_v1::CacheData>(response)
         {
@@ -284,7 +268,7 @@ impl ContactsFetcher {
 
                 let bootstrap_addresses = response
                     .split('\n')
-                    .filter_map(|str| craft_valid_multiaddr_from_str(str, ignore_peer_id))
+                    .filter_map(craft_valid_multiaddr_from_str)
                     .collect::<Vec<_>>();
 
                 if bootstrap_addresses.is_empty() {

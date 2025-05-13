@@ -35,7 +35,7 @@ async fn test_transport_protocol_variants() -> Result<()> {
     for (addr_str, should_be_valid) in variants {
         let addr = addr_str.parse::<Multiaddr>()?;
         info!("Testing multiaddr: {}", addr_str);
-        let result = craft_valid_multiaddr(&addr, false);
+        let result = craft_valid_multiaddr(&addr);
 
         if should_be_valid {
             assert!(
@@ -60,21 +60,21 @@ async fn test_craft_valid_multiaddr_from_str() -> Result<()> {
     // Test valid multiaddr
     let valid_addr =
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
-    let result = craft_valid_multiaddr_from_str(valid_addr, false);
+    let result = craft_valid_multiaddr_from_str(valid_addr);
     assert!(result.is_some(), "Should accept valid multiaddr string");
 
     // Test invalid multiaddr
     let invalid_addr = "not a multiaddr";
-    let result = craft_valid_multiaddr_from_str(invalid_addr, false);
+    let result = craft_valid_multiaddr_from_str(invalid_addr);
     assert!(result.is_none(), "Should reject invalid multiaddr string");
 
     // Test with malformed but parseable multiaddr
     let malformed_addr = "/ip4/127.0.0.1/tcp/8080"; // Missing peer ID
-    let result = craft_valid_multiaddr_from_str(malformed_addr, false);
+    let result = craft_valid_multiaddr_from_str(malformed_addr);
     assert!(result.is_none(), "Should reject malformed multiaddr");
 
     // Same address with ignore_peer_id=true should succeed
-    let result = craft_valid_multiaddr_from_str(malformed_addr, true);
+    let result = craft_valid_multiaddr_from_str(malformed_addr);
     assert!(
         result.is_some(),
         "Should accept multiaddr without peer ID when ignoring peer ID"
@@ -91,14 +91,14 @@ async fn test_craft_valid_multiaddr_ignore_peer_id() -> Result<()> {
     let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse()?;
 
     // Should fail with ignore_peer_id = false
-    let result1 = craft_valid_multiaddr(&addr_without_peer, false);
+    let result1 = craft_valid_multiaddr(&addr_without_peer);
     assert!(
         result1.is_none(),
         "Should reject addr without peer ID by default"
     );
 
     // Should pass with ignore_peer_id = true
-    let result2 = craft_valid_multiaddr(&addr_without_peer, true);
+    let result2 = craft_valid_multiaddr(&addr_without_peer);
     assert!(
         result2.is_some(),
         "Should accept addr without peer ID when ignore flag is set"
