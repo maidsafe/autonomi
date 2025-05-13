@@ -96,7 +96,7 @@ impl InitialPeersConfig {
 
         // Add addrs from arguments if present
         for addr in &self.addrs {
-            if let Some(addr) = craft_valid_multiaddr(addr, false) {
+            if let Some(addr) = craft_valid_multiaddr(addr) {
                 info!("Adding addr from arguments: {addr}");
                 bootstrap_addresses.push(addr);
             } else {
@@ -213,7 +213,7 @@ impl InitialPeersConfig {
         // Read from ANT_PEERS environment variable if present
         if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
             for addr_str in addrs.split(',') {
-                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
+                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str) {
                     info!("Adding addr from environment variable: {addr}");
                     bootstrap_addresses.push(addr);
                 } else {
