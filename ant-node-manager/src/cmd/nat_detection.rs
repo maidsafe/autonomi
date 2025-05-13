@@ -38,7 +38,6 @@ pub async fn run_nat_detection(
         Some(servers) => servers,
         None => {
             let mut contacts_fetcher = ContactsFetcher::new()?;
-            contacts_fetcher.ignore_peer_id(true);
             contacts_fetcher.insert_endpoint(NAT_DETECTION_SERVERS_LIST_URL.parse()?);
 
             let fetched = contacts_fetcher.fetch_addrs().await?;
