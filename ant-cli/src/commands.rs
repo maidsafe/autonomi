@@ -14,9 +14,10 @@ mod wallet;
 
 use crate::actions::NetworkContext;
 use crate::opt::Opt;
-use autonomi::ResponseQuorum;
+use autonomi::networking::Quorum;
 use clap::{error::ErrorKind, CommandFactory as _, Subcommand};
 use color_eyre::Result;
+use std::num::NonZeroUsize;
 
 #[derive(Subcommand, Debug)]
 pub enum SubCmd {
@@ -69,11 +70,6 @@ pub enum FileCmd {
         /// Upload the file as public. Everyone can see public data on the Network.
         #[arg(short, long)]
         public: bool,
-        /// Experimental: Optionally specify the quorum for the verification of the upload.
-        ///
-        /// Possible values are: "one", "majority", "all", n (where n is a number greater than 0)
-        #[arg(short, long)]
-        quorum: Option<ResponseQuorum>,
         /// Optional: Specify the maximum fee per gas in u128.
         #[arg(long)]
         max_fee_per_gas: Option<u128>,
@@ -85,11 +81,11 @@ pub enum FileCmd {
         addr: String,
         /// The destination file path.
         dest_file: String,
-        /// Experimental: Optionally specify the quorum for the download (makes sure that we have n copies for each chunks).
+        /// Experimental: Optionally specify the quorum for the download (makes sure that we have n copies for each chunk).
         ///
         /// Possible values are: "one", "majority", "all", n (where n is a number greater than 0)
-        #[arg(short, long)]
-        quorum: Option<ResponseQuorum>,
+        #[arg(short, long, value_parser = parse_quorum)]
+        quorum: Option<Quorum>,
     },
 
     /// List previous uploads
@@ -246,13 +242,7 @@ pub enum WalletCmd {
 pub async fn handle_subcommand(opt: Opt) -> Result<()> {
     let cmd = opt.command;
 
-    let network_context = if let Some(network_id) = opt.network_id {
-        NetworkContext::new(opt.peers, network_id)
-    } else if opt.alpha {
-        NetworkContext::new(opt.peers, 2)
-    } else {
-        NetworkContext::new(opt.peers, 1)
-    };
+    let network_context = NetworkContext::new(opt.peers, opt.network_id);
 
     match cmd {
         Some(SubCmd::File { command }) => match command {
@@ -260,11 +250,10 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             FileCmd::Upload {
                 file,
                 public,
-                quorum,
                 max_fee_per_gas,
             } => {
                 if let Err((err, exit_code)) =
-                    file::upload(&file, public, network_context, quorum, max_fee_per_gas).await
+                    file::upload(&file, public, network_context, max_fee_per_gas).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
@@ -333,7 +322,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 password,
             } => wallet::import(private_key, no_password, password),
             WalletCmd::Export => wallet::export(),
-            WalletCmd::Balance => wallet::balance(network_context.peers.local).await,
+            WalletCmd::Balance => {
+                wallet::balance(network_context.peers.local, network_context.network_id).await
+            }
         },
         Some(SubCmd::Analyze { addr, verbose }) => {
             analyze::analyze(&addr, verbose, network_context).await
@@ -343,6 +334,18 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             Opt::command()
                 .error(ErrorKind::MissingSubcommand, "Please provide a subcommand")
                 .exit();
+        }
+    }
+}
+
+fn parse_quorum(str: &str) -> Result<Quorum, String> {
+    match str {
+        "one" => Ok(Quorum::One),
+        "majority" => Ok(Quorum::Majority),
+        "all" => Ok(Quorum::All),
+        _ => {
+            let n: NonZeroUsize = str.parse().map_err(|_| "Invalid quorum value")?;
+            Ok(Quorum::N(n))
         }
     }
 }

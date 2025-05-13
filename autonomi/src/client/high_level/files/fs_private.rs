@@ -26,6 +26,7 @@ use crate::{AttoTokens, Client};
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::path::PathBuf;
+use std::time::Instant;
 use xor_name::XorName;
 
 impl Client {
@@ -100,7 +101,7 @@ impl Client {
                     return Err(err_msg);
                 }
 
-                let now = ant_networking::time::Instant::now();
+                let now = Instant::now();
 
                 let (data_map_chunk, chunks) = encrypt(data).map_err(|err| err.to_string())?;
 
@@ -178,28 +179,17 @@ impl Client {
                 #[cfg(feature = "loud")]
                 println!("Uploading file: {name} ({} chunks)..", chunks.len());
 
-                // todo: handle failed uploads
-                let mut failed_uploads = self
-                    .upload_chunks_with_retries(chunks.iter().collect(), &receipt_clone)
-                    .await;
-
-                let chunks_uploaded = chunks.len() - failed_uploads.len();
-
-                // Return the last chunk upload error
-                if let Some(last_chunk_fail) = failed_uploads.pop() {
-                    error!(
-                        "Error uploading chunk ({:?}): {:?}",
-                        last_chunk_fail.0.address(),
-                        last_chunk_fail.1
-                    );
-
-                    (name, Err(UploadError::from(last_chunk_fail.1)))
-                } else {
-                    info!("Successfully uploaded {name} ({} chunks)", chunks.len());
-                    #[cfg(feature = "loud")]
-                    println!("Successfully uploaded {name} ({} chunks)", chunks.len());
-
-                    (name, Ok(chunks_uploaded))
+                match self
+                    .chunk_batch_upload(chunks.iter().collect(), &receipt_clone)
+                    .await
+                {
+                    Ok(_) => {
+                        info!("Successfully uploaded {name} ({} chunks)", chunks.len());
+                        #[cfg(feature = "loud")]
+                        println!("Successfully uploaded {name} ({} chunks)", chunks.len());
+                        (name, Ok(chunks.len()))
+                    }
+                    Err(err) => (name, Err(UploadError::from(err))),
                 }
             });
         }

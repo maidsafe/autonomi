@@ -38,6 +38,7 @@ pub enum PayError {
 
 pub fn receipt_from_store_quotes(quotes: StoreQuote) -> Receipt {
     let mut receipt = Receipt::new();
+
     for (content_addr, quote_for_address) in quotes.0 {
         let price = AttoTokens::from_atto(quote_for_address.price());
 

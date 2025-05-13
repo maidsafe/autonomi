@@ -189,38 +189,6 @@ impl PyClient {
         })
     }
 
-    fn upload_chunks_with_retries<'a>(
-        &self,
-        py: Python<'a>,
-        chunks: Vec<PyChunk>, // Vec<&PyChunk> to match original code is not supported by PyO3
-        receipt: PyReceipt,
-    ) -> PyResult<Bound<'a, PyAny>> {
-        let inner_client = self.inner.clone();
-        let inner_receipt = receipt.inner;
-
-        future_into_py(py, async move {
-            let inner_chunks: Vec<Chunk> = chunks.into_iter().map(|chunk| chunk.inner).collect();
-            let chunk_refs: Vec<&Chunk> = inner_chunks.iter().collect();
-            let result = inner_client
-                .upload_chunks_with_retries(chunk_refs, &inner_receipt)
-                .await;
-
-            let py_failures = result
-                .into_iter()
-                .map(|(chunk, err)| {
-                    (
-                        PyChunk {
-                            inner: chunk.clone(),
-                        },
-                        err.to_string(),
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            Ok(py_failures)
-        })
-    }
-
     /// Fetches a GraphEntry from the network.
     fn graph_entry_get<'a>(
         &self,
@@ -248,7 +216,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .graph_entry_check_existance(&addr.inner)
+                .graph_entry_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get graph entry: {e}")))?;
             Ok(exists)
@@ -335,7 +303,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .scratchpad_check_existance(&addr.inner)
+                .scratchpad_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
 
@@ -1103,7 +1071,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let exists = client
-                .pointer_check_existance(&addr.inner)
+                .pointer_check_existence(&addr.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get pointer: {e}")))?;
 

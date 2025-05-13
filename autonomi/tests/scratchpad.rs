@@ -158,6 +158,7 @@ async fn scratchpad_errors() -> Result<()> {
 
     // try update scratchpad, it should fail as we haven't created it
     let res = client.scratchpad_update(&key, content_type, &content).await;
+    println!("scratchpad update should fail here: {res:?}");
     assert!(matches!(
         res,
         Err(ScratchpadError::CannotUpdateNewScratchpad)

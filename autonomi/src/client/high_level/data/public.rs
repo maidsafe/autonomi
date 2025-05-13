@@ -8,6 +8,7 @@
 
 use ant_protocol::storage::DataTypes;
 use bytes::Bytes;
+use std::time::Instant;
 
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
@@ -39,7 +40,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), PutError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunk, chunks) = encrypt(data)?;
         let data_map_addr = data_map_chunk.address();
         debug!("Encryption took: {:.2?}", now.elapsed());
@@ -62,25 +63,14 @@ impl Client {
         // Upload all the chunks in parallel including the data map chunk
         debug!("Uploading {} chunks", chunks.len());
 
-        let mut failed_uploads = self
-            .upload_chunks_with_retries(
-                chunks
-                    .iter()
-                    .chain(std::iter::once(&data_map_chunk))
-                    .collect(),
-                &receipt,
-            )
-            .await;
-
-        // Return the last chunk upload error
-        if let Some(last_chunk_fail) = failed_uploads.pop() {
-            tracing::error!(
-                "Error uploading chunk ({:?}): {:?}",
-                last_chunk_fail.0.address(),
-                last_chunk_fail.1
-            );
-            return Err(last_chunk_fail.1);
-        }
+        self.chunk_batch_upload(
+            chunks
+                .iter()
+                .chain(std::iter::once(&data_map_chunk))
+                .collect(),
+            &receipt,
+        )
+        .await?;
 
         let record_count = (chunks.len() + 1) - skipped_payments;
 
@@ -116,7 +106,7 @@ impl Client {
         &self,
         data: Bytes,
     ) -> Result<Vec<(XorName, usize)>, CostError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunks, chunks) = encrypt(data)?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());

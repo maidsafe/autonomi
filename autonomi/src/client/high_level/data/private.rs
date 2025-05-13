@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_protocol::storage::DataTypes;
+use std::time::Instant;
 
 use crate::client::payment::PaymentOption;
 use crate::client::{ClientEvent, GetError, PutError, UploadSummary};
@@ -68,7 +69,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
-        let now = ant_networking::time::Instant::now();
+        let now = Instant::now();
         let (data_map_chunk, chunks) = encrypt(data)?;
         debug!("Encryption took: {:.2?}", now.elapsed());
 
@@ -86,19 +87,8 @@ impl Client {
         // Upload the chunks with the payments
         debug!("Uploading {} chunks", chunks.len());
 
-        let mut failed_uploads = self
-            .upload_chunks_with_retries(chunks.iter().collect(), &receipt)
-            .await;
-
-        // Return the last chunk upload error
-        if let Some(last_chunk_fail) = failed_uploads.pop() {
-            tracing::error!(
-                "Error uploading chunk ({:?}): {:?}",
-                last_chunk_fail.0.address(),
-                last_chunk_fail.1
-            );
-            return Err(last_chunk_fail.1);
-        }
+        self.chunk_batch_upload(chunks.iter().collect(), &receipt)
+            .await?;
 
         let record_count = chunks.len().saturating_sub(skipped_payments);
 
