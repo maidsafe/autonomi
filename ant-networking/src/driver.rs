@@ -409,43 +409,29 @@ impl SwarmDriver {
                     }
                 },
                 Some(()) = Self::conditional_interval(&mut bootstrap_cache_save_interval) => {
-                    let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() else {
-                        continue;
-                    };
                     let Some(current_interval) = bootstrap_cache_save_interval.as_mut() else {
                         continue;
                     };
                     let start = Instant::now();
 
-                    let config = bootstrap_cache.config().clone();
-                    let mut old_cache = bootstrap_cache.clone();
+                    if  self.sync_and_flush_cache().is_err() {
+                        warn!("Failed to sync and flush bootstrap cache, skipping this interval");
+                        continue;
+                    }
 
-                    let new = match BootstrapCacheStore::new(config) {
-                        Ok(new) => new,
-                        Err(err) => {
-                            error!("Failed to create a new empty cache: {err}");
-                            continue;
-                        }
+                    let Some(bootstrap_config) = self.bootstrap_cache.as_ref().map(|cache|cache.config()) else {
+                        continue;
                     };
-                    *bootstrap_cache = new;
-
-                    // save the cache to disk
-                    spawn(async move {
-                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
-                            error!("Failed to save bootstrap cache: {err}");
-                        }
-                    });
-
-                    if current_interval.period() >= bootstrap_cache.config().max_cache_save_duration {
+                    if current_interval.period() >= bootstrap_config.max_cache_save_duration {
                         continue;
                     }
 
                     // add a variance of 1% to the max interval to avoid all nodes writing to disk at the same time.
                     let max_cache_save_duration =
-                        Self::duration_with_variance(bootstrap_cache.config().max_cache_save_duration, 1);
+                        Self::duration_with_variance(bootstrap_config.max_cache_save_duration, 1);
 
                     // scale up the interval until we reach the max
-                    let scaled = current_interval.period().as_secs().saturating_mul(bootstrap_cache.config().cache_save_scaling_factor);
+                    let scaled = current_interval.period().as_secs().saturating_mul(bootstrap_config.cache_save_scaling_factor);
                     let new_duration = Duration::from_secs(std::cmp::min(scaled, max_cache_save_duration.as_secs()));
                     info!("Scaling up the bootstrap cache save interval to {new_duration:?}");
 
@@ -615,6 +601,28 @@ impl SwarmDriver {
     pub(crate) fn listen_on(&mut self, addr: Multiaddr) -> Result<()> {
         let id = self.swarm.listen_on(addr.clone())?;
         info!("Listening on {id:?} with addr: {addr:?}");
+        Ok(())
+    }
+
+    /// Sync and flush the bootstrap cache to disk.
+    ///
+    /// This function creates a new cache and saves the old one to disk.
+    pub(crate) fn sync_and_flush_cache(&mut self) -> Result<()> {
+        if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
+            let config = bootstrap_cache.config().clone();
+            let mut old_cache = bootstrap_cache.clone();
+
+            if let Ok(new) = BootstrapCacheStore::new(config) {
+                self.bootstrap_cache = Some(new);
+
+                // Save cache to disk.
+                crate::time::spawn(async move {
+                    if let Err(err) = old_cache.sync_and_flush_to_disk() {
+                        error!("Failed to save bootstrap cache: {err}");
+                    }
+                });
+            }
+        }
         Ok(())
     }
 

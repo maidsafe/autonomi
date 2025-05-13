@@ -154,12 +154,15 @@ impl BootstrapCacheStore {
             config.cache_file_path = bootstrap_cache_path;
         }
 
-        let store = Self::new(config)?;
+        let mut store = Self::new(config)?;
 
         // If it is the first node, clear the cache.
         if init_peers_config.first {
             info!("First node in network, writing empty cache to disk");
             store.write()?;
+        } else {
+            info!("Flushing cache to disk on init.");
+            store.sync_and_flush_to_disk()?;
         }
 
         Ok(store)
