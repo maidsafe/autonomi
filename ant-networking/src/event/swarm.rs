@@ -13,7 +13,7 @@ use crate::{
     time::Instant,
     NetworkEvent, NodeIssue, Result, SwarmDriver,
 };
-use ant_bootstrap::{multiaddr_get_peer_id, BootstrapCacheStore};
+use ant_bootstrap::multiaddr_get_peer_id;
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
@@ -174,25 +174,16 @@ impl SwarmDriver {
                     // Others won't read our advertised external address, as we now use the addr from connection info.
                     // this is needed for Kad Mode::Server
                     self.swarm.add_external_address(address.clone());
+                }
 
-                    // If we are local, add our own address(es) to cache
+                // If we are a local node, add our own address(es) to cache
+                if !self.is_client && self.local {
                     if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
-                        tracing::info!("Adding listen address to bootstrap cache");
-
-                        let config = bootstrap_cache.config().clone();
-                        let mut old_cache = bootstrap_cache.clone();
-
-                        if let Ok(new) = BootstrapCacheStore::new(config) {
-                            self.bootstrap_cache = Some(new);
-                            old_cache.add_addr(address.clone());
-
-                            // Save cache to disk.
-                            crate::time::spawn(async move {
-                                if let Err(err) = old_cache.sync_and_flush_to_disk() {
-                                    error!("Failed to save bootstrap cache: {err}");
-                                }
-                            });
-                        }
+                        info!("Adding listen address to bootstrap cache (local): {address:?}");
+                        bootstrap_cache.add_addr(address.clone());
+                    }
+                    if let Err(err) = self.sync_and_flush_cache() {
+                        warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
                     }
                 }
 
@@ -205,7 +196,7 @@ impl SwarmDriver {
 
                 self.initial_bootstrap_trigger.listen_addr_obtained = true;
 
-                self.send_event(NetworkEvent::NewListenAddr(address.clone()));
+                self.send_event(NetworkEvent::NewListenAddr(address));
             }
             SwarmEvent::ListenerClosed {
                 listener_id,
