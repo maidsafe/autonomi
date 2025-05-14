@@ -114,7 +114,11 @@ impl PrivateArchive {
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PrivateArchive, rmp_serde::decode::Error> {
-        let root: PrivateArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        let root: PrivateArchiveVersioned = match serde_json::from_slice(&data[..]) {
+            Ok(root) => root,
+            Err(_) => rmp_serde::from_slice(&data[..])?,
+        };
+
         // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
         let PrivateArchiveVersioned::V0(root) = root;
 
@@ -124,7 +128,8 @@ impl PrivateArchive {
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
         let versioned = PrivateArchiveVersioned::V0(self.clone());
-        let root_serialized = rmp_serde::to_vec_named(&versioned)?;
+        let root_serialized = serde_json::to_vec(&versioned)
+            .map_err(|e| rmp_serde::encode::Error::Syntax(e.to_string()))?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)
@@ -215,5 +220,23 @@ mod tests {
         assert_eq!(arch.map().len(), 2);
         assert_eq!(arch.map().get(&file1).unwrap().1.size, 5);
         assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+    }
+
+    #[test]
+    fn test_archive_serialization_formats() {
+        let mut arch = PrivateArchive::new();
+        arch.add_file(
+            PathBuf::from_str("hello_world").unwrap(),
+            DataMapChunk::from_hex("1111").unwrap(),
+            Metadata::new_with_size(1),
+        );
+        let bytes = arch.to_bytes().unwrap();
+        let archive_from_bytes = PrivateArchive::from_bytes(bytes).unwrap();
+        assert_eq!(arch, archive_from_bytes);
+
+        let versionned_arch = PrivateArchiveVersioned::V0(arch.clone());
+        let bytes_rmp = rmp_serde::to_vec_named(&versionned_arch).unwrap();
+        let archive_from_bytes_rmp = PrivateArchive::from_bytes(Bytes::from(bytes_rmp)).unwrap();
+        assert_eq!(arch, archive_from_bytes_rmp);
     }
 }
