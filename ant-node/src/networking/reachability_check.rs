@@ -132,7 +132,14 @@ impl ReachabilityCheckSwarmDriver {
             dialer: Dialer::new(1),
             upnp_supported: false,
             listeners,
-            initial_contacts,
+            initial_contacts: initial_contacts
+                .into_iter()
+                .filter(|addr| {
+                    !addr
+                        .iter()
+                        .any(|protocol| matches!(protocol, Protocol::P2pCircuit))
+                })
+                .collect(),
         }
     }
     /// Runs the reachability check workflow.
