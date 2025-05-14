@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::messages::{QueryResponse, Response};
+use ant_protocol::messages::{CmdResponse, QueryResponse, Response};
 use libp2p::kad::{Event as KadEvent, ProgressStep, QueryId, QueryResult, QueryStats};
 use libp2p::request_response::{Event as ReqEvent, Message, OutboundRequestId};
 use libp2p::swarm::SwarmEvent;
@@ -48,7 +48,7 @@ impl NetworkDriver {
                 },
             )) => self.handle_kad_progress_event(id, result, &stats, &step),
             _other_event => {
-                // trace!("Other event: {:?}", _other_event);
+                trace!("Other event: {:?}", _other_event);
                 Ok(())
             }
         }
@@ -109,14 +109,19 @@ impl NetworkDriver {
             return Ok(());
         }
 
-        if let Response::Query(QueryResponse::GetStoreQuote {
-            quote,
-            peer_address,
-            storage_proofs: _,
-        }) = response
-        {
-            self.pending_tasks
-                .update_get_quote(request_id, quote, peer_address)?;
+        match response {
+            Response::Query(QueryResponse::GetStoreQuote {
+                quote,
+                peer_address,
+                storage_proofs: _,
+            }) => self
+                .pending_tasks
+                .update_get_quote(request_id, quote, peer_address)?,
+            Response::Cmd(CmdResponse::UploadRecord(resp))
+            | Response::Cmd(CmdResponse::PaymentNotification(resp)) => {
+                self.pending_tasks.update_request(request_id, resp)?
+            }
+            _ => warn!("Unsupported response of request({request_id:?}): {response:?}"),
         }
 
         Ok(())

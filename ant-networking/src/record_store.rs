@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, VecDeque},
     fs,
     path::{Path, PathBuf},
     time::SystemTime,
@@ -154,6 +154,8 @@ pub struct NodeRecordStore {
     config: NodeRecordStoreConfig,
     /// Main records store remains unchanged for compatibility
     records: HashMap<Key, (NetworkAddress, ValidationType, DataTypes)>,
+    /// Records got paid and expected to be uploaded later on.
+    expected_records: VecDeque<Key>,
     /// Additional index organizing records by distance
     records_by_distance: BTreeMap<Distance, Key>,
     /// FIFO simple cache of records to reduce read times
@@ -400,6 +402,7 @@ impl NodeRecordStore {
             local_address,
             config,
             records,
+            expected_records: Default::default(),
             records_by_distance,
             records_cache: RecordCache::new(cache_size, CACHE_TIMEOUT),
             network_event_sender,
@@ -601,6 +604,29 @@ impl NodeRecordStore {
         self.records.contains_key(key)
     }
 
+    /// Add a key to expected records with FIFO behavior
+    pub(crate) fn add_expected_record(&mut self, key: Key) {
+        if self.expected_records.len() >= MAX_RECORDS_COUNT {
+            let _ = self.expected_records.pop_front(); // Remove oldest if at capacity
+        }
+        self.expected_records.push_back(key);
+    }
+
+    /// Remove a key from expected records if present
+    pub(crate) fn remove_expected_record(&mut self, key: &Key) -> bool {
+        if let Some(pos) = self.expected_records.iter().position(|k| k == key) {
+            self.expected_records.remove(pos);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Check if a key is in expected records
+    pub(crate) fn is_expected(&self, key: &Key) -> bool {
+        self.expected_records.contains(key)
+    }
+
     /// Returns the set of `NetworkAddress::RecordKey` held by the store
     /// Use `record_addresses_ref` to get a borrowed type
     pub(crate) fn record_addresses(&self) -> HashMap<NetworkAddress, ValidationType> {
@@ -628,6 +654,8 @@ impl NodeRecordStore {
         validate_type: ValidationType,
         data_type: DataTypes,
     ) {
+        let _ = self.remove_expected_record(&key);
+
         let addr = NetworkAddress::from(&key);
         let distance = self.local_address.distance(&addr);
 
@@ -796,6 +824,12 @@ impl NodeRecordStore {
             info!("Basing cost of _total_ records stored.");
         };
 
+        // Use `data_size = 0` to report back the record is `expected`,
+        // i.e. doesn't need to be paid, but required to be uploaded.
+        if self.is_expected(key) {
+            quoting_metrics.data_size = 0;
+        }
+
         // vdash metric (if modified please notify at https://github.com/happybeing/vdash/issues):
         info!("Quoting_metrics {quoting_metrics:?}");
 
@@ -804,8 +838,9 @@ impl NodeRecordStore {
     }
 
     /// Notify the node received a payment.
-    pub(crate) fn payment_received(&mut self) {
+    pub(crate) fn payment_received(&mut self, key: Key) {
         self.received_payment_count = self.received_payment_count.saturating_add(1);
+        self.add_expected_record(key);
 
         self.flush_historic_quoting_metrics();
     }
@@ -1677,7 +1712,7 @@ mod tests {
             None,
         );
 
-        store.payment_received();
+        store.payment_received(NetworkAddress::from(PeerId::random()).to_record_key());
 
         // Wait for a while to allow the file written to disk.
         sleep(Duration::from_millis(5000)).await;

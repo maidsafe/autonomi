@@ -145,6 +145,10 @@ pub enum CmdResponse {
     Replicate(Result<()>),
     /// Response to fresh replication cmd
     FreshReplicate(Result<()>),
+    /// Response to payment notification cmd
+    PaymentNotification(Result<()>),
+    /// Response to upload record cmd
+    UploadRecord(Result<()>),
     //
     // ===== PeerConsideredAsBad =====
     //

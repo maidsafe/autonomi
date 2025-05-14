@@ -43,6 +43,26 @@ pub enum Cmd {
             Option<ProofOfPayment>,
         )>,
     },
+    /// Write operation to notify holder a payment got made to it.
+    ///
+    /// [`NetworkAddress`]: crate::NetworkAddress
+    PaymentNotification {
+        /// Holder of the correspondent record.
+        holder: NetworkAddress,
+        /// Keys of copy that shall be replicated.
+        record_info: (NetworkAddress, DataTypes, ValidationType, ProofOfPayment),
+    },
+    /// Write operation to upload a record.
+    ///
+    /// [`NetworkAddress`]: crate::NetworkAddress
+    UploadRecord {
+        /// Holder of the record.
+        holder: NetworkAddress,
+        /// serialized record.
+        serialized_record: Vec<u8>,
+        /// Address of the record.
+        address: NetworkAddress,
+    },
     /// Notify the peer it is now being considered as BAD due to the included behaviour
     PeerConsideredAsBad {
         detected_by: NetworkAddress,
@@ -70,6 +90,24 @@ impl std::fmt::Debug for Cmd {
                     .field("first_ten_keys", &first_ten_keys)
                     .finish()
             }
+            Cmd::PaymentNotification {
+                holder,
+                record_info,
+            } => f
+                .debug_struct("Cmd::PaymentNotification")
+                .field("holder", holder)
+                .field("record_info", &record_info.0)
+                .finish(),
+            Cmd::UploadRecord {
+                holder,
+                address,
+                serialized_record,
+            } => f
+                .debug_struct("Cmd::UploadRecord")
+                .field("holder", holder)
+                .field("record address", &address)
+                .field("serialized_record", &serialized_record.len())
+                .finish(),
             Cmd::PeerConsideredAsBad {
                 detected_by,
                 bad_peer,
@@ -90,6 +128,8 @@ impl Cmd {
         match self {
             Cmd::Replicate { holder, .. } => holder.clone(),
             Cmd::FreshReplicate { holder, .. } => holder.clone(),
+            Cmd::PaymentNotification { holder, .. } => holder.clone(),
+            Cmd::UploadRecord { holder, .. } => holder.clone(),
             Cmd::PeerConsideredAsBad { bad_peer, .. } => bad_peer.clone(),
         }
     }
@@ -112,6 +152,29 @@ impl std::fmt::Display for Cmd {
                     "Cmd::Replicate({:?} has {} keys)",
                     holder.as_peer_id(),
                     keys.len()
+                )
+            }
+            Cmd::PaymentNotification {
+                holder,
+                record_info,
+            } => {
+                write!(
+                    f,
+                    "Cmd::PaymentNotification({:?} got paid for record {:?})",
+                    holder.as_peer_id(),
+                    record_info.0
+                )
+            }
+            Cmd::UploadRecord {
+                holder,
+                address,
+                serialized_record,
+            } => {
+                write!(
+                    f,
+                    "Cmd::UploadRecord(To {:?}, with record {address:?} has {} data_size)",
+                    holder.as_peer_id(),
+                    serialized_record.len()
                 )
             }
             Cmd::PeerConsideredAsBad {

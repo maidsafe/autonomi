@@ -34,49 +34,36 @@ impl Node {
 
         match record_header.kind {
             RecordKind::DataWithPayment(DataTypes::Chunk) => {
+                let pretty_key = PrettyPrintRecordKey::from(&record.key);
+                warn!("Chunk {pretty_key:?} shall be uploaded with payment and content separated.");
+                Err(Error::UnexpectedRecordWithPayment(pretty_key.into_owned()))
+            }
+            RecordKind::DataOnly(DataTypes::Chunk) => {
                 let record_key = record.key.clone();
-                let (payment, chunk) = try_deserialize_record::<(ProofOfPayment, Chunk)>(&record)?;
+                let chunk = try_deserialize_record::<Chunk>(&record)?;
                 let already_exists = self
                     .validate_key_and_existence(&chunk.network_address(), &record_key)
                     .await?;
 
-                // Validate the payment and that we received what we asked.
-                // This stores any payments to disk
-                let payment_res = self
-                    .payment_for_us_exists_and_is_still_valid(
-                        &chunk.network_address(),
-                        DataTypes::Chunk,
-                        payment.clone(),
-                    )
-                    .await;
-
-                // Now that we've taken any money passed to us, regardless of the payment's validity,
-                // if we already have the data we can return early
                 if already_exists {
-                    // Client changed to upload to ALL payees, hence no longer need this.
-                    // May need again once client change back to upload to just one to save traffic.
-                    // self.replicate_valid_fresh_record(
-                    //     record_key,
-                    //     DataTypes::Chunk,
-                    //     ValidationType::Chunk,
-                    //     Some(payment),
-                    // );
-
-                    // Notify replication_fetcher to mark the attempt as completed.
-                    // Send the notification earlier to avoid it got skipped due to:
-                    // the record becomes stored during the fetch because of other interleaved process.
                     self.network()
-                        .notify_fetch_completed(record.key.clone(), ValidationType::Chunk);
+                        .notify_fetch_completed(record_key.clone(), ValidationType::Chunk);
 
                     debug!(
-                        "Chunk with addr {:?} already exists: {already_exists}, payment extracted.",
+                        "Chunk with addr {:?} already exists.",
                         chunk.network_address()
                     );
                     return Ok(());
                 }
 
-                // Finally before we store, lets bail for any payment issues
-                payment_res?;
+                let is_expected = self.network().is_record_key_expected(&record_key).await?;
+
+                if !is_expected {
+                    error!("Chunk {:?} is not expected.", chunk.network_address());
+                    return Err(Error::InvalidPutWithoutPayment(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    ));
+                }
 
                 // Writing chunk to disk takes time, hence try to execute it first.
                 // So that when the replicate target asking for the copy,
@@ -84,32 +71,17 @@ impl Node {
                 let store_chunk_result = self.store_chunk(&chunk, true);
 
                 if store_chunk_result.is_ok() {
-                    Marker::ValidPaidChunkPutFromClient(&PrettyPrintRecordKey::from(&record.key))
+                    Marker::ValidPaidChunkPutFromClient(&PrettyPrintRecordKey::from(&record_key))
                         .log();
-                    // Client changed to upload to ALL payees, hence no longer need this.
-                    // May need again once client change back to upload to just one to save traffic.
-                    // self.replicate_valid_fresh_record(
-                    //     record_key,
-                    //     DataTypes::Chunk,
-                    //     ValidationType::Chunk,
-                    //     Some(payment),
-                    // );
 
                     // Notify replication_fetcher to mark the attempt as completed.
                     // Send the notification earlier to avoid it got skipped due to:
                     // the record becomes stored during the fetch because of other interleaved process.
                     self.network()
-                        .notify_fetch_completed(record.key.clone(), ValidationType::Chunk);
+                        .notify_fetch_completed(record_key, ValidationType::Chunk);
                 }
 
                 store_chunk_result
-            }
-
-            RecordKind::DataOnly(DataTypes::Chunk) => {
-                error!("Chunk should not be validated at this point");
-                Err(Error::InvalidPutWithoutPayment(
-                    PrettyPrintRecordKey::from(&record.key).into_owned(),
-                ))
             }
             RecordKind::DataWithPayment(DataTypes::Scratchpad) => {
                 let record_key = record.key.clone();
@@ -731,7 +703,7 @@ impl Node {
 
         if !reward_amount.is_zero() {
             // Notify `record_store` that the node received a payment.
-            self.network().notify_payment_received();
+            self.network().notify_payment_received(key);
 
             #[cfg(feature = "open-metrics")]
             if let Some(metrics_recorder) = self.metrics_recorder() {

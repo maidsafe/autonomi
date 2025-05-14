@@ -100,6 +100,11 @@ pub enum LocalSwarmCmd {
         key: RecordKey,
         sender: oneshot::Sender<Result<bool>>,
     },
+    /// Check if the local RecordStore expects the provided key
+    RecordStoreExpectKey {
+        key: RecordKey,
+        sender: oneshot::Sender<Result<bool>>,
+    },
     /// Get the Addresses of all the Records held locally
     GetAllLocalRecordAddresses {
         sender: oneshot::Sender<Result<HashMap<NetworkAddress, ValidationType>>>,
@@ -117,8 +122,10 @@ pub enum LocalSwarmCmd {
         data_size: usize,
         sender: oneshot::Sender<Result<(QuotingMetrics, bool)>>,
     },
-    /// Notify the node received a payment.
-    PaymentReceived,
+    /// Notify the node received a payment of a record.
+    PaymentReceived {
+        key: RecordKey,
+    },
     /// Put record to the local RecordStore
     PutLocalRecord {
         record: Record,
@@ -164,6 +171,10 @@ pub enum LocalSwarmCmd {
     /// Add a network density sample
     AddNetworkDensitySample {
         distance: Distance,
+    },
+    /// Notify a received payment to record_store
+    NotifyPayment {
+        addr: NetworkAddress,
     },
     /// Send peer scores (collected from storage challenge) to replication_fetcher
     NotifyPeerScores {
@@ -293,8 +304,8 @@ impl Debug for LocalSwarmCmd {
             LocalSwarmCmd::GetLocalQuotingMetrics { .. } => {
                 write!(f, "LocalSwarmCmd::GetLocalQuotingMetrics")
             }
-            LocalSwarmCmd::PaymentReceived => {
-                write!(f, "LocalSwarmCmd::PaymentReceived")
+            LocalSwarmCmd::PaymentReceived { key } => {
+                write!(f, "LocalSwarmCmd::PaymentReceived {{ key: {key:?} }}")
             }
             LocalSwarmCmd::GetLocalRecord { key, .. } => {
                 write!(
@@ -319,6 +330,13 @@ impl Debug for LocalSwarmCmd {
                 write!(
                     f,
                     "LocalSwarmCmd::RecordStoreHasKey {:?}",
+                    PrettyPrintRecordKey::from(key)
+                )
+            }
+            LocalSwarmCmd::RecordStoreExpectKey { key, .. } => {
+                write!(
+                    f,
+                    "LocalSwarmCmd::RecordStoreExpectKey {:?}",
                     PrettyPrintRecordKey::from(key)
                 )
             }
@@ -356,6 +374,9 @@ impl Debug for LocalSwarmCmd {
             }
             LocalSwarmCmd::AddNetworkDensitySample { distance } => {
                 write!(f, "LocalSwarmCmd::AddNetworkDensitySample({distance:?})")
+            }
+            LocalSwarmCmd::NotifyPayment { addr } => {
+                write!(f, "LocalSwarmCmd::NotifyPayment({addr:?})")
             }
             LocalSwarmCmd::NotifyPeerScores { peer_scores } => {
                 write!(f, "LocalSwarmCmd::NotifyPeerScores({peer_scores:?})")
@@ -735,13 +756,13 @@ impl SwarmDriver {
 
                 let _res = sender.send(Ok((quoting_metrics, is_already_stored)));
             }
-            LocalSwarmCmd::PaymentReceived => {
+            LocalSwarmCmd::PaymentReceived { key } => {
                 cmd_string = "PaymentReceived";
                 self.swarm
                     .behaviour_mut()
                     .kademlia
                     .store_mut()
-                    .payment_received();
+                    .payment_received(key);
             }
             LocalSwarmCmd::GetLocalRecord { key, sender } => {
                 cmd_string = "GetLocalRecord";
@@ -885,6 +906,16 @@ impl SwarmDriver {
                     .contains(&key);
                 let _ = sender.send(has_key);
             }
+            LocalSwarmCmd::RecordStoreExpectKey { key, sender } => {
+                cmd_string = "RecordStoreExpectKey";
+                let has_key = self
+                    .swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .store_mut()
+                    .is_expected(&key);
+                let _ = sender.send(has_key);
+            }
             LocalSwarmCmd::GetAllLocalRecordAddresses { sender } => {
                 cmd_string = "GetAllLocalRecordAddresses";
                 #[allow(clippy::mutable_key_type)] // for the Bytes in NetworkAddress
@@ -1014,6 +1045,14 @@ impl SwarmDriver {
             LocalSwarmCmd::AddNetworkDensitySample { distance } => {
                 cmd_string = "AddNetworkDensitySample";
                 self.network_density_samples.add(distance);
+            }
+            LocalSwarmCmd::NotifyPayment { addr } => {
+                cmd_string = "NotifyPayment";
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .store_mut()
+                    .payment_received(addr.to_record_key());
             }
             LocalSwarmCmd::NotifyPeerScores { peer_scores } => {
                 cmd_string = "NotifyPeerScores";

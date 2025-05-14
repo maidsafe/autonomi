@@ -95,6 +95,16 @@ impl UnifiedRecordStore {
         }
     }
 
+    pub(crate) fn is_expected(&self, key: &RecordKey) -> Result<bool> {
+        match self {
+            Self::Client(_) => {
+                error!("Calling 'is_expected' at Client. This should not happen");
+                Err(NetworkError::OperationNotAllowedOnClientRecordStore)
+            }
+            Self::Node(store) => Ok(store.is_expected(key)),
+        }
+    }
+
     pub(crate) fn record_addresses(&self) -> Result<HashMap<NetworkAddress, ValidationType>> {
         match self {
             Self::Client(_) => {
@@ -150,12 +160,12 @@ impl UnifiedRecordStore {
         }
     }
 
-    pub(crate) fn payment_received(&mut self) {
+    pub(crate) fn payment_received(&mut self, key: RecordKey) {
         match self {
             Self::Client(_) => {
                 error!("Calling payment_received at Client. This should not happen");
             }
-            Self::Node(store) => store.payment_received(),
+            Self::Node(store) => store.payment_received(key),
         }
     }
 

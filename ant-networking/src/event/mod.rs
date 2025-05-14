@@ -174,6 +174,17 @@ pub enum NetworkEvent {
             Option<ProofOfPayment>,
         )>,
     },
+    /// Notify a payment has been made
+    PaymentNotification {
+        holder: NetworkAddress,
+        record_info: (NetworkAddress, DataTypes, ValidationType, ProofOfPayment),
+    },
+    /// A record got uploaded
+    UploadRecord {
+        holder: NetworkAddress,
+        address: NetworkAddress,
+        serialized_record: Vec<u8>,
+    },
     /// Peers of picked bucket for version query.
     PeersForVersionQuery(Vec<(PeerId, Addresses)>),
 }
@@ -245,6 +256,26 @@ impl Debug for NetworkEvent {
                 write!(
                     f,
                     "NetworkEvent::FreshReplicateToFetch({holder:?}, {keys:?})"
+                )
+            }
+            NetworkEvent::PaymentNotification {
+                holder,
+                record_info,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PaymentNotification({holder:?}, {record_info:?})"
+                )
+            }
+            NetworkEvent::UploadRecord {
+                holder,
+                address,
+                serialized_record,
+            } => {
+                write!(
+                    f,
+                    "NetworkEvent::PaymentNotification({holder:?}, {address:?} - {:?})",
+                    serialized_record.len()
                 )
             }
             NetworkEvent::PeersForVersionQuery(peers) => {

@@ -30,7 +30,12 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
+use libp2p::{
+    identity::Keypair,
+    kad::{Record, U256},
+    request_response::OutboundFailure,
+    Multiaddr, PeerId,
+};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -583,6 +588,36 @@ impl Node {
             NetworkEvent::FreshReplicateToFetch { holder, keys } => {
                 event_header = "FreshReplicateToFetch";
                 self.fresh_replicate_to_fetch(holder, keys);
+            }
+            NetworkEvent::PaymentNotification {
+                holder,
+                record_info,
+            } => {
+                event_header = "PaymentNotification";
+                self.handle_payment_notification(holder, record_info);
+            }
+            NetworkEvent::UploadRecord {
+                holder: _,
+                address,
+                serialized_record,
+            } => {
+                event_header = "UploadRecord";
+                let record = Record {
+                    key: address.to_record_key(),
+                    value: serialized_record,
+                    publisher: None,
+                    expires: None,
+                };
+                let self_clone = self.clone();
+                let _handle = spawn(async move {
+                    let key = PrettyPrintRecordKey::from(&record.key).into_owned();
+                    match self_clone.validate_and_store_record(record).await {
+                        Ok(()) => debug!("Uploaded record {key} has been stored"),
+                        Err(err) => {
+                            self_clone.record_metrics(Marker::RecordRejected(&key, &err));
+                        }
+                    }
+                });
             }
             NetworkEvent::PeersForVersionQuery(peers) => {
                 event_header = "PeersForVersionQuery";
