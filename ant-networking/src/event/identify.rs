@@ -11,6 +11,7 @@ use crate::{
     craft_valid_multiaddr_without_p2p, multiaddr_strip_p2p, Addresses, NetworkEvent, SwarmDriver,
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use itertools::Itertools;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
@@ -97,6 +98,7 @@ impl SwarmDriver {
                 .listen_addrs
                 .iter()
                 .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
+                .unique()
                 .collect::<Vec<_>>();
             debug!("Peer {peer_id:?} is a relayed peer. Not using {addr_fom_connection:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
             p2p_addrs
