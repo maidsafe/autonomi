@@ -243,6 +243,11 @@ impl BootstrapCacheStore {
             _ => return,
         };
 
+        if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
+            debug!("Not adding relay address to the cache: {addr}");
+            return;
+        }
+
         // Check if we already have this peer
         if let Some(bootstrap_addrs) = self.data.peers.get_mut(&peer_id) {
             if let Some(bootstrap_addr) = bootstrap_addrs.get_addr_mut(&addr) {
