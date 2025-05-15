@@ -38,6 +38,11 @@ impl From<u8> for VerbosityLevel {
     }
 }
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
+
 use crate::error::{Error, Result};
 use ant_service_management::rpc::RpcActions;
 use ant_service_management::{
@@ -372,6 +377,30 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
     }
 }
 
+fn spawn_status_thread() -> (thread::JoinHandle<()>, Arc<AtomicBool>) {
+    // This flag will allow us to stop the thread later.
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = Arc::clone(&running);
+
+    let handle = thread::spawn(move || {
+        let symbols = ["|", "/", "-", "\\"];
+        let mut index = 0;
+
+        while running_clone.load(Ordering::Relaxed) {
+            print!("\rStatus: Processing {}", symbols[index]);
+            index = (index + 1) % symbols.len();
+            std::io::Write::flush(&mut std::io::stdout()).unwrap();
+            thread::sleep(Duration::from_millis(200));
+        }
+
+        // Clear the line when stopping
+        print!("\rStatus: Processed       \n");
+        std::io::Write::flush(&mut std::io::stdout()).unwrap();
+    });
+
+    (handle, running)
+}
+
 pub async fn status_report(
     node_registry: &mut NodeRegistry,
     service_control: &dyn ServiceControl,
@@ -380,6 +409,8 @@ pub async fn status_report(
     fail: bool,
     is_local_network: bool,
 ) -> Result<()> {
+    let (handle, running) = spawn_status_thread();
+
     refresh_node_registry(
         node_registry,
         service_control,
@@ -388,6 +419,11 @@ pub async fn status_report(
         is_local_network,
     )
     .await?;
+    // Stop the spinner
+    running.store(false, Ordering::Relaxed);
+
+    // Wait for the spinner thread to finish
+    handle.join().unwrap();
 
     if output_json {
         let json = serde_json::to_string_pretty(&node_registry.to_status_summary())?;
