@@ -296,7 +296,9 @@ impl TaskHandler {
     pub fn update_request(
         &mut self,
         id: OutboundRequestId,
-        request_res: Result<(), ant_protocol::error::Error>,
+        request_res: Result<bool, ant_protocol::error::Error>,
+        _peer_address: NetworkAddress,
+        _record_addr: NetworkAddress,
     ) -> Result<(), TaskHandlerError> {
         let (resp, peer, _addresses) =
             self.requests

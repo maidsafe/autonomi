@@ -232,47 +232,44 @@ impl Node {
     }
 
     // Validate a received payment notification, and insert it into expectation list if necessary.
-    pub(crate) fn handle_payment_notification(
+    pub(crate) async fn handle_payment_notification(
         &self,
         _holder: NetworkAddress,
         record_info: (NetworkAddress, DataTypes, ValidationType, ProofOfPayment),
-    ) {
-        let node = self.clone();
+    ) -> Result<bool> {
         let (addr, data_type, _val_type, payment) = record_info;
-        let _handle = spawn(async move {
-            // Check whether record already exists
-            match node
-                .validate_key_and_existence(&addr, &addr.to_record_key())
-                .await
-            {
-                Ok(true) => {
-                    info!(
-                        "Received a payment notification of an already existing record of {addr:?}"
-                    );
-                    return;
-                }
-                Ok(false) => {
-                    info!("Received a payment notification of {addr:?}");
-                }
-                Err(err) => {
-                    info!("When received a payment notification, failed to verify the local existence of {addr:?} with error {err:?}");
-                    return;
-                }
-            }
 
-            // Payment must be valid
-            match node
-                .payment_for_us_exists_and_is_still_valid(&addr, data_type, payment)
-                .await
-            {
-                Ok(_) => {}
-                Err(err) => {
-                    info!("ProofOfPayment of {addr:?} is invalid with error {err:?}");
-                    return;
-                }
+        // Check whether record already exists
+        match self
+            .validate_key_and_existence(&addr, &addr.to_record_key())
+            .await
+        {
+            Ok(true) => {
+                info!("Received a payment notification of an already existing record of {addr:?}");
+                return Ok(true);
             }
+            Ok(false) => {
+                info!("Received a payment notification of {addr:?}");
+            }
+            Err(err) => {
+                info!("When received a payment notification, failed to verify the local existence of {addr:?} with error {err:?}");
+                return Err(err);
+            }
+        }
 
-            node.network().notify_payment(addr);
-        });
+        // Payment must be valid
+        match self
+            .payment_for_us_exists_and_is_still_valid(&addr, data_type, payment)
+            .await
+        {
+            Ok(_) => {}
+            Err(err) => {
+                info!("ProofOfPayment of {addr:?} is invalid with error {err:?}");
+                return Err(err);
+            }
+        }
+
+        self.network().notify_payment(addr);
+        Ok(true)
     }
 }

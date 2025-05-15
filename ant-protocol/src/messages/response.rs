@@ -19,7 +19,7 @@ use std::fmt::Debug;
 /// The response to a query, containing the query result.
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum QueryResponse {
-    // ===== GetStoreQuote =====
+    // ===== Upload related =====
     //
     /// Response to [`GetStoreQuote`]
     ///
@@ -32,6 +32,33 @@ pub enum QueryResponse {
         /// Storage proofs based on requested target address and difficulty
         storage_proofs: Vec<(NetworkAddress, Result<ChunkProof>)>,
     },
+    /// Response to [`PaymentNotification`]
+    ///
+    /// [`PaymentNotification`]: crate::messages::Query::PaymentNotification
+    PaymentNotification {
+        /// Result of payment notification.
+        result: Result<bool>,
+        /// Node's Peer Address
+        peer_address: NetworkAddress,
+        /// Correspondent Record Address
+        record_addr: NetworkAddress,
+    },
+    /// Response to [`UploadRecord`]
+    ///
+    /// [`UploadRecord`]: crate::messages::Query::UploadRecord
+    UploadRecord {
+        /// Result of record upload.
+        result: Result<bool>,
+        /// Node's Peer Address
+        peer_address: NetworkAddress,
+        /// Correspondent Record Address
+        record_addr: NetworkAddress,
+    },
+    // ===== Status Check =====
+    //
+    /// Response to [`CheckNodeInProblem`]
+    ///
+    /// [`CheckNodeInProblem`]: crate::messages::Query::CheckNodeInProblem
     CheckNodeInProblem {
         /// Address of the peer that queried
         reporter_address: NetworkAddress,
@@ -66,7 +93,6 @@ pub enum QueryResponse {
         // Signature of signing the above (if requested), for future economic model usage.
         signature: Option<Vec<u8>>,
     },
-    /// *** From now on, the order of variants shall be retained to be backward compatible
     // ===== GetVersion =====
     //
     /// Response to [`GetVersion`]
@@ -92,6 +118,26 @@ impl Debug for QueryResponse {
                     f,
                     "GetStoreQuote(quote: {quote:?}, from {peer_address:?} w/ payment_address: {payment_address:?}, and {} storage proofs)",
                     storage_proofs.len()
+                )
+            }
+            QueryResponse::PaymentNotification {
+                result,
+                peer_address,
+                record_addr,
+            } => {
+                write!(
+                    f,
+                    "PaymentNotification(payment of {record_addr:?} sent to {peer_address:?} with result {result:?})",
+                )
+            }
+            QueryResponse::UploadRecord {
+                result,
+                peer_address,
+                record_addr,
+            } => {
+                write!(
+                    f,
+                    "UploadRecord(Record {record_addr:?} uploaded to {peer_address:?} with result {result:?})",
                 )
             }
             QueryResponse::CheckNodeInProblem {
@@ -145,10 +191,6 @@ pub enum CmdResponse {
     Replicate(Result<()>),
     /// Response to fresh replication cmd
     FreshReplicate(Result<()>),
-    /// Response to payment notification cmd
-    PaymentNotification(Result<()>),
-    /// Response to upload record cmd
-    UploadRecord(Result<()>),
     //
     // ===== PeerConsideredAsBad =====
     //

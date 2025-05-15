@@ -20,7 +20,7 @@ use crate::{
 use ant_evm::{Amount, AttoTokens};
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
 use ant_protocol::{
-    messages::{Cmd, Request},
+    messages::{Query, Request},
     storage::{
         try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind,
         ValidationType,
@@ -250,7 +250,7 @@ impl Client {
                     proof.to_proof_of_payment(),
                 );
                 for (peer_id, addrs) in proof.payees() {
-                    let request = Request::Cmd(Cmd::PaymentNotification {
+                    let request = Request::Query(Query::PaymentNotification {
                         holder: NetworkAddress::from(peer_id),
                         record_info: record_info.clone(),
                     });
@@ -326,7 +326,7 @@ impl Client {
             };
 
             for (peer_id, addrs) in proof.payees() {
-                let request = Request::Cmd(Cmd::UploadRecord {
+                let request = Request::Query(Query::UploadRecord {
                     holder: NetworkAddress::from(peer_id),
                     address: NetworkAddress::from(address),
                     serialized_record: serialized_record.clone(),

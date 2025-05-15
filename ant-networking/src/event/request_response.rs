@@ -68,44 +68,6 @@ impl SwarmDriver {
 
                             self.send_event(NetworkEvent::FreshReplicateToFetch { holder, keys });
                         }
-                        Request::Cmd(ant_protocol::messages::Cmd::PaymentNotification {
-                            holder,
-                            record_info,
-                        }) => {
-                            let response = Response::Cmd(
-                                ant_protocol::messages::CmdResponse::PaymentNotification(Ok(())),
-                            );
-
-                            self.queue_network_swarm_cmd(NetworkSwarmCmd::SendResponse {
-                                resp: response,
-                                channel: MsgResponder::FromPeer(channel),
-                            });
-
-                            self.send_event(NetworkEvent::PaymentNotification {
-                                holder,
-                                record_info,
-                            });
-                        }
-                        Request::Cmd(ant_protocol::messages::Cmd::UploadRecord {
-                            holder,
-                            address,
-                            serialized_record,
-                        }) => {
-                            let response = Response::Cmd(
-                                ant_protocol::messages::CmdResponse::UploadRecord(Ok(())),
-                            );
-
-                            self.queue_network_swarm_cmd(NetworkSwarmCmd::SendResponse {
-                                resp: response,
-                                channel: MsgResponder::FromPeer(channel),
-                            });
-
-                            self.send_event(NetworkEvent::UploadRecord {
-                                holder,
-                                address,
-                                serialized_record,
-                            });
-                        }
                         Request::Cmd(ant_protocol::messages::Cmd::PeerConsideredAsBad {
                             detected_by,
                             bad_peer,

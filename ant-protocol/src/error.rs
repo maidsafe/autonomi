@@ -52,6 +52,10 @@ pub enum Error {
     GetStoreQuoteFailed,
     #[error("There was an error generating the payment quote")]
     QuoteGenerationFailed,
+    #[error("There was an error when handling PaymentNotifiction: {0}")]
+    PaymentNotificationFailed(String),
+    #[error("There was an error when handling UploadRecord: {0}")]
+    UploadRecordFailed(String),
 
     // ---------- replication errors
     /// Replication not found.
