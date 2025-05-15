@@ -15,7 +15,7 @@ use crate::{
     },
     networking::common::Addresses,
     self_encryption::DataMapLevel,
-    Client,
+    Client, XorName,
 };
 use ant_evm::{Amount, AttoTokens};
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
@@ -28,7 +28,6 @@ use ant_protocol::{
     NetworkAddress,
 };
 use bytes::Bytes;
-use libp2p::kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -170,49 +169,24 @@ impl Client {
             .inspect_err(|err| error!("Error paying for chunk {address:?} :{err:?}"))?;
 
         // verify payment was successful
-        let (proof, price) = match payment_proofs.get(&xor_name) {
+        let (_proof, price) = match payment_proofs.get(&xor_name) {
             Some((proof, price)) => (proof, price),
             None => {
-                info!("Chunk at address: {address:?} was already paid for");
+                info!("Chunk at address: {address:?} was already stored.");
                 return Ok((AttoTokens::zero(), *chunk.address()));
             }
         };
         let total_cost = *price;
 
-        let payees = proof
-            .payees()
-            .iter()
-            .map(|(peer_id, _addrs)| *peer_id)
-            .collect();
+        self.send_payment_notifications(&payment_proofs, DataTypes::Chunk, ValidationType::Chunk)
+            .await?;
 
-        let record = Record {
-            key: address.to_record_key(),
-            value: try_serialize_record(
-                &(proof.to_proof_of_payment(), chunk),
-                RecordKind::DataWithPayment(DataTypes::Chunk),
-            )
-            .map_err(|_| {
-                PutError::Serialization("Failed to serialize chunk with payment".to_string())
-            })?
-            .to_vec(),
-            publisher: None,
-            expires: None,
-        };
-
-        // store the chunk on the network
-        debug!("Storing chunk at address: {address:?} to the network");
-
-        self.network
-            .put_record_with_retries(record, payees, &self.config.chunks)
-            .await
-            .inspect_err(|err| {
-                error!("Failed to put record - chunk {address:?} to the network: {err}")
-            })
-            .map_err(|err| PutError::Network {
-                address: address.clone(),
-                network_error: err.clone(),
-                payment: Some(payment_proofs),
-            })?;
+        let mut serialized_records = vec![];
+        let serialized_record =
+            try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))?.to_vec();
+        serialized_records.push((*chunk.name(), *chunk.address(), serialized_record));
+        self.upload_records_content(serialized_records, &payment_proofs)
+            .await?;
 
         Ok((total_cost, *chunk.address()))
     }
@@ -242,17 +216,37 @@ impl Client {
         chunks: Vec<&Chunk>,
         receipt: &Receipt,
     ) -> Result<(), PutError> {
+        self.send_payment_notifications(receipt, DataTypes::Chunk, ValidationType::Chunk)
+            .await?;
+
+        let mut serialized_records = vec![];
+        for chunk in chunks.iter() {
+            let serialized_record =
+                try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))?.to_vec();
+            serialized_records.push((*chunk.name(), *chunk.address(), serialized_record));
+        }
+        self.upload_records_content(serialized_records, receipt)
+            .await
+    }
+
+    /// Send payment notifications in batches
+    async fn send_payment_notifications(
+        &self,
+        receipt: &Receipt,
+        data_type: DataTypes,
+        validation_type: ValidationType,
+    ) -> Result<(), PutError> {
         #[cfg(feature = "loud")]
         let total_payments = receipt.len();
 
         let mut payment_notification_tasks = vec![];
-        // Send PaymentNotification first, those `0` balance quotes are already paid and can be skipped
+        // Send PaymentNotification, those `0` balance quotes are already paid and can be skipped
         for (_i, (name, (proof, balance))) in receipt.iter().enumerate() {
             if !balance.is_zero() {
                 let record_info = (
                     NetworkAddress::from(ChunkAddress::new(*name)),
-                    DataTypes::Chunk,
-                    ValidationType::Chunk,
+                    data_type,
+                    validation_type.clone(),
                     proof.to_proof_of_payment(),
                 );
                 for (peer_id, addrs) in proof.payees() {
@@ -303,29 +297,33 @@ impl Client {
                     Err(err) => state.push_error(chunk_addr, PutError::NetworkError(err)),
                 }
             }
-            return Err(PutError::Batch(state));
+            Err(PutError::Batch(state))
+        } else {
+            Ok(())
         }
+    }
 
+    /// Upload records (content only) in batches
+    async fn upload_records_content(
+        &self,
+        serialized_records: Vec<(XorName, ChunkAddress, Vec<u8>)>,
+        receipt: &Receipt,
+    ) -> Result<(), PutError> {
         #[cfg(feature = "loud")]
-        let total_chunks = chunks.len();
+        let total_records = serialized_records.len();
 
         let mut upload_tasks = vec![];
         // Upload chunks
-        for (_i, &chunk) in chunks.iter().enumerate() {
-            let address = *chunk.address();
-            let Some((proof, _price)) = receipt.get(chunk.name()) else {
-                debug!("Chunk at {address:?} was already uploaded so skipping");
+        for (_i, (name, address, serialized_record)) in serialized_records.into_iter().enumerate() {
+            let Some((proof, _price)) = receipt.get(&name) else {
+                debug!("Record at {name:?} was already uploaded so skipping");
                 #[cfg(feature = "loud")]
                 println!(
-                    "({}/{total_chunks}) Chunk stored at: {} (skipping, already exists)",
+                    "({}/{total_records}) Record stored at: {name:} (skipping, already exists)",
                     _i + 1,
-                    address.to_hex()
                 );
                 continue;
             };
-
-            let serialized_record =
-                try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))?.to_vec();
 
             for (peer_id, addrs) in proof.payees() {
                 let request = Request::Cmd(Cmd::UploadRecord {
@@ -340,13 +338,13 @@ impl Client {
                     match &res {
                         Ok(_) => {
                             println!(
-                                "({}/{total_chunks}) Chunk {address:?} stored at {peer_id:?}",
+                                "({}/{total_records}) Record {address:?} stored at {peer_id:?}",
                                 _i + 1,
                             );
                         }
                         Err(err) => {
                             println!(
-                                "({}/{total_chunks}) Chunk {address:?} failed upload to {peer_id:?} ({err})",
+                                "({}/{total_records}) Record {address:?} failed upload to {peer_id:?} ({err})",
                                 _i + 1,
                             );
                         }
@@ -361,16 +359,16 @@ impl Client {
         // return errors if any
         if uploads.iter().any(|(_, res)| res.is_err()) {
             let mut state = ChunkBatchUploadState::default();
-            for (chunk_addr, res) in uploads.into_iter() {
+            for (addr, res) in uploads.into_iter() {
                 match res {
-                    Ok(_) => state.successful.push(chunk_addr),
-                    Err(err) => state.push_error(chunk_addr, PutError::NetworkError(err)),
+                    Ok(_) => state.successful.push(addr),
+                    Err(err) => state.push_error(addr, PutError::NetworkError(err)),
                 }
             }
-            return Err(PutError::Batch(state));
+            Err(PutError::Batch(state))
+        } else {
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Unpack a wrapped data map and fetch all bytes using self-encryption.
