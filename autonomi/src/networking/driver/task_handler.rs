@@ -297,8 +297,6 @@ impl TaskHandler {
         &mut self,
         id: OutboundRequestId,
         request_res: Result<bool, ant_protocol::error::Error>,
-        _peer_address: NetworkAddress,
-        _record_addr: NetworkAddress,
     ) -> Result<(), TaskHandlerError> {
         let (resp, peer, _addresses) =
             self.requests
@@ -307,13 +305,13 @@ impl TaskHandler {
                     "OutboundRequestId {id:?}"
                 )))?;
         trace!("OutboundRequestId({id}): got request response {request_res:?} from peer {peer:?}");
-        let result = if request_res.is_err() {
-            None
+        let result = if let Err(err) = request_res {
+            Err(NetworkError::PutRecordError(format!("{err:?}")))
         } else {
-            Some(peer)
+            Ok(Some(peer))
         };
 
-        resp.send(Ok(result))
+        resp.send(result)
             .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
 
         Ok(())
