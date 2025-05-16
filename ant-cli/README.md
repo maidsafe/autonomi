@@ -41,6 +41,17 @@ ant [OPTIONS] <COMMAND>
 
 [Reference : Vault](#vault-operations)
 
+### Scratchpad
+- `scratchpad generate-key [--overwrite]`
+- `scratchpad cost <name>`
+- `scratchpad create <name> <data> [--max-fee-per-gas <value>]`
+- `scratchpad share <name>`
+- `scratchpad get <name> [--secret-key] [--hex]`
+- `scratchpad edit <name> <data> [--secret-key]`
+- `scratchpad list`
+
+[Reference : Scratchpad](#scratchpad-operations)
+
 ### Wallet
 - `wallet create [--no-password] [--password <password>]`
 - `wallet import <private_key> [--no-password] [--password <password>]`
@@ -327,6 +338,79 @@ Analyze an address to get the address type, and visualize the content.
 analyze <address>
 ```
 
+### Scratchpad Operations
+
+#### Generate a new scratchpad key
+```
+scratchpad generate-key [--overwrite]
+```
+Generate a new general scratchpad key from which all your scratchpad keys can be derived.
+
+The following flag can be applied:
+`--overwrite` (Optional) Warning: overwriting the existing key will result in loss of access to any existing scratchpads
+
+#### Get a cost estimate for creating a scratchpad
+```
+scratchpad cost <name>
+```
+Gets a cost estimate for creating a scratchpad on the network.
+
+Expected values:
+- `<name>`: The name of the scratchpad
+
+#### Create a new scratchpad
+```
+scratchpad create <name> <data> [--max-fee-per-gas <value>]
+```
+Create a new scratchpad with the given name and data.
+
+Expected values:
+- `<name>`: The name of the scratchpad
+- `<data>`: The data to store in the scratchpad (Up to 4MB)
+
+The following flag can be applied:
+`--max-fee-per-gas <value>` (Optional) Specify the maximum fee per gas
+
+#### Share a scratchpad
+```
+scratchpad share <name>
+```
+Share a scratchpad secret key with someone else. Sharing this key means that the other party will have permanent read and write access to the scratchpad.
+
+Expected values:
+- `<name>`: The name of the scratchpad
+
+#### Get a scratchpad
+```
+scratchpad get <name> [--secret-key] [--hex]
+```
+Get the contents of an existing scratchpad from the network.
+
+Expected values:
+- `<name>`: The name of the scratchpad
+
+The following flags can be applied:
+`--secret-key` (Optional) Indicate that this is an external scratchpad secret key (Use when interacting with a shared scratchpad)
+`--hex` (Optional) Display the data as a hex string instead of raw bytes
+
+#### Edit a scratchpad
+```
+scratchpad edit <name> <data> [--secret-key]
+```
+Edit the contents of an existing scratchpad.
+
+Expected values:
+- `<name>`: The name of the scratchpad
+- `<data>`: The new data to store in the scratchpad (Up to 4MB)
+
+The following flag can be applied:
+`--secret-key` (Optional) Indicate that this is an external scratchpad secret key (Use when interacting with a shared scratchpad)
+
+#### List scratchpads
+```
+scratchpad list
+```
+List owned scratchpads.
 
 ## Error Handling
 If you encounter any errors while using the CLI, you can use the `--log-output-dest` and `--log-format` options to specify logging details. This can help with debugging and understanding the behavior of the CLI.
