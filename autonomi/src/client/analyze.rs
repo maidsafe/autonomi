@@ -263,10 +263,11 @@ async fn analyze_datamap(
         // to identify them we check if all the addresses are in fact xornames
         // cf test_archives_serialize_deserialize for more details
         let xorname_hex_len = xor_name::XOR_NAME_LEN * 2;
-        let all_addrs_are_xornames = private_archive
-            .map()
-            .iter()
-            .all(|(_, (data_addr, _))| data_addr.to_hex().len() == xorname_hex_len);
+        let xorname_hex_len_json = xorname_hex_len * 2;
+        let all_addrs_are_xornames = private_archive.map().iter().all(|(_, (data_addr, _))| {
+            data_addr.to_hex().len() == xorname_hex_len
+                || data_addr.to_hex().len() == xorname_hex_len_json
+        });
         if all_addrs_are_xornames {
             println_if_verbose!("All addresses are xornames, so it's a public archive");
             if let Ok(public_archive) = PublicArchive::from_bytes(data.clone()) {

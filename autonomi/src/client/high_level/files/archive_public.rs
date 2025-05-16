@@ -112,7 +112,11 @@ impl PublicArchive {
 
     /// Deserialize from bytes.
     pub fn from_bytes(data: Bytes) -> Result<PublicArchive, rmp_serde::decode::Error> {
-        let root: PublicArchiveVersioned = rmp_serde::from_slice(&data[..])?;
+        let root: PublicArchiveVersioned = match serde_json::from_slice(&data[..]) {
+            Ok(r) => r,
+            Err(_) => rmp_serde::from_slice(&data[..])?,
+        };
+
         // Currently we have only `V0`. If we add `V1`, then we need an upgrade/migration path here.
         let PublicArchiveVersioned::V0(root) = root;
 
@@ -122,7 +126,8 @@ impl PublicArchive {
     /// Serialize to bytes.
     pub fn to_bytes(&self) -> Result<Bytes, rmp_serde::encode::Error> {
         let versioned = PublicArchiveVersioned::V0(self.clone());
-        let root_serialized = rmp_serde::to_vec_named(&versioned)?;
+        let root_serialized = serde_json::to_vec(&versioned)
+            .map_err(|e| rmp_serde::encode::Error::Syntax(e.to_string()))?;
         let root_serialized = Bytes::from(root_serialized);
 
         Ok(root_serialized)
@@ -333,5 +338,38 @@ mod test {
         assert_eq!(arch.map().len(), 2);
         assert_eq!(arch.map().get(&file1).unwrap().1.size, 5);
         assert_eq!(arch.map().get(&file2).unwrap().1.size, 2);
+    }
+
+    #[test]
+    fn test_archive_serialization_formats() {
+        let mut arch = PublicArchive::new();
+        arch.add_file(
+            PathBuf::from_str("hello_world").unwrap(),
+            DataAddress::new(XorName::random(&mut rand::thread_rng())),
+            Metadata::new_with_size(1),
+        );
+        let bytes = arch.to_bytes().unwrap();
+        let archive_from_bytes = PublicArchive::from_bytes(bytes).unwrap();
+        assert_eq!(arch, archive_from_bytes);
+
+        let versionned_arch = PublicArchiveVersioned::V0(arch.clone());
+        let bytes_rmp = rmp_serde::to_vec_named(&versionned_arch).unwrap();
+        let archive_from_bytes_rmp = PublicArchive::from_bytes(Bytes::from(bytes_rmp)).unwrap();
+        assert_eq!(arch, archive_from_bytes_rmp);
+    }
+
+    #[test]
+    fn test_archive_is_plain_text_json() {
+        let mut arch = PublicArchive::new();
+        arch.add_file(
+            PathBuf::from_str("hello_world").unwrap(),
+            DataAddress::new(XorName::from_content(
+                b"3f285b24433d8989a85b6cad30c95a90970469d101fda9d3e600a506c8ba7452",
+            )),
+            Metadata::empty(),
+        );
+        let bytes = arch.to_bytes().unwrap();
+        let expected = r#"{"V0":{"map":{"hello_world":["8891cbb710828f38578134a11f52717b814f3cd0d619cb40a7ce1c248d32486d",{"created":0,"modified":0,"size":0,"extra":null}]}}}"#;
+        assert_eq!(String::from_utf8(bytes.to_vec()).unwrap(), expected);
     }
 }
