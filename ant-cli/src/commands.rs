@@ -9,6 +9,7 @@
 mod analyze;
 mod file;
 mod register;
+mod scratchpad;
 mod vault;
 mod wallet;
 
@@ -37,6 +38,12 @@ pub enum SubCmd {
     Vault {
         #[command(subcommand)]
         command: VaultCmd,
+    },
+
+    /// Operations related to scratchpad management.
+    Scratchpad {
+        #[command(subcommand)]
+        command: ScratchpadCmd,
     },
 
     /// Operations related to wallet management.
@@ -209,6 +216,69 @@ pub enum VaultCmd {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum ScratchpadCmd {
+    /// Generate a new general scratchpad key from which all your scratchpad keys can be derived (using their names).
+    GenerateKey {
+        /// Overwrite existing key if it exists
+        /// Warning: overwriting the existing key will result in loss of access to any existing scratchpads
+        #[arg(short, long)]
+        overwrite: bool,
+    },
+
+    /// Estimate cost to create a scratchpad.
+    Cost {
+        /// The name of the scratchpad.
+        name: String,
+    },
+
+    /// Create a new scratchpad.
+    Create {
+        /// Optional: Specify the maximum fee per gas in u128.
+        #[arg(long)]
+        max_fee_per_gas: Option<u128>,
+        /// The name of the scratchpad.
+        name: String,
+        /// The data to store in the scratchpad (Up to 4MB)
+        data: String,
+    },
+
+    /// Share a scratchpad secret key with someone else.
+    /// Sharing this key means that the other party will have permanent read and write access to the scratchpad.
+    Share {
+        /// The name of the scratchpad.
+        name: String,
+    },
+
+    /// Get the contents of an existing scratchpad from the network.
+    Get {
+        /// The name of the scratchpad.
+        name: String,
+        /// Indicate that this is an external scratchpad secret key.
+        /// (Use this when interacting with a scratchpad shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+        /// Display the data as a hex string instead of raw bytes
+        #[arg(long)]
+        hex: bool,
+    },
+
+    /// Edit the contents of an existing scratchpad.
+    Edit {
+        /// The name of the scratchpad.
+        name: String,
+        /// Indicate that this is an external scratchpad secret key.
+        /// (Use this when interacting with a scratchpad shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+        /// The new data to store in the scratchpad (Up to 4MB)
+        data: String,
+    },
+
+    /// List owned scratchpads
+    List,
+}
+
+#[derive(Subcommand, Debug)]
 pub enum WalletCmd {
     /// Create a wallet.
     Create {
@@ -310,6 +380,27 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             }
             VaultCmd::Load => vault::load(network_context).await,
             VaultCmd::Sync { force } => vault::sync(force, network_context).await,
+        },
+        Some(SubCmd::Scratchpad { command }) => match command {
+            ScratchpadCmd::GenerateKey { overwrite } => scratchpad::generate_key(overwrite),
+            ScratchpadCmd::Cost { name } => scratchpad::cost(name, network_context).await,
+            ScratchpadCmd::Create {
+                max_fee_per_gas,
+                name,
+                data,
+            } => scratchpad::create(network_context, name, data, max_fee_per_gas).await,
+            ScratchpadCmd::Share { name } => scratchpad::share(name),
+            ScratchpadCmd::Get {
+                name,
+                secret_key,
+                hex,
+            } => scratchpad::get(network_context, name, secret_key, hex).await,
+            ScratchpadCmd::Edit {
+                name,
+                secret_key,
+                data,
+            } => scratchpad::edit(network_context, name, secret_key, data).await,
+            ScratchpadCmd::List => scratchpad::list(),
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {

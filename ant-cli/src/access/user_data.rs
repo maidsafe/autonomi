@@ -15,6 +15,7 @@ use autonomi::{
         vault::UserData,
     },
     data::DataAddress,
+    ScratchpadAddress,
 };
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -36,12 +37,16 @@ pub fn get_local_user_data() -> Result<UserData> {
     let register_key = super::keys::get_register_signing_key()
         .map(|k| k.to_hex())
         .ok();
+    let scratchpad_key = super::keys::get_scratchpad_general_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
 
     let user_data = UserData {
         file_archives,
         private_file_archives,
         register_addresses: registers,
         register_key,
+        scratchpad_key,
     };
     Ok(user_data)
 }
@@ -150,6 +155,14 @@ pub fn write_local_user_data(user_data: &UserData) -> Result<()> {
         )?;
     }
 
+    if let Some(scratchpad_key) = &user_data.scratchpad_key {
+        let key = super::keys::parse_scratchpad_signing_key(scratchpad_key)
+            .wrap_err("Failed to parse scratchpad signing key while writing to local user data")?;
+        super::keys::create_scratchpad_signing_key_file(key).wrap_err(
+            "Failed to create scratchpad signing key file while writing to local user data",
+        )?;
+    }
+
     Ok(())
 }
 
@@ -187,4 +200,32 @@ pub fn write_local_private_file_archive(
     })?;
     std::fs::write(private_file_archives_path.join(file_name), content)?;
     Ok(())
+}
+
+pub fn write_local_scratchpad(address: ScratchpadAddress, name: &str) -> Result<()> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpads_path = user_data_path.join("scratchpads");
+    std::fs::create_dir_all(&scratchpads_path)?;
+    std::fs::write(scratchpads_path.join(name), address.to_hex())?;
+    Ok(())
+}
+
+pub fn get_local_scratchpads() -> Result<HashMap<String, String>> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpads_path = user_data_path.join("scratchpads");
+    std::fs::create_dir_all(&scratchpads_path)?;
+
+    let mut scratchpads = HashMap::new();
+    for entry in walkdir::WalkDir::new(scratchpads_path)
+        .min_depth(1)
+        .max_depth(1)
+    {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy();
+        let scratchpad_address = std::fs::read_to_string(entry.path())?;
+        scratchpads.insert(file_name.to_string(), scratchpad_address);
+    }
+    Ok(scratchpads)
 }

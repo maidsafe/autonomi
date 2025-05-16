@@ -26,6 +26,7 @@ pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =
     LazyLock::new(|| app_name_to_vault_content_type("UserData"));
 
 pub type RegisterSecretKeyHex = String;
+pub type ScratchpadSecretKeyHex = String;
 
 /// UserData is stored in Vaults and contains most of a user's private data:
 /// It allows users to keep track of only the key to their User Data Vault
@@ -43,6 +44,10 @@ pub struct UserData {
     #[serde(default)]
     // This makes the field optional to support old versions without that field
     pub register_key: Option<RegisterSecretKeyHex>,
+    /// Scratchpads key
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub scratchpad_key: Option<ScratchpadSecretKeyHex>,
 }
 
 /// Errors that can occur during the get operation.
@@ -246,6 +251,7 @@ mod tests {
             private_file_archives: v1_data.private_file_archives.clone(),
             register_addresses: v1_data.register_addresses.clone(),
             register_key: Some("test_key".to_string()),
+            scratchpad_key: Some("test_scratchpad_key".to_string()),
         };
 
         let serialized = rmp_serde::to_vec(&current_data).unwrap();
