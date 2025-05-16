@@ -207,6 +207,14 @@ pub async fn edit(
     }
     info!("Scratchpad updated");
 
+    if !secret_key {
+        let addr = ScratchpadAddress::new(scratchpad_key.public_key());
+        crate::user_data::write_local_scratchpad(addr, &name)
+            .wrap_err("Failed to save scratchpad to local user data")
+            .with_suggestion(|| "Local user data saves the scratchpad address above to disk (for the scratchpad list command), without it you need remember the name yourself")?;
+        info!("Saved scratchpad to local user data");
+    }
+
     Ok(())
 }
 
