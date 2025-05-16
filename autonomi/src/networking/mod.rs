@@ -275,6 +275,23 @@ impl Network {
         addresses: Addresses,
         req: Request,
     ) -> Result<Option<PeerId>, NetworkError> {
+        let result = self
+            .send_request_once(peer_id, addresses.clone(), req.clone())
+            .await;
+        if result.is_ok() {
+            return result;
+        }
+
+        // Re-send the request once
+        self.send_request_once(peer_id, addresses, req).await
+    }
+
+    async fn send_request_once(
+        &self,
+        peer_id: PeerId,
+        addresses: Addresses,
+        req: Request,
+    ) -> Result<Option<PeerId>, NetworkError> {
         let (tx, rx) = oneshot::channel();
         let task = NetworkTask::Request {
             peer_id,
