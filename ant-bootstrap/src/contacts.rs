@@ -44,8 +44,6 @@ pub struct ContactsFetcher {
     endpoints: Vec<Url>,
     /// Reqwest Client
     request_client: Client,
-    /// Ignore PeerId in the multiaddr if not present. This is only useful for fetching nat detection contacts
-    ignore_peer_id: bool,
 }
 
 impl ContactsFetcher {
@@ -64,7 +62,6 @@ impl ContactsFetcher {
             max_addrs: usize::MAX,
             endpoints,
             request_client,
-            ignore_peer_id: false,
         })
     }
 
@@ -99,10 +96,6 @@ impl ContactsFetcher {
         self.endpoints.push(endpoint);
     }
 
-    pub fn ignore_peer_id(&mut self, ignore_peer_id: bool) {
-        self.ignore_peer_id = ignore_peer_id;
-    }
-
     /// Fetch the list of bootstrap addresses from all configured endpoints
     pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<BootstrapAddr>> {
         Ok(self
@@ -129,12 +122,7 @@ impl ContactsFetcher {
                     endpoint
                 );
                 (
-                    Self::fetch_from_endpoint(
-                        self.request_client.clone(),
-                        &endpoint,
-                        self.ignore_peer_id,
-                    )
-                    .await,
+                    Self::fetch_from_endpoint(self.request_client.clone(), &endpoint).await,
                     endpoint,
                 )
             })
@@ -177,12 +165,7 @@ impl ContactsFetcher {
     }
 
     /// Fetch the list of multiaddrs from a single endpoint
-    async fn fetch_from_endpoint(
-        request_client: Client,
-        endpoint: &Url,
-        ignore_peer_id: bool,
-    ) -> Result<Vec<Multiaddr>> {
-        info!("Fetching peers from endpoint: {endpoint}");
+    async fn fetch_from_endpoint(request_client: Client, endpoint: &Url) -> Result<Vec<Multiaddr>> {
         let mut retries = 0;
 
         let bootstrap_addresses = loop {
@@ -193,7 +176,7 @@ impl ContactsFetcher {
                     if response.status().is_success() {
                         let text = response.text().await?;
 
-                        match Self::try_parse_response(&text, ignore_peer_id) {
+                        match Self::try_parse_response(&text) {
                             Ok(addrs) => break addrs,
                             Err(err) => {
                                 warn!("Failed to parse response with err: {err:?}");
@@ -227,7 +210,7 @@ impl ContactsFetcher {
                     }
                 }
             }
-            trace!(
+            debug!(
                 "Failed to get bootstrap addrs from URL, retrying {retries}/{MAX_RETRIES_ON_FETCH_FAILURE}"
             );
 
@@ -238,7 +221,7 @@ impl ContactsFetcher {
     }
 
     /// Try to parse a response from an endpoint
-    fn try_parse_response(response: &str, ignore_peer_id: bool) -> Result<Vec<Multiaddr>> {
+    fn try_parse_response(response: &str) -> Result<Vec<Multiaddr>> {
         match serde_json::from_str::<CacheData>(response) {
             Ok(json_endpoints) => {
                 info!(
@@ -273,7 +256,7 @@ impl ContactsFetcher {
                 // example of contacts file exists in resources/network-contacts-examples
                 let bootstrap_addresses = response
                     .split('\n')
-                    .filter_map(|str| craft_valid_multiaddr_from_str(str, ignore_peer_id))
+                    .filter_map(craft_valid_multiaddr_from_str)
                     .collect::<Vec<_>>();
 
                 info!(
@@ -361,31 +344,6 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(addrs[0].addr, addr);
-    }
-
-    #[tokio::test]
-    async fn test_invalid_multiaddr() {
-        let mock_server = MockServer::start().await;
-
-        Mock::given(method("GET"))
-            .and(path("/"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(
-                    "/ip4/127.0.0.1/tcp/8080\n/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
-                ),
-            )
-            .mount(&mock_server)
-            .await;
-
-        let mut fetcher = ContactsFetcher::new().unwrap();
-        fetcher.endpoints = vec![mock_server.uri().parse().unwrap()];
-
-        let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
-        let valid_addr: Multiaddr =
-            "/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
-                .parse()
-                .unwrap();
-        assert_eq!(addrs[0].addr, valid_addr);
     }
 
     #[tokio::test]

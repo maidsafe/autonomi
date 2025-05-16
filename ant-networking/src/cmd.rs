@@ -22,6 +22,7 @@ use ant_protocol::{
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
+use libp2p::multiaddr::Protocol;
 use libp2p::{
     kad::{
         store::{Error as StoreError, RecordStore},
@@ -582,11 +583,7 @@ impl SwarmDriver {
                         if addrs.0.is_empty() {
                             info!("No addresses for peer {peer:?} to send request. This could cause dial failure if swarm could not find the peer's addrs.");
                         } else {
-                            let opts = DialOpts::peer_id(peer)
-                                // If we have a peer ID, we can prevent simultaneous dials.
-                                .condition(PeerCondition::NotDialing)
-                                .addresses(addrs.0.clone())
-                                .build();
+                            let opts = DialOpts::peer_id(peer).addresses(addrs.0.clone()).build();
 
                             match self.swarm.dial(opts) {
                                 Ok(()) => {
@@ -950,7 +947,20 @@ impl SwarmDriver {
                 let current_state = SwarmLocalState {
                     connected_peers: self.swarm.connected_peers().cloned().collect(),
                     peers_in_routing_table: self.peers_in_rt,
-                    listeners: self.swarm.listeners().cloned().collect(),
+                    listeners: self
+                        .swarm
+                        .listeners()
+                        .cloned()
+                        .map(|mut addr| {
+                            if !addr
+                                .iter()
+                                .any(|protocol| matches!(protocol, Protocol::P2p(_)))
+                            {
+                                addr.push(Protocol::P2p(self.self_peer_id));
+                            }
+                            addr
+                        })
+                        .collect(),
                 };
 
                 sender

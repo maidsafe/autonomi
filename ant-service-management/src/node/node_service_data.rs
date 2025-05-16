@@ -13,13 +13,13 @@ use serde::{de::Error as DeError, Deserialize, Deserializer, Serializer};
 use std::str::FromStr;
 
 /// Type alias for the latest version of the node service data structure.
-pub type NodeServiceData = super::node_service_data_v2::NodeServiceDataV2;
+pub type NodeServiceData = super::node_service_data_v3::NodeServiceDataV3;
 /// Type alias for the latest node service data schema version.
 pub const NODE_SERVICE_DATA_SCHEMA_LATEST: u32 =
-    super::node_service_data_v2::NODE_SERVICE_DATA_SCHEMA_V2;
+    super::node_service_data_v3::NODE_SERVICE_DATA_SCHEMA_V3;
 
-/// Custom deserialization for NodeServiceData.
-/// This will perform conversion from V0 or V1 to V2 if needed.
+/// Custom deserialization for NodeServiceData
+/// This will perform conversion from older version to the latest one if needed.
 impl<'de> Deserialize<'de> for NodeServiceData {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -33,24 +33,44 @@ impl<'de> Deserialize<'de> for NodeServiceData {
         };
 
         match schema_version {
-            Some(2) => {
-                match super::node_service_data_v2::NodeServiceDataV2::deserialize_v2(
+            Some(v) if v == super::node_service_data_v3::NODE_SERVICE_DATA_SCHEMA_V3 as u64 => {
+                // It's the latest version - use NodeServiceDataV3's helper method
+                match super::node_service_data_v3::NodeServiceDataV3::deserialize_v3(
                     &mut serde_json::de::Deserializer::from_str(&json_value.to_string()),
                 ) {
-                    Ok(v2) => Ok(v2),
+                    Ok(v3) => Ok(v3),
+                    Err(e) => Err(D::Error::custom(format!(
+                        "Failed to deserialize as V3: {}",
+                        e
+                    ))),
+                }
+            }
+            Some(v) if v == super::node_service_data_v2::NODE_SERVICE_DATA_SCHEMA_V2 as u64 => {
+                // It's the latest version - use NodeServiceDataV2's helper method
+                match serde_json::from_value::<super::node_service_data_v2::NodeServiceDataV2>(
+                    json_value,
+                ) {
+                    Ok(v2) => {
+                        // Convert V2 to V3
+                        let v3: super::node_service_data_v3::NodeServiceDataV3 = v2.into();
+                        Ok(v3)
+                    }
                     Err(e) => Err(D::Error::custom(format!(
                         "Failed to deserialize as V2: {}",
                         e
                     ))),
                 }
             }
-            Some(1) => {
+            Some(v) if v == super::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1 as u64 => {
+                // It's V1 format - deserialize and convert to V2
                 match serde_json::from_value::<super::node_service_data_v1::NodeServiceDataV1>(
                     json_value,
                 ) {
                     Ok(v1) => {
+                        // Convert V1 to latest
                         let v2: super::node_service_data_v2::NodeServiceDataV2 = v1.into();
-                        Ok(v2)
+                        let v3: super::node_service_data_v3::NodeServiceDataV3 = v2.into();
+                        Ok(v3)
                     }
                     Err(e) => Err(D::Error::custom(format!(
                         "Failed to deserialize as V1: {}",
@@ -59,13 +79,16 @@ impl<'de> Deserialize<'de> for NodeServiceData {
                 }
             }
             _ => {
+                // It's V0 format - deserialize and convert
                 match serde_json::from_value::<super::node_service_data_v0::NodeServiceDataV0>(
                     json_value,
                 ) {
                     Ok(v0) => {
+                        // Convert V0 to latest
                         let v1: super::node_service_data_v1::NodeServiceDataV1 = v0.into();
                         let v2: super::node_service_data_v2::NodeServiceDataV2 = v1.into();
-                        Ok(v2)
+                        let v3: super::node_service_data_v3::NodeServiceDataV3 = v2.into();
+                        Ok(v3)
                     }
                     Err(e) => Err(D::Error::custom(format!(
                         "Failed to deserialize as V0: {}",
