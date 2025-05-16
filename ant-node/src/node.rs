@@ -30,7 +30,12 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
+use libp2p::{
+    identity::Keypair,
+    kad::{Record, U256},
+    request_response::OutboundFailure,
+    Multiaddr, PeerId,
+};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -507,11 +512,12 @@ impl Node {
             }
             NetworkEvent::QueryRequestReceived { query, channel } => {
                 event_header = "QueryRequestReceived";
-                let network = self.network().clone();
+                let node = self.clone();
                 let payment_address = *self.reward_address();
 
                 let _handle = spawn(async move {
-                    let res = Self::handle_query(&network, query, payment_address).await;
+                    let network = node.network().clone();
+                    let res = Self::handle_query(node, query, payment_address).await;
 
                     // Reducing non-mandatory logging
                     if let Response::Query(QueryResponse::GetVersion { .. }) = res {
@@ -620,11 +626,8 @@ impl Node {
         Ok(())
     }
 
-    async fn handle_query(
-        network: &Network,
-        query: Query,
-        payment_address: RewardsAddress,
-    ) -> Response {
+    async fn handle_query(node: Self, query: Query, payment_address: RewardsAddress) -> Response {
+        let network = node.network();
         let resp: QueryResponse = match query {
             Query::GetStoreQuote {
                 key,
@@ -684,6 +687,58 @@ impl Node {
                             storage_proofs,
                         }
                     }
+                }
+            }
+            Query::PaymentNotification {
+                holder,
+                record_info,
+            } => {
+                let record_addr = record_info.0.clone();
+                let result = match node
+                    .handle_payment_notification(holder.clone(), record_info)
+                    .await
+                {
+                    Ok(value) => {
+                        debug!("PaymentNotification of {record_addr:?} has been accepted");
+                        Ok(value)
+                    }
+                    Err(err) => Err(ant_protocol::Error::PaymentNotificationFailed(format!(
+                        "{err:?}"
+                    ))),
+                };
+                QueryResponse::PaymentNotification {
+                    result,
+                    peer_address: holder,
+                    record_addr,
+                }
+            }
+            Query::UploadRecord {
+                holder,
+                address,
+                serialized_record,
+            } => {
+                let record = Record {
+                    key: address.to_record_key(),
+                    value: serialized_record,
+                    publisher: None,
+                    expires: None,
+                };
+
+                let key = PrettyPrintRecordKey::from(&record.key).into_owned();
+                let result = match node.validate_and_store_record(record).await {
+                    Ok(()) => {
+                        debug!("Uploaded record {key} has been stored");
+                        Ok(true)
+                    }
+                    Err(err) => {
+                        node.record_metrics(Marker::RecordRejected(&key, &err));
+                        Err(ant_protocol::Error::UploadRecordFailed(format!("{err:?}")))
+                    }
+                };
+                QueryResponse::PaymentNotification {
+                    result,
+                    peer_address: holder,
+                    record_addr: address,
                 }
             }
             Query::GetReplicatedRecord { requester: _, key } => {

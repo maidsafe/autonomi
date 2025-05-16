@@ -729,8 +729,8 @@ impl Network {
     }
 
     /// Notify the node receicced a payment.
-    pub fn notify_payment_received(&self) {
-        self.send_local_swarm_cmd(LocalSwarmCmd::PaymentReceived);
+    pub fn notify_payment_received(&self, key: RecordKey) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::PaymentReceived { key });
     }
 
     /// Get `Record` from the local RecordStore
@@ -909,6 +909,21 @@ impl Network {
         Ok(is_present)
     }
 
+    /// Returns true if a RecordKey is expected by the RecordStore
+    pub async fn is_record_key_expected(&self, key: &RecordKey) -> Result<bool> {
+        let (sender, receiver) = oneshot::channel();
+        self.send_local_swarm_cmd(LocalSwarmCmd::RecordStoreExpectKey {
+            key: key.clone(),
+            sender,
+        });
+
+        let is_expected = receiver
+            .await
+            .map_err(|_e| NetworkError::InternalMsgChannelDropped)??;
+
+        Ok(is_expected)
+    }
+
     /// Returns the Addresses of all the locally stored Records
     pub async fn get_all_local_record_addresses(
         &self,
@@ -1050,6 +1065,10 @@ impl Network {
 
     pub fn add_network_density_sample(&self, distance: KBucketDistance) {
         self.send_local_swarm_cmd(LocalSwarmCmd::AddNetworkDensitySample { distance })
+    }
+
+    pub fn notify_payment(&self, addr: NetworkAddress) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::NotifyPayment { addr })
     }
 
     pub fn notify_peer_scores(&self, peer_scores: Vec<(PeerId, bool)>) {

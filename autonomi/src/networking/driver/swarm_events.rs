@@ -47,8 +47,25 @@ impl NetworkDriver {
                     step,
                 },
             )) => self.handle_kad_progress_event(id, result, &stats, &step),
+            SwarmEvent::Behaviour(AutonomiClientBehaviourEvent::RequestResponse(
+                ReqEvent::OutboundFailure {
+                    peer,
+                    request_id,
+                    connection_id,
+                    error,
+                },
+            )) => {
+                error!("Request {request_id:?} to {peer:?} failed on connection {connection_id:?} with error {error:?}");
+                self.pending_tasks.update_request(
+                    request_id,
+                    Err(ant_protocol::error::Error::OtherFailure(format!(
+                        "{error:?}"
+                    ))),
+                )?;
+                Ok(())
+            }
             _other_event => {
-                // trace!("Other event: {:?}", _other_event);
+                trace!("Other event: {:?}", _other_event);
                 Ok(())
             }
         }
@@ -109,14 +126,19 @@ impl NetworkDriver {
             return Ok(());
         }
 
-        if let Response::Query(QueryResponse::GetStoreQuote {
-            quote,
-            peer_address,
-            storage_proofs: _,
-        }) = response
-        {
-            self.pending_tasks
-                .update_get_quote(request_id, quote, peer_address)?;
+        match response {
+            Response::Query(QueryResponse::GetStoreQuote {
+                quote,
+                peer_address,
+                storage_proofs: _,
+            }) => self
+                .pending_tasks
+                .update_get_quote(request_id, quote, peer_address)?,
+            Response::Query(QueryResponse::UploadRecord { result, .. })
+            | Response::Query(QueryResponse::PaymentNotification { result, .. }) => {
+                self.pending_tasks.update_request(request_id, result)?
+            }
+            _ => warn!("Unsupported response of request({request_id:?}): {response:?}"),
         }
 
         Ok(())

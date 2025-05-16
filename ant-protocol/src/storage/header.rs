@@ -17,7 +17,9 @@ use std::fmt::Display;
 use xor_name::XorName;
 
 /// Data types that natively suppported by autonomi network.
-#[derive(EncodeLabelValue, Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(
+    EncodeLabelValue, Debug, Serialize, Deserialize, Clone, Copy, Eq, PartialEq, PartialOrd, Hash,
+)]
 pub enum DataTypes {
     Chunk,
     GraphEntry,
@@ -49,7 +51,7 @@ impl DataTypes {
 /// Indicates the type of the record content.
 /// This is to be only used within the node instance to reflect different content version.
 /// Hence, only need to have two entries: Chunk and NonChunk.
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, PartialOrd, Hash)]
 pub enum ValidationType {
     Chunk,
     NonChunk(XorName),

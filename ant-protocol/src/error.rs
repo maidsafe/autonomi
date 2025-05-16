@@ -52,6 +52,10 @@ pub enum Error {
     GetStoreQuoteFailed,
     #[error("There was an error generating the payment quote")]
     QuoteGenerationFailed,
+    #[error("There was an error when handling PaymentNotifiction: {0}")]
+    PaymentNotificationFailed(String),
+    #[error("There was an error when handling UploadRecord: {0}")]
+    UploadRecordFailed(String),
 
     // ---------- replication errors
     /// Replication not found.
@@ -73,6 +77,11 @@ pub enum Error {
     // The record already exists at this node
     #[error("The record already exists, so do not charge for it: {0:?}")]
     RecordExists(PrettyPrintRecordKey<'static>),
+
+    // ---------- other errors
+    // Place holder of other network errors
+    #[error("Other netowrk erros {0}")]
+    OtherFailure(String),
 }
 
 impl From<Error> for store::Error {

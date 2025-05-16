@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::OneShotTaskResult;
+use crate::networking::{common::Addresses, OneShotTaskResult};
 use ant_evm::PaymentQuote;
-use ant_protocol::NetworkAddress;
+use ant_protocol::{messages::Request, NetworkAddress};
 use libp2p::{
     kad::{PeerInfo, Quorum, Record},
     PeerId,
@@ -58,5 +58,13 @@ pub(super) enum NetworkTask {
         data_size: usize,
         #[debug(skip)]
         resp: OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
+    },
+    /// cf [`crate::driver::task_handler::TaskHandler::update_request`]
+    Request {
+        peer_id: PeerId,
+        addresses: Addresses,
+        req: Request,
+        #[debug(skip)]
+        resp: OneShotTaskResult<Option<PeerId>>,
     },
 }

@@ -6,7 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{messages::Nonce, NetworkAddress};
+use crate::{
+    messages::Nonce,
+    storage::{DataTypes, ValidationType},
+    NetworkAddress,
+};
+use ant_evm::ProofOfPayment;
 use libp2p::kad::U256;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +21,7 @@ use serde::{Deserialize, Serialize};
 /// Network, and their semantics.
 ///
 /// [`protocol`]: crate
-#[derive(Eq, PartialEq, PartialOrd, Clone, Serialize, Deserialize, Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Clone, Serialize, Deserialize, custom_debug::Debug)]
 pub enum Query {
     /// Retrieve the quote to store a record at the given address.
     /// The storage verification is optional to be undertaken
@@ -34,6 +39,23 @@ pub enum Query {
         /// Node shall try their best to fulfill the number, based on their capacity.
         /// Set to 0 to indicate not carry out any verification.
         difficulty: usize,
+    },
+    /// Write operation to notify holder a payment got made to it.
+    PaymentNotification {
+        /// Holder of the correspondent record.
+        holder: NetworkAddress,
+        /// Keys of copy that shall be replicated.
+        record_info: (NetworkAddress, DataTypes, ValidationType, ProofOfPayment),
+    },
+    /// Write operation to upload a record.
+    UploadRecord {
+        /// Holder of the record.
+        holder: NetworkAddress,
+        /// serialized record.
+        #[debug(skip)]
+        serialized_record: Vec<u8>,
+        /// Address of the record.
+        address: NetworkAddress,
     },
     /// Retrieve a specific record from a specific peer.
     ///
@@ -71,7 +93,6 @@ pub enum Query {
         // For future econ usage,
         sign_result: bool,
     },
-    /// *** From now on, the order of variants shall be retained to be backward compatible
     /// Query peer's cargo package version.
     GetVersion(NetworkAddress),
 }
@@ -83,6 +104,9 @@ impl Query {
             Query::CheckNodeInProblem(address) | Query::GetVersion(address) => address.clone(),
             // Shall not be called for this, as this is a `one-to-one` message,
             // and the destination shall be decided by the requester already.
+            Query::PaymentNotification { holder, .. } | Query::UploadRecord { holder, .. } => {
+                holder.clone()
+            }
             Query::GetStoreQuote { key, .. }
             | Query::GetReplicatedRecord { key, .. }
             | Query::GetChunkExistenceProof { key, .. }
@@ -104,6 +128,29 @@ impl std::fmt::Display for Query {
                 write!(
                     f,
                     "Query::GetStoreQuote({key:?} {data_type} {data_size} {nonce:?} {difficulty})"
+                )
+            }
+            Query::PaymentNotification {
+                holder,
+                record_info,
+            } => {
+                write!(
+                    f,
+                    "Cmd::PaymentNotification({:?} got paid for record {:?})",
+                    holder.as_peer_id(),
+                    record_info.0
+                )
+            }
+            Query::UploadRecord {
+                holder,
+                address,
+                serialized_record,
+            } => {
+                write!(
+                    f,
+                    "Cmd::UploadRecord(To {:?}, with record {address:?} has {} data_size)",
+                    holder.as_peer_id(),
+                    serialized_record.len()
                 )
             }
             Query::GetReplicatedRecord { key, requester } => {
