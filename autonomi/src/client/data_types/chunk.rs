@@ -10,14 +10,16 @@ use crate::{
     client::{
         payment::{PaymentOption, Receipt},
         quote::CostError,
-        utils::process_tasks_with_max_concurrency,
+        utils::{
+            process_request_tasks_expect_majority_succeeds, process_tasks_with_max_concurrency,
+        },
         ChunkBatchUploadState, GetError, PutError,
     },
     networking::common::Addresses,
     self_encryption::DataMapLevel,
     Client, XorName,
 };
-use ant_evm::{Amount, AttoTokens};
+use ant_evm::{Amount, AttoTokens, ClientProofOfPayment, ProofOfPayment};
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
 use ant_protocol::{
     messages::{Query, Request},
@@ -229,6 +231,56 @@ impl Client {
             .await
     }
 
+    /// Send payment_notifications rquests of one record
+    async fn send_payment_notification_of_one_record(
+        &self,
+        proof: &ClientProofOfPayment,
+        record_info: &(NetworkAddress, DataTypes, ValidationType, ProofOfPayment),
+    ) -> Result<(), PutError> {
+        let mut tasks = vec![];
+        for (peer_id, addrs) in proof.payees() {
+            let request = Request::Query(Query::PaymentNotification {
+                holder: NetworkAddress::from(peer_id),
+                record_info: record_info.clone(),
+            });
+            let self_clone = self.clone();
+            tasks.push(async move {
+                self_clone
+                    .network
+                    .send_request(peer_id, Addresses(addrs), request)
+                    .await
+            });
+        }
+
+        process_request_tasks_expect_majority_succeeds(tasks.len(), tasks).await
+    }
+
+    /// Send payment_notifications rquests of one record
+    async fn upload_content_of_one_record(
+        &self,
+        address: NetworkAddress,
+        proof: &ClientProofOfPayment,
+        serialized_record: &[u8],
+    ) -> Result<(), PutError> {
+        let mut tasks = vec![];
+        for (peer_id, addrs) in proof.payees() {
+            let request = Request::Query(Query::UploadRecord {
+                holder: NetworkAddress::from(peer_id),
+                address: address.clone(),
+                serialized_record: serialized_record.to_owned(),
+            });
+            let self_clone = self.clone();
+            tasks.push(async move {
+                self_clone
+                    .network
+                    .send_request(peer_id, Addresses(addrs), request)
+                    .await
+            });
+        }
+
+        process_request_tasks_expect_majority_succeeds(tasks.len(), tasks).await
+    }
+
     /// Send payment notifications in batches
     async fn send_payment_notifications(
         &self,
@@ -249,32 +301,26 @@ impl Client {
                     validation_type.clone(),
                     proof.to_proof_of_payment(),
                 );
-                for (peer_id, addrs) in proof.payees() {
-                    let request = Request::Query(Query::PaymentNotification {
-                        holder: NetworkAddress::from(peer_id),
-                        record_info: record_info.clone(),
-                    });
-                    let self_clone = self.clone();
-                    payment_notification_tasks.push(async move {
-                        let res = self_clone.network.send_request(peer_id, Addresses(addrs), request).await;
-                        #[cfg(feature = "loud")]
-                        match &res {
-                            Ok(_) => {
-                                println!(
-                                    "({}/{total_payments}) Payment of Chunk {name:?} notified to {peer_id:?}",
-                                    _i + 1,
-                                );
-                            }
-                            Err(err) => {
-                                println!(
-                                    "({}/{total_payments}) Payment of Chunk {name:?} failed with notify to {peer_id:?} ({err})",
-                                    _i + 1,
-                                );
-                            }
+                let self_clone = self.clone();
+                payment_notification_tasks.push(async move {
+                    let res = self_clone.send_payment_notification_of_one_record(proof, &record_info).await;
+                    #[cfg(feature = "loud")]
+                    match &res {
+                        Ok(_) => {
+                            println!(
+                                "({}/{total_payments}) Payment of Chunk {name:?} notified to payees",
+                                _i + 1,
+                            );
                         }
-                        (ChunkAddress::new(*name), res)
-                    });
-                }
+                        Err(err) => {
+                            println!(
+                                "({}/{total_payments}) Payment of Chunk {name:?} failed notify payees ({err})",
+                                _i + 1,
+                            );
+                        }
+                    }
+                    (ChunkAddress::new(*name), res)
+                });
             } else {
                 debug!("Chunk of {name:?} was already paid, only need upload");
                 #[cfg(feature = "loud")]
@@ -294,7 +340,7 @@ impl Client {
             for (chunk_addr, res) in payment_notifications.into_iter() {
                 match res {
                     Ok(_) => state.successful.push(chunk_addr),
-                    Err(err) => state.push_error(chunk_addr, PutError::NetworkError(err)),
+                    Err(err) => state.push_error(chunk_addr, err),
                 }
             }
             Err(PutError::Batch(state))
@@ -325,33 +371,30 @@ impl Client {
                 continue;
             };
 
-            for (peer_id, addrs) in proof.payees() {
-                let request = Request::Query(Query::UploadRecord {
-                    holder: NetworkAddress::from(peer_id),
-                    address: NetworkAddress::from(address),
-                    serialized_record: serialized_record.clone(),
-                });
-                let self_clone = self.clone();
-                upload_tasks.push(async move {
-                    let res = self_clone.network.send_request(peer_id, Addresses(addrs), request).await;
-                    #[cfg(feature = "loud")]
-                    match &res {
-                        Ok(_) => {
-                            println!(
-                                "({}/{total_records}) Record {address:?} stored at {peer_id:?}",
-                                _i + 1,
-                            );
-                        }
-                        Err(err) => {
-                            println!(
-                                "({}/{total_records}) Record {address:?} failed upload to {peer_id:?} ({err})",
-                                _i + 1,
-                            );
-                        }
+            let self_clone = self.clone();
+
+            upload_tasks.push(async move {
+                let res = self_clone
+                    .upload_content_of_one_record(
+                        NetworkAddress::from(address),
+                        proof,
+                        &serialized_record,
+                    )
+                    .await;
+                #[cfg(feature = "loud")]
+                match &res {
+                    Ok(_) => {
+                        println!("({}/{total_records}) Record {address:?} stored", _i + 1,);
                     }
-                    (address, res)
-                });
-            }
+                    Err(err) => {
+                        println!(
+                            "({}/{total_records}) Record {address:?} failed upload ({err})",
+                            _i + 1,
+                        );
+                    }
+                }
+                (address, res)
+            });
         }
         let uploads =
             process_tasks_with_max_concurrency(upload_tasks, *CHUNK_UPLOAD_BATCH_SIZE).await;
@@ -362,7 +405,7 @@ impl Client {
             for (addr, res) in uploads.into_iter() {
                 match res {
                     Ok(_) => state.successful.push(addr),
-                    Err(err) => state.push_error(addr, PutError::NetworkError(err)),
+                    Err(err) => state.push_error(addr, err),
                 }
             }
             Err(PutError::Batch(state))
