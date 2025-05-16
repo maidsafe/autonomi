@@ -16,7 +16,7 @@ use xor_name::XorName;
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Pointer {
     owner: PublicKey,
-    counter: u32,
+    counter: u64,
     target: PointerTarget,
     signature: Signature,
 }
@@ -67,7 +67,7 @@ impl Pointer {
     /// Create a new pointer, signing it with the provided secret key.
     /// This pointer would be stored on the network at the provided key's public key.
     /// There can only be one pointer at a time at the same address (one per key).
-    pub fn new(owner: &SecretKey, counter: u32, target: PointerTarget) -> Self {
+    pub fn new(owner: &SecretKey, counter: u64, target: PointerTarget) -> Self {
         let pubkey = owner.public_key();
         let bytes_to_sign = Self::bytes_to_sign(&pubkey, counter, &target);
         let signature = owner.sign(&bytes_to_sign);
@@ -83,7 +83,7 @@ impl Pointer {
     /// Create a new pointer with an existing signature
     pub fn new_with_signature(
         owner: PublicKey,
-        counter: u32,
+        counter: u64,
         target: PointerTarget,
         signature: Signature,
     ) -> Self {
@@ -96,12 +96,21 @@ impl Pointer {
     }
 
     /// Get the bytes that the signature is calculated from
-    fn bytes_to_sign(owner: &PublicKey, counter: u32, target: &PointerTarget) -> Vec<u8> {
+    fn bytes_to_sign(owner: &PublicKey, counter: u64, target: &PointerTarget) -> Vec<u8> {
+        // to support retrocompatibility with old pointers (u32 counter), we need to cast the counter to u32
+        // the support is limited to counters under u32::MAX
+        let counter_bytes: Vec<u8> = if counter > u32::MAX as u64 {
+            counter.to_le_bytes().to_vec()
+        } else {
+            let u32_counter = counter as u32;
+            u32_counter.to_le_bytes().to_vec()
+        };
+
         let mut bytes = Vec::new();
         // Add owner public key bytes
         bytes.extend_from_slice(&owner.to_bytes());
         // Add counter
-        bytes.extend_from_slice(&counter.to_le_bytes());
+        bytes.extend_from_slice(&counter_bytes);
         // Add target bytes using MessagePack serialization
         if let Ok(target_bytes) = rmp_serde::to_vec(target) {
             bytes.extend_from_slice(&target_bytes);
@@ -135,7 +144,7 @@ impl Pointer {
 
     /// Get the counter of the pointer, the higher the counter, the more recent the pointer is
     /// Similarly to counter CRDTs only the latest version (highest counter) of the pointer is kept on the network
-    pub fn counter(&self) -> u32 {
+    pub fn counter(&self) -> u64 {
         self.counter
     }
 
@@ -172,5 +181,95 @@ mod tests {
         let wrong_pointer =
             Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig);
         assert!(!wrong_pointer.verify_signature()); // Should be invalid with wrong signature
+    }
+
+    #[test]
+    fn test_pointer_deserialize_counter_compatibility() {
+        #[derive(Serialize, Deserialize)]
+        struct OldPointer {
+            owner: PublicKey,
+            counter: u32,
+            target: PointerTarget,
+            signature: Signature,
+        }
+        fn bytes_to_sign_old_pointer(
+            owner: &PublicKey,
+            counter: u32,
+            target: &PointerTarget,
+        ) -> Vec<u8> {
+            let mut bytes = Vec::new();
+            // Add owner public key bytes
+            bytes.extend_from_slice(&owner.to_bytes());
+            // Add counter
+            bytes.extend_from_slice(&counter.to_le_bytes());
+            // Add target bytes using MessagePack serialization
+            if let Ok(target_bytes) = rmp_serde::to_vec(target) {
+                bytes.extend_from_slice(&target_bytes);
+            }
+            bytes
+        }
+
+        let xor = XorName::random(&mut rand::thread_rng());
+        let sk = SecretKey::random();
+        let old_pointer = OldPointer {
+            owner: sk.public_key(),
+            counter: 42u32,
+            target: PointerTarget::ChunkAddress(ChunkAddress::new(xor)),
+            signature: sk.sign(bytes_to_sign_old_pointer(
+                &sk.public_key(),
+                42u32,
+                &PointerTarget::ChunkAddress(ChunkAddress::new(xor)),
+            )),
+        };
+
+        // Serialize the old pointer format
+        let serialized_old =
+            rmp_serde::to_vec(&old_pointer).expect("Failed to serialize old pointer");
+
+        // Deserialize into new pointer format
+        let deserialized_as_new: Pointer =
+            rmp_serde::from_slice(&serialized_old).expect("Failed to deserialize");
+
+        // Verify the counter was correctly converted to u64
+        assert_eq!(deserialized_as_new.counter(), 42u64);
+        assert_eq!(deserialized_as_new.owner(), &old_pointer.owner);
+        assert_eq!(deserialized_as_new.target(), &old_pointer.target);
+        assert_eq!(deserialized_as_new.signature, old_pointer.signature);
+
+        // Serialize the new pointer format
+        let new_pointer =
+            Pointer::new(&sk, 42, PointerTarget::ChunkAddress(ChunkAddress::new(xor)));
+
+        // Serialize the new pointer format
+        let serialized_new =
+            rmp_serde::to_vec(&new_pointer).expect("Failed to serialize new pointer");
+
+        // Deserialize into pointer format
+        let deserialized_new: Pointer =
+            rmp_serde::from_slice(&serialized_new).expect("Failed to deserialize");
+
+        // Verify the counter was correctly converted to u64
+        assert_eq!(deserialized_new.counter(), 42u64);
+        assert_eq!(deserialized_new.owner(), &new_pointer.owner);
+        assert_eq!(deserialized_new.target(), &new_pointer.target);
+        assert_eq!(deserialized_new.signature, new_pointer.signature);
+
+        // Deserialize into old pointer format
+        let deserialized_as_old: OldPointer =
+            rmp_serde::from_slice(&serialized_new).expect("Failed to deserialize");
+
+        // Verify the counter was correctly converted to u32
+        assert_eq!(deserialized_as_old.counter, 42u32);
+        assert_eq!(deserialized_as_old.owner, new_pointer.owner);
+        assert_eq!(deserialized_as_old.target, new_pointer.target);
+        assert_eq!(deserialized_as_old.signature, new_pointer.signature);
+
+        // compare old and new pointer
+        assert_eq!(old_pointer.counter as u64, new_pointer.counter);
+        assert_eq!(old_pointer.owner, new_pointer.owner);
+        assert_eq!(old_pointer.target, new_pointer.target);
+
+        // signature is the same
+        assert_eq!(old_pointer.signature, new_pointer.signature);
     }
 }

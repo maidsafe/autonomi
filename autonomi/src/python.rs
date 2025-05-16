@@ -1393,7 +1393,7 @@ impl PyPointer {
     /// This pointer would be stored on the network at the provided key's public key.
     /// There can only be one pointer at a time at the same address (one per key).
     #[new]
-    pub fn new(key: &PySecretKey, counter: u32, target: &PyPointerTarget) -> PyResult<Self> {
+    pub fn new(key: &PySecretKey, counter: u64, target: &PyPointerTarget) -> PyResult<Self> {
         Ok(Self {
             inner: Pointer::new(&key.inner, counter, target.inner.clone()),
         })
