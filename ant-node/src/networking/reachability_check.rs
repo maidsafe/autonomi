@@ -28,7 +28,7 @@ use libp2p::{
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
 const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 
@@ -72,7 +72,7 @@ pub struct ReachabilityCheckSwarmDriver {
 pub struct Dialer {
     // The number of attempts/retries we have made with the entire Dialer workflow.
     current_workflow_attempt: usize,
-    ongoing_dial_attempts: HashMap<PeerId, (DialAttemptState, Instant)>,
+    ongoing_dial_attempts: HashMap<PeerId, DialState>,
     identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
     incoming_connection_ids: HashSet<ConnectionId>,
     incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
@@ -98,14 +98,53 @@ pub enum ReachabilityStatus {
 }
 
 #[derive(Debug, Clone)]
-pub enum DialAttemptState {
+pub enum DialState {
     /// We have initiated a dial attempt.
-    InitialDialAttempted,
+    Initiated { at: Instant },
     /// We got a successful response from the remote peer. We can now wait for them to contact us back after the
     /// DIAL_BACK_DELAY.
-    InitialSuccessfulResponseReceived,
+    Connected { at: Instant },
     /// We have received a response from the remote peer after the DIAL_BACK_DELAY.
-    DialedBackAfterWait,
+    DialBackReceived { at: Instant },
+}
+
+impl DialState {
+    fn elapsed(&self) -> Duration {
+        match self {
+            DialState::Initiated { at } => at.elapsed(),
+            DialState::Connected { at } => at.elapsed(),
+            DialState::DialBackReceived { at } => at.elapsed(),
+        }
+    }
+
+    fn transition_to_connected(&mut self, peer_id: &PeerId) {
+        match self {
+            DialState::Initiated { .. } => {
+                *self = DialState::Connected { at: Instant::now() };
+            }
+            _ => {
+                warn!("DialState for {peer_id:?} cannot be transitioned to Connected. Current state: {self:?}");
+            }
+        }
+    }
+
+    fn transition_to_dial_back_received(&mut self, peer_id: &PeerId) {
+        match self {
+            DialState::Connected { at } => {
+                if at.elapsed() > DIAL_BACK_DELAY {
+                    info!("DialState for {peer_id:?} has been updated to DialBackReceived");
+                    *self = DialState::DialBackReceived { at: Instant::now() };
+                } else {
+                    warn!("DialState for {peer_id:?} has not been updated to DialBackReceived. We got the response too early.");
+                }
+            }
+            _ => {
+                warn!(
+                    "DialState for {peer_id:?} cannot be transitioned to DialBackReceived. Current state: {self:?}"
+                );
+            }
+        }
+    }
 }
 
 impl ReachabilityCheckSwarmDriver {
@@ -271,23 +310,19 @@ impl ReachabilityCheckSwarmDriver {
                 event_string = "ConnectionEstablished";
                 debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
+                // If we have dialed, then transition to connected state
                 if let ConnectedPoint::Dialer { address, .. } = endpoint {
                     if let Some(peer_id) = multiaddr_get_p2p(&address) {
-                        self.dialer.ongoing_dial_attempts
+                        let entry = self.dialer.ongoing_dial_attempts
                                 .entry(peer_id)
-                                .and_modify(|(state, time)| {
-                                    *state = DialAttemptState::InitialSuccessfulResponseReceived;
-                                    *time = Instant::now();
-                                    info!("Dial attempt for a previous {peer_id:?} has been established. State: {state:?}");
-                                })
-                                .or_insert_with(|| {
-                                    let state = DialAttemptState::InitialDialAttempted;
-                                    info!("Dial attempt for a new {peer_id:?} has been established. State: {state:?}");
-                                    (
-                                        state,
-                                        Instant::now(),
-                                    )
+                                .and_modify(|state| {
+                                    let old_state = state.clone();
+                                    state.transition_to_connected(&peer_id);
+                                    info!("Connection established for {peer_id:?} that we had dialed. We'll wait for dial back now. Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
                                 });
+                        if let Entry::Vacant(_) = entry {
+                            info!("We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+                        }
                     } else {
                         warn!("Dialer address does not contain peer id: {address:?}");
                     }
@@ -347,23 +382,19 @@ impl ReachabilityCheckSwarmDriver {
                                 connection_id,
                             );
 
-                            self.dialer.ongoing_dial_attempts
+                            let entry = self.dialer.ongoing_dial_attempts
                                     .entry(peer_id)
-                                    .and_modify(|(state, time)| {
-                                        let new_state = DialAttemptState::DialedBackAfterWait;
-                                        if matches!(
-                                            state,
-                                            DialAttemptState::InitialSuccessfulResponseReceived
-                                        ) {
-                                            if time.elapsed() > DIAL_BACK_DELAY {
-                                                info!("State for peer {peer_id:?} has been updated to {new_state:?}");
-                                                *state = new_state;
-                                                *time = Instant::now();
-                                            } else {
-                                                warn!("State for peer {peer_id:?} has not been updated to {new_state:?}. We got the response too early.");
-                                            }
-                                        }
+                                    .and_modify(|state| {
+                                        let old_state = state.clone();
+                                        state.transition_to_dial_back_received(&peer_id);
+                                        info!("Identify received for for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+
+                                        
                                     });
+
+                            if let Entry::Vacant(_) = entry {
+                                info!("We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+                            }
                         }
                         if self.has_dialing_completed() {
                             info!("Dialing completed. We have received enough observed addresses.");
@@ -434,67 +465,65 @@ impl ReachabilityCheckSwarmDriver {
                 .iter()
                 .position(|addr| matches!(addr.iter().last(), Some(Protocol::P2p(_))));
 
-            if let Some(index) = index {
-                let mut addr = self.initial_contacts.remove(index);
-                let addr_clone = addr.clone();
-                let peer_id =
-                    multiaddr_pop_p2p(&mut addr).ok_or(ReachabilityCheckError::EmptyPeerId)?;
-
-                let opts = DialOpts::peer_id(peer_id)
-                    // If we have a peer ID, we can prevent simultaneous dials.
-                    .condition(PeerCondition::NotDialing)
-                    .addresses(vec![addr])
-                    .build();
-
-                info!("Trying to dial peer with address: {addr_clone}",);
-
-                match self.swarm.dial(opts) {
-                    Ok(()) => {
-                        self.dialer.ongoing_dial_attempts.insert(
-                            peer_id,
-                            (DialAttemptState::InitialDialAttempted, Instant::now()),
-                        );
-                        info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.dialer.ongoing_dial_attempts.len());
-                    }
-                    Err(err) => match err {
-                        DialError::LocalPeerId { .. } => {
-                            warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
-                        }
-                        DialError::NoAddresses => {
-                            error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
-                        }
-                        DialError::DialPeerConditionFalse(_) => {
-                            warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
-                        }
-                        DialError::Aborted => {
-                            error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
-                        }
-                        DialError::WrongPeerId { obtained, .. } => {
-                            error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
-                        }
-                        DialError::Denied { cause } => {
-                            error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
-                        }
-                        DialError::Transport(items) => {
-                            error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
-                        }
-                    },
-                }
-            } else {
-                error!("Dialer has no more contacts to dial.");
+            let Some(index) = index else {
+                info!("Dialer has no more contacts to dial.");
                 return Err(ReachabilityCheckError::NoMoreContacts);
+            };
+
+            let mut addr = self.initial_contacts.remove(index);
+            let addr_clone = addr.clone();
+            let peer_id =
+                multiaddr_pop_p2p(&mut addr).ok_or(ReachabilityCheckError::EmptyPeerId)?;
+
+            let opts = DialOpts::peer_id(peer_id)
+                // If we have a peer ID, we can prevent simultaneous dials.
+                .condition(PeerCondition::NotDialing)
+                .addresses(vec![addr])
+                .build();
+
+            info!("Trying to dial peer with address: {addr_clone}",);
+
+            match self.swarm.dial(opts) {
+                Ok(()) => {
+                    self.dialer
+                        .ongoing_dial_attempts
+                        .insert(peer_id, DialState::Initiated { at: Instant::now() });
+                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.dialer.ongoing_dial_attempts.len());
+                }
+                Err(err) => match err {
+                    DialError::LocalPeerId { .. } => {
+                        warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
+                    }
+                    DialError::NoAddresses => {
+                        error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
+                    }
+                    DialError::DialPeerConditionFalse(_) => {
+                        warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
+                    }
+                    DialError::Aborted => {
+                        error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
+                    }
+                    DialError::WrongPeerId { obtained, .. } => {
+                        error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
+                    }
+                    DialError::Denied { cause } => {
+                        error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
+                    }
+                    DialError::Transport(items) => {
+                        error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
+                    }
+                },
             }
         }
 
         Ok(())
     }
 
-    // cleanup dial attempts if we're stuck in InitialDialAttempted state for too long
+    // cleanup dial attempts if we're stuck in Attempted state for too long
     fn cleanup_dial_attempts(&mut self) {
-        self.dialer.ongoing_dial_attempts.retain(|peer, (state, time)| {
-            if matches!(state, DialAttemptState::InitialDialAttempted) {
-                let elapsed = time.elapsed();
-                if elapsed.as_secs() > 30 {
+        self.dialer.ongoing_dial_attempts.retain(|peer, state| {
+            if matches!(state, DialState::Initiated { .. }) {
+                if state.elapsed().as_secs() > 30 {
                     info!("Dial attempt for {peer:?} with state {state:?} has timed out. Cleaning up.");
                     false
                 } else {
@@ -515,18 +544,18 @@ impl ReachabilityCheckSwarmDriver {
             "Checking if dialing has completed. Ongoing dial attempts: {:?}",
             self.dialer.ongoing_dial_attempts
         );
-        for (state, instant) in self.dialer.ongoing_dial_attempts.values() {
+        for state in self.dialer.ongoing_dial_attempts.values() {
             match state {
-                DialAttemptState::InitialDialAttempted => {
+                DialState::Initiated { .. } => {
                     // this state should eventually be cleaned up by `cleanup_dial_attempts`
                     still_waiting_for_dial_back = true;
                 }
-                DialAttemptState::InitialSuccessfulResponseReceived => {
-                    if instant.elapsed().as_secs() < (DIAL_BACK_DELAY.as_secs() + 20) {
+                DialState::Connected {..} => {
+                    if state.elapsed().as_secs() < (DIAL_BACK_DELAY.as_secs() + 20) {
                         still_waiting_for_dial_back = true;
                     }
                 }
-                DialAttemptState::DialedBackAfterWait => {}
+                DialState::DialBackReceived {..} => {}
             }
         }
         !still_waiting_for_dial_back
