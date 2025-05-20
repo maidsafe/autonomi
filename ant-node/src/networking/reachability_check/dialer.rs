@@ -8,7 +8,7 @@
 
 use super::MAX_DIAL_ATTEMPTS;
 use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
-use libp2p::{swarm::ConnectionId, Multiaddr, PeerId};
+use libp2p::{multiaddr::Protocol, swarm::ConnectionId, Multiaddr, PeerId};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     net::SocketAddr,
@@ -25,26 +25,23 @@ pub struct DialManager {
     pub(crate) current_workflow_attempt: usize,
     pub(crate) dialer: Dialer,
     pub(crate) all_dial_attempts: HashMap<PeerId, DialResult>,
-}
-
-impl Default for DialManager {
-    fn default() -> Self {
-        Self {
-            current_workflow_attempt: 1,
-            dialer: Dialer::default(),
-            all_dial_attempts: HashMap::new(),
-        }
-    }
+    pub(crate) initial_contacts_manager: InitialContactsManager,
 }
 
 /// A struct that can be re initialized to start a new reachability check attempt.
 #[derive(Debug, Clone, Default)]
 pub struct Dialer {
-    // Critical field should only be managed by the DialManager. Don't try to access it directly.
+    // Critical field, should only be managed by the DialManager. Don't try to access it directly.
     ongoing_dial_attempts: HashMap<PeerId, DialState>,
     pub(super) identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
     pub(super) incoming_connection_ids: HashSet<ConnectionId>,
     pub(super) incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct InitialContactsManager {
+    pub(super) initial_contacts: Vec<Multiaddr>,
+    pub(super) attempted_indices: HashSet<usize>,
 }
 
 /// The final result of a dial attempt.
@@ -116,10 +113,68 @@ impl DialState {
     }
 }
 
+impl InitialContactsManager {
+    pub fn new(initial_contacts: Vec<Multiaddr>) -> Self {
+        let len = initial_contacts.len();
+        let initial_contacts: Vec<Multiaddr> = initial_contacts
+            .into_iter()
+            .filter(|addr| {
+                !addr
+                    .iter()
+                    .any(|protocol| matches!(protocol, Protocol::P2pCircuit))
+            })
+            .filter(|addr| {
+                addr.iter()
+                    .any(|protocol| matches!(protocol, Protocol::P2p(_)))
+            })
+            .collect();
+        info!("Initial contacts len after filtering out circuit addresses and ones without peer ids: {:?}. original len: {len:?}", initial_contacts.len());
+        Self {
+            initial_contacts,
+            attempted_indices: HashSet::new(),
+        }
+    }
+
+    /// Return a random contact from the initial contacts list that we haven't attempted to dial yet.
+    pub fn get_next_contact(&mut self) -> Option<Multiaddr> {
+        if self.attempted_indices.len() >= self.initial_contacts.len() {
+            return None;
+        }
+
+        let mut rng = rand::thread_rng();
+        let mut index = rand::Rng::gen_range(&mut rng, 0..self.initial_contacts.len());
+
+        while self.attempted_indices.contains(&index) {
+            index = rand::Rng::gen_range(&mut rng, 0..self.initial_contacts.len());
+        }
+
+        self.attempted_indices.insert(index);
+        Some(self.initial_contacts[index].clone())
+    }
+
+    pub fn reset(&mut self) {
+        self.attempted_indices.clear();
+    }
+}
+
 impl DialManager {
+    pub fn new(initial_contacts: Vec<Multiaddr>) -> Self {
+        Self {
+            current_workflow_attempt: 1,
+            dialer: Dialer::default(),
+            all_dial_attempts: HashMap::new(),
+            initial_contacts_manager: InitialContactsManager::new(initial_contacts),
+        }
+    }
+
     pub fn reattempt_workflow(&mut self) {
         self.current_workflow_attempt += 1;
         self.dialer = Dialer::default();
+        self.initial_contacts_manager.reset();
+    }
+
+    pub fn get_next_contact(&mut self) -> Option<Multiaddr> {
+        self.initial_contacts_manager.get_next_contact()
     }
 
     /// Check if we can perform a new dial attempt.
@@ -225,7 +280,7 @@ impl DialManager {
                         to_remove_peers.push(*peer);
                         if tracked_peer.is_some() {
                             // only override dial errors (which are low priority, if we have established a connection on a different address)
-                            if let Some(DialResult::ErrorDuringDial { .. }) = tracked_peer {
+                            if let Some(DialResult::ErrorDuringDial) = tracked_peer {
                                 self.all_dial_attempts
                                     .insert(*peer, DialResult::TimedOutOnInitiated);
                             }
@@ -240,7 +295,7 @@ impl DialManager {
                     if state.elapsed().as_secs() > TIMEOUT_ON_CONNECTED_STATE.as_secs() {
                         if tracked_peer.is_some() {
                             // only override dial errors (which are low priority, if we have established a connection on a different address)
-                            if let Some(DialResult::ErrorDuringDial { .. }) = tracked_peer {
+                            if let Some(DialResult::ErrorDuringDial) = tracked_peer {
                                 self.all_dial_attempts
                                     .insert(*peer, DialResult::TimedOutAfterConnecting);
                             }
