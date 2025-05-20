@@ -1,0 +1,267 @@
+// Copyright 2025 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
+use super::MAX_DIAL_ATTEMPTS;
+use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
+use libp2p::{swarm::ConnectionId, Multiaddr, PeerId};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet},
+    net::SocketAddr,
+    time::{Duration, Instant},
+};
+
+const TIMEOUT_ON_INITIATED_STATE: Duration = Duration::from_secs(30);
+const TIMEOUT_ON_CONNECTED_STATE: Duration = Duration::from_secs(20 + DIAL_BACK_DELAY.as_secs());
+
+/// Higher level struct that manages everything that is related to dialing.
+#[derive(Debug)]
+pub struct DialManager {
+    // The number of attempts/retries we have made with the entire Dialer workflow.
+    pub(crate) current_workflow_attempt: usize,
+    pub(crate) dialer: Dialer,
+    pub(crate) all_dial_attempts: HashMap<PeerId, DialResult>,
+}
+
+impl Default for DialManager {
+    fn default() -> Self {
+        Self {
+            current_workflow_attempt: 1,
+            dialer: Dialer::default(),
+            all_dial_attempts: HashMap::new(),
+        }
+    }
+}
+
+/// A struct that can be re initialized to start a new reachability check attempt.
+#[derive(Debug, Clone, Default)]
+pub struct Dialer {
+    // Critical field should only be managed by the DialManager. Don't try to access it directly.
+    ongoing_dial_attempts: HashMap<PeerId, DialState>,
+    pub(super) identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+    pub(super) incoming_connection_ids: HashSet<ConnectionId>,
+    pub(super) incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
+}
+
+/// The final result of a dial attempt.
+#[derive(Debug, Clone)]
+pub enum DialResult {
+    /// We did not receive any response from the remote peer after dialing.
+    TimedOutOnInitiated,
+
+    /// We did not get a dialback in time.
+    TimedOutAfterConnecting,
+
+    /// We have received an error from the remote peer.
+    ErrorDuringDial,
+
+    /// The dial attempt was successful with the peer.
+    SuccessfulDialBack,
+}
+
+#[derive(Debug, Clone)]
+/// The state of a dial attempt that we initiated with a remote peer.
+///
+/// The state can only be transitioned to Connected or DialBackReceived.
+pub enum DialState {
+    /// We have initiated a dial attempt.
+    Initiated { at: Instant },
+    /// We got a successful response from the remote peer. We can now wait for them to contact us back after the
+    /// DIAL_BACK_DELAY.
+    Connected { at: Instant },
+    /// We have received a response from the remote peer after the DIAL_BACK_DELAY.
+    DialBackReceived { at: Instant },
+}
+
+impl DialState {
+    fn elapsed(&self) -> Duration {
+        match self {
+            DialState::Initiated { at } => at.elapsed(),
+            DialState::Connected { at } => at.elapsed(),
+            DialState::DialBackReceived { at } => at.elapsed(),
+        }
+    }
+
+    fn transition_to_connected(&mut self, peer_id: &PeerId) {
+        match self {
+            DialState::Initiated { .. } => {
+                *self = DialState::Connected { at: Instant::now() };
+            }
+            _ => {
+                warn!("DialState for {peer_id:?} cannot be transitioned to Connected. Current state: {self:?}");
+            }
+        }
+    }
+
+    fn transition_to_dial_back_received(&mut self, peer_id: &PeerId) {
+        match self {
+            DialState::Connected { at } => {
+                if at.elapsed() > DIAL_BACK_DELAY {
+                    info!("DialState for {peer_id:?} has been updated to DialBackReceived");
+                    *self = DialState::DialBackReceived { at: Instant::now() };
+                } else {
+                    warn!("DialState for {peer_id:?} has not been updated to DialBackReceived. We got the response too early.");
+                }
+            }
+            _ => {
+                warn!(
+                    "DialState for {peer_id:?} cannot be transitioned to DialBackReceived. Current state: {self:?}"
+                );
+            }
+        }
+    }
+}
+
+impl DialManager {
+    pub fn reattempt_workflow(&mut self) {
+        self.current_workflow_attempt += 1;
+        self.dialer = Dialer::default();
+    }
+
+    /// Check if we can perform a new dial attempt.
+    pub fn can_we_perform_new_dial(&self) -> bool {
+        self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS
+    }
+
+    /// Dialing has completed if:
+    /// 1. We still have peers that we haven't successfully connected to yet.
+    /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
+    pub fn has_dialing_completed(&self) -> bool {
+        let mut still_waiting_for_dial_back = false;
+        debug!(
+            "Checking if dialing has completed. Ongoing dial attempts: {:?}",
+            self.dialer.ongoing_dial_attempts
+        );
+        for state in self.dialer.ongoing_dial_attempts.values() {
+            match state {
+                DialState::Initiated { .. } => {
+                    // this state should eventually be cleaned up by `cleanup_dial_attempts`
+                    still_waiting_for_dial_back = true;
+                }
+                DialState::Connected { .. } => {
+                    if state.elapsed().as_secs() < TIMEOUT_ON_CONNECTED_STATE.as_secs() {
+                        still_waiting_for_dial_back = true;
+                    }
+                }
+                DialState::DialBackReceived { .. } => {}
+            }
+        }
+        !still_waiting_for_dial_back
+    }
+
+    pub fn on_successful_dial(&mut self, peer_id: &PeerId, address: &Multiaddr) {
+        self.dialer
+            .ongoing_dial_attempts
+            .insert(*peer_id, DialState::Initiated { at: Instant::now() });
+        info!(
+            "Dial attempt initiated for peer with address: {address}. Ongoing dial attempts: {}",
+            self.dialer.ongoing_dial_attempts.len()
+        );
+    }
+
+    pub fn on_error_during_dial_attempt(&mut self, peer_id: &PeerId) {
+        // Any successful/timeout result should be preferred over a dial error.
+        if self.all_dial_attempts.contains_key(peer_id) {
+            debug!("Not tracking dial attempt error result for {peer_id:?} as we already have better results for it.");
+            return;
+        }
+
+        self.all_dial_attempts
+            .insert(*peer_id, DialResult::ErrorDuringDial);
+    }
+
+    pub fn on_connection_established_as_dialer(&mut self, address: &Multiaddr) {
+        if let Some(peer_id) = multiaddr_get_p2p(address) {
+            let entry = self.dialer.ongoing_dial_attempts
+                .entry(peer_id)
+                .and_modify(|state| {
+                    let old_state = state.clone();
+                    state.transition_to_connected(&peer_id);
+                    info!("Connection established for {peer_id:?} that we had dialed. We'll wait for dial back now. Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+                });
+            if let Entry::Vacant(_) = entry {
+                info!("We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+            }
+        } else {
+            warn!("Dialer address does not contain peer id: {address:?}");
+        }
+    }
+
+    pub fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) {
+        let entry = self.dialer.ongoing_dial_attempts
+            .entry(*peer_id)
+            .and_modify(|state| {
+                let old_state = state.clone();
+                state.transition_to_dial_back_received(peer_id);
+                info!("Identify received for for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+            });
+
+        if let Entry::Vacant(_) = entry {
+            info!("We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+        }
+    }
+
+    pub fn on_outgoing_connection_error(&mut self, peer_id: PeerId) {
+        warn!(
+            "Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts."
+        );
+        self.dialer.ongoing_dial_attempts.remove(&peer_id);
+    }
+
+    // cleanup dial attempts if we're stuck in Attempted state for too long
+    pub fn cleanup_dial_attempts(&mut self) {
+        let mut to_remove_peers = Vec::new();
+        for (peer, state) in self.dialer.ongoing_dial_attempts.iter() {
+            let tracked_peer = self.all_dial_attempts.get(peer);
+
+            match state {
+                DialState::Initiated { .. } => {
+                    if state.elapsed().as_secs() > TIMEOUT_ON_INITIATED_STATE.as_secs() {
+                        info!("Dial attempt for {peer:?} with state {state:?} has timed out (timeout: {TIMEOUT_ON_INITIATED_STATE:?}). Cleaning up.");
+                        to_remove_peers.push(*peer);
+                        if tracked_peer.is_some() {
+                            // only override dial errors (which are low priority, if we have established a connection on a different address)
+                            if let Some(DialResult::ErrorDuringDial { .. }) = tracked_peer {
+                                self.all_dial_attempts
+                                    .insert(*peer, DialResult::TimedOutOnInitiated);
+                            }
+                        } else {
+                            self.all_dial_attempts
+                                .insert(*peer, DialResult::TimedOutOnInitiated);
+                        }
+                    }
+                }
+                DialState::Connected { .. } => {
+                    // Don't cleanup this state. If we did not receive a dial back, then it means that the peer is not reachable.
+                    if state.elapsed().as_secs() > TIMEOUT_ON_CONNECTED_STATE.as_secs() {
+                        if tracked_peer.is_some() {
+                            // only override dial errors (which are low priority, if we have established a connection on a different address)
+                            if let Some(DialResult::ErrorDuringDial { .. }) = tracked_peer {
+                                self.all_dial_attempts
+                                    .insert(*peer, DialResult::TimedOutAfterConnecting);
+                            }
+                        } else {
+                            self.all_dial_attempts
+                                .insert(*peer, DialResult::TimedOutAfterConnecting);
+                        }
+                    }
+                }
+                DialState::DialBackReceived { .. } => {
+                    // override if not already successful
+                    if !matches!(tracked_peer, Some(DialResult::SuccessfulDialBack)) {
+                        self.all_dial_attempts
+                            .insert(*peer, DialResult::SuccessfulDialBack);
+                    }
+                }
+            }
+        }
+
+        for peer in to_remove_peers {
+            self.dialer.ongoing_dial_attempts.remove(&peer);
+        }
+    }
+}
