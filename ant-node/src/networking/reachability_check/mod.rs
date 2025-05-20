@@ -76,7 +76,6 @@ pub struct ReachabilityCheckSwarmDriver {
     pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
     pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
-    pub(crate) initial_contacts: Vec<Multiaddr>,
 }
 
 impl ReachabilityCheckSwarmDriver {
@@ -100,17 +99,9 @@ impl ReachabilityCheckSwarmDriver {
         let listeners = HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
         Self {
             swarm,
-            dial_manager: DialManager::default(),
+            dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
-            initial_contacts: initial_contacts
-                .into_iter()
-                .filter(|addr| {
-                    !addr
-                        .iter()
-                        .any(|protocol| matches!(protocol, Protocol::P2pCircuit))
-                })
-                .collect(),
         }
     }
     /// Runs the reachability check workflow.
@@ -385,18 +376,11 @@ impl ReachabilityCheckSwarmDriver {
 
     fn trigger_dial(&mut self) -> Result<(), ReachabilityCheckError> {
         while self.dial_manager.can_we_perform_new_dial() {
-            // get the first contact with peer id present in it and remove it
-            let index = self
-                .initial_contacts
-                .iter()
-                .position(|addr| matches!(addr.iter().last(), Some(Protocol::P2p(_))));
-
-            let Some(index) = index else {
+            let Some(mut addr) = self.dial_manager.get_next_contact() else {
                 info!("Dialer has no more contacts to dial.");
                 return Err(ReachabilityCheckError::NoMoreContacts);
             };
 
-            let mut addr = self.initial_contacts.remove(index);
             let addr_clone = addr.clone();
             let peer_id =
                 multiaddr_pop_p2p(&mut addr).ok_or(ReachabilityCheckError::EmptyPeerId)?;
