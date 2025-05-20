@@ -64,30 +64,136 @@ impl From<libp2p::identify::Event> for ReachabilityCheckEvent {
 pub struct ReachabilityCheckSwarmDriver {
     pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
     pub(crate) upnp_supported: bool,
-    pub(crate) dialer: Dialer,
+    pub(crate) dial_manager: DialManager,
     pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
     pub(crate) initial_contacts: Vec<Multiaddr>,
 }
 
-pub struct Dialer {
+/// Higher level struct that manages everything that is related to dialing.
+#[derive(Debug)]
+pub struct DialManager {
     // The number of attempts/retries we have made with the entire Dialer workflow.
-    current_workflow_attempt: usize,
+    pub(crate) current_workflow_attempt: usize,
+    pub(crate) dialer: Dialer,
+}
+
+impl Default for DialManager {
+    fn default() -> Self {
+        Self {
+            current_workflow_attempt: 1,
+            dialer: Dialer::default(),
+        }
+    }
+}
+
+impl DialManager {
+    fn reattempt_workflow(&mut self) {
+        self.current_workflow_attempt += 1;
+        self.dialer = Dialer::default();
+    }
+
+    fn can_we_perform_new_dial(&self) -> bool {
+        self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS
+    }
+
+    /// Dialing has completed if:
+    /// 1. We still have peers that we haven't successfully connected to yet.
+    /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
+    fn has_dialing_completed(&self) -> bool {
+        let mut still_waiting_for_dial_back = false;
+        debug!(
+            "Checking if dialing has completed. Ongoing dial attempts: {:?}",
+            self.dialer.ongoing_dial_attempts
+        );
+        for state in self.dialer.ongoing_dial_attempts.values() {
+            match state {
+                DialState::Initiated { .. } => {
+                    // this state should eventually be cleaned up by `cleanup_dial_attempts`
+                    still_waiting_for_dial_back = true;
+                }
+                DialState::Connected { .. } => {
+                    if state.elapsed().as_secs() < (DIAL_BACK_DELAY.as_secs() + 20) {
+                        still_waiting_for_dial_back = true;
+                    }
+                }
+                DialState::DialBackReceived { .. } => {}
+            }
+        }
+        !still_waiting_for_dial_back
+    }
+
+    fn on_successful_dial(&mut self, peer_id: &PeerId, address: &Multiaddr) {
+        self.dialer
+            .ongoing_dial_attempts
+            .insert(*peer_id, DialState::Initiated { at: Instant::now() });
+        info!(
+            "Dial attempt initiated for peer with address: {address}. Ongoing dial attempts: {}",
+            self.dialer.ongoing_dial_attempts.len()
+        );
+    }
+
+    fn on_connection_established_as_dialer(&mut self, address: &Multiaddr) {
+        if let Some(peer_id) = multiaddr_get_p2p(address) {
+            let entry = self.dialer.ongoing_dial_attempts
+                .entry(peer_id)
+                .and_modify(|state| {
+                    let old_state = state.clone();
+                    state.transition_to_connected(&peer_id);
+                    info!("Connection established for {peer_id:?} that we had dialed. We'll wait for dial back now. Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+                });
+            if let Entry::Vacant(_) = entry {
+                info!("We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+            }
+        } else {
+            warn!("Dialer address does not contain peer id: {address:?}");
+        }
+    }
+
+    fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) {
+        let entry = self.dialer.ongoing_dial_attempts
+            .entry(*peer_id)
+            .and_modify(|state| {
+                let old_state = state.clone();
+                state.transition_to_dial_back_received(peer_id);
+                info!("Identify received for for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+            });
+
+        if let Entry::Vacant(_) = entry {
+            info!("We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+        }
+    }
+
+    fn on_outgoing_connection_error(&mut self, peer_id: PeerId) {
+        warn!(
+            "Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts."
+        );
+        self.dialer.ongoing_dial_attempts.remove(&peer_id);
+    }
+
+    // cleanup dial attempts if we're stuck in Attempted state for too long
+    fn cleanup_dial_attempts(&mut self) {
+        self.dialer.ongoing_dial_attempts.retain(|peer, state| {
+            if matches!(state, DialState::Initiated { .. }) {
+                if state.elapsed().as_secs() > 30 {
+                    info!("Dial attempt for {peer:?} with state {state:?} has timed out. Cleaning up.");
+                    false
+                } else {
+                    true
+                }
+            } else {
+               true
+            }
+        });
+    }
+}
+
+/// A struct that can be re initialized to start a new reachability check attempt.
+#[derive(Debug, Clone, Default)]
+pub struct Dialer {
     ongoing_dial_attempts: HashMap<PeerId, DialState>,
     identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
     incoming_connection_ids: HashSet<ConnectionId>,
     incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
-}
-
-impl Dialer {
-    fn new(attempt: usize) -> Self {
-        Self {
-            current_workflow_attempt: attempt,
-            ongoing_dial_attempts: HashMap::new(),
-            identify_observed_external_addr: HashMap::new(),
-            incoming_connection_ids: HashSet::new(),
-            incoming_connection_local_adapter_map: HashMap::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -168,7 +274,7 @@ impl ReachabilityCheckSwarmDriver {
         let listeners = HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
         Self {
             swarm,
-            dialer: Dialer::new(1),
+            dial_manager: DialManager::default(),
             upnp_supported: false,
             listeners,
             initial_contacts: initial_contacts
@@ -197,7 +303,7 @@ impl ReachabilityCheckSwarmDriver {
                             if let Some(status) = self.retry_if_possible(status) {
                                 return Ok(status);
                             } else {
-                               info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                               info!("We are retrying the reachability check workflow. We will not return a status yet.");
                             }
                         }
                         Ok(None) => {}
@@ -290,7 +396,8 @@ impl ReachabilityCheckSwarmDriver {
 
                 match socket_addr {
                     Some(socket_addr) => {
-                        self.dialer
+                        self.dial_manager
+                            .dialer
                             .incoming_connection_local_adapter_map
                             .insert(connection_id, socket_addr);
                     }
@@ -312,22 +419,13 @@ impl ReachabilityCheckSwarmDriver {
 
                 // If we have dialed, then transition to connected state
                 if let ConnectedPoint::Dialer { address, .. } = endpoint {
-                    if let Some(peer_id) = multiaddr_get_p2p(&address) {
-                        let entry = self.dialer.ongoing_dial_attempts
-                                .entry(peer_id)
-                                .and_modify(|state| {
-                                    let old_state = state.clone();
-                                    state.transition_to_connected(&peer_id);
-                                    info!("Connection established for {peer_id:?} that we had dialed. We'll wait for dial back now. Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
-                                });
-                        if let Entry::Vacant(_) = entry {
-                            info!("We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
-                        }
-                    } else {
-                        warn!("Dialer address does not contain peer id: {address:?}");
-                    }
+                    self.dial_manager
+                        .on_connection_established_as_dialer(&address);
                 } else {
-                    self.dialer.incoming_connection_ids.insert(connection_id);
+                    self.dial_manager
+                        .dialer
+                        .incoming_connection_ids
+                        .insert(connection_id);
                 }
             }
             SwarmEvent::OutgoingConnectionError {
@@ -340,14 +438,19 @@ impl ReachabilityCheckSwarmDriver {
 
                 // drop the state for the peer
                 if let Some(peer_id) = peer_id {
-                    warn!("Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts.");
-                    self.dialer.ongoing_dial_attempts.remove(&peer_id);
+                    self.dial_manager.on_outgoing_connection_error(peer_id);
+
                     self.trigger_dial()?;
                 } else {
                     warn!("OutgoingConnectionError: Peer ID not found");
                 };
 
-                if self.dialer.incoming_connection_ids.remove(&connection_id) {
+                if self
+                    .dial_manager
+                    .dialer
+                    .incoming_connection_ids
+                    .remove(&connection_id)
+                {
                     debug!("Removed connection {connection_id:?} from incomming_connections");
                 }
             }
@@ -361,7 +464,12 @@ impl ReachabilityCheckSwarmDriver {
                 event_string = "ConnectionClosed";
                 debug!(%peer_id, num_established, ?cause, "ConnectionClosed ({connection_id:?}) in {endpoint:?}");
 
-                if self.dialer.incoming_connection_ids.remove(&connection_id) {
+                if self
+                    .dial_manager
+                    .dialer
+                    .incoming_connection_ids
+                    .remove(&connection_id)
+                {
                     debug!("Removed connection {connection_id:?} from incomming_connections");
                 }
             }
@@ -374,29 +482,21 @@ impl ReachabilityCheckSwarmDriver {
                         connection_id,
                     } => {
                         debug!(%peer_id, ?info, "identify: received info on {connection_id:?}");
-                        if self.dialer.incoming_connection_ids.contains(&connection_id) {
+                        if self
+                            .dial_manager
+                            .dialer
+                            .incoming_connection_ids
+                            .contains(&connection_id)
+                        {
                             debug!("Received identify info from incoming connection {connection_id:?}. Adding observed address to our list.");
                             self.insert_observed_address(
                                 peer_id,
                                 info.observed_addr,
                                 connection_id,
                             );
-
-                            let entry = self.dialer.ongoing_dial_attempts
-                                    .entry(peer_id)
-                                    .and_modify(|state| {
-                                        let old_state = state.clone();
-                                        state.transition_to_dial_back_received(&peer_id);
-                                        info!("Identify received for for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
-
-                                        
-                                    });
-
-                            if let Entry::Vacant(_) = entry {
-                                info!("We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
-                            }
+                            self.dial_manager.on_successful_dial_back_identify(&peer_id);
                         }
-                        if self.has_dialing_completed() {
+                        if self.dial_manager.has_dialing_completed() {
                             info!("Dialing completed. We have received enough observed addresses.");
                             return Ok(Some(self.get_reachability_status()?));
                         }
@@ -432,10 +532,10 @@ impl ReachabilityCheckSwarmDriver {
         &mut self,
     ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
         // check if we have any ongoing dial attempts
-        self.cleanup_dial_attempts();
+        self.dial_manager.cleanup_dial_attempts();
         self.trigger_dial()?;
 
-        if self.has_dialing_completed() {
+        if self.dial_manager.has_dialing_completed() {
             info!("Dialing completed. We have received enough observed addresses.");
             match self.get_reachability_status() {
                 Ok(status) => {
@@ -443,7 +543,7 @@ impl ReachabilityCheckSwarmDriver {
                     if let Some(status) = self.retry_if_possible(status) {
                         Ok(Some(status))
                     } else {
-                        info!("We are retrying the WaitingForExternalAddr workflow. We will not return a status yet.");
+                        info!("We are retrying the reachability check workflow. We will not return a status yet.");
                         Ok(None)
                     }
                 }
@@ -458,7 +558,7 @@ impl ReachabilityCheckSwarmDriver {
     }
 
     fn trigger_dial(&mut self) -> Result<(), ReachabilityCheckError> {
-        while self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS {
+        while self.dial_manager.can_we_perform_new_dial() {
             // get the first contact with peer id present in it and remove it
             let index = self
                 .initial_contacts
@@ -485,10 +585,7 @@ impl ReachabilityCheckSwarmDriver {
 
             match self.swarm.dial(opts) {
                 Ok(()) => {
-                    self.dialer
-                        .ongoing_dial_attempts
-                        .insert(peer_id, DialState::Initiated { at: Instant::now() });
-                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.dialer.ongoing_dial_attempts.len());
+                    self.dial_manager.on_successful_dial(&peer_id, &addr_clone);
                 }
                 Err(err) => match err {
                     DialError::LocalPeerId { .. } => {
@@ -519,48 +616,6 @@ impl ReachabilityCheckSwarmDriver {
         Ok(())
     }
 
-    // cleanup dial attempts if we're stuck in Attempted state for too long
-    fn cleanup_dial_attempts(&mut self) {
-        self.dialer.ongoing_dial_attempts.retain(|peer, state| {
-            if matches!(state, DialState::Initiated { .. }) {
-                if state.elapsed().as_secs() > 30 {
-                    info!("Dial attempt for {peer:?} with state {state:?} has timed out. Cleaning up.");
-                    false
-                } else {
-                    true
-                }
-            } else {
-               true
-            }
-        });
-    }
-
-    /// Dialing has completed if:
-    /// 1. We still have peers that we haven't successfully connected to yet.
-    /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
-    fn has_dialing_completed(&self) -> bool {
-        let mut still_waiting_for_dial_back = false;
-        debug!(
-            "Checking if dialing has completed. Ongoing dial attempts: {:?}",
-            self.dialer.ongoing_dial_attempts
-        );
-        for state in self.dialer.ongoing_dial_attempts.values() {
-            match state {
-                DialState::Initiated { .. } => {
-                    // this state should eventually be cleaned up by `cleanup_dial_attempts`
-                    still_waiting_for_dial_back = true;
-                }
-                DialState::Connected {..} => {
-                    if state.elapsed().as_secs() < (DIAL_BACK_DELAY.as_secs() + 20) {
-                        still_waiting_for_dial_back = true;
-                    }
-                }
-                DialState::DialBackReceived {..} => {}
-            }
-        }
-        !still_waiting_for_dial_back
-    }
-
     fn insert_observed_address(
         &mut self,
         src_peer: PeerId,
@@ -572,7 +627,12 @@ impl ReachabilityCheckSwarmDriver {
             return;
         };
 
-        match self.dialer.identify_observed_external_addr.entry(src_peer) {
+        match self
+            .dial_manager
+            .dialer
+            .identify_observed_external_addr
+            .entry(src_peer)
+        {
             Entry::Occupied(mut entry) => {
                 let addresses = entry.get_mut();
 
@@ -603,7 +663,12 @@ impl ReachabilityCheckSwarmDriver {
         // find all connection ids for the reachable addresses
         let mut reachable_connection_ids = HashMap::new();
         for reachable_addr in &reachable_addresses {
-            for addrs in self.dialer.identify_observed_external_addr.values() {
+            for addrs in self
+                .dial_manager
+                .dialer
+                .identify_observed_external_addr
+                .values()
+            {
                 for (addr, connection_id) in addrs {
                     if addr == reachable_addr {
                         reachable_connection_ids
@@ -619,7 +684,9 @@ impl ReachabilityCheckSwarmDriver {
         info!("Reachable connection ids: {reachable_connection_ids:?}");
         info!(
             "Incoming connection local adapter map: {:?}",
-            self.dialer.incoming_connection_local_adapter_map
+            self.dial_manager
+                .dialer
+                .incoming_connection_local_adapter_map
         );
 
         let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> =
@@ -631,6 +698,7 @@ impl ReachabilityCheckSwarmDriver {
             };
             for connection_id in connection_ids {
                 let Some(local_adapter_addr) = self
+                    .dial_manager
                     .dialer
                     .incoming_connection_local_adapter_map
                     .get(&connection_id)
@@ -775,20 +843,36 @@ impl ReachabilityCheckSwarmDriver {
     ) -> Result<(Vec<SocketAddr>, bool), ReachabilityCheckError> {
         info!(
             "Determining reachability status based on observed addresses: {:?}",
-            self.dialer.identify_observed_external_addr
+            self.dial_manager.dialer.identify_observed_external_addr
         );
 
-        if self.dialer.identify_observed_external_addr.is_empty() {
+        if self
+            .dial_manager
+            .dialer
+            .identify_observed_external_addr
+            .is_empty()
+        {
             info!("No observed addresses found. We're unreachable.");
             return Ok((vec![], false));
-        } else if self.dialer.identify_observed_external_addr.len() < 3 {
+        } else if self
+            .dial_manager
+            .dialer
+            .identify_observed_external_addr
+            .len()
+            < 3
+        {
             info!("Not enough observed addresses found. Retrying.");
             return Ok((vec![], true));
         }
 
         let mut ports = HashSet::new();
         let mut ips = HashSet::new();
-        for addresses in self.dialer.identify_observed_external_addr.values() {
+        for addresses in self
+            .dial_manager
+            .dialer
+            .identify_observed_external_addr
+            .values()
+        {
             for (addr, _id) in addresses {
                 ports.insert(addr.port());
                 if let IpAddr::V4(ip) = addr.ip() {
@@ -884,22 +968,20 @@ impl ReachabilityCheckSwarmDriver {
         }
     }
 
-    // consumes status if we are retrying the WaitingForExternalAddr workflow and would reset the states.
+    // consumes status if we are retrying the reachability check workflow and would reset the states.
     fn retry_if_possible(&mut self, status: ReachabilityStatus) -> Option<ReachabilityStatus> {
         let mut should_retry = false;
         match status {
             ReachabilityStatus::Unreachable { retry, .. } => {
                 if retry {
-                    if self.dialer.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
+                    if self.dial_manager.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
                         info!(
-                            "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-                            self.dialer.current_workflow_attempt + 1
+                            "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                            self.dial_manager.current_workflow_attempt + 1
                         );
                         should_retry = true;
                     } else {
-                        info!(
-                            "Max WaitingForExternalAddr workflow attempts reached. Not retrying."
-                        );
+                        info!("Max reachability check workflow attempts reached. Not retrying.");
                     }
                 } else {
                     info!("No retry needed.");
@@ -918,11 +1000,11 @@ impl ReachabilityCheckSwarmDriver {
         }
 
         info!(
-            "Retrying WaitingForExternalAddr workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-            self.dialer.current_workflow_attempt + 1
+            "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+            self.dial_manager.current_workflow_attempt + 1
         );
 
-        self.dialer = Dialer::new(self.dialer.current_workflow_attempt + 1);
+        self.dial_manager.reattempt_workflow();
 
         None
     }
