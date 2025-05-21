@@ -56,6 +56,7 @@ tokio = { version = "1.43", features = ["full"] }
 tracing = { version = "~0.1.26" }
 tonic = { version = "0.6.2" }
 uuid = { version = "1.5.0", features = ["v4"] }
+anyhow = "1.0.98"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 nix = { version = "0.27.1", features = ["fs", "user"] }
