@@ -1043,6 +1043,7 @@ dependencies = [
  "ant-protocol",
  "ant-releases",
  "ant-service-management",
+ "anyhow",
  "assert_cmd",
  "assert_fs",
  "assert_matches",

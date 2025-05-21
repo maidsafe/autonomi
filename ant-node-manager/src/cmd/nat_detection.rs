@@ -12,18 +12,20 @@ use crate::{
 use ant_bootstrap::ContactsFetcher;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{NatDetectionStatus, NodeRegistry};
-use color_eyre::eyre::{bail, OptionExt, Result};
+use color_eyre::eyre::{bail, Context, Result};
 use libp2p::Multiaddr;
 use rand::seq::SliceRandom;
 use std::{
     io::{BufRead, BufReader},
     path::PathBuf,
     process::{Command, Stdio},
+    time::Duration,
 };
+use tokio::{task, time::timeout};
+pub const NAT_DETECTION_TIMEOUT_SECS: u64 = 180;
 
 const NAT_DETECTION_SERVERS_LIST_URL: &str =
     "https://sn-testnet.s3.eu-west-2.amazonaws.com/nat-detection-servers";
-
 pub async fn run_nat_detection(
     servers: Option<Vec<Multiaddr>>,
     force_run: bool,
@@ -39,15 +41,15 @@ pub async fn run_nat_detection(
             contacts_fetcher.ignore_peer_id(true);
             contacts_fetcher.insert_endpoint(NAT_DETECTION_SERVERS_LIST_URL.parse()?);
 
-            let servers = contacts_fetcher.fetch_addrs().await?;
-
-            servers
+            let fetched = contacts_fetcher.fetch_addrs().await?;
+            fetched
                 .choose_multiple(&mut rand::thread_rng(), 10)
                 .cloned()
                 .collect::<Vec<_>>()
         }
     };
     info!("Running nat detection with servers: {servers:?}");
+
     let mut node_registry = NodeRegistry::load(&get_node_registry_path()?)?;
 
     if !force_run {
@@ -55,7 +57,7 @@ pub async fn run_nat_detection(
             if verbosity != VerbosityLevel::Minimal {
                 println!("NAT status has already been set as: {status:?}");
             }
-            debug!("NAT status has already been set as: {status:?}, returning.");
+            debug!("NAT status already set as: {status:?}, skipping.");
             return Ok(());
         }
     }
@@ -64,8 +66,7 @@ pub async fn run_nat_detection(
         path
     } else {
         let release_repo = <dyn AntReleaseRepoActions>::default_config();
-
-        let (nat_detection_path, _) = download_and_extract_release(
+        let (path, _) = download_and_extract_release(
             ReleaseType::NatDetection,
             url,
             version,
@@ -74,49 +75,82 @@ pub async fn run_nat_detection(
             None,
         )
         .await?;
-        nat_detection_path
+        path
     };
 
     if verbosity != VerbosityLevel::Minimal {
         println!("Running NAT detection. This can take a while..");
     }
-    debug!("Running NAT detection with path: {nat_detection_path:?}. This can take a while..");
-
-    let mut command = Command::new(nat_detection_path);
-    command.stdout(Stdio::piped()).stderr(Stdio::null());
-    command.arg(
-        servers
-            .iter()
-            .map(|addr| addr.to_string())
-            .collect::<Vec<String>>()
-            .join(","),
+    debug!(
+        "Running NAT detection with binary path: {:?}",
+        nat_detection_path
     );
-    if tracing::level_enabled!(tracing::Level::TRACE) {
-        command.arg("-vvvv");
-    }
-    let mut child = command.spawn()?;
 
-    // only execute if log level is set to trace
-    if tracing::level_enabled!(tracing::Level::TRACE) {
-        // using buf reader to handle both stderr and stout is risky as it might block indefinitely.
-        if let Some(ref mut stdout) = child.stdout {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let line = line?;
-                // only if log level is trace
+    let servers_arg = servers
+        .iter()
+        .map(|a| a.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let trace_enabled = tracing::level_enabled!(tracing::Level::TRACE);
+    let timeout_duration = Duration::from_secs(NAT_DETECTION_TIMEOUT_SECS);
+    debug!(
+        "NAT detection timeout set to {} seconds",
+        NAT_DETECTION_TIMEOUT_SECS
+    );
 
-                let clean_line = strip_ansi_escapes(&line);
-                trace!("{clean_line}");
+    let output = timeout(
+        timeout_duration,
+        task::spawn_blocking(move || -> Result<i32> {
+            let mut command = Command::new(&nat_detection_path);
+            command.stdout(Stdio::piped()).stderr(Stdio::null());
+            command.arg(servers_arg);
+            if trace_enabled {
+                command.arg("-vvvv");
             }
-        }
-    }
 
-    let status = child.wait()?;
-    let status = match status.code().ok_or_eyre("Failed to get the exit code")? {
-        10 => NatDetectionStatus::Public,
-        11 => NatDetectionStatus::UPnP,
-        12 => NatDetectionStatus::Private,
-        code => bail!("Failed to detect NAT status, exit code: {code}"),
+            let mut child = command
+                .spawn()
+                .wrap_err("Failed to spawn NAT detection process")?;
+
+            if trace_enabled {
+                if let Some(ref mut stdout) = child.stdout {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        let line = line?;
+                        let clean_line = strip_ansi_escapes(&line);
+                        trace!("{clean_line}");
+                    }
+                }
+            }
+
+            let status = child
+                .wait()
+                .wrap_err("Failed to wait on NAT detection process")?;
+            Ok(status.code().unwrap_or(-1))
+        }),
+    )
+    .await;
+
+    let exit_code = match output {
+        Ok(Ok(code)) => code,
+        Ok(Err(e)) => bail!("Failed to detect NAT status, exit code: {:?}", e),
+        Err(_) => {
+            debug!(
+                "NAT detection timed out after {} seconds",
+                NAT_DETECTION_TIMEOUT_SECS
+            );
+            bail!(
+                "NAT detection timed out after {} seconds",
+                NAT_DETECTION_TIMEOUT_SECS
+            );
+        }
+    };
+
+    let status = match exit_code {
+        Ok(10) => NatDetectionStatus::Public,
+        Ok(11) => NatDetectionStatus::UPnP,
+        Ok(12) => NatDetectionStatus::Private,
+        code => bail!("Failed to detect NAT status, exit code: {:?}", code),
     };
 
     if verbosity != VerbosityLevel::Minimal {

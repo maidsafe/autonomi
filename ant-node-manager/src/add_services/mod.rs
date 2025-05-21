@@ -24,10 +24,7 @@ use ant_service_management::{
     DaemonServiceData, FaucetServiceData, NatDetectionStatus, NodeRegistry, NodeServiceData,
     ServiceStatus,
 };
-use color_eyre::{
-    eyre::{eyre, OptionExt},
-    Help, Result,
-};
+use color_eyre::{eyre::eyre, Help, Result};
 use colored::Colorize;
 use service_manager::ServiceInstallCtx;
 use std::{
@@ -167,25 +164,29 @@ pub async fn add_node(
         )?;
 
         if options.auto_set_nat_flags {
-            let nat_status = node_registry
-                .nat_status
-                .clone()
-                .ok_or_eyre("NAT status has not been set. Run 'nat-detection' first")?;
+            let nat_status = node_registry.nat_status.clone();
 
             match nat_status {
-                NatDetectionStatus::Public => {
+                Some(NatDetectionStatus::Public) => {
                     options.no_upnp = true; // UPnP not needed
                     options.relay = false;
                 }
-                NatDetectionStatus::UPnP => {
+                Some(NatDetectionStatus::UPnP) => {
                     options.no_upnp = false;
                     options.relay = false;
                 }
-                NatDetectionStatus::Private => {
+                Some(NatDetectionStatus::Private) => {
                     options.no_upnp = true;
                     options.relay = true;
                 }
+                None => {
+                    // Fallback to private defaults
+                    options.no_upnp = true;
+                    options.relay = true;
+                    debug!("NAT status not set; defaulting to no_upnp=true and relay=true");
+                }
             }
+
             debug!(
                 "Auto-setting NAT flags: no_upnp={}, relay={}",
                 options.no_upnp, options.relay
