@@ -1,3 +1,4 @@
+use crate::retry;
 use alloy::transports::{RpcError, TransportErrorKind};
 
 #[derive(thiserror::Error, Debug)]
@@ -14,4 +15,6 @@ pub enum Error {
     PaymentVerificationLengthInvalid,
     #[error("Timeout: {0:?}")]
     Timeout(#[from] tokio::time::error::Elapsed),
+    #[error(transparent)]
+    Transaction(#[from] retry::TransactionError),
 }
