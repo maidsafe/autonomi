@@ -46,7 +46,10 @@ use ant_service_management::{
     UpgradeResult,
 };
 use colored::Colorize;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use semver::Version;
+
 use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
@@ -558,11 +561,23 @@ pub async fn refresh_node_registry(
 ) -> Result<()> {
     // This message is useful for users, but needs to be suppressed when a JSON output is
     // requested.
+
     if print_refresh_message {
         println!("Refreshing the node registry...");
     }
     info!("Refreshing the node registry");
 
+    let total_nodes = node_registry.nodes.len() as u64;
+    // Create a progress bar
+    let pb = ProgressBar::new(total_nodes);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) ETA: {eta_precise}")
+            .unwrap()
+            .progress_chars("#>-"),
+    );
+
+    // Main processing loop
     for node in &mut node_registry.nodes {
         // The `status` command can run before a node is started and therefore before its wallet
         // exists.
@@ -631,7 +646,11 @@ pub async fn refresh_node_registry(
                 }
             }
         }
+        pb.inc(1);
     }
+
+    pb.finish_with_message("Node registry refresh complete!");
+
     Ok(())
 }
 
@@ -6212,7 +6231,7 @@ network_id: None,
         match result {
             Ok(_) => panic!("This test should result in an error"),
             Err(e) => assert_eq!(
-                "The service(s) is already running: [\"antnode1\"]",
+                "Unable to remove a running service [\"antnode1\"], stop this service first before removing",
                 e.to_string()
             ),
         }
