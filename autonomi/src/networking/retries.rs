@@ -35,6 +35,12 @@ impl Network {
                 // retry on other errors
                 Err(err) => {
                     warn!("Put record failed at {addr}: {err:?}, retrying in {duration:?}");
+                    // Get closest peers to the record key to refresh the routing table next to the address
+                    let closest_peers = self
+                        .get_closest_peers(NetworkAddress::RecordKey(record.key.to_vec().into()))
+                        .await?;
+                    trace!("Closest peers to failed put for {addr}: {closest_peers:?}");
+                    trace!("Peers set as target to record put: {to:?}");
                     errors.push(err.clone());
                     match duration {
                         Some(retry_delay) => sleep(retry_delay).await,
