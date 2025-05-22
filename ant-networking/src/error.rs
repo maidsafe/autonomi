@@ -97,8 +97,6 @@ pub enum ReachabilityCheckError {
     LocalAdapterShouldNotBeEmpty,
     #[error("External address not found")]
     ExternalAddrsShouldNotBeEmpty,
-    #[error("No more contacts to dial")]
-    NoMoreContacts,
 }
 
 /// Network Errors
