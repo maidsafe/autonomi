@@ -507,13 +507,6 @@ impl SwarmDriver {
         }
     }
 
-    /// Listen on the provided address. Also records it within RelayManager
-    pub(crate) fn listen_on(&mut self, addr: Multiaddr) -> Result<()> {
-        let id = self.swarm.listen_on(addr.clone())?;
-        info!("Listening on {id:?} with addr: {addr:?}");
-        Ok(())
-    }
-
     /// Sync and flush the bootstrap cache to disk.
     ///
     /// This function creates a new cache and saves the old one to disk.

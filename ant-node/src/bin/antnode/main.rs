@@ -404,15 +404,11 @@ async fn run_node(
                 node_builder.relay_client(true);
                 node_builder.no_upnp(!upnp);
             }
-            Ok(ReachabilityStatus::Reachable {
-                addr: mut socket_addr,
-                upnp,
-            }) => {
-                info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", socket_addr.ip());
-                println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", socket_addr.ip());
-                socket_addr.set_port(0); // todo: use the same port.
+            Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
+                println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
                 node_builder.no_upnp(!upnp);
-                node_builder.with_socket_addr(socket_addr);
+                node_builder.with_socket_addr(addr);
             }
             Ok(ReachabilityStatus::NotRoutable { .. }) => {
                 info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");

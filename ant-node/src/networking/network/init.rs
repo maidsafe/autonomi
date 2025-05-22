@@ -241,9 +241,22 @@ impl NetworkBuilder {
         let addr_quic = Multiaddr::from(listen_socket_addr.ip())
             .with(Protocol::Udp(listen_socket_addr.port()))
             .with(Protocol::QuicV1);
-        swarm_driver
-            .listen_on(addr_quic)
-            .expect("Multiaddr should be supported by our configured transports");
+        if listen_socket_addr.port() != 0 {
+            let start_time = std::time::Instant::now();
+            let timeout = Duration::from_secs(300); // 5 minutes
+            while swarm_driver.swarm.listen_on(addr_quic.clone()).is_err() {
+                if start_time.elapsed() > timeout {
+                    panic!("Failed to listen on QUIC address {addr_quic:?} after 5 minutes");
+                }
+                warn!("Failed to listen on QUIC address {addr_quic:?}, retrying...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        } else {
+            swarm_driver
+                .swarm
+                .listen_on(addr_quic.clone())
+                .expect("Failed to listen on QUIC address");
+        }
 
         // Run the swarm driver as a background task
         let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx.clone()));
