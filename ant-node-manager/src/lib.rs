@@ -46,9 +46,10 @@ use ant_service_management::{
     UpgradeResult,
 };
 use colored::Colorize;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use semver::Version;
-use tokio::sync::mpsc;
-use tokio::task;
+
 use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
@@ -566,26 +567,18 @@ pub async fn refresh_node_registry(
     }
     info!("Refreshing the node registry");
 
-    let total_nodes = node_registry.nodes.len();
-    let (tx, mut rx) = mpsc::channel::<usize>(100);
-
-    // Progress printer task
-    let handle = task::spawn(async move {
-        let mut last_percent = 0;
-        while let Some(processed) = rx.recv().await {
-            let percent = (processed * 100) / total_nodes.max(1);
-            if percent != last_percent {
-                use std::io::{stdout, Write};
-                stdout().flush().unwrap();
-                print!("\rRefresh progress - {:>3}%", percent);
-                last_percent = percent;
-            }
-        }
-        println!("\rRefresh progress - 100%");
-    });
+    let total_nodes = node_registry.nodes.len() as u64;
+    // Create a progress bar
+    let pb = ProgressBar::new(total_nodes);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) ETA: {eta_precise}")
+            .unwrap()
+            .progress_chars("#>-"),
+    );
 
     // Main processing loop
-    for (i, node) in node_registry.nodes.iter_mut().enumerate() {
+    for node in &mut node_registry.nodes {
         // The `status` command can run before a node is started and therefore before its wallet
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
@@ -653,13 +646,10 @@ pub async fn refresh_node_registry(
                 }
             }
         }
-
-        let _ = tx.send(i + 1).await;
+        pb.inc(1);
     }
 
-    // Drop the sender to end the progress task
-    drop(tx);
-    let _ = handle.await;
+    pb.finish_with_message("Node registry refresh complete!");
 
     Ok(())
 }
