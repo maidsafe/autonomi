@@ -62,7 +62,7 @@ pub struct NodeServiceDataV2 {
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_name: String,
     pub status: ServiceStatus,
     pub user: Option<String>,
@@ -147,7 +147,7 @@ impl NodeServiceDataV2 {
             relay: helper.relay,
             rewards_address: helper.rewards_address,
             reward_balance: helper.reward_balance,
-            rpc_socket_addr: helper.rpc_socket_addr,
+            rpc_socket_addr: Some(helper.rpc_socket_addr),
             service_name: helper.service_name,
             status: helper.status,
             user: helper.user,
