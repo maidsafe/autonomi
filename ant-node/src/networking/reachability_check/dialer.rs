@@ -205,7 +205,41 @@ impl DialManager {
                 DialState::DialBackReceived { .. } => {}
             }
         }
+
         !still_waiting_for_dial_back
+    }
+
+    /// Check if we are faulty.
+    pub fn are_we_faulty(&self) -> bool {
+        if !self.has_dialing_completed() {
+            warn!("Dialing has not completed yet. We are not faulty.");
+            return false;
+        }
+
+        for state in self.dialer.ongoing_dial_attempts.values() {
+            match state {
+                DialState::DialBackReceived { .. } | DialState::Connected { .. } => {
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
+        // not faulty if atleast one dial attempt was successful. (i.e, connection established or dial back received)
+        let mut faulty = true;
+        for dial_result in self.all_dial_attempts.values() {
+            match dial_result {
+                DialResult::TimedOutAfterConnecting => {
+                    faulty = false;
+                }
+                DialResult::SuccessfulDialBack => {
+                    faulty = false;
+                }
+                _ => {}
+            }
+        }
+
+        faulty
     }
 
     pub fn on_successful_dial(&mut self, peer_id: &PeerId, address: &Multiaddr) {
