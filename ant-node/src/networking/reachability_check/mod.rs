@@ -37,9 +37,9 @@ const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Clone)]
 pub enum ReachabilityStatus {
-    Upnp,
-    Reachable { addr: SocketAddr },
-    Unreachable { retry: bool, terminate: bool },
+    Relay { upnp: bool },
+    Reachable { addr: SocketAddr, upnp: bool },
+    NotRoutable { upnp: bool },
 }
 
 /// The behaviors are polled in the order they are defined.
@@ -79,6 +79,10 @@ pub struct ReachabilityCheckSwarmDriver {
 }
 
 impl ReachabilityCheckSwarmDriver {
+    /// Create a new instance of the reachability check driver.
+    ///
+    /// We need atleast 5 working, non-circuit contacts, with PeerId on them to be able to determine
+    /// the reachability status.
     pub fn new(
         swarm: Swarm<ReachabilityCheckBehaviour>,
         initial_contacts: Vec<Multiaddr>,
@@ -117,11 +121,7 @@ impl ReachabilityCheckSwarmDriver {
                     match self.handle_swarm_events(swarm_event) {
                         Ok(Some(status)) => {
                             info!("Reachability status has been found to be: {status:?}");
-                            if let Some(status) = self.retry_if_possible(status) {
-                                return Ok(status);
-                            } else {
-                               info!("We are retrying the reachability check workflow. We will not return a status yet.");
-                            }
+                            return Ok(status);
                         }
                         Ok(None) => {}
                         Err(err) => {
@@ -314,8 +314,8 @@ impl ReachabilityCheckSwarmDriver {
                             self.dial_manager.on_successful_dial_back_identify(&peer_id);
                         }
                         if self.dial_manager.has_dialing_completed() {
-                            info!("Dialing completed. We have received enough observed addresses.");
-                            return Ok(Some(self.get_reachability_status()?));
+                            info!("Dialing completed. We have received enough observed addresses. Checking reachability status.");
+                            return self.get_reachability_status();
                         }
                     }
                     libp2p::identify::Event::Sent { .. } => {
@@ -355,14 +355,13 @@ impl ReachabilityCheckSwarmDriver {
         if self.dial_manager.has_dialing_completed() {
             info!("Dialing completed. We have received enough observed addresses.");
             match self.get_reachability_status() {
-                Ok(status) => {
+                Ok(Some(status)) => {
                     info!("Reachability status has been found to be: {status:?}");
-                    if let Some(status) = self.retry_if_possible(status) {
-                        Ok(Some(status))
-                    } else {
-                        info!("We are retrying the reachability check workflow. We will not return a status yet.");
-                        Ok(None)
-                    }
+                    Ok(Some(status))
+                }
+                Ok(None) => {
+                    info!("Reachability status is not yet determined.");
+                    Ok(None)
                 }
                 Err(err) => {
                     warn!("Error while getting reachability status: {err}");
@@ -377,8 +376,8 @@ impl ReachabilityCheckSwarmDriver {
     fn trigger_dial(&mut self) -> Result<(), ReachabilityCheckError> {
         while self.dial_manager.can_we_perform_new_dial() {
             let Some(mut addr) = self.dial_manager.get_next_contact() else {
-                info!("Dialer has no more contacts to dial.");
-                return Err(ReachabilityCheckError::NoMoreContacts);
+                info!("Dialer has no more contacts to dial. The get_reachability_status method will now calculate the reachability status.");
+                return Ok(());
             };
 
             let addr_clone = addr.clone();
@@ -462,19 +461,48 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// And then we map the external address to the local adapter address.
     /// If the local adapter is unspecified, we can use any address from the same ListenerId.
-    fn get_reachability_status(&self) -> Result<ReachabilityStatus, ReachabilityCheckError> {
-        let (reachable_addresses, retry) = self.determine_reachability_via_external_addr()?;
-        if reachable_addresses.is_empty() {
-            debug!("No reachable addresses found. We are unreachable.");
-            return Ok(ReachabilityStatus::Unreachable {
-                retry,
-                terminate: false,
-            });
+    fn get_reachability_status(
+        &mut self,
+    ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
+        let external_addr_result = self.determine_reachability_via_external_addr()?;
+
+        if external_addr_result.retry {
+            if self.do_we_have_retries_left() {
+                info!("Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}", self.dial_manager.current_workflow_attempt + 1);
+                self.dial_manager.reattempt_workflow();
+                self.trigger_dial()?;
+                return Ok(None);
+            } else {
+                info!("Max reachability check workflow attempts reached. Not retrying.");
+            }
+        }
+        if external_addr_result.terminate {
+            info!("Terminating the node as we are not routable.");
+            return Ok(Some(ReachabilityStatus::NotRoutable {
+                upnp: self.upnp_supported,
+            }));
+        }
+
+        if external_addr_result.relay {
+            info!(
+                "We are not reachable. Setting reachability status to relay with UPnP: {}",
+                self.upnp_supported
+            );
+            return Ok(Some(ReachabilityStatus::Relay {
+                upnp: self.upnp_supported,
+            }));
+        }
+
+        if external_addr_result.reachable_addresses.is_empty() {
+            debug!("No reachable addresses found. This should not happen. Terminating the node as we are not routable.");
+            return Ok(Some(ReachabilityStatus::NotRoutable {
+                upnp: self.upnp_supported,
+            }));
         }
 
         // find all connection ids for the reachable addresses
         let mut reachable_connection_ids = HashMap::new();
-        for reachable_addr in &reachable_addresses {
+        for reachable_addr in &external_addr_result.reachable_addresses {
             for addrs in self
                 .dial_manager
                 .dialer
@@ -492,7 +520,10 @@ impl ReachabilityCheckSwarmDriver {
             }
         }
 
-        info!("Reachable addresses: {reachable_addresses:?}");
+        info!(
+            "Reachable addresses: {:?}",
+            external_addr_result.reachable_addresses
+        );
         info!("Reachable connection ids: {reachable_connection_ids:?}");
         info!(
             "Incoming connection local adapter map: {:?}",
@@ -602,10 +633,14 @@ impl ReachabilityCheckSwarmDriver {
 
         if external_to_local_addr_map.is_empty() {
             info!("No local adapter mapping found for the reachable addresses. Returning the first external address instead.");
-            let addr = reachable_addresses
+            let addr = external_addr_result
+                .reachable_addresses
                 .first()
                 .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
-            return Ok(ReachabilityStatus::Reachable { addr: *addr });
+            return Ok(Some(ReachabilityStatus::Reachable {
+                addr: *addr,
+                upnp: self.upnp_supported,
+            }));
         }
 
         info!("External address to local adapter map exists: {external_to_local_addr_map:?}");
@@ -623,9 +658,10 @@ impl ReachabilityCheckSwarmDriver {
                 })
         {
             info!("Found a reachable address {reachable_addr:?} that is the same as the local adapter address.");
-            return Ok(ReachabilityStatus::Reachable {
+            return Ok(Some(ReachabilityStatus::Reachable {
                 addr: *reachable_addr,
-            });
+                upnp: self.upnp_supported,
+            }));
         }
 
         info!("No reachable address found that is the same as the local adapter address. Picking the first external address & its first local adapter address.");
@@ -638,12 +674,13 @@ impl ReachabilityCheckSwarmDriver {
 
         info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}. Returning the first local adapter address.");
 
-        Ok(ReachabilityStatus::Reachable {
+        Ok(Some(ReachabilityStatus::Reachable {
             addr: *local_adapter_addrs
                 .iter()
                 .next()
                 .ok_or(ReachabilityCheckError::LocalAdapterShouldNotBeEmpty)?,
-        })
+            upnp: self.upnp_supported,
+        }))
     }
 
     /// We received our observed addrs via identify. We would now determine if we're reachable/unreachable via the
@@ -652,7 +689,13 @@ impl ReachabilityCheckSwarmDriver {
     /// Returns a vector of addresses that are reachable and a boolean to retry the entire process.
     fn determine_reachability_via_external_addr(
         &self,
-    ) -> Result<(Vec<SocketAddr>, bool), ReachabilityCheckError> {
+    ) -> Result<ExternalAddrResult, ReachabilityCheckError> {
+        let mut result = ExternalAddrResult {
+            retry: false,
+            terminate: false,
+            reachable_addresses: vec![],
+            relay: false,
+        };
         info!(
             "Determining reachability status based on observed addresses: {:?}",
             self.dial_manager.dialer.identify_observed_external_addr
@@ -664,8 +707,15 @@ impl ReachabilityCheckSwarmDriver {
             .identify_observed_external_addr
             .is_empty()
         {
-            info!("No observed addresses found. We're unreachable.");
-            return Ok((vec![], false));
+            info!("No observed addresses found. Check if we atleast made any successful dials.");
+            if self.dial_manager.are_we_faulty() {
+                error!("We are faulty. We have not made any successful dials.");
+                result.terminate = true;
+            } else {
+                info!("We are not faulty, but we have not made any successful dials. Hence we should use relay if the retries are exhausted.");
+                result.relay = true;
+            }
+            result.retry = true;
         } else if self
             .dial_manager
             .dialer
@@ -673,8 +723,13 @@ impl ReachabilityCheckSwarmDriver {
             .len()
             < 3
         {
-            info!("Not enough observed addresses found. Retrying.");
-            return Ok((vec![], true));
+            info!("We have observed less than 3 addresses. We should use relay if the retries are exhausted.");
+            result.relay = true;
+            result.retry = true;
+        }
+
+        if result.retry || result.terminate {
+            return Ok(result);
         }
 
         let mut ports = HashSet::new();
@@ -694,8 +749,9 @@ impl ReachabilityCheckSwarmDriver {
         }
 
         if ports.len() != 1 {
-            info!("Multiple ports observed. Reachability status is Unreachable. This should not happen as symmetric NATs should not get a response back.");
-            return Ok((vec![], false));
+            error!("Multiple ports observed. This should not happen as symmetric NATs should not get a response back. Terminating the node.");
+            result.terminate = true;
+            return Ok(result);
         }
 
         let port = *ports
@@ -703,31 +759,34 @@ impl ReachabilityCheckSwarmDriver {
             .next()
             .ok_or(ReachabilityCheckError::EmptyPort)?;
         if port == 0 {
-            info!("Observed port is 0. Reachability status is Unreachable.");
-            return Ok((vec![], false));
+            error!("Observed port is 0. This should not happen. Terminating the node.");
+            result.relay = true;
+            return Ok(result);
         }
 
         #[allow(clippy::comparison_chain)]
+        #[allow(clippy::needless_return)]
         if ips.len() == 1 {
             let ip = ips
                 .iter()
                 .next()
                 .ok_or(ReachabilityCheckError::EmptyIpAddrs)?;
             if ip.is_unspecified() || ip.is_documentation() || ip.is_broadcast() {
-                info!(
-                    "Observed address {ip:?} is unspecified. Reachability status is Unreachable."
-                );
-                Ok((vec![], false))
+                info!("Observed address {ip:?} is unspecified. Terminating the node.");
+                result.terminate = true;
+                return Ok(result);
             } else if ip.is_private() {
                 let addr = SocketAddr::new(IpAddr::V4(*ip), port);
                 info!(
                     "Observed IP address {addr:?} is non-global. Reachability status is Reachable."
                 );
-                Ok((vec![addr], false))
+                result.reachable_addresses.push(addr);
+                return Ok(result);
             } else {
                 let addr = SocketAddr::new(IpAddr::V4(*ip), port);
                 info!("Observed IP address {addr:?} is global. Reachability status is Reachable.");
-                Ok((vec![addr], false))
+                result.reachable_addresses.push(addr);
+                return Ok(result);
             }
         } else if ips.len() > 1 {
             // if mix of private and public IPs, pick the private one (i.e,. on a local testnet on a public machine)
@@ -752,7 +811,8 @@ impl ReachabilityCheckSwarmDriver {
                 if private_ip.iter().any(|ip| ip.is_loopback()) {
                     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
                     info!("We have multiple private IP addresses, picking localhost: {addr:?}. Reachability status is Reachable.");
-                    return Ok((vec![addr], false));
+                    result.reachable_addresses.push(addr);
+                    return Ok(result);
                 }
 
                 let addrs = private_ip
@@ -760,7 +820,8 @@ impl ReachabilityCheckSwarmDriver {
                     .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
                     .collect::<Vec<_>>();
                 info!("We have multiple private IP addresses {addrs:?}. Reachability status is Reachable.");
-                return Ok((addrs, false));
+                result.reachable_addresses.extend(addrs);
+                return Ok(result);
             }
 
             if !public_ip.is_empty() {
@@ -769,55 +830,28 @@ impl ReachabilityCheckSwarmDriver {
                     .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
                     .collect::<Vec<_>>();
                 info!("We have multiple public IP addresses {addrs:?}. Reachability status is Reachable.");
-                return Ok((addrs, false));
+                result.reachable_addresses.extend(addrs);
+                return Ok(result);
             }
 
-            error!("We have multiple IP addresses, but none are private or public. Reachability status is Unreachable.");
-            return Ok((vec![], false));
+            error!("We have multiple IP addresses, but none are private or public. Terminating the node.");
+            result.terminate = true;
+            return Ok(result);
         } else {
-            error!("We have no IP addresses. Reachability status is Unreachable.");
-            return Ok((vec![], false));
+            error!("We have no IP addresses. Terminating the node.");
+            result.terminate = true;
+            return Ok(result);
         }
     }
 
-    // consumes status if we are retrying the reachability check workflow and would reset the states.
-    fn retry_if_possible(&mut self, status: ReachabilityStatus) -> Option<ReachabilityStatus> {
-        let mut should_retry = false;
-        match status {
-            ReachabilityStatus::Unreachable { retry, .. } => {
-                if retry {
-                    if self.dial_manager.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS {
-                        info!(
-                            "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-                            self.dial_manager.current_workflow_attempt + 1
-                        );
-                        should_retry = true;
-                    } else {
-                        info!("Max reachability check workflow attempts reached. Not retrying.");
-                    }
-                } else {
-                    info!("No retry needed.");
-                }
-            }
-            ReachabilityStatus::Reachable { .. } => {
-                debug!("We are reachable. No retry needed.");
-            }
-            ReachabilityStatus::Upnp => {
-                debug!("We are reachable via UPnP. No retry needed.");
-            }
-        }
-
-        if !should_retry {
-            return Some(status);
-        }
-
-        info!(
-            "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
-            self.dial_manager.current_workflow_attempt + 1
-        );
-
-        self.dial_manager.reattempt_workflow();
-
-        None
+    fn do_we_have_retries_left(&self) -> bool {
+        self.dial_manager.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS
     }
+}
+
+struct ExternalAddrResult {
+    retry: bool,
+    terminate: bool,
+    reachable_addresses: Vec<SocketAddr>,
+    relay: bool,
 }
