@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::networking::PeerInfo;
 use crate::{
     client::{
         payment::{PaymentOption, Receipt},
@@ -178,7 +179,10 @@ impl Client {
         let payees = proof
             .payees()
             .iter()
-            .map(|(peer_id, _addrs)| *peer_id)
+            .map(|(peer_id, addrs)| PeerInfo {
+                peer_id: *peer_id,
+                addrs: addrs.clone(),
+            })
             .collect();
 
         let record = Record {
@@ -312,7 +316,10 @@ impl Client {
         let storing_nodes: Vec<_> = payment
             .payees()
             .iter()
-            .map(|(peer_id, _addrs)| *peer_id)
+            .map(|(peer_id, addrs)| PeerInfo {
+                peer_id: *peer_id,
+                addrs: addrs.clone(),
+            })
             .collect();
 
         if storing_nodes.is_empty() {

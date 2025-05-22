@@ -25,7 +25,7 @@ use ant_protocol::{
 use bls::PublicKey;
 use libp2p::kad::Record;
 
-use crate::networking::NetworkError;
+use crate::networking::{NetworkError, PeerInfo};
 pub use crate::SecretKey;
 pub use ant_protocol::storage::{GraphContent, GraphEntry, GraphEntryAddress};
 
@@ -140,7 +140,10 @@ impl Client {
         let payees = proof
             .payees()
             .iter()
-            .map(|(peer_id, _addrs)| *peer_id)
+            .map(|(peer_id, addrs)| PeerInfo {
+                peer_id: *peer_id,
+                addrs: addrs.clone(),
+            })
             .collect();
 
         let record = Record {

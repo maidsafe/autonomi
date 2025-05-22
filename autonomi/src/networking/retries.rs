@@ -10,7 +10,7 @@ use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
 
 use super::{Network, RetryStrategy};
-use super::{NetworkError, PeerId, PeerInfo, Record, Strategy};
+use super::{NetworkError, PeerInfo, Record, Strategy};
 use tokio::time::sleep;
 
 impl Network {
@@ -18,7 +18,7 @@ impl Network {
     pub async fn put_record_with_retries(
         &self,
         record: Record,
-        to: Vec<PeerId>,
+        to: Vec<PeerInfo>,
         strategy: &Strategy,
     ) -> Result<(), NetworkError> {
         let addr = PrettyPrintRecordKey::from(&record.key).into_owned();

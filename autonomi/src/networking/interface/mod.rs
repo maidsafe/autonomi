@@ -45,7 +45,7 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         record: Record,
         /// Empty vec results in regular store to peers closest to record address
-        to: Vec<PeerId>,
+        to: Vec<PeerInfo>,
         quorum: Quorum,
         #[debug(skip)]
         resp: OneShotTaskResult<()>,

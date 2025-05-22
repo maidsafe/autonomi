@@ -185,7 +185,7 @@ impl Network {
     pub async fn put_record(
         &self,
         record: Record,
-        to: Vec<PeerId>,
+        to: Vec<PeerInfo>,
         quorum: Quorum,
     ) -> Result<(), NetworkError> {
         let (tx, rx) = oneshot::channel();

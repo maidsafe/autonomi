@@ -54,6 +54,9 @@ pub const KAD_ALPHA: NonZeroUsize = NonZeroUsize::new(3).expect("KAD_ALPHA must 
 /// Interval of resending identify to connected peers.
 /// Libp2p defaults to 5 minutes, we use 1 hour.
 const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600); // todo: taken over from ant-networking. Why 1 hour?
+/// Size of the LRU cache for peers and their addresses.
+/// Libp2p defaults to 100, we use 10k.
+const PEER_CACHE_SIZE: usize = 10_000;
 
 /// Driver for the Autonomi Client Network
 ///
@@ -108,7 +111,8 @@ impl NetworkDriver {
             let cfg = libp2p::identify::Config::new(identify_protocol_str, keypair.public())
                 .with_agent_version(agent_version)
                 .with_interval(RESEND_IDENTIFY_INVERVAL) // todo: find a way to disable this. Clients shouldn't need to
-                .with_hide_listen_addrs(true);
+                .with_hide_listen_addrs(true)
+                .with_cache_size(PEER_CACHE_SIZE);
             libp2p::identify::Behaviour::new(cfg)
         };
 
@@ -246,7 +250,15 @@ impl NetworkDriver {
                         }
                     }
                 } else {
-                    let to = to.clone().into_iter();
+                    for peer_info in &to {
+                        // Add the peer addresses to our cache before sending a query.
+                        for addr in &peer_info.addrs {
+                            self.swarm.add_peer_address(peer_info.peer_id, addr.clone());
+                        }
+                    }
+
+                    let to = to.clone().into_iter().map(|p| p.peer_id);
+
                     self.kad().put_record_to(record.clone(), to, quorum)
                 };
 

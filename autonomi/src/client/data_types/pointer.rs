@@ -13,7 +13,7 @@ use crate::client::{
     quote::CostError,
     Client, GetError, PutError,
 };
-use crate::networking::{PeerId, Record};
+use crate::networking::{PeerId, PeerInfo, Record};
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
@@ -147,7 +147,10 @@ impl Client {
                 proof
                     .payees()
                     .iter()
-                    .map(|(peer_id, _addrs)| *peer_id)
+                    .map(|(peer_id, addrs)| PeerInfo {
+                        peer_id: *peer_id,
+                        addrs: addrs.clone(),
+                    })
                     .collect(),
             );
             let record = Record {
