@@ -76,15 +76,8 @@ impl SwarmDriver {
             return;
         }
 
-        if info.agent_version.contains("client") {
-            debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
-            return;
-        }
-
         let has_dialed = self.dialed_peers.contains(&peer_id);
-
         let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
-
         let addrs = if !is_relayed_peer {
             let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
             let Some(addr) = addr else {
@@ -103,6 +96,19 @@ impl SwarmDriver {
             debug!("Peer {peer_id:?} is a relayed peer. Not using {addr_fom_connection:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
             p2p_addrs
         };
+
+        // return early for reachability-check-client / clients
+        if info.agent_version.contains("reachability-check-client") {
+            debug!("Peer {peer_id:?} is a peer requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
+            self.dial_queue.insert(
+                peer_id,
+                (Addresses(addrs.clone()), Instant::now() + DIAL_BACK_DELAY),
+            );
+            return;
+        } else if info.agent_version.contains("client") {
+            debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
+            return;
+        }
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
