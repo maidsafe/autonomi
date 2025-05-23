@@ -284,14 +284,7 @@ fn main() -> Result<()> {
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
         init_logging(&opt, keypair.public().to_peer_id())?;
 
-    let mut bootstrap_cache = BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, None)?;
-    // If we are the first node, write initial cache to disk.
-    if opt.peers.first {
-        bootstrap_cache.write()?;
-    } else {
-        // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk()?;
-    }
+    let bootstrap_cache = BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, None)?;
 
     let msg = format!(
         "Running {} v{}",
