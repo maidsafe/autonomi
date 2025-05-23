@@ -111,19 +111,6 @@ impl SwarmDriver {
             return;
         }
 
-        // return early for nat_detection
-        if info.agent_version.contains("nat_detection") {
-            debug!("Peer {peer_id:?} is a NAT detection peer. Adding it to the dial queue. Not adding to RT.");
-            self.dial_queue.insert(
-                peer_id,
-                (Addresses(addrs.to_vec()), Instant::now() + DIAL_BACK_DELAY),
-            );
-            return;
-        } else if info.agent_version.contains("client") {
-            debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
-            return;
-        }
-
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
             if let Some(relay_manager) = self.relay_manager.as_mut() {
