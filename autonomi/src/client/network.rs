@@ -6,19 +6,19 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::networking::NetworkError;
 use crate::Client;
-use ant_networking::{Addresses, NetworkError};
 use ant_protocol::NetworkAddress;
-use libp2p::PeerId;
+use libp2p::kad::PeerInfo;
 
 impl Client {
     /// Retrieve the closest peers to the given network address.
     pub async fn get_closest_to_address(
         &self,
         network_address: impl Into<NetworkAddress>,
-    ) -> Result<Vec<(PeerId, Addresses)>, NetworkError> {
+    ) -> Result<Vec<PeerInfo>, NetworkError> {
         self.network
-            .get_closest_peers(&network_address.into())
+            .get_closest_peers_with_retries(network_address.into())
             .await
     }
 }

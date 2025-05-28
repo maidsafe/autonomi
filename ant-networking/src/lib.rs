@@ -235,7 +235,7 @@ impl Network {
             .map_err(|_e| NetworkError::InternalMsgChannelDropped)
     }
 
-    /// Returns all the PeerId from all the KBuckets from our local Routing Table
+    /// Returns K closest peers (to self) from our local Routing Table
     /// Also contains our own PeerId.
     pub async fn get_closest_k_value_local_peers(&self) -> Result<Vec<(PeerId, Addresses)>> {
         let (sender, receiver) = oneshot::channel();
@@ -1031,6 +1031,7 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::TriggerIntervalReplication)
     }
 
+    /// To be called when got a fresh record from client uploading.
     pub fn add_fresh_records_to_the_replication_fetcher(
         &self,
         holder: NetworkAddress,
@@ -1165,7 +1166,6 @@ impl Network {
 
     /// Send a `Request` to the provided set of peers and wait for their responses concurrently.
     /// If `get_all_responses` is true, we wait for the responses from all the peers.
-    /// NB TODO: Will return an error if the request timeouts.
     /// If `get_all_responses` is false, we return the first successful response that we get
     pub async fn send_and_get_responses(
         &self,

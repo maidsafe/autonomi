@@ -10,8 +10,7 @@ use crate::actions::NetworkContext;
 use crate::wallet::fs::{select_wallet_private_key, store_private_key};
 use crate::wallet::input::request_password;
 use crate::wallet::DUMMY_NETWORK;
-use autonomi::get_evm_network;
-use autonomi::Wallet;
+use autonomi::{get_evm_network, Wallet};
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use prettytable::{Cell, Row, Table};
@@ -85,7 +84,7 @@ pub fn export() -> Result<()> {
 pub async fn balance(network_context: NetworkContext) -> Result<()> {
     let network = get_evm_network(
         network_context.peers.local,
-        Some(network_context.network_id),
+        Some(network_context.network_id as u8),
     )?;
     let wallet = crate::wallet::load_wallet(&network)?;
 

@@ -6,28 +6,32 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use std::collections::HashMap;
+
 use crate::client::{
     payment::{PayError, PaymentOption},
     quote::CostError,
-    Client,
+    Client, GetError, PutError,
 };
+use crate::networking::{PeerId, PeerInfo, Record};
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_networking::{Addresses, GetRecordError, NetworkError};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
 };
 use bls::{PublicKey, SecretKey};
-use libp2p::kad::Record;
 use tracing::{debug, error, trace};
 
+use crate::networking::NetworkError;
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
 
 /// Errors that can occur when dealing with Pointers
 #[derive(Debug, thiserror::Error)]
 pub enum PointerError {
-    #[error("Network error")]
-    Network(#[from] NetworkError),
+    #[error("Failed to put pointer: {0}")]
+    PutError(#[from] PutError),
+    #[error(transparent)]
+    GetError(#[from] GetError),
     #[error("Serialization error")]
     Serialization,
     #[error("Pointer record corrupt: {0}")]
@@ -49,34 +53,25 @@ pub enum PointerError {
 impl Client {
     /// Get a pointer from the network
     pub async fn pointer_get(&self, address: &PointerAddress) -> Result<Pointer, PointerError> {
-        let key = NetworkAddress::from(*address).to_record_key();
+        let key = NetworkAddress::from(*address);
         debug!("Fetching pointer from network at: {key:?}");
 
-        let get_cfg = self.config.pointer.get_cfg();
-        let record = self
+        let pointer = match self
             .network
-            .get_record_from_network(key.clone(), &get_cfg)
+            .get_record_with_retries(key.clone(), &self.config.pointer)
             .await
-            .inspect_err(|err| error!("Error fetching pointer: {err:?}"))?;
-        let header = RecordHeader::from_record(&record).map_err(|err| {
-            PointerError::Corrupt(format!(
-                "Failed to parse record header for pointer at {key:?}: {err:?}"
-            ))
-        })?;
-
-        let kind = header.kind;
-        if !matches!(kind, RecordKind::DataOnly(DataTypes::Pointer)) {
-            error!("Record kind mismatch: expected Pointer, got {kind:?}");
-            return Err(
-                NetworkError::RecordKindMismatch(RecordKind::DataOnly(DataTypes::Pointer)).into(),
-            );
+        {
+            Ok(Some(r)) => pointer_from_record(r)?,
+            Ok(None) => Err(GetError::RecordNotFound)?,
+            Err(NetworkError::SplitRecord(result_map)) => {
+                warn!("Pointer at {key:?} is split, trying resolution");
+                select_highest_pointer_version(result_map, key)?
+            }
+            Err(err) => {
+                error!("Error fetching pointer: {err:?}");
+                return Err(PointerError::GetError(err.into()));
+            }
         };
-
-        let pointer: Pointer = try_deserialize_record(&record).map_err(|err| {
-            PointerError::Corrupt(format!(
-                "Failed to parse record for pointer at {key:?}: {err:?}"
-            ))
-        })?;
 
         info!("Got pointer at address {address:?}: {pointer:?}");
         Self::pointer_verify(&pointer)?;
@@ -84,23 +79,25 @@ impl Client {
     }
 
     /// Check if a pointer exists on the network
-    pub async fn pointer_check_existance(
+    /// This method is much faster than [`Client::pointer_get`]
+    /// This may fail if called immediately after creating the pointer, as nodes sometimes take longer to store the pointer than this request takes to execute!
+    pub async fn pointer_check_existence(
         &self,
         address: &PointerAddress,
     ) -> Result<bool, PointerError> {
-        let key = NetworkAddress::from(*address).to_record_key();
-        debug!("Checking pointer existance at: {key:?}");
-        let get_cfg = self.config.pointer.verification_cfg();
+        let key = NetworkAddress::from(*address);
+        debug!("Checking pointer existence at: {key:?}");
+
         match self
             .network
-            .get_record_from_network(key.clone(), &get_cfg)
+            .get_record(key.clone(), self.config.pointer.verification_quorum)
             .await
         {
-            Ok(_) => Ok(true),
-            Err(NetworkError::GetRecordError(GetRecordError::SplitRecord { .. })) => Ok(true),
-            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => Ok(false),
-            Err(err) => Err(PointerError::Network(err))
-                .inspect_err(|err| error!("Error checking pointer existance: {err:?}")),
+            Ok(None) => Ok(false),
+            Ok(Some(_)) => Ok(true),
+            Err(NetworkError::SplitRecord(..)) => Ok(true),
+            Err(err) => Err(PointerError::GetError(GetError::Network(err)))
+                .inspect_err(|err| error!("Error checking pointer existence: {err:?}")),
         }
     }
 
@@ -142,16 +139,18 @@ impl Client {
                 (None, &AttoTokens::zero())
             }
         };
+
         let total_cost = *price;
 
-        let (record, payees) = if let Some(proof) = proof {
-            let payees = Some(
-                proof
-                    .payees()
-                    .iter()
-                    .map(|(peer_id, addrs)| (*peer_id, Addresses(addrs.clone())))
-                    .collect(),
-            );
+        let (record, target_nodes) = if let Some(proof) = proof {
+            let payees = proof
+                .payees()
+                .iter()
+                .map(|(peer_id, addrs)| PeerInfo {
+                    peer_id: *peer_id,
+                    addrs: addrs.clone(),
+                })
+                .collect();
             let record = Record {
                 key: NetworkAddress::from(address).to_record_key(),
                 value: try_serialize_record(
@@ -165,25 +164,42 @@ impl Client {
             };
             (record, payees)
         } else {
+            let net_addr = NetworkAddress::from(address);
             let record = Record {
-                key: NetworkAddress::from(address).to_record_key(),
+                key: net_addr.to_record_key(),
                 value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))
                     .map_err(|_| PointerError::Serialization)?
                     .to_vec(),
                 publisher: None,
                 expires: None,
             };
-            (record, None)
+            let target_nodes = self
+                .network
+                .get_closest_peers_with_retries(net_addr.clone())
+                .await
+                .map_err(|e| PutError::Network {
+                    address: net_addr,
+                    network_error: e,
+                    payment: None,
+                })?;
+            (record, target_nodes)
         };
 
         // store the pointer on the network
-        debug!("Storing pointer at address {address:?} to the network");
-        let put_cfg = self.config.pointer.put_cfg(payees);
+        debug!("Storing pointer at address {address:?} to the network on nodes {target_nodes:?}");
+
         self.network
-            .put_record(record, &put_cfg)
+            .put_record_with_retries(record, target_nodes, &self.config.pointer)
             .await
             .inspect_err(|err| {
                 error!("Failed to put record - pointer {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                PointerError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err,
+                    payment: Some(payment_proofs),
+                })
             })?;
 
         Ok((total_cost, address))
@@ -199,7 +215,7 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
         let address = PointerAddress::new(owner.public_key());
-        let already_exists = self.pointer_check_existance(&address).await?;
+        let already_exists = self.pointer_check_existence(&address).await?;
         if already_exists {
             return Err(PointerError::PointerAlreadyExists(address));
         }
@@ -222,14 +238,11 @@ impl Client {
         info!("Updating pointer at address {address:?} to {target:?}");
         let current = match self.pointer_get(&address).await {
             Ok(pointer) => Some(pointer),
-            Err(PointerError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            ))) => None,
-            Err(PointerError::Network(NetworkError::GetRecordError(
-                GetRecordError::SplitRecord { result_map },
-            ))) => result_map
+            Err(PointerError::GetError(GetError::Network(NetworkError::SplitRecord(
+                result_map,
+            )))) => result_map
                 .values()
-                .filter_map(|(record, _)| try_deserialize_record::<Pointer>(record).ok())
+                .filter_map(|record| try_deserialize_record::<Pointer>(record).ok())
                 .max_by_key(|pointer: &Pointer| pointer.counter()),
             Err(err) => {
                 return Err(err);
@@ -246,8 +259,9 @@ impl Client {
         };
 
         // prepare the record to be stored
+        let net_addr = NetworkAddress::from(address);
         let record = Record {
-            key: NetworkAddress::from(address).to_record_key(),
+            key: net_addr.to_record_key(),
             value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))
                 .map_err(|_| PointerError::Serialization)?
                 .to_vec(),
@@ -256,13 +270,29 @@ impl Client {
         };
 
         // store the pointer on the network
-        debug!("Updating pointer at address {address:?} to the network");
-        let put_cfg = self.config.pointer.put_cfg_specific(None, record.clone());
+        let target_nodes = self
+            .network
+            .get_closest_peers_with_retries(net_addr.clone())
+            .await
+            .map_err(|e| PutError::Network {
+                address: net_addr,
+                network_error: e,
+                payment: None,
+            })?;
+        debug!("Updating pointer at address {address:?} to the network on nodes {target_nodes:?}");
+
         self.network
-            .put_record(record, &put_cfg)
+            .put_record_with_retries(record, target_nodes, &self.config.pointer)
             .await
             .inspect_err(|err| {
                 error!("Failed to update pointer at address {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                PointerError::PutError(PutError::Network {
+                    address: NetworkAddress::from(address),
+                    network_error: err,
+                    payment: None,
+                })
             })?;
 
         Ok(())
@@ -287,4 +317,57 @@ impl Client {
         debug!("Calculated the cost to create pointer of {key:?} is {total_cost}");
         Ok(total_cost)
     }
+}
+
+/// Select the highest versioned pointer from a list of conflicting pointer records
+///
+/// If there are multiple conflicting pointers at the latest version, the first one is returned
+/// If there are no valid pointers, an error is returned
+fn select_highest_pointer_version(
+    result_map: HashMap<PeerId, Record>,
+    key: NetworkAddress,
+) -> Result<Pointer, PointerError> {
+    let highest_version = result_map
+        .into_iter()
+        .filter_map(|(peer, record)| match pointer_from_record(record) {
+            Ok(pointer) => Some(pointer),
+            Err(err) => {
+                warn!("Peer {peer:?} returned invalid pointer at {key} with error: {err}");
+                None
+            }
+        })
+        .max_by_key(|pointer| pointer.counter());
+
+    match highest_version {
+        Some(pointer) => Ok(pointer),
+        None => {
+            let msg = format!("Found multiple conflicting invalid pointers at {key}");
+            warn!("{msg}");
+            Err(PointerError::Corrupt(msg))
+        }
+    }
+}
+
+/// Deserialize a pointer from a record
+fn pointer_from_record(record: Record) -> Result<Pointer, PointerError> {
+    let key = &record.key;
+    let header = RecordHeader::from_record(&record).map_err(|err| {
+        PointerError::Corrupt(format!(
+            "Failed to parse record header for pointer at {key:?}: {err:?}"
+        ))
+    })?;
+
+    let kind = header.kind;
+    if !matches!(kind, RecordKind::DataOnly(DataTypes::Pointer)) {
+        error!("Record kind mismatch: expected Pointer, got {kind:?}");
+        return Err(GetError::RecordKindMismatch(RecordKind::DataOnly(DataTypes::Pointer)).into());
+    };
+
+    let pointer: Pointer = try_deserialize_record(&record).map_err(|err| {
+        PointerError::Corrupt(format!(
+            "Failed to parse record for pointer at {key:?}: {err:?}"
+        ))
+    })?;
+
+    Ok(pointer)
 }

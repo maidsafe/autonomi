@@ -6,12 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::access::cached_payments;
 use crate::actions::NetworkContext;
 use crate::exit_code::{upload_exit_code, ExitCodeError, IO_ERROR};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::payment::PaymentOption;
-use autonomi::ResponseQuorum;
+use autonomi::client::PutError;
+use autonomi::files::UploadError;
+use autonomi::networking::Quorum;
 use autonomi::{ClientOperatingStrategy, TransactionConfig};
 use color_eyre::eyre::{eyre, Context, Result};
 use color_eyre::Section;
@@ -39,13 +42,10 @@ pub async fn upload(
     file: &str,
     public: bool,
     network_context: NetworkContext,
-    optional_verification_quorum: Option<ResponseQuorum>,
     max_fee_per_gas: Option<u128>,
 ) -> Result<(), ExitCodeError> {
-    let mut config = ClientOperatingStrategy::new();
-    if let Some(verification_quorum) = optional_verification_quorum {
-        config.chunks.verification_quorum = verification_quorum;
-    }
+    let config = ClientOperatingStrategy::new();
+
     let mut client =
         crate::actions::connect_to_network_with_config(network_context, config).await?;
 
@@ -55,7 +55,13 @@ pub async fn upload(
         wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
     }
 
-    let payment = PaymentOption::Wallet(wallet);
+    let payment = if let Ok(Some(receipt)) = cached_payments::load_payment_for_file(file) {
+        println!("Using cached payment: no need to re-pay");
+        PaymentOption::Receipt(receipt)
+    } else {
+        PaymentOption::Wallet(wallet)
+    };
+
     let event_receiver = client.enable_client_events();
     let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
 
@@ -80,6 +86,17 @@ pub async fn upload(
                 local_addr = xor_name.to_hex();
                 local_addr.clone()
             }
+            Err(UploadError::PutError(PutError::Batch(upload_state))) => {
+                let res = cached_payments::save_payment(file, &upload_state);
+                println!("Cached payment to local disk for {file}: {res:?}");
+                let exit_code =
+                    upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
+                return Err((
+                    eyre!(UploadError::PutError(PutError::Batch(upload_state)))
+                        .wrap_err("Failed to upload file".to_string()),
+                    exit_code,
+                ));
+            }
             Err(err) => {
                 let exit_code = upload_exit_code(&err);
                 return Err((
@@ -94,6 +111,17 @@ pub async fn upload(
             Ok((_cost, private_data_access)) => {
                 local_addr = private_data_access.address();
                 private_data_access.to_hex()
+            }
+            Err(UploadError::PutError(PutError::Batch(upload_state))) => {
+                let res = crate::access::cached_payments::save_payment(file, &upload_state);
+                println!("Cached payment to local disk for {file}: {res:?}");
+                let exit_code =
+                    upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
+                return Err((
+                    eyre!(UploadError::PutError(PutError::Batch(upload_state)))
+                        .wrap_err("Failed to upload file".to_string()),
+                    exit_code,
+                ));
             }
             Err(err) => {
                 let exit_code = upload_exit_code(&err);
@@ -150,7 +178,7 @@ pub async fn download(
     addr: &str,
     dest_path: &str,
     network_context: NetworkContext,
-    quorum: Option<ResponseQuorum>,
+    quorum: Option<Quorum>,
 ) -> Result<(), ExitCodeError> {
     let mut config = ClientOperatingStrategy::new();
     if let Some(quorum) = quorum {
