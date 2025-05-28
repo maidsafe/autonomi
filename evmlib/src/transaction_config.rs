@@ -1,20 +1,17 @@
-const DEFAULT_MAX_FEE_PER_GAS: u128 = 200_000_000; // 0.2 Gwei
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct TransactionConfig {
-    pub max_fee_per_gas: u128,
+    pub max_fee_per_gas: MaxFeePerGas,
 }
 
-impl TransactionConfig {
-    pub fn new(max_fee_per_gas: u128) -> Self {
-        Self { max_fee_per_gas }
-    }
-}
-
-impl Default for TransactionConfig {
-    fn default() -> Self {
-        Self {
-            max_fee_per_gas: DEFAULT_MAX_FEE_PER_GAS,
-        }
-    }
+#[derive(Clone, Debug, Default)]
+pub enum MaxFeePerGas {
+    /// Use the current market price for fee per gas. WARNING: This can result in unexpected high gas fees!
+    #[default]
+    Auto,
+    /// Use the current market price for fee per gas, but with an upper limit.
+    LimitedAuto(u128),
+    /// Use no max fee per gas. WARNING: This can result in unexpected high gas fees!
+    Unlimited,
+    /// Use a custom max fee per gas in WEI.
+    Custom(u128),
 }

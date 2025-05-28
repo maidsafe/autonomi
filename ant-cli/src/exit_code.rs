@@ -21,6 +21,7 @@ pub const IO_ERROR: i32 = 12;
 const NETWORK_ERROR: i32 = 13;
 const PROTOCOL_ERROR: i32 = 14;
 const SELF_ENCRYPTION_ERROR: i32 = 15;
+pub const FEES_ERROR: i32 = 62;
 
 pub type ExitCodeError = (Report, i32);
 

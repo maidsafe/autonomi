@@ -27,7 +27,7 @@ use crate::{
     ScratchpadAddress,
 };
 
-use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
+use ant_evm::{MaxFeePerGas, PaymentQuote, QuotingMetrics, RewardsAddress, TransactionConfig};
 use ant_protocol::storage::DataTypes;
 use bls::{PublicKey, SecretKey};
 use libp2p::{Multiaddr, PeerId};
@@ -1887,6 +1887,87 @@ impl PyWallet {
     pub fn random_private_key() -> String {
         Wallet::random_private_key()
     }
+
+    /// Sets the transaction configuration for the wallet.
+    fn set_transaction_config(&mut self, config: PyTransactionConfig) -> PyResult<()> {
+        self.inner.set_transaction_config(config.into());
+        Ok(())
+    }
+}
+
+#[pyclass(name = "TransactionConfig")]
+#[derive(Clone, Debug)]
+pub struct PyTransactionConfig {
+    pub max_fee_per_gas: PyMaxFeePerGas,
+}
+
+#[pymethods]
+impl PyTransactionConfig {
+    fn __str__(&self) -> String {
+        format!(
+            "{:?}",
+            std::convert::Into::<TransactionConfig>::into(self.clone())
+        )
+    }
+}
+
+#[allow(clippy::from_over_into)]
+impl Into<TransactionConfig> for PyTransactionConfig {
+    fn into(self) -> TransactionConfig {
+        let max_fee_per_gas = match self.max_fee_per_gas {
+            PyMaxFeePerGas::Auto() => MaxFeePerGas::Auto,
+            PyMaxFeePerGas::LimitedAuto(limit) => MaxFeePerGas::LimitedAuto(limit),
+            PyMaxFeePerGas::Unlimited() => MaxFeePerGas::Unlimited,
+            PyMaxFeePerGas::Custom(limit) => MaxFeePerGas::Custom(limit),
+        };
+
+        TransactionConfig { max_fee_per_gas }
+    }
+}
+
+#[pyclass(name = "MaxFeePerGas")]
+#[derive(Clone, Debug)]
+pub enum PyMaxFeePerGas {
+    Auto(),
+    LimitedAuto(u128),
+    Unlimited(),
+    Custom(u128),
+}
+
+#[pymethods]
+impl PyMaxFeePerGas {
+    /// Use the current market price for fee per gas. WARNING: This can result in unexpected high gas fees!
+    #[staticmethod]
+    pub fn auto() -> Self {
+        Self::Auto()
+    }
+
+    /// Use the current market price for fee per gas, but with an upper limit.
+    #[staticmethod]
+    pub fn limited_auto(value: u128) -> Self {
+        Self::LimitedAuto(value)
+    }
+
+    /// Use no max fee per gas. WARNING: This can result in unexpected high gas fees!
+    #[staticmethod]
+    pub fn unlimited() -> Self {
+        Self::Unlimited()
+    }
+
+    /// Use a custom max fee per gas in WEI.
+    #[staticmethod]
+    pub fn custom(value: u128) -> Self {
+        Self::Custom(value)
+    }
+
+    pub fn __str__(&self) -> String {
+        match self {
+            Self::Auto() => "Auto".to_string(),
+            Self::LimitedAuto(val) => format!("LimitedAuto({val})"),
+            Self::Unlimited() => "Unlimited".to_string(),
+            Self::Custom(val) => format!("Custom({val})"),
+        }
+    }
 }
 
 /// Options for making payments on the network.
@@ -2947,6 +3028,8 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyReceipt>()?;
     m.add_class::<PyStoreQuote>()?;
     m.add_class::<PyWallet>()?;
+    m.add_class::<PyTransactionConfig>()?;
+    m.add_class::<PyMaxFeePerGas>()?;
     m.add_class::<PyPaymentOption>()?;
     m.add_class::<PyVaultSecretKey>()?;
     m.add_class::<PyUserData>()?;
