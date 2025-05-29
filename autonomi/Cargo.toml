@@ -57,6 +57,7 @@ xor_name = "5.0.0"
 [dev-dependencies]
 alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 ant-logging = { path = "../ant-logging", version = "0.2.49" }
+ant-node = { path = "../ant-node", version = "0.4.0" }
 evmlib = { path = "../evmlib", version = "0.4.0" }
 eyre = "0.6.5"
 serial_test = "3.2.0"
