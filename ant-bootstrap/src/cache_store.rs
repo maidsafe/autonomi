@@ -154,12 +154,15 @@ impl BootstrapCacheStore {
             config.cache_file_path = bootstrap_cache_path;
         }
 
-        let store = Self::new(config)?;
+        let mut store = Self::new(config)?;
 
         // If it is the first node, clear the cache.
         if init_peers_config.first {
             info!("First node in network, writing empty cache to disk");
             store.write()?;
+        } else {
+            info!("Flushing cache to disk on init.");
+            store.sync_and_flush_to_disk()?;
         }
 
         Ok(store)
@@ -239,6 +242,11 @@ impl BootstrapCacheStore {
             Some(Protocol::P2p(id)) => id,
             _ => return,
         };
+
+        if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
+            debug!("Not adding relay address to the cache: {addr}");
+            return;
+        }
 
         // Check if we already have this peer
         if let Some(bootstrap_addrs) = self.data.peers.get_mut(&peer_id) {
