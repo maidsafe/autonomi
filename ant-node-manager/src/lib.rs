@@ -46,7 +46,10 @@ use ant_service_management::{
     UpgradeResult,
 };
 use colored::Colorize;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use semver::Version;
+
 use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
@@ -384,7 +387,6 @@ pub async fn status_report(
         node_registry,
         service_control,
         !output_json,
-        true,
         is_local_network,
     )
     .await?;
@@ -552,21 +554,34 @@ pub async fn status_report(
 pub async fn refresh_node_registry(
     node_registry: &mut NodeRegistry,
     service_control: &dyn ServiceControl,
-    print_refresh_message: bool,
     full_refresh: bool,
     is_local_network: bool,
 ) -> Result<()> {
     // This message is useful for users, but needs to be suppressed when a JSON output is
     // requested.
-    if print_refresh_message {
-        println!("Refreshing the node registry...");
-    }
+
     info!("Refreshing the node registry");
 
+    let total_nodes = node_registry.nodes.len() as u64;
+    // Create a progress bar
+    let pb = ProgressBar::new(total_nodes);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{msg} {spinner:.green} [{bar:40.cyan/blue}] ({percent}%)")
+            .unwrap_or_else(|_e| {
+                // Fallback to default style if template fails
+                ProgressStyle::default_bar()
+            })
+            .progress_chars("#>-"),
+    );
+    pb.set_message("Refreshing the node registry");
+
+    // Main processing loop
     for node in &mut node_registry.nodes {
         // The `status` command can run before a node is started and therefore before its wallet
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
+
         node.reward_balance = None;
 
         let mut rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
@@ -631,7 +646,12 @@ pub async fn refresh_node_registry(
                 }
             }
         }
+        pb.inc(1);
     }
+    pb.finish_and_clear();
+
+    info!("Node registry refresh complete!");
+
     Ok(())
 }
 
@@ -6212,7 +6232,7 @@ network_id: None,
         match result {
             Ok(_) => panic!("This test should result in an error"),
             Err(e) => assert_eq!(
-                "The service(s) is already running: [\"antnode1\"]",
+                "Unable to remove a running service [\"antnode1\"], stop this service first before removing",
                 e.to_string()
             ),
         }
