@@ -209,7 +209,7 @@ impl Client {
                 error!("Failed to put record - chunk {address:?} to the network: {err}")
             })
             .map_err(|err| PutError::Network {
-                address: address.clone(),
+                address: Box::new(address.clone()),
                 network_error: err.clone(),
                 payment: Some(payment_proofs),
             })?;
@@ -351,7 +351,7 @@ impl Client {
             .map_err(|err| {
                 let receipt = HashMap::from_iter([(*chunk.name(), (payment, price))]);
                 PutError::Network {
-                    address: NetworkAddress::from(*chunk.address()),
+                    address: Box::new(NetworkAddress::from(*chunk.address())),
                     network_error: err,
                     payment: Some(receipt),
                 }

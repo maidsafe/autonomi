@@ -15,6 +15,7 @@ use autonomi::{
         vault::UserData,
     },
     data::DataAddress,
+    PointerAddress, ScratchpadAddress,
 };
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -36,12 +37,20 @@ pub fn get_local_user_data() -> Result<UserData> {
     let register_key = super::keys::get_register_signing_key()
         .map(|k| k.to_hex())
         .ok();
+    let scratchpad_key = super::keys::get_scratchpad_general_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
+    let pointer_key = super::keys::get_pointer_general_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
 
     let user_data = UserData {
         file_archives,
         private_file_archives,
         register_addresses: registers,
         register_key,
+        scratchpad_key,
+        pointer_key,
     };
     Ok(user_data)
 }
@@ -130,23 +139,48 @@ pub fn get_local_public_file_archives() -> Result<HashMap<ArchiveAddress, String
 }
 
 pub fn write_local_user_data(user_data: &UserData) -> Result<()> {
-    for (archive, name) in user_data.file_archives.iter() {
+    let UserData {
+        file_archives,
+        private_file_archives,
+        register_addresses,
+        register_key,
+        scratchpad_key,
+        pointer_key,
+    } = user_data;
+
+    for (archive, name) in file_archives.iter() {
         write_local_public_file_archive(archive.to_hex(), name)?;
     }
 
-    for (archive, name) in user_data.private_file_archives.iter() {
+    for (archive, name) in private_file_archives.iter() {
         write_local_private_file_archive(archive.to_hex(), archive.address(), name)?;
     }
 
-    for (register, name) in user_data.register_addresses.iter() {
+    for (register, name) in register_addresses.iter() {
         write_local_register(register, name)?;
     }
 
-    if let Some(register_key) = &user_data.register_key {
+    if let Some(register_key) = &register_key {
         let key = super::keys::parse_register_signing_key(register_key)
             .wrap_err("Failed to parse register signing key while writing to local user data")?;
         super::keys::create_register_signing_key_file(key).wrap_err(
             "Failed to create register signing key file while writing to local user data",
+        )?;
+    }
+
+    if let Some(scratchpad_key) = &scratchpad_key {
+        let key = super::keys::parse_scratchpad_signing_key(scratchpad_key)
+            .wrap_err("Failed to parse scratchpad signing key while writing to local user data")?;
+        super::keys::create_scratchpad_signing_key_file(key).wrap_err(
+            "Failed to create scratchpad signing key file while writing to local user data",
+        )?;
+    }
+
+    if let Some(pointer_key) = &pointer_key {
+        let key = super::keys::parse_pointer_signing_key(pointer_key)
+            .wrap_err("Failed to parse pointer signing key while writing to local user data")?;
+        super::keys::create_pointer_signing_key_file(key).wrap_err(
+            "Failed to create pointer signing key file while writing to local user data",
         )?;
     }
 
@@ -187,4 +221,60 @@ pub fn write_local_private_file_archive(
     })?;
     std::fs::write(private_file_archives_path.join(file_name), content)?;
     Ok(())
+}
+
+pub fn write_local_scratchpad(address: ScratchpadAddress, name: &str) -> Result<()> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpads_path = user_data_path.join("scratchpads");
+    std::fs::create_dir_all(&scratchpads_path)?;
+    std::fs::write(scratchpads_path.join(name), address.to_hex())?;
+    Ok(())
+}
+
+pub fn get_local_scratchpads() -> Result<HashMap<String, String>> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpads_path = user_data_path.join("scratchpads");
+    std::fs::create_dir_all(&scratchpads_path)?;
+
+    let mut scratchpads = HashMap::new();
+    for entry in walkdir::WalkDir::new(scratchpads_path)
+        .min_depth(1)
+        .max_depth(1)
+    {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy();
+        let scratchpad_address = std::fs::read_to_string(entry.path())?;
+        scratchpads.insert(file_name.to_string(), scratchpad_address);
+    }
+    Ok(scratchpads)
+}
+
+pub fn write_local_pointer(address: PointerAddress, name: &str) -> Result<()> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let pointers_path = user_data_path.join("pointers");
+    std::fs::create_dir_all(&pointers_path)?;
+    std::fs::write(pointers_path.join(name), address.to_hex())?;
+    Ok(())
+}
+
+pub fn get_local_pointers() -> Result<HashMap<String, String>> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let pointers_path = user_data_path.join("pointers");
+    std::fs::create_dir_all(&pointers_path)?;
+
+    let mut pointers = HashMap::new();
+    for entry in walkdir::WalkDir::new(pointers_path)
+        .min_depth(1)
+        .max_depth(1)
+    {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy();
+        let pointer_address = std::fs::read_to_string(entry.path())?;
+        pointers.insert(file_name.to_string(), pointer_address);
+    }
+    Ok(pointers)
 }

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::storage::ScratchpadAddress;
+use ant_protocol::storage::{PointerTarget, ScratchpadAddress};
 use self_encryption::DataMap;
 
 use crate::{
@@ -198,6 +198,84 @@ impl Client {
         }
 
         Err(AnalysisError::UnrecognizedInput)
+    }
+
+    /// Analyze an address and return the address type (Chunk, Pointer, GraphEntry, Scratchpad)
+    pub async fn analyze_address_type(
+        &self,
+        address: &str,
+        verbose: bool,
+    ) -> Result<PointerTarget, AnalysisError> {
+        macro_rules! println_if_verbose {
+            ($($arg:tt)*) => {
+                if verbose {
+                    println!($($arg)*);
+                }
+            };
+        }
+        let hex_addr = address.trim_start_matches("0x");
+
+        // data addresses
+        let maybe_xorname = ChunkAddress::from_hex(address).ok();
+        if let Some(chunk_addr) = maybe_xorname {
+            println_if_verbose!("Identified as a Chunk address...");
+            return Ok(PointerTarget::ChunkAddress(chunk_addr));
+        }
+
+        // public keys
+        let maybe_public_key = PublicKey::from_hex(hex_addr).ok();
+        if let Some(public_key) = maybe_public_key {
+            println_if_verbose!("Identified as a bls Public Key, might be a key addressed type...");
+            return analyze_public_key_type(public_key, self, verbose).await;
+        }
+
+        Err(AnalysisError::UnrecognizedInput)
+    }
+}
+
+async fn analyze_public_key_type(
+    public_key: PublicKey,
+    client: &Client,
+    verbose: bool,
+) -> Result<PointerTarget, AnalysisError> {
+    macro_rules! println_if_verbose {
+        ($($arg:tt)*) => {
+            if verbose {
+                println!($($arg)*);
+            }
+        };
+    }
+
+    let graph_entry_address = GraphEntryAddress::new(public_key);
+    let pointer_address = PointerAddress::new(public_key);
+    let scratchpad_address = ScratchpadAddress::new(public_key);
+
+    let graph_entry_res = client.graph_entry_get(&graph_entry_address);
+    let pointer_res = client.pointer_get(&pointer_address);
+    let scratchpad_res = client.scratchpad_get(&scratchpad_address);
+
+    let (maybe_graph_entry, maybe_pointer, maybe_scratchpad) =
+        tokio::join!(graph_entry_res, pointer_res, scratchpad_res);
+
+    match (maybe_graph_entry, maybe_pointer, maybe_scratchpad) {
+        (Ok(_graph_entry), _, _) => {
+            println_if_verbose!("Identified GraphEntry...");
+            Ok(PointerTarget::GraphEntryAddress(graph_entry_address))
+        }
+        (_, Ok(_pointer), _) => {
+            println_if_verbose!("Identified Pointer...");
+            Ok(PointerTarget::PointerAddress(pointer_address))
+        }
+        (_, _, Ok(_scratchpad)) => {
+            println_if_verbose!("Identified Scratchpad...");
+            Ok(PointerTarget::ScratchpadAddress(scratchpad_address))
+        }
+        (Err(e1), Err(e2), Err(e3)) => {
+            println_if_verbose!("Failed to get graph entry: {e1}");
+            println_if_verbose!("Failed to get pointer: {e2}");
+            println_if_verbose!("Failed to get scratchpad: {e3}");
+            Err(AnalysisError::FailedGet)
+        }
     }
 }
 

@@ -48,7 +48,7 @@ impl ChunkBatchUploadState {
                 network_error,
                 payment,
             } => {
-                let chunk_addr = match address {
+                let chunk_addr = match *address {
                     NetworkAddress::ChunkAddress(chunk_addr) => chunk_addr,
                     _ => {
                         error!("Skip unexpected non-chunk address: {address:?}");

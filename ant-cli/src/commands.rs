@@ -8,7 +8,9 @@
 
 mod analyze;
 mod file;
+mod pointer;
 mod register;
+mod scratchpad;
 mod vault;
 mod wallet;
 
@@ -17,6 +19,8 @@ use crate::opt::{NetworkId, Opt};
 use autonomi::networking::Quorum;
 use clap::{error::ErrorKind, CommandFactory as _, Subcommand};
 use color_eyre::Result;
+use pointer::parse_target_data_type;
+use pointer::TargetDataType;
 use std::num::NonZeroUsize;
 
 #[derive(Subcommand, Debug)]
@@ -37,6 +41,18 @@ pub enum SubCmd {
     Vault {
         #[command(subcommand)]
         command: VaultCmd,
+    },
+
+    /// Operations related to scratchpad management.
+    Scratchpad {
+        #[command(subcommand)]
+        command: ScratchpadCmd,
+    },
+
+    /// Operations related to pointer management.
+    Pointer {
+        #[command(subcommand)]
+        command: PointerCmd,
     },
 
     /// Operations related to wallet management.
@@ -209,6 +225,137 @@ pub enum VaultCmd {
 }
 
 #[derive(Subcommand, Debug)]
+pub enum ScratchpadCmd {
+    /// Generate a new general scratchpad key from which all your scratchpad keys can be derived (using their names).
+    GenerateKey {
+        /// Overwrite existing key if it exists
+        /// Warning: overwriting the existing key will result in loss of access to any existing scratchpads
+        #[arg(short, long)]
+        overwrite: bool,
+    },
+
+    /// Estimate cost to create a scratchpad.
+    Cost {
+        /// The name of the scratchpad.
+        name: String,
+    },
+
+    /// Create a new scratchpad.
+    Create {
+        /// Optional: Specify the maximum fee per gas in u128.
+        #[arg(long)]
+        max_fee_per_gas: Option<u128>,
+        /// The name of the scratchpad.
+        name: String,
+        /// The data to store in the scratchpad (Up to 4MB)
+        data: String,
+    },
+
+    /// Share a scratchpad secret key with someone else.
+    /// Sharing this key means that the other party will have permanent read and write access to the scratchpad.
+    Share {
+        /// The name of the scratchpad.
+        name: String,
+    },
+
+    /// Get the contents of an existing scratchpad from the network.
+    Get {
+        /// The name of the scratchpad.
+        name: String,
+        /// Indicate that this is an external scratchpad secret key.
+        /// (Use this when interacting with a scratchpad shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+        /// Display the data as a hex string instead of raw bytes
+        #[arg(long)]
+        hex: bool,
+    },
+
+    /// Edit the contents of an existing scratchpad.
+    Edit {
+        /// The name of the scratchpad.
+        name: String,
+        /// Indicate that this is an external scratchpad secret key.
+        /// (Use this when interacting with a scratchpad shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+        /// The new data to store in the scratchpad (Up to 4MB)
+        data: String,
+    },
+
+    /// List owned scratchpads
+    List,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum PointerCmd {
+    /// Generate a new general pointer key from which all your pointer keys can be derived (using their names).
+    GenerateKey {
+        /// Overwrite existing key if it exists
+        /// Warning: overwriting the existing key will result in loss of access to any existing pointers
+        #[arg(short, long)]
+        overwrite: bool,
+    },
+
+    /// Estimate cost to create a pointer.
+    Cost {
+        /// The name of the pointer.
+        name: String,
+    },
+
+    /// Create a new pointer.
+    Create {
+        /// The name of the pointer.
+        name: String,
+        /// The target address to point to
+        target: String,
+        /// The data type of the target (valid values: graph, scratchpad, pointer, chunk, auto)
+        /// If not specified (or 'auto'), the type will be automatically detected by fetching the data from the network
+        #[arg(value_parser = parse_target_data_type, default_value = "auto", long, short)]
+        target_data_type: TargetDataType,
+        /// Optional: Specify the maximum fee per gas in u128.
+        #[arg(long)]
+        max_fee_per_gas: Option<u128>,
+    },
+
+    /// Share a pointer secret key with someone else.
+    /// Sharing this key means that the other party will have permanent read and write access to the pointer.
+    Share {
+        /// The name of the pointer.
+        name: String,
+    },
+
+    /// Get the target of an existing pointer from the network.
+    Get {
+        /// The name of the pointer.
+        name: String,
+        /// Indicate that this is an external pointer secret key.
+        /// (Use this when interacting with a pointer shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+    },
+
+    /// Edit the target of an existing pointer.
+    Edit {
+        /// The name of the pointer.
+        name: String,
+        /// The new target address to point to
+        target: String,
+        /// The data type of the target (valid values: graph, scratchpad, pointer, chunk, auto)
+        /// If not specified (or 'auto'), the type will be automatically detected by fetching the data from the network
+        #[arg(value_parser = parse_target_data_type, default_value = "auto", long, short)]
+        target_data_type: TargetDataType,
+        /// Indicate that this is an external pointer secret key.
+        /// (Use this when interacting with a pointer shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
+    },
+
+    /// List owned pointers
+    List,
+}
+
+#[derive(Subcommand, Debug)]
 pub enum WalletCmd {
     /// Create a wallet.
     Create {
@@ -314,6 +461,57 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             }
             VaultCmd::Load => vault::load(network_context).await,
             VaultCmd::Sync { force } => vault::sync(force, network_context).await,
+        },
+        Some(SubCmd::Scratchpad { command }) => match command {
+            ScratchpadCmd::GenerateKey { overwrite } => scratchpad::generate_key(overwrite),
+            ScratchpadCmd::Cost { name } => scratchpad::cost(name, network_context).await,
+            ScratchpadCmd::Create {
+                max_fee_per_gas,
+                name,
+                data,
+            } => scratchpad::create(network_context, name, data, max_fee_per_gas).await,
+            ScratchpadCmd::Share { name } => scratchpad::share(name),
+            ScratchpadCmd::Get {
+                name,
+                secret_key,
+                hex,
+            } => scratchpad::get(network_context, name, secret_key, hex).await,
+            ScratchpadCmd::Edit {
+                name,
+                secret_key,
+                data,
+            } => scratchpad::edit(network_context, name, secret_key, data).await,
+            ScratchpadCmd::List => scratchpad::list(),
+        },
+        Some(SubCmd::Pointer { command }) => match command {
+            PointerCmd::GenerateKey { overwrite } => pointer::generate_key(overwrite),
+            PointerCmd::Cost { name } => pointer::cost(name, network_context).await,
+            PointerCmd::Create {
+                name,
+                target,
+                target_data_type,
+                max_fee_per_gas,
+            } => {
+                pointer::create(
+                    network_context,
+                    name,
+                    target,
+                    target_data_type,
+                    max_fee_per_gas,
+                )
+                .await
+            }
+            PointerCmd::Share { name } => pointer::share(name),
+            PointerCmd::Get { name, secret_key } => {
+                pointer::get(network_context, name, secret_key).await
+            }
+            PointerCmd::Edit {
+                name,
+                target,
+                target_data_type,
+                secret_key,
+            } => pointer::edit(network_context, name, secret_key, target, target_data_type).await,
+            PointerCmd::List => pointer::list(),
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {

@@ -136,7 +136,7 @@ pub enum PutError {
     PayeesMissing,
     #[error("A network error occurred for {address}: {network_error}")]
     Network {
-        address: NetworkAddress,
+        address: Box<NetworkAddress>,
         network_error: NetworkError,
         /// if a payment was made, it will be returned here so it can be reused
         payment: Option<Receipt>,

@@ -26,6 +26,8 @@ pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =
     LazyLock::new(|| app_name_to_vault_content_type("UserData"));
 
 pub type RegisterSecretKeyHex = String;
+pub type ScratchpadSecretKeyHex = String;
+pub type PointerSecretKeyHex = String;
 
 /// UserData is stored in Vaults and contains most of a user's private data:
 /// It allows users to keep track of only the key to their User Data Vault
@@ -43,6 +45,14 @@ pub struct UserData {
     #[serde(default)]
     // This makes the field optional to support old versions without that field
     pub register_key: Option<RegisterSecretKeyHex>,
+    /// Scratchpads key
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub scratchpad_key: Option<ScratchpadSecretKeyHex>,
+    /// Pointer key
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub pointer_key: Option<PointerSecretKeyHex>,
 }
 
 /// Errors that can occur during the get operation.
@@ -62,20 +72,6 @@ impl UserData {
     /// Create a new empty UserData
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Set the register key
-    /// Returns Some(old register key) if it was already set and was different from the new one
-    pub fn set_register_key(
-        &mut self,
-        register_key: RegisterSecretKeyHex,
-    ) -> Option<RegisterSecretKeyHex> {
-        let mut old_key = self.register_key.clone();
-        if old_key == Some(register_key.clone()) {
-            old_key = None;
-        }
-        self.register_key = Some(register_key);
-        old_key
     }
 
     /// Add a register. Returning `Option::Some` with the old name if the register was already in the set.
@@ -246,6 +242,8 @@ mod tests {
             private_file_archives: v1_data.private_file_archives.clone(),
             register_addresses: v1_data.register_addresses.clone(),
             register_key: Some("test_key".to_string()),
+            scratchpad_key: Some("test_scratchpad_key".to_string()),
+            pointer_key: Some("test_pointer_key".to_string()),
         };
 
         let serialized = rmp_serde::to_vec(&current_data).unwrap();

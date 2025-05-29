@@ -8,6 +8,7 @@
 
 use crate::actions::NetworkContext;
 use crate::wallet::load_wallet;
+use autonomi::vault::UserData;
 use autonomi::TransactionConfig;
 use color_eyre::eyre::eyre;
 use color_eyre::eyre::Context;
@@ -82,20 +83,7 @@ pub async fn sync(force: bool, network_context: NetworkContext) -> Result<()> {
             .wrap_err("Failed to fetch vault from network")
             .with_suggestion(|| "Make sure you have already created a vault on the network")?;
 
-        // prevent loss of local register key if it differs from one in the vault
-        let net_register_key = net_user_data.register_key.clone();
-        let local_register_key = crate::access::keys::get_register_signing_key()
-            .map(|k| k.to_hex())
-            .ok();
-        if local_register_key.is_some()
-            && net_register_key.is_some()
-            && net_register_key != local_register_key
-        {
-            return Err(eyre!("The register key in the vault does not match the local register key, aborting sync to prevent loss of current register key")
-                .with_suggestion(|| "You can overwrite the data in the vault with the local data by providing the `force` flag")
-                .with_suggestion(|| "Or you can overwrite the local data with the data in the vault by using the `load` command")
-            );
-        }
+        prevent_loss_of_keys(&net_user_data)?;
 
         println!("Syncing vault with local user data...");
         crate::user_data::write_local_user_data(&net_user_data)?;
@@ -111,6 +99,65 @@ pub async fn sync(force: bool, network_context: NetworkContext) -> Result<()> {
     println!("✅ Successfully synced vault");
     println!("Vault contains:");
     local_user_data.display_stats();
+    Ok(())
+}
+
+fn prevent_loss_of_keys(net_user_data: &UserData) -> Result<()> {
+    let UserData {
+        register_key,
+        scratchpad_key,
+        pointer_key,
+        file_archives: _,
+        private_file_archives: _,
+        register_addresses: _,
+    } = net_user_data;
+
+    let mut endangered_key_types = Vec::new();
+
+    // check local register key if it differs from one in the vault
+    let net_register_key = register_key.clone();
+    let local_register_key = crate::access::keys::get_register_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
+    if local_register_key.is_some()
+        && net_register_key.is_some()
+        && net_register_key != local_register_key
+    {
+        endangered_key_types.push("register key".to_string());
+    }
+
+    // check local scratchpad key if it differs from one in the vault
+    let net_scratchpad_key = scratchpad_key.clone();
+    let local_scratchpad_key = crate::access::keys::get_scratchpad_general_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
+    if local_scratchpad_key.is_some()
+        && net_scratchpad_key.is_some()
+        && net_scratchpad_key != local_scratchpad_key
+    {
+        endangered_key_types.push("scratchpad key".to_string());
+    }
+
+    // check local pointer key if it differs from one in the vault
+    let net_pointer_key = pointer_key.clone();
+    let local_pointer_key = crate::access::keys::get_pointer_general_signing_key()
+        .map(|k| k.to_hex())
+        .ok();
+    if local_pointer_key.is_some()
+        && net_pointer_key.is_some()
+        && net_pointer_key != local_pointer_key
+    {
+        endangered_key_types.push("pointer key".to_string());
+    }
+
+    if !endangered_key_types.is_empty() {
+        let endangered_key_types = endangered_key_types.join(", ");
+        return Err(eyre!("The {endangered_key_types} in the vault do not match the local {endangered_key_types}, aborting sync to prevent loss of current keys")
+            .with_suggestion(|| "You can overwrite the data in the vault with the local data by providing the `force` flag")
+            .with_suggestion(|| "Or you can overwrite the local data with the data in the vault by using the `load` command")
+        );
+    }
+
     Ok(())
 }
 
