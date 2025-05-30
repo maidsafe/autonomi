@@ -84,7 +84,7 @@ pub fn export() -> Result<()> {
 pub async fn balance(network_context: NetworkContext) -> Result<()> {
     let network = get_evm_network(
         network_context.peers.local,
-        Some(network_context.network_id as u8),
+        Some(network_context.network_id.as_u8()),
     )?;
     let wallet = crate::wallet::load_wallet(&network)?;
 

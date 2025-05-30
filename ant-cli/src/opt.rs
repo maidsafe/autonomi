@@ -15,31 +15,62 @@ use clap::Parser;
 use color_eyre::Result;
 use std::time::Duration;
 
+pub(crate) const LOCAL_NETWORK_ID: u8 = 0;
+pub(crate) const MAIN_NETWORK_ID: u8 = 1;
+pub(crate) const ALPHA_NETWORK_ID: u8 = 2;
+
 // Please do not remove the blank lines in these doc comments.
 // They are used for inserting line breaks when the help menu is rendered in the UI.
 
-#[derive(Parser, Clone, Copy, Debug)]
-#[repr(u8)]
-pub enum NetworkId {
-    /// Local Network
-    Local = 0,
-    /// Mainnet
-    Main = 1,
-    /// Alpha Network
-    Alpha = 2,
-    /// Custom Network (obtained through environment variables)
-    Custom = 3,
+/// Network identifier for selecting which network to connect to.
+///
+/// Predefined networks have reserved IDs:
+/// - 0: Local Network
+/// - 1: Mainnet
+/// - 2: Alpha Network
+///
+/// Custom networks can use any ID from 3 to 255.
+#[derive(Debug, Clone, Copy)]
+pub struct NetworkId {
+    id: u8,
 }
 
 impl NetworkId {
+    /// Create a new NetworkId with the specified ID.
+    pub fn new(id: u8) -> Self {
+        Self { id }
+    }
+
+    /// Create a new NetworkId for the local network (ID 0).
+    pub fn local() -> Self {
+        Self::new(LOCAL_NETWORK_ID)
+    }
+
+    /// Create a new NetworkId for the alpha network (ID 2).
+    pub fn alpha() -> Self {
+        Self::new(ALPHA_NETWORK_ID)
+    }
+
+    /// Get the raw ID value.
+    pub fn as_u8(&self) -> u8 {
+        self.id
+    }
+
+    /// Get the EVM network corresponding to this network ID.
     #[allow(dead_code)]
     pub fn evm_network(&self, local: bool) -> Result<EvmNetwork> {
-        match self {
-            NetworkId::Local => Ok(EvmNetwork::new(true)?),
-            NetworkId::Main => Ok(EvmNetwork::default()),
-            NetworkId::Alpha => Ok(EvmNetwork::ArbitrumSepoliaTest),
-            NetworkId::Custom => Ok(get_evm_network(local, Some(*self as u8))?),
+        match self.id {
+            0 => Ok(EvmNetwork::new(true)?),
+            1 => Ok(EvmNetwork::default()),
+            2 => Ok(EvmNetwork::ArbitrumSepoliaTest),
+            _ => Ok(get_evm_network(local, Some(self.id))?),
         }
+    }
+}
+
+impl std::fmt::Display for NetworkId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id)
     }
 }
 
@@ -47,13 +78,10 @@ impl std::str::FromStr for NetworkId {
     type Err = color_eyre::eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "0" => Ok(NetworkId::Local),
-            "1" => Ok(NetworkId::Main),
-            "2" => Ok(NetworkId::Alpha),
-            "3" => Ok(NetworkId::Custom),
-            _ => Err(color_eyre::eyre::eyre!(
-                "Invalid network ID. Valid values are 0, 1, 2 or 3"
+        match s.parse::<u8>() {
+            Ok(id) => Ok(NetworkId::new(id)),
+            Err(_) => Err(color_eyre::eyre::eyre!(
+                "Invalid network ID: must be a number from 0-255"
             )),
         }
     }
@@ -108,7 +136,7 @@ pub(crate) struct Opt {
     ///  - 0: Local Network
     ///  - 1: Mainnet (default)
     ///  - 2: Alpha Network
-    ///  - 3: Custom Network (obtained through environment variables and other network config flags)
+    ///  - 3-255: Custom Networks (obtained through environment variables and other network config flags)
     #[clap(long, verbatim_doc_comment, default_value = "1")]
     pub network_id: NetworkId,
 

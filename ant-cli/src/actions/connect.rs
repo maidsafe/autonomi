@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::exit_code::{connect_error_exit_code, evm_util_error_exit_code, ExitCodeError};
-use crate::opt::NetworkId;
+use crate::opt::{NetworkId, ALPHA_NETWORK_ID, LOCAL_NETWORK_ID, MAIN_NETWORK_ID};
 use autonomi::client::config::ClientOperatingStrategy;
 use autonomi::{get_evm_network, Client, ClientConfig, InitialPeersConfig};
 use color_eyre::eyre::eyre;
@@ -39,28 +39,28 @@ pub async fn connect_to_network_with_config(
 ) -> Result<Client, ExitCodeError> {
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(120));
-    progress_bar.set_message("Connecting to The Autonomi Network...");
+    progress_bar.set_message("Connecting to Autonomi...");
     let new_style = progress_bar.style().tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈🔗");
     progress_bar.set_style(new_style);
 
-    let res = match network_context.network_id {
-        NetworkId::Local => {
-            progress_bar.set_message("Connecting to a local Autonomi Network...");
+    let res = match network_context.network_id.as_u8() {
+        LOCAL_NETWORK_ID => {
+            progress_bar.set_message("Connecting to a local Autonomi network...");
             Client::init_local().await
         }
-        NetworkId::Main => {
-            progress_bar.set_message("Connecting to The Autonomi Network...");
+        MAIN_NETWORK_ID => {
+            progress_bar.set_message("Connecting to Autonomi...");
             Client::init().await
         }
-        NetworkId::Alpha => {
-            progress_bar.set_message("Connecting to the Alpha Autonomi Network...");
+        ALPHA_NETWORK_ID => {
+            progress_bar.set_message("Connecting to the alpha Autonomi network...");
             Client::init_alpha().await
         }
-        NetworkId::Custom => {
-            progress_bar.set_message("Connecting to a custom Autonomi Network...");
+        _ => {
+            progress_bar.set_message("Connecting to a custom Autonomi network...");
             let evm_network = get_evm_network(
                 network_context.peers.local,
-                Some(network_context.network_id as u8),
+                Some(network_context.network_id.as_u8()),
             )
             .map_err(|err| {
                 let exit_code = evm_util_error_exit_code(&err);
@@ -71,7 +71,7 @@ pub async fn connect_to_network_with_config(
                 init_peers_config: network_context.peers,
                 evm_network,
                 strategy: operating_strategy.clone(),
-                network_id: Some(network_context.network_id as u8),
+                network_id: Some(network_context.network_id.as_u8()),
             };
 
             Client::init_with_config(config).await
@@ -80,9 +80,9 @@ pub async fn connect_to_network_with_config(
 
     match res {
         Ok(client) => {
-            info!("Connected to the Network");
+            info!("Connected to the network");
             progress_bar.finish_with_message(format!(
-                "Connected to the {:?} Network",
+                "Connected to the {:?} network",
                 network_context.network_id
             ));
             let client = client.with_strategy(operating_strategy);
@@ -91,7 +91,7 @@ pub async fn connect_to_network_with_config(
         Err(e) => {
             error!("Failed to connect to the network: {e}");
             progress_bar.finish_with_message(format!(
-                "Failed to connect to the {:?} Network",
+                "Failed to connect to the {:?} network",
                 network_context.network_id
             ));
             let exit_code = connect_error_exit_code(&e);

@@ -243,7 +243,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
     let cmd = opt.command;
 
     let network_context = if opt.alpha {
-        NetworkContext::new(opt.peers, NetworkId::Alpha)
+        NetworkContext::new(opt.peers, NetworkId::alpha())
     } else {
         NetworkContext::new(opt.peers, opt.network_id)
     };

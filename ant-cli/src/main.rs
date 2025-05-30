@@ -27,8 +27,7 @@ use color_eyre::Result;
 use ant_logging::metrics::init_metrics;
 use ant_logging::{LogBuilder, LogFormat, ReloadHandle, WorkerGuard};
 use autonomi::version;
-use opt::NetworkId;
-use opt::Opt;
+use opt::{NetworkId, Opt};
 use tracing::Level;
 
 #[tokio::main]
@@ -72,9 +71,7 @@ async fn main() -> Result<()> {
     let _log_guards = init_logging_and_metrics(&opt)?;
     if opt.peers.local {
         tokio::spawn(init_metrics(std::process::id()));
-
-        // --local flag overrides the network ID
-        opt.network_id = NetworkId::Local;
+        opt.network_id = NetworkId::local();
     }
 
     info!("\"{}\"", std::env::args().collect::<Vec<_>>().join(" "));
