@@ -209,7 +209,7 @@ impl SwarmDriver {
 
         // accept replication requests from the K_VALUE peers away,
         // giving us some margin for replication
-        let closest_k_peers = self.get_closest_k_value_local_peers();
+        let closest_k_peers = self.get_closest_k_local_peers_to_self();
         if !closest_k_peers
             .iter()
             .any(|(peer_id, _)| peer_id == &holder)
@@ -229,7 +229,7 @@ impl SwarmDriver {
             .behaviour_mut()
             .kademlia
             .store_mut()
-            .record_addresses_ref()?;
+            .record_addresses_ref();
         let keys_to_fetch = self.replication_fetcher.add_keys(
             holder,
             incoming_keys,

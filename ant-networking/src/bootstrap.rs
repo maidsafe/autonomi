@@ -32,16 +32,14 @@ const MAX_PEERS_BEFORE_TERMINATION: usize = 5;
 /// This is used to track the conditions that are required to trigger the initial bootstrap process once.
 pub(crate) struct InitialBootstrapTrigger {
     pub(crate) upnp: bool,
-    pub(crate) client: bool,
     pub(crate) upnp_gateway_result_obtained: bool,
     pub(crate) listen_addr_obtained: bool,
 }
 
 impl InitialBootstrapTrigger {
-    pub(crate) fn new(upnp: bool, client: bool) -> Self {
+    pub(crate) fn new(upnp: bool) -> Self {
         Self {
             upnp,
-            client,
             upnp_gateway_result_obtained: false,
             listen_addr_obtained: false,
         }
@@ -53,10 +51,6 @@ impl InitialBootstrapTrigger {
     /// - If we have set upnp flag and if we have obtained the upnp gateway result, we should trigger the initial bootstrap process.
     /// - If we don't have upnp enabled, then we should trigger the initial bootstrap process only if we have a listen address available.
     pub(crate) fn should_trigger_initial_bootstrap(&self) -> bool {
-        if self.client {
-            return true;
-        }
-
         if self.upnp {
             return self.upnp_gateway_result_obtained;
         }

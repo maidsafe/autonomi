@@ -8,12 +8,11 @@
 
 use crate::time::Instant;
 use crate::{
-    config::GetRecordCfg,
     driver::{PendingGetClosestType, SwarmDriver},
     error::{NetworkError, Result},
     event::TerminateNodeReason,
     log_markers::Marker,
-    Addresses, GetRecordError, MsgResponder, NetworkEvent, ResponseQuorum, CLOSE_GROUP_SIZE,
+    Addresses, MsgResponder, NetworkEvent, CLOSE_GROUP_SIZE,
 };
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::messages::ConnectionInfo;
@@ -25,7 +24,7 @@ use ant_protocol::{
 use libp2p::{
     kad::{
         store::{Error as StoreError, RecordStore},
-        KBucketDistance as Distance, Record, RecordKey, K_VALUE,
+        KBucketDistance as Distance, Record, RecordKey,
     },
     swarm::dial_opts::{DialOpts, PeerCondition},
     Multiaddr, PeerId,
@@ -83,26 +82,20 @@ pub enum LocalSwarmCmd {
     GetKBuckets {
         sender: oneshot::Sender<BTreeMap<u32, Vec<PeerId>>>,
     },
-    // Returns up to K_VALUE peers from all the k-buckets from the local Routing Table.
-    // And our PeerId as well.
-    GetClosestKLocalPeers {
-        sender: oneshot::Sender<Vec<(PeerId, Addresses)>>,
-    },
-    // Get X closest peers to target from the local RoutingTable, self not included
-    GetCloseLocalPeersToTarget {
+    // Get K closest peers to target from the local RoutingTable, self is included
+    GetKCloseLocalPeersToTarget {
         key: NetworkAddress,
-        num_of_peers: usize,
         sender: oneshot::Sender<Vec<(PeerId, Addresses)>>,
     },
     GetSwarmLocalState(oneshot::Sender<SwarmLocalState>),
     /// Check if the local RecordStore contains the provided key
     RecordStoreHasKey {
         key: RecordKey,
-        sender: oneshot::Sender<Result<bool>>,
+        sender: oneshot::Sender<bool>,
     },
     /// Get the Addresses of all the Records held locally
     GetAllLocalRecordAddresses {
-        sender: oneshot::Sender<Result<HashMap<NetworkAddress, ValidationType>>>,
+        sender: oneshot::Sender<HashMap<NetworkAddress, ValidationType>>,
     },
     /// Get data from the local RecordStore
     GetLocalRecord {
@@ -115,7 +108,7 @@ pub enum LocalSwarmCmd {
         key: RecordKey,
         data_type: u32,
         data_size: usize,
-        sender: oneshot::Sender<Result<(QuotingMetrics, bool)>>,
+        sender: oneshot::Sender<(QuotingMetrics, bool)>,
     },
     /// Notify the node received a payment.
     PaymentReceived,
@@ -161,10 +154,6 @@ pub enum LocalSwarmCmd {
     TriggerIntervalReplication,
     /// Triggers unrelevant record cleanup
     TriggerIrrelevantRecordCleanup,
-    /// Add a network density sample
-    AddNetworkDensitySample {
-        distance: Distance,
-    },
     /// Send peer scores (collected from storage challenge) to replication_fetcher
     NotifyPeerScores {
         peer_scores: Vec<(PeerId, bool)>,
@@ -217,28 +206,6 @@ pub enum NetworkSwarmCmd {
         resp: Response,
         channel: MsgResponder,
     },
-
-    /// Get Record from the Kad network
-    GetNetworkRecord {
-        key: RecordKey,
-        sender: oneshot::Sender<std::result::Result<Record, GetRecordError>>,
-        cfg: GetRecordCfg,
-    },
-
-    /// Put record to network
-    PutRecord {
-        record: Record,
-        sender: oneshot::Sender<Result<()>>,
-        quorum: ResponseQuorum,
-    },
-    /// Put record to specific node
-    PutRecordTo {
-        peers: Vec<PeerId>,
-        record: Record,
-        sender: oneshot::Sender<Result<()>>,
-        quorum: ResponseQuorum,
-    },
-
     // Attempt to dial specific peer.
     DialPeer {
         peer: PeerId,
@@ -279,15 +246,10 @@ impl Debug for LocalSwarmCmd {
                     PrettyPrintRecordKey::from(key)
                 )
             }
-            LocalSwarmCmd::GetClosestKLocalPeers { .. } => {
-                write!(f, "LocalSwarmCmd::GetClosestKLocalPeers")
-            }
-            LocalSwarmCmd::GetCloseLocalPeersToTarget {
-                key, num_of_peers, ..
-            } => {
+            LocalSwarmCmd::GetKCloseLocalPeersToTarget { key, .. } => {
                 write!(
                     f,
-                    "LocalSwarmCmd::GetCloseLocalPeersToTarget {{ key: {key:?}, num_of_peers: {num_of_peers} }}"
+                    "LocalSwarmCmd::GetKCloseLocalPeersToTarget {{ key: {key:?} }}"
                 )
             }
             LocalSwarmCmd::GetLocalQuotingMetrics { .. } => {
@@ -354,9 +316,6 @@ impl Debug for LocalSwarmCmd {
             LocalSwarmCmd::TriggerIrrelevantRecordCleanup => {
                 write!(f, "LocalSwarmCmd::TriggerUnrelevantRecordCleanup")
             }
-            LocalSwarmCmd::AddNetworkDensitySample { distance } => {
-                write!(f, "LocalSwarmCmd::AddNetworkDensitySample({distance:?})")
-            }
             LocalSwarmCmd::NotifyPeerScores { peer_scores } => {
                 write!(f, "LocalSwarmCmd::NotifyPeerScores({peer_scores:?})")
             }
@@ -384,27 +343,6 @@ impl Debug for LocalSwarmCmd {
 impl Debug for NetworkSwarmCmd {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetworkSwarmCmd::GetNetworkRecord { key, cfg, .. } => {
-                write!(
-                    f,
-                    "NetworkSwarmCmd::GetNetworkRecord {{ key: {:?}, cfg: {cfg:?}",
-                    PrettyPrintRecordKey::from(key)
-                )
-            }
-            NetworkSwarmCmd::PutRecord { record, .. } => {
-                write!(
-                    f,
-                    "NetworkSwarmCmd::PutRecord {{ key: {:?} }}",
-                    PrettyPrintRecordKey::from(&record.key)
-                )
-            }
-            NetworkSwarmCmd::PutRecordTo { peers, record, .. } => {
-                write!(
-                    f,
-                    "NetworkSwarmCmd::PutRecordTo {{ peers: {peers:?}, key: {:?} }}",
-                    PrettyPrintRecordKey::from(&record.key)
-                )
-            }
             NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork { key, .. } => {
                 write!(f, "NetworkSwarmCmd::GetClosestPeers {{ key: {key:?} }}")
             }
@@ -439,105 +377,6 @@ impl SwarmDriver {
         let start = Instant::now();
         let cmd_string;
         match cmd {
-            NetworkSwarmCmd::GetNetworkRecord { key, sender, cfg } => {
-                cmd_string = "GetNetworkRecord";
-
-                for (pending_query, (inflight_record_query_key, senders, _, _)) in
-                    self.pending_get_record.iter_mut()
-                {
-                    if *inflight_record_query_key == key {
-                        debug!(
-                            "GetNetworkRecord for {:?} is already in progress. Adding sender to {pending_query:?}",
-                            PrettyPrintRecordKey::from(&key)
-                        );
-                        senders.push(sender);
-
-                        // early exit as we're already processing this query
-                        return Ok(());
-                    }
-                }
-
-                let query_id = self.swarm.behaviour_mut().kademlia.get_record(key.clone());
-
-                debug!(
-                    "Record {:?} with task {query_id:?} expected to be held by {:?}",
-                    PrettyPrintRecordKey::from(&key),
-                    cfg.expected_holders
-                );
-
-                if self
-                    .pending_get_record
-                    .insert(query_id, (key, vec![sender], Default::default(), cfg))
-                    .is_some()
-                {
-                    warn!("An existing get_record task {query_id:?} got replaced");
-                }
-                // Logging the status of the `pending_get_record`.
-                // We also interested in the status of `result_map` (which contains record) inside.
-                let total_records: usize = self
-                    .pending_get_record
-                    .iter()
-                    .map(|(_, (_, _, result_map, _))| result_map.len())
-                    .sum();
-                info!("We now have {} pending get record attempts and cached {total_records} fetched copies",
-                      self.pending_get_record.len());
-            }
-            NetworkSwarmCmd::PutRecord {
-                record,
-                sender,
-                quorum,
-            } => {
-                cmd_string = "PutRecord";
-                let record_key = PrettyPrintRecordKey::from(&record.key).into_owned();
-                debug!(
-                    "Putting record sized: {:?} to network {:?}",
-                    record.value.len(),
-                    record_key
-                );
-                let res = match self
-                    .swarm
-                    .behaviour_mut()
-                    .kademlia
-                    .put_record(record, quorum.get_kad_quorum())
-                {
-                    Ok(request_id) => {
-                        debug!("Sent record {record_key:?} to network. Request id: {request_id:?} to network");
-                        Ok(())
-                    }
-                    Err(error) => {
-                        error!("Error sending record {record_key:?} to network");
-                        Err(NetworkError::from(error))
-                    }
-                };
-
-                if let Err(err) = sender.send(res) {
-                    error!("Could not send response to PutRecord cmd: {:?}", err);
-                }
-            }
-            NetworkSwarmCmd::PutRecordTo {
-                peers,
-                record,
-                sender,
-                quorum,
-            } => {
-                cmd_string = "PutRecordTo";
-                let record_key = PrettyPrintRecordKey::from(&record.key).into_owned();
-                debug!(
-                    "Putting record {record_key:?} sized: {:?} to {peers:?}",
-                    record.value.len(),
-                );
-                let peers_count = peers.len();
-                let request_id = self.swarm.behaviour_mut().kademlia.put_record_to(
-                    record,
-                    peers.into_iter(),
-                    quorum.get_kad_quorum(),
-                );
-                info!("Sent record {record_key:?} to {peers_count:?} peers. Request id: {request_id:?}");
-
-                if let Err(err) = sender.send(Ok(())) {
-                    error!("Could not send response to PutRecordTo cmd: {:?}", err);
-                }
-            }
             NetworkSwarmCmd::GetClosestPeersToAddressFromNetwork { key, sender } => {
                 cmd_string = "GetClosestPeersToAddressFromNetwork";
                 let query_id = self
@@ -553,7 +392,6 @@ impl SwarmDriver {
                     ),
                 );
             }
-
             NetworkSwarmCmd::SendRequest {
                 req,
                 peer,
@@ -678,7 +516,7 @@ impl SwarmDriver {
                 cmd_string = "GetLocalQuotingMetrics";
                 let kbucket_status = self.get_kbuckets_status();
                 self.update_on_kbucket_status(&kbucket_status);
-                let (quoting_metrics, is_already_stored) = match self
+                let (quoting_metrics, is_already_stored) = self
                     .swarm
                     .behaviour_mut()
                     .kademlia
@@ -688,13 +526,7 @@ impl SwarmDriver {
                         data_type,
                         data_size,
                         Some(kbucket_status.estimated_network_size as u64),
-                    ) {
-                    Ok(res) => res,
-                    Err(err) => {
-                        let _res = sender.send(Err(err));
-                        return Ok(());
-                    }
-                };
+                    );
                 self.record_metrics(Marker::QuotingMetrics {
                     quoting_metrics: &quoting_metrics,
                 });
@@ -733,7 +565,7 @@ impl SwarmDriver {
                         .retain(|peer_addr| key_address.distance(peer_addr) < boundary_distance);
                 }
 
-                let _res = sender.send(Ok((quoting_metrics, is_already_stored)));
+                let _res = sender.send((quoting_metrics, is_already_stored));
             }
             LocalSwarmCmd::PaymentReceived => {
                 cmd_string = "PaymentReceived";
@@ -807,7 +639,7 @@ impl SwarmDriver {
                             .behaviour_mut()
                             .kademlia
                             .store_mut()
-                            .get_farthest()?;
+                            .get_farthest();
                         self.replication_fetcher.set_farthest_on_full(farthest);
                     }
                     Err(_) => {
@@ -835,7 +667,7 @@ impl SwarmDriver {
                     .behaviour_mut()
                     .kademlia
                     .store_mut()
-                    .get_farthest_replication_distance()?
+                    .get_responsible_distance_range()
                 {
                     self.replication_fetcher
                         .set_replication_distance_range(distance);
@@ -931,19 +763,11 @@ impl SwarmDriver {
                 }
                 let _ = sender.send(result);
             }
-            LocalSwarmCmd::GetCloseLocalPeersToTarget {
-                key,
-                num_of_peers,
-                sender,
-            } => {
-                cmd_string = "GetCloseLocalPeersToTarget";
-                let closest_peers = self.get_closest_local_peers_to_target(&key, num_of_peers);
+            LocalSwarmCmd::GetKCloseLocalPeersToTarget { key, sender } => {
+                cmd_string = "GetKCloseLocalPeersToTarget";
+                let closest_peers = self.get_closest_k_local_peers_to_target(&key, true);
 
                 let _ = sender.send(closest_peers);
-            }
-            LocalSwarmCmd::GetClosestKLocalPeers { sender } => {
-                cmd_string = "GetClosestKLocalPeers";
-                let _ = sender.send(self.get_closest_k_value_local_peers());
             }
             LocalSwarmCmd::GetSwarmLocalState(sender) => {
                 cmd_string = "GetSwarmLocalState";
@@ -1011,10 +835,6 @@ impl SwarmDriver {
                     .store_mut()
                     .cleanup_irrelevant_records();
             }
-            LocalSwarmCmd::AddNetworkDensitySample { distance } => {
-                cmd_string = "AddNetworkDensitySample";
-                self.network_density_samples.add(distance);
-            }
             LocalSwarmCmd::NotifyPeerScores { peer_scores } => {
                 cmd_string = "NotifyPeerScores";
                 self.replication_fetcher.add_peer_scores(peer_scores);
@@ -1034,8 +854,7 @@ impl SwarmDriver {
                     .behaviour_mut()
                     .kademlia
                     .store_mut()
-                    .get_farthest_replication_distance()
-                    .unwrap_or_default();
+                    .get_responsible_distance_range();
                 let _ = sender.send(density);
             }
             LocalSwarmCmd::RemovePeer { peer } => {
@@ -1219,7 +1038,7 @@ impl SwarmDriver {
             .behaviour_mut()
             .kademlia
             .store_mut()
-            .record_addresses_ref()?
+            .record_addresses_ref()
             .values()
             .cloned()
             .collect();
@@ -1270,15 +1089,15 @@ impl SwarmDriver {
             CLOSE_GROUP_SIZE
         };
 
-        // get closest peers from buckets, sorted by increasing distance to the target
-        let closest_k_peers = self.get_closest_local_peers_to_target(target, K_VALUE.get());
+        // Get closest peers from buckets
+        let closest_k_peers = self.get_closest_k_local_peers_to_target(target, false);
 
         if let Some(responsible_range) = self
             .swarm
             .behaviour_mut()
             .kademlia
             .store_mut()
-            .get_farthest_replication_distance()?
+            .get_responsible_distance_range()
         {
             let peers_in_range = get_peers_in_range(&closest_k_peers, target, responsible_range);
 

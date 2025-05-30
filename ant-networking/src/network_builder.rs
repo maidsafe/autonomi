@@ -13,10 +13,8 @@ use crate::{
     error::{NetworkError, Result},
     event::NetworkEvent,
     external_address::ExternalAddressManager,
-    fifo_register::FifoRegister,
     network_discovery::NetworkDiscovery,
-    record_store::{ClientRecordStore, NodeRecordStore, NodeRecordStoreConfig},
-    record_store_api::UnifiedRecordStore,
+    record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     time::Instant,
@@ -29,8 +27,8 @@ use crate::{
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
     version::{
-        get_network_id_str, IDENTIFY_CLIENT_VERSION_STR, IDENTIFY_NODE_VERSION_STR,
-        IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR,
+        get_network_id_str, IDENTIFY_NODE_VERSION_STR, IDENTIFY_PROTOCOL_STR,
+        REQ_RESPONSE_VERSION_STR,
     },
     NetworkAddress, PrettyPrintKBucketKey,
 };
@@ -72,9 +70,6 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
-
-/// Client requires a super long time when have get_closest query against production network
-const CLIENT_KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
 
 // Init during compilation, instead of runtime error that should never happen
 // Option<T>::expect will be stabilised as const in the future (https://github.com/rust-lang/rust/issues/67441)
@@ -253,7 +248,7 @@ impl NetworkBuilder {
         let listen_addr = self.listen_addr;
 
         let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, Some(store_cfg), false, ProtocolSupport::Full);
+            self.build(kad_cfg, store_cfg, ProtocolSupport::Full);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -269,34 +264,11 @@ impl NetworkBuilder {
         Ok((network, events_receiver, swarm_driver))
     }
 
-    /// Same as `build_node` API but creates the network components in client mode
-    pub fn build_client(self) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
-        // Create a Kademlia behaviour for client mode, i.e. set req/resp protocol
-        // to outbound-only mode and don't listen on any address
-        let mut kad_cfg = kad::Config::new(KAD_STREAM_PROTOCOL_ID); // default query timeout is 60 secs
-
-        let _ = kad_cfg
-            .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
-            .set_max_packet_size(MAX_PACKET_SIZE)
-            .set_query_timeout(CLIENT_KAD_QUERY_TIMEOUT_S)
-            // may consider to use disjoint paths for increased resiliency in the presence of potentially adversarial nodes.
-            // however, this has the risk of libp2p report back partial-correct result in case of high peer query failure rate.
-            // .disjoint_query_paths(true)
-            // How many nodes _should_ store data.
-            .set_replication_factor(REPLICATION_FACTOR);
-
-        let (network, net_event_recv, driver) =
-            self.build(kad_cfg, None, true, ProtocolSupport::Outbound);
-
-        (network, net_event_recv, driver)
-    }
-
     /// Private helper to create the network components with the provided config and req/res behaviour
     fn build(
         self,
         kad_cfg: kad::Config,
-        record_store_cfg: Option<NodeRecordStoreConfig>,
-        is_client: bool,
+        record_store_cfg: NodeRecordStoreConfig,
         req_res_protocol: ProtocolSupport,
     ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
@@ -404,44 +376,27 @@ impl NetworkBuilder {
 
         // Kademlia Behaviour
         let kademlia = {
-            match record_store_cfg {
-                Some(store_cfg) => {
-                    #[cfg(feature = "open-metrics")]
-                    let record_stored_metrics =
-                        metrics_recorder.as_ref().map(|r| r.records_stored.clone());
-                    let node_record_store = NodeRecordStore::with_config(
-                        peer_id,
-                        store_cfg,
-                        network_event_sender.clone(),
-                        local_swarm_cmd_sender.clone(),
-                        #[cfg(feature = "open-metrics")]
-                        record_stored_metrics,
-                    );
+            #[cfg(feature = "open-metrics")]
+            let record_stored_metrics = metrics_recorder.as_ref().map(|r| r.records_stored.clone());
+            let node_record_store = NodeRecordStore::with_config(
+                peer_id,
+                record_store_cfg,
+                network_event_sender.clone(),
+                local_swarm_cmd_sender.clone(),
+                #[cfg(feature = "open-metrics")]
+                record_stored_metrics,
+            );
 
-                    let store = UnifiedRecordStore::Node(node_record_store);
-                    debug!("Using Kademlia with NodeRecordStore!");
-                    kad::Behaviour::with_config(peer_id, store, kad_cfg)
-                }
-                // no cfg provided for client
-                None => {
-                    let store = UnifiedRecordStore::Client(ClientRecordStore::default());
-                    debug!("Using Kademlia with ClientRecordStore!");
-                    kad::Behaviour::with_config(peer_id, store, kad_cfg)
-                }
-            }
+            let store = node_record_store;
+            debug!("Using Kademlia with NodeRecordStore!");
+            kad::Behaviour::with_config(peer_id, store, kad_cfg)
         };
 
-        let agent_version = if is_client {
-            IDENTIFY_CLIENT_VERSION_STR
-                .read()
-                .expect("Failed to obtain read lock for IDENTIFY_CLIENT_VERSION_STR")
-                .clone()
-        } else {
-            IDENTIFY_NODE_VERSION_STR
-                .read()
-                .expect("Failed to obtain read lock for IDENTIFY_NODE_VERSION_STR")
-                .clone()
-        };
+        let agent_version = IDENTIFY_NODE_VERSION_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_NODE_VERSION_STR")
+            .clone();
+
         // Identify Behaviour
         info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
         let identify = {
@@ -453,7 +408,7 @@ impl NetworkBuilder {
             libp2p::identify::Behaviour::new(cfg)
         };
 
-        let upnp = if !self.local && !is_client && !self.no_upnp && !self.relay_client {
+        let upnp = if !self.local && !self.no_upnp && !self.relay_client {
             debug!("Enabling UPnP port opening behavior");
             Some(libp2p::upnp::tokio::Behaviour::default())
         } else {
@@ -461,7 +416,7 @@ impl NetworkBuilder {
         }
         .into(); // Into `Toggle<T>`
 
-        let relay_server = if !is_client && !self.relay_client {
+        let relay_server = if !self.relay_client {
             let relay_server_cfg = relay::Config {
                 max_reservations: 128,             // Amount of peers we are relaying for
                 max_circuits: 1024, // The total amount of relayed connections at any given moment.
@@ -497,7 +452,7 @@ impl NetworkBuilder {
         let replication_fetcher = ReplicationFetcher::new(peer_id, network_event_sender.clone());
 
         // Enable relay manager to allow the node to act as a relay client and connect via relay servers to the network
-        let relay_manager = if !is_client && self.relay_client {
+        let relay_manager = if self.relay_client {
             let relay_manager = RelayManager::new(peer_id);
             #[cfg(feature = "open-metrics")]
             let mut relay_manager = relay_manager;
@@ -513,7 +468,7 @@ impl NetworkBuilder {
             None
         };
         // Enable external address manager for public nodes and not behind nat
-        let external_address_manager = if !is_client && !self.local && !self.relay_client {
+        let external_address_manager = if !self.local && !self.relay_client {
             Some(ExternalAddressManager::new(peer_id))
         } else {
             info!("External address manager is disabled for this node.");
@@ -525,13 +480,12 @@ impl NetworkBuilder {
             swarm,
             self_peer_id: peer_id,
             local: self.local,
-            is_client,
             is_relay_client: self.relay_client,
             #[cfg(feature = "open-metrics")]
             close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
             peers_in_rt: 0,
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
-            initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled, is_client),
+            initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
             bootstrap_cache: self.bootstrap_cache,
             relay_manager,
             connected_relay_clients: Default::default(),
@@ -563,7 +517,6 @@ impl NetworkBuilder {
             replication_targets: Default::default(),
             last_replication: None,
             last_connection_pruning_time: Instant::now(),
-            network_density_samples: FifoRegister::new(100),
             peers_version: Default::default(),
         };
 

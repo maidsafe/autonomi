@@ -6,12 +6,10 @@ use crate::{
     NodeBuilder, RunningNode,
 };
 use ant_evm::{EvmNetwork, RewardsAddress};
-use ant_networking::{PutRecordCfg, ResponseQuorum};
 use ant_protocol::{node::get_antnode_root_dir, storage::ChunkAddress, NetworkAddress};
 use const_hex::FromHex;
 use libp2p::{
     identity::{Keypair, PeerId},
-    kad::Record as KadRecord,
     Multiaddr,
 };
 use pyo3::{exceptions::PyRuntimeError, exceptions::PyValueError, prelude::*, types::PyModule};
@@ -161,49 +159,6 @@ impl PyAntNode {
             .map_err(|_| PyRuntimeError::new_err("Failed to acquire node lock"))?;
 
         Ok(format!("0x{}", hex::encode(node_guard.reward_address())))
-    }
-
-    /// Store a record in the node's storage
-    fn store_record<'p>(
-        self_: PyRef<'p, Self>,
-        py: Python<'p>,
-        key: String,
-        value: Vec<u8>,
-        _data_type: String,
-    ) -> PyResult<Bound<'p, PyAny>> {
-        let node = Arc::clone(&self_.node);
-
-        future_into_py(py, async move {
-            let node_guard = node.read().await;
-
-            let xorname = XorName::from_content(
-                &hex::decode(key)
-                    .map_err(|e| PyValueError::new_err(format!("Invalid key format: {e}")))?,
-            );
-            let chunk_address = ChunkAddress::new(xorname);
-            let network_address = NetworkAddress::from(chunk_address);
-            let record_key = network_address.to_record_key();
-
-            let record = KadRecord {
-                key: record_key,
-                value,
-                publisher: None,
-                expires: None,
-            };
-            let cfg = PutRecordCfg {
-                put_quorum: ResponseQuorum::One,
-                retry_strategy: Default::default(),
-                use_put_record_to: None,
-                verification: None,
-            };
-            node_guard
-                .network
-                .put_record(record, &cfg)
-                .await
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to store record: {e}")))?;
-
-            Ok(())
-        })
     }
 
     /// Get a record from the node's storage

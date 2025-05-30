@@ -990,43 +990,6 @@ impl RecordStore for NodeRecordStore {
     }
 }
 
-/// A place holder RecordStore impl for the client that does nothing
-#[derive(Default, Debug)]
-pub struct ClientRecordStore {}
-
-impl RecordStore for ClientRecordStore {
-    type RecordsIter<'a> = vec::IntoIter<Cow<'a, Record>>;
-    type ProvidedIter<'a> = vec::IntoIter<Cow<'a, ProviderRecord>>;
-
-    fn get(&self, _k: &Key) -> Option<Cow<'_, Record>> {
-        None
-    }
-
-    fn put(&mut self, _record: Record) -> Result<()> {
-        Ok(())
-    }
-
-    fn remove(&mut self, _k: &Key) {}
-
-    fn records(&self) -> Self::RecordsIter<'_> {
-        vec![].into_iter()
-    }
-
-    fn add_provider(&mut self, _record: ProviderRecord) -> Result<()> {
-        Ok(())
-    }
-
-    fn providers(&self, _key: &Key) -> Vec<ProviderRecord> {
-        vec![]
-    }
-
-    fn provided(&self) -> Self::ProvidedIter<'_> {
-        vec![].into_iter()
-    }
-
-    fn remove_provider(&mut self, _key: &Key, _provider: &PeerId) {}
-}
-
 #[expect(trivial_casts)]
 #[cfg(test)]
 mod tests {

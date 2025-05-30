@@ -279,7 +279,7 @@ impl SwarmDriver {
     #[cfg(feature = "open-metrics")]
     pub(crate) fn check_for_change_in_our_close_group(&mut self) {
         // this includes self
-        let closest_k_peers = self.get_closest_k_value_local_peers();
+        let closest_k_peers = self.get_closest_k_local_peers_to_self();
 
         let new_closest_peers: Vec<PeerId> = closest_k_peers
             .into_iter()

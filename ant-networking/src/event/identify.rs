@@ -125,8 +125,7 @@ impl SwarmDriver {
         // When received an identify from un-dialed peer, try to dial it
         // The dial shall trigger the same identify to be sent again and confirm
         // peer is external accessible, hence safe to be added into RT.
-        // Client doesn't need to dial back.
-        if !self.is_client && !self.local && !has_dialed {
+        if !self.local && !has_dialed {
             // Only need to dial back for not fulfilled kbucket
             if kbucket_full {
                 debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");

@@ -17,14 +17,12 @@ use crate::{
     error::Result,
     event::{NetworkEvent, NodeEvent},
     external_address::ExternalAddressManager,
-    fifo_register::FifoRegister,
     log_markers::Marker,
     network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL},
-    record_store_api::UnifiedRecordStore,
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     time::{interval, spawn, Instant, Interval},
-    Addresses, GetRecordError, NodeIssue, CLOSE_GROUP_SIZE,
+    Addresses, GetRecordError, NodeIssue, NodeRecordStore, CLOSE_GROUP_SIZE,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
@@ -105,7 +103,7 @@ pub(super) struct NodeBehaviour {
     pub(super) upnp: Toggle<libp2p::upnp::tokio::Behaviour>,
     pub(super) relay_client: libp2p::relay::client::Behaviour,
     pub(super) relay_server: Toggle<libp2p::relay::Behaviour>,
-    pub(super) kademlia: kad::Behaviour<UnifiedRecordStore>,
+    pub(super) kademlia: kad::Behaviour<NodeRecordStore>,
     pub(super) request_response: request_response::cbor::Behaviour<Request, Response>,
 }
 
@@ -114,7 +112,6 @@ pub struct SwarmDriver {
     pub(crate) self_peer_id: PeerId,
     /// When true, we don't filter our local addresses
     pub(crate) local: bool,
-    pub(crate) is_client: bool,
     pub(crate) is_relay_client: bool,
     #[cfg(feature = "open-metrics")]
     pub(crate) close_group: Vec<PeerId>,
@@ -166,8 +163,6 @@ pub struct SwarmDriver {
     pub(crate) last_replication: Option<Instant>,
     /// when was the last outdated connection prunning undertaken.
     pub(crate) last_connection_pruning_time: Instant,
-    /// FIFO cache for the network density samples
-    pub(crate) network_density_samples: FifoRegister,
     /// record versions of those peers that in the non-full-kbuckets.
     pub(crate) peers_version: HashMap<PeerId, String>,
 }
@@ -319,60 +314,41 @@ impl SwarmDriver {
                     }
                 }
                 _ = set_farthest_record_interval.tick() => {
-                    if !self.is_client {
-                        let kbucket_status = self.get_kbuckets_status();
-                        self.update_on_kbucket_status(&kbucket_status);
-                        if kbucket_status.estimated_network_size <= CLOSE_GROUP_SIZE {
-                            info!("Not enough estimated network size {}, with {} peers_in_non_full_buckets and {} num_of_full_buckets.",
-                            kbucket_status.estimated_network_size,
-                            kbucket_status.peers_in_non_full_buckets,
-                            kbucket_status.num_of_full_buckets);
-                            continue;
-                        }
-                        // The entire Distance space is U256
-                        // (U256::MAX is 115792089237316195423570985008687907853269984665640564039457584007913129639935)
-                        // The network density (average distance among nodes) can be estimated as:
-                        //     network_density = entire_U256_space / estimated_network_size
-                        let density = U256::MAX / U256::from(kbucket_status.estimated_network_size);
-                        let density_distance = density * U256::from(CLOSE_GROUP_SIZE);
-
-                        // Use distance to close peer to avoid the situation that
-                        // the estimated density_distance is too narrow.
-                        let closest_k_peers = self.get_closest_k_value_local_peers();
-                        if closest_k_peers.len() <= CLOSE_GROUP_SIZE + 2 {
-                            continue;
-                        }
-                        // Results are sorted, hence can calculate distance directly
-                        // Note: self is included
-                        let self_addr = NetworkAddress::from(self.self_peer_id);
-                        let close_peers_distance = self_addr.distance(&NetworkAddress::from(closest_k_peers[CLOSE_GROUP_SIZE + 1].0));
-
-                        let distance = std::cmp::max(Distance(density_distance), close_peers_distance);
-
-                        // The sampling approach has severe impact to the node side performance
-                        // Hence suggested to be only used by client side.
-                        // let distance = if let Some(distance) = self.network_density_samples.get_median() {
-                        //     distance
-                        // } else {
-                        //     // In case sampling not triggered or yet,
-                        //     // fall back to use the distance to CLOSE_GROUP_SIZEth closest
-                        //     let closest_k_peers = self.get_closest_k_value_local_peers();
-                        //     if closest_k_peers.len() <= CLOSE_GROUP_SIZE + 1 {
-                        //         continue;
-                        //     }
-                        //     // Results are sorted, hence can calculate distance directly
-                        //     // Note: self is included
-                        //     let self_addr = NetworkAddress::from(self.self_peer_id);
-                        //     self_addr.distance(&NetworkAddress::from(closest_k_peers[CLOSE_GROUP_SIZE]))
-                        // };
-
-                        info!("Set responsible range to {distance:?}({:?})", distance.ilog2());
-
-                        // set any new distance to farthest record in the store
-                        self.swarm.behaviour_mut().kademlia.store_mut().set_distance_range(distance);
-                        // the distance range within the replication_fetcher shall be in sync as well
-                        self.replication_fetcher.set_replication_distance_range(distance);
+                    let kbucket_status = self.get_kbuckets_status();
+                    self.update_on_kbucket_status(&kbucket_status);
+                    if kbucket_status.estimated_network_size <= CLOSE_GROUP_SIZE {
+                        info!("Not enough estimated network size {}, with {} peers_in_non_full_buckets and {} num_of_full_buckets.",
+                        kbucket_status.estimated_network_size,
+                        kbucket_status.peers_in_non_full_buckets,
+                        kbucket_status.num_of_full_buckets);
+                        continue;
                     }
+                    // The entire Distance space is U256
+                    // (U256::MAX is 115792089237316195423570985008687907853269984665640564039457584007913129639935)
+                    // The network density (average distance among nodes) can be estimated as:
+                    //     network_density = entire_U256_space / estimated_network_size
+                    let density = U256::MAX / U256::from(kbucket_status.estimated_network_size);
+                    let density_distance = density * U256::from(CLOSE_GROUP_SIZE);
+
+                    // Use distance to close peer to avoid the situation that
+                    // the estimated density_distance is too narrow.
+                    let closest_k_peers = self.get_closest_k_local_peers_to_self();
+                    if closest_k_peers.len() <= CLOSE_GROUP_SIZE + 2 {
+                        continue;
+                    }
+                    // Results are sorted, hence can calculate distance directly
+                    // Note: self is included
+                    let self_addr = NetworkAddress::from(self.self_peer_id);
+                    let close_peers_distance = self_addr.distance(&NetworkAddress::from(closest_k_peers[CLOSE_GROUP_SIZE + 1].0));
+
+                    let distance = std::cmp::max(Distance(density_distance), close_peers_distance);
+
+                    info!("Set responsible range to {distance:?}({:?})", distance.ilog2());
+
+                    // set any new distance to farthest record in the store
+                    self.swarm.behaviour_mut().kademlia.store_mut().set_responsible_distance_range(distance);
+                    // the distance range within the replication_fetcher shall be in sync as well
+                    self.replication_fetcher.set_replication_distance_range(distance);
                 }
                 _ = relay_manager_reservation_interval.tick() => {
                     if let Some(relay_manager) = &mut self.relay_manager {
@@ -474,38 +450,44 @@ impl SwarmDriver {
         });
     }
 
-    /// Get closest K_VALUE peers from our local RoutingTable. Contains self.
-    /// Is sorted for closeness to self.
-    pub(crate) fn get_closest_k_value_local_peers(&mut self) -> Vec<(PeerId, Addresses)> {
-        // Limit ourselves to K_VALUE (20) peers.
-        let peers: Vec<_> = self.get_closest_local_peers_to_target(
-            &NetworkAddress::from(self.self_peer_id),
-            K_VALUE.get() - 1,
-        );
-
-        // Start with our own PeerID and chain the closest.
-        std::iter::once((self.self_peer_id, Default::default()))
-            .chain(peers)
-            .collect()
+    /// Get K closest peers to self, from our local RoutingTable.
+    /// Always includes self in.
+    pub(crate) fn get_closest_k_local_peers_to_self(&mut self) -> Vec<(PeerId, Addresses)> {
+        self.get_closest_k_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true)
     }
 
-    /// Get closest X peers to the target. Not containing self.
-    /// Is sorted for closeness to the target.
-    pub(crate) fn get_closest_local_peers_to_target(
+    /// Get K closest peers to the target, from our local RoutingTable.
+    /// Sorted for closeness to the target
+    /// If requested, self will be added as the first entry.
+    pub(crate) fn get_closest_k_local_peers_to_target(
         &mut self,
         target: &NetworkAddress,
-        num_of_peers: usize,
+        include_self: bool,
     ) -> Vec<(PeerId, Addresses)> {
-        let peer_ids = self
+        let num_peers = if include_self {
+            K_VALUE.get() - 1
+        } else {
+            K_VALUE.get()
+        };
+
+        let peer_ids: Vec<_> = self
             .swarm
             .behaviour_mut()
             .kademlia
             .get_closest_local_peers(&target.as_kbucket_key())
             // Map KBucketKey<PeerId> to PeerId.
             .map(|key| key.into_preimage())
-            .take(num_of_peers)
+            .take(num_peers)
             .collect();
-        self.collect_peers_info(peer_ids)
+
+        if include_self {
+            // Start with our own PeerID and chain the closest.
+            std::iter::once((self.self_peer_id, Default::default()))
+                .chain(self.collect_peers_info(peer_ids))
+                .collect()
+        } else {
+            self.collect_peers_info(peer_ids)
+        }
     }
 
     /// Collect peers' address info

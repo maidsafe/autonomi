@@ -13,10 +13,7 @@ use ant_protocol::{
 };
 use core::fmt::{self, Debug};
 use exponential_backoff::Backoff;
-use libp2p::{
-    kad::{Quorum, Record},
-    PeerId,
-};
+use libp2p::{kad::Record, PeerId};
 use std::{collections::HashSet, num::NonZeroUsize, time::Duration};
 
 use crate::close_group_majority;
@@ -107,15 +104,6 @@ impl std::str::FromStr for ResponseQuorum {
 }
 
 impl ResponseQuorum {
-    pub(crate) fn get_kad_quorum(&self) -> Quorum {
-        match self {
-            ResponseQuorum::One => Quorum::One,
-            ResponseQuorum::Majority => Quorum::Majority,
-            ResponseQuorum::All => Quorum::All,
-            ResponseQuorum::N(n) => Quorum::N(*n),
-        }
-    }
-
     /// Get the value of the provided Quorum
     pub fn get_value(&self) -> usize {
         match self {
