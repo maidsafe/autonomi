@@ -189,6 +189,7 @@ impl Network {
         quorum: Quorum,
     ) -> Result<(), NetworkError> {
         let (tx, rx) = oneshot::channel();
+        let network_address = NetworkAddress::from(&record.key);
         let task = NetworkTask::PutRecord {
             record,
             to,
@@ -199,7 +200,21 @@ impl Network {
             .send(task)
             .await
             .map_err(|_| NetworkError::NetworkDriverOffline)?;
-        rx.await?
+
+        // DevNote: We ignore the put quorum failed error for now as it seems unreliable.
+        // Instead, we do a manual get record check after the put.
+        match rx.await? {
+            Ok(_) | Err(NetworkError::PutRecordQuorumFailed(_, _)) => Ok(()),
+            Err(e) => Err(e),
+        }?;
+
+        // Manual put verification.
+        match self.get_record_and_holders(network_address, quorum).await? {
+            (Some(_), _) => Ok(()),
+            (None, _) => Err(NetworkError::PutRecordError(
+                "Put verification failed".to_string(),
+            )),
+        }
     }
 
     /// Get the closest peers to an address on the Network
