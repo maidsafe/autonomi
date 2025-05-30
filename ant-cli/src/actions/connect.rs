@@ -39,25 +39,25 @@ pub async fn connect_to_network_with_config(
 ) -> Result<Client, ExitCodeError> {
     let progress_bar = ProgressBar::new_spinner();
     progress_bar.enable_steady_tick(Duration::from_millis(120));
-    progress_bar.set_message("Connecting to The Autonomi Network...");
+    progress_bar.set_message("Connecting to Autonomi...");
     let new_style = progress_bar.style().tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈🔗");
     progress_bar.set_style(new_style);
 
     let res = match network_context.network_id.as_u8() {
         LOCAL_NETWORK_ID => {
-            progress_bar.set_message("Connecting to a local Autonomi Network...");
+            progress_bar.set_message("Connecting to a local Autonomi network...");
             Client::init_local().await
         }
         MAIN_NETWORK_ID => {
-            progress_bar.set_message("Connecting to The Autonomi Network...");
+            progress_bar.set_message("Connecting to Autonomi...");
             Client::init().await
         }
         ALPHA_NETWORK_ID => {
-            progress_bar.set_message("Connecting to the Alpha Autonomi Network...");
+            progress_bar.set_message("Connecting to the alpha Autonomi network...");
             Client::init_alpha().await
         }
         _ => {
-            progress_bar.set_message("Connecting to a custom Autonomi Network...");
+            progress_bar.set_message("Connecting to a custom Autonomi network...");
             let evm_network = get_evm_network(
                 network_context.peers.local,
                 Some(network_context.network_id.as_u8()),
@@ -80,9 +80,9 @@ pub async fn connect_to_network_with_config(
 
     match res {
         Ok(client) => {
-            info!("Connected to the Network");
+            info!("Connected to the network");
             progress_bar.finish_with_message(format!(
-                "Connected to the {:?} Network",
+                "Connected to the {:?} network",
                 network_context.network_id
             ));
             let client = client.with_strategy(operating_strategy);
@@ -91,7 +91,7 @@ pub async fn connect_to_network_with_config(
         Err(e) => {
             error!("Failed to connect to the network: {e}");
             progress_bar.finish_with_message(format!(
-                "Failed to connect to the {:?} Network",
+                "Failed to connect to the {:?} network",
                 network_context.network_id
             ));
             let exit_code = connect_error_exit_code(&e);
