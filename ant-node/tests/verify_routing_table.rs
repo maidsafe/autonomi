@@ -10,6 +10,7 @@
 mod common;
 
 use crate::common::get_all_peer_ids;
+use ant_logging::LogBuilder;
 use ant_node::spawn::network_spawner::NetworkSpawner;
 use ant_protocol::antnode_proto::k_buckets_response;
 use autonomi::Wallet;
@@ -30,6 +31,9 @@ const SLEEP_BEFORE_VERIFICATION: Duration = Duration::from_secs(5);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_routing_table() -> Result<()> {
+    let _log_appender_guard =
+        LogBuilder::init_multi_threaded_tokio_test("verify_routing_table", false);
+
     let sleep_duration = std::env::var("SLEEP_BEFORE_VERIFICATION")
         .map(|value| {
             value

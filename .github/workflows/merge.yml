@@ -717,6 +717,39 @@ jobs:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 30
 
+      # Sleep for a while to allow restarted nodes can be detected by others
+      - name: Sleep a while
+        run: sleep 300
+
+      - name: Upload log files (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          ROOT_DIR: "/home/runner/.local/share/autonomi"
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_churn_${{ matrix.os }}
+          path: |
+            ~/.local/share/autonomi/**/*.log*
+
+      - name: Upload log files (macOs)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_churn_${{ matrix.os }}
+          path: |
+            /Users/runner/Library/Application Support/autonomi/**/*.log*
+
+      - name: Upload log files (Windows)
+        if: matrix.os ==  'windows-latest'
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_churn_${{ matrix.os }}
+          path: |
+            C:\Users\runneradmin\AppData\Roaming\autonomi\**\*.log*
+
   verify_data_location_routing_table:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Verify data location and Routing Table
@@ -810,6 +843,39 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 5
+
+      # Sleep for a while to allow restarted nodes can be detected by others
+      - name: Sleep a while
+        run: sleep 300
+
+      - name: Upload log files (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          ROOT_DIR: "/home/runner/.local/share/autonomi"
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_data_location_${{ matrix.os }}
+          path: |
+            ~/.local/share/autonomi/**/*.log*
+
+      - name: Upload log files (macOs)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_data_location_${{ matrix.os }}
+          path: |
+            /Users/runner/Library/Application Support/autonomi/**/*.log*
+
+      - name: Upload log files (Windows)
+        if: matrix.os ==  'windows-latest'
+        uses: actions/upload-artifact@main
+        with:
+          compression-level: 9
+          name: safe_test_logs_data_location_${{ matrix.os }}
+          path: |
+            C:\Users\runneradmin\AppData\Roaming\autonomi\**\*.log*
 
   # faucet_test:
   #   if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
