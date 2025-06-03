@@ -27,7 +27,8 @@ use prometheus_client::{
 pub(crate) struct NodeMetricsRecorder {
     /// put record
     put_record_ok: Family<PutRecordOk, Counter>,
-    put_record_err: Family<PutRecordErr, Counter>,
+    put_record_err: Counter,
+    put_record_err_v2: Family<PutRecordErr, Counter>,
 
     /// replication
     replication_triggered: Counter,
@@ -68,11 +69,18 @@ impl NodeMetricsRecorder {
             "Number of successful record PUTs",
             put_record_ok.clone(),
         );
-        let put_record_err = Family::default();
+
+        let put_record_err = Counter::default();
         sub_registry.register(
             "put_record_err",
             "Number of errors during record PUTs",
             put_record_err.clone(),
+        );
+        let put_record_err_v2 = Family::default();
+        sub_registry.register(
+            "put_record_err_v2",
+            "Number of errors during record PUTs",
+            put_record_err_v2.clone(),
         );
 
         let replication_triggered = Counter::default();
@@ -128,6 +136,7 @@ impl NodeMetricsRecorder {
         Self {
             put_record_ok,
             put_record_err,
+            put_record_err_v2,
             replication_triggered,
             replication_keys_to_fetch,
             peer_added_to_routing_table,
@@ -161,9 +170,13 @@ impl NodeMetricsRecorder {
             }
 
             Marker::RecordRejected(_, error) => {
-                let _ = self.put_record_err.get_or_create(&PutRecordErr {
-                    error_type: PutRecordErrorType::from(error),
-                });
+                let _ = self
+                    .put_record_err_v2
+                    .get_or_create(&PutRecordErr {
+                        error_type: PutRecordErrorType::from(error),
+                    })
+                    .inc();
+                let _ = self.put_record_err.inc();
             }
 
             Marker::IntervalReplicationTriggered => {
