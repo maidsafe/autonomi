@@ -1,0 +1,26 @@
+{
+  "name": "@withautonomi/ant-node-linux-x64-gnu",
+  "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maidsafe/autonomi.git",
+    "directory": "nodejs/npm/linux-x64-gnu"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "ant-node.linux-x64-gnu.node",
+  "files": [
+    "ant-node.linux-x64-gnu.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  },
+  "libc": [
+    "glibc"
+  ]
+}
