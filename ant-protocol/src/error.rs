@@ -32,10 +32,6 @@ pub enum Error {
     #[error("Chunk does not exist {0:?}")]
     ChunkDoesNotExist(NetworkAddress),
 
-    // ---------- Chunk errors
-    #[error("Chunk is too large: {0} bytes, when max size is {1} bytes")]
-    OversizedChunk(usize, usize),
-
     // ---------- Scratchpad errors
     /// The provided String can't be deserialized as a ScratchpadAddress
     #[error("Failed to deserialize hex ScratchpadAddress")]
