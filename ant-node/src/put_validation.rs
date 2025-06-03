@@ -8,12 +8,10 @@
 
 use std::collections::BTreeSet;
 
-use crate::{node::Node, Error, Marker, Result};
+use crate::{error::PutValidationError, node::Node, Marker};
 use ant_evm::payment_vault::verify_data_payment;
 use ant_evm::ProofOfPayment;
-use ant_networking::NetworkError;
 use ant_protocol::storage::GraphEntry;
-use ant_protocol::Error as ProtocolError;
 use ant_protocol::{
     storage::{
         try_deserialize_record, try_serialize_record, Chunk, DataTypes, GraphEntryAddress, Pointer,
@@ -29,13 +27,22 @@ const RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS: u64 = 5;
 
 impl Node {
     /// Validate a record and its payment, and store the record to the RecordStore
-    pub(crate) async fn validate_and_store_record(&self, record: Record) -> Result<()> {
-        let record_header = RecordHeader::from_record(&record)?;
+    pub(crate) async fn validate_and_store_record(
+        &self,
+        record: Record,
+    ) -> Result<(), PutValidationError> {
+        let record_header = RecordHeader::from_record(&record)
+            .map_err(|_| PutValidationError::InvalidRecordHeader)?;
 
         match record_header.kind {
             RecordKind::DataWithPayment(DataTypes::Chunk) => {
                 let record_key = record.key.clone();
-                let (payment, chunk) = try_deserialize_record::<(ProofOfPayment, Chunk)>(&record)?;
+                let (payment, chunk) = try_deserialize_record::<(ProofOfPayment, Chunk)>(&record)
+                    .map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 let already_exists = self
                     .validate_key_and_existence(&chunk.network_address(), &record_key)
                     .await?;
@@ -106,15 +113,21 @@ impl Node {
             }
 
             RecordKind::DataOnly(DataTypes::Chunk) => {
-                error!("Chunk should not be validated at this point");
-                Err(Error::InvalidPutWithoutPayment(
+                error!("Chunk should not be validated at this point. Got a PUT without payment.");
+                Err(PutValidationError::NoPayment(
                     PrettyPrintRecordKey::from(&record.key).into_owned(),
                 ))
             }
             RecordKind::DataWithPayment(DataTypes::Scratchpad) => {
                 let record_key = record.key.clone();
-                let (payment, scratchpad) =
-                    try_deserialize_record::<(ProofOfPayment, Scratchpad)>(&record)?;
+                let (payment, scratchpad) = try_deserialize_record::<(ProofOfPayment, Scratchpad)>(
+                    &record,
+                )
+                .map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 let _already_exists = self
                     .validate_key_and_existence(&scratchpad.network_address(), &record_key)
                     .await?;
@@ -148,7 +161,7 @@ impl Node {
                     // if we're receiving this scratchpad PUT again, and we have been paid,
                     // we eagerly retry replicaiton as it seems like other nodes are having trouble
                     // did not manage to get this scratchpad as yet.
-                    Ok(_) | Err(Error::IgnoringOutdatedScratchpadPut) => {
+                    Ok(_) | Err(PutValidationError::IgnoringOutdatedScratchpadPut) => {
                         let content_hash = XorName::from_content(&record.value);
                         Marker::ValidScratchpadRecordPutFromClient(&PrettyPrintRecordKey::from(
                             &record_key,
@@ -171,13 +184,17 @@ impl Node {
             RecordKind::DataOnly(DataTypes::Scratchpad) => {
                 // make sure we already have this scratchpad locally, else reject it as first time upload needs payment
                 let key = record.key.clone();
-                let scratchpad = try_deserialize_record::<Scratchpad>(&record)?;
+                let scratchpad = try_deserialize_record::<Scratchpad>(&record).map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 let net_addr = NetworkAddress::ScratchpadAddress(*scratchpad.address());
                 let pretty_key = PrettyPrintRecordKey::from(&key);
                 trace!("Got record to store without payment for scratchpad at {pretty_key:?}");
                 if !self.validate_key_and_existence(&net_addr, &key).await? {
                     warn!("Ignore store without payment for scratchpad at {pretty_key:?}");
-                    return Err(Error::InvalidPutWithoutPayment(
+                    return Err(PutValidationError::NoPayment(
                         PrettyPrintRecordKey::from(&record.key).into_owned(),
                     ));
                 }
@@ -189,13 +206,19 @@ impl Node {
             RecordKind::DataOnly(DataTypes::GraphEntry) => {
                 // Transactions should always be paid for
                 error!("Transaction should not be validated at this point");
-                Err(Error::InvalidPutWithoutPayment(
+                Err(PutValidationError::NoPayment(
                     PrettyPrintRecordKey::from(&record.key).into_owned(),
                 ))
             }
             RecordKind::DataWithPayment(DataTypes::GraphEntry) => {
                 let (payment, graph_entry) =
-                    try_deserialize_record::<(ProofOfPayment, GraphEntry)>(&record)?;
+                    try_deserialize_record::<(ProofOfPayment, GraphEntry)>(&record).map_err(
+                        |_| {
+                            PutValidationError::InvalidRecord(
+                                PrettyPrintRecordKey::from(&record.key).into_owned(),
+                            )
+                        },
+                    )?;
 
                 // check if the deserialized value's GraphEntryAddress matches the record's key
                 let net_addr = NetworkAddress::from(graph_entry.address());
@@ -205,7 +228,7 @@ impl Node {
                     warn!(
                         "Record's key {pretty_key:?} does not match with the value's GraphEntryAddress, ignoring PUT."
                     );
-                    return Err(Error::RecordKeyMismatch);
+                    return Err(PutValidationError::RecordKeyMismatch);
                 }
 
                 let already_exists = self.validate_key_and_existence(&net_addr, &key).await?;
@@ -257,7 +280,11 @@ impl Node {
                 res
             }
             RecordKind::DataOnly(DataTypes::Pointer) => {
-                let pointer = try_deserialize_record::<Pointer>(&record)?;
+                let pointer = try_deserialize_record::<Pointer>(&record).map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 let net_addr = NetworkAddress::from(pointer.address());
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);
                 let already_exists = self
@@ -266,7 +293,7 @@ impl Node {
 
                 if !already_exists {
                     warn!("Pointer at address: {:?}, key: {:?} does not exist locally, rejecting PUT without payment", pointer.address(), pretty_key);
-                    return Err(Error::InvalidPutWithoutPayment(
+                    return Err(PutValidationError::NoPayment(
                         PrettyPrintRecordKey::from(&record.key).into_owned(),
                     ));
                 }
@@ -288,7 +315,11 @@ impl Node {
             }
             RecordKind::DataWithPayment(DataTypes::Pointer) => {
                 let (payment, pointer) =
-                    try_deserialize_record::<(ProofOfPayment, Pointer)>(&record)?;
+                    try_deserialize_record::<(ProofOfPayment, Pointer)>(&record).map_err(|_| {
+                        PutValidationError::InvalidRecord(
+                            PrettyPrintRecordKey::from(&record.key).into_owned(),
+                        )
+                    })?;
 
                 let net_addr = NetworkAddress::from(pointer.address());
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);
@@ -338,22 +369,30 @@ impl Node {
     }
 
     /// Store a pre-validated, and already paid record to the RecordStore
-    pub(crate) async fn store_replicated_in_record(&self, record: Record) -> Result<()> {
+    pub(crate) async fn store_replicated_in_record(
+        &self,
+        record: Record,
+    ) -> Result<(), PutValidationError> {
         debug!(
             "Storing record which was replicated to us {:?}",
             PrettyPrintRecordKey::from(&record.key)
         );
-        let record_header = RecordHeader::from_record(&record)?;
+        let record_header = RecordHeader::from_record(&record)
+            .map_err(|_| PutValidationError::InvalidRecordHeader)?;
         match record_header.kind {
             // A separate flow handles record with payment
             RecordKind::DataWithPayment(_) => {
                 warn!("Prepaid record came with Payment, which should be handled in another flow");
-                Err(Error::UnexpectedRecordWithPayment(
+                Err(PutValidationError::UnexpectedRecordWithPayment(
                     PrettyPrintRecordKey::from(&record.key).into_owned(),
                 ))
             }
             RecordKind::DataOnly(DataTypes::Chunk) => {
-                let chunk = try_deserialize_record::<Chunk>(&record)?;
+                let chunk = try_deserialize_record::<Chunk>(&record).map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
 
                 let record_key = record.key.clone();
                 let already_exists = self
@@ -371,18 +410,31 @@ impl Node {
             }
             RecordKind::DataOnly(DataTypes::Scratchpad) => {
                 let key = record.key.clone();
-                let scratchpad = try_deserialize_record::<Scratchpad>(&record)?;
+                let scratchpad = try_deserialize_record::<Scratchpad>(&record).map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 self.validate_and_store_scratchpad_record(scratchpad, key, false, None)
                     .await
             }
             RecordKind::DataOnly(DataTypes::GraphEntry) => {
                 let record_key = record.key.clone();
-                let graph_entries = try_deserialize_record::<Vec<GraphEntry>>(&record)?;
+                let graph_entries =
+                    try_deserialize_record::<Vec<GraphEntry>>(&record).map_err(|_| {
+                        PutValidationError::InvalidRecord(
+                            PrettyPrintRecordKey::from(&record.key).into_owned(),
+                        )
+                    })?;
                 self.validate_merge_and_store_graphentries(graph_entries, &record_key, false)
                     .await
             }
             RecordKind::DataOnly(DataTypes::Pointer) => {
-                let pointer = try_deserialize_record::<Pointer>(&record)?;
+                let pointer = try_deserialize_record::<Pointer>(&record).map_err(|_| {
+                    PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    )
+                })?;
                 let key = record.key.clone();
                 self.validate_and_store_pointer_record(pointer, key, false, None)
                     .await
@@ -396,7 +448,7 @@ impl Node {
         &self,
         address: &NetworkAddress,
         expected_record_key: &RecordKey,
-    ) -> Result<bool> {
+    ) -> Result<bool, PutValidationError> {
         let data_key = address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&data_key);
 
@@ -407,13 +459,14 @@ impl Node {
                 pretty_key
             );
             warn!("Record's key does not match with the value's address, ignoring PUT.");
-            return Err(Error::RecordKeyMismatch);
+            return Err(PutValidationError::RecordKeyMismatch);
         }
 
         let present_locally = self
             .network()
             .is_record_key_present_locally(&data_key)
-            .await?;
+            .await
+            .map_err(|_| PutValidationError::LocalSwarmError)?;
 
         if present_locally {
             // We may short circuit if the Record::key is present locally;
@@ -428,7 +481,11 @@ impl Node {
     }
 
     /// Store a `Chunk` to the RecordStore
-    pub(crate) fn store_chunk(&self, chunk: &Chunk, is_client_put: bool) -> Result<()> {
+    pub(crate) fn store_chunk(
+        &self,
+        chunk: &Chunk,
+        is_client_put: bool,
+    ) -> Result<(), PutValidationError> {
         let key = NetworkAddress::from(*chunk.address()).to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
@@ -439,12 +496,17 @@ impl Node {
                 chunk.size(),
                 Chunk::MAX_SIZE
             );
-            return Err(ProtocolError::OversizedChunk(chunk.size(), Chunk::MAX_SIZE).into());
+            return Err(PutValidationError::OversizedChunk(
+                chunk.size(),
+                Chunk::MAX_SIZE,
+            ));
         }
 
         let record = Record {
             key,
-            value: try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))?.to_vec(),
+            value: try_serialize_record(&chunk, RecordKind::DataOnly(DataTypes::Chunk))
+                .map_err(|_| PutValidationError::RecordSerializationFailed(pretty_key.clone()))?
+                .to_vec(),
             publisher: None,
             expires: None,
         };
@@ -474,7 +536,7 @@ impl Node {
         record_key: RecordKey,
         is_client_put: bool,
         _payment: Option<ProofOfPayment>,
-    ) -> Result<()> {
+    ) -> Result<(), PutValidationError> {
         // owner PK is defined herein, so as long as record key and this match, we're good
         let addr = scratchpad.address();
         let count = scratchpad.counter();
@@ -484,28 +546,37 @@ impl Node {
         let scratchpad_key = NetworkAddress::ScratchpadAddress(*addr).to_record_key();
         if scratchpad_key != record_key {
             warn!("Record's key does not match with the value's ScratchpadAddress, ignoring PUT.");
-            return Err(Error::RecordKeyMismatch);
+            return Err(PutValidationError::RecordKeyMismatch);
         }
 
         // check if the Scratchpad is present locally that we don't have a newer version
-        if let Some(local_pad) = self.network().get_local_record(&scratchpad_key).await? {
-            let local_pad = try_deserialize_record::<Scratchpad>(&local_pad)?;
+        if let Some(local_pad) = self
+            .network()
+            .get_local_record(&scratchpad_key)
+            .await
+            .map_err(|_| PutValidationError::LocalSwarmError)?
+        {
+            let local_pad = try_deserialize_record::<Scratchpad>(&local_pad).map_err(|_| {
+                PutValidationError::InvalidRecord(
+                    PrettyPrintRecordKey::from(&scratchpad_key).into_owned(),
+                )
+            })?;
             if local_pad.counter() >= scratchpad.counter() {
                 warn!("Rejecting Scratchpad PUT with counter less than or equal to the current counter");
-                return Err(Error::IgnoringOutdatedScratchpadPut);
+                return Err(PutValidationError::IgnoringOutdatedScratchpadPut);
             }
         }
 
         // ensure data integrity
         if !scratchpad.verify_signature() {
             warn!("Rejecting Scratchpad PUT with invalid signature");
-            return Err(Error::InvalidScratchpadSignature);
+            return Err(PutValidationError::InvalidScratchpadSignature);
         }
 
         // ensure the scratchpad is not too big
         if scratchpad.is_too_big() {
             warn!("Rejecting Scratchpad PUT with too big size");
-            return Err(Error::ScratchpadTooBig(scratchpad.size()));
+            return Err(PutValidationError::ScratchpadTooBig(scratchpad.size()));
         }
 
         info!(
@@ -515,7 +586,12 @@ impl Node {
 
         let record = Record {
             key: scratchpad_key.clone(),
-            value: try_serialize_record(&scratchpad, RecordKind::DataOnly(DataTypes::Scratchpad))?
+            value: try_serialize_record(&scratchpad, RecordKind::DataOnly(DataTypes::Scratchpad))
+                .map_err(|_| {
+                    PutValidationError::RecordSerializationFailed(
+                        PrettyPrintRecordKey::from(&scratchpad_key).into_owned(),
+                    )
+                })?
                 .to_vec(),
             publisher: None,
             expires: None,
@@ -551,7 +627,7 @@ impl Node {
         entries: Vec<GraphEntry>,
         record_key: &RecordKey,
         is_client_put: bool,
-    ) -> Result<()> {
+    ) -> Result<(), PutValidationError> {
         let pretty_key = PrettyPrintRecordKey::from(record_key);
         debug!("Validating GraphEntries before storage at {pretty_key:?}");
 
@@ -575,9 +651,9 @@ impl Node {
         // if we have no GraphEntries to verify, return early
         if entries_for_key.is_empty() {
             warn!("Found no valid GraphEntries to verify upon validation for {pretty_key:?}");
-            return Err(Error::InvalidRequest(format!(
-                "No GraphEntries to verify when validating {pretty_key:?}"
-            )));
+            return Err(PutValidationError::EmptyGraphEntry(
+                pretty_key.clone().into_owned(),
+            ));
         }
 
         // verify the GraphEntries
@@ -613,7 +689,10 @@ impl Node {
             value: try_serialize_record(
                 &validated_entries,
                 RecordKind::DataOnly(DataTypes::GraphEntry),
-            )?
+            )
+            .map_err(|_| {
+                PutValidationError::RecordSerializationFailed(pretty_key.clone().into_owned())
+            })?
             .to_vec(),
             publisher: None,
             expires: None,
@@ -639,7 +718,7 @@ impl Node {
         address: &NetworkAddress,
         data_type: DataTypes,
         payment: ProofOfPayment,
-    ) -> Result<()> {
+    ) -> Result<(), PutValidationError> {
         let key = address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
 
@@ -647,18 +726,18 @@ impl Node {
         let self_peer_id = self.network().peer_id();
         if !payment.verify_for(self_peer_id) {
             warn!("Payment is not valid for record {pretty_key}");
-            return Err(Error::InvalidRequest(format!(
-                "Payment is not valid for record {pretty_key}"
-            )));
+            return Err(PutValidationError::PaymentNotMadeToOurNode(
+                pretty_key.clone(),
+            ));
         }
 
         // verify data type matches
         let own_quotes: Vec<_> = payment.quotes_by_peer(&self_peer_id);
         if !payment.verify_data_type(data_type.get_index()) {
             warn!("Payment quote has wrong data type for record {pretty_key}");
-            return Err(Error::InvalidRequest(format!(
-                "Payment quote has wrong data type for record {pretty_key}"
-            )));
+            return Err(PutValidationError::PaymentMadeToIncorrectDataType(
+                pretty_key.clone(),
+            ));
         }
 
         // verify the claimed payees are all known to us within the certain range.
@@ -666,23 +745,31 @@ impl Node {
         let closest_k_peers = self
             .network()
             .get_k_closest_local_peers_to_the_target(Some(address.clone()))
-            .await?;
+            .await
+            .map_err(|_| PutValidationError::LocalSwarmError)?;
+
         let mut payees = payment.payees();
         payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
         if !payees.is_empty() {
             // There might be payee got blocked by us or churned out from our perspective.
             // We shall still consider the payment is valid whenever payees are close enough.
             // In case we don't have enough knowledge of the network, we shall trust the payment.
-            if let Some(network_density) = self.network().get_network_density().await? {
+            if let Some(network_density) = self
+                .network()
+                .get_network_density()
+                .await
+                .map_err(|_| PutValidationError::LocalSwarmError)?
+            {
                 payees.retain(|peer_id| {
                     NetworkAddress::from(*peer_id).distance(address) > network_density
                 });
 
                 if !payees.is_empty() {
-                    warn!("Payment quote has out-of-range payees for record {pretty_key}");
-                    return Err(Error::InvalidRequest(format!(
-                        "Payment quote has out-of-range payees {payees:?}"
-                    )));
+                    warn!("Payment quote has out-of-range payees for record {pretty_key}. Payees: {payees:?}");
+                    return Err(PutValidationError::PaymentQuoteOutOfRange {
+                        record_key: pretty_key.clone(),
+                        payees: payees.clone(),
+                    });
                 }
             }
         }
@@ -710,8 +797,9 @@ impl Node {
                     .inspect_err(|e| {
                         warn!("Failed to verify record payment on the second attempt: {e}");
                     })
-                    .map_err(|e| {
-                        Error::EvmNetwork(format!("Failed to verify record payment: {e}"))
+                    .map_err(|e| PutValidationError::PaymentVerificationFailed {
+                        record_key: pretty_key.clone(),
+                        error: e,
                     })?
             }
         };
@@ -761,11 +849,19 @@ impl Node {
 
     /// Get the local GraphEntries for the provided `GraphEntryAddress`
     /// This only fetches the GraphEntries from the local store and does not perform any network operations.
-    async fn get_local_graphentries(&self, addr: GraphEntryAddress) -> Result<Vec<GraphEntry>> {
+    async fn get_local_graphentries(
+        &self,
+        addr: GraphEntryAddress,
+    ) -> Result<Vec<GraphEntry>, PutValidationError> {
         // get the local GraphEntries
         let record_key = NetworkAddress::from(addr).to_record_key();
         debug!("Checking for local GraphEntries with key: {record_key:?}");
-        let local_record = match self.network().get_local_record(&record_key).await? {
+        let local_record = match self
+            .network()
+            .get_local_record(&record_key)
+            .await
+            .map_err(|_| PutValidationError::LocalSwarmError)?
+        {
             Some(r) => r,
             None => {
                 debug!("GraphEntry is not present locally: {record_key:?}");
@@ -773,17 +869,12 @@ impl Node {
             }
         };
 
-        // deserialize the record and get the GraphEntries
-        let local_header = RecordHeader::from_record(&local_record)?;
-        let record_kind = local_header.kind;
-        if !matches!(record_kind, RecordKind::DataOnly(DataTypes::GraphEntry)) {
-            error!("Found a {record_kind} when expecting to find GraphEntry at {addr:?}");
-            return Err(NetworkError::RecordKindMismatch(RecordKind::DataOnly(
-                DataTypes::GraphEntry,
-            ))
-            .into());
-        }
-        let local_entries: Vec<GraphEntry> = try_deserialize_record(&local_record)?;
+        let local_entries: Vec<GraphEntry> =
+            try_deserialize_record(&local_record).map_err(|_| {
+                PutValidationError::InvalidRecord(
+                    PrettyPrintRecordKey::from(&record_key).into_owned(),
+                )
+            })?;
         Ok(local_entries)
     }
 
@@ -836,18 +927,18 @@ impl Node {
         key: RecordKey,
         is_client_put: bool,
         _payment: Option<ProofOfPayment>,
-    ) -> Result<()> {
+    ) -> Result<(), PutValidationError> {
         // Verify the pointer's signature
         if !pointer.verify_signature() {
             warn!("Pointer signature verification failed");
-            return Err(Error::InvalidSignature);
+            return Err(PutValidationError::InvalidPointerSignature);
         }
 
         // Check if the pointer's address matches the record key
         let net_addr = NetworkAddress::from(pointer.address());
         if key != net_addr.to_record_key() {
             warn!("Pointer address does not match record key");
-            return Err(Error::RecordKeyMismatch);
+            return Err(PutValidationError::RecordKeyMismatch);
         }
 
         // Keep the pointer with the highest counter
@@ -865,7 +956,12 @@ impl Node {
         // Store the pointer
         let record = Record {
             key: key.clone(),
-            value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))?
+            value: try_serialize_record(&pointer, RecordKind::DataOnly(DataTypes::Pointer))
+                .map_err(|_| {
+                    PutValidationError::RecordSerializationFailed(
+                        PrettyPrintRecordKey::from(&key).into_owned(),
+                    )
+                })?
                 .to_vec(),
             publisher: None,
             expires: None,
