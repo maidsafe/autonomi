@@ -12,7 +12,7 @@ use ant_networking::time::Instant;
 use ant_networking::MetricsRegistries;
 use ant_protocol::storage::DataTypes;
 use prometheus_client::{
-    encoding::EncodeLabelSet,
+    encoding::{EncodeLabelSet, EncodeLabelValue},
     metrics::{
         counter::Counter,
         family::Family,
@@ -27,7 +27,7 @@ use prometheus_client::{
 pub(crate) struct NodeMetricsRecorder {
     /// put record
     put_record_ok: Family<PutRecordOk, Counter>,
-    put_record_err: Counter,
+    put_record_err: Family<PutRecordErr, Counter>,
 
     /// replication
     replication_triggered: Counter,
@@ -44,11 +44,6 @@ pub(crate) struct NodeMetricsRecorder {
     // to track the uptime of the node.
     pub(crate) started_instant: Instant,
     pub(crate) uptime: Gauge,
-}
-
-#[derive(EncodeLabelSet, Hash, Clone, Eq, PartialEq, Debug)]
-struct PutRecordOk {
-    record_type: DataTypes,
 }
 
 impl NodeMetricsRecorder {
@@ -73,7 +68,7 @@ impl NodeMetricsRecorder {
             "Number of successful record PUTs",
             put_record_ok.clone(),
         );
-        let put_record_err = Counter::default();
+        let put_record_err = Family::default();
         sub_registry.register(
             "put_record_err",
             "Number of errors during record PUTs",
@@ -165,8 +160,10 @@ impl NodeMetricsRecorder {
                     .inc();
             }
 
-            Marker::RecordRejected(_, _) => {
-                let _ = self.put_record_err.inc();
+            Marker::RecordRejected(_, error) => {
+                let _ = self.put_record_err.get_or_create(&PutRecordErr {
+                    error_type: PutRecordErrorType::from(error),
+                });
             }
 
             Marker::IntervalReplicationTriggered => {
@@ -186,6 +183,75 @@ impl NodeMetricsRecorder {
             }
 
             _ => {}
+        }
+    }
+}
+
+#[derive(EncodeLabelSet, Hash, Clone, Eq, PartialEq, Debug)]
+struct PutRecordOk {
+    record_type: DataTypes,
+}
+
+#[derive(EncodeLabelSet, Hash, Clone, Eq, PartialEq, Debug)]
+struct PutRecordErr {
+    error_type: PutRecordErrorType,
+}
+
+#[derive(EncodeLabelValue, Hash, Clone, Eq, PartialEq, Debug)]
+enum PutRecordErrorType {
+    RecordKeyMismatch,
+    RecordSerializationFailed,
+    NoPayment,
+    UnexpectedRecordWithPayment,
+    PaymentNotMadeToOurNode,
+    PaymentMadeToIncorrectDataType,
+    PaymentQuoteOutOfRange,
+    PaymentVerificationFailed,
+    OversizedChunk,
+    IgnoringOutdatedScratchpadPut,
+    InvalidScratchpadSignature,
+    ScratchpadTooBig,
+    EmptyGraphEntry,
+    InvalidPointerSignature,
+    LocalSwarmError,
+    InvalidRecordHeader,
+    InvalidRecord,
+}
+
+impl From<&crate::PutValidationError> for PutRecordErrorType {
+    fn from(error: &crate::PutValidationError) -> Self {
+        match error {
+            crate::PutValidationError::RecordKeyMismatch => Self::RecordKeyMismatch,
+            crate::PutValidationError::RecordSerializationFailed(_) => {
+                Self::RecordSerializationFailed
+            }
+            crate::PutValidationError::NoPayment(_) => Self::NoPayment,
+            crate::PutValidationError::UnexpectedRecordWithPayment(_) => {
+                Self::UnexpectedRecordWithPayment
+            }
+            crate::PutValidationError::PaymentNotMadeToOurNode(_) => Self::PaymentNotMadeToOurNode,
+            crate::PutValidationError::PaymentMadeToIncorrectDataType(_) => {
+                Self::PaymentMadeToIncorrectDataType
+            }
+            crate::PutValidationError::PaymentQuoteOutOfRange { .. } => {
+                Self::PaymentQuoteOutOfRange
+            }
+            crate::PutValidationError::PaymentVerificationFailed { .. } => {
+                Self::PaymentVerificationFailed
+            }
+            crate::PutValidationError::OversizedChunk(_, _) => Self::OversizedChunk,
+            crate::PutValidationError::IgnoringOutdatedScratchpadPut => {
+                Self::IgnoringOutdatedScratchpadPut
+            }
+            crate::PutValidationError::InvalidScratchpadSignature => {
+                Self::InvalidScratchpadSignature
+            }
+            crate::PutValidationError::ScratchpadTooBig(_) => Self::ScratchpadTooBig,
+            crate::PutValidationError::EmptyGraphEntry(_) => Self::EmptyGraphEntry,
+            crate::PutValidationError::InvalidPointerSignature => Self::InvalidPointerSignature,
+            crate::PutValidationError::LocalSwarmError => Self::LocalSwarmError,
+            crate::PutValidationError::InvalidRecordHeader => Self::InvalidRecordHeader,
+            crate::PutValidationError::InvalidRecord(_) => Self::InvalidRecord,
         }
     }
 }
