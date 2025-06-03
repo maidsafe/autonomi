@@ -67,7 +67,7 @@ jobs:
         # Criterion outputs the actual bench results to stderr "2>&1 tee output.txt" takes stderr,
         # passes to tee which displays it in the terminal and writes to output.txt
         run: |
-          cargo criterion --message-format=json 2>&1 -p ant | tee -a output.txt
+          cargo criterion --message-format=json 2>&1 -p ant-cli | tee -a output.txt
           cat output.txt | rg benchmark-complete | jq -s 'map({
             name: (.id | split("/"))[-1],
             unit: "MiB/s",
