@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749045627376,
+  "lastUpdate": 1749045771040,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -244,6 +244,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 84,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "75d145ac2879cb1e98ba3344d24f2938bc4edce5",
+          "message": "Merge pull request #3002 from maidsafe/bring_back_bench_test\n\nfix(ci): bring back benchmark charts",
+          "timestamp": "2025-06-04T12:56:30Z",
+          "tree_id": "25c5a4d440b9558bd090c89dddf193cd4c844204",
+          "url": "https://github.com/maidsafe/autonomi/commit/75d145ac2879cb1e98ba3344d24f2938bc4edce5"
+        },
+        "date": 1749045770121,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 85,
             "unit": "MB"
           }
         ]
