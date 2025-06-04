@@ -8,12 +8,6 @@
 
 mod dialer;
 
-use crate::error::Result;
-use crate::networking::error::ReachabilityCheckError;
-use crate::networking::network::endpoint_str;
-use crate::networking::{
-    multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p, NetworkError,
-};
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
 use futures::StreamExt;
@@ -31,6 +25,14 @@ use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::Instant;
+
+use crate::networking::error::ReachabilityCheckError;
+#[cfg(feature = "open-metrics")]
+use crate::networking::metrics::NetworkMetricsRecorder;
+use crate::networking::network::endpoint_str;
+use crate::networking::{
+    multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p, NetworkError,
+};
 
 pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
 const MAX_WORKFLOW_ATTEMPTS: usize = 3;
@@ -91,6 +93,8 @@ pub(crate) struct ReachabilityCheckSwarmDriver {
     pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
     pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
+    #[cfg(feature = "open-metrics")]
+    pub(crate) metrics_recorder: Option<NetworkMetricsRecorder>,
 }
 
 impl ReachabilityCheckSwarmDriver {
@@ -102,6 +106,7 @@ impl ReachabilityCheckSwarmDriver {
         swarm: Swarm<ReachabilityCheckBehaviour>,
         initial_contacts: Vec<Multiaddr>,
         listen_socket_addr: SocketAddr,
+        #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Self {
         let mut swarm = swarm;
 
@@ -121,6 +126,7 @@ impl ReachabilityCheckSwarmDriver {
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
+            metrics_recorder,
         }
     }
     /// Runs the reachability check workflow.
@@ -355,6 +361,13 @@ impl ReachabilityCheckSwarmDriver {
 
                 debug!("SwarmEvent has been ignored: {other:?}")
             }
+        }
+
+        #[cfg(feature = "open-metrics")]
+        if let Some(metrics_recorder) = &self.metrics_recorder {
+            let _ = metrics_recorder
+                .connected_peers
+                .set(self.swarm.connected_peers().count() as i64);
         }
 
         trace!(
