@@ -39,7 +39,7 @@ pub use self::{
     cmd::{NodeIssue, SwarmLocalState},
     config::ResponseQuorum,
     driver::SwarmDriver,
-    error::NetworkError,
+    error::{NetworkError, ReachabilityCheckError},
     event::{MsgResponder, NetworkEvent},
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
     reachability_check::ReachabilityStatus,
