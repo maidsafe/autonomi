@@ -8,6 +8,7 @@
 
 pub mod evm;
 pub mod testnet;
+pub mod local_network_spawner;
 
 use bytes::Bytes;
 use rand::Rng;

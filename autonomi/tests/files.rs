@@ -10,25 +10,25 @@ use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::Client;
 use eyre::Result;
-use serial_test::serial;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::time::Duration;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 use tokio::time::sleep;
 use walkdir::WalkDir;
 
 // With a local evm network, and local network, run:
 // EVM_NETWORK=local cargo test --package autonomi --test fs
 #[tokio::test]
-#[serial]
 async fn dir_upload_download() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("dir_upload_download", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     let (_cost, addr) = client
         .dir_upload_public("tests/file/test_dir".into(), wallet.into())
@@ -78,12 +78,14 @@ fn compute_dir_sha256(dir: &str) -> Result<String> {
 }
 
 #[tokio::test]
-#[serial]
 async fn file_into_vault() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("file", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let client_sk = bls::SecretKey::random();
 
     let (_cost, addr) = client
@@ -98,7 +100,7 @@ async fn file_into_vault() -> Result<()> {
         .await?;
 
     // now assert over the stored account packet
-    let new_client = Client::init_local().await?;
+    let new_client = Client::init_with_config(spawned_local_network.config).await?;
 
     let (ap, got_version) = new_client.fetch_and_decrypt_vault(&client_sk).await?;
     assert_eq!(set_version, got_version);
@@ -114,13 +116,15 @@ async fn file_into_vault() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn file_advanced_use() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("file_advanced_use", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::Wallet(wallet);
 
     // upload a directory

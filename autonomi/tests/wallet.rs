@@ -11,7 +11,7 @@ use autonomi::get_evm_network;
 use autonomi::Wallet;
 use autonomi::{Amount, RewardsAddress};
 use const_hex::traits::FromHex;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
 async fn from_private_key() {
@@ -30,9 +30,10 @@ async fn from_private_key() {
 async fn send_tokens() {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("wallet", false);
 
-    let network =
-        get_evm_network(true, None).expect("Could not get EVM network from environment variables");
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await.unwrap();
+    let wallet = spawned_local_network.wallet;
+    let network = spawned_local_network.evm_network;
 
     let receiving_wallet = Wallet::new_with_random_wallet(network);
 
