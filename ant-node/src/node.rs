@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    Marker, NodeEvent, error::Result, event::NodeEventsChannel, quote::quotes_verification,
+    error::Error, error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker,
+    NodeEvent,
 };
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
@@ -170,7 +171,6 @@ impl NodeBuilder {
 
     /// Check if the node is publicly reachable.
     pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
-        // setup metrics
         #[cfg(feature = "open-metrics")]
         let (_metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
             // metadata registry
@@ -197,6 +197,7 @@ impl NodeBuilder {
             no_upnp: self.no_upnp,
             relay_client: self.relay_client,
             custom_request_timeout: None,
+            reachability_status: None,
             #[cfg(feature = "open-metrics")]
             metrics_registries,
             #[cfg(feature = "open-metrics")]
@@ -220,9 +221,52 @@ impl NodeBuilder {
     ///
     /// # Errors
     ///
-    /// Returns an error if there is a problem initializing the Network.
-    pub fn build_and_run(self) -> Result<RunningNode> {
-        // setup metrics
+    /// Returns an error if there is a problem initializing the `Network`.
+    pub async fn build_and_run(self) -> Result<RunningNode> {
+        let mut relay_client = false;
+        let mut no_upnp = false;
+        let mut address = self.addr;
+        let mut reachability_status = None;
+
+        if self.reachability_check {
+            info!("Running reachability check ... This might take a few minutes to complete.");
+            let status = self.run_reachability_check().await;
+
+            if let Ok(s) = &status {
+                reachability_status = Some(s.clone());
+            }
+            match status {
+                Ok(ReachabilityStatus::Relay { upnp }) => {
+                    info!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    println!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    relay_client = true;
+                    no_upnp = !upnp;
+                    reachability_status = Some(ReachabilityStatus::Relay { upnp });
+                }
+                Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                    info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
+                    println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
+                    address = addr;
+                    relay_client = false;
+                    no_upnp = !upnp;
+                }
+                Ok(ReachabilityStatus::NotRoutable { .. }) => {
+                    info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    return Err(Error::UnreachableNode);
+                }
+                Err(err) => {
+                    info!("Reachability check error: {err}. Terminating the node.");
+                    println!("Reachability check error: {err}. Terminating the node.");
+                    return Err(err);
+                }
+            }
+        }
+
         #[cfg(feature = "open-metrics")]
         let (metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
             // metadata registry
@@ -242,17 +286,18 @@ impl NodeBuilder {
             keypair: self.identity_keypair,
             local: self.local,
             initial_contacts: self.initial_peers,
-            listen_addr: self.addr,
+            listen_addr: address,
             root_dir: self.root_dir.clone(),
             shutdown_rx: shutdown_rx.clone(),
             bootstrap_cache: self.bootstrap_cache,
-            no_upnp: self.no_upnp,
-            relay_client: self.relay_client,
+            no_upnp,
+            relay_client,
             custom_request_timeout: None,
             #[cfg(feature = "open-metrics")]
             metrics_registries,
             #[cfg(feature = "open-metrics")]
             metrics_server_port: self.metrics_server_port,
+            reachability_status,
         };
         let (network, network_event_receiver) = Network::init(network_config)?;
 
