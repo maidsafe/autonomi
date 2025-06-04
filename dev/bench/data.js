@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749035510127,
+  "lastUpdate": 1749035511366,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -168,6 +168,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 17,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "qima",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "qima",
+            "username": "maqi"
+          },
+          "distinct": true,
+          "id": "d810db963bc2fde4000f0e926120d8a45d2d610a",
+          "message": "fix(ci): bring back benchmark charts",
+          "timestamp": "2025-06-04T18:58:48+08:00",
+          "tree_id": "ff1f1ebe89ca01d5fa58afad0697cdc404a61866",
+          "url": "https://github.com/maidsafe/autonomi/commit/d810db963bc2fde4000f0e926120d8a45d2d610a"
+        },
+        "date": 1749035511013,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
             "unit": "MB"
           },
           {
