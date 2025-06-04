@@ -7,16 +7,21 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::Client;
 use eyre::Result;
-use test_utils::{evm::get_funded_wallet, gen_random_data};
+use test_utils::{
+    gen_random_data,
+    local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE},
+};
 
 #[tokio::test]
 async fn put() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let data = gen_random_data(1024 * 1024 * 10);
 
     let (_cost, addr) = client.data_put_public(data.clone(), wallet.into()).await?;

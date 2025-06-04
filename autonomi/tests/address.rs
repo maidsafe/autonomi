@@ -18,16 +18,16 @@ use autonomi::{
     ScratchpadAddress,
 };
 use eyre::Result;
-use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
-#[serial]
 async fn test_data_addresses_use() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     // put the chunk
     let chunk = Chunk::new(Bytes::from("Chunk content example"));

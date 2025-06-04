@@ -7,19 +7,24 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::client::chunk::Chunk;
 use autonomi::client::payment::PaymentOption;
 use autonomi::self_encryption::encrypt;
-use autonomi::{client::chunk::Chunk, Client};
 use eyre::Result;
 use self_encryption::test_helpers::random_bytes;
-use serial_test::serial;
-use test_utils::{evm::get_funded_wallet, gen_random_data};
+use test_utils::{
+    gen_random_data,
+    local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE},
+};
 
 async fn chunk_put_with_size(size: usize) -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let data = gen_random_data(size);
     let data_len = data.len();
 
@@ -49,26 +54,22 @@ async fn chunk_put_with_size(size: usize) -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn chunk_put_empty() -> Result<()> {
     chunk_put_with_size(0).await
 }
 
 #[tokio::test]
-#[serial]
 async fn chunk_put_1mb() -> Result<()> {
     chunk_put_with_size(1024 * 1024).await // 1MB
 }
 
 #[tokio::test]
-#[serial]
 async fn chunk_put_max_size() -> Result<()> {
     // 4MB + 16 bytes (Brotli compression overhead) + 16 bytes (encryption padding)
     chunk_put_with_size(Chunk::MAX_SIZE).await
 }
 
 #[tokio::test]
-#[serial]
 async fn chunk_put_oversize() -> Result<()> {
     // 4MB + 16 bytes (Brotli compression overhead) + 16 bytes (encryption padding) + 1 byte
     let result = chunk_put_with_size(Chunk::MAX_SIZE + 1).await;

@@ -8,23 +8,20 @@
 
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
+use autonomi::client::scratchpad::{Bytes, Scratchpad};
 use autonomi::scratchpad::ScratchpadError;
 use autonomi::AttoTokens;
-use autonomi::{
-    client::scratchpad::{Bytes, Scratchpad},
-    Client,
-};
 use eyre::Result;
-use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
-#[serial]
 async fn scratchpad_put_manual() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     let key = bls::SecretKey::random();
     let public_key = key.public_key();
@@ -81,12 +78,13 @@ async fn scratchpad_put_manual() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn scratchpad_put() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     let key = bls::SecretKey::random();
     let public_key = key.public_key();
@@ -145,12 +143,13 @@ async fn scratchpad_put() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn scratchpad_errors() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     let key = bls::SecretKey::random();
     let content = Bytes::from("what's the meaning of life the universe and everything?");
