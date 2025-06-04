@@ -24,7 +24,7 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, ReachabilityStatus};
+use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
 use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
@@ -380,7 +380,7 @@ fn main() -> Result<()> {
 /// - `Ok(None)` if we want to shutdown the node.
 /// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
-    mut node_builder: NodeBuilder,
+    node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
@@ -390,45 +390,7 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
-    if node_builder.reachability_check {
-        info!("Running reachability check ... This might take a few minutes to complete.");
-        let status = node_builder.run_reachability_check().await;
-        match status {
-            Ok(ReachabilityStatus::Relay { upnp }) => {
-                info!(
-                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
-                );
-                println!(
-                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
-                );
-                node_builder.relay_client(true);
-                node_builder.no_upnp(!upnp);
-            }
-            Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
-                info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
-                println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
-                node_builder.no_upnp(!upnp);
-                node_builder.with_socket_addr(addr);
-            }
-            Ok(ReachabilityStatus::NotRoutable { .. }) => {
-                info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
-                println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
-                return Err(eyre!(
-                    "The node will be unreachable even with Relay mode. Terminating node."
-                ));
-            }
-            Err(err) => {
-                info!("Reachability check error: {err}. Terminating the node.");
-                println!("Reachability check error: {err}. Terminating the node.");
-                return Err(eyre!(
-                    "Reachability check error: {err}. Terminating the node."
-                ));
-            }
-        }
-    }
-
-    let running_node = node_builder.build_and_run()?;
-
+    let running_node = node_builder.build_and_run().await?;
     println!(
         "
 Node started
