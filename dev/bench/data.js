@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749035512685,
+  "lastUpdate": 1749037612122,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -77,6 +77,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 32.1222983858366,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "qima",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "qima",
+            "username": "maqi"
+          },
+          "distinct": true,
+          "id": "7cc1c06c9a2bed81bc78685217092a737c2f4820",
+          "message": "fix(ci): bring back benchmark charts",
+          "timestamp": "2025-06-04T19:36:13+08:00",
+          "tree_id": "7b4e04513f0aafeb4dc9570b9a6da285eb9a71a1",
+          "url": "https://github.com/maidsafe/autonomi/commit/7cc1c06c9a2bed81bc78685217092a737c2f4820"
+        },
+        "date": 1749037604596,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.26536661696725466,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 1.2972546111581587,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 32.085403729083886,
             "unit": "MiB/s"
           }
         ]
