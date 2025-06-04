@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749045773186,
+  "lastUpdate": 1749045775930,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -525,6 +525,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 11400,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "75d145ac2879cb1e98ba3344d24f2938bc4edce5",
+          "message": "Merge pull request #3002 from maidsafe/bring_back_bench_test\n\nfix(ci): bring back benchmark charts",
+          "timestamp": "2025-06-04T12:56:30Z",
+          "tree_id": "25c5a4d440b9558bd090c89dddf193cd4c844204",
+          "url": "https://github.com/maidsafe/autonomi/commit/75d145ac2879cb1e98ba3344d24f2938bc4edce5"
+        },
+        "date": 1749045774729,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 4769,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 11972,
             "unit": "ms"
           },
           {
