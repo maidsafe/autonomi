@@ -6,22 +6,24 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    CLOSE_GROUP_SIZE, NetworkEvent,
-    bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
-    circular_vec::CircularVec,
-    driver::{NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery},
-    error::{NetworkError, Result},
-    external_address::ExternalAddressManager,
-    reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
-    record_store::{NodeRecordStore, NodeRecordStoreConfig},
-    relay_manager::RelayManager,
-    replication_fetcher::ReplicationFetcher,
-    transport,
-};
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
-    MetricsRegistries, metrics::NetworkMetricsRecorder, metrics::service::run_metrics_server,
+    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+};
+use crate::{
+    networking::{
+        bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
+        circular_vec::CircularVec,
+        driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
+        error::{NetworkError, Result},
+        external_address::ExternalAddressManager,
+        reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
+        record_store::{NodeRecordStore, NodeRecordStoreConfig},
+        relay_manager::RelayManager,
+        replication_fetcher::ReplicationFetcher,
+        transport, NetworkEvent, CLOSE_GROUP_SIZE,
+    },
+    ReachabilityStatus,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
@@ -44,8 +46,6 @@ use libp2p::{
     swarm::{StreamProtocol, Swarm},
 };
 use libp2p::{core::muxing::StreamMuxerBox, relay};
-#[cfg(feature = "open-metrics")]
-use prometheus_client::metrics::info::Info;
 use std::time::Instant;
 use std::{
     convert::TryInto,
@@ -81,6 +81,8 @@ pub(crate) struct NetworkConfig {
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
     pub bootstrap_cache: Option<BootstrapCacheStore>,
     pub no_upnp: bool,
+    /// The reachability status found using the reachability swarm
+    pub reachability_status: Option<ReachabilityStatus>,
     pub relay_client: bool,
     pub custom_request_timeout: Option<Duration>,
     #[cfg(feature = "open-metrics")]
@@ -255,24 +257,13 @@ fn init_swarm_driver(
 
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
-        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
-        let metadata_sub_reg = metrics_registries
-            .metadata
-            .sub_registry_with_prefix("ant_networking");
+        use crate::networking::metrics::MetadataRecorder;
 
-        metadata_sub_reg.register(
-            "peer_id",
-            "Identifier of a peer of the network",
-            Info::new(vec![("peer_id".to_string(), peer_id.to_string())]),
-        );
-        metadata_sub_reg.register(
-            "identify_protocol_str",
-            "The protocol version string that is used to connect to the correct network",
-            Info::new(vec![(
-                "identify_protocol_str".to_string(),
-                identify_protocol_str.clone(),
-            )]),
-        );
+        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+        let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+        metadata_recorder.register_peer_id(&peer_id);
+        metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+        metadata_recorder.register_reachability_status(config.reachability_status.clone());
 
         run_metrics_server(metrics_registries, port);
         Some(metrics_recorder)
@@ -507,6 +498,22 @@ pub(crate) fn init_reachability_check_swarm(
         })
         .boxed();
 
+    #[cfg(feature = "open-metrics")]
+    let metrics_recorder = if let Some(port) = config.metrics_server_port {
+        use crate::networking::metrics::MetadataRecorder;
+
+        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+        let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+        metadata_recorder.register_peer_id(&peer_id);
+        metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+        metadata_recorder.register_reachability_check_is_ongoing();
+
+        run_metrics_server(metrics_registries, port);
+        Some(metrics_recorder)
+    } else {
+        None
+    };
+
     // Identify Behaviour
     let agent_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
         .read()
@@ -532,8 +539,13 @@ pub(crate) fn init_reachability_check_swarm(
 
     let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
-    let swarm_driver =
-        ReachabilityCheckSwarmDriver::new(swarm, config.initial_contacts, config.listen_addr);
+    let swarm_driver = ReachabilityCheckSwarmDriver::new(
+        swarm,
+        config.initial_contacts,
+        config.listen_addr,
+        #[cfg(feature = "open-metrics")]
+        metrics_recorder,
+    );
 
     Ok(swarm_driver)
 }
