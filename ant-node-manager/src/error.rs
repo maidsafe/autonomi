@@ -24,7 +24,7 @@ pub enum Error {
     MetricPortEmpty,
     #[error(transparent)]
     SemverError(#[from] semver::Error),
-    #[error("The service(s) is already running: {0:?}")]
+    #[error("Unable to remove a running service {0:?}, stop this service first before removing")]
     ServiceAlreadyRunning(Vec<String>),
     #[error("The service(s) is not running: {0:?}")]
     ServiceNotRunning(Vec<String>),
