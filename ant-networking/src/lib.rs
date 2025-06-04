@@ -42,7 +42,7 @@ pub use self::{
     cmd::{NodeIssue, SwarmLocalState},
     config::{GetRecordCfg, PutRecordCfg, ResponseQuorum, RetryStrategy, VerificationKind},
     driver::SwarmDriver,
-    error::{GetRecordError, NetworkError},
+    error::{GetRecordError, NetworkError, ReachabilityCheckError},
     event::{MsgResponder, NetworkEvent},
     graph::get_graph_entry_from_record,
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},

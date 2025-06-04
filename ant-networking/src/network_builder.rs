@@ -20,11 +20,12 @@ use crate::{
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     time::Instant,
-    transport, Network, SwarmDriver, CLOSE_GROUP_SIZE,
+    transport, Network, ReachabilityStatus, SwarmDriver, CLOSE_GROUP_SIZE,
 };
 #[cfg(feature = "open-metrics")]
 use crate::{
-    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+    metrics::service::run_metrics_server, metrics::MetadataRecorder,
+    metrics::NetworkMetricsRecorder, MetricsRegistries,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
@@ -46,8 +47,6 @@ use libp2p::{
     swarm::{StreamProtocol, Swarm},
     Multiaddr, PeerId,
 };
-#[cfg(feature = "open-metrics")]
-use prometheus_client::metrics::info::Info;
 use rand::Rng;
 use std::{
     convert::TryInto,
@@ -107,6 +106,8 @@ pub struct NetworkBuilder {
     #[cfg(feature = "open-metrics")]
     metrics_server_port: Option<u16>,
     no_upnp: bool,
+    /// The reachability status found using the reachability swarm
+    reachability_status: Option<ReachabilityStatus>,
     relay_client: bool,
     request_timeout: Option<Duration>,
 }
@@ -125,6 +126,7 @@ impl NetworkBuilder {
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
             no_upnp: true,
+            reachability_status: None,
             relay_client: false,
             request_timeout: None,
         }
@@ -163,8 +165,14 @@ impl NetworkBuilder {
         self.metrics_server_port = port;
     }
 
+    /// Disable UPnP.
     pub fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
+    }
+
+    /// Set the reachability status
+    pub fn reachability_status(&mut self, reachability_status: ReachabilityStatus) {
+        self.reachability_status = Some(reachability_status);
     }
 
     /// Creates a new `SwarmDriver` instance, along with a `Network` handle
@@ -351,6 +359,20 @@ impl NetworkBuilder {
             })
             .boxed();
 
+        #[cfg(feature = "open-metrics")]
+        let metrics_recorder = if let Some(port) = self.metrics_server_port {
+            let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+            let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+            metadata_recorder.register_peer_id(&peer_id);
+            metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+            metadata_recorder.register_reachability_check_is_ongoing();
+
+            run_metrics_server(metrics_registries, port);
+            Some(metrics_recorder)
+        } else {
+            None
+        };
+
         // Listen on the provided address
         let listen_socket_addr = self
             .listen_addr
@@ -381,8 +403,12 @@ impl NetworkBuilder {
 
         let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
-        let swarm_driver =
-            ReachabilityCheckSwarmDriver::new(swarm, self.initial_contacts, listen_socket_addr);
+        let swarm_driver = ReachabilityCheckSwarmDriver::new(
+            swarm,
+            self.initial_contacts,
+            listen_socket_addr,
+            metrics_recorder,
+        );
 
         Ok(swarm_driver)
     }
@@ -447,23 +473,10 @@ impl NetworkBuilder {
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if let Some(port) = self.metrics_server_port {
             let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
-            let metadata_sub_reg = metrics_registries
-                .metadata
-                .sub_registry_with_prefix("ant_networking");
-
-            metadata_sub_reg.register(
-                "peer_id",
-                "Identifier of a peer of the network",
-                Info::new(vec![("peer_id".to_string(), peer_id.to_string())]),
-            );
-            metadata_sub_reg.register(
-                "identify_protocol_str",
-                "The protocol version string that is used to connect to the correct network",
-                Info::new(vec![(
-                    "identify_protocol_str".to_string(),
-                    identify_protocol_str.clone(),
-                )]),
-            );
+            let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+            metadata_recorder.register_peer_id(&peer_id);
+            metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+            metadata_recorder.register_reachability_status(self.reachability_status.clone());
 
             run_metrics_server(metrics_registries, port);
             Some(metrics_recorder)

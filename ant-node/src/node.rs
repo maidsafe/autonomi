@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker, NodeEvent,
+    error::Error, error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker,
+    NodeEvent,
 };
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
@@ -192,9 +193,48 @@ impl NodeBuilder {
     /// # Errors
     ///
     /// Returns an error if there is a problem initializing the `SwarmDriver`.
-    pub fn build_and_run(self) -> Result<RunningNode> {
-        let mut network_builder =
-            NetworkBuilder::new(self.identity_keypair, self.local, self.initial_peers);
+    pub async fn build_and_run(mut self) -> Result<RunningNode> {
+        let mut network_builder = NetworkBuilder::new(
+            self.identity_keypair.clone(),
+            self.local,
+            self.initial_peers.clone(),
+        );
+
+        if self.reachability_check {
+            info!("Running reachability check ... This might take a few minutes to complete.");
+            let status = self.run_reachability_check().await;
+            if let Ok(reachability_status) = &status {
+                network_builder.reachability_status(reachability_status.clone());
+            }
+            match status {
+                Ok(ReachabilityStatus::Relay { upnp }) => {
+                    info!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    println!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    self.relay_client(true);
+                    self.no_upnp(!upnp);
+                }
+                Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                    info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
+                    println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
+                    self.no_upnp(!upnp);
+                    self.with_socket_addr(addr);
+                }
+                Ok(ReachabilityStatus::NotRoutable { .. }) => {
+                    info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    return Err(Error::UnRoutableNode);
+                }
+                Err(err) => {
+                    info!("Reachability check error: {err}. Terminating the node.");
+                    println!("Reachability check error: {err}. Terminating the node.");
+                    return Err(err);
+                }
+            }
+        }
 
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if self.metrics_server_port.is_some() {
