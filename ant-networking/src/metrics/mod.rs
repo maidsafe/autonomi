@@ -6,11 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
+mod metadata;
 mod relay_client;
 pub mod service;
 mod upnp;
+
+pub use metadata::MetadataRecorder;
 
 use crate::MetricsRegistries;
 use crate::{log_markers::Marker, time::sleep};
@@ -38,7 +40,7 @@ pub(crate) struct VersionLabels {
 }
 
 /// The shared recorders that are used to record metrics.
-pub(crate) struct NetworkMetricsRecorder {
+pub struct NetworkMetricsRecorder {
     // Records libp2p related metrics
     // Must directly call self.libp2p_metrics.record(libp2p_event) with Recorder trait in scope. But since we have
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)

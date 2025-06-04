@@ -9,6 +9,7 @@
 mod dialer;
 
 use crate::error::ReachabilityCheckError;
+use crate::metrics::NetworkMetricsRecorder;
 use crate::{endpoint_str, multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p};
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
@@ -72,6 +73,8 @@ pub struct ReachabilityCheckSwarmDriver {
     pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
     pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
+    #[cfg(feature = "open-metrics")]
+    pub(crate) metrics_recorder: Option<NetworkMetricsRecorder>,
 }
 
 impl ReachabilityCheckSwarmDriver {
@@ -83,6 +86,7 @@ impl ReachabilityCheckSwarmDriver {
         swarm: Swarm<ReachabilityCheckBehaviour>,
         initial_contacts: Vec<Multiaddr>,
         listen_socket_addr: SocketAddr,
+        #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Self {
         let mut swarm = swarm;
 
@@ -102,6 +106,7 @@ impl ReachabilityCheckSwarmDriver {
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
+            metrics_recorder,
         }
     }
 
@@ -332,6 +337,13 @@ impl ReachabilityCheckSwarmDriver {
 
                 debug!("SwarmEvent has been ignored: {other:?}")
             }
+        }
+
+        #[cfg(feature = "open-metrics")]
+        if let Some(metrics_recorder) = &self.metrics_recorder {
+            metrics_recorder
+                .connected_peers
+                .set(self.swarm.connected_peers().count() as i64);
         }
 
         trace!(
