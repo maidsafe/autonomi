@@ -31,7 +31,9 @@ async fn send_tokens() {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("wallet", false);
 
     // Spawn local network
-    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await.unwrap();
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE)
+        .await
+        .unwrap();
     let wallet = spawned_local_network.wallet;
     let network = spawned_local_network.evm_network;
 

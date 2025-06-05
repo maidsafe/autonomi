@@ -25,7 +25,7 @@ async fn test_analyze_chunk() -> Result<()> {
     let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
     let client = spawned_local_network.client;
     let wallet = spawned_local_network.wallet;
-    
+
     let payment_option = PaymentOption::from(&wallet);
 
     let chunk = Chunk::new(Bytes::from("Chunk content example"));
@@ -50,7 +50,7 @@ async fn test_analyze_data() -> Result<()> {
     let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
     let client = spawned_local_network.client;
     let wallet = spawned_local_network.wallet;
-    
+
     let payment_option = PaymentOption::from(&wallet);
 
     let data = Bytes::from("Private data example");
@@ -76,7 +76,7 @@ async fn test_analyze_public_data() -> Result<()> {
     let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
     let client = spawned_local_network.client;
     let wallet = spawned_local_network.wallet;
-    
+
     let payment_option = PaymentOption::from(&wallet);
 
     let data = Bytes::from("Public data example");

@@ -1,11 +1,7 @@
 use ant_bootstrap::InitialPeersConfig;
 use ant_node::spawn::network_spawner::{NetworkSpawner, RunningNetwork};
 use autonomi::{Client, ClientConfig};
-use evmlib::{
-    Network,
-    testnet::Testnet,
-    wallet::Wallet,
-};
+use evmlib::{testnet::Testnet, wallet::Wallet, Network};
 use eyre::Result;
 
 /// Default number of nodes to spawn in a local network
@@ -32,10 +28,10 @@ pub struct SpawnedLocalNetwork {
 }
 
 /// Spawns a local Autonomi network and returns a client connected to it
-/// 
+///
 /// # Arguments
 /// * `network_size` - Number of nodes to spawn in the network
-/// 
+///
 /// # Returns
 /// A `LocalSpawnedNetwork` struct containing all network components
 pub async fn spawn_local_network(network_size: usize) -> Result<SpawnedLocalNetwork> {

@@ -11,17 +11,14 @@ use ant_evm::Amount;
 use ant_protocol::antnode_proto::{NodeInfoRequest, RestartRequest};
 use ant_service_management::{get_local_node_registry_path, NodeRegistry};
 use autonomi::Client;
-use evmlib::{
-    Network,
-    wallet::Wallet,
-};
+use evmlib::{wallet::Wallet, Network};
 use eyre::Result;
 use std::str::FromStr;
 use std::{net::SocketAddr, path::Path};
 use test_utils::{
-        evm::{get_funded_wallet, get_new_wallet},
-        testnet::DeploymentInventory,
-        local_network_spawner::SpawnedLocalNetwork,
+    evm::{get_funded_wallet, get_new_wallet},
+    local_network_spawner::SpawnedLocalNetwork,
+    testnet::DeploymentInventory,
 };
 use tokio::sync::Mutex;
 use tonic::Request;
@@ -69,10 +66,10 @@ pub fn get_node_count() -> usize {
 }
 
 /// Get the number of nodes in a spawned network
-/// 
+///
 /// # Arguments
 /// * `network` - A reference to a spawned local network
-/// 
+///
 /// # Returns
 /// The number of nodes in the network
 pub fn get_spawned_network_node_count(network: &SpawnedLocalNetwork) -> usize {
@@ -140,7 +137,11 @@ pub async fn transfer_to_new_wallet(from: &Wallet, amount: usize) -> Result<Wall
 
 /// Transfer tokens from the provided wallet to a newly created wallet with the provided EVM network
 /// Returns the newly created wallet
-pub async fn transfer_to_new_wallet_with_evm_network(from: &Wallet, amount: usize, evm_network: Network) -> Result<Wallet> {
+pub async fn transfer_to_new_wallet_with_evm_network(
+    from: &Wallet,
+    amount: usize,
+    evm_network: Network,
+) -> Result<Wallet> {
     let wallet_balance = from.balance_of_tokens().await?;
     let gas_balance = from.balance_of_gas_tokens().await?;
 
