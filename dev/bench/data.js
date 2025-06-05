@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749160636113,
+  "lastUpdate": 1749160638289,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1089,6 +1089,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 10516,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "efaf096763d77e6e88ebd33787829ba857379180",
+          "message": "Merge pull request #2977 from ermineJose/hotfix-Lauchpad-timeout\n\nfeat: add timeout option for NAT-detection",
+          "timestamp": "2025-06-05T22:44:22+01:00",
+          "tree_id": "efabdac43ade5eed1552dda6e5662395839a827f",
+          "url": "https://github.com/maidsafe/autonomi/commit/efaf096763d77e6e88ebd33787829ba857379180"
+        },
+        "date": 1749160637517,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 4756,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 11202,
             "unit": "ms"
           },
           {
