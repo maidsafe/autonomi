@@ -39,6 +39,28 @@ pub enum ReachabilityStatus {
     NotRoutable { upnp: bool },
 }
 
+impl ReachabilityStatus {
+    pub fn upnp_supported(&self) -> bool {
+        match self {
+            ReachabilityStatus::Relay { upnp } => *upnp,
+            ReachabilityStatus::Reachable { upnp, .. } => *upnp,
+            ReachabilityStatus::NotRoutable { upnp } => *upnp,
+        }
+    }
+
+    pub fn is_relay(&self) -> bool {
+        matches!(self, ReachabilityStatus::Relay { .. })
+    }
+
+    pub fn is_reachable(&self) -> bool {
+        matches!(self, ReachabilityStatus::Reachable { .. })
+    }
+
+    pub fn is_not_routable(&self) -> bool {
+        matches!(self, ReachabilityStatus::NotRoutable { .. })
+    }
+}
+
 /// The behaviors are polled in the order they are defined.
 /// The first struct member is polled until it returns Poll::Pending before moving on to later members.
 /// Prioritize the behaviors related to connection handling.
