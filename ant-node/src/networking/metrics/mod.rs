@@ -106,9 +106,9 @@ impl NetworkMetricsRecorder {
         // reachability check should be a part of the standard metrics and is of type Info
         let reachability_status = match reachability_check_metric {
             ReachabilityStatusMetric::Ongoing => {
-                Self::construct_reachability_bitmap(false, true, false, false, false, false)
+                Self::construct_reachability_info(false, true, false, false, false, false)
             }
-            ReachabilityStatusMetric::Status(status) => Self::construct_reachability_bitmap(
+            ReachabilityStatusMetric::Status(status) => Self::construct_reachability_info(
                 false,
                 false,
                 status.is_reachable(),
@@ -117,13 +117,13 @@ impl NetworkMetricsRecorder {
                 status.upnp_supported(),
             ),
             ReachabilityStatusMetric::NotPerformed => {
-                Self::construct_reachability_bitmap(true, false, false, false, false, false)
+                Self::construct_reachability_info(true, false, false, false, false, false)
             }
         };
 
         sub_registry.register(
             "reachability_status",
-            "The reachability status of the node presented as a bitmap. The bitmap represents the following: not_performed, is_ongoing, reachable, relay, not_routable, upnp.",
+            "The reachability status of the node.",
             reachability_status,
         );
 
@@ -431,24 +431,23 @@ impl NetworkMetricsRecorder {
         }
     }
 
-    fn construct_reachability_bitmap(
+    fn construct_reachability_info(
         not_performed: bool,
         is_ongoing: bool,
         reachable: bool,
         relay: bool,
         not_routable: bool,
         upnp: bool,
-    ) -> Info<[(String, String); 1]> {
-        let bitmap = format!(
-            "{}{}{}{}{}{}",
-            if not_performed { "1" } else { "0" },
-            if is_ongoing { "1" } else { "0" },
-            if reachable { "1" } else { "0" },
-            if relay { "1" } else { "0" },
-            if not_routable { "1" } else { "0" },
-            if upnp { "1" } else { "0" },
-        );
-        Info::new([("bitmap".to_string(), bitmap)])
+    ) -> Info<[(String, String); 6]> {
+        let bool_to_str = |b: bool| if b { "1".to_string() } else { "0".to_string() };
+        Info::new([
+            ("not_performed".to_string(), bool_to_str(not_performed)),
+            ("ongoing".to_string(), bool_to_str(is_ongoing)),
+            ("reachable".to_string(), bool_to_str(reachable)),
+            ("relay".to_string(), bool_to_str(relay)),
+            ("not_routable".to_string(), bool_to_str(not_routable)),
+            ("upnp_supported".to_string(), bool_to_str(upnp)),
+        ])
     }
 }
 
