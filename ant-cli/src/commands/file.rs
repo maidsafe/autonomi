@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
-use crate::exit_code::{upload_exit_code, ExitCodeError, IO_ERROR};
+use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
+use crate::exit_code::{upload_exit_code, ExitCodeError, FEES_ERROR, IO_ERROR};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::payment::PaymentOption;
@@ -40,20 +41,23 @@ pub async fn upload(
     public: bool,
     network_context: NetworkContext,
     optional_verification_quorum: Option<ResponseQuorum>,
-    max_fee_per_gas: Option<u128>,
+    max_fee_per_gas_param: Option<MaxFeePerGasParam>,
 ) -> Result<(), ExitCodeError> {
     let mut config = ClientOperatingStrategy::new();
+
     if let Some(verification_quorum) = optional_verification_quorum {
         config.chunks.verification_quorum = verification_quorum;
     }
+
     let mut client =
         crate::actions::connect_to_network_with_config(network_context, config).await?;
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 
-    if let Some(max_fee_per_gas) = max_fee_per_gas {
-        wallet.set_transaction_config(TransactionConfig::new(max_fee_per_gas))
-    }
+    let max_fee_per_gas =
+        get_max_fee_per_gas_from_opt_param(max_fee_per_gas_param, client.evm_network())
+            .map_err(|err| (err, FEES_ERROR))?;
+    wallet.set_transaction_config(TransactionConfig { max_fee_per_gas });
 
     let payment = PaymentOption::Wallet(wallet);
     let event_receiver = client.enable_client_events();
