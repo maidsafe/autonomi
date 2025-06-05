@@ -13,9 +13,10 @@ pub(super) mod service;
 mod upnp;
 
 pub(crate) use metadata::MetadataRecorder;
+use prometheus_client::metrics::info::Info;
 
-use crate::networking::log_markers::Marker;
 use crate::networking::MetricsRegistries;
+use crate::{networking::log_markers::Marker, ReachabilityStatus};
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     metrics::{Metrics as Libp2pMetrics, Recorder},
@@ -38,6 +39,12 @@ const TO_MB: u64 = 1_000_000;
 #[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
 pub(crate) struct VersionLabels {
     version: String,
+}
+
+pub(crate) enum ReachabilityStatusMetric {
+    Ongoing,
+    Status(ReachabilityStatus),
+    NotPerformed,
 }
 
 /// The shared recorders that are used to record metrics.
@@ -86,13 +93,40 @@ pub(crate) struct NetworkMetricsRecorder {
 }
 
 impl NetworkMetricsRecorder {
-    pub(crate) fn new(registries: &mut MetricsRegistries) -> Self {
+    pub(crate) fn new(
+        registries: &mut MetricsRegistries,
+        reachability_check_metric: ReachabilityStatusMetric,
+    ) -> Self {
         // ==== Standard metrics =====
 
         let libp2p_metrics = Libp2pMetrics::new(&mut registries.standard_metrics);
         let sub_registry = registries
             .standard_metrics
             .sub_registry_with_prefix("ant_networking");
+
+        // reachability check should be a part of the standard metrics and is of type Info
+        let reachability_status = match reachability_check_metric {
+            ReachabilityStatusMetric::Ongoing => {
+                Self::construct_reachability_bitmap(false, true, false, false, false, false)
+            }
+            ReachabilityStatusMetric::Status(status) => Self::construct_reachability_bitmap(
+                false,
+                false,
+                status.is_reachable(),
+                status.is_relay(),
+                status.is_not_routable(),
+                status.upnp_supported(),
+            ),
+            ReachabilityStatusMetric::NotPerformed => {
+                Self::construct_reachability_bitmap(true, false, false, false, false, false)
+            }
+        };
+
+        sub_registry.register(
+            "reachability_status",
+            "The reachability status of the node presented as a bitmap. The bitmap represents the following: not_performed, is_ongoing, reachable, relay, not_routable, upnp.",
+            reachability_status,
+        );
 
         let records_stored = Gauge::default();
         sub_registry.register(
@@ -396,6 +430,26 @@ impl NetworkMetricsRecorder {
                 .get_or_create(&VersionLabels { version })
                 .set(count as i64);
         }
+    }
+
+    fn construct_reachability_bitmap(
+        not_performed: bool,
+        is_ongoing: bool,
+        reachable: bool,
+        relay: bool,
+        not_routable: bool,
+        upnp: bool,
+    ) -> Info<[(String, String); 1]> {
+        let bitmap = format!(
+            "{}{}{}{}{}{}",
+            if not_performed { "1" } else { "0" },
+            if is_ongoing { "1" } else { "0" },
+            if reachable { "1" } else { "0" },
+            if relay { "1" } else { "0" },
+            if not_routable { "1" } else { "0" },
+            if upnp { "1" } else { "0" },
+        );
+        Info::new([("bitmap".to_string(), bitmap)])
     }
 }
 
