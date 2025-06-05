@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749045775930,
+  "lastUpdate": 1749110322684,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -155,6 +155,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 31.44852384160029,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "36204420+vphongph@users.noreply.github.com",
+            "name": "vphongph",
+            "username": "vphongph"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b5dbfa4568e56b84035f1a1c0889722a36ffa38e",
+          "message": "Merge pull request #2991 from mickvandijke/example-network-from-code\n\nchore: add a network spawner example",
+          "timestamp": "2025-06-05T06:57:54Z",
+          "tree_id": "1ce560c1ae4792eecbd57b02101e7a0a471e1a6d",
+          "url": "https://github.com/maidsafe/autonomi/commit/b5dbfa4568e56b84035f1a1c0889722a36ffa38e"
+        },
+        "date": 1749110315220,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.26464013254119956,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 1.2753288661519067,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 32.20872243420691,
             "unit": "MiB/s"
           }
         ]
