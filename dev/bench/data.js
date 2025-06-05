@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749137793330,
+  "lastUpdate": 1749137794575,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -673,6 +673,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/5839aced5d1774a71675baaff911008f14517828"
         },
         "date": 1749133137968,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 13,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1c8a2c2439404bfdd2c0011092e025bb9ce76382",
+          "message": "Merge pull request #2739 from mickvandijke/example-spawn-single-node\n\nchore: add spawn single node example",
+          "timestamp": "2025-06-05T14:33:07Z",
+          "tree_id": "f2200f6de6d00c507ab904118207df4887cfb39c",
+          "url": "https://github.com/maidsafe/autonomi/commit/1c8a2c2439404bfdd2c0011092e025bb9ce76382"
+        },
+        "date": 1749137794244,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
