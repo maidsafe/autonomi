@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749133138271,
+  "lastUpdate": 1749133139549,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -807,6 +807,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 11534,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5839aced5d1774a71675baaff911008f14517828",
+          "message": "Merge pull request #3005 from jacderida/chore-disable_nightly_test_runs\n\nchore: disable nightly test runs",
+          "timestamp": "2025-06-05T15:06:04+01:00",
+          "tree_id": "fe2eabe8ebdf5963dd1bb3029281e00a7a93b890",
+          "url": "https://github.com/maidsafe/autonomi/commit/5839aced5d1774a71675baaff911008f14517828"
+        },
+        "date": 1749133139182,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 4604,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 11195,
             "unit": "ms"
           },
           {
