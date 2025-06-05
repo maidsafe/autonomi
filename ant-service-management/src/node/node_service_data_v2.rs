@@ -62,7 +62,7 @@ pub struct NodeServiceDataV2 {
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     pub reward_balance: Option<AttoTokens>,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_name: String,
     pub status: ServiceStatus,
     pub user: Option<String>,
@@ -111,7 +111,7 @@ impl NodeServiceDataV2 {
             #[serde(default)]
             rewards_address: RewardsAddress,
             reward_balance: Option<AttoTokens>,
-            rpc_socket_addr: SocketAddr,
+            rpc_socket_addr: Option<SocketAddr>,
             service_name: String,
             status: ServiceStatus,
             user: Option<String>,

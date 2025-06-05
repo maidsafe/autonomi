@@ -20,6 +20,8 @@ pub enum Error {
     PidNotFoundAfterStarting,
     #[error("The PID of the process was not set.")]
     PidNotSet,
+    #[error("The metric port of the node is empty")]
+    MetricPortEmpty,
     #[error(transparent)]
     SemverError(#[from] semver::Error),
     #[error("Unable to remove a running service {0:?}, stop this service first before removing")]

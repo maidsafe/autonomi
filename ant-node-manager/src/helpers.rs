@@ -381,7 +381,9 @@ pub fn check_port_availability(port_option: &PortRange, nodes: &[NodeServiceData
         if let Some(port) = node.node_port {
             all_ports.push(port);
         }
-        all_ports.push(node.rpc_socket_addr.port());
+        if let Some(addr) = node.rpc_socket_addr {
+            all_ports.push(addr.port());
+        }
     }
 
     match port_option {
