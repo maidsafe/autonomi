@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749110460700,
+  "lastUpdate": 1749132998796,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -194,6 +194,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 32.20872243420691,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5839aced5d1774a71675baaff911008f14517828",
+          "message": "Merge pull request #3005 from jacderida/chore-disable_nightly_test_runs\n\nchore: disable nightly test runs",
+          "timestamp": "2025-06-05T15:06:04+01:00",
+          "tree_id": "fe2eabe8ebdf5963dd1bb3029281e00a7a93b890",
+          "url": "https://github.com/maidsafe/autonomi/commit/5839aced5d1774a71675baaff911008f14517828"
+        },
+        "date": 1749132991320,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.2556234961917194,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 1.273989772070566,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 32.387072619852624,
             "unit": "MiB/s"
           }
         ]
