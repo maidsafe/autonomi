@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749132998796,
+  "lastUpdate": 1749133137099,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -380,6 +380,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 86,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5839aced5d1774a71675baaff911008f14517828",
+          "message": "Merge pull request #3005 from jacderida/chore-disable_nightly_test_runs\n\nchore: disable nightly test runs",
+          "timestamp": "2025-06-05T15:06:04+01:00",
+          "tree_id": "fe2eabe8ebdf5963dd1bb3029281e00a7a93b890",
+          "url": "https://github.com/maidsafe/autonomi/commit/5839aced5d1774a71675baaff911008f14517828"
+        },
+        "date": 1749133136700,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 84,
             "unit": "MB"
           }
         ]
