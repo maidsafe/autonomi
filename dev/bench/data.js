@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749160633845,
+  "lastUpdate": 1749160636113,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -775,6 +775,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/1c8a2c2439404bfdd2c0011092e025bb9ce76382"
         },
         "date": 1749137794244,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 13,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "efaf096763d77e6e88ebd33787829ba857379180",
+          "message": "Merge pull request #2977 from ermineJose/hotfix-Lauchpad-timeout\n\nfeat: add timeout option for NAT-detection",
+          "timestamp": "2025-06-05T22:44:22+01:00",
+          "tree_id": "efabdac43ade5eed1552dda6e5662395839a827f",
+          "url": "https://github.com/maidsafe/autonomi/commit/efaf096763d77e6e88ebd33787829ba857379180"
+        },
+        "date": 1749160634989,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
