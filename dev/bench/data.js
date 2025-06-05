@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749110458112,
+  "lastUpdate": 1749110459389,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -469,6 +469,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/75d145ac2879cb1e98ba3344d24f2938bc4edce5"
         },
         "date": 1749045772272,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 13,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "36204420+vphongph@users.noreply.github.com",
+            "name": "vphongph",
+            "username": "vphongph"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b5dbfa4568e56b84035f1a1c0889722a36ffa38e",
+          "message": "Merge pull request #2991 from mickvandijke/example-network-from-code\n\nchore: add a network spawner example",
+          "timestamp": "2025-06-05T06:57:54Z",
+          "tree_id": "1ce560c1ae4792eecbd57b02101e7a0a471e1a6d",
+          "url": "https://github.com/maidsafe/autonomi/commit/b5dbfa4568e56b84035f1a1c0889722a36ffa38e"
+        },
+        "date": 1749110459027,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
