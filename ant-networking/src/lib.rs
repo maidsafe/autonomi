@@ -26,6 +26,7 @@ mod log_markers;
 mod metrics;
 mod network_builder;
 mod network_discovery;
+mod reachability_check;
 mod record_store;
 mod record_store_api;
 mod relay_manager;
@@ -45,6 +46,7 @@ pub use self::{
     event::{MsgResponder, NetworkEvent},
     graph::get_graph_entry_from_record,
     network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
+    reachability_check::ReachabilityStatus,
     record_store::NodeRecordStore,
 };
 #[cfg(feature = "open-metrics")]
@@ -72,7 +74,7 @@ use libp2p::{
 use rand::Rng;
 use std::{
     collections::{BTreeMap, HashMap},
-    net::IpAddr,
+    net::{IpAddr, SocketAddr},
     sync::Arc,
 };
 use tokio::sync::{
@@ -1297,6 +1299,13 @@ pub(crate) fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Mult
     Some(new_multiaddr)
 }
 
+/// Get the `SocketAddr` from the `Multiaddr`
+pub(crate) fn multiaddr_get_socket_addr(addr: &Multiaddr) -> Option<SocketAddr> {
+    let ip = multiaddr_get_ip(addr)?;
+    let port = multiaddr_get_port(addr)?;
+    Some(SocketAddr::new(ip, port))
+}
+
 /// Get the `IpAddr` from the `Multiaddr`
 pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
     addr.iter().find_map(|p| match p {
@@ -1351,6 +1360,18 @@ pub(crate) fn send_network_swarm_cmd(
             error!("Failed to send SwarmCmd: {}", error);
         }
     });
+}
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
 }
 
 #[cfg(test)]

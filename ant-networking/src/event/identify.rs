@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 /// The delay before we dial back a peer after receiving an identify event.
 /// 180s will most likely remove the UDP tuple from the remote's NAT table.
 /// This will make sure that the peer is reachable and that we can add it to the routing table.
-const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
+pub const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 impl SwarmDriver {
     pub(super) fn handle_identify_event(&mut self, identify_event: libp2p::identify::Event) {
@@ -76,13 +76,7 @@ impl SwarmDriver {
             return;
         }
 
-        if info.agent_version.contains("client") {
-            debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
-            return;
-        }
-
         let has_dialed = self.dialed_peers.contains(&peer_id);
-
         let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
 
         let addrs = if !is_relayed_peer {
@@ -103,6 +97,19 @@ impl SwarmDriver {
             debug!("Peer {peer_id:?} is a relayed peer. Not using {addr_fom_connection:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
             p2p_addrs
         };
+
+        // return early for reachability-check-client / clients
+        if info.agent_version.contains("reachability-check-client") {
+            debug!("Peer {peer_id:?} is a peer requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
+            self.dial_queue.insert(
+                peer_id,
+                (Addresses(addrs.clone()), Instant::now() + DIAL_BACK_DELAY),
+            );
+            return;
+        } else if info.agent_version.contains("client") {
+            debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
+            return;
+        }
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
@@ -226,6 +233,7 @@ impl SwarmDriver {
                 warn!("Peer {peer_id:?} is not part of the RT. Cannot update addresses.");
                 return;
             };
+
             let existing_addrs = entry
                 .node
                 .value
