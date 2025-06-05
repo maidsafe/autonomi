@@ -8,8 +8,10 @@
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
-    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+    metrics::service::run_metrics_server, metrics::MetadataRecorder,
+    metrics::NetworkMetricsRecorder, metrics::ReachabilityStatusMetric, MetricsRegistries,
 };
+
 use crate::{
     networking::{
         bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
@@ -257,13 +259,16 @@ fn init_swarm_driver(
 
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
-        use crate::networking::metrics::MetadataRecorder;
-
-        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+        let reachability_check_metric = if let Some(status) = config.reachability_status {
+            ReachabilityStatusMetric::Status(status)
+        } else {
+            ReachabilityStatusMetric::NotPerformed
+        };
+        let metrics_recorder =
+            NetworkMetricsRecorder::new(&mut metrics_registries, reachability_check_metric);
         let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
         metadata_recorder.register_peer_id(&peer_id);
         metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
-        metadata_recorder.register_reachability_status(config.reachability_status.clone());
 
         run_metrics_server(metrics_registries, port);
         Some(metrics_recorder)
@@ -500,13 +505,11 @@ pub(crate) fn init_reachability_check_swarm(
 
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
-        use crate::networking::metrics::MetadataRecorder;
-
-        let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+        let metrics_recorder =
+            NetworkMetricsRecorder::new(&mut metrics_registries, ReachabilityStatusMetric::Ongoing);
         let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
         metadata_recorder.register_peer_id(&peer_id);
         metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
-        metadata_recorder.register_reachability_check_is_ongoing();
 
         run_metrics_server(metrics_registries, port);
         Some(metrics_recorder)
