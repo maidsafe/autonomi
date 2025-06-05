@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1749165779667,
+  "lastUpdate": 1749165913874,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -584,6 +584,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 87,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c428d9c5ba926a1485f316c883c58846a9556296",
+          "message": "Merge pull request #2981 from RolandSherwin/compatibility_for_reachability_check\n\nfeat(network): add to dial queue if reachability check agent",
+          "timestamp": "2025-06-06T00:12:40+01:00",
+          "tree_id": "70f2a9c661f76aaa3abc264253596b519ca7fc43",
+          "url": "https://github.com/maidsafe/autonomi/commit/c428d9c5ba926a1485f316c883c58846a9556296"
+        },
+        "date": 1749165913540,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 85,
             "unit": "MB"
           }
         ]
