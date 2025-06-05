@@ -7,12 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::{Error, Result};
-use ant_protocol::{
-    antnode_proto::{
-        ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest,
-        RecordAddressesRequest, RestartRequest, StopRequest, UpdateLogLevelRequest, UpdateRequest,
-    },
-    CLOSE_GROUP_SIZE,
+use ant_protocol::antnode_proto::{
+    ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest, RecordAddressesRequest,
+    RestartRequest, StopRequest, UpdateLogLevelRequest, UpdateRequest,
 };
 use async_trait::async_trait;
 use libp2p::{kad::RecordKey, Multiaddr, PeerId};
@@ -241,17 +238,12 @@ impl RpcActions for RpcClient {
             );
             if let Ok(mut client) = AntNodeClient::connect(self.endpoint.clone()).await {
                 debug!("Connection to RPC successful");
-                if let Ok(response) = client
+                if client
                     .network_info(Request::new(NetworkInfoRequest {}))
                     .await
+                    .is_ok()
                 {
-                    if response.get_ref().connected_peers.len() > CLOSE_GROUP_SIZE {
-                        return Ok(());
-                    } else {
-                        error!(
-                            "Node does not have enough peers connected yet. Retrying {attempts}/{max_attempts}",
-                        );
-                    }
+                    return Ok(());
                 } else {
                     error!("Could not obtain NetworkInfo through RPC. Retrying {attempts}/{max_attempts}");
                 }

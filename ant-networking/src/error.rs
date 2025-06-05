@@ -85,6 +85,20 @@ impl Debug for GetRecordError {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum ReachabilityCheckError {
+    #[error("Port not found")]
+    EmptyPort,
+    #[error("Ip address not found")]
+    EmptyIpAddrs,
+    #[error("PeerId not found")]
+    EmptyPeerId,
+    #[error("Local adapter not found")]
+    LocalAdapterShouldNotBeEmpty,
+    #[error("External address not found")]
+    ExternalAddrsShouldNotBeEmpty,
+}
+
 /// Network Errors
 #[derive(Debug, Error)]
 pub enum NetworkError {
@@ -108,6 +122,9 @@ pub enum NetworkError {
 
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
+
+    #[error("Reachability check error: {0}")]
+    ReachabilityCheckError(#[from] ReachabilityCheckError),
 
     // ---------- Record Errors
     // GetRecord query errors

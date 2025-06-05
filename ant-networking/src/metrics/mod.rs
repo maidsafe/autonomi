@@ -6,14 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
+mod metadata;
 mod relay_client;
 pub mod service;
 mod upnp;
 
-use crate::MetricsRegistries;
+pub use metadata::MetadataRecorder;
+use prometheus_client::metrics::info::Info;
+
 use crate::{log_markers::Marker, time::sleep};
+use crate::{MetricsRegistries, ReachabilityStatus};
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     metrics::{Metrics as Libp2pMetrics, Recorder},
@@ -37,8 +40,14 @@ pub(crate) struct VersionLabels {
     version: String,
 }
 
+pub enum ReachabilityStatusMetric {
+    Ongoing,
+    Status(ReachabilityStatus),
+    NotPerformed,
+}
+
 /// The shared recorders that are used to record metrics.
-pub(crate) struct NetworkMetricsRecorder {
+pub struct NetworkMetricsRecorder {
     // Records libp2p related metrics
     // Must directly call self.libp2p_metrics.record(libp2p_event) with Recorder trait in scope. But since we have
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)
@@ -83,13 +92,40 @@ pub(crate) struct NetworkMetricsRecorder {
 }
 
 impl NetworkMetricsRecorder {
-    pub fn new(registries: &mut MetricsRegistries) -> Self {
+    pub fn new(
+        registries: &mut MetricsRegistries,
+        reachability_check_metric: ReachabilityStatusMetric,
+    ) -> Self {
         // ==== Standard metrics =====
 
         let libp2p_metrics = Libp2pMetrics::new(&mut registries.standard_metrics);
         let sub_registry = registries
             .standard_metrics
             .sub_registry_with_prefix("ant_networking");
+
+        // reachability check should be a part of the standard metrics and is of type Info
+        let reachability_status = match reachability_check_metric {
+            ReachabilityStatusMetric::Ongoing => {
+                Self::construct_reachability_info(false, true, false, false, false, false)
+            }
+            ReachabilityStatusMetric::Status(status) => Self::construct_reachability_info(
+                false,
+                false,
+                status.is_reachable(),
+                status.is_relay(),
+                status.is_not_routable(),
+                status.upnp_supported(),
+            ),
+            ReachabilityStatusMetric::NotPerformed => {
+                Self::construct_reachability_info(true, false, false, false, false, false)
+            }
+        };
+
+        sub_registry.register(
+            "reachability_status",
+            "The reachability status of the node.",
+            reachability_status,
+        );
 
         let records_stored = Gauge::default();
         sub_registry.register(
@@ -389,6 +425,25 @@ impl NetworkMetricsRecorder {
                 .get_or_create(&VersionLabels { version })
                 .set(count as i64);
         }
+    }
+
+    fn construct_reachability_info(
+        not_performed: bool,
+        is_ongoing: bool,
+        reachable: bool,
+        relay: bool,
+        not_routable: bool,
+        upnp: bool,
+    ) -> Info<[(String, String); 6]> {
+        let bool_to_str = |b: bool| if b { "1".to_string() } else { "0".to_string() };
+        Info::new([
+            ("not_performed".to_string(), bool_to_str(not_performed)),
+            ("ongoing".to_string(), bool_to_str(is_ongoing)),
+            ("reachable".to_string(), bool_to_str(reachable)),
+            ("relay".to_string(), bool_to_str(relay)),
+            ("not_routable".to_string(), bool_to_str(not_routable)),
+            ("upnp_supported".to_string(), bool_to_str(upnp)),
+        ])
     }
 }
 
