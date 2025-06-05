@@ -79,7 +79,6 @@ impl fmt::Debug for ContentError {
 type ContentErredList = Arc<RwLock<BTreeMap<NetworkAddress, ContentError>>>;
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore]
 async fn data_availability_during_churn() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_multi_threaded_tokio_test("data_with_churn", false);
 
