@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{networking::MetricsRegistries, ReachabilityStatus};
+use crate::networking::MetricsRegistries;
 use libp2p::PeerId;
 use prometheus_client::{metrics::info::Info, registry::Registry};
 
@@ -42,75 +42,5 @@ impl<'a> MetadataRecorder<'a> {
                 identify_protocol_str,
             )]),
         );
-    }
-
-    /// Register the reachability status of the node in the metadata registry.
-    /// Setting `status` to `None` indicates that the reachability check has not been performed.
-    pub(crate) fn register_reachability_status(&mut self, status: Option<ReachabilityStatus>) {
-        let mut upnp_result = false;
-        let mut relay = false;
-        let mut reachable = false;
-        let mut not_routable = false;
-        let mut not_performed = false;
-
-        match status {
-            Some(ReachabilityStatus::NotRoutable { upnp }) => {
-                not_routable = true;
-                upnp_result = upnp;
-            }
-            Some(ReachabilityStatus::Relay { upnp }) => {
-                relay = true;
-                upnp_result = upnp;
-            }
-            Some(ReachabilityStatus::Reachable { upnp, .. }) => {
-                reachable = true;
-                upnp_result = upnp;
-            }
-            None => {
-                not_performed = true;
-            }
-        }
-
-        self.metadata_sub_reg.register(
-            "reachability_status",
-            "The reachability status of the node",
-            self.construct_reachability_info(
-                upnp_result,
-                relay,
-                reachable,
-                not_routable,
-                not_performed,
-                false,
-            ),
-        );
-    }
-
-    /// Register that a reachability check is ongoing in the metadata registry.
-    /// This sets the other reachability status fields to `false`.
-    pub(crate) fn register_reachability_check_is_ongoing(&mut self) {
-        self.metadata_sub_reg.register(
-            "is_ongoing_reachability_check",
-            "Indicates if a reachability check is currently ongoing",
-            self.construct_reachability_info(false, false, false, false, false, true),
-        );
-    }
-
-    fn construct_reachability_info(
-        &self,
-        upnp: bool,
-        relay: bool,
-        reachable: bool,
-        not_routable: bool,
-        not_performed: bool,
-        is_ongoing: bool,
-    ) -> Info<[(String, String); 6]> {
-        Info::new([
-            ("not_routable".to_string(), not_routable.to_string()),
-            ("relay".to_string(), relay.to_string()),
-            ("reachable".to_string(), reachable.to_string()),
-            ("check_not_performed".to_string(), not_performed.to_string()),
-            ("upnp".to_string(), upnp.to_string()),
-            ("is_ongoing".to_string(), is_ongoing.to_string()),
-        ])
     }
 }
