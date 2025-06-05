@@ -24,8 +24,9 @@ use crate::{
 };
 #[cfg(feature = "open-metrics")]
 use crate::{
-    metrics::service::run_metrics_server, metrics::MetadataRecorder,
-    metrics::NetworkMetricsRecorder, MetricsRegistries,
+    metrics::service::run_metrics_server,
+    metrics::{MetadataRecorder, NetworkMetricsRecorder, ReachabilityStatusMetric},
+    MetricsRegistries,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
@@ -361,11 +362,13 @@ impl NetworkBuilder {
 
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if let Some(port) = self.metrics_server_port {
-            let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+            let metrics_recorder = NetworkMetricsRecorder::new(
+                &mut metrics_registries,
+                ReachabilityStatusMetric::Ongoing,
+            );
             let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
             metadata_recorder.register_peer_id(&peer_id);
             metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
-            metadata_recorder.register_reachability_check_is_ongoing();
 
             run_metrics_server(metrics_registries, port);
             Some(metrics_recorder)
@@ -472,11 +475,16 @@ impl NetworkBuilder {
 
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if let Some(port) = self.metrics_server_port {
-            let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
+            let reachability_check_metric = if let Some(status) = self.reachability_status {
+                ReachabilityStatusMetric::Status(status)
+            } else {
+                ReachabilityStatusMetric::NotPerformed
+            };
+            let metrics_recorder =
+                NetworkMetricsRecorder::new(&mut metrics_registries, reachability_check_metric);
             let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
             metadata_recorder.register_peer_id(&peer_id);
             metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
-            metadata_recorder.register_reachability_status(self.reachability_status.clone());
 
             run_metrics_server(metrics_registries, port);
             Some(metrics_recorder)
