@@ -213,7 +213,7 @@ pub async fn remove(
         verbosity != VerbosityLevel::Minimal,
         false,
     )
-    .await?;
+    .await;
 
     let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
     if service_indices.is_empty() {
@@ -298,7 +298,7 @@ pub async fn start_batch(
         verbosity != VerbosityLevel::Minimal,
         false,
     )
-    .await?;
+    .await;
 
     let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
     if service_indices.is_empty() {
@@ -384,7 +384,7 @@ pub async fn stop(
         verbosity != VerbosityLevel::Minimal,
         false,
     )
-    .await?;
+    .await;
 
     let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
     if service_indices.is_empty() {

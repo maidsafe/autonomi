@@ -174,7 +174,23 @@ impl NodeBuilder {
             self.initial_peers.clone(),
         );
 
+        #[cfg(feature = "open-metrics")]
+        let _ = if self.metrics_server_port.is_some() {
+            // metadata registry
+            let mut metrics_registries = MetricsRegistries::default();
+            let metrics_recorder = NodeMetricsRecorder::new(&mut metrics_registries);
+
+            network_builder.metrics_registries(metrics_registries);
+
+            Some(metrics_recorder)
+        } else {
+            None
+        };
+
+        #[cfg(feature = "open-metrics")]
+        network_builder.metrics_server_port(self.metrics_server_port);
         network_builder.listen_addr(self.addr);
+
         let swarm_driver = network_builder.build_reachability_check_swarm()?;
         let status = swarm_driver.detect().await?;
 
