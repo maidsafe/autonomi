@@ -69,6 +69,9 @@ pub enum FileCmd {
         /// Upload the file as public. Everyone can see public data on the Network.
         #[arg(short, long)]
         public: bool,
+        /// Skip creating local archive after upload. Only upload files without saving archive information.
+        #[arg(long)]
+        no_archive: bool,
         /// Experimental: Optionally specify the quorum for the verification of the upload.
         ///
         /// Possible values are: "one", "majority", "all", n (where n is a number greater than 0)
@@ -260,11 +263,12 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             FileCmd::Upload {
                 file,
                 public,
+                no_archive,
                 quorum,
                 max_fee_per_gas,
             } => {
                 if let Err((err, exit_code)) =
-                    file::upload(&file, public, network_context, quorum, max_fee_per_gas).await
+                    file::upload(&file, public, no_archive, network_context, quorum, max_fee_per_gas).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
