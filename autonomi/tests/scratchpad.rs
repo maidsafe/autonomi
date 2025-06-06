@@ -12,7 +12,7 @@ use autonomi::scratchpad::ScratchpadError;
 use autonomi::AttoTokens;
 use autonomi::{
     client::scratchpad::{Bytes, Scratchpad},
-    Client,
+    Client, ScratchpadAddress,
 };
 use eyre::Result;
 use serial_test::serial;
@@ -162,6 +162,12 @@ async fn scratchpad_errors() -> Result<()> {
         res,
         Err(ScratchpadError::CannotUpdateNewScratchpad)
     ));
+
+    // try get scratchpad, it should fail as we haven't created it
+    let res = client
+        .scratchpad_get(&ScratchpadAddress::new(key.public_key()))
+        .await;
+    assert!(matches!(res, Err(ScratchpadError::Missing)));
 
     // put the scratchpad normally
     let payment_option = PaymentOption::from(&wallet);

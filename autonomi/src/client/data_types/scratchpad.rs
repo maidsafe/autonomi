@@ -109,6 +109,10 @@ impl Client {
                 };
                 pad.to_owned()
             }
+            Err(NetworkError::GetRecordError(GetRecordError::RecordNotFound)) => {
+                debug!("Record not found for {scratch_key:?}");
+                return Err(ScratchpadError::Missing);
+            }
             Err(e) => {
                 warn!("Failed to fetch scratchpad {network_address:?} from network: {e}");
                 return Err(e)?;
@@ -271,9 +275,7 @@ impl Client {
         let address = ScratchpadAddress::new(owner.public_key());
         let current = match self.scratchpad_get(&address).await {
             Ok(scratchpad) => Some(scratchpad),
-            Err(ScratchpadError::Network(NetworkError::GetRecordError(
-                GetRecordError::RecordNotFound,
-            ))) => None,
+            Err(ScratchpadError::Missing) => None,
             Err(ScratchpadError::Network(NetworkError::GetRecordError(
                 GetRecordError::SplitRecord { result_map },
             ))) => result_map
