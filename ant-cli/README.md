@@ -17,7 +17,7 @@ ant [OPTIONS] <COMMAND>
 
 ### File
 - `file cost <file>`
-- `file upload <file> [--public]`
+- `file upload <file> [--public] [--no-archive]`
 - `file download <addr> <dest_file>`
 - `file list`
 
@@ -155,15 +155,16 @@ Expected value:
 
 #### Upload a file
 ```
-file upload <file> [--public]
+file upload <file> [--public] [--no-archive]
 ```
 Uploads a file to the network.
 
 Expected value: 
 - `<file>`: File path (accessible by current user)
 
-The following flag can be added:
-`--public` (Optional) Specifying this will make this file publicly available to anyone on the network
+The following flags can be added:
+- `--public` (Optional) Specifying this will make this file publicly available to anyone on the network
+- `--no-archive` (Optional) Skip creating local archive after upload. Only upload files without saving archive information
 
 #### Download a file
 ```
