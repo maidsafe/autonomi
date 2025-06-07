@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 pub mod evm;
+pub mod local_network_spawner;
 pub mod testnet;
 
 use bytes::Bytes;
