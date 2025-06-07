@@ -68,6 +68,8 @@ pub struct NodeServiceDataV2 {
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
+    #[serde(default)]
+    pub write_older_cache_files: bool,
 }
 
 // Helper method for direct V2 deserialization
@@ -119,6 +121,8 @@ impl NodeServiceDataV2 {
             version: String,
             #[serde(default)]
             alpha: bool,
+            #[serde(default)]
+            write_older_cache_files: bool,
         }
 
         let helper = NodeServiceDataV2Helper::deserialize(deserializer)?;
@@ -154,6 +158,7 @@ impl NodeServiceDataV2 {
             user_mode: helper.user_mode,
             version: helper.version,
             alpha: helper.alpha,
+            write_older_cache_files: helper.write_older_cache_files,
         })
     }
 }
@@ -191,6 +196,7 @@ impl From<NodeServiceDataV1> for NodeServiceDataV2 {
             user_mode: v1.user_mode,
             version: v1.version,
             alpha: false, // Default value for upgraded instances
+            write_older_cache_files: false,
         }
     }
 }
