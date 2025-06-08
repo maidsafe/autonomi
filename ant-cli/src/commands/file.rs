@@ -42,6 +42,7 @@ pub async fn cost(file: &str, network_context: NetworkContext) -> Result<()> {
 pub async fn upload(
     file: &str,
     public: bool,
+    archive: bool,
     network_context: NetworkContext,
     max_fee_per_gas: Option<u128>,
 ) -> Result<(), ExitCodeError> {
@@ -80,97 +81,102 @@ pub async fn upload(
 
     // upload dir
     let local_addr;
-    let archive = if public {
-        let result = client.dir_upload_public(dir_path, payment.clone()).await;
-        match result {
-            Ok((_cost, xor_name)) => {
-                local_addr = xor_name.to_hex();
-                local_addr.clone()
-            }
-            Err(UploadError::PutError(PutError::Batch(upload_state))) => {
-                let res = cached_payments::save_payment(file, &upload_state);
-                println!("Cached payment to local disk for {file}: {res:?}");
-                let exit_code =
-                    upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
-                return Err((
-                    eyre!(UploadError::PutError(PutError::Batch(upload_state)))
-                        .wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
-            Err(err) => {
-                let exit_code = upload_exit_code(&err);
-                return Err((
-                    eyre!(err).wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
+    let archive_content = if archive {
+        // Traditional upload with archive creation and upload
+        if public {
+            let (_cost, xor_name) = client.dir_upload_public(dir_path, payment.clone()).await
+                .map_err(|err| {
+                    let exit_code = upload_exit_code(&err);
+                    (eyre!(err).wrap_err("Failed to upload file"), exit_code)
+                })?;
+            
+            local_addr = xor_name.to_hex();
+            local_addr.clone()
+        } else {
+            let (_cost, private_data_access) = client.dir_upload(dir_path, payment).await
+                .map_err(|err| {
+                    let exit_code = upload_exit_code(&err);
+                    (eyre!(err).wrap_err("Failed to upload file"), exit_code)
+                })?;
+            
+            local_addr = private_data_access.address();
+            private_data_access.to_hex()
         }
     } else {
-        let result = client.dir_upload(dir_path, payment).await;
-        match result {
-            Ok((_cost, private_data_access)) => {
-                local_addr = private_data_access.address();
-                private_data_access.to_hex()
-            }
-            Err(UploadError::PutError(PutError::Batch(upload_state))) => {
-                let res = crate::access::cached_payments::save_payment(file, &upload_state);
-                println!("Cached payment to local disk for {file}: {res:?}");
-                let exit_code =
-                    upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
-                return Err((
-                    eyre!(UploadError::PutError(PutError::Batch(upload_state)))
-                        .wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
-            Err(err) => {
-                let exit_code = upload_exit_code(&err);
-                return Err((
-                    eyre!(err).wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
+        // Only upload file content, don't create or upload archive (default behavior)
+        if public {
+            let (cost, _archive) = client.dir_content_upload_public(dir_path, payment.clone()).await
+                .map_err(|err| {
+                    let exit_code = upload_exit_code(&err);
+                    (eyre!(err).wrap_err("Failed to upload file content"), exit_code)
+                })?;
+            
+            println!("Files uploaded successfully. Total cost: {} AttoTokens", cost);
+            info!("Files uploaded successfully. Cost: {cost}");
+            local_addr = "content-only-upload".to_string();
+            local_addr.clone()
+        } else {
+            let (cost, _archive) = client.dir_content_upload(dir_path, payment).await
+                .map_err(|err| {
+                    let exit_code = upload_exit_code(&err);
+                    (eyre!(err).wrap_err("Failed to upload file content"), exit_code)
+                })?;
+            
+            println!("Files uploaded successfully. Total cost: {} AttoTokens", cost);
+            info!("Files uploaded successfully. Cost: {cost}");
+            local_addr = "content-only-upload".to_string();
+            local_addr.clone()
         }
     };
 
-    // wait for upload to complete
+    // wait for upload to complete and get summary
     if let Err(e) = upload_completed_tx.send(()) {
         error!("Failed to send upload completed event: {e:?}");
         eprintln!("Failed to send upload completed event: {e:?}");
     }
 
-    // get summary
-    let summary = upload_summary_thread
-        .await
-        .map_err(|err| (eyre!(err), IO_ERROR))?;
-    if summary.records_paid == 0 {
-        println!("All chunks already exist on the network.");
+    if archive {
+        // get summary only for traditional uploads with archive
+        let summary = upload_summary_thread
+            .await
+            .map_err(|err| (eyre!(err), IO_ERROR))?;
+        if summary.records_paid == 0 {
+            println!("All chunks already exist on the network.");
+        } else {
+            println!("Successfully uploaded: {file}");
+            println!("At address: {local_addr}");
+            info!("Successfully uploaded: {file} at address: {local_addr}");
+            println!("Number of chunks uploaded: {}", summary.records_paid);
+            println!(
+                "Number of chunks already paid/uploaded: {}",
+                summary.records_already_paid
+            );
+            println!("Total cost: {} AttoTokens", summary.tokens_spent);
+        }
+        info!("Summary for upload of file {file} at {local_addr:?}: {summary:?}");
     } else {
-        println!("Successfully uploaded: {file}");
-        println!("At address: {local_addr}");
-        info!("Successfully uploaded: {file} at address: {local_addr}");
-        println!("Number of chunks uploaded: {}", summary.records_paid);
-        println!(
-            "Number of chunks already paid/uploaded: {}",
-            summary.records_already_paid
-        );
-        println!("Total cost: {} AttoTokens", summary.tokens_spent);
+        // For content-only uploads, we already printed the cost and don't have an archive address
+        println!("Content-only upload completed: {file}");
+        info!("Content-only upload completed: {file}");
     }
-    info!("Summary for upload of file {file} at {local_addr:?}: {summary:?}");
 
-    // save to local user data
-    let writer = if public {
-        crate::user_data::write_local_public_file_archive(archive, &name)
+    // save to local user data (only if archive is true)
+    if archive {
+        let writer = if public {
+            crate::user_data::write_local_public_file_archive(archive_content, &name)
+        } else {
+            crate::user_data::write_local_private_file_archive(archive_content, local_addr, &name)
+        };
+        writer
+            .wrap_err("Failed to save file to local user data")
+            .with_suggestion(|| "Local user data saves the file address above to disk, without it you need to keep track of the address yourself")
+            .map_err(|err| (err, IO_ERROR))?;
+
+        info!("Saved file to local user data");
     } else {
-        crate::user_data::write_local_private_file_archive(archive, local_addr, &name)
-    };
-    writer
-        .wrap_err("Failed to save file to local user data")
-        .with_suggestion(|| "Local user data saves the file address above to disk, without it you need to keep track of the address yourself")
-        .map_err(|err| (err, IO_ERROR))?;
-
-    info!("Saved file to local user data");
+        info!("Skipped saving file to local user data (content-only mode)");
+        println!("Archive creation skipped. File uploaded but no local archive saved.");
+    }
 
     Ok(())
 }

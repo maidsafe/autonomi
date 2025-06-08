@@ -70,6 +70,13 @@ pub enum FileCmd {
         /// Upload the file as public. Everyone can see public data on the Network.
         #[arg(short, long)]
         public: bool,
+        /// Create and upload archive after file upload. This enables traditional archive functionality.
+        /// The archive preserves directory structure, filenames, and metadata of uploaded folders.
+        /// This ensures the original folder structure and file naming are maintained after download.
+        /// Without this flag, all files are uploaded as individual objects, losing filenames, metadata, and directory structure.
+        /// Using this option incurs additional costs.
+        #[arg(short, long)]
+        archive: bool,
         /// Optional: Specify the maximum fee per gas in u128.
         #[arg(long)]
         max_fee_per_gas: Option<u128>,
@@ -258,10 +265,11 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             FileCmd::Upload {
                 file,
                 public,
+                archive,
                 max_fee_per_gas,
             } => {
                 if let Err((err, exit_code)) =
-                    file::upload(&file, public, network_context, max_fee_per_gas).await
+                    file::upload(&file, public, archive, network_context,  max_fee_per_gas).await
                 {
                     eprintln!("{err:?}");
                     std::process::exit(exit_code);
