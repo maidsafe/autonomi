@@ -15,9 +15,10 @@ use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
 use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
 use libp2p::request_response::OutboundRequestId;
 use libp2p::PeerId;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use thiserror::Error;
 use tokio::sync::mpsc::Sender;
+use xor_name::XorName;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum TaskHandlerError {
@@ -49,7 +50,7 @@ pub(crate) struct TaskHandler {
         ),
     >,
     get_record: HashMap<QueryId, (OneShotTaskResult<RecordAndHolders>, Quorum)>,
-    get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
+    get_record_accumulator: HashMap<QueryId, HashMap<XorName, (Record, HashSet<PeerId>)>>,
 }
 
 impl TaskHandler {
@@ -144,17 +145,27 @@ impl TaskHandler {
                     "QueryId({id}): GetRecordOk::FoundRecord {:?}",
                     PrettyPrintRecordKey::from(&record.record.key)
                 );
-                let holders = self.get_record_accumulator.entry(id).or_default();
+
+                let record_results = self.get_record_accumulator.entry(id).or_default();
 
                 if let Some(peer_id) = record.peer {
-                    holders.insert(peer_id, record.record);
+                    let record_content_hash = XorName::from_content(&record.record.value);
+
+                    let entry = record_results
+                        .entry(record_content_hash)
+                        .or_insert_with(|| (record.record.clone(), Default::default()));
+
+                    entry.1.insert(peer_id);
                 }
 
                 // If we have enough holders, finish the task.
                 if let Some((_resp, quorum)) = self.get_record.get(&id) {
                     let expected_holders = get_quorum_amount(quorum);
 
-                    if holders.len() >= expected_holders {
+                    if record_results
+                        .iter()
+                        .any(|(_, (_, peers))| peers.len() >= expected_holders)
+                    {
                         info!("QueryId({id}): got enough holders, finishing task");
                         self.finish_get_record(id).await?;
                     }
@@ -170,8 +181,13 @@ impl TaskHandler {
                     hex::encode(key),
                     closest_peers
                 );
-                let ((responder, _), holders) = self.consume_get_record_task_and_holders(id)?;
-                let peers = holders.keys().cloned().collect();
+                let ((responder, _), record_results) =
+                    self.consume_get_record_task_and_results(id)?;
+
+                let peers: Vec<_> = record_results
+                    .values()
+                    .flat_map(|(_, peers_set)| peers_set.iter().cloned())
+                    .collect();
 
                 responder
                     .send(Ok((None, peers)))
@@ -188,8 +204,13 @@ impl TaskHandler {
                     records.len(),
                     quorum
                 );
-                let ((responder, _), holders) = self.consume_get_record_task_and_holders(id)?;
-                let peers = holders.keys().cloned().collect();
+                let ((responder, _), record_results) =
+                    self.consume_get_record_task_and_results(id)?;
+
+                let peers: Vec<_> = record_results
+                    .values()
+                    .flat_map(|(_, peers_set)| peers_set.iter().cloned())
+                    .collect();
 
                 responder
                     .send(Ok((None, peers)))
@@ -200,8 +221,13 @@ impl TaskHandler {
                     "QueryId({id}): GetRecordError::Timeout {:?}",
                     hex::encode(key)
                 );
-                let ((responder, _), holders) = self.consume_get_record_task_and_holders(id)?;
-                let peers = holders.keys().cloned().collect();
+                let ((responder, _), record_results) =
+                    self.consume_get_record_task_and_results(id)?;
+
+                let peers: Vec<_> = record_results
+                    .values()
+                    .flat_map(|(_, peers_set)| peers_set.iter().cloned())
+                    .collect();
 
                 responder
                     .send(Err(NetworkError::GetRecordTimeout(peers)))
@@ -212,16 +238,20 @@ impl TaskHandler {
     }
 
     pub async fn finish_get_record(&mut self, id: QueryId) -> Result<(), TaskHandlerError> {
-        let ((responder, quorum), holders) = self.consume_get_record_task_and_holders(id)?;
+        let ((responder, quorum), record_results) = self.consume_get_record_task_and_results(id)?;
 
         self.finish_kad_query(id).await;
 
         let expected_holders = get_quorum_amount(&quorum);
 
-        if holders.len() < expected_holders {
+        // Return quorum error if none of the records have enough holders.
+        if !record_results
+            .iter()
+            .any(|(_, (_, peers))| peers.len() >= expected_holders)
+        {
             responder
                 .send(Err(NetworkError::GetRecordQuorumFailed {
-                    got_holders: holders.len(),
+                    got_holders: record_results.len(),
                     expected_holders,
                 }))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
@@ -229,20 +259,23 @@ impl TaskHandler {
             return Ok(());
         }
 
-        let peers = holders.keys().cloned().collect();
+        let records: Vec<_> = record_results.into_values().collect();
 
-        let records_uniq = holders.values().cloned().fold(Vec::new(), |mut acc, x| {
-            if !acc.contains(&x) {
-                acc.push(x);
+        let res = match &records.as_slice() {
+            [] => responder.send(Ok((None, Default::default()))),
+            [one] => responder.send(Ok((Some(one.0.clone()), one.1.iter().cloned().collect()))),
+            [_one, _two, ..] => {
+                let mut map = HashMap::new();
+
+                for (record, peers) in records {
+                    for peer in peers {
+                        // Insert into the map, cloning the record (if necessary)
+                        map.insert(peer, record.clone());
+                    }
+                }
+
+                responder.send(Err(NetworkError::SplitRecord(map)))
             }
-            acc
-        });
-
-        let res = match &records_uniq[..] {
-            [] => responder.send(Ok((None, peers))),
-            [one] => responder.send(Ok((Some(one.clone()), peers))),
-            // TODO: Should we consider returning one of the two split records if it has a majority of holders?
-            [_one, _two, ..] => responder.send(Err(NetworkError::SplitRecord(holders))),
         };
 
         res.map_err(|_| TaskHandlerError::NetworkClientDropped)?;
@@ -351,13 +384,13 @@ impl TaskHandler {
 
     /// Helper function to take the responder and holders from a get record task
     #[allow(clippy::type_complexity)]
-    fn consume_get_record_task_and_holders(
+    fn consume_get_record_task_and_results(
         &mut self,
         id: QueryId,
     ) -> Result<
         (
             (OneShotTaskResult<RecordAndHolders>, Quorum),
-            HashMap<PeerId, Record>,
+            HashMap<XorName, (Record, HashSet<PeerId>)>,
         ),
         TaskHandlerError,
     > {
@@ -365,8 +398,8 @@ impl TaskHandler {
             .get_record
             .remove(&id)
             .ok_or(TaskHandlerError::UnknownQuery(format!("QueryId {id:?}")))?;
-        let holders = self.get_record_accumulator.remove(&id).unwrap_or_default();
-        Ok(((responder, quorum), holders))
+        let record_results = self.get_record_accumulator.remove(&id).unwrap_or_default();
+        Ok(((responder, quorum), record_results))
     }
 
     /// Forcefully finish a kad query.
