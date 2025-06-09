@@ -4,6 +4,7 @@
 //! provides network spawning capabilities and convergent encryption on file-based data.
 
 use napi::bindgen_prelude::*;
+use napi::tokio::sync::Mutex;
 use napi::{Result, Status};
 use napi_derive::napi;
 use std::path::PathBuf;
@@ -11,7 +12,7 @@ use std::path::PathBuf;
 // Convert Rust errors to JavaScript errors
 fn map_error<E>(err: E) -> napi::Error
 where
-    E: std::error::Error,
+    E: std::error::Error + Send + Sync + 'static,
 {
     let mut err_str = String::new();
     err_str.push_str(&format!("{err:?}: {err}\n"));
@@ -24,7 +25,7 @@ where
     napi::Error::new(Status::GenericFailure, err_str)
 }
 
-fn try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
+fn _try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
     let (_signed, value, losless) = value.get_u64();
     if losless {
         if let Ok(value) = T::try_from(value) {
@@ -39,6 +40,145 @@ fn try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
             std::any::type_name::<T>()
         ),
     ))
+}
+
+/// Once a node is started and running, the user obtains a NodeRunning object which can be used to interact with it.
+#[napi]
+pub struct RunningNode(ant_node::RunningNode);
+
+#[napi]
+impl RunningNode {
+    /// Returns this node's `PeerId`
+    #[napi]
+    pub fn peer_id(&self) -> String {
+        self.0.peer_id().to_string()
+    }
+
+    /// Returns the root directory path for the node.
+    ///
+    /// This will either be a value defined by the user, or a default location, plus the peer ID
+    /// appended. The default location is platform specific:
+    ///  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
+    ///  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
+    ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\node\<peer-id>
+    #[napi]
+    pub fn root_dir_path(&self) -> String {
+        self.0.root_dir_path().to_string_lossy().to_string()
+    }
+
+    // /// Returns a `SwarmLocalState` with some information obtained from swarm's local state.
+    // #[napi]
+    // pub async fn get_swarm_local_state(&self) -> Result<SwarmLocalState> {
+    //     self.0.get_swarm_local_state()
+    // }
+
+    /// Return the node's listening addresses.
+    #[napi]
+    pub async fn get_listen_addrs(&self) -> Result<Vec<String>> {
+        self.0
+            .get_listen_addrs()
+            .await
+            .map(|addrs| addrs.iter().map(|addr| addr.to_string()).collect())
+            .map_err(map_error)
+    }
+
+    /// Return the node's listening addresses with the peer id appended.
+    #[napi]
+    pub async fn get_listen_addrs_with_peer_id(&self) -> Result<Vec<String>> {
+        self.0
+            .get_listen_addrs_with_peer_id()
+            .await
+            .map(|addrs| addrs.iter().map(|addr| addr.to_string()).collect())
+            .map_err(map_error)
+    }
+
+    /// Return the node's listening port
+    #[napi]
+    pub async fn get_node_listening_port(&self) -> Result<u16> {
+        self.0.get_node_listening_port().await.map_err(map_error)
+    }
+
+    // /// Returns the node events channel where to subscribe to receive `NodeEvent`s
+    // #[napi]
+    // pub fn node_events_channel(&self) -> &NodeEventsChannel {
+    //     self.0.node_events_channel()
+    // }
+
+    /// Returns the list of all the RecordKeys held by the node
+    #[napi]
+    pub async fn get_all_record_addresses(&self) -> Result<Vec<Vec<u8>>> {
+        self.0
+            .get_all_record_addresses()
+            .await
+            .map(|addrs| addrs.iter().map(|addr| addr.as_bytes()).collect())
+            .map_err(map_error)
+    }
+
+    // /// Returns a map where each key is the ilog2 distance of that Kbucket and each value is a vector of peers in that
+    // /// bucket.
+    // #[napi]
+    // pub async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
+    //     self.0.get_kbuckets()
+    // }
+
+    /// Returns the node's reward address
+    #[napi]
+    pub fn reward_address(&self) -> Vec<u8> {
+        self.0.reward_address().to_vec()
+    }
+
+    // /// Shutdown the SwarmDriver loop and the node (NetworkEvents) loop.
+    // #[napi]
+    // pub fn shutdown(self) {
+    //     self.0.shutdown()
+    // }
+}
+
+/// Represents a running test network.
+#[napi]
+pub struct RunningNetwork(Mutex<Option<ant_node::spawn::network_spawner::RunningNetwork>>);
+
+#[napi]
+impl RunningNetwork {
+    /// Returns a bootstrap peer from this network.
+    #[napi]
+    pub async fn bootstrap_peer(&self) -> Result<String> {
+        let running_network = self.0.lock().await;
+        let running_network = running_network.as_ref().ok_or_else(|| {
+            napi::Error::new(Status::GenericFailure, "Network has already been shutdown")
+        })?;
+
+        let peer = running_network.bootstrap_peer().await;
+        Ok(peer.to_string())
+    }
+
+    /// Returns a bootstrap peer from this network.
+    #[napi]
+    pub async fn running_nodes(&self) -> Result<Vec<RunningNode>> {
+        let running_network = self.0.lock().await;
+        let running_network = running_network.as_ref().ok_or_else(|| {
+            napi::Error::new(Status::GenericFailure, "Network has already been shutdown")
+        })?;
+
+        let nodes = running_network
+            .running_nodes()
+            .iter()
+            .map(|node| RunningNode(node.clone()))
+            .collect::<Vec<_>>();
+        Ok(nodes)
+    }
+
+    /// Shutdown all running nodes.
+    #[napi]
+    pub async fn shutdown(&self) -> Result<()> {
+        let mut running_network = self.0.lock().await;
+        let running_network = running_network.take().ok_or_else(|| {
+            napi::Error::new(Status::GenericFailure, "Network has already been shutdown")
+        })?;
+
+        running_network.shutdown();
+        Ok(())
+    }
 }
 
 /// A spawner for creating local SAFE networks for testing and development.
@@ -66,6 +206,19 @@ impl NetworkSpawner {
         }
 
         Self(spawner)
+    }
+
+    /// Spawns the network with the configured parameters.
+    #[napi]
+    pub async fn spawn(&self) -> Result<RunningNetwork> {
+        let running_network = self.0.clone().spawn().await.map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("Failed to spawn network: {e}"),
+            )
+        })?;
+
+        Ok(RunningNetwork(Mutex::new(Some(running_network))))
     }
 }
 
