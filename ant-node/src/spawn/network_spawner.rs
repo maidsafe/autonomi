@@ -13,6 +13,7 @@ use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone)]
 pub struct NetworkSpawner {
     /// The EVM network to which the spawned nodes will connect.
     evm_network: EvmNetwork,

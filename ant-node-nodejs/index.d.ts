@@ -9,7 +9,44 @@ export interface NetworkSpawnerFields {
   rootDir?: string | undefined | null
   size?: number
 }
+/** Once a node is started and running, the user obtains a NodeRunning object which can be used to interact with it. */
+export declare class RunningNode {
+  /** Returns this node's `PeerId` */
+  peerId(): string
+  /**
+   * Returns the root directory path for the node.
+   *
+   * This will either be a value defined by the user, or a default location, plus the peer ID
+   * appended. The default location is platform specific:
+   *  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
+   *  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
+   *  - Windows: C:\Users\<username>\AppData\Roaming\autonomi
+  ode\<peer-id>
+   */
+  rootDirPath(): string
+  /** Return the node's listening addresses. */
+  getListenAddrs(): Promise<Array<string>>
+  /** Return the node's listening addresses with the peer id appended. */
+  getListenAddrsWithPeerId(): Promise<Array<string>>
+  /** Return the node's listening port */
+  getNodeListeningPort(): Promise<number>
+  /** Returns the list of all the RecordKeys held by the node */
+  getAllRecordAddresses(): Promise<Array<Array<number>>>
+  /** Returns the node's reward address */
+  rewardAddress(): Array<number>
+}
+/** Represents a running test network. */
+export declare class RunningNetwork {
+  /** Returns a bootstrap peer from this network. */
+  bootstrapPeer(): Promise<string>
+  /** Returns a bootstrap peer from this network. */
+  runningNodes(): Promise<Array<RunningNode>>
+  /** Shutdown all running nodes. */
+  shutdown(): Promise<void>
+}
 /** A spawner for creating local SAFE networks for testing and development. */
 export declare class NetworkSpawner {
   constructor(args?: NetworkSpawnerFields | undefined | null)
+  /** Spawns the network with the configured parameters. */
+  spawn(): Promise<RunningNetwork>
 }
