@@ -9,6 +9,11 @@ export interface NetworkSpawnerFields {
   rootDir?: string | undefined | null
   size?: number
 }
+export declare class SwarmLocalState {
+  get connectedPeers(): Array<string>
+  get peersInRoutingTable(): bigint
+  get listeners(): Array<string>
+}
 /** Once a node is started and running, the user obtains a NodeRunning object which can be used to interact with it. */
 export declare class RunningNode {
   /** Returns this node's `PeerId` */
@@ -24,6 +29,8 @@ export declare class RunningNode {
   ode\<peer-id>
    */
   rootDirPath(): string
+  /** Returns a `SwarmLocalState` with some information obtained from swarm's local state. */
+  getSwarmLocalState(): Promise<SwarmLocalState>
   /** Return the node's listening addresses. */
   getListenAddrs(): Promise<Array<string>>
   /** Return the node's listening addresses with the peer id appended. */
