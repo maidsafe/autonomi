@@ -148,6 +148,7 @@ impl ReachabilityCheckSwarmDriver {
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
+            #[cfg(feature = "open-metrics")]
             metrics_recorder,
         }
     }
