@@ -8,14 +8,15 @@
 
 mod bad_node;
 mod metadata;
+mod reachability_check;
 mod relay_client;
 pub(super) mod service;
 mod upnp;
 
 pub(crate) use metadata::MetadataRecorder;
-use prometheus_client::metrics::info::Info;
+pub(crate) use reachability_check::ReachabilityStatusMetric;
+use crate::networking::log_markers::Marker;
 use crate::networking::MetricsRegistries;
-use crate::{networking::log_markers::Marker, ReachabilityStatus};
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     PeerId,
@@ -38,12 +39,6 @@ const TO_MB: u64 = 1_000_000;
 #[derive(Clone, Hash, PartialEq, Eq, Debug, EncodeLabelSet)]
 pub(crate) struct VersionLabels {
     version: String,
-}
-
-pub(crate) enum ReachabilityStatusMetric {
-    Ongoing,
-    Status(ReachabilityStatus),
-    NotPerformed,
 }
 
 /// The shared recorders that are used to record metrics.
@@ -103,28 +98,14 @@ impl NetworkMetricsRecorder {
             .standard_metrics
             .sub_registry_with_prefix("ant_networking");
 
-        // reachability check should be a part of the standard metrics and is of type Info
-        let reachability_status = match reachability_check_metric {
-            ReachabilityStatusMetric::Ongoing => {
-                Self::construct_reachability_info(false, true, false, false, false, false)
-            }
-            ReachabilityStatusMetric::Status(status) => Self::construct_reachability_info(
-                false,
-                false,
-                status.is_reachable(),
-                status.is_relay(),
-                status.is_not_routable(),
-                status.upnp_supported(),
-            ),
-            ReachabilityStatusMetric::NotPerformed => {
-                Self::construct_reachability_info(true, false, false, false, false, false)
-            }
-        };
+        // reachability check should be a part of the standard metrics and is a gauge value, but never changes.
+        let reachability_check_metric =
+            reachability_check::get_reachability_status_metric(reachability_check_metric);
 
         sub_registry.register(
             "reachability_status",
             "The reachability status of the node.",
-            reachability_status,
+            reachability_check_metric,
         );
 
         let records_stored = Gauge::default();
@@ -429,25 +410,6 @@ impl NetworkMetricsRecorder {
                 .get_or_create(&VersionLabels { version })
                 .set(count as i64);
         }
-    }
-
-    fn construct_reachability_info(
-        not_performed: bool,
-        is_ongoing: bool,
-        reachable: bool,
-        relay: bool,
-        not_routable: bool,
-        upnp: bool,
-    ) -> Info<[(String, String); 6]> {
-        let bool_to_str = |b: bool| if b { "1".to_string() } else { "0".to_string() };
-        Info::new([
-            ("not_performed".to_string(), bool_to_str(not_performed)),
-            ("ongoing".to_string(), bool_to_str(is_ongoing)),
-            ("reachable".to_string(), bool_to_str(reachable)),
-            ("relay".to_string(), bool_to_str(relay)),
-            ("not_routable".to_string(), bool_to_str(not_routable)),
-            ("upnp_supported".to_string(), bool_to_str(upnp)),
-        ])
     }
 }
 
