@@ -42,6 +42,31 @@ fn _try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
     ))
 }
 
+#[napi]
+pub struct SwarmLocalState(ant_node::SwarmLocalState);
+
+#[napi]
+impl SwarmLocalState {
+    #[napi(getter)]
+    pub fn connected_peers(&self) -> Vec<String> {
+        self.0
+            .connected_peers
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    #[napi(getter)]
+    pub fn peers_in_routing_table(&self) -> usize {
+        self.0.peers_in_routing_table
+    }
+
+    #[napi(getter)]
+    pub fn listeners(&self) -> Vec<String> {
+        self.0.listeners.iter().map(ToString::to_string).collect()
+    }
+}
+
 /// Once a node is started and running, the user obtains a NodeRunning object which can be used to interact with it.
 #[napi]
 pub struct RunningNode(ant_node::RunningNode);
@@ -66,11 +91,15 @@ impl RunningNode {
         self.0.root_dir_path().to_string_lossy().to_string()
     }
 
-    // /// Returns a `SwarmLocalState` with some information obtained from swarm's local state.
-    // #[napi]
-    // pub async fn get_swarm_local_state(&self) -> Result<SwarmLocalState> {
-    //     self.0.get_swarm_local_state()
-    // }
+    /// Returns a `SwarmLocalState` with some information obtained from swarm's local state.
+    #[napi]
+    pub async fn get_swarm_local_state(&self) -> Result<SwarmLocalState> {
+        self.0
+            .get_swarm_local_state()
+            .await
+            .map(SwarmLocalState)
+            .map_err(map_error)
+    }
 
     /// Return the node's listening addresses.
     #[napi]

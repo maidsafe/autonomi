@@ -310,8 +310,9 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { RunningNode, RunningNetwork, NetworkSpawner } = nativeBinding
+const { SwarmLocalState, RunningNode, RunningNetwork, NetworkSpawner } = nativeBinding
 
+module.exports.SwarmLocalState = SwarmLocalState
 module.exports.RunningNode = RunningNode
 module.exports.RunningNetwork = RunningNetwork
 module.exports.NetworkSpawner = NetworkSpawner
