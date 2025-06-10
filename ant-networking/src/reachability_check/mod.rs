@@ -9,6 +9,7 @@
 mod dialer;
 
 use crate::error::ReachabilityCheckError;
+#[cfg(feature = "open-metrics")]
 use crate::metrics::NetworkMetricsRecorder;
 use crate::{endpoint_str, multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p};
 use custom_debug::Debug as CustomDebug;
@@ -128,6 +129,7 @@ impl ReachabilityCheckSwarmDriver {
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
+            #[cfg(feature = "open-metrics")]
             metrics_recorder,
         }
     }
