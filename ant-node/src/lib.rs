@@ -44,11 +44,12 @@ pub use self::{
     log_markers::Marker,
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
+pub use ant_networking::SwarmLocalState;
 
 use crate::error::{Error, Result};
 
 use ant_evm::RewardsAddress;
-use ant_networking::{Network, SwarmLocalState};
+use ant_networking::Network;
 use ant_protocol::{get_port_from_multiaddr, NetworkAddress};
 use libp2p::{Multiaddr, PeerId};
 

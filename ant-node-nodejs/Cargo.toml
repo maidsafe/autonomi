@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "ant-node-nodejs"
+version = "0.1.0"
+description = "NodeJS bindings for Autonomi Node"
+license = "GPL-3.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ant-node = { path = "../ant-node", version = "0.4.0" }
+hex = "0.4.3"
+napi = { version = "2.12.2", default-features = false, features = ["napi4", "napi6", "tokio_rt", "serde-json"] }
+napi-derive = "2.12.2"
+
+[build-dependencies]
+napi-build = "2.0.1"
