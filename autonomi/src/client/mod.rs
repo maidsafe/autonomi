@@ -257,7 +257,11 @@ impl Client {
             ant_protocol::version::set_network_id(network_id);
         }
 
-        let initial_peers = match config.init_peers_config.get_addrs(None, None).await {
+        let initial_peers = match config
+            .init_peers_config
+            .get_bootstrap_addr(None, None)
+            .await
+        {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };

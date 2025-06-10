@@ -91,6 +91,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub relay: bool,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
+    pub write_older_cache_files: bool,
 }
 
 impl InstallNodeServiceCtxBuilder {
@@ -146,6 +147,9 @@ impl InstallNodeServiceCtxBuilder {
 
         args.push(OsString::from("--rewards-address"));
         args.push(OsString::from(self.rewards_address.to_string()));
+        if self.write_older_cache_files {
+            args.push(OsString::from("--write-older-cache-files"));
+        }
 
         args.push(OsString::from(self.evm_network.to_string()));
         if let EvmNetwork::Custom(custom_network) = &self.evm_network {
@@ -204,6 +208,7 @@ pub struct AddNodeServiceOptions {
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
+    pub write_older_cache_files: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -328,6 +333,7 @@ mod tests {
             metrics_port: None,
             name: "test-node".to_string(),
             network_id: None,
+            no_upnp: false,
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
@@ -335,7 +341,7 @@ mod tests {
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
-            no_upnp: false,
+            write_older_cache_files: false,
         }
     }
 
@@ -373,6 +379,7 @@ mod tests {
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
+            write_older_cache_files: false,
         }
     }
 
@@ -410,6 +417,7 @@ mod tests {
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
+            write_older_cache_files: false,
         }
     }
 
@@ -503,6 +511,7 @@ mod tests {
             vec!["http://localhost:8080".parse().unwrap()];
         builder.init_peers_config.ignore_cache = true;
         builder.service_user = Some("antnode-user".to_string());
+        builder.write_older_cache_files = true;
 
         let result = builder.build().unwrap();
 
@@ -539,6 +548,7 @@ mod tests {
             "10",
             "--rewards-address",
             "0x03B770D9cD32077cC0bF330c13C114a87643B124",
+            "--write-older-cache-files",
             "evm-custom",
             "--rpc-url",
             "http://localhost:8545/",

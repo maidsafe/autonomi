@@ -417,6 +417,7 @@ async fn add_node(args: MaintainNodesArgs) {
         None, // user,
         None, // version,
         VerbosityLevel::Minimal,
+        false, // write_older_cache_files
     )
     .await
     {
@@ -679,6 +680,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         None,
         VerbosityLevel::Minimal,
         None,
+        false,
     )
     .await
     {
@@ -753,6 +755,7 @@ async fn add_nodes(
             None,
             VerbosityLevel::Minimal,
             None,
+            false,
         )
         .await
         {
