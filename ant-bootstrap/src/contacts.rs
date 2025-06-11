@@ -182,7 +182,6 @@ impl ContactsFetcher {
         endpoint: &Url,
         ignore_peer_id: bool,
     ) -> Result<Vec<Multiaddr>> {
-        info!("Fetching peers from endpoint: {endpoint}");
         let mut retries = 0;
 
         let bootstrap_addresses = loop {
@@ -227,7 +226,7 @@ impl ContactsFetcher {
                     }
                 }
             }
-            trace!(
+            debug!(
                 "Failed to get bootstrap addrs from URL, retrying {retries}/{MAX_RETRIES_ON_FETCH_FAILURE}"
             );
 

@@ -6,16 +6,23 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::relay_manager::is_a_relayed_peer;
-use crate::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
+use crate::relay_manager::{is_a_relayed_peer, RelayManager};
+use crate::{
+    craft_valid_multiaddr_without_p2p, multiaddr_strip_p2p, Addresses, NetworkEvent, SwarmDriver,
+};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use itertools::Itertools;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
-use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::Multiaddr;
-use std::collections::HashSet;
-use std::time::Instant;
+use std::collections::{hash_map, HashSet};
+use std::time::{Duration, Instant};
+
+/// The delay before we dial back a peer after receiving an identify event.
+/// 180s will most likely remove the UDP tuple from the remote's NAT table.
+/// This will make sure that the peer is reachable and that we can add it to the routing table.
+const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 impl SwarmDriver {
     pub(super) fn handle_identify_event(&mut self, identify_event: libp2p::identify::Event) {
@@ -43,11 +50,17 @@ impl SwarmDriver {
         connection_id: libp2p::swarm::ConnectionId,
     ) {
         debug!("identify: received info from {peer_id:?} on {connection_id:?}. Info: {info:?}");
+        // If the peer dials us with a different addr, we would add it to our RT via update_pre_existing_peer
+        let Some((_, addr_fom_connection, _)) = self.live_connected_peers.get(&connection_id)
+        else {
+            warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
+            return;
+        };
 
         let our_identify_protocol = IDENTIFY_PROTOCOL_STR.read().expect("IDENTIFY_PROTOCOL_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
 
         if info.protocol_version != our_identify_protocol {
-            warn!(?info.protocol_version, "identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}");
+            warn!("identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}. Their protocol version: {:?}",info.protocol_version);
 
             self.send_event(NetworkEvent::PeerWithUnsupportedProtocol {
                 our_protocol: our_identify_protocol,
@@ -63,31 +76,39 @@ impl SwarmDriver {
             return;
         }
 
-        if info.agent_version.contains("client") {
+        let has_dialed = self.dialed_peers.contains(&peer_id);
+        let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
+        let addrs = if !is_relayed_peer {
+            let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
+            let Some(addr) = addr else {
+                warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
+                return;
+            };
+            debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
+            vec![addr]
+        } else {
+            let p2p_addrs = info
+                .listen_addrs
+                .iter()
+                .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
+                .unique()
+                .collect::<Vec<_>>();
+            debug!("Peer {peer_id:?} is a relayed peer. Not using {addr_fom_connection:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
+            p2p_addrs
+        };
+
+        // return early for reachability-check-peer / clients
+        if info.agent_version.contains("reachability-check-peer") {
+            debug!("Peer {peer_id:?} is a peer requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
+            self.dial_queue.insert(
+                peer_id,
+                (Addresses(addrs.clone()), Instant::now() + DIAL_BACK_DELAY),
+            );
+            return;
+        } else if info.agent_version.contains("client") {
             debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
             return;
         }
-
-        let has_dialed = self.dialed_peers.contains(&peer_id);
-
-        // If we're not in local mode, only add globally reachable addresses.
-        // Strip the `/p2p/...` part of the multiaddresses.
-        // Collect into a HashSet directly to avoid multiple allocations and handle deduplication.
-        let mut addrs: HashSet<Multiaddr> = match self.local {
-            true => info
-                .listen_addrs
-                .into_iter()
-                .map(|addr| multiaddr_strip_p2p(&addr))
-                .collect(),
-            false => info
-                .listen_addrs
-                .into_iter()
-                .filter(multiaddr_is_global)
-                .map(|addr| multiaddr_strip_p2p(&addr))
-                .collect(),
-        };
-
-        let is_relayed_peer = is_a_relayed_peer(addrs.iter());
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
@@ -113,70 +134,96 @@ impl SwarmDriver {
                 return;
             };
 
-        // If the peer is part already of the RT, try updating the addresses based on the new push info.
-        // We don't have to dial it back.
         if already_present_in_rt {
+            // If the peer is part already of the RT, try updating the addresses based on the new push info.
+            // We don't have to dial it back.
+
             debug!("Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new.");
+            self.update_pre_existing_peer(peer_id, &addrs, is_relayed_peer);
+        } else if !self.local && !has_dialed {
+            // When received an identify from un-dialed peer, try to dial it
+            // The dial shall trigger the same identify to be sent again and confirm
+            // peer is external accessible, hence safe to be added into RT.
+            // Client doesn't need to dial back.
 
-            self.update_pre_existing_peer(peer_id, addrs.clone());
-            return;
-        }
+            let exists_in_dial_queue = self.dial_queue.contains_key(&peer_id);
 
-        // When received an identify from un-dialed peer, try to dial it
-        // The dial shall trigger the same identify to be sent again and confirm
-        // peer is external accessible, hence safe to be added into RT.
-        // Client doesn't need to dial back.
-        if !self.local && !has_dialed {
             // Only need to dial back for not fulfilled kbucket
-            if kbucket_full {
+            if kbucket_full && !exists_in_dial_queue {
                 debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
                 return;
             }
 
-            info!(%peer_id, ?addrs, "received identify info from undialed peer for not full kbucket {ilog2:?}, dial back to confirm external accessible");
-            if let Err(err) = self.swarm.dial(
-                DialOpts::peer_id(peer_id)
-                    .condition(PeerCondition::NotDialing)
-                    .addresses(addrs.iter().cloned().collect())
-                    .build(),
-            ) {
-                warn!(%peer_id, ?addrs, "dialing error: {err:?}");
+            info!("received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}");
+            match self.dial_queue.entry(peer_id) {
+                hash_map::Entry::Occupied(mut entry) => {
+                    let (old_addrs, time) = entry.get_mut();
+
+                    debug!("Resetting dial time for {peer_id:?}");
+                    *time = Instant::now() + DIAL_BACK_DELAY;
+
+                    for addr in addrs.iter() {
+                        if !old_addrs.0.contains(addr) {
+                            debug!("Adding new addr {addr:?} to dial queue for {peer_id:?}");
+                            old_addrs.0.push(addr.clone());
+                        } else {
+                            debug!("Already have addr {addr:?} in dial queue for {peer_id:?}.");
+                        }
+                    }
+
+                    if is_relayed_peer {
+                        let mut removed = false;
+                        old_addrs.0.retain(|addr| {
+                            if addr.iter().any(|seg| matches!(seg, Protocol::P2pCircuit)) {
+                                true
+                            } else {
+                                removed = true;
+                                false
+                            }
+                        });
+                        if removed {
+                            debug!("Removed non-p2p addr from dial queue for {peer_id:?}. Remaining addrs: {old_addrs:?}");
+                        }
+                    }
+                }
+                hash_map::Entry::Vacant(entry) => {
+                    debug!("Adding new addr {addrs:?} to dial queue for {peer_id:?}");
+                    entry.insert((Addresses(addrs), Instant::now() + DIAL_BACK_DELAY));
+                }
             }
-        } else
-        // We care only for peers that we dialed and thus are reachable.
-        // Or if we are local, we can add the peer directly.
-        {
+        } else {
+            // We care only for peers that we dialed and thus are reachable.
+            // Or if we are local, we can add the peer directly.
             // A bad node cannot establish a connection with us. So we can add it to the RT directly.
 
             // With the new bootstrap cache, the workload is distributed,
             // hence no longer need to replace bootstrap nodes for workload share.
             // self.remove_bootstrap_from_full(peer_id);
-
-            // Avoid have `direct link format` addrs co-exists with `relay` addr
-            if is_relayed_peer {
-                addrs.retain(|multiaddr| {
-                    multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit))
-                });
-            }
-
-            debug!(%peer_id, ?addrs, "identify: attempting to add addresses to routing table");
+            debug!("identify: attempting to add addresses to routing table for {peer_id:?}. Addrs: {addrs:?}");
 
             // Attempt to add the addresses to the routing table.
-            for multiaddr in addrs {
+            for addr in addrs.into_iter() {
                 let _routing_update = self
                     .swarm
                     .behaviour_mut()
                     .kademlia
-                    .add_address(&peer_id, multiaddr);
+                    .add_address(&peer_id, addr);
             }
         }
     }
 
     /// If the peer is part already of the RT, try updating the addresses based on the new push info.
-    fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addrs: HashSet<Multiaddr>) {
+    ///
+    /// new_addrs will not contain non-p2p-circuit (non-relayed) addresses if the peer is a relayed peer.
+    fn update_pre_existing_peer(
+        &mut self,
+        peer_id: libp2p::PeerId,
+        new_addrs: &[Multiaddr],
+        is_relayed_peer: bool,
+    ) {
         if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
+            let new_addrs = new_addrs.iter().cloned().collect::<HashSet<_>>();
             let mut addresses_to_add = Vec::new();
-            let mut addresses_to_remove = Vec::new();
 
             let Some(entry) = kbucket
                 .iter()
@@ -192,16 +239,21 @@ impl SwarmDriver {
                 .map(multiaddr_strip_p2p)
                 .collect::<HashSet<_>>();
             addresses_to_add.extend(new_addrs.difference(&existing_addrs));
-            addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
 
-            if !addresses_to_remove.is_empty() {
-                debug!("Removing addresses from RT for {peer_id:?} as the new identify does not contain them: {addresses_to_remove:?}");
-                for multiaddr in addresses_to_remove {
-                    let _routing_update = self
-                        .swarm
-                        .behaviour_mut()
-                        .kademlia
-                        .remove_address(&peer_id, multiaddr);
+            // remove addresses only for relayed peers.
+            if is_relayed_peer {
+                let mut addresses_to_remove = Vec::new();
+                addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
+
+                if !addresses_to_remove.is_empty() {
+                    debug!("Removing addresses from RT for {peer_id:?} (relayed) as the new identify does not contain them: {addresses_to_remove:?}");
+                    for multiaddr in addresses_to_remove {
+                        let _routing_update = self
+                            .swarm
+                            .behaviour_mut()
+                            .kademlia
+                            .remove_address(&peer_id, multiaddr);
+                    }
                 }
             }
 
