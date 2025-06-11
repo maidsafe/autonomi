@@ -184,7 +184,7 @@ async fn upload_dir(
             let (_, addr) = client
                 .archive_put_public(&public_archive, payment_option.clone())
                 .await?;
-            Ok((addr.to_hex(), addr.to_hex()))
+            Ok((addr.to_hex(), addrs.join(", ")))
         }
     } else {
         let (_, private_archive) = client
