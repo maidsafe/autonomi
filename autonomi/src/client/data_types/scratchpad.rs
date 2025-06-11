@@ -401,7 +401,7 @@ impl Client {
     /// The scratchpad needs to be created first with a public scratchpad.
     /// This operation is free as the scratchpad was already paid for at creation.
     /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable.
-    /// 
+    ///
     /// Note: The data is stored unencrypted and publicly readable.
     pub async fn scratchpad_update_public(
         &self,
