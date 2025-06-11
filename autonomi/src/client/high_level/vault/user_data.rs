@@ -151,11 +151,11 @@ impl UserData {
 
 impl Client {
     /// Get the user data from the vault
-    pub async fn get_user_data_from_vault(
+    pub async fn vault_get_user_data(
         &self,
         secret_key: &VaultSecretKey,
     ) -> Result<UserData, UserDataVaultError> {
-        let (bytes, content_type) = self.fetch_and_decrypt_vault(secret_key).await?;
+        let (bytes, content_type) = self.vault_get(secret_key).await?;
 
         if content_type != *USER_DATA_VAULT_CONTENT_IDENTIFIER {
             return Err(UserDataVaultError::UnsupportedVaultContentType(
@@ -173,7 +173,7 @@ impl Client {
     /// Put the user data to the vault
     ///
     /// Returns the total cost of the put operation
-    pub async fn put_user_data_to_vault(
+    pub async fn vault_put_user_data(
         &self,
         secret_key: &VaultSecretKey,
         payment_option: PaymentOption,
@@ -183,7 +183,7 @@ impl Client {
             UserDataVaultError::Serialization(format!("Failed to serialize user data: {e}"))
         })?;
         let total_cost = self
-            .write_bytes_to_vault(
+            .vault_put(
                 bytes,
                 payment_option,
                 secret_key,
@@ -191,6 +191,25 @@ impl Client {
             )
             .await?;
         Ok(total_cost)
+    }
+
+    // Backward compatibility functions
+    #[deprecated(since = "0.5.0", note = "Use `vault_get_user_data` instead")]
+    pub async fn get_user_data_from_vault(
+        &self,
+        secret_key: &VaultSecretKey,
+    ) -> Result<UserData, UserDataVaultError> {
+        self.vault_get_user_data(secret_key).await
+    }
+
+    #[deprecated(since = "0.5.0", note = "Use `vault_put_user_data` instead")]
+    pub async fn put_user_data_to_vault(
+        &self,
+        secret_key: &VaultSecretKey,
+        payment_option: PaymentOption,
+        user_data: UserData,
+    ) -> Result<AttoTokens, UserDataVaultError> {
+        self.vault_put_user_data(secret_key, payment_option, user_data).await
     }
 }
 
