@@ -1006,7 +1006,7 @@ impl PyClient {
         let key = key.inner.clone();
 
         future_into_py(py, async move {
-            match client.get_user_data_from_vault(&key).await {
+            match client.vault_get_user_data(&key).await {
                 Ok(user_data) => Ok(PyUserData { inner: user_data }),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to get user data from vault: {e}"
@@ -1032,7 +1032,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             match client
-                .put_user_data_to_vault(&key, payment, user_data)
+                .vault_put_user_data(&key, payment, user_data)
                 .await
             {
                 Ok(cost) => Ok(cost.to_string()),

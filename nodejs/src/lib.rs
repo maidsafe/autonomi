@@ -734,7 +734,7 @@ impl Client {
     #[napi]
     pub async fn get_user_data_from_vault(&self, secret_key: &VaultSecretKey) -> Result<UserData> {
         self.0
-            .get_user_data_from_vault(&secret_key.0)
+            .vault_get_user_data(&secret_key.0)
             .await
             .map(UserData)
             .map_err(map_error)
@@ -751,7 +751,7 @@ impl Client {
         user_data: &UserData,
     ) -> Result</* AttoTokens */ String> {
         self.0
-            .put_user_data_to_vault(&secret_key.0, payment_option.0.clone(), user_data.0.clone())
+            .vault_put_user_data(&secret_key.0, payment_option.0.clone(), user_data.0.clone())
             .await
             .map(|c| c.to_string())
             .map_err(map_error)
