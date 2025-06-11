@@ -15,7 +15,6 @@ use crate::{
     driver::kad::U256,
     error::Result,
     event::{NetworkEvent, NodeEvent},
-    external_address::ExternalAddressManager,
     log_markers::Marker,
     network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL},
     relay_manager::RelayManager,
@@ -34,7 +33,10 @@ use futures::StreamExt;
 use libp2p::{
     kad::{self, KBucketDistance as Distance, QueryId, K_VALUE},
     request_response::OutboundRequestId,
-    swarm::{ConnectionId, Swarm},
+    swarm::{
+        dial_opts::{DialOpts, PeerCondition},
+        ConnectionId, Swarm,
+    },
     Multiaddr, PeerId,
 };
 use libp2p::{
@@ -42,10 +44,7 @@ use libp2p::{
     swarm::{behaviour::toggle::Toggle, NetworkBehaviour, SwarmEvent},
 };
 use rand::Rng;
-use std::{
-    collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
-    net::IpAddr,
-};
+use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Duration;
 use tracing::warn;
@@ -60,6 +59,9 @@ pub(crate) const CLOSET_RECORD_CHECK_INTERVAL: Duration = Duration::from_secs(15
 
 /// Interval over which we query relay manager to check if we can make any more reservations.
 pub(crate) const RELAY_MANAGER_RESERVATION_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Interval over which we check if we could dial any peer in the dial queue.
+const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
@@ -106,7 +108,6 @@ pub struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
-    pub(crate) external_address_manager: Option<ExternalAddressManager>,
     pub(crate) relay_manager: Option<RelayManager>,
     /// The peers that are using our relay service.
     pub(crate) connected_relay_clients: HashSet<PeerId>,
@@ -130,12 +131,13 @@ pub struct SwarmDriver {
     >,
     /// A list of the most recent peers we have dialed ourselves. Old dialed peers are evicted once the vec fills up.
     pub(crate) dialed_peers: CircularVec<PeerId>,
+    pub(crate) dial_queue: HashMap<PeerId, (Addresses, Instant)>,
     // Peers that having live connection to. Any peer got contacted during kad network query
     // will have live connection established. And they may not appear in the RT.
     pub(crate) live_connected_peers: BTreeMap<ConnectionId, (PeerId, Multiaddr, Instant)>,
     /// The list of recently established connections ids.
     /// This is used to prevent log spamming.
-    pub(crate) latest_established_connection_ids: HashMap<usize, (IpAddr, Instant)>,
+    pub(crate) latest_established_connection_ids: HashMap<usize, (Multiaddr, Instant)>,
     // Record the handling time of the recent 10 for each handling kind.
     pub(crate) handling_statistics: BTreeMap<String, Vec<Duration>>,
     pub(crate) handled_times: usize,
@@ -166,6 +168,8 @@ impl SwarmDriver {
         let mut relay_manager_reservation_interval = interval(RELAY_MANAGER_RESERVATION_INTERVAL);
         let mut initial_bootstrap_trigger_check_interval =
             Some(interval(INITIAL_BOOTSTRAP_CHECK_INTERVAL));
+        let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
+        dial_queue_check_interval.tick().await; // first tick completes immediately
 
         let mut bootstrap_cache_save_interval = self.bootstrap_cache.as_ref().and_then(|cache| {
             if cache.config().disable_cache_writing {
@@ -250,6 +254,31 @@ impl SwarmDriver {
                     }
                 },
                 // thereafter we can check our intervals
+
+                _ = dial_queue_check_interval.tick() => {
+                    let now = Instant::now();
+                    let mut to_remove = vec![];
+                    // check if we can dial any peer in the dial queue
+                    // if we have no peers in the dial queue, skip this check
+                    for (peer_id, (addrs, wait_time)) in self.dial_queue.iter() {
+                        if now > *wait_time {
+                            info!("Dialing peer {peer_id:?} from dial queue with addresses {addrs:?}");
+                            to_remove.push(*peer_id);
+                            if let Err(err) = self.swarm.dial(
+                                DialOpts::peer_id(*peer_id)
+                                    .condition(PeerCondition::NotDialing)
+                                    .addresses(addrs.0.clone())
+                                    .build(),
+                            ) {
+                                warn!(%peer_id, ?addrs, "dialing error: {err:?}");
+                            }
+                        }
+                    }
+
+                    for peer_id in to_remove.iter() {
+                        self.dial_queue.remove(peer_id);
+                    }
+                },
 
                 // check if we can trigger the initial bootstrap process
                 // once it is triggered, we don't re-trigger it
@@ -341,43 +370,29 @@ impl SwarmDriver {
                     }
                 },
                 Some(()) = Self::conditional_interval(&mut bootstrap_cache_save_interval) => {
-                    let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() else {
-                        continue;
-                    };
                     let Some(current_interval) = bootstrap_cache_save_interval.as_mut() else {
                         continue;
                     };
                     let start = Instant::now();
 
-                    let config = bootstrap_cache.config().clone();
-                    let mut old_cache = bootstrap_cache.clone();
+                    if  self.sync_and_flush_cache().is_err() {
+                        warn!("Failed to sync and flush bootstrap cache, skipping this interval");
+                        continue;
+                    }
 
-                    let new = match BootstrapCacheStore::new(config) {
-                        Ok(new) => new,
-                        Err(err) => {
-                            error!("Failed to create a new empty cache: {err}");
-                            continue;
-                        }
+                    let Some(bootstrap_config) = self.bootstrap_cache.as_ref().map(|cache|cache.config()) else {
+                        continue;
                     };
-                    *bootstrap_cache = new;
-
-                    // save the cache to disk
-                    spawn(async move {
-                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
-                            error!("Failed to save bootstrap cache: {err}");
-                        }
-                    });
-
-                    if current_interval.period() >= bootstrap_cache.config().max_cache_save_duration {
+                    if current_interval.period() >= bootstrap_config.max_cache_save_duration {
                         continue;
                     }
 
                     // add a variance of 1% to the max interval to avoid all nodes writing to disk at the same time.
                     let max_cache_save_duration =
-                        Self::duration_with_variance(bootstrap_cache.config().max_cache_save_duration, 1);
+                        Self::duration_with_variance(bootstrap_config.max_cache_save_duration, 1);
 
                     // scale up the interval until we reach the max
-                    let scaled = current_interval.period().as_secs().saturating_mul(bootstrap_cache.config().cache_save_scaling_factor);
+                    let scaled = current_interval.period().as_secs().saturating_mul(bootstrap_config.cache_save_scaling_factor);
                     let new_duration = Duration::from_secs(std::cmp::min(scaled, max_cache_save_duration.as_secs()));
                     info!("Scaling up the bootstrap cache save interval to {new_duration:?}");
 
@@ -553,6 +568,28 @@ impl SwarmDriver {
     pub(crate) fn listen_on(&mut self, addr: Multiaddr) -> Result<()> {
         let id = self.swarm.listen_on(addr.clone())?;
         info!("Listening on {id:?} with addr: {addr:?}");
+        Ok(())
+    }
+
+    /// Sync and flush the bootstrap cache to disk.
+    ///
+    /// This function creates a new cache and saves the old one to disk.
+    pub(crate) fn sync_and_flush_cache(&mut self) -> Result<()> {
+        if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
+            let config = bootstrap_cache.config().clone();
+            let mut old_cache = bootstrap_cache.clone();
+
+            if let Ok(new) = BootstrapCacheStore::new(config) {
+                self.bootstrap_cache = Some(new);
+
+                // Save cache to disk.
+                crate::time::spawn(async move {
+                    if let Err(err) = old_cache.sync_and_flush_to_disk() {
+                        error!("Failed to save bootstrap cache: {err}");
+                    }
+                });
+            }
+        }
         Ok(())
     }
 

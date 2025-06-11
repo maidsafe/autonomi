@@ -420,11 +420,7 @@ impl SwarmDriver {
                         if addrs.0.is_empty() {
                             info!("No addresses for peer {peer:?} to send request. This could cause dial failure if swarm could not find the peer's addrs.");
                         } else {
-                            let opts = DialOpts::peer_id(peer)
-                                // If we have a peer ID, we can prevent simultaneous dials.
-                                .condition(PeerCondition::NotDialing)
-                                .addresses(addrs.0.clone())
-                                .build();
+                            let opts = DialOpts::peer_id(peer).addresses(addrs.0.clone()).build();
 
                             match self.swarm.dial(opts) {
                                 Ok(()) => {
