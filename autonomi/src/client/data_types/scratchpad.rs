@@ -359,6 +359,137 @@ impl Client {
         Ok(())
     }
 
+    /// Create a new public scratchpad to the network without encryption.
+    ///
+    /// Make sure that the owner key is not already used for another scratchpad as each key is associated with one scratchpad.
+    /// The data will be stored unencrypted and publicly readable on the network.
+    /// The content type is used to identify the type of data stored in the scratchpad, the choice is up to the caller.
+    ///
+    /// Returns the cost and the address of the scratchpad.
+    pub async fn scratchpad_create_public(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        initial_data: &Bytes,
+        payment_option: PaymentOption,
+    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        let address = ScratchpadAddress::new(owner.public_key());
+        let already_exists = self.scratchpad_check_existence(&address).await?;
+        if already_exists {
+            return Err(ScratchpadError::ScratchpadAlreadyExists(address));
+        }
+
+        let counter = 0;
+        // Create a public scratchpad by storing unencrypted data directly
+        let signature = owner.sign(Scratchpad::bytes_for_signature(
+            address,
+            content_type,
+            initial_data,
+            counter,
+        ));
+        let scratchpad = Scratchpad::new_with_signature(
+            owner.public_key(),
+            content_type,
+            initial_data.clone(),
+            counter,
+            signature,
+        );
+        self.scratchpad_put(scratchpad, payment_option).await
+    }
+
+    /// Update an existing public scratchpad to the network without encryption.
+    /// The scratchpad needs to be created first with a public scratchpad.
+    /// This operation is free as the scratchpad was already paid for at creation.
+    /// Only the latest version of the scratchpad is kept on the Network, previous versions will be overwritten and unrecoverable.
+    /// 
+    /// Note: The data is stored unencrypted and publicly readable.
+    pub async fn scratchpad_update_public(
+        &self,
+        owner: &SecretKey,
+        content_type: u64,
+        data: &Bytes,
+    ) -> Result<(), ScratchpadError> {
+        let address = ScratchpadAddress::new(owner.public_key());
+        let current = match self.scratchpad_get(&address).await {
+            Ok(scratchpad) => Some(scratchpad),
+            Err(ScratchpadError::GetError(GetError::RecordNotFound)) => None,
+            Err(ScratchpadError::GetError(GetError::Network(NetworkError::SplitRecord(
+                result_map,
+            )))) => result_map
+                .values()
+                .filter_map(|record| try_deserialize_record::<Scratchpad>(record).ok())
+                .max_by_key(|scratchpad: &Scratchpad| scratchpad.counter()),
+            Err(err) => {
+                return Err(err);
+            }
+        };
+
+        let scratchpad = if let Some(p) = current {
+            let version = p.counter() + 1;
+            // Create a public scratchpad by storing unencrypted data directly
+            let signature = owner.sign(Scratchpad::bytes_for_signature(
+                address,
+                content_type,
+                data,
+                version,
+            ));
+            Scratchpad::new_with_signature(
+                owner.public_key(),
+                content_type,
+                data.clone(),
+                version,
+                signature,
+            )
+        } else {
+            warn!("Scratchpad at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created");
+            return Err(ScratchpadError::CannotUpdateNewScratchpad);
+        };
+
+        // make sure the scratchpad is valid
+        Self::scratchpad_verify(&scratchpad)?;
+
+        // prepare the record to be stored
+        let net_addr = NetworkAddress::from(address);
+        let record = Record {
+            key: net_addr.to_record_key(),
+            value: try_serialize_record(&scratchpad, RecordKind::DataOnly(DataTypes::Scratchpad))
+                .map_err(|_| ScratchpadError::Serialization)?
+                .to_vec(),
+            publisher: None,
+            expires: None,
+        };
+
+        // store the scratchpad on the network
+        let target_nodes = self
+            .network
+            .get_closest_peers_with_retries(net_addr.clone())
+            .await
+            .map_err(|e| PutError::Network {
+                address: Box::new(net_addr),
+                network_error: e,
+                payment: None,
+            })?;
+        debug!(
+            "Updating public scratchpad at address {address:?} to the network on nodes {target_nodes:?}"
+        );
+
+        self.network
+            .put_record_with_retries(record, target_nodes, &self.config.scratchpad)
+            .await
+            .inspect_err(|err| {
+                error!("Failed to update public scratchpad at address {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                ScratchpadError::PutError(PutError::Network {
+                    address: Box::new(NetworkAddress::from(address)),
+                    network_error: err,
+                    payment: None,
+                })
+            })?;
+
+        Ok(())
+    }
+
     /// Get the cost of creating a new Scratchpad
     pub async fn scratchpad_cost(&self, owner: &PublicKey) -> Result<AttoTokens, CostError> {
         info!("Getting cost for scratchpad");
