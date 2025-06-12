@@ -24,15 +24,17 @@ use tokio::time::sleep;
 #[tokio::test]
 #[serial]
 async fn test_single_file_download_no_double_fetch() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("single_file_download_fix", false);
+    let _log_appender_guard =
+        LogBuilder::init_single_threaded_tokio_test("single_file_download_fix", false);
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
 
     // Create a test file that is NOT an archive
     let test_file_path = "test_single_file.txt";
-    let test_content = b"This is a single file, not an archive.\nIt should be downloaded without double-fetching.";
-    
+    let test_content =
+        b"This is a single file, not an archive.\nIt should be downloaded without double-fetching.";
+
     // Write test file
     let mut file = File::create(test_file_path)?;
     file.write_all(test_content)?;
@@ -41,8 +43,10 @@ async fn test_single_file_download_no_double_fetch() -> Result<()> {
 
     // Upload the single file as public data
     let file_data = fs::read(test_file_path)?;
-    let (_cost, addr) = client.data_put_public(file_data.clone().into(), wallet.into()).await?;
-    
+    let (_cost, addr) = client
+        .data_put_public(file_data.clone().into(), wallet.into())
+        .await?;
+
     // Wait for propagation
     sleep(Duration::from_secs(2)).await;
 
@@ -50,12 +54,20 @@ async fn test_single_file_download_no_double_fetch() -> Result<()> {
     // 1. Try to deserialize as PublicArchive (will fail)
     // 2. Use the same downloaded bytes for single file (no double download)
     let downloaded_path = "downloaded_single_file.txt";
-    client.archive_get_public_to_file(&addr, downloaded_path).await?;
+    client
+        .archive_get_public_to_file(&addr, downloaded_path)
+        .await?;
 
     // Verify the downloaded content matches
-    assert!(Path::new(downloaded_path).exists(), "Downloaded file should exist");
+    assert!(
+        Path::new(downloaded_path).exists(),
+        "Downloaded file should exist"
+    );
     let downloaded_content = fs::read(downloaded_path)?;
-    assert_eq!(file_data, downloaded_content, "Downloaded content should match original");
+    assert_eq!(
+        file_data, downloaded_content,
+        "Downloaded content should match original"
+    );
 
     // Verify content integrity
     let original_hash = compute_sha256(test_file_path)?;

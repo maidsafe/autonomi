@@ -16,8 +16,7 @@ use autonomi::{
     },
     data::DataAddress,
     files::{PrivateArchive, PublicArchive},
-    Bytes,
-    Client,
+    Bytes, Client,
 };
 use color_eyre::{eyre::eyre, Section};
 use std::path::PathBuf;
@@ -202,7 +201,6 @@ async fn download_pub_archive_to_disk(
         }
     }
 }
-
 
 /// Flush single file data bytes to disk
 /// This writes already-downloaded data to disk without additional network calls
