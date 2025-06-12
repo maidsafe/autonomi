@@ -18,7 +18,11 @@ async-trait = "0.1"
 dirs-next = "2.0.0"
 libp2p = { version = "0.56.0", features = ["kad"] }
 libp2p-identity = { version = "0.2.12", features = ["rand"] }
+prometheus-parse = "0.2.5"
 prost = { version = "0.9" }
+reqwest = { version = "0.12.2", default-features = false, features = [
+    "rustls-tls-manual-roots",
+] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 semver = "1.0.20"
