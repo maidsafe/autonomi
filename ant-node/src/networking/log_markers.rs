@@ -16,7 +16,7 @@ use strum::Display;
 ///
 /// Changing these log markers is a breaking change.
 #[derive(Debug, Clone, Display, Copy)]
-pub enum Marker<'a> {
+pub(crate) enum Marker<'a> {
     /// Close records held (Used in VDash)
     CloseRecordsLen(usize),
     /// Quoting metrics
@@ -29,7 +29,7 @@ pub enum Marker<'a> {
 
 impl Marker<'_> {
     /// Returns the string representation of the LogMarker.
-    pub fn log(&self) {
+    pub(crate) fn log(&self) {
         // Down the line, if some logs are noisier than others, we can
         // match the type and log a different level.
         info!("{self:?}");

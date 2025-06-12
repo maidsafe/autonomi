@@ -9,13 +9,9 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
 
-#[macro_use]
-extern crate tracing;
-
 mod bootstrap;
 mod circular_vec;
 mod cmd;
-mod config;
 mod driver;
 mod error;
 mod event;
@@ -28,31 +24,30 @@ mod network_discovery;
 mod record_store;
 mod relay_manager;
 mod replication_fetcher;
-pub mod time;
 mod transport;
+
+pub(crate) use ant_protocol::CLOSE_GROUP_SIZE;
 
 use cmd::LocalSwarmCmd;
 
 // re-export arch dependent deps for use in the crate, or above
-pub use self::{
+pub(crate) use self::{
     cmd::{NodeIssue, SwarmLocalState},
-    config::ResponseQuorum,
     driver::SwarmDriver,
     error::NetworkError,
-    event::{MsgResponder, NetworkEvent},
-    network_builder::{NetworkBuilder, MAX_PACKET_SIZE},
+    network_builder::NetworkBuilder,
     record_store::NodeRecordStore,
 };
+pub(crate) use event::{MsgResponder, NetworkEvent};
 #[cfg(feature = "open-metrics")]
-pub use metrics::service::MetricsRegistries;
-pub use time::{interval, sleep, spawn, Instant, Interval};
+pub(crate) use metrics::service::MetricsRegistries;
 
 use self::{cmd::NetworkSwarmCmd, error::Result};
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::{
     messages::{ConnectionInfo, Request, Response},
     storage::ValidationType,
-    NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
+    NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey,
 };
 use futures::future::select_all;
 use libp2p::{
@@ -71,14 +66,6 @@ use tokio::sync::{
     mpsc::{self, Sender},
     oneshot,
 };
-
-/// Majority of a given group (i.e. > 1/2).
-#[inline]
-pub const fn close_group_majority() -> usize {
-    // Calculate the majority of the close group size by dividing it by 2 and adding 1.
-    // This ensures that the majority is always greater than half.
-    CLOSE_GROUP_SIZE / 2 + 1
-}
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
 /// Return with the closest expected number of entries it has.
@@ -127,7 +114,7 @@ pub struct Addresses(pub Vec<Multiaddr>);
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm
-pub struct Network {
+pub(crate) struct Network {
     inner: Arc<NetworkInner>,
 }
 
@@ -142,7 +129,7 @@ struct NetworkInner {
 }
 
 impl Network {
-    pub fn new(
+    pub(crate) fn new(
         network_swarm_cmd_sender: mpsc::Sender<NetworkSwarmCmd>,
         local_swarm_cmd_sender: mpsc::Sender<LocalSwarmCmd>,
         peer_id: PeerId,
@@ -159,12 +146,12 @@ impl Network {
     }
 
     /// Returns the `PeerId` of the instance.
-    pub fn peer_id(&self) -> PeerId {
+    pub(crate) fn peer_id(&self) -> PeerId {
         self.inner.peer_id
     }
 
     /// Returns the `Keypair` of the instance.
-    pub fn keypair(&self) -> &Keypair {
+    pub(crate) fn keypair(&self) -> &Keypair {
         &self.inner.keypair
     }
 
@@ -178,23 +165,25 @@ impl Network {
     }
 
     /// Signs the given data with the node's keypair.
-    pub fn sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
+    pub(crate) fn sign(&self, msg: &[u8]) -> Result<Vec<u8>> {
         self.keypair().sign(msg).map_err(NetworkError::from)
     }
 
     /// Verifies a signature for the given data and the node's public key.
-    pub fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
+    pub(crate) fn verify(&self, msg: &[u8], sig: &[u8]) -> bool {
         self.keypair().public().verify(msg, sig)
     }
 
     /// Returns the protobuf serialised PublicKey to allow messaging out for share.
-    pub fn get_pub_key(&self) -> Vec<u8> {
+    pub(crate) fn get_pub_key(&self) -> Vec<u8> {
         self.keypair().public().encode_protobuf()
     }
 
     /// Returns a list of peers in local RT and their correspondent Multiaddr.
     /// Does not include self
-    pub async fn get_local_peers_with_multiaddr(&self) -> Result<Vec<(PeerId, Vec<Multiaddr>)>> {
+    pub(crate) async fn get_local_peers_with_multiaddr(
+        &self,
+    ) -> Result<Vec<(PeerId, Vec<Multiaddr>)>> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetPeersWithMultiaddr { sender });
         receiver
@@ -205,7 +194,7 @@ impl Network {
     /// Returns a map where each key is the ilog2 distance of that Kbucket
     /// and each value is a vector of peers in that bucket.
     /// Does not include self
-    pub async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
+    pub(crate) async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetKBuckets { sender });
         receiver
@@ -216,7 +205,7 @@ impl Network {
     /// Returns K closest local peers to the target.
     /// Target defaults to self, if not provided.
     /// Self is always included as the first entry.
-    pub async fn get_k_closest_local_peers_to_the_target(
+    pub(crate) async fn get_k_closest_local_peers_to_the_target(
         &self,
         key: Option<NetworkAddress>,
     ) -> Result<Vec<(PeerId, Addresses)>> {
@@ -238,7 +227,7 @@ impl Network {
     }
 
     /// Get the quoting metrics for storing the next record from the network
-    pub async fn get_local_quoting_metrics(
+    pub(crate) async fn get_local_quoting_metrics(
         &self,
         key: RecordKey,
         data_type: u32,
@@ -259,12 +248,12 @@ impl Network {
     }
 
     /// Notify the node receicced a payment.
-    pub fn notify_payment_received(&self) {
+    pub(crate) fn notify_payment_received(&self) {
         self.send_local_swarm_cmd(LocalSwarmCmd::PaymentReceived);
     }
 
     /// Get `Record` from the local RecordStore
-    pub async fn get_local_record(&self, key: &RecordKey) -> Result<Option<Record>> {
+    pub(crate) async fn get_local_record(&self, key: &RecordKey) -> Result<Option<Record>> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetLocalRecord {
             key: key.clone(),
@@ -277,7 +266,7 @@ impl Network {
     }
 
     /// Whether the target peer is considered blacklisted by self
-    pub async fn is_peer_shunned(&self, target: NetworkAddress) -> Result<bool> {
+    pub(crate) async fn is_peer_shunned(&self, target: NetworkAddress) -> Result<bool> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::IsPeerShunned { target, sender });
 
@@ -288,13 +277,13 @@ impl Network {
 
     /// Notify ReplicationFetch a fetch attempt is completed.
     /// (but it won't trigger any real writes to disk)
-    pub fn notify_fetch_completed(&self, key: RecordKey, record_type: ValidationType) {
+    pub(crate) fn notify_fetch_completed(&self, key: RecordKey, record_type: ValidationType) {
         self.send_local_swarm_cmd(LocalSwarmCmd::FetchCompleted((key, record_type)))
     }
 
     /// Put `Record` to the local RecordStore
     /// Must be called after the validations are performed on the Record
-    pub fn put_local_record(&self, record: Record, is_client_put: bool) {
+    pub(crate) fn put_local_record(&self, record: Record, is_client_put: bool) {
         debug!(
             "Writing Record locally, for {:?} - length {:?}",
             PrettyPrintRecordKey::from(&record.key),
@@ -307,7 +296,7 @@ impl Network {
     }
 
     /// Returns true if a RecordKey is present locally in the RecordStore
-    pub async fn is_record_key_present_locally(&self, key: &RecordKey) -> Result<bool> {
+    pub(crate) async fn is_record_key_present_locally(&self, key: &RecordKey) -> Result<bool> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::RecordStoreHasKey {
             key: key.clone(),
@@ -322,7 +311,7 @@ impl Network {
     }
 
     /// Returns the Addresses of all the locally stored Records
-    pub async fn get_all_local_record_addresses(
+    pub(crate) async fn get_all_local_record_addresses(
         &self,
     ) -> Result<HashMap<NetworkAddress, ValidationType>> {
         let (sender, receiver) = oneshot::channel();
@@ -340,7 +329,7 @@ impl Network {
     /// layers.
     ///
     /// If an outbound issue is raised, we retry once more to send the request before returning an error.
-    pub async fn send_request(
+    pub(crate) async fn send_request(
         &self,
         req: Request,
         peer: PeerId,
@@ -424,24 +413,24 @@ impl Network {
     }
 
     /// Send a `Response` through the channel opened by the requester.
-    pub fn send_response(&self, resp: Response, channel: MsgResponder) {
+    pub(crate) fn send_response(&self, resp: Response, channel: MsgResponder) {
         self.send_network_swarm_cmd(NetworkSwarmCmd::SendResponse { resp, channel })
     }
 
     /// Return a `SwarmLocalState` with some information obtained from swarm's local state.
-    pub async fn get_swarm_local_state(&self) -> Result<SwarmLocalState> {
+    pub(crate) async fn get_swarm_local_state(&self) -> Result<SwarmLocalState> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetSwarmLocalState(sender));
         let state = receiver.await?;
         Ok(state)
     }
 
-    pub fn trigger_interval_replication(&self) {
+    pub(crate) fn trigger_interval_replication(&self) {
         self.send_local_swarm_cmd(LocalSwarmCmd::TriggerIntervalReplication)
     }
 
     /// To be called when got a fresh record from client uploading.
-    pub fn add_fresh_records_to_the_replication_fetcher(
+    pub(crate) fn add_fresh_records_to_the_replication_fetcher(
         &self,
         holder: NetworkAddress,
         keys: Vec<(NetworkAddress, ValidationType)>,
@@ -449,27 +438,27 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::AddFreshReplicateRecords { holder, keys })
     }
 
-    pub fn record_node_issues(&self, peer_id: PeerId, issue: NodeIssue) {
+    pub(crate) fn record_node_issues(&self, peer_id: PeerId, issue: NodeIssue) {
         self.send_local_swarm_cmd(LocalSwarmCmd::RecordNodeIssue { peer_id, issue });
     }
 
-    pub fn historical_verify_quotes(&self, quotes: Vec<(PeerId, PaymentQuote)>) {
+    pub(crate) fn historical_verify_quotes(&self, quotes: Vec<(PeerId, PaymentQuote)>) {
         self.send_local_swarm_cmd(LocalSwarmCmd::QuoteVerification { quotes });
     }
 
-    pub fn trigger_irrelevant_record_cleanup(&self) {
+    pub(crate) fn trigger_irrelevant_record_cleanup(&self) {
         self.send_local_swarm_cmd(LocalSwarmCmd::TriggerIrrelevantRecordCleanup)
     }
 
-    pub fn notify_peer_scores(&self, peer_scores: Vec<(PeerId, bool)>) {
+    pub(crate) fn notify_peer_scores(&self, peer_scores: Vec<(PeerId, bool)>) {
         self.send_local_swarm_cmd(LocalSwarmCmd::NotifyPeerScores { peer_scores })
     }
 
-    pub fn notify_node_version(&self, peer: PeerId, version: String) {
+    pub(crate) fn notify_node_version(&self, peer: PeerId, version: String) {
         self.send_local_swarm_cmd(LocalSwarmCmd::NotifyPeerVersion { peer, version })
     }
 
-    pub fn remove_peer(&self, peer: PeerId) {
+    pub(crate) fn remove_peer(&self, peer: PeerId) {
         self.send_local_swarm_cmd(LocalSwarmCmd::RemovePeer { peer })
     }
 
@@ -484,7 +473,8 @@ impl Network {
     }
 
     /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
-    pub async fn get_closest_peers(
+    #[allow(dead_code)]
+    pub(crate) async fn get_closest_peers(
         &self,
         key: &NetworkAddress,
     ) -> Result<Vec<(PeerId, Addresses)>> {
@@ -523,7 +513,8 @@ impl Network {
     }
 
     /// Returns the `n` closest peers to the given `XorName`, sorted by their distance to the xor_name.
-    pub async fn get_n_closest_peers(
+    #[allow(dead_code)]
+    pub(crate) async fn get_n_closest_peers(
         &self,
         key: &NetworkAddress,
         n: usize,
@@ -549,7 +540,7 @@ impl Network {
     /// Send a `Request` to the provided set of peers and wait for their responses concurrently.
     /// If `get_all_responses` is true, we wait for the responses from all the peers.
     /// If `get_all_responses` is false, we return the first successful response that we get
-    pub async fn send_and_get_responses(
+    pub(crate) async fn send_and_get_responses(
         &self,
         peers: &[(PeerId, Addresses)],
         req: &Request,
@@ -577,7 +568,7 @@ impl Network {
             if !get_all_responses && resp.is_ok() {
                 return BTreeMap::from([(peer, resp)]);
             }
-            responses.insert(peer, resp);
+            let _ = responses.insert(peer, resp);
             list_of_futures = remaining_futures;
         }
 
@@ -586,7 +577,7 @@ impl Network {
     }
 
     /// Get the estimated network density (i.e. the responsible_distance_range).
-    pub async fn get_network_density(&self) -> Result<Option<KBucketDistance>> {
+    pub(crate) async fn get_network_density(&self) -> Result<Option<KBucketDistance>> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetNetworkDensity { sender });
 
@@ -599,7 +590,7 @@ impl Network {
 
 /// Verifies if `Multiaddr` contains IPv4 address that is not global.
 /// This is used to filter out unroutable addresses from the Kademlia routing table.
-pub fn multiaddr_is_global(multiaddr: &Multiaddr) -> bool {
+pub(crate) fn multiaddr_is_global(multiaddr: &Multiaddr) -> bool {
     !multiaddr.iter().any(|addr| match addr {
         Protocol::Ip4(ip) => {
             // Based on the nightly `is_global` method (`Ipv4Addrs::is_global`), only using what is available in stable.
@@ -690,7 +681,7 @@ pub(crate) fn send_local_swarm_cmd(swarm_cmd_sender: Sender<LocalSwarmCmd>, cmd:
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = spawn(async move {
+    let _handle = tokio::spawn(async move {
         if let Err(error) = swarm_cmd_sender.send(cmd).await {
             error!("Failed to send SwarmCmd: {}", error);
         }
@@ -711,7 +702,7 @@ pub(crate) fn send_network_swarm_cmd(
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = spawn(async move {
+    let _handle = tokio::spawn(async move {
         if let Err(error) = swarm_cmd_sender.send(cmd).await {
             error!("Failed to send SwarmCmd: {}", error);
         }

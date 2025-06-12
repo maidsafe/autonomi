@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 #[cfg(feature = "open-metrics")]
-use crate::MetricsRegistries;
+use crate::networking::MetricsRegistries;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport},
     identity::Keypair,

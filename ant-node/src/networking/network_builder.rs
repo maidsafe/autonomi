@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
+use crate::networking::{
     bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
     circular_vec::CircularVec,
     driver::NodeBehaviour,
@@ -17,11 +17,10 @@ use crate::{
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    time::Instant,
     transport, Network, SwarmDriver, CLOSE_GROUP_SIZE,
 };
 #[cfg(feature = "open-metrics")]
-use crate::{
+use crate::networking::{
     metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
 };
 use ant_bootstrap::BootstrapCacheStore;
@@ -46,6 +45,7 @@ use libp2p::{
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::info::Info;
 use rand::Rng;
+use std::time::Instant;
 use std::{
     convert::TryInto,
     fmt::Debug,
@@ -82,14 +82,14 @@ const KAD_STREAM_PROTOCOL_ID: StreamProtocol = StreamProtocol::new("/autonomi/ka
 
 /// What is the largest packet to send over the network.
 /// Records larger than this will be rejected.
-pub const MAX_PACKET_SIZE: usize = 1024 * 1024 * 5; // the chunk size is 1mb, so should be higher than that to prevent failures
+pub(super) const MAX_PACKET_SIZE: usize = 1024 * 1024 * 5; // the chunk size is 1mb, so should be higher than that to prevent failures
 
 /// Interval to trigger native libp2p::kad bootstrap.
 /// This is the max time it should take. Minimum interval at any node will be half this
 const PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S: u64 = 21600;
 
 #[derive(Debug)]
-pub struct NetworkBuilder {
+pub(crate) struct NetworkBuilder {
     bootstrap_cache: Option<BootstrapCacheStore>,
     concurrency_limit: Option<usize>,
     initial_contacts: Vec<Multiaddr>,
@@ -106,7 +106,7 @@ pub struct NetworkBuilder {
 }
 
 impl NetworkBuilder {
-    pub fn new(keypair: Keypair, local: bool, initial_contacts: Vec<Multiaddr>) -> Self {
+    pub(crate) fn new(keypair: Keypair, local: bool, initial_contacts: Vec<Multiaddr>) -> Self {
         Self {
             bootstrap_cache: None,
             concurrency_limit: None,
@@ -124,40 +124,42 @@ impl NetworkBuilder {
         }
     }
 
-    pub fn bootstrap_cache(&mut self, bootstrap_cache: BootstrapCacheStore) {
+    pub(crate) fn bootstrap_cache(&mut self, bootstrap_cache: BootstrapCacheStore) {
         self.bootstrap_cache = Some(bootstrap_cache);
     }
 
-    pub fn relay_client(&mut self, relay_client: bool) {
+    pub(crate) fn relay_client(&mut self, relay_client: bool) {
         self.relay_client = relay_client;
     }
 
-    pub fn listen_addr(&mut self, listen_addr: SocketAddr) {
+    pub(crate) fn listen_addr(&mut self, listen_addr: SocketAddr) {
         self.listen_addr = Some(listen_addr);
     }
 
-    pub fn request_timeout(&mut self, request_timeout: Duration) {
+    #[allow(dead_code)]
+    pub(crate) fn request_timeout(&mut self, request_timeout: Duration) {
         self.request_timeout = Some(request_timeout);
     }
 
-    pub fn concurrency_limit(&mut self, concurrency_limit: usize) {
+    #[allow(dead_code)]
+    pub(crate) fn concurrency_limit(&mut self, concurrency_limit: usize) {
         self.concurrency_limit = Some(concurrency_limit);
     }
 
     /// Set the registries used inside the metrics server.
     /// Configure the `metrics_server_port` to enable the metrics server.
     #[cfg(feature = "open-metrics")]
-    pub fn metrics_registries(&mut self, registries: MetricsRegistries) {
+    pub(crate) fn metrics_registries(&mut self, registries: MetricsRegistries) {
         self.metrics_registries = Some(registries);
     }
 
     #[cfg(feature = "open-metrics")]
     /// The metrics server is enabled only if the port is provided.
-    pub fn metrics_server_port(&mut self, port: Option<u16>) {
+    pub(crate) fn metrics_server_port(&mut self, port: Option<u16>) {
         self.metrics_server_port = port;
     }
 
-    pub fn no_upnp(&mut self, no_upnp: bool) {
+    pub(crate) fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
     }
 
@@ -174,7 +176,7 @@ impl NetworkBuilder {
     /// # Errors
     ///
     /// Returns an error if there is a problem initializing the mDNS behaviour.
-    pub fn build_node(
+    pub(crate) fn build_node(
         self,
         root_dir: PathBuf,
     ) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
@@ -540,13 +542,13 @@ fn check_and_wipe_storage_dir_if_necessary(
     {
         match fs::File::open(version_file.clone()) {
             Ok(mut file) => {
-                file.read_to_string(&mut prev_version_str)?;
+                let _ = file.read_to_string(&mut prev_version_str)?;
             }
             Err(err) => {
                 warn!("Failed in accessing version file {version_file:?}: {err:?}");
                 // Assuming file was not created yet
                 info!("Creating a new version file at {version_file:?}");
-                fs::File::create(version_file.clone())?;
+                let _ = fs::File::create(version_file.clone())?;
             }
         }
     }
@@ -597,7 +599,8 @@ mod tests {
                 .read(true)
                 .open(version_file.clone())
                 .expect("Failed to open version file");
-            file.read_to_string(&mut content_str)
+            let _ = file
+                .read_to_string(&mut content_str)
                 .expect("Failed to read from version file");
             assert_eq!(content_str, cur_version);
 
@@ -620,7 +623,8 @@ mod tests {
                 .read(true)
                 .open(version_file.clone())
                 .expect("Failed to open version file");
-            file.read_to_string(&mut content_str)
+            let _ = file
+                .read_to_string(&mut content_str)
                 .expect("Failed to read from version file");
             assert_eq!(content_str, cur_version);
 

@@ -6,8 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::time::Instant;
-use crate::{
+use crate::networking::{
     driver::{PendingGetClosestType, SwarmDriver},
     error::{NetworkError, Result},
     event::TerminateNodeReason,
@@ -29,6 +28,7 @@ use libp2p::{
     swarm::dial_opts::{DialOpts, PeerCondition},
     Multiaddr, PeerId,
 };
+use std::time::Instant;
 use std::{
     collections::{BTreeMap, HashMap},
     fmt::Debug,
@@ -46,12 +46,13 @@ const REPLICATION_TIMEOUT: Duration = Duration::from_secs(45);
 const MIN_REPLICATION_INTERVAL_S: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-pub enum NodeIssue {
+pub(crate) enum NodeIssue {
     /// Some connections might be considered to be critical and should be tracked.
     ConnectionIssue,
     /// Data Replication failed
     ReplicationFailure,
     /// Close nodes have reported this peer as bad
+    #[allow(dead_code)]
     CloseNodesShunning,
     /// Provided a bad quote
     BadQuoting,
@@ -72,7 +73,7 @@ impl std::fmt::Display for NodeIssue {
 }
 
 /// Commands to send to the Swarm
-pub enum LocalSwarmCmd {
+pub(crate) enum LocalSwarmCmd {
     /// Get a list of all peers in local RT, with correspondent Multiaddr info attached as well.
     GetPeersWithMultiaddr {
         sender: oneshot::Sender<Vec<(PeerId, Vec<Multiaddr>)>>,
@@ -179,7 +180,7 @@ pub enum LocalSwarmCmd {
 }
 
 /// Commands to send to the Swarm
-pub enum NetworkSwarmCmd {
+pub(crate) enum NetworkSwarmCmd {
     // Get closest peers from the network
     GetClosestPeersToAddressFromNetwork {
         key: NetworkAddress,
@@ -783,7 +784,7 @@ impl SwarmDriver {
             }
             LocalSwarmCmd::AddPeerToBlockList { peer_id } => {
                 cmd_string = "AddPeerToBlockList";
-                self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
+                let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
             }
             LocalSwarmCmd::RecordNodeIssue { peer_id, issue } => {
                 cmd_string = "RecordNodeIssues";
@@ -888,7 +889,7 @@ impl SwarmDriver {
             // check if vec is already 10 long, if so, remove the oldest issue
             // we only track 10 issues to avoid mem leaks
             if issue_vec.len() == 10 {
-                issue_vec.remove(0);
+                let _ = issue_vec.remove(0);
             }
 
             // To avoid being too sensitive, only consider as a new issue
@@ -960,7 +961,8 @@ impl SwarmDriver {
                 // response handling
                 let (tx, rx) = oneshot::channel();
                 let local_swarm_cmd_sender = self.local_cmd_sender.clone();
-                tokio::spawn(async move {
+                #[allow(clippy::let_underscore_future)]
+                let _ = tokio::spawn(async move {
                     match rx.await {
                         Ok(result) => {
                             debug!("Got response for Cmd::PeerConsideredAsBad from {peer_id:?} {result:?}");

@@ -19,7 +19,7 @@ const SCRATCHPAD_MAX_SIZE: usize = ant_protocol::storage::Scratchpad::MAX_SIZE;
 #[allow(missing_docs)]
 pub enum Error {
     #[error("Network error {0}")]
-    Network(#[from] ant_networking::NetworkError),
+    Network(#[from] crate::networking::NetworkError),
 
     #[error("Protocol error {0}")]
     Protocol(#[from] ant_protocol::Error),

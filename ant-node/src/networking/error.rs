@@ -122,7 +122,7 @@ pub enum NetworkError {
 }
 
 /// Return a list of error strings for the DialError type
-pub fn dial_error_to_str(err: &DialError) -> Vec<(String, Level)> {
+pub(in crate::networking) fn dial_error_to_str(err: &DialError) -> Vec<(String, Level)> {
     match err {
         DialError::LocalPeerId { .. } => {
             vec![("DialError::LocalPeerId".to_string(), TRACING_ERROR_LEVEL)]
@@ -150,7 +150,7 @@ pub fn dial_error_to_str(err: &DialError) -> Vec<(String, Level)> {
 }
 
 /// Return a string for the ListenError type
-pub fn listen_error_to_str(err: &ListenError) -> (String, Level) {
+pub(in crate::networking) fn listen_error_to_str(err: &ListenError) -> (String, Level) {
     match err {
         ListenError::Aborted => ("ListenError::Aborted".to_string(), TRACING_ERROR_LEVEL),
 

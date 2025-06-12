@@ -16,17 +16,17 @@ path = "src/bin/antnode/main.rs"
 [features]
 default = ["open-metrics"]
 extension-module = ["pyo3/extension-module", "pyo3-async-runtimes"]
-loud = ["ant-networking/loud"] # loud mode: print important messages to console
+loud = [] # loud mode: print important messages to console
 nightly = []
-open-metrics = ["ant-networking/open-metrics", "prometheus-client"]
+open-metrics = ["libp2p/metrics", "prometheus-client", "hyper", "sysinfo"]
 otlp = ["ant-logging/otlp"]
 
 [dependencies]
+aes-gcm-siv = "0.11.1"
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.3" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.27" }
 ant-evm = { path = "../ant-evm", version = "0.1.14" }
 ant-logging = { path = "../ant-logging", version = "0.2.49", features = ["process-metrics"] }
-ant-networking = { path = "../ant-networking", version = "0.3.12" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.5" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.13" }
 async-trait = "0.1"
@@ -43,8 +43,29 @@ eyre = "0.6.8"
 file-rotate = "0.7.3"
 futures = "~0.3.13"
 hex = "~0.4.3"
+hkdf = "0.12"
+hyper = { version = "0.14", features = [
+    "server",
+    "tcp",
+    "http1",
+], optional = true }
 itertools = "~0.12.1"
-libp2p = { version = "0.55.0", features = ["tokio", "dns", "kad", "macros"] }
+libp2p = { version = "0.55.0", features = [
+    "tokio",
+    "dns",
+    "upnp",
+    "kad",
+    "macros",
+    "request-response",
+    "cbor",
+    "identify",
+    "quic",
+    "relay",
+    "noise",
+    "tcp",
+    "yamux",
+    "websocket",
+] }
 num-traits = "0.2"
 prometheus-client = { version = "0.22", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems
@@ -55,9 +76,11 @@ pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"], optional
 rand = { version = "~0.8.5", features = ["small_rng"] }
 rmp-serde = "1.1.1"
 rayon = "1.8.0"
+sha2 = "0.10"
 self_encryption = "~0.30.0"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 strum = { version = "0.26.2", features = ["derive"] }
+sysinfo = { version = "0.30.8", default-features = false, optional = true }
 thiserror = "1.0.23"
 tokio = { version = "1.43.1", features = [
     "io-util",
@@ -76,12 +99,14 @@ tracing-opentelemetry = { version = "0.21", optional = true }
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 walkdir = "~2.5.0"
 xor_name = "5.0.0"
+void = "1.0.2"
 
 [dev-dependencies]
 ant-protocol = { path = "../ant-protocol", version = "1.0.5", features = ["rpc"] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.4.0" }
 autonomi = { path = "../autonomi", version = "0.4.6" }
+quickcheck = "1.0.3"
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }
@@ -90,6 +115,7 @@ tempfile = "3.6.0"
 # Do not specify the version field. Release process expects even the local dev deps to be published.
 # Removing the version field is a workaround.
 test-utils = { path = "../test-utils" }
+uuid = { version = "1.5.0", features = ["v4"] }
 
 [lints]
 workspace = true

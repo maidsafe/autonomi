@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 #[cfg(feature = "open-metrics")]
-use crate::metrics::NetworkMetricsRecorder;
-use crate::{
+use crate::networking::metrics::NetworkMetricsRecorder;
+use crate::networking::{
     bootstrap::{InitialBootstrap, InitialBootstrapTrigger, INITIAL_BOOTSTRAP_CHECK_INTERVAL},
     circular_vec::CircularVec,
     cmd::{LocalSwarmCmd, NetworkSwarmCmd},
@@ -20,7 +20,6 @@ use crate::{
     network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    time::{interval, spawn, Instant, Interval},
     Addresses, NodeIssue, NodeRecordStore, CLOSE_GROUP_SIZE,
 };
 use ant_bootstrap::BootstrapCacheStore;
@@ -42,12 +41,15 @@ use libp2p::{
     swarm::{behaviour::toggle::Toggle, NetworkBehaviour, SwarmEvent},
 };
 use rand::Rng;
+use std::time::Instant;
 use std::{
     collections::{btree_map::Entry, BTreeMap, HashMap, HashSet},
     net::IpAddr,
 };
+use tokio::spawn;
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::time::Duration;
+use tokio::time::{interval, Duration, Interval};
+
 use tracing::warn;
 
 /// 10 is the max number of issues per node we track to avoid mem leaks
@@ -93,8 +95,8 @@ pub(super) struct NodeBehaviour {
     pub(super) request_response: request_response::cbor::Behaviour<Request, Response>,
 }
 
-pub struct SwarmDriver {
-    pub(crate) swarm: Swarm<NodeBehaviour>,
+pub(crate) struct SwarmDriver {
+    pub(super) swarm: Swarm<NodeBehaviour>,
     pub(crate) self_peer_id: PeerId,
     /// When true, we don't filter our local addresses
     pub(crate) local: bool,
@@ -160,7 +162,7 @@ impl SwarmDriver {
     /// The `tokio::select` macro is used to concurrently process swarm events
     /// and command receiver messages, ensuring efficient handling of multiple
     /// asynchronous tasks.
-    pub async fn run(mut self, mut shutdown_rx: watch::Receiver<bool>) {
+    pub(crate) async fn run(mut self, mut shutdown_rx: watch::Receiver<bool>) {
         let mut network_discover_interval = interval(NETWORK_DISCOVER_INTERVAL);
         let mut set_farthest_record_interval = interval(CLOSET_RECORD_CHECK_INTERVAL);
         let mut relay_manager_reservation_interval = interval(RELAY_MANAGER_RESERVATION_INTERVAL);
@@ -178,7 +180,7 @@ impl SwarmDriver {
             }
         });
         if let Some(interval) = bootstrap_cache_save_interval.as_mut() {
-            interval.tick().await; // first tick completes immediately
+            let _ = interval.tick().await; // first tick completes immediately
             info!(
                 "Bootstrap cache save interval is set to {:?}",
                 interval.period()
@@ -362,7 +364,8 @@ impl SwarmDriver {
                     *bootstrap_cache = new;
 
                     // save the cache to disk
-                    spawn(async move {
+                    #[allow(clippy::let_underscore_future)]
+                    let _ = spawn(async move {
                         if let Err(err) = old_cache.sync_and_flush_to_disk() {
                             error!("Failed to save bootstrap cache: {err}");
                         }
@@ -382,7 +385,7 @@ impl SwarmDriver {
                     info!("Scaling up the bootstrap cache save interval to {new_duration:?}");
 
                     *current_interval = interval(new_duration);
-                    current_interval.tick().await;
+                    let _ = current_interval.tick().await;
 
                     trace!("Bootstrap cache synced in {:?}", start.elapsed());
 
@@ -505,7 +508,7 @@ impl SwarmDriver {
                 records.push(handle_time);
             }
             Entry::Vacant(entry) => {
-                entry.insert(vec![handle_time]);
+                let _ = entry.insert(vec![handle_time]);
             }
         }
 
@@ -573,7 +576,7 @@ impl SwarmDriver {
     async fn conditional_interval(i: &mut Option<Interval>) -> Option<()> {
         match i {
             Some(i) => {
-                i.tick().await;
+                let _ = i.tick().await;
                 Some(())
             }
             None => None,
@@ -591,7 +594,8 @@ mod tests {
         let variance = 10;
         let expected_variance = Duration::from_secs(15); // 10% of 150
         for _ in 0..10000 {
-            let new_duration = crate::SwarmDriver::duration_with_variance(duration, variance);
+            let new_duration =
+                crate::networking::SwarmDriver::duration_with_variance(duration, variance);
             println!("new_duration: {new_duration:?}");
             if new_duration < duration - expected_variance
                 || new_duration > duration + expected_variance

@@ -16,7 +16,7 @@
 // use sn_client::{Error as ClientError, FilesDownload, Uploader, WalletClient};
 // use ant_evm::{Amount, AttoTokens, PaymentQuote};
 // use ant_logging::LogBuilder;
-// use ant_networking::{GetRecordError, NetworkError};
+// use crate::networking::{GetRecordError, NetworkError};
 // use ant_protocol::{
 //     error::Error as ProtocolError,
 //     storage::ChunkAddress,

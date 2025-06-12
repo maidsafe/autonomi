@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{driver::NodeBehaviour, multiaddr_get_ip, multiaddr_get_port, multiaddr_is_global};
+use crate::networking::{
+    driver::NodeBehaviour, multiaddr_get_ip, multiaddr_get_port, multiaddr_is_global,
+};
 use itertools::Itertools;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, Swarm};
 use std::{
@@ -28,7 +30,7 @@ const MAX_CANDIDATES: usize = 50;
 // TODO:
 // 1. if the max candidate is reached, kick out the oldest candidate sorted by # of reports
 #[derive(Debug)]
-pub struct ExternalAddressManager {
+pub(crate) struct ExternalAddressManager {
     /// All the external addresses of the node
     address_states: Vec<ExternalAddressState>,
     /// The current IP address of all the external addresses.
@@ -72,7 +74,7 @@ impl PortStats {
 }
 
 impl ExternalAddressManager {
-    pub fn new(peer_id: PeerId) -> Self {
+    pub(crate) fn new(peer_id: PeerId) -> Self {
         Self {
             address_states: Vec::new(),
             current_ip_address: None,
@@ -83,7 +85,7 @@ impl ExternalAddressManager {
     }
 
     /// Get the list of candidate addresses
-    pub fn candidate_addresses(&self) -> Vec<&Multiaddr> {
+    pub(crate) fn candidate_addresses(&self) -> Vec<&Multiaddr> {
         self.address_states
             .iter()
             .filter_map(|state| {
@@ -100,7 +102,7 @@ impl ExternalAddressManager {
     /// If the address has been reported often enough, it is confirmed and added to the swarm.
     /// If a new IP address has been reported often enough, then we switch to the new IP address and discard the old
     /// external addresses.
-    pub fn add_external_address_candidate(
+    pub(in crate::networking) fn add_external_address_candidate(
         &mut self,
         address: Multiaddr,
         swarm: &mut Swarm<NodeBehaviour>,
@@ -228,7 +230,11 @@ impl ExternalAddressManager {
     /// Adds a non-local listen-addr to the swarm and the manager.
     /// If the IP address of the listen-addr is different from the current IP address, then we directly
     /// switch to the new IP address.
-    pub fn on_new_listen_addr(&mut self, listen_addr: Multiaddr, swarm: &mut Swarm<NodeBehaviour>) {
+    pub(in crate::networking) fn on_new_listen_addr(
+        &mut self,
+        listen_addr: Multiaddr,
+        swarm: &mut Swarm<NodeBehaviour>,
+    ) {
         // only add our global addresses
         let address = if multiaddr_is_global(&listen_addr) {
             let Some(address) = self.craft_external_address(&listen_addr) else {
@@ -305,7 +311,11 @@ impl ExternalAddressManager {
     }
 
     /// Remove a listen-addr from the manager if expired.
-    pub fn on_expired_listen_addr(&mut self, listen_addr: Multiaddr, swarm: &Swarm<NodeBehaviour>) {
+    pub(in crate::networking) fn on_expired_listen_addr(
+        &mut self,
+        listen_addr: Multiaddr,
+        swarm: &Swarm<NodeBehaviour>,
+    ) {
         let address = if multiaddr_is_global(&listen_addr) {
             let Some(address) = self.craft_external_address(&listen_addr) else {
                 error!("Listen address is ill formed, ignoring {listen_addr:?}");
@@ -329,7 +339,7 @@ impl ExternalAddressManager {
         });
     }
 
-    pub fn on_incoming_connection_error(
+    pub(in crate::networking) fn on_incoming_connection_error(
         &mut self,
         on_address: Multiaddr,
         swarm: &mut Swarm<NodeBehaviour>,
@@ -365,7 +375,7 @@ impl ExternalAddressManager {
             }
             for idx in to_remove_indices.iter().rev() {
                 swarm.remove_external_address(self.address_states[*idx].multiaddr());
-                self.address_states.remove(*idx);
+                let _ = self.address_states.remove(*idx);
             }
             if !removed_candidates.is_empty() {
                 debug!("Removed external candidates due to connection errors on port {port}: {removed_candidates:?}");
@@ -380,7 +390,10 @@ impl ExternalAddressManager {
     }
 
     /// Reset the incoming connection errors for a port
-    pub fn on_established_incoming_connection(&mut self, on_address: Multiaddr) {
+    pub(in crate::networking) fn on_established_incoming_connection(
+        &mut self,
+        on_address: Multiaddr,
+    ) {
         let Some(port) = multiaddr_get_port(&on_address) else {
             return;
         };
@@ -411,7 +424,7 @@ impl ExternalAddressManager {
             }
         }
         for idx in to_remove_indices.iter().rev() {
-            self.address_states.remove(*idx);
+            let _ = self.address_states.remove(*idx);
         }
         info!("Removed addresses due to change of IP: {removed_addresses:?}");
 

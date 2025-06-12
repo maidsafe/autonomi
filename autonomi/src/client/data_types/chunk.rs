@@ -245,16 +245,20 @@ impl Client {
         let mut upload_tasks = vec![];
         #[cfg(feature = "loud")]
         let total_chunks = chunks.len();
-        for (_i, &chunk) in chunks.iter().enumerate() {
+        for (i, &chunk) in chunks.iter().enumerate() {
             let self_clone = self.clone();
             let address = *chunk.address();
 
             let Some((proof, price)) = receipt.get(chunk.name()) else {
-                debug!("Chunk at {address:?} was already paid for so skipping");
+                debug!(
+                    "({}/{}) Chunk at {address:?} was already paid for so skipping",
+                    i + 1,
+                    chunks.len()
+                );
                 #[cfg(feature = "loud")]
                 println!(
                     "({}/{}) Chunk stored at: {} (skipping, already exists)",
-                    _i + 1,
+                    i + 1,
                     chunks.len(),
                     chunk.address().to_hex()
                 );
@@ -272,7 +276,7 @@ impl Client {
                     Ok(_addr) => {
                         println!(
                             "({}/{}) Chunk stored at: {}",
-                            _i + 1,
+                            i + 1,
                             total_chunks,
                             chunk.address().to_hex()
                         );
@@ -280,7 +284,7 @@ impl Client {
                     Err((_, err)) => {
                         println!(
                             "({}/{}) Chunk failed to be stored at: {} ({err})",
-                            _i + 1,
+                            i + 1,
                             total_chunks,
                             chunk.address().to_hex()
                         );

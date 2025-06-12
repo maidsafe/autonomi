@@ -38,7 +38,8 @@ impl From<&libp2p::relay::client::Event> for EventType {
 
 impl super::Recorder<libp2p::relay::client::Event> for super::NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::relay::client::Event) {
-        self.relay_client_events
+        let _ = self
+            .relay_client_events
             .get_or_create(&RelayClientEventLabels {
                 event: event.into(),
             })

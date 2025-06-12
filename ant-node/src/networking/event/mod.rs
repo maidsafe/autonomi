@@ -11,7 +11,9 @@ mod kad;
 mod request_response;
 mod swarm;
 
-use crate::{driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses};
+use crate::networking::{
+    driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
+};
 use core::fmt;
 use custom_debug::Debug as CustomDebug;
 use libp2p::{
@@ -122,7 +124,7 @@ impl From<void::Void> for NodeEvent {
 #[allow(clippy::type_complexity)]
 #[derive(CustomDebug)]
 /// Channel to send the `Response` through.
-pub enum MsgResponder {
+pub(crate) enum MsgResponder {
     /// Respond to a request from `self` through a simple one-shot channel.
     FromSelf(Option<oneshot::Sender<Result<(Response, Option<ConnectionInfo>)>>>),
     /// Respond to a request from a peer in the network.
@@ -130,7 +132,7 @@ pub enum MsgResponder {
 }
 
 /// Events forwarded by the underlying Network; to be used by the upper layers
-pub enum NetworkEvent {
+pub(crate) enum NetworkEvent {
     /// Incoming `Query` from a peer
     QueryRequestReceived {
         /// Query
@@ -163,6 +165,7 @@ pub enum NetworkEvent {
     /// List of peer nodes that failed to fetch replication copy from.
     FailedToFetchHolders(BTreeMap<PeerId, RecordKey>),
     /// Quotes to be verified
+    #[allow(dead_code)]
     QuoteVerification { quotes: Vec<(PeerId, PaymentQuote)> },
     /// Fresh replicate to fetch
     FreshReplicateToFetch {
@@ -180,7 +183,7 @@ pub enum NetworkEvent {
 
 /// Terminate node for the following reason
 #[derive(Debug, Clone)]
-pub enum TerminateNodeReason {
+pub(crate) enum TerminateNodeReason {
     HardDiskWriteError,
     UpnpGatewayNotFound,
 }
@@ -419,7 +422,7 @@ impl SwarmDriver {
         self.peers_in_rt = status.total_peers;
         #[cfg(feature = "open-metrics")]
         if let Some(metrics_recorder) = &self.metrics_recorder {
-            metrics_recorder
+            let _ = metrics_recorder
                 .peers_in_routing_table
                 .set(status.total_peers as i64);
 

@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::relay_manager::is_a_relayed_peer;
-use crate::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
+use crate::networking::relay_manager::is_a_relayed_peer;
+use crate::networking::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
@@ -54,7 +54,7 @@ impl SwarmDriver {
                 their_protocol: info.protocol_version,
             });
             // Block the peer from any further communication.
-            self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
+            let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
             if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
                 error!("Clearing out a protocol mismatch peer from RT. The peer pushed an incorrect identify info after being added: {peer_id:?}");
                 self.update_on_peer_removal(*dead_peer.node.key.preimage());

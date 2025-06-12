@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::driver::{BadNodes, NodeBehaviour};
+use crate::networking::driver::{BadNodes, NodeBehaviour};
 use itertools::Itertools;
 use libp2p::swarm::ConnectionId;
 use libp2p::{
@@ -87,7 +87,7 @@ impl ReservationStat {
     fn record_value(&mut self, value: bool) {
         self.stat.push_back(value);
         if self.stat.len() > RESERVATION_SCORE_ROLLING_WINDOW {
-            self.stat.pop_front();
+            let _ = self.stat.pop_front();
         }
     }
 
@@ -162,7 +162,7 @@ impl RelayManager {
     // todo: how do we know if a reservation has been revoked / if the peer has gone offline?
     /// Try connecting to candidate relays if we are below the threshold connections.
     /// This is run periodically on a loop.
-    pub(crate) fn try_connecting_to_relay(
+    pub(in crate::networking) fn try_connecting_to_relay(
         &mut self,
         swarm: &mut Swarm<NodeBehaviour>,
         bad_nodes: &BadNodes,
@@ -208,8 +208,8 @@ impl RelayManager {
                 match swarm.listen_on(relay_addr.clone()) {
                     Ok(id) => {
                         info!("Sending reservation to relay {peer_id:?} on {relay_addr:?}");
-                        self.waiting_for_reservation.insert(peer_id, relay_addr);
-                        self.relayed_listener_id_map.insert(id, peer_id);
+                        let _ = self.waiting_for_reservation.insert(peer_id, relay_addr);
+                        let _ = self.relayed_listener_id_map.insert(id, peer_id);
                         n_reservations += 1;
                     }
                     Err(err) => {
@@ -224,7 +224,7 @@ impl RelayManager {
     }
 
     /// Update client state after we've successfully made reservation with a relay.
-    pub(crate) fn on_successful_reservation_by_client(
+    pub(in crate::networking) fn on_successful_reservation_by_client(
         &mut self,
         peer_id: &PeerId,
         swarm: &mut Swarm<NodeBehaviour>,
@@ -234,7 +234,7 @@ impl RelayManager {
             Some(addr) => {
                 info!("Successfully made reservation with {peer_id:?} on {addr:?}. Adding the addr to external address.");
                 swarm.add_external_address(addr.clone());
-                self.connected_relay_servers.insert(*peer_id, addr);
+                let _ = self.connected_relay_servers.insert(*peer_id, addr);
             }
             None => {
                 debug!("Made a reservation with a peer that we had not requested to");
@@ -255,7 +255,7 @@ impl RelayManager {
     }
 
     /// Update client state if the reservation has been cancelled or if the relay has closed.
-    pub(crate) fn on_listener_closed(
+    pub(in crate::networking) fn on_listener_closed(
         &mut self,
         listener_id: &ListenerId,
         swarm: &mut Swarm<NodeBehaviour>,
@@ -413,7 +413,7 @@ impl RelayReservationHealth {
                     .push((relay_server, *connection_id, SystemTime::now(), None));
             }
             Entry::Vacant(entry) => {
-                entry.insert(vec![(
+                let _ = entry.insert(vec![(
                     relay_server,
                     *connection_id,
                     SystemTime::now(),
@@ -506,7 +506,7 @@ impl RelayReservationHealth {
                     Entry::Vacant(entry) => {
                         let mut stat = ReservationStat::default();
                         stat.record_value(true);
-                        entry.insert(stat);
+                        let _ = entry.insert(stat);
                     }
                 }
             }
@@ -527,7 +527,7 @@ impl RelayReservationHealth {
                         Entry::Vacant(entry) => {
                             let mut stat = ReservationStat::default();
                             stat.record_value(false);
-                            entry.insert(stat);
+                            let _ = entry.insert(stat);
                         }
                     }
                 }
@@ -537,7 +537,8 @@ impl RelayReservationHealth {
         }
 
         for from_peer in to_remove {
-            self.incoming_connections_from_remote_peer
+            let _ = self
+                .incoming_connections_from_remote_peer
                 .remove(&from_peer);
         }
 
@@ -549,7 +550,7 @@ impl RelayReservationHealth {
             .map(|stat| stat.success_rate())
             .sum::<f64>()
             / self.reservation_score.len() as f64;
-        self.relay_reservation_health_metric.set(avg_health);
+        let _ = self.relay_reservation_health_metric.set(avg_health);
 
         self.log_reservation_score();
     }

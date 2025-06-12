@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::time::interval;
 use ant_protocol::CLOSE_GROUP_SIZE;
 use libp2p::PeerId;
 use prometheus_client::{
@@ -18,6 +17,7 @@ use std::{
     time::{Duration, Instant},
 };
 use strum::IntoEnumIterator;
+use tokio::time::interval;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -26,12 +26,12 @@ const MAX_EVICTED_CLOSE_GROUP_PEERS: usize = 5 * CLOSE_GROUP_SIZE;
 #[cfg(test)]
 const MAX_EVICTED_CLOSE_GROUP_PEERS: usize = CLOSE_GROUP_SIZE + 2;
 
-pub struct BadNodeMetrics {
+pub(super) struct BadNodeMetrics {
     shunned_count_across_time_frames: ShunnedCountAcrossTimeFrames,
     shunned_by_close_group: ShunnedByCloseGroup,
 }
 
-pub enum BadNodeMetricsMsg {
+pub(super) enum BadNodeMetricsMsg {
     ShunnedByPeer(PeerId),
     CloseGroupUpdated(Vec<PeerId>),
 }
@@ -58,12 +58,12 @@ struct ShunnedReportTracker {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
-pub struct TimeFrame {
+pub(super) struct TimeFrame {
     time_frame: TimeFrameType,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, EncodeLabelValue, strum::EnumIter)]
-pub enum TimeFrameType {
+pub(super) enum TimeFrameType {
     LastTenMinutes,
     LastHour,
     LastSixHours,
@@ -110,7 +110,7 @@ impl TimeFrameType {
 }
 
 impl BadNodeMetrics {
-    pub fn spawn_background_task(
+    pub(super) fn spawn_background_task(
         time_based_shunned_count: Family<TimeFrame, Gauge>,
         shunned_by_close_group: Gauge,
         shunned_by_old_close_group: Gauge,
@@ -132,9 +132,10 @@ impl BadNodeMetrics {
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
-        tokio::spawn(async move {
+        #[allow(clippy::let_underscore_future)]
+        let _ = tokio::spawn(async move {
             let mut update_interval = interval(UPDATE_INTERVAL);
-            update_interval.tick().await;
+            let _ = update_interval.tick().await;
 
             loop {
                 tokio::select! {
@@ -168,11 +169,11 @@ impl ShunnedByCloseGroup {
         // increment the metric if the peer is in the close group (new or old) and hasn't shunned us before
         if !self.old_new_group_shunned_list.contains(&peer) {
             if self.close_group_peers.contains(&peer) {
-                self.metric_current_group.inc();
-                self.old_new_group_shunned_list.insert(peer);
+                let _ = self.metric_current_group.inc();
+                let _ = self.old_new_group_shunned_list.insert(peer);
             } else if self.old_close_group_peers.contains(&peer) {
-                self.metric_old_group.inc();
-                self.old_new_group_shunned_list.insert(peer);
+                let _ = self.metric_old_group.inc();
+                let _ = self.old_new_group_shunned_list.insert(peer);
             }
         }
     }
@@ -192,8 +193,8 @@ impl ShunnedByCloseGroup {
         for new_member in &new_members {
             // if it has shunned us before, update the metrics.
             if self.old_new_group_shunned_list.contains(new_member) {
-                self.metric_old_group.dec();
-                self.metric_current_group.inc();
+                let _ = self.metric_old_group.dec();
+                let _ = self.metric_current_group.inc();
             }
         }
 
@@ -201,8 +202,8 @@ impl ShunnedByCloseGroup {
             self.old_close_group_peers.push_back(*evicted_member);
             // if it has shunned us before, update the metrics.
             if self.old_new_group_shunned_list.contains(evicted_member) {
-                self.metric_current_group.dec();
-                self.metric_old_group.inc();
+                let _ = self.metric_current_group.dec();
+                let _ = self.metric_old_group.inc();
             }
         }
 
@@ -213,7 +214,7 @@ impl ShunnedByCloseGroup {
             while self.old_close_group_peers.len() > MAX_EVICTED_CLOSE_GROUP_PEERS {
                 if let Some(removed_peer) = self.old_close_group_peers.pop_front() {
                     if self.old_new_group_shunned_list.remove(&removed_peer) {
-                        self.metric_old_group.dec();
+                        let _ = self.metric_old_group.dec();
                     }
                 }
             }
@@ -233,7 +234,7 @@ impl ShunnedCountAcrossTimeFrames {
             let time_frame = TimeFrame {
                 time_frame: variant,
             };
-            self.metric.get_or_create(&time_frame).inc();
+            let _ = self.metric.get_or_create(&time_frame).inc();
         }
     }
 
@@ -249,7 +250,7 @@ impl ShunnedCountAcrossTimeFrames {
                 let time_frame = TimeFrame {
                     time_frame: tracked_value.least_bucket_it_fits_in,
                 };
-                self.metric.get_or_create(&time_frame).dec();
+                let _ = self.metric.get_or_create(&time_frame).dec();
 
                 let new_time_frame = tracked_value.least_bucket_it_fits_in.next_time_frame();
                 if new_time_frame == TimeFrameType::Indefinite {
@@ -261,7 +262,7 @@ impl ShunnedCountAcrossTimeFrames {
         }
         // remove the ones that are now indefinite
         for idx in idx_to_remove {
-            self.shunned_report_tracker.remove(idx);
+            let _ = self.shunned_report_tracker.remove(idx);
         }
     }
 }
