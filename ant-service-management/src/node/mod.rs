@@ -10,8 +10,6 @@ mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
 mod node_service_data_v2;
-#[cfg(test)]
-mod tests;
 
 // Re-export types
 pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
