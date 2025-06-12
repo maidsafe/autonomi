@@ -13,6 +13,7 @@
 pub mod control;
 pub mod daemon;
 pub mod error;
+pub mod metric;
 pub mod node;
 pub mod registry;
 pub mod rpc;

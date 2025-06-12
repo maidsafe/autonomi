@@ -23,6 +23,10 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error("Could not connect to the metrics endpoint'{0}'")]
+    MetricsConnectionError(String),
+    #[error("Could not parse metrics")]
+    MetricsParseError,
     #[error(transparent)]
     MultiAddrParseError(#[from] libp2p::multiaddr::Error),
     #[error("The registry does not contain a service named '{0}'")]
@@ -31,6 +35,8 @@ pub enum Error {
     ParseIntError(#[from] std::num::ParseIntError),
     #[error(transparent)]
     PeerIdParseError(#[from] libp2p_identity::ParseError),
+    #[error("Reachability status check has timed out")]
+    ReachabilityStatusCheckTimedOut,
     #[error("Could not connect to RPC endpoint '{0}'")]
     RpcConnectionError(String),
     #[error("Could not obtain node info through RPC: {0}")]
