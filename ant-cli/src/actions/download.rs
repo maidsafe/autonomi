@@ -145,7 +145,7 @@ async fn download_public(
         }
         Err(_) => {
             info!("Failed to deserialize Public Archive from address {addr}, treating as single file instead");
-            download_public_single_file_with_data(addr, data, dest_path).await
+            flush_single_file_data_to_disk(addr, data, dest_path).await
         }
     }
 }
@@ -204,9 +204,9 @@ async fn download_pub_archive_to_disk(
 }
 
 
-/// Download a single file using already-downloaded data bytes
-/// This avoids re-downloading when we already have the data from a failed archive deserialization
-async fn download_public_single_file_with_data(
+/// Flush single file data bytes to disk
+/// This writes already-downloaded data to disk without additional network calls
+async fn flush_single_file_data_to_disk(
     addr: &str,
     bytes: Bytes,
     dest_path: &str,
