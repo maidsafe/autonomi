@@ -90,7 +90,12 @@ impl NetworkDriver {
             QueryResult::GetRecord(res) => {
                 // The result here is not logged because it can produce megabytes of text.
                 trace!("GetRecord event occurred");
-                self.pending_tasks.update_get_record(id, res)?;
+                let finished = self.pending_tasks.update_get_record(id, res)?;
+                if finished {
+                    if let Some(mut query) = self.kad().query_mut(&id) {
+                        query.finish();
+                    }
+                }
             }
             QueryResult::PutRecord(res) => {
                 trace!("PutRecord: {:?}", res);
