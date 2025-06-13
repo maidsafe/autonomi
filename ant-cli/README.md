@@ -17,7 +17,7 @@ ant [OPTIONS] <COMMAND>
 
 ### File
 - `file cost <file>`
-- `file upload <file> [--public] [--no-archive]`
+- `file upload <file> [--public] [--no-archive] [--retry-failed]`
 - `file download <addr> <dest_file>`
 - `file list`
 
@@ -166,7 +166,7 @@ Expected value:
 
 #### Upload a file
 ```
-file upload <file> [--public] [--no-archive]
+file upload <file> [--public] [--no-archive] [--retry-failed]
 ```
 Uploads a file to the network.
 
@@ -176,6 +176,13 @@ Expected value:
 The following flags can be added:
 - `--public` (Optional) Specifying this will make this file publicly available to anyone on the network
 - `--no-archive` (Optional) Skip creating local archive after upload. Only upload files without saving archive information. Note that --no-archive is the default behaviour for single file uploads (folk can still upload a single file as an archive by putting it in a directory)
+- `--retry-failed` (Optional) Automatically retry failed uploads after a 1-minute pause. This is particularly useful for handling gas fee errors when the network base fee exceeds your --max-fee-per-gas setting. The retry mechanism works at the batch level, so only failed chunks are retried, not the entire file upload process.
+
+Example usage with retry functionality:
+```
+ant file upload myfile.txt --public --retry-failed --max-fee-per-gas 10000000
+```
+This will upload the file publicly and automatically retry if the base fee is higher than arbitrums minimum gas fee, showing detailed error messages with current gas prices. Using these settings ensures your data goes up at minimum cost (but depending on current blockchain fees and the amount of data this might take a while)
 
 #### Download a file
 ```

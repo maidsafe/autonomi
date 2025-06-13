@@ -48,6 +48,7 @@ pub async fn upload(
     no_archive: bool,
     network_context: NetworkContext,
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
+    retry_failed: bool,
 ) -> Result<(), ExitCodeError> {
     let config = ClientOperatingStrategy::new();
 
@@ -85,28 +86,34 @@ pub async fn upload(
 
     // upload dir
     let not_single_file = !dir_path.is_file();
-    let (archive_addr, local_addr) =
-        match upload_dir(&client, dir_path, public, no_archive, payment).await {
-            Ok((a, l)) => (a, l),
-            Err(UploadError::PutError(PutError::Batch(upload_state))) => {
-                let res = cached_payments::save_payment(file, &upload_state);
-                println!("Cached payment to local disk for {file}: {res:?}");
-                let exit_code =
-                    upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
-                return Err((
-                    eyre!(UploadError::PutError(PutError::Batch(upload_state)))
-                        .wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
-            Err(err) => {
-                let exit_code = upload_exit_code(&err);
-                return Err((
-                    eyre!(err).wrap_err("Failed to upload file".to_string()),
-                    exit_code,
-                ));
-            }
-        };
+    let result = if retry_failed {
+        println!("🔄 Retry mode enabled - will persistently retry failed chunks until successful");
+        upload_dir(&client, dir_path, public, no_archive, payment, true).await
+    } else {
+        upload_dir(&client, dir_path, public, no_archive, payment, false).await
+    };
+
+    let (archive_addr, local_addr) = match result {
+        Ok((a, l)) => (a, l),
+        Err(UploadError::PutError(PutError::Batch(upload_state))) => {
+            let res = cached_payments::save_payment(file, &upload_state);
+            println!("Cached payment to local disk for {file}: {res:?}");
+            let exit_code =
+                upload_exit_code(&UploadError::PutError(PutError::Batch(Default::default())));
+            return Err((
+                eyre!(UploadError::PutError(PutError::Batch(upload_state)))
+                    .wrap_err("Failed to upload file".to_string()),
+                exit_code,
+            ));
+        }
+        Err(err) => {
+            let exit_code = upload_exit_code(&err);
+            return Err((
+                eyre!(err).wrap_err("Failed to upload file".to_string()),
+                exit_code,
+            ));
+        }
+    };
 
     // wait for upload to complete
     if let Err(e) = upload_completed_tx.send(()) {
@@ -160,13 +167,20 @@ async fn upload_dir(
     public: bool,
     no_archive: bool,
     payment_option: PaymentOption,
+    retry_failed: bool,
 ) -> Result<(String, String), UploadError> {
     let is_single_file = dir_path.is_file();
 
     if public {
-        let (_, public_archive) = client
-            .dir_content_upload_public(dir_path, payment_option.clone())
-            .await?;
+        let (_, public_archive) = if retry_failed {
+            client
+                .dir_content_upload_public_with_retry(dir_path, payment_option.clone())
+                .await?
+        } else {
+            client
+                .dir_content_upload_public(dir_path, payment_option.clone())
+                .await?
+        };
 
         let mut addrs = vec![];
         for (file_path, addr, _meta) in public_archive.iter() {
@@ -187,9 +201,15 @@ async fn upload_dir(
             Ok((addr.to_hex(), addr.to_hex()))
         }
     } else {
-        let (_, private_archive) = client
-            .dir_content_upload(dir_path, payment_option.clone())
-            .await?;
+        let (_, private_archive) = if retry_failed {
+            client
+                .dir_content_upload_with_retry(dir_path, payment_option.clone())
+                .await?
+        } else {
+            client
+                .dir_content_upload(dir_path, payment_option.clone())
+                .await?
+        };
 
         let mut addrs = vec![];
         for (file_path, private_datamap, _meta) in private_archive.iter() {
