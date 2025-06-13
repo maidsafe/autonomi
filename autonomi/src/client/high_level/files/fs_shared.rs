@@ -17,6 +17,8 @@ use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use std::sync::LazyLock;
+use std::time::Duration;
+use tokio::time::sleep;
 
 type AggregatedChunks = Vec<((String, Option<DataAddress>, usize, usize), Chunk)>;
 
@@ -72,6 +74,25 @@ impl Client {
         payment_option: PaymentOption,
         combined_chunks: CombinedChunks,
     ) -> Result<AttoTokens, UploadError> {
+        self.pay_and_upload_internal(payment_option, combined_chunks, false).await
+    }
+
+    /// Processes file uploads with payment in batches, with retry on failure
+    pub(crate) async fn pay_and_upload_with_retry(
+        &self,
+        payment_option: PaymentOption,
+        combined_chunks: CombinedChunks,
+    ) -> Result<AttoTokens, UploadError> {
+        self.pay_and_upload_internal(payment_option, combined_chunks, true).await
+    }
+
+    /// Internal method that handles the actual upload logic with optional retry
+    async fn pay_and_upload_internal(
+        &self,
+        payment_option: PaymentOption,
+        combined_chunks: CombinedChunks,
+        retry_on_failure: bool,
+    ) -> Result<AttoTokens, UploadError> {
         let start = tokio::time::Instant::now();
         let total_files = combined_chunks.len();
         let mut receipts = Vec::new();
@@ -101,13 +122,69 @@ impl Client {
 
         // Process all chunks for this file in batches
         while !aggregated_chunks.is_empty() {
-            self.process_chunk_batch(
+            let batch_result = self.process_chunk_batch(
                 &mut aggregated_chunks,
                 &mut receipts,
                 &mut free_chunks_counts,
                 payment_option.clone(),
+                retry_on_failure,
             )
-            .await?;
+            .await;
+
+            match batch_result {
+                Ok(()) => continue,
+                Err(err) if retry_on_failure => {
+                    // Helper function to extract gas values from error message
+                    fn extract_gas_values(err_str: &str) -> Option<(String, String)> {
+                        // Look for pattern: "maxFeePerGas: <value>, baseFee: <value>"
+                        if let Some(max_fee_start) = err_str.find("maxFeePerGas: ") {
+                            let max_fee_str = &err_str[max_fee_start + 14..];
+                            if let Some(comma_pos) = max_fee_str.find(',') {
+                                let max_fee = &max_fee_str[..comma_pos];
+                                
+                                if let Some(base_fee_start) = err_str.find("baseFee: ") {
+                                    let base_fee_str = &err_str[base_fee_start + 9..];
+                                    // Find the end of the base fee value (could be end of string or another delimiter)
+                                    let base_fee = base_fee_str.split(|c: char| !c.is_numeric()).next()?;
+                                    
+                                    return Some((max_fee.to_string(), base_fee.to_string()));
+                                }
+                            }
+                        }
+                        None
+                    }
+
+                    // Format error message for user
+                    let err_str = format!("{err:?}");
+                    let error_msg = if err_str.contains("max fee per gas less than block base fee") {
+                        if let Some((max_fee, base_fee)) = extract_gas_values(&err_str) {
+                            format!(
+                                "❌ Gas fee too low!\n💰 Your max fee per gas: {} wei\n📈 Network base fee: {} wei\n💡 Increase your --max-fee-per-gas if you want the upload to be executed faster",
+                                max_fee, base_fee
+                            )
+                        } else {
+                            "💸 Gas fee too low - current base fee exceeds your setting".to_string()
+                        }
+                    } else if err_str.contains("insufficient funds") {
+                        "💰 Insufficient funds for transaction".to_string()
+                    } else if let UploadError::PutError(PutError::Batch(ref upload_state)) = err {
+                        format!("❌ Upload batch failed: {} chunks failed", upload_state.failed.len())
+                    } else {
+                        "❌ Upload error occurred".to_string()
+                    };
+                    
+                    println!("⚠️  {}. Retrying after 1 minute pause...", error_msg);
+                    info!("Upload error: {}. Retrying in 1 minute...", err);
+                    
+                    // Wait 1 minute before retry
+                    sleep(Duration::from_secs(60)).await;
+                    println!("🔄 Retrying upload...");
+                    
+                    // Continue the loop to retry with the same chunks
+                    continue;
+                }
+                Err(err) => return Err(err),
+            }
         }
 
         info!(
@@ -130,15 +207,28 @@ impl Client {
     #[allow(clippy::too_many_arguments)]
     async fn process_chunk_batch(
         &self,
-        remaining_chunks: &mut AggregatedChunks,
+        aggregated_chunks: &mut AggregatedChunks,
         receipts: &mut Vec<Receipt>,
         free_chunks_counts: &mut Vec<usize>,
         payment_option: PaymentOption,
+        retry_on_failure: bool,
     ) -> Result<(), UploadError> {
         // Take next batch of chunks (up to UPLOAD_FLOW_BATCH_SIZE)
-        let batch: Vec<_> = remaining_chunks
-            .drain(..std::cmp::min(remaining_chunks.len(), *UPLOAD_FLOW_BATCH_SIZE))
-            .collect();
+        let batch_size = std::cmp::min(aggregated_chunks.len(), *UPLOAD_FLOW_BATCH_SIZE);
+        
+        // Important: Don't drain chunks yet - we might need to retry them
+        let batch: Vec<_> = if retry_on_failure {
+            // For retry mode, clone the chunks so we can retry if needed
+            aggregated_chunks[..batch_size]
+                .iter()
+                .cloned()
+                .collect()
+        } else {
+            // For non-retry mode, drain as before
+            aggregated_chunks
+                .drain(..batch_size)
+                .collect()
+        };
 
         // Prepare payment info for batch
         let payment_info: Vec<_> = batch
@@ -179,7 +269,7 @@ impl Client {
             .pay_for_content_addrs(DataTypes::Chunk, payment_info.into_iter(), payment_option)
             .await
             .inspect_err(|err| error!("Payment failed: {err:?}"))
-            .map_err(PutError::from)?;
+            .map_err(|err| UploadError::from(PutError::from(err)))?;
 
         if free_chunks > 0 {
             info!(
@@ -199,6 +289,11 @@ impl Client {
 
         receipts.push(receipt);
         free_chunks_counts.push(free_chunks);
+
+        // Only remove chunks from aggregated_chunks if retry mode and upload was successful
+        if retry_on_failure {
+            aggregated_chunks.drain(..batch_size);
+        }
 
         Ok(())
     }

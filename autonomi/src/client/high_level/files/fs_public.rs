@@ -20,6 +20,8 @@ use bytes::Bytes;
 use std::path::PathBuf;
 use std::time;
 use std::time::{Duration, SystemTime};
+use std::collections::HashMap;
+use std::time::Instant;
 
 impl Client {
     /// Download file from network to local file system
@@ -57,19 +59,99 @@ impl Client {
         Ok(())
     }
 
-    /// Upload the content of all files in a directory to the network.
-    /// The directory is recursively walked and each file is uploaded to the network.
+    /// Uploads a directory of files to the network as public data.
     ///
-    /// The data maps of these files are uploaded on the network, making the individual files publicly available.
+    /// # Arguments
+    /// * `dir_path` - Path to the directory to upload
+    /// * `payment_option` - Payment option for the upload
     ///
-    /// This returns, but does not upload (!),the [`PublicArchive`] containing the data maps of the uploaded files.
+    /// # Returns
+    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The data addresses and public archive
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use autonomi::{Client, PaymentOption};
+    /// # use std::path::PathBuf;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::init().await?;
+    /// let dir_path = PathBuf::from("/path/to/directory");
+    /// let payment = PaymentOption::default();
+    /// let (addresses, archive) = client.dir_content_upload_public(dir_path, payment).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn dir_content_upload_public(
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, PublicArchive), UploadError> {
-        info!("Uploading directory: {dir_path:?}");
+    ) -> Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError> {
+        info!("Uploading directory as public data: {dir_path:?}");
+        let start = Instant::now();
 
+        // Generate chunks from directory
+        let (chunks, public_archive) = self.dir_to_public_archive(dir_path.clone()).await?;
+
+        // Upload chunks
+        let tokens_spent = self.pay_and_upload(payment_option, chunks).await?;
+
+        // Create data addresses map
+        let mut data_addrs = HashMap::new();
+        for (path, addr, _meta) in public_archive.iter() {
+            data_addrs.insert(path.clone(), *addr);
+        }
+
+        debug!(
+            "Uploaded directory in {:?}: {} files, {} tokens spent",
+            start.elapsed(),
+            data_addrs.len(),
+            tokens_spent
+        );
+        Ok((data_addrs, public_archive))
+    }
+
+    /// Uploads a directory of files to the network as public data with retry functionality.
+    ///
+    /// # Arguments
+    /// * `dir_path` - Path to the directory to upload
+    /// * `payment_option` - Payment option for the upload
+    ///
+    /// # Returns
+    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The data addresses and public archive
+    pub async fn dir_content_upload_public_with_retry(
+        &self,
+        dir_path: PathBuf,
+        payment_option: PaymentOption,
+    ) -> Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError> {
+        info!("Uploading directory as public data with retry: {dir_path:?}");
+        let start = Instant::now();
+
+        // Generate chunks from directory
+        let (chunks, public_archive) = self.dir_to_public_archive(dir_path.clone()).await?;
+
+        // Upload chunks with retry
+        let tokens_spent = self.pay_and_upload_with_retry(payment_option, chunks).await?;
+
+        // Create data addresses map
+        let mut data_addrs = HashMap::new();
+        for (path, addr, _meta) in public_archive.iter() {
+            data_addrs.insert(path.clone(), *addr);
+        }
+
+        debug!(
+            "Uploaded directory with retry in {:?}: {} files, {} tokens spent",
+            start.elapsed(),
+            data_addrs.len(),
+            tokens_spent
+        );
+        Ok((data_addrs, public_archive))
+    }
+
+    /// Convert a directory to chunks and create a public archive
+    async fn dir_to_public_archive(
+        &self,
+        dir_path: PathBuf,
+    ) -> Result<(CombinedChunks, PublicArchive), UploadError> {
         let mut encryption_tasks = vec![];
 
         for entry in walkdir::WalkDir::new(&dir_path) {
@@ -145,34 +227,7 @@ impl Client {
             }
         }
 
-        let total_cost = self.pay_and_upload(payment_option, combined_chunks).await?;
-
-        for (file_path, data_addr, _meta) in public_archive.iter() {
-            info!("Uploaded file: {file_path:?} to: {data_addr}");
-            #[cfg(feature = "loud")]
-            println!("Uploaded file: {file_path:?} to: {data_addr}");
-        }
-
-        Ok((total_cost, public_archive))
-    }
-
-    /// Same as [`Client::dir_content_upload_public`] but also uploads the archive to the network.
-    ///
-    /// Returns the [`ArchiveAddress`] of the uploaded archive.
-    pub async fn dir_upload_public(
-        &self,
-        dir_path: PathBuf,
-        payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, ArchiveAddress), UploadError> {
-        let (cost1, archive) = self
-            .dir_content_upload_public(dir_path, payment_option.clone())
-            .await?;
-        let (cost2, archive_addr) = self.archive_put_public(&archive, payment_option).await?;
-        let total_cost = cost1.checked_add(cost2).unwrap_or_else(|| {
-            error!("Total cost overflowed: {cost1:?} + {cost2:?}");
-            cost1
-        });
-        Ok((total_cost, archive_addr))
+        Ok((combined_chunks, public_archive))
     }
 
     /// Upload the content of a file to the network.
