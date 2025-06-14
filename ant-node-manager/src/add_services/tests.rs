@@ -91,6 +91,11 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let init_peers_config = InitialPeersConfig {
         first: true,
@@ -119,7 +124,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         name: "antnode1".to_string(),
         network_id: None,
         node_ip: None,
@@ -152,7 +157,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -323,7 +327,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -406,7 +409,6 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -481,6 +483,11 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -500,7 +507,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -533,6 +540,11 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         .times(1)
         .returning(|| Ok(8083))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6003))
+        .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
         autostart: false,
@@ -551,7 +563,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6003),
         network_id: None,
         name: "antnode2".to_string(),
         node_ip: None,
@@ -584,6 +596,11 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         .times(1)
         .returning(|| Ok(8085))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6005))
+        .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
         autostart: false,
@@ -602,7 +619,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         log_dir_path: node_logs_dir.to_path_buf().join("antnode3"),
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6005),
         network_id: None,
         name: "antnode3".to_string(),
         node_ip: None,
@@ -636,7 +653,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -767,7 +783,12 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -787,7 +808,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -796,7 +817,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         reachability_check: false,
         relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -820,7 +841,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: env_variables.clone(),
             log_format: None,
             max_archived_log_files: None,
@@ -879,7 +899,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
     assert_eq!(node0.number, 1);
     assert_eq!(
         node0.rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081)
     );
     assert_eq!(
         node0.log_dir_path,
@@ -963,6 +983,11 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         .times(1)
         .returning(|| Ok(8083))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6003))
+        .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
         autostart: false,
@@ -981,7 +1006,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6003),
         network_id: None,
         name: "antnode2".to_string(),
         node_ip: None,
@@ -1015,7 +1040,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1113,7 +1137,12 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1123,7 +1152,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1141,6 +1170,8 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
                             .to_string(),
                     ),
                     OsString::from("--first"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1175,7 +1206,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1263,7 +1293,12 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1273,7 +1308,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1293,6 +1328,8 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
                     OsString::from("--peer"),
                     OsString::from(
                         "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1327,7 +1364,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1412,7 +1448,12 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1422,7 +1463,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1440,6 +1481,8 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
                             .to_string(),
                     ),
                     OsString::from("--local"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1474,7 +1517,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1562,7 +1604,12 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1572,7 +1619,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1591,6 +1638,8 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
                     ),
                     OsString::from("--network-contacts-url"),
                     OsString::from("http://localhost:8080/contacts,http://localhost:8081/contacts"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1625,7 +1674,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1710,7 +1758,12 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1720,7 +1773,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1738,6 +1791,8 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
                             .to_string(),
                     ),
                     OsString::from("--ignore-cache"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1772,7 +1827,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -1857,7 +1911,12 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -1867,7 +1926,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -1886,6 +1945,8 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
                     ),
                     OsString::from("--bootstrap-cache-dir"),
                     OsString::from("/path/to/bootstrap/cache"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -1920,7 +1981,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             init_peers_config: initial_peers_config.clone(),
             log_format: None,
@@ -1999,7 +2059,12 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -2009,7 +2074,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2028,6 +2093,8 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
                     ),
                     OsString::from("--network-id"),
                     OsString::from("5"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -2062,7 +2129,6 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2139,7 +2205,12 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -2149,7 +2220,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2168,6 +2239,8 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
                     ),
                     OsString::from("--ip"),
                     OsString::from(custom_ip.to_string()),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -2202,7 +2275,6 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2279,7 +2351,12 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -2299,7 +2376,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -2308,7 +2385,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         reachability_check: false,
         relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -2333,7 +2410,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2409,7 +2485,12 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15000))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -2418,7 +2499,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15000"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2437,6 +2518,8 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     ),
                     OsString::from("--port"),
                     OsString::from("12000"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -2468,7 +2551,12 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15001))
+        .returning(|| Ok(8082))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6002))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -2477,7 +2565,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15001"),
+                    OsString::from("127.0.0.1:8082"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2496,6 +2584,8 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     ),
                     OsString::from("--port"),
                     OsString::from("12001"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6002"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -2527,7 +2617,12 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15002))
+        .returning(|| Ok(8083))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6003))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -2536,7 +2631,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15002"),
+                    OsString::from("127.0.0.1:8083"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -2555,6 +2650,8 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     ),
                     OsString::from("--port"),
                     OsString::from("12002"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6003"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -2589,7 +2686,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2713,7 +2809,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2832,7 +2927,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2905,7 +2999,6 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             auto_set_nat_flags: false,
             count: Some(2),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -2983,7 +3076,6 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             auto_set_nat_flags: false,
             count: Some(2),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -3039,7 +3131,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
 }
 
 #[tokio::test]
-async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> Result<()> {
+async fn add_node_should_set_random_ports_for_metrics_server() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -3058,11 +3150,15 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
     let mut seq = Sequence::new();
 
     // First service
-    let mut ports = vec![Ok(8081), Ok(15001)].into_iter();
     mock_service_control
         .expect_get_available_port()
-        .times(2)
-        .returning(move || ports.next().unwrap())
+        .times(1)
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -3089,7 +3185,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
                             .to_string(),
                     ),
                     OsString::from("--metrics-server-port"),
-                    OsString::from("15001"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -3124,7 +3220,6 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: true,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -3167,7 +3262,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
     .await?;
 
     let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert_eq!(node0.metrics_port, Some(15001));
+    assert_eq!(node0.metrics_port, Some(6001));
     Ok(())
 }
 
@@ -3196,6 +3291,11 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     mock_service_control
         .expect_install()
@@ -3221,6 +3321,8 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--max-archived-log-files"),
                     OsString::from("20"),
                     OsString::from("--rewards-address"),
@@ -3257,7 +3359,6 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: Some(20),
@@ -3330,6 +3431,11 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     mock_service_control
         .expect_install()
@@ -3355,6 +3461,8 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--max-log-files"),
                     OsString::from("20"),
                     OsString::from("--rewards-address"),
@@ -3391,7 +3499,6 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -3462,7 +3569,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15000))
+        .returning(|| Ok(8081))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -3471,7 +3578,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15000"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3489,7 +3596,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                             .to_string(),
                     ),
                     OsString::from("--metrics-server-port"),
-                    OsString::from("12000"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -3521,7 +3628,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15001))
+        .returning(|| Ok(8082))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -3530,7 +3637,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15001"),
+                    OsString::from("127.0.0.1:8082"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3548,7 +3655,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                             .to_string(),
                     ),
                     OsString::from("--metrics-server-port"),
-                    OsString::from("12001"),
+                    OsString::from("6002"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -3580,7 +3687,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(15002))
+        .returning(|| Ok(8083))
         .in_sequence(&mut seq);
     mock_service_control
         .expect_install()
@@ -3589,7 +3696,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:15002"),
+                    OsString::from("127.0.0.1:8083"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3607,7 +3714,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                             .to_string(),
                     ),
                     OsString::from("--metrics-server-port"),
-                    OsString::from("12002"),
+                    OsString::from("6003"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -3642,12 +3749,11 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
-            metrics_port: Some(PortRange::Range(12000, 12002)),
+            metrics_port: Some(PortRange::Range(6001, 6003)),
             network_id: None,
             node_ip: None,
             node_port: None,
@@ -3689,9 +3795,9 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     let node1 = node_registry.nodes.read().await[1].read().await.clone();
     let node2 = node_registry.nodes.read().await[2].read().await.clone();
 
-    assert_eq!(node0.metrics_port, Some(12000));
-    assert_eq!(node1.metrics_port, Some(12001));
-    assert_eq!(node2.metrics_port, Some(12002));
+    assert_eq!(node0.metrics_port, Some(6001));
+    assert_eq!(node1.metrics_port, Some(6002));
+    assert_eq!(node2.metrics_port, Some(6003));
 
     Ok(())
 }
@@ -3764,7 +3870,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -3884,7 +3989,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -3957,13 +4061,18 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
 
     // First service
     mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
+    mock_service_control
         .expect_install()
         .times(1)
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20000"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -3980,6 +4089,8 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -4009,13 +4120,18 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
 
     // Second service
     mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6002))
+        .in_sequence(&mut seq);
+    mock_service_control
         .expect_install()
         .times(1)
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20001"),
+                    OsString::from("127.0.0.1:8082"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -4032,6 +4148,8 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6002"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -4061,13 +4179,18 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
 
     // Third service
     mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6003))
+        .in_sequence(&mut seq);
+    mock_service_control
         .expect_install()
         .times(1)
         .with(
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:20002"),
+                    OsString::from("127.0.0.1:8083"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -4084,6 +4207,8 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6003"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -4118,7 +4243,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             auto_set_nat_flags: false,
             count: Some(3),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4131,7 +4255,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             reachability_check: false,
             relay: false,
             rpc_address: None,
-            rpc_port: Some(PortRange::Range(20000, 20002)),
+            rpc_port: Some(PortRange::Range(8081, 8083)),
             antnode_dir_path: temp_dir.to_path_buf(),
             antnode_src_path: antnode_download_path.to_path_buf(),
             service_data_dir_path: node_data_dir.to_path_buf(),
@@ -4169,15 +4293,15 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
     let node2 = node_registry.nodes.read().await[2].read().await.clone();
     assert_eq!(
         node0.rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20000)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081)
     );
     assert_eq!(
         node1.rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20001)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8082)
     );
     assert_eq!(
         node2.rpc_socket_addr,
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 20002)
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8083)
     );
     Ok(())
 }
@@ -4250,7 +4374,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4370,7 +4493,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             auto_set_nat_flags: false,
             count: Some(2),
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4444,7 +4566,12 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
@@ -4465,7 +4592,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -4474,7 +4601,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
         reachability_check: false,
         relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4498,7 +4625,6 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
             auto_set_nat_flags: true,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4570,7 +4696,12 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
@@ -4591,7 +4722,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -4600,7 +4731,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
         reachability_check: false,
         relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4624,7 +4755,6 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
             auto_set_nat_flags: true,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4695,7 +4825,12 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
@@ -4716,7 +4851,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -4725,7 +4860,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
         reachability_check: false,
         relay: true,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4749,7 +4884,6 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
             auto_set_nat_flags: true,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -4822,7 +4956,12 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -4843,14 +4982,14 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
+        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
         antnode_path: node_data_dir
             .to_path_buf()
             .join("antnode1")
@@ -4875,7 +5014,6 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
             auto_set_nat_flags: true,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5085,6 +5223,11 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5104,7 +5247,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -5138,7 +5281,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5211,6 +5353,11 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5230,7 +5377,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -5264,7 +5411,6 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5338,6 +5484,11 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5357,7 +5508,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -5391,7 +5542,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5461,6 +5611,11 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5480,7 +5635,7 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -5514,7 +5669,6 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5586,6 +5740,11 @@ async fn add_node_should_auto_restart() -> Result<()> {
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     mock_service_control
         .expect_install()
@@ -5610,6 +5769,8 @@ async fn add_node_should_auto_restart() -> Result<()> {
                             .to_string_lossy()
                             .to_string(),
                     ),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -5645,7 +5806,6 @@ async fn add_node_should_auto_restart() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
@@ -5718,6 +5878,11 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5738,7 +5903,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -5771,7 +5936,6 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             relay: false,
             log_format: None,
@@ -5851,7 +6015,12 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
     mock_service_control
         .expect_get_available_port()
         .times(1)
-        .returning(|| Ok(12001))
+        .returning(|| Ok(8081))
+        .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
         .in_sequence(&mut seq);
 
     mock_service_control
@@ -5861,7 +6030,7 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
             eq(ServiceInstallCtx {
                 args: vec![
                     OsString::from("--rpc"),
-                    OsString::from("127.0.0.1:12001"),
+                    OsString::from("127.0.0.1:8081"),
                     OsString::from("--root-dir"),
                     OsString::from(
                         node_data_dir
@@ -5879,6 +6048,8 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
                             .to_string(),
                     ),
                     OsString::from("--alpha"),
+                    OsString::from("--metrics-server-port"),
+                    OsString::from("6001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
                     OsString::from("evm-custom"),
@@ -5913,7 +6084,6 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
             auto_set_nat_flags: false,
             count: None,
             delete_antnode_src: true,
-            enable_metrics_server: false,
             env_variables: None,
             relay: false,
             log_format: None,
@@ -5992,6 +6162,11 @@ async fn add_node_should_add_the_node_with_reachability_check_flag() -> Result<(
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -6011,7 +6186,7 @@ async fn add_node_should_add_the_node_with_reachability_check_flag() -> Result<(
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,
@@ -6045,7 +6220,6 @@ async fn add_node_should_add_the_node_with_reachability_check_flag() -> Result<(
             auto_set_nat_flags: false,
             count: Some(1),
             delete_antnode_src: false,
-            enable_metrics_server: false,
             env_variables: None,
             log_format: None,
             max_archived_log_files: None,
