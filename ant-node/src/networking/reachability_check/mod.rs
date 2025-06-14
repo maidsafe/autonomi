@@ -845,7 +845,7 @@ impl ReachabilityCheckSwarmDriver {
     }
 
     fn do_we_have_retries_left(&self) -> bool {
-        self.dial_manager.current_workflow_attempt <= MAX_WORKFLOW_ATTEMPTS
+        self.dial_manager.current_workflow_attempt < MAX_WORKFLOW_ATTEMPTS
     }
 }
 
