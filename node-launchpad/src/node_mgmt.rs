@@ -276,7 +276,6 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
     }
 
     if let Err(err) = ant_node_manager::cmd::node::upgrade(
-        None,
         args.do_not_start,
         args.custom_bin_path,
         args.force,
@@ -394,7 +393,6 @@ async fn add_node(args: MaintainNodesArgs) {
         config.auto_set_nat_flags,
         Some(config.count),
         config.data_dir_path,
-        true,       // enable_metrics_server,
         None,       // env_variables,
         None,       // evm_network
         None,       // log_dir_path,
@@ -445,7 +443,7 @@ async fn add_node(args: MaintainNodesArgs) {
 
 async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
     debug!("Starting node {:?}", services);
-    if let Err(err) = ant_node_manager::cmd::node::start_batch(
+    if let Err(err) = ant_node_manager::cmd::node::start(
         FIXED_INTERVAL,
         vec![],
         services.clone(),
@@ -654,7 +652,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         config.auto_set_nat_flags,
         count,
         config.data_dir_path.clone(),
-        true,
         None,
         Some(EvmNetwork::default()),
         None,
@@ -728,7 +725,6 @@ async fn add_nodes(
             config.auto_set_nat_flags,
             config.count,
             config.data_dir_path.clone(),
-            true,
             None,
             Some(EvmNetwork::default()),
             None,
