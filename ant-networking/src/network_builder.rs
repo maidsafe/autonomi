@@ -57,7 +57,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 // Timeout for requests sent/received through the request_response behaviour.
 const REQUEST_TIMEOUT_DEFAULT_S: Duration = Duration::from_secs(30);
@@ -179,15 +179,21 @@ impl NetworkBuilder {
     /// # Returns
     ///
     /// A tuple containing a `Network` handle, an `mpsc::Receiver<NetworkEvent>`,
-    /// and a `SwarmDriver` instance.
+    /// a `SwarmDriver` instance, and an optional metrics server shutdown sender.
     ///
     /// # Errors
     ///
     /// Returns an error if there is a problem initializing the mDNS behaviour.
+    #[allow(clippy::type_complexity)]
     pub fn build_node(
         self,
         root_dir: PathBuf,
-    ) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
+    ) -> Result<(
+        Network,
+        mpsc::Receiver<NetworkEvent>,
+        SwarmDriver,
+        Option<watch::Sender<bool>>,
+    )> {
         let bootstrap_interval = rand::thread_rng().gen_range(
             PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S / 2..PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S,
         );
@@ -257,7 +263,8 @@ impl NetworkBuilder {
 
         let listen_addr = self.listen_addr;
 
-        let (network, events_receiver, mut swarm_driver) = self.build(kad_cfg, store_cfg);
+        let (network, events_receiver, mut swarm_driver, metrics_shutdown_tx) =
+            self.build(kad_cfg, store_cfg);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -283,11 +290,13 @@ impl NetworkBuilder {
                 .expect("Failed to listen on QUIC address");
         }
 
-        Ok((network, events_receiver, swarm_driver))
+        Ok((network, events_receiver, swarm_driver, metrics_shutdown_tx))
     }
 
     /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
-    pub fn build_reachability_check_swarm(self) -> Result<ReachabilityCheckSwarmDriver> {
+    pub fn build_reachability_check_swarm(
+        self,
+    ) -> Result<(ReachabilityCheckSwarmDriver, Option<watch::Sender<bool>>)> {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
             .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -334,7 +343,7 @@ impl NetworkBuilder {
             .boxed();
 
         #[cfg(feature = "open-metrics")]
-        let metrics_recorder = if let Some(port) = self.metrics_server_port {
+        let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = self.metrics_server_port {
             let metrics_recorder = NetworkMetricsRecorder::new(
                 &mut metrics_registries,
                 ReachabilityStatusMetric::Ongoing,
@@ -343,11 +352,14 @@ impl NetworkBuilder {
             metadata_recorder.register_peer_id(&peer_id);
             metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
 
-            run_metrics_server(metrics_registries, port);
-            Some(metrics_recorder)
+            let shutdown_tx = run_metrics_server(metrics_registries, port);
+            (Some(metrics_recorder), Some(shutdown_tx))
         } else {
-            None
+            (None, None)
         };
+
+        #[cfg(not(feature = "open-metrics"))]
+        let metrics_shutdown_tx = None;
 
         // Listen on the provided address
         let listen_socket_addr = self
@@ -387,7 +399,7 @@ impl NetworkBuilder {
             metrics_recorder,
         );
 
-        Ok(swarm_driver)
+        Ok((swarm_driver, metrics_shutdown_tx))
     }
 
     /// Private helper to create the network components with the provided config and req/res behaviour
@@ -395,7 +407,12 @@ impl NetworkBuilder {
         self,
         kad_cfg: kad::Config,
         record_store_cfg: NodeRecordStoreConfig,
-    ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
+    ) -> (
+        Network,
+        mpsc::Receiver<NetworkEvent>,
+        SwarmDriver,
+        Option<watch::Sender<bool>>,
+    ) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
             .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -447,7 +464,7 @@ impl NetworkBuilder {
             .boxed();
 
         #[cfg(feature = "open-metrics")]
-        let metrics_recorder = if let Some(port) = self.metrics_server_port {
+        let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = self.metrics_server_port {
             let reachability_check_metric = if let Some(status) = self.reachability_status {
                 ReachabilityStatusMetric::Status(status)
             } else {
@@ -459,11 +476,14 @@ impl NetworkBuilder {
             metadata_recorder.register_peer_id(&peer_id);
             metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
 
-            run_metrics_server(metrics_registries, port);
-            Some(metrics_recorder)
+            let shutdown_tx = run_metrics_server(metrics_registries, port);
+            (Some(metrics_recorder), Some(shutdown_tx))
         } else {
-            None
+            (None, None)
         };
+
+        #[cfg(not(feature = "open-metrics"))]
+        let metrics_shutdown_tx = None;
 
         // RequestResponse Behaviour
         let request_response = {
@@ -647,7 +667,12 @@ impl NetworkBuilder {
             self.keypair,
         );
 
-        (network, network_event_receiver, swarm_driver)
+        (
+            network,
+            network_event_receiver,
+            swarm_driver,
+            metrics_shutdown_tx,
+        )
     }
 }
 
