@@ -71,6 +71,9 @@ use tokio::sync::watch;
 #[derive(Clone)]
 pub struct RunningNode {
     shutdown_sender: watch::Sender<bool>,
+    #[allow(dead_code)]
+    /// This has to be kept for the lifetime of the node, so that the metrics server can be kept running.
+    metrics_server_shutdown_sender: Option<watch::Sender<bool>>,
     network: Network,
     node_events_channel: NodeEventsChannel,
     root_dir_path: PathBuf,

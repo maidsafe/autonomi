@@ -59,7 +59,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 // Timeout for requests sent/received through the request_response behaviour.
 const REQUEST_TIMEOUT_DEFAULT_S: Duration = Duration::from_secs(30);
@@ -102,14 +102,18 @@ pub(crate) struct NetworkConfig {
 /// # Returns
 ///
 /// A tuple containing a `Network` handle, an `mpsc::Receiver<NetworkEvent>`,
-/// and a `SwarmDriver` instance.
+/// a `SwarmDriver` instance, and an optional metrics server shutdown sender.
 ///
 /// # Errors
 ///
 /// Returns an error if there is a problem initializing the mDNS behaviour.
 pub(super) fn init_driver(
     config: NetworkConfig,
-) -> Result<(SwarmDriver, mpsc::Receiver<NetworkEvent>)> {
+) -> Result<(
+    SwarmDriver,
+    mpsc::Receiver<NetworkEvent>,
+    Option<watch::Sender<bool>>,
+)> {
     let mut kad_cfg = kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
     let _ = kad_cfg
         .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
@@ -177,7 +181,8 @@ pub(super) fn init_driver(
     // Listen on the provided address
     let listen_socket_addr = config.listen_addr;
 
-    let (events_receiver, mut swarm_driver) = init_swarm_driver(kad_cfg, store_cfg, config);
+    let (events_receiver, mut swarm_driver, metrics_shutdown_tx) =
+        init_swarm_driver(kad_cfg, store_cfg, config);
 
     // Listen on QUIC
     let addr_quic = Multiaddr::from(listen_socket_addr.ip())
@@ -200,7 +205,7 @@ pub(super) fn init_driver(
             .expect("Failed to listen on QUIC address");
     }
     info!("Listening on QUIC address: {addr_quic:?}");
-    Ok((swarm_driver, events_receiver))
+    Ok((swarm_driver, events_receiver, metrics_shutdown_tx))
 }
 
 /// Private helper to create the network components with the provided config and req/res behaviour
@@ -208,7 +213,11 @@ fn init_swarm_driver(
     kad_cfg: kad::Config,
     record_store_cfg: NodeRecordStoreConfig,
     config: NetworkConfig,
-) -> (mpsc::Receiver<NetworkEvent>, SwarmDriver) {
+) -> (
+    mpsc::Receiver<NetworkEvent>,
+    SwarmDriver,
+    Option<watch::Sender<bool>>,
+) {
     let identify_protocol_str = IDENTIFY_PROTOCOL_STR
         .read()
         .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -260,7 +269,7 @@ fn init_swarm_driver(
         .boxed();
 
     #[cfg(feature = "open-metrics")]
-    let metrics_recorder = if let Some(port) = config.metrics_server_port {
+    let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = config.metrics_server_port {
         let reachability_check_metric = if let Some(status) = config.reachability_status {
             ReachabilityStatusMetric::Status(status)
         } else {
@@ -272,11 +281,17 @@ fn init_swarm_driver(
         metadata_recorder.register_peer_id(&peer_id);
         metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
 
-        run_metrics_server(metrics_registries, port);
-        Some(metrics_recorder)
+        let shutdown_tx = run_metrics_server(metrics_registries, port);
+        (Some(metrics_recorder), Some(shutdown_tx))
     } else {
-        None
+        (None, None)
     };
+
+    #[cfg(not(feature = "open-metrics"))]
+    let metrics_shutdown_tx = None;
+
+    #[cfg(not(feature = "open-metrics"))]
+    let metrics_shutdown_tx = None;
 
     let request_response = {
         let cfg = RequestResponseConfig::default().with_request_timeout(
@@ -453,13 +468,13 @@ fn init_swarm_driver(
         dial_queue: Default::default(),
     };
 
-    (network_event_receiver, swarm_driver)
+    (network_event_receiver, swarm_driver, metrics_shutdown_tx)
 }
 
 /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
 pub(crate) async fn init_reachability_check_swarm(
     config: NetworkConfig,
-) -> Result<ReachabilityCheckSwarmDriver> {
+) -> Result<(ReachabilityCheckSwarmDriver, Option<watch::Sender<bool>>)> {
     let identify_protocol_str = IDENTIFY_PROTOCOL_STR
         .read()
         .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -506,18 +521,21 @@ pub(crate) async fn init_reachability_check_swarm(
         .boxed();
 
     #[cfg(feature = "open-metrics")]
-    let metrics_recorder = if let Some(port) = config.metrics_server_port {
+    let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = config.metrics_server_port {
         let metrics_recorder =
             NetworkMetricsRecorder::new(&mut metrics_registries, ReachabilityStatusMetric::Ongoing);
         let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
         metadata_recorder.register_peer_id(&peer_id);
         metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
 
-        run_metrics_server(metrics_registries, port);
-        Some(metrics_recorder)
+        let shutdown_tx = run_metrics_server(metrics_registries, port);
+        (Some(metrics_recorder), Some(shutdown_tx))
     } else {
-        None
+        (None, None)
     };
+
+    #[cfg(not(feature = "open-metrics"))]
+    let metrics_shutdown_tx = None;
 
     // Identify Behaviour
     let agent_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
@@ -557,7 +575,7 @@ pub(crate) async fn init_reachability_check_swarm(
     )
     .await?;
 
-    Ok(swarm_driver)
+    Ok((swarm_driver, metrics_shutdown_tx))
 }
 
 fn check_and_wipe_storage_dir_if_necessary(
