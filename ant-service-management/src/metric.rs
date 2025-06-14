@@ -13,6 +13,8 @@ use tonic::async_trait;
 
 const REACHABILITY_STATUS_METRIC: &str = "ant_networking_reachability_status";
 
+const REACHABILITY_CHECK_TIMEOUT_SEC: u64 = 14 * 60;
+
 #[derive(Debug, Clone, Default)]
 pub struct ReachabilityStatusValues {
     pub not_performed: bool,
@@ -31,8 +33,10 @@ pub struct NodeMetrics {
 #[async_trait]
 pub trait MetricsAction: Sync + Send {
     async fn get_node_metrics(&self) -> Result<NodeMetrics, Error>;
-    async fn wait_until_reachability_check_completes(&self, timeout: Duration)
-        -> Result<(), Error>;
+    async fn wait_until_reachability_check_completes(
+        &self,
+        timeout: Option<Duration>,
+    ) -> Result<(), Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -136,10 +140,16 @@ impl MetricsAction for MetricsClient {
     }
 
     /// Waits until the reachability check completes or times out.
+    ///
+    /// The default timeout is set to 14 minutes, which is the maximum time the reachability check can take.
     async fn wait_until_reachability_check_completes(
         &self,
-        timeout: Duration,
+        timeout: Option<Duration>,
     ) -> Result<(), Error> {
+        let timeout =
+            timeout.unwrap_or_else(|| Duration::from_secs(REACHABILITY_CHECK_TIMEOUT_SEC));
+        debug!("Waiting for node to complete reachability check with a timeout of {timeout:?}...");
+
         let max_attempts = std::cmp::max(1, timeout.as_secs() / self.retry_delay.as_secs());
         trace!(
             "Metrics: reachability check max attempts set to: {max_attempts} with retry_delay of {:?}",
@@ -173,7 +183,10 @@ impl MetricsAction for MetricsClient {
             tokio::time::sleep(self.retry_delay).await;
             if attempts >= max_attempts {
                 error!("Reachability check has not completed after {max_attempts} attempts. Timing out.");
-                return Err(Error::ReachabilityStatusCheckTimedOut);
+                return Err(Error::ReachabilityStatusCheckTimedOut {
+                    metrics_port: self.port,
+                    timeout,
+                });
             }
         }
     }
