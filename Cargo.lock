@@ -962,6 +962,7 @@ dependencies = [
  "quickcheck",
  "rand 0.8.5",
  "rayon",
+ "reqwest 0.12.15",
  "rmp-serde",
  "serde",
  "sha2",

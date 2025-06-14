@@ -186,8 +186,14 @@ impl NodeBuilder {
         network_builder.metrics_server_port(self.metrics_server_port);
         network_builder.listen_addr(self.addr);
 
-        let swarm_driver = network_builder.build_reachability_check_swarm()?;
+        let (swarm_driver, metrics_shutdown_tx) =
+            network_builder.build_reachability_check_swarm()?;
         let status = swarm_driver.detect().await?;
+
+        // Shutdown the metrics server if it was started
+        if let Some(shutdown_tx) = metrics_shutdown_tx {
+            let _ = shutdown_tx.send(true);
+        }
 
         Ok(status)
     }
@@ -270,7 +276,7 @@ impl NodeBuilder {
 
         network_builder.no_upnp(self.no_upnp);
 
-        let (network, network_event_receiver, swarm_driver) =
+        let (network, network_event_receiver, swarm_driver, metrics_shutdown_tx) =
             network_builder.build_node(self.root_dir.clone())?;
 
         let node_events_channel = NodeEventsChannel::default();
@@ -296,6 +302,7 @@ impl NodeBuilder {
 
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
+            metrics_server_shutdown_sender: metrics_shutdown_tx,
             network,
             node_events_channel,
             root_dir_path: self.root_dir,
