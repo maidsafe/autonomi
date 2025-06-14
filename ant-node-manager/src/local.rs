@@ -202,7 +202,6 @@ pub async fn kill_network(
 
 pub struct LocalNetworkOptions {
     pub antnode_bin_path: PathBuf,
-    pub enable_metrics_server: bool,
     pub join: bool,
     pub interval: u64,
     pub metrics_port: Option<PortRange>,
@@ -269,10 +268,8 @@ pub async fn run_network(
         };
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
         } else {
-            None
+            Some(service_control.get_available_port()?)
         };
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
@@ -315,10 +312,8 @@ pub async fn run_network(
         };
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
         } else {
-            None
+            Some(service_control.get_available_port()?)
         };
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
@@ -536,7 +531,7 @@ mod tests {
             async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> RpcResult<()>;
             async fn node_stop(&self, delay_millis: u64) -> RpcResult<()>;
             async fn node_update(&self, delay_millis: u64) -> RpcResult<()>;
-            async fn is_node_connected_to_network(&self, timeout: std::time::Duration) -> RpcResult<()>;
+            async fn wait_until_node_connects_to_network(&self, timeout: Option<std::time::Duration>) -> RpcResult<()>;
             async fn update_log_level(&self, log_levels: String) -> RpcResult<()>;
         }
     }

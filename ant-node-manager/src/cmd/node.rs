@@ -15,7 +15,6 @@ use crate::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
-    cmd::node_batch_manager::NodeBatchServiceManager,
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report,
@@ -28,15 +27,14 @@ use ant_service_management::{
     NodeRegistryManager, NodeService, NodeServiceData, ServiceStateActions, ServiceStatus,
     UpgradeOptions, UpgradeResult,
     control::{ServiceControl, ServiceController},
+    metric::MetricsClient,
     rpc::RpcClient,
 };
 use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
-use std::{
-    cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc, time::Duration,
-};
+use std::{cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc};
 use tokio::sync::RwLock;
 use tracing::debug;
 
@@ -47,7 +45,6 @@ pub async fn add(
     auto_set_nat_flags: bool,
     count: Option<u16>,
     data_dir_path: Option<PathBuf>,
-    enable_metrics_server: bool,
     env_variables: Option<Vec<(String, String)>>,
     evm_network: Option<EvmNetwork>,
     log_dir_path: Option<PathBuf>,
@@ -129,7 +126,6 @@ pub async fn add(
         auto_set_nat_flags,
         count,
         delete_antnode_src: src_path.is_none(),
-        enable_metrics_server,
         evm_network: evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         env_variables,
         relay,
@@ -238,7 +234,17 @@ pub async fn remove(
     for node in &services_for_ops {
         let service_name = node.read().await.service_name.clone();
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
+        let service = NodeService::new(
+            Arc::clone(node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         match service_manager.remove(keep_directories).await {
@@ -293,7 +299,7 @@ pub async fn reset(
     Ok(())
 }
 
-pub async fn start_batch(
+pub async fn start(
     fixed_interval: u64,
     node_registry: NodeRegistryManager,
     peer_ids: Vec<String>,
@@ -322,26 +328,88 @@ pub async fn start_batch(
         }
         return Ok(());
     }
+    let mut failed_services = Vec::new();
 
-    let batch_manager =
-        NodeBatchServiceManager::new(services_for_ops, Box::new(ServiceController {}), verbosity);
+    // First start all the services.
+    for node in services_for_ops.iter() {
+        let service_name = node.read().await.service_name.clone();
+        let user_mode = node.read().await.user_mode;
 
-    let start_results = batch_manager.start_all(fixed_interval).await;
+        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
 
-    // 12 minutes for the reachability check to complete.
-    batch_manager
-        .poll_services(Duration::from_secs(12 * 60))
-        .await;
+        let service = NodeService::new(
+            Arc::clone(node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
+        let service_manager =
+            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
 
-    node_registry.save().await?;
+        info!("Attempting to start service: {service_name}");
+        if verbosity != VerbosityLevel::Minimal {
+            println!("Starting {service_name}...");
+        }
 
-    let failed_services: Vec<(String, String)> = start_results
-        .into_iter()
-        .filter_map(|(name, result)| match result {
-            Err(err) => Some((name, err)),
-            _ => None,
-        })
-        .collect();
+        if service_manager.service.status().await != ServiceStatus::Running {
+            // It would be possible here to check if the service *is* running and then just
+            // continue without applying the delay. The reason for not doing so is because when
+            // `start` is called below, the user will get a message to say the service was already
+            // started, which I think is useful behaviour to retain.
+            debug!("Sleeping for {} milliseconds", fixed_interval);
+            std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
+        }
+
+        match service_manager
+            .service_control
+            .start(&service_name, user_mode)
+        {
+            Ok(_) => {
+                info!("Started service {service_name}");
+            }
+            Err(err) => {
+                error!("Failed to start service {service_name}: {}", err);
+                failed_services.push((service_name.clone(), err.to_string()));
+            }
+        };
+    }
+
+    // Now we wait for the nodes to be started.
+    for node in &services_for_ops {
+        let service_name = node.read().await.service_name.clone();
+        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
+        let service = NodeService::new(
+            Arc::clone(node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
+
+        let mut service_manager =
+            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
+
+        match service_manager.start().await {
+            Ok(start_duration) => {
+                debug!("Started service {service_name} in {start_duration:?}");
+
+                node_registry.save().await?;
+            }
+            Err(err) => {
+                error!("Failed to start service {service_name}: {err}");
+                failed_services.push((service_name.clone(), err.to_string()))
+            }
+        }
+    }
 
     summarise_any_failed_ops(failed_services, "start", verbosity)
 }
@@ -405,7 +473,17 @@ pub async fn stop(
     for node in services_for_ops.iter() {
         let service_name = node.read().await.service_name.clone();
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
+        let service = NodeService::new(
+            Arc::clone(node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
 
@@ -431,7 +509,6 @@ pub async fn stop(
 }
 
 pub async fn upgrade(
-    connection_timeout_s: Option<u64>,
     do_not_start: bool,
     custom_bin_path: Option<PathBuf>,
     force: bool,
@@ -524,13 +601,17 @@ pub async fn upgrade(
         let service_name = node.read().await.service_name.clone();
 
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
-        let service = if let Some(timeout) = connection_timeout_s {
-            debug!("Setting connection timeout to {timeout} seconds");
-            service.with_connection_timeout(Duration::from_secs(timeout))
-        } else {
-            service
-        };
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
+        let service = NodeService::new(
+            Arc::clone(node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
 
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
@@ -541,10 +622,8 @@ pub async fn upgrade(
                 if upgrade_result != UpgradeResult::NotRequired {
                     // It doesn't seem useful to apply the fixed_interval if there was no upgrade
                     // required for the previous service.
-                    if connection_timeout_s.is_none() {
-                        debug!("Sleeping for {fixed_interval} milliseconds",);
-                        std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
-                    }
+                    debug!("Sleeping for {fixed_interval} milliseconds",);
+                    std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
                 }
                 upgrade_summary.push((service_name.clone(), upgrade_result));
                 node_registry.save().await?;
@@ -585,7 +664,6 @@ pub async fn maintain_n_running_nodes(
     auto_set_nat_flags: bool,
     max_nodes_to_run: u16,
     data_dir_path: Option<PathBuf>,
-    enable_metrics_server: bool,
     env_variables: Option<Vec<(String, String)>>,
     evm_network: Option<EvmNetwork>,
     log_dir_path: Option<PathBuf>,
@@ -669,7 +747,7 @@ pub async fn maintain_n_running_nodes(
                     "Starting {} existing inactive nodes: {:?}",
                     to_start_count, nodes_to_start
                 );
-                start_batch(
+                start(
                     start_node_interval,
                     node_registry.clone(),
                     vec![],
@@ -700,7 +778,6 @@ pub async fn maintain_n_running_nodes(
                         auto_set_nat_flags,
                         Some(1),
                         data_dir_path.clone(),
-                        enable_metrics_server,
                         env_variables.clone(),
                         evm_network.clone(),
                         log_dir_path.clone(),
@@ -729,7 +806,7 @@ pub async fn maintain_n_running_nodes(
                     .await?;
 
                     if i == 0 {
-                        start_batch(
+                        start(
                             start_node_interval,
                             node_registry.clone(),
                             vec![],
@@ -741,7 +818,7 @@ pub async fn maintain_n_running_nodes(
                 }
 
                 if !inactive_nodes.is_empty() {
-                    start_batch(
+                    start(
                         start_node_interval,
                         node_registry.clone(),
                         vec![],
