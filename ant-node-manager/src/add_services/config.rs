@@ -193,7 +193,6 @@ pub struct AddNodeServiceOptions {
     pub auto_set_nat_flags: bool,
     pub count: Option<u16>,
     pub delete_antnode_src: bool,
-    pub enable_metrics_server: bool,
     pub env_variables: Option<Vec<(String, String)>>,
     pub evm_network: EvmNetwork,
     pub init_peers_config: InitialPeersConfig,
