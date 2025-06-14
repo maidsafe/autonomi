@@ -204,8 +204,14 @@ impl NodeBuilder {
             metrics_server_port: self.metrics_server_port,
         };
 
-        let swarm_driver = init_reachability_check_swarm(network_config).await?;
+        let (swarm_driver, metrics_shutdown_tx) =
+            init_reachability_check_swarm(network_config).await?;
         let status = swarm_driver.detect().await?;
+
+        // Shutdown the metrics server if it was started
+        if let Some(shutdown_tx) = metrics_shutdown_tx {
+            let _ = shutdown_tx.send(true);
+        }
 
         Ok(status)
     }
@@ -290,7 +296,7 @@ impl NodeBuilder {
             metrics_server_port: self.metrics_server_port,
             reachability_status,
         };
-        let (network, network_event_receiver) = Network::init(network_config)?;
+        let (network, network_event_receiver, metrics_shutdown_tx) = Network::init(network_config)?;
 
         // init node
         let node_events_channel = NodeEventsChannel::default();
@@ -310,6 +316,7 @@ impl NodeBuilder {
         node.run(network_event_receiver, shutdown_rx);
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
+            metrics_server_shutdown_sender: metrics_shutdown_tx,
             network,
             node_events_channel,
             root_dir_path: self.root_dir,
