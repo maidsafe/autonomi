@@ -113,14 +113,6 @@ pub enum SubCmd {
         ///  - Windows: C:\ProgramData\antnode\services
         #[clap(long, verbatim_doc_comment)]
         data_dir_path: Option<PathBuf>,
-        /// Set this flag to enable the metrics server. The ports will be selected at random.
-        ///
-        /// If you're passing the compiled antnode via --path, make sure to enable the open-metrics feature
-        /// when compiling.
-        ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// Provide environment variables for the antnode service.
         ///
         /// Useful to set log levels. Variables should be comma separated without spaces.
@@ -167,8 +159,7 @@ pub enum SubCmd {
         /// If you're passing the compiled antnode via --node-path, make sure to enable the open-metrics feature
         /// when compiling.
         ///
-        /// If not set, metrics server will not be started. Use --enable-metrics-server to start
-        /// the metrics server without specifying a port.
+        /// If not set, metrics server will be started on a random port.
         ///
         /// If multiple services are being added and this argument is used, you must specify a
         /// range. For example, '12000-12004'. The length of the range must match the number of
@@ -326,19 +317,10 @@ pub enum SubCmd {
     /// sudo if you defined system-wide services; otherwise, do not run the command elevated.
     #[clap(name = "start")]
     Start {
-        /// The max time in seconds to wait for a node to connect to the network. If the node does not connect to the
-        /// network within this time, the node is considered failed.
-        ///
-        /// This argument is mutually exclusive with the 'interval' argument.
-        #[clap(long, conflicts_with = "interval")]
-        connection_timeout: Option<u64>,
         /// An interval applied between launching each service.
         ///
-        /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
-        /// 'connection-timeout' argument.
-        ///
         /// Units are milliseconds. Defaults to 10s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS, conflicts_with = "connection_timeout")]
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS)]
         interval: u64,
         /// The peer ID of the service to start.
         ///
@@ -401,12 +383,6 @@ pub enum SubCmd {
     /// sudo if you defined system-wide services; otherwise, do not run the command elevated.
     #[clap(name = "upgrade")]
     Upgrade {
-        /// The max time in seconds to wait for a node to connect to the network. If the node does not connect to the
-        /// network within this time, the node is considered failed.
-        ///
-        /// This argument is mutually exclusive with the 'interval' argument.
-        #[clap(long, conflicts_with = "interval")]
-        connection_timeout: Option<u64>,
         /// Set this flag to upgrade the nodes without automatically starting them.
         ///
         /// Can be useful for testing scenarios.
@@ -430,11 +406,8 @@ pub enum SubCmd {
         force: bool,
         /// An interval applied between upgrading each service.
         ///
-        /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
-        /// 'connection-timeout' argument.
-        ///
         /// Units are milliseconds. Defaults to 10s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS, conflicts_with = "connection_timeout")]
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS)]
         interval: u64,
         /// Provide a path for the antnode binary to be used by the service.
         ///
@@ -596,9 +569,6 @@ pub enum LocalSubCmd {
         /// on the antnode when compiling. If you're using --build, then make sure to enable the feature flag on
         /// antctl.
         ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
@@ -695,9 +665,6 @@ pub enum LocalSubCmd {
         /// on the antnode when compiling. If you're using --build, then make sure to enable the feature flag on
         /// antctl.
         ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
@@ -834,7 +801,6 @@ async fn main() -> Result<()> {
             auto_set_nat_flags,
             count,
             data_dir_path,
-            enable_metrics_server,
             env_variables,
             evm_network,
             relay,
@@ -864,7 +830,6 @@ async fn main() -> Result<()> {
                 auto_set_nat_flags,
                 count,
                 data_dir_path,
-                enable_metrics_server,
                 env_variables,
                 Some(evm_network.try_into()?),
                 log_dir_path,
@@ -911,7 +876,6 @@ async fn main() -> Result<()> {
             LocalSubCmd::Join {
                 build,
                 count,
-                enable_metrics_server,
                 interval,
                 metrics_port,
                 node_path,
@@ -931,7 +895,6 @@ async fn main() -> Result<()> {
                 cmd::local::join(
                     build,
                     count,
-                    enable_metrics_server,
                     interval,
                     metrics_port,
                     node_path,
@@ -954,7 +917,6 @@ async fn main() -> Result<()> {
                 build,
                 clean,
                 count,
-                enable_metrics_server,
                 interval,
                 log_format,
                 metrics_port,
@@ -974,7 +936,6 @@ async fn main() -> Result<()> {
                     build,
                     clean,
                     count,
-                    enable_metrics_server,
                     interval,
                     metrics_port,
                     node_path,
@@ -1020,14 +981,10 @@ async fn main() -> Result<()> {
         }
         Some(SubCmd::Reset { force }) => cmd::node::reset(force, node_registry, verbosity).await,
         Some(SubCmd::Start {
-            connection_timeout: _,
             interval,
             peer_id: peer_ids,
             service_name: service_names,
-        }) => {
-            cmd::node::start_batch(interval, node_registry, peer_ids, service_names, verbosity)
-                .await
-        }
+        }) => cmd::node::start(interval, node_registry, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Status {
             details,
             fail,
@@ -1039,7 +996,6 @@ async fn main() -> Result<()> {
             service_name: service_names,
         }) => cmd::node::stop(interval, node_registry, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Upgrade {
-            connection_timeout,
             do_not_start,
             force,
             interval,
@@ -1051,7 +1007,6 @@ async fn main() -> Result<()> {
             version,
         }) => {
             cmd::node::upgrade(
-                connection_timeout,
                 do_not_start,
                 path,
                 force,
