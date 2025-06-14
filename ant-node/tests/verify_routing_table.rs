@@ -9,29 +9,33 @@
 #![allow(clippy::mutable_key_type)]
 mod common;
 
-use crate::common::{client::get_all_rpc_addresses, get_all_peer_ids, get_antnode_rpc_client};
+use crate::common::get_all_peer_ids;
 use ant_logging::LogBuilder;
-use ant_protocol::antnode_proto::KBucketsRequest;
+use ant_protocol::antnode_proto::k_buckets_response;
 use color_eyre::Result;
 use libp2p::{
     kad::{KBucketKey, K_VALUE},
     PeerId,
 };
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     time::Duration,
 };
-use tonic::Request;
+use test_utils::local_network_spawner::spawn_local_network;
 use tracing::{error, info, trace};
 
-/// Sleep for sometime for the nodes to discover each other before verification
+/// Sleep for some time for the nodes to discover each other before verification.
 /// Also can be set through the env variable of the same name.
-const SLEEP_BEFORE_VERIFICATION: Duration = Duration::from_secs(30);
+const SLEEP_BEFORE_VERIFICATION: Duration = Duration::from_secs(10);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_routing_table() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_multi_threaded_tokio_test("verify_routing_table", false);
+
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(20).await?;
+    let ant_network = spawned_local_network.ant_network;
 
     let sleep_duration = std::env::var("SLEEP_BEFORE_VERIFICATION")
         .map(|value| {
@@ -44,20 +48,24 @@ async fn verify_routing_table() -> Result<()> {
     info!("Sleeping for {sleep_duration:?} before verification");
     tokio::time::sleep(sleep_duration).await;
 
-    let node_rpc_address = get_all_rpc_addresses(false)?;
+    let all_peers = get_all_peer_ids(&ant_network)?;
 
-    let all_peers = get_all_peer_ids(&node_rpc_address).await?;
     trace!("All peers: {all_peers:?}");
     let mut all_failed_list = BTreeMap::new();
 
-    for (node_index, rpc_address) in node_rpc_address.iter().enumerate() {
-        let mut rpc_client = get_antnode_rpc_client(*rpc_address).await?;
+    for (node_index, running_node) in ant_network.running_nodes().iter().enumerate() {
+        let k_buckets: HashMap<u32, k_buckets_response::Peers> = running_node
+            .get_kbuckets()
+            .await
+            .expect("failed to get k-buckets")
+            .into_iter()
+            .map(|(ilog2_distance, peers)| {
+                let peers = peers.into_iter().map(|peer| peer.to_bytes()).collect();
+                let peers = k_buckets_response::Peers { peers };
+                (ilog2_distance, peers)
+            })
+            .collect();
 
-        let response = rpc_client
-            .k_buckets(Request::new(KBucketsRequest {}))
-            .await?;
-
-        let k_buckets = response.get_ref().kbuckets.clone();
         let k_buckets = k_buckets
             .into_iter()
             .map(|(ilog2, peers)| {
