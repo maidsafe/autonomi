@@ -10,43 +10,40 @@ mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
 mod node_service_data_v2;
+mod node_service_data_v3;
 
 // Re-export types
 pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
 
-use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::{
+    error::Result, metric::MetricsAction, rpc::RpcActions, ServiceStateActions, ServiceStatus,
+    UpgradeOptions,
+};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::multiaddr::Protocol;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{ffi::OsString, path::PathBuf, time::Duration};
+use std::{ffi::OsString, path::PathBuf};
 use tonic::async_trait;
 
 pub struct NodeService<'a> {
     pub service_data: &'a mut NodeServiceData,
+    pub metrics_action: Box<dyn MetricsAction + Send>,
     pub rpc_actions: Box<dyn RpcActions + Send>,
-    /// Used to enable dynamic startup delay based on the time it takes for a node to connect to the network.
-    pub connection_timeout: Option<Duration>,
 }
 
 impl<'a> NodeService<'a> {
     pub fn new(
         service_data: &'a mut NodeServiceData,
         rpc_actions: Box<dyn RpcActions + Send>,
+        metrics_action: Box<dyn MetricsAction + Send>,
     ) -> NodeService<'a> {
         NodeService {
             rpc_actions,
+            metrics_action,
             service_data,
-            connection_timeout: None,
         }
-    }
-
-    /// Set the max time to wait for the node to connect to the network.
-    /// If not set, we do not perform a dynamic startup delay.
-    pub fn with_connection_timeout(mut self, connection_timeout: Duration) -> NodeService<'a> {
-        self.connection_timeout = Some(connection_timeout);
-        self
     }
 }
 
@@ -83,6 +80,9 @@ impl ServiceStateActions for NodeService<'_> {
         if let Some(id) = self.service_data.network_id {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
+        }
+        if self.service_data.reachability_check {
+            args.push(OsString::from("--reachability-check"));
         }
         if self.service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));
@@ -176,18 +176,22 @@ impl ServiceStateActions for NodeService<'_> {
     async fn on_start(&mut self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let (connected_peers, pid, peer_id) = if full_refresh {
             debug!(
-                "Performing full refresh for {}",
+                "Performing full refresh for {}. We will wait for reachability check to complete",
                 self.service_data.service_name
             );
-            if let Some(connection_timeout) = self.connection_timeout {
-                debug!(
-                    "Performing dynamic startup delay for {}",
-                    self.service_data.service_name
-                );
-                self.rpc_actions
-                    .is_node_connected_to_network(connection_timeout)
-                    .await?;
-            }
+
+            self.metrics_action
+                .wait_until_reachability_check_completes(None)
+                .await?;
+
+            info!(
+                "Reachability check completed for {}. Now waiting for the node to connect to the network",
+                self.service_data.service_name
+            );
+
+            self.rpc_actions
+                .wait_until_node_connects_to_network(None)
+                .await?;
 
             let node_info = self
                 .rpc_actions
@@ -226,7 +230,7 @@ impl ServiceStateActions for NodeService<'_> {
 
             (
                 Some(network_info.connected_peers),
-                pid,
+                Some(node_info.pid),
                 Some(node_info.peer_id),
             )
         } else {

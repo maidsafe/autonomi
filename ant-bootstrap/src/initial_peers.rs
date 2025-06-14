@@ -110,12 +110,16 @@ impl InitialPeersConfig {
         bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
 
         if !bootstrap_addresses.is_empty() {
+            info!(
+                "Found {} bootstrap addresses from environment variable",
+                bootstrap_addresses.len()
+            );
             return Ok(bootstrap_addresses);
         }
 
         // Add addrs from arguments if present
         for addr in &self.addrs {
-            if let Some(addr) = craft_valid_multiaddr(addr, false) {
+            if let Some(addr) = craft_valid_multiaddr(addr) {
                 info!("Adding addr from arguments: {addr}");
                 bootstrap_addresses.push(BootstrapAddr::new(addr));
             } else {
@@ -127,7 +131,10 @@ impl InitialPeersConfig {
             if bootstrap_addresses.len() >= count {
                 bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                 bootstrap_addresses.truncate(count);
-                info!("Returning early as enough bootstrap addresses are found");
+                info!(
+                    "Found {} bootstrap addresses. Returning early.",
+                    bootstrap_addresses.len()
+                );
                 return Ok(bootstrap_addresses);
             }
         }
@@ -157,7 +164,10 @@ impl InitialPeersConfig {
                         if bootstrap_addresses.len() >= count {
                             bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                             bootstrap_addresses.truncate(count);
-                            info!("Returning early as enough bootstrap addresses are found");
+                            info!(
+                                "Found {} bootstrap addresses. Returning early.",
+                                bootstrap_addresses.len()
+                            );
                             return Ok(bootstrap_addresses);
                         }
                     }
@@ -189,7 +199,10 @@ impl InitialPeersConfig {
                 if bootstrap_addresses.len() >= count {
                     bootstrap_addresses.sort_by_key(|addr| addr.failure_rate() as u64);
                     bootstrap_addresses.truncate(count);
-                    info!("Returning early as enough bootstrap addresses are found");
+                    info!(
+                        "Found {} bootstrap addresses. Returning early.",
+                        bootstrap_addresses.len()
+                    );
                     return Ok(bootstrap_addresses);
                 }
             }
@@ -200,6 +213,7 @@ impl InitialPeersConfig {
             if let Some(count) = count {
                 contacts_fetcher.set_max_addrs(count);
             }
+            info!("Fetching bootstrap address from mainnet contacts");
             let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
             bootstrap_addresses.extend(addrs);
         } else if !self.local && get_network_id() == ALPHANET_ID {
@@ -207,6 +221,7 @@ impl InitialPeersConfig {
             if let Some(count) = count {
                 contacts_fetcher.set_max_addrs(count);
             }
+            info!("Fetching bootstrap address from alphanet contacts");
             let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
             bootstrap_addresses.extend(addrs);
         }
@@ -216,6 +231,10 @@ impl InitialPeersConfig {
             if let Some(count) = count {
                 bootstrap_addresses.truncate(count);
             }
+            info!(
+                "Found {} bootstrap addresses. Returning early.",
+                bootstrap_addresses.len()
+            );
             Ok(bootstrap_addresses)
         } else {
             error!("No initial bootstrap peers found through any means");
@@ -235,7 +254,7 @@ impl InitialPeersConfig {
         // Read from ANT_PEERS environment variable if present
         if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
             for addr_str in addrs.split(',') {
-                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
+                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str) {
                     info!("Adding addr from environment variable: {addr}");
                     bootstrap_addresses.push(BootstrapAddr::new(addr));
                 } else {

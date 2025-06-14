@@ -14,21 +14,24 @@ use crate::{
     event::NetworkEvent,
     external_address::ExternalAddressManager,
     network_discovery::NetworkDiscovery,
+    reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     time::Instant,
-    transport, Network, SwarmDriver, CLOSE_GROUP_SIZE,
+    transport, Network, ReachabilityStatus, SwarmDriver, CLOSE_GROUP_SIZE,
 };
 #[cfg(feature = "open-metrics")]
 use crate::{
-    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+    metrics::service::run_metrics_server,
+    metrics::{MetadataRecorder, NetworkMetricsRecorder, ReachabilityStatusMetric},
+    MetricsRegistries,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
     version::{
         get_network_id_str, IDENTIFY_NODE_VERSION_STR, IDENTIFY_PROTOCOL_STR,
-        REQ_RESPONSE_VERSION_STR,
+        IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR, REQ_RESPONSE_VERSION_STR,
     },
     NetworkAddress, PrettyPrintKBucketKey,
 };
@@ -43,8 +46,6 @@ use libp2p::{
     swarm::{StreamProtocol, Swarm},
     Multiaddr, PeerId,
 };
-#[cfg(feature = "open-metrics")]
-use prometheus_client::metrics::info::Info;
 use rand::Rng;
 use std::{
     convert::TryInto,
@@ -56,7 +57,7 @@ use std::{
     path::PathBuf,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
 // Timeout for requests sent/received through the request_response behaviour.
 const REQUEST_TIMEOUT_DEFAULT_S: Duration = Duration::from_secs(30);
@@ -101,6 +102,8 @@ pub struct NetworkBuilder {
     #[cfg(feature = "open-metrics")]
     metrics_server_port: Option<u16>,
     no_upnp: bool,
+    /// The reachability status found using the reachability swarm
+    reachability_status: Option<ReachabilityStatus>,
     relay_client: bool,
     request_timeout: Option<Duration>,
 }
@@ -119,6 +122,7 @@ impl NetworkBuilder {
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
             no_upnp: true,
+            reachability_status: None,
             relay_client: false,
             request_timeout: None,
         }
@@ -157,8 +161,14 @@ impl NetworkBuilder {
         self.metrics_server_port = port;
     }
 
+    /// Disable UPnP.
     pub fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
+    }
+
+    /// Set the reachability status
+    pub fn reachability_status(&mut self, reachability_status: ReachabilityStatus) {
+        self.reachability_status = Some(reachability_status);
     }
 
     /// Creates a new `SwarmDriver` instance, along with a `Network` handle
@@ -169,15 +179,21 @@ impl NetworkBuilder {
     /// # Returns
     ///
     /// A tuple containing a `Network` handle, an `mpsc::Receiver<NetworkEvent>`,
-    /// and a `SwarmDriver` instance.
+    /// a `SwarmDriver` instance, and an optional metrics server shutdown sender.
     ///
     /// # Errors
     ///
     /// Returns an error if there is a problem initializing the mDNS behaviour.
+    #[allow(clippy::type_complexity)]
     pub fn build_node(
         self,
         root_dir: PathBuf,
-    ) -> Result<(Network, mpsc::Receiver<NetworkEvent>, SwarmDriver)> {
+    ) -> Result<(
+        Network,
+        mpsc::Receiver<NetworkEvent>,
+        SwarmDriver,
+        Option<watch::Sender<bool>>,
+    )> {
         let bootstrap_interval = rand::thread_rng().gen_range(
             PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S / 2..PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S,
         );
@@ -247,8 +263,8 @@ impl NetworkBuilder {
 
         let listen_addr = self.listen_addr;
 
-        let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, store_cfg, ProtocolSupport::Full);
+        let (network, events_receiver, mut swarm_driver, metrics_shutdown_tx) =
+            self.build(kad_cfg, store_cfg);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -257,11 +273,133 @@ impl NetworkBuilder {
         let addr_quic = Multiaddr::from(listen_socket_addr.ip())
             .with(Protocol::Udp(listen_socket_addr.port()))
             .with(Protocol::QuicV1);
-        swarm_driver
-            .listen_on(addr_quic)
-            .expect("Multiaddr should be supported by our configured transports");
+        if listen_socket_addr.port() != 0 {
+            let start_time = std::time::Instant::now();
+            let timeout = Duration::from_secs(300); // 5 minutes
+            while swarm_driver.swarm.listen_on(addr_quic.clone()).is_err() {
+                if start_time.elapsed() > timeout {
+                    panic!("Failed to listen on QUIC address {addr_quic:?} after 5 minutes");
+                }
+                warn!("Failed to listen on QUIC address {addr_quic:?}, retrying...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        } else {
+            swarm_driver
+                .swarm
+                .listen_on(addr_quic.clone())
+                .expect("Failed to listen on QUIC address");
+        }
 
-        Ok((network, events_receiver, swarm_driver))
+        Ok((network, events_receiver, swarm_driver, metrics_shutdown_tx))
+    }
+
+    /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
+    pub fn build_reachability_check_swarm(
+        self,
+    ) -> Result<(ReachabilityCheckSwarmDriver, Option<watch::Sender<bool>>)> {
+        let identify_protocol_str = IDENTIFY_PROTOCOL_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
+            .clone();
+
+        let peer_id = PeerId::from(self.keypair.public());
+        info!(
+            "Self PeerID {peer_id} is represented as kbucket_key {:?}",
+            PrettyPrintKBucketKey(NetworkAddress::from(peer_id).as_kbucket_key())
+        );
+
+        #[cfg(feature = "open-metrics")]
+        let mut metrics_registries = self.metrics_registries.unwrap_or_default();
+
+        // ==== Transport ====
+        #[cfg(feature = "open-metrics")]
+        let transport = transport::build_transport(&self.keypair, &mut metrics_registries);
+        #[cfg(not(feature = "open-metrics"))]
+        let transport = transport::build_transport(&self.keypair);
+        let transport = if !self.local {
+            debug!("Preventing non-global dials");
+            // Wrap upper in a transport that prevents dialing local addresses.
+            libp2p::core::transport::global_only::Transport::new(transport).boxed()
+        } else {
+            transport
+        };
+
+        let (relay_transport, _relay_client) =
+            libp2p::relay::client::new(self.keypair.public().to_peer_id());
+        let transport = relay_transport
+            .upgrade(libp2p::core::upgrade::Version::V1Lazy)
+            .authenticate(
+                libp2p::noise::Config::new(&self.keypair)
+                    .expect("Signing libp2p-noise static DH keypair failed."),
+            )
+            .multiplex(libp2p::yamux::Config::default())
+            .or_transport(transport);
+
+        let transport = transport
+            .map(|either_output, _| match either_output {
+                Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            })
+            .boxed();
+
+        #[cfg(feature = "open-metrics")]
+        let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = self.metrics_server_port {
+            let metrics_recorder = NetworkMetricsRecorder::new(
+                &mut metrics_registries,
+                ReachabilityStatusMetric::Ongoing,
+            );
+            let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+            metadata_recorder.register_peer_id(&peer_id);
+            metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+
+            let shutdown_tx = run_metrics_server(metrics_registries, port);
+            (Some(metrics_recorder), Some(shutdown_tx))
+        } else {
+            (None, None)
+        };
+
+        #[cfg(not(feature = "open-metrics"))]
+        let metrics_shutdown_tx = None;
+
+        // Listen on the provided address
+        let listen_socket_addr = self
+            .listen_addr
+            .ok_or(NetworkError::ListenAddressNotProvided)?;
+
+        // Identify Behaviour
+        let agent_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR")
+            .clone();
+        info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
+        let identify = {
+            let cfg = libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
+                .with_agent_version(agent_version)
+                // Enlength the identify interval from default 5 mins to 1 hour.
+                .with_interval(RESEND_IDENTIFY_INVERVAL)
+                .with_hide_listen_addrs(true);
+            libp2p::identify::Behaviour::new(cfg)
+        };
+
+        let behaviour = ReachabilityCheckBehaviour {
+            upnp: libp2p::upnp::tokio::Behaviour::default(),
+            identify,
+        };
+
+        let swarm_config = libp2p::swarm::Config::with_tokio_executor()
+            .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
+
+        let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
+
+        let swarm_driver = ReachabilityCheckSwarmDriver::new(
+            swarm,
+            self.initial_contacts,
+            listen_socket_addr,
+            #[cfg(feature = "open-metrics")]
+            metrics_recorder,
+        );
+
+        Ok((swarm_driver, metrics_shutdown_tx))
     }
 
     /// Private helper to create the network components with the provided config and req/res behaviour
@@ -269,8 +407,12 @@ impl NetworkBuilder {
         self,
         kad_cfg: kad::Config,
         record_store_cfg: NodeRecordStoreConfig,
-        req_res_protocol: ProtocolSupport,
-    ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
+    ) -> (
+        Network,
+        mpsc::Receiver<NetworkEvent>,
+        SwarmDriver,
+        Option<watch::Sender<bool>>,
+    ) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
             .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
@@ -292,20 +434,20 @@ impl NetworkBuilder {
 
         // ==== Transport ====
         #[cfg(feature = "open-metrics")]
-        let main_transport = transport::build_transport(&self.keypair, &mut metrics_registries);
+        let transport = transport::build_transport(&self.keypair, &mut metrics_registries);
         #[cfg(not(feature = "open-metrics"))]
-        let main_transport = transport::build_transport(&self.keypair);
+        let transport = transport::build_transport(&self.keypair);
         let transport = if !self.local {
             debug!("Preventing non-global dials");
             // Wrap upper in a transport that prevents dialing local addresses.
-            libp2p::core::transport::global_only::Transport::new(main_transport).boxed()
+            libp2p::core::transport::global_only::Transport::new(transport).boxed()
         } else {
-            main_transport
+            transport
         };
 
-        let (relay_transport, relay_behaviour) =
+        let (relay_transport, relay_client) =
             libp2p::relay::client::new(self.keypair.public().to_peer_id());
-        let relay_transport = relay_transport
+        let transport = relay_transport
             .upgrade(libp2p::core::upgrade::Version::V1Lazy)
             .authenticate(
                 libp2p::noise::Config::new(&self.keypair)
@@ -314,7 +456,7 @@ impl NetworkBuilder {
             .multiplex(libp2p::yamux::Config::default())
             .or_transport(transport);
 
-        let transport = relay_transport
+        let transport = transport
             .map(|either_output, _| match either_output {
                 Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
                 Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
@@ -322,31 +464,26 @@ impl NetworkBuilder {
             .boxed();
 
         #[cfg(feature = "open-metrics")]
-        let metrics_recorder = if let Some(port) = self.metrics_server_port {
-            let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
-            let metadata_sub_reg = metrics_registries
-                .metadata
-                .sub_registry_with_prefix("ant_networking");
+        let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = self.metrics_server_port {
+            let reachability_check_metric = if let Some(status) = self.reachability_status {
+                ReachabilityStatusMetric::Status(status)
+            } else {
+                ReachabilityStatusMetric::NotPerformed
+            };
+            let metrics_recorder =
+                NetworkMetricsRecorder::new(&mut metrics_registries, reachability_check_metric);
+            let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
+            metadata_recorder.register_peer_id(&peer_id);
+            metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
 
-            metadata_sub_reg.register(
-                "peer_id",
-                "Identifier of a peer of the network",
-                Info::new(vec![("peer_id".to_string(), peer_id.to_string())]),
-            );
-            metadata_sub_reg.register(
-                "identify_protocol_str",
-                "The protocol version string that is used to connect to the correct network",
-                Info::new(vec![(
-                    "identify_protocol_str".to_string(),
-                    identify_protocol_str.clone(),
-                )]),
-            );
-
-            run_metrics_server(metrics_registries, port);
-            Some(metrics_recorder)
+            let shutdown_tx = run_metrics_server(metrics_registries, port);
+            (Some(metrics_recorder), Some(shutdown_tx))
         } else {
-            None
+            (None, None)
         };
+
+        #[cfg(not(feature = "open-metrics"))]
+        let metrics_shutdown_tx = None;
 
         // RequestResponse Behaviour
         let request_response = {
@@ -362,7 +499,7 @@ impl NetworkBuilder {
                 [(
                     StreamProtocol::try_from_owned(req_res_version_str)
                         .expect("StreamProtocol should start with a /"),
-                    req_res_protocol,
+                    ProtocolSupport::Full,
                 )],
                 cfg,
             )
@@ -436,7 +573,7 @@ impl NetworkBuilder {
             blocklist: libp2p::allow_block_list::Behaviour::default(),
             // `Relay client Behaviour` is enabled for all nodes. This is required for normal nodes to connect to relay
             // clients.
-            relay_client: relay_behaviour,
+            relay_client,
             relay_server,
             upnp,
             request_response,
@@ -467,7 +604,10 @@ impl NetworkBuilder {
             info!("Relay manager is disabled for this node.");
             None
         };
-        // Enable external address manager for public nodes and not behind nat
+
+        // Enable external address manager for public nodes and not behind nat.
+        // We don't get a peer's address from external address list anymore. But we should still
+        // advertise our external addresses, as the older nodes still rely on the old mechanism.
         let external_address_manager = if !self.local && !self.relay_client {
             Some(ExternalAddressManager::new(peer_id))
         } else {
@@ -487,6 +627,7 @@ impl NetworkBuilder {
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
             initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
             bootstrap_cache: self.bootstrap_cache,
+            dial_queue: Default::default(),
             relay_manager,
             connected_relay_clients: Default::default(),
             external_address_manager,
@@ -526,7 +667,12 @@ impl NetworkBuilder {
             self.keypair,
         );
 
-        (network, network_event_receiver, swarm_driver)
+        (
+            network,
+            network_event_receiver,
+            swarm_driver,
+            metrics_shutdown_tx,
+        )
     }
 }
 
