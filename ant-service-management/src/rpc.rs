@@ -18,6 +18,8 @@ use tokio::time::Duration;
 use tonic::Request;
 use tracing::error;
 
+const NODE_CONNECTION_CHECK_TIMEOUT_SEC: u64 = 5 * 60; // 5 minutes
+
 #[derive(Debug, Clone)]
 pub struct NodeInfo {
     pub pid: u32,
@@ -48,7 +50,7 @@ pub trait RpcActions: Sync {
     async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> Result<()>;
     async fn node_stop(&self, delay_millis: u64) -> Result<()>;
     async fn node_update(&self, delay_millis: u64) -> Result<()>;
-    async fn is_node_connected_to_network(&self, timeout: Duration) -> Result<()>;
+    async fn wait_until_node_connects_to_network(&self, timeout: Option<Duration>) -> Result<()>;
     async fn update_log_level(&self, log_levels: String) -> Result<()>;
 }
 
@@ -224,7 +226,10 @@ impl RpcActions for RpcClient {
         Ok(())
     }
 
-    async fn is_node_connected_to_network(&self, timeout: Duration) -> Result<()> {
+    async fn wait_until_node_connects_to_network(&self, timeout: Option<Duration>) -> Result<()> {
+        let timeout =
+            timeout.unwrap_or_else(|| Duration::from_secs(NODE_CONNECTION_CHECK_TIMEOUT_SEC));
+        debug!("Waiting for node to connect to the network with a timeout of {timeout:?}...");
         let max_attempts = std::cmp::max(1, timeout.as_secs() / self.retry_delay.as_secs());
         trace!(
             "RPC conneciton max attempts set to: {max_attempts} with retry_delay of {:?}",
@@ -257,7 +262,14 @@ impl RpcActions for RpcClient {
             attempts += 1;
             tokio::time::sleep(self.retry_delay).await;
             if attempts >= max_attempts {
-                return Err(Error::RpcConnectionError(self.endpoint.clone()));
+                error!(
+                    "Could not connect to the network using rpc endpoint '{}' within {:?}",
+                    self.endpoint, timeout
+                );
+                return Err(Error::NodeConnectionTimedOut {
+                    rpc_endpoint: self.endpoint.clone(),
+                    timeout,
+                });
             }
         }
     }

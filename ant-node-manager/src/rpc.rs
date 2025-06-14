@@ -12,6 +12,7 @@ use crate::{
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
+    metric::MetricsClient,
     node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
     NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus,
@@ -43,7 +44,18 @@ pub async fn restart_node_service(
     })?;
 
     let rpc_client = RpcClient::from_socket_addr(current_node.read().await.rpc_socket_addr);
-    let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
+    let metrics_client = MetricsClient::new(
+        current_node
+            .read()
+            .await
+            .metrics_port
+            .expect("TEMP: metrics port is required"),
+    );
+    let service = NodeService::new(
+        current_node.clone(),
+        Box::new(rpc_client),
+        Box::new(metrics_client),
+    );
     let mut service_manager = ServiceManager::new(
         service,
         Box::new(ServiceController {}),
@@ -246,7 +258,13 @@ pub async fn restart_node_service(
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(
+            current_node.clone(),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(ServiceController {}),
