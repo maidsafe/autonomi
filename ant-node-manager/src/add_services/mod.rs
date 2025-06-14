@@ -116,10 +116,8 @@ pub async fn add_node(
         };
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
-        } else if options.enable_metrics_server {
-            Some(service_control.get_available_port()?)
         } else {
-            None
+            Some(service_control.get_available_port()?)
         };
 
         let rpc_socket_addr = if let Some(addr) = options.rpc_address {
@@ -199,7 +197,6 @@ pub async fn add_node(
             data_dir_path: service_data_dir_path.clone(),
             env_variables: options.env_variables.clone(),
             evm_network: options.evm_network.clone(),
-            relay: options.relay,
             log_dir_path: service_log_dir_path.clone(),
             log_format: options.log_format,
             max_archived_log_files: options.max_archived_log_files,
@@ -210,7 +207,9 @@ pub async fn add_node(
             node_ip: options.node_ip,
             node_port,
             init_peers_config: options.init_peers_config.clone(),
+            reachability_check: options.reachability_check,
             rewards_address: options.rewards_address,
+            relay: options.relay,
             rpc_socket_addr,
             antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
@@ -236,7 +235,6 @@ pub async fn add_node(
                     connected_peers: None,
                     data_dir_path: service_data_dir_path.clone(),
                     evm_network: options.evm_network.clone(),
-                    relay: options.relay,
                     initial_peers_config: options.init_peers_config.clone(),
                     listen_addr: None,
                     log_dir_path: service_log_dir_path.clone(),
@@ -248,6 +246,8 @@ pub async fn add_node(
                     node_ip: options.node_ip,
                     node_port,
                     number: node_number,
+                    reachability_check: options.reachability_check,
+                    relay: options.relay,
                     rewards_address: options.rewards_address,
                     reward_balance: None,
                     rpc_socket_addr,

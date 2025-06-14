@@ -186,6 +186,12 @@ struct Opt {
     #[clap(long, default_value_t = 0)]
     port: u16,
 
+    /// Enabling this will run an optional reachability check before starting the node.
+    ///
+    /// Enabling this will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
+    #[clap(long, default_value_t = false)]
+    reachability_check: bool,
+
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
@@ -284,14 +290,7 @@ fn main() -> Result<()> {
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
         init_logging(&opt, keypair.public().to_peer_id())?;
 
-    let mut bootstrap_cache = BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, None)?;
-    // If we are the first node, write initial cache to disk.
-    if opt.peers.first {
-        bootstrap_cache.write()?;
-    } else {
-        // Else we check/clean the file, write it back, and ensure its existence.
-        bootstrap_cache.sync_and_flush_to_disk()?;
-    }
+    let bootstrap_cache = BootstrapCacheStore::new_from_initial_peers_config(&opt.peers, None)?;
 
     let msg = format!(
         "Running {} v{}",
@@ -324,6 +323,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_reachability_check(opt.reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -375,8 +375,7 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
-    let running_node = node_builder.build_and_run()?;
-
+    let running_node = node_builder.build_and_run().await?;
     println!(
         "
 Node started

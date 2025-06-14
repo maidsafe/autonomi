@@ -30,6 +30,9 @@ pub enum Error {
     #[error("Failed to parse NodeEvent")]
     NodeEventParsingFailed,
 
+    #[error("The node cannot be routed through the network. Terminating it.")]
+    UnRoutableNode,
+
     // ---------- Record Errors
     #[error("Record was not stored as no payment supplied: {0:?}")]
     InvalidPutWithoutPayment(PrettyPrintRecordKey<'static>),
@@ -86,4 +89,6 @@ pub enum Error {
     InvalidRequest(String),
     #[error("EVM Network error: {0}")]
     EvmNetwork(String),
+    #[error("The node is not externally reachable by the network")]
+    UnreachableNode,
 }
