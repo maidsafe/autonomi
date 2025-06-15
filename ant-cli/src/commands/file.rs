@@ -172,7 +172,7 @@ async fn upload_dir(
     let is_single_file = dir_path.is_file();
 
     if public {
-        let (_, public_archive) = client
+        let (_, public_archive, _cost) = client
             .dir_upload_public(dir_path, payment_option.clone())
             .await?;
 
@@ -195,7 +195,7 @@ async fn upload_dir(
             Ok((addr.to_hex(), addr.to_hex()))
         }
     } else {
-        let (_, private_archive) = client
+        let (_, private_archive, _cost) = client
             .dir_upload(dir_path, payment_option.clone())
             .await?;
 

@@ -66,7 +66,7 @@ impl Client {
     /// * `payment_option` - Payment option for the upload
     ///
     /// # Returns
-    /// * `Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive), UploadError>` - The private data addresses and private archive
+    /// * `Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive, AttoTokens), UploadError>` - The private data addresses, private archive, and total cost
     ///
     /// # Example
     /// ```no_run
@@ -77,7 +77,7 @@ impl Client {
     /// # let client = Client::init().await?;
     /// let dir_path = PathBuf::from("/path/to/directory");
     /// let payment = PaymentOption::default();
-    /// let (addresses, archive) = client.dir_upload(dir_path, payment).await?;
+    /// let (addresses, archive, cost) = client.dir_upload(dir_path, payment).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -85,7 +85,7 @@ impl Client {
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive), UploadError> {
+    ) -> Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive, AttoTokens), UploadError> {
         info!("Uploading directory as private data: {dir_path:?}");
         let start = Instant::now();
 
@@ -107,7 +107,7 @@ impl Client {
             data_addrs.len(),
             tokens_spent
         );
-        Ok((data_addrs, private_archive))
+        Ok((data_addrs, private_archive, tokens_spent))
     }
 
     /// Convert a directory to chunks and create a private archive

@@ -584,19 +584,16 @@ impl Client {
         payment_option: &PaymentOption,
     ) -> Result</* (AttoTokens, PrivateArchive) */ tuple_result::DirContentUpload> {
         let dir_path = PathBuf::from(dir_path);
-
-        let (cost, archive) = self
+        let (_file_addrs, archive, cost) = self
             .0
             .dir_upload(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
-
         Ok(tuple_result::DirContentUpload { cost, archive })
     }
 
-    /// Same as Client::dir_content_upload but also uploads the archive (privately) to the network.
-    ///
-    /// Returns the PrivateArchiveDataMap allowing the private archive to be downloaded from the network.
+    /// Upload a directory to the network.
+    /// This will recursively upload all files in the directory and return the data map of the directory.
     #[napi]
     pub async fn dir_upload(
         &self,
@@ -604,14 +601,24 @@ impl Client {
         payment_option: &PaymentOption,
     ) -> Result</* (AttoTokens, PrivateArchiveDataMap) */ tuple_result::DirUpload> {
         let dir_path = PathBuf::from(dir_path);
-
-        let (cost, data_map) = self
+        let (_data_addrs, archive, chunk_upload_cost) = self
             .0
             .dir_upload(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
-
-        Ok(tuple_result::DirUpload { cost, data_map })
+        
+        // Upload the archive and get the cost
+        let (archive_cost, data_map) = self
+            .0
+            .archive_put(&archive, payment_option.0.clone())
+            .await
+            .map_err(map_error)?;
+        
+        // Total cost is chunk upload cost + archive upload cost
+        let total_cost = chunk_upload_cost.checked_add(archive_cost)
+            .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Cost overflow"))?;
+        
+        Ok(tuple_result::DirUpload { cost: total_cost, data_map })
     }
 
     /// Upload the content of a private file to the network. Reads file, splits into
@@ -675,19 +682,16 @@ impl Client {
         payment_option: &PaymentOption,
     ) -> Result</* (AttoTokens, PublicArchive) */ tuple_result::DirContentUploadPublic> {
         let dir_path = PathBuf::from(dir_path);
-
-        let (cost, archive) = self
+        let (_file_addrs, archive, cost) = self
             .0
             .dir_upload_public(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
-
         Ok(tuple_result::DirContentUploadPublic { cost, archive })
     }
 
-    /// Same as Client::dir_content_upload_public but also uploads the archive to the network.
-    ///
-    /// Returns the ArchiveAddress of the uploaded archive.
+    /// Upload a directory to the network as public data.
+    /// This will recursively upload all files in the directory and return the archive address.
     #[napi]
     pub async fn dir_upload_public(
         &self,
@@ -695,14 +699,27 @@ impl Client {
         payment_option: &PaymentOption,
     ) -> Result</* (AttoTokens, ArchiveAddress) */ tuple_result::DirUploadPublic> {
         let dir_path = PathBuf::from(dir_path);
-
-        let (cost, addr) = self
+        let (_data_addrs, archive, chunk_upload_cost) = self
             .0
             .dir_upload_public(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
-
-        Ok(tuple_result::DirUploadPublic { cost, addr })
+        
+        // Upload the archive and get the cost
+        let (archive_cost, addr) = self
+            .0
+            .archive_put_public(&archive, payment_option.0.clone())
+            .await
+            .map_err(map_error)?;
+        
+        // Total cost is chunk upload cost + archive upload cost
+        let total_cost = chunk_upload_cost.checked_add(archive_cost)
+            .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Cost overflow"))?;
+        
+        Ok(tuple_result::DirUploadPublic { 
+            cost: total_cost, 
+            addr: autonomi::files::archive_public::ArchiveAddress::from(addr) 
+        })
     }
 
     /// Upload the content of a file to the network. Reads file, splits into chunks,
@@ -793,7 +810,7 @@ impl Client {
         Ok(cost.to_string())
     }
 
-    /// Put data into the client’s VaultPacket
+    /// Put data into the client's VaultPacket
     ///
     /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
     ///
@@ -838,7 +855,7 @@ impl Client {
 
     /// Create a new register key from a SecretKey and a name.
     ///
-    /// This derives a new SecretKey from the owner’s SecretKey using the name. Note that you will need to keep track of the names you used to create the register key.
+    /// This derives a new SecretKey from the owner's SecretKey using the name. Note that you will need to keep track of the names you used to create the register key.
     #[napi]
     pub fn register_key_from_name(owner: &SecretKey, name: String) -> SecretKey {
         let key = autonomi::Client::register_key_from_name(&owner.0, &name);
@@ -905,7 +922,7 @@ impl Client {
             .map_err(map_error)
     }
 
-    /// Get the cost of a register operation. Returns the cost of creation if it doesn’t exist, else returns the cost of an update
+    /// Get the cost of a register operation. Returns the cost of creation if it doesn't exist, else returns the cost of an update
     #[napi]
     pub async fn register_cost(&self, owner: &PublicKey) -> Result</* AttoTokens */ String> {
         let cost = self

@@ -10,6 +10,7 @@ use super::CombinedChunks;
 use crate::client::high_level::data::DataAddress;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
+use crate::client::utils::format_upload_error;
 use crate::client::{ClientEvent, PutError, UploadSummary};
 use crate::files::UploadError;
 use crate::Client;
@@ -124,44 +125,8 @@ impl Client {
             match batch_result {
                 Ok(()) => continue,
                 Err(err) if retry_on_failure => {
-                    // Helper function to extract gas values from error message
-                    fn extract_gas_values(err_str: &str) -> Option<(String, String)> {
-                        // Look for pattern: "maxFeePerGas: <value>, baseFee: <value>"
-                        if let Some(max_fee_start) = err_str.find("maxFeePerGas: ") {
-                            let max_fee_str = &err_str[max_fee_start + 14..];
-                            if let Some(comma_pos) = max_fee_str.find(',') {
-                                let max_fee = &max_fee_str[..comma_pos];
-                                
-                                if let Some(base_fee_start) = err_str.find("baseFee: ") {
-                                    let base_fee_str = &err_str[base_fee_start + 9..];
-                                    // Find the end of the base fee value (could be end of string or another delimiter)
-                                    let base_fee = base_fee_str.split(|c: char| !c.is_numeric()).next()?;
-                                    
-                                    return Some((max_fee.to_string(), base_fee.to_string()));
-                                }
-                            }
-                        }
-                        None
-                    }
-
                     // Format error message for user
-                    let err_str = format!("{err:?}");
-                    let error_msg = if err_str.contains("max fee per gas less than block base fee") {
-                        if let Some((max_fee, base_fee)) = extract_gas_values(&err_str) {
-                            format!(
-                                "❌ Gas fee too low!\n💰 Your max fee per gas: {} wei\n📈 Network base fee: {} wei\n💡 Increase your --max-fee-per-gas if you want the upload to be executed faster",
-                                max_fee, base_fee
-                            )
-                        } else {
-                            "💸 Gas fee too low - current base fee exceeds your setting".to_string()
-                        }
-                    } else if err_str.contains("insufficient funds") {
-                        "💰 Insufficient funds for transaction".to_string()
-                    } else if let UploadError::PutError(PutError::Batch(ref upload_state)) = err {
-                        format!("❌ Upload batch failed: {} chunks failed", upload_state.failed.len())
-                    } else {
-                        "❌ Upload error occurred".to_string()
-                    };
+                    let error_msg = format_upload_error(&err);
                     
                     println!("⚠️  {}. Retrying after 1 minute pause...", error_msg);
                     info!("Upload error: {}. Retrying in 1 minute...", err);

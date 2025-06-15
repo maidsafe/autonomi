@@ -66,7 +66,7 @@ impl Client {
     /// * `payment_option` - Payment option for the upload
     ///
     /// # Returns
-    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The public data addresses and public archive
+    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive, AttoTokens), UploadError>` - The public data addresses, public archive, and total cost
     ///
     /// # Example
     /// ```no_run
@@ -77,7 +77,7 @@ impl Client {
     /// # let client = Client::init().await?;
     /// let dir_path = PathBuf::from("/path/to/directory");
     /// let payment = PaymentOption::default();
-    /// let (addresses, archive) = client.dir_upload_public(dir_path, payment).await?;
+    /// let (addresses, archive, cost) = client.dir_upload_public(dir_path, payment).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -85,7 +85,7 @@ impl Client {
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
-    ) -> Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError> {
+    ) -> Result<(HashMap<PathBuf, DataAddress>, PublicArchive, AttoTokens), UploadError> {
         info!("Uploading directory as public data: {dir_path:?}");
         let start = Instant::now();
 
@@ -107,7 +107,7 @@ impl Client {
             data_addrs.len(),
             tokens_spent
         );
-        Ok((data_addrs, public_archive))
+        Ok((data_addrs, public_archive, tokens_spent))
     }
 
     /// Convert a directory to chunks and create a public archive
