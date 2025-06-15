@@ -587,7 +587,7 @@ impl Client {
 
         let (cost, archive) = self
             .0
-            .dir_content_upload(dir_path, payment_option.0.clone())
+            .dir_upload(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
 
@@ -678,7 +678,7 @@ impl Client {
 
         let (cost, archive) = self
             .0
-            .dir_content_upload_public(dir_path, payment_option.0.clone())
+            .dir_upload_public(dir_path, payment_option.0.clone())
             .await
             .map_err(map_error)?;
 

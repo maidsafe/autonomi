@@ -559,7 +559,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             let (cost, archive) = client
-                .dir_content_upload(dir_path, payment.inner)
+                .dir_upload(dir_path, payment.inner)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to upload directory: {e}")))?;
             Ok((cost.to_string(), PyPrivateArchive { inner: archive }))

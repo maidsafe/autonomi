@@ -54,6 +54,12 @@ pub async fn upload(
 
     let mut client =
         crate::actions::connect_to_network_with_config(network_context, config).await?;
+    
+    // Configure client with retry_failed setting
+    if retry_failed {
+        client = client.with_retry_failed(true);
+        println!("🔄 Retry mode enabled - will persistently retry failed chunks until successful");
+    }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 
@@ -84,14 +90,9 @@ pub async fn upload(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or(file.to_string());
 
-    // upload dir
+    // upload dir - now using the unified methods
     let not_single_file = !dir_path.is_file();
-    let result = if retry_failed {
-        println!("🔄 Retry mode enabled - will persistently retry failed chunks until successful");
-        upload_dir(&client, dir_path, public, no_archive, payment, true).await
-    } else {
-        upload_dir(&client, dir_path, public, no_archive, payment, false).await
-    };
+    let result = upload_dir(&client, dir_path, public, no_archive, payment).await;
 
     let (archive_addr, local_addr) = match result {
         Ok((a, l)) => (a, l),
@@ -167,20 +168,13 @@ async fn upload_dir(
     public: bool,
     no_archive: bool,
     payment_option: PaymentOption,
-    retry_failed: bool,
 ) -> Result<(String, String), UploadError> {
     let is_single_file = dir_path.is_file();
 
     if public {
-        let (_, public_archive) = if retry_failed {
-            client
-                .dir_content_upload_public_with_retry(dir_path, payment_option.clone())
-                .await?
-        } else {
-            client
-                .dir_content_upload_public(dir_path, payment_option.clone())
-                .await?
-        };
+        let (_, public_archive) = client
+            .dir_upload_public(dir_path, payment_option.clone())
+            .await?;
 
         let mut addrs = vec![];
         for (file_path, addr, _meta) in public_archive.iter() {
@@ -201,15 +195,9 @@ async fn upload_dir(
             Ok((addr.to_hex(), addr.to_hex()))
         }
     } else {
-        let (_, private_archive) = if retry_failed {
-            client
-                .dir_content_upload_with_retry(dir_path, payment_option.clone())
-                .await?
-        } else {
-            client
-                .dir_content_upload(dir_path, payment_option.clone())
-                .await?
-        };
+        let (_, private_archive) = client
+            .dir_upload(dir_path, payment_option.clone())
+            .await?;
 
         let mut addrs = vec![];
         for (file_path, private_datamap, _meta) in private_archive.iter() {

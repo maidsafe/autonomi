@@ -66,7 +66,7 @@ impl Client {
     /// * `payment_option` - Payment option for the upload
     ///
     /// # Returns
-    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The data addresses and public archive
+    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The public data addresses and public archive
     ///
     /// # Example
     /// ```no_run
@@ -77,11 +77,11 @@ impl Client {
     /// # let client = Client::init().await?;
     /// let dir_path = PathBuf::from("/path/to/directory");
     /// let payment = PaymentOption::default();
-    /// let (addresses, archive) = client.dir_content_upload_public(dir_path, payment).await?;
+    /// let (addresses, archive) = client.dir_upload_public(dir_path, payment).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn dir_content_upload_public(
+    pub async fn dir_upload_public(
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
@@ -103,43 +103,6 @@ impl Client {
 
         debug!(
             "Uploaded directory in {:?}: {} files, {} tokens spent",
-            start.elapsed(),
-            data_addrs.len(),
-            tokens_spent
-        );
-        Ok((data_addrs, public_archive))
-    }
-
-    /// Uploads a directory of files to the network as public data with retry functionality.
-    ///
-    /// # Arguments
-    /// * `dir_path` - Path to the directory to upload
-    /// * `payment_option` - Payment option for the upload
-    ///
-    /// # Returns
-    /// * `Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError>` - The data addresses and public archive
-    pub async fn dir_content_upload_public_with_retry(
-        &self,
-        dir_path: PathBuf,
-        payment_option: PaymentOption,
-    ) -> Result<(HashMap<PathBuf, DataAddress>, PublicArchive), UploadError> {
-        info!("Uploading directory as public data with retry: {dir_path:?}");
-        let start = Instant::now();
-
-        // Generate chunks from directory
-        let (chunks, public_archive) = self.dir_to_public_archive(dir_path.clone()).await?;
-
-        // Upload chunks with retry
-        let tokens_spent = self.pay_and_upload_with_retry(payment_option, chunks).await?;
-
-        // Create data addresses map
-        let mut data_addrs = HashMap::new();
-        for (path, addr, _meta) in public_archive.iter() {
-            data_addrs.insert(path.clone(), *addr);
-        }
-
-        debug!(
-            "Uploaded directory with retry in {:?}: {} files, {} tokens spent",
             start.elapsed(),
             data_addrs.len(),
             tokens_spent

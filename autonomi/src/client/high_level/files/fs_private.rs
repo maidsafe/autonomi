@@ -58,6 +58,7 @@ impl Client {
         Ok(())
     }
 
+
     /// Uploads a directory of files to the network as private data.
     ///
     /// # Arguments
@@ -76,11 +77,11 @@ impl Client {
     /// # let client = Client::init().await?;
     /// let dir_path = PathBuf::from("/path/to/directory");
     /// let payment = PaymentOption::default();
-    /// let (addresses, archive) = client.dir_content_upload(dir_path, payment).await?;
+    /// let (addresses, archive) = client.dir_upload(dir_path, payment).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn dir_content_upload(
+    pub async fn dir_upload(
         &self,
         dir_path: PathBuf,
         payment_option: PaymentOption,
@@ -102,43 +103,6 @@ impl Client {
 
         debug!(
             "Uploaded directory in {:?}: {} files, {} tokens spent",
-            start.elapsed(),
-            data_addrs.len(),
-            tokens_spent
-        );
-        Ok((data_addrs, private_archive))
-    }
-
-    /// Uploads a directory of files to the network as private data with retry functionality.
-    ///
-    /// # Arguments
-    /// * `dir_path` - Path to the directory to upload
-    /// * `payment_option` - Payment option for the upload
-    ///
-    /// # Returns
-    /// * `Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive), UploadError>` - The private data addresses and private archive
-    pub async fn dir_content_upload_with_retry(
-        &self,
-        dir_path: PathBuf,
-        payment_option: PaymentOption,
-    ) -> Result<(HashMap<PathBuf, DataMapChunk>, PrivateArchive), UploadError> {
-        info!("Uploading directory as private data with retry: {dir_path:?}");
-        let start = Instant::now();
-
-        // Generate chunks from directory
-        let (chunks, private_archive) = self.dir_to_private_archive(dir_path.clone()).await?;
-
-        // Upload chunks with retry
-        let tokens_spent = self.pay_and_upload_with_retry(payment_option, chunks).await?;
-
-        // Create data addresses map
-        let mut data_addrs = HashMap::new();
-        for (path, addr, _meta) in private_archive.iter() {
-            data_addrs.insert(path.clone(), addr.clone());
-        }
-
-        debug!(
-            "Uploaded directory with retry in {:?}: {} files, {} tokens spent",
             start.elapsed(),
             data_addrs.len(),
             tokens_spent

@@ -68,22 +68,12 @@ impl Client {
     }
 
     /// Processes file uploads with payment in batches
-    /// Returns total cost of uploads or error if any upload fails
     pub(crate) async fn pay_and_upload(
         &self,
         payment_option: PaymentOption,
         combined_chunks: CombinedChunks,
     ) -> Result<AttoTokens, UploadError> {
-        self.pay_and_upload_internal(payment_option, combined_chunks, false).await
-    }
-
-    /// Processes file uploads with payment in batches, with retry on failure
-    pub(crate) async fn pay_and_upload_with_retry(
-        &self,
-        payment_option: PaymentOption,
-        combined_chunks: CombinedChunks,
-    ) -> Result<AttoTokens, UploadError> {
-        self.pay_and_upload_internal(payment_option, combined_chunks, true).await
+        self.pay_and_upload_internal(payment_option, combined_chunks, self.retry_failed).await
     }
 
     /// Internal method that handles the actual upload logic with optional retry
