@@ -12,7 +12,6 @@ pub mod faucet;
 pub mod local;
 pub mod nat_detection;
 pub mod node;
-pub mod node_batch_manager;
 
 use crate::{
     helpers::{download_and_extract_release, get_bin_version},
