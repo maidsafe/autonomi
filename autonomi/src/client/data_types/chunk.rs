@@ -237,7 +237,7 @@ impl Client {
     }
 
     /// Upload chunks in batches
-    pub(crate) async fn chunk_batch_upload(
+    pub async fn chunk_batch_upload(
         &self,
         chunks: Vec<&Chunk>,
         receipt: &Receipt,
