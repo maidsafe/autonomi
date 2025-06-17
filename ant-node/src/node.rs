@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker, NodeEvent,
+    error::Error, error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker,
+    NodeEvent,
 };
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
@@ -18,6 +19,7 @@ use ant_evm::RewardsAddress;
 use ant_networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use ant_networking::MetricsRegistries;
+use ant_networking::ReachabilityStatus;
 use ant_networking::{
     Instant, Network, NetworkBuilder, NetworkError, NetworkEvent, NodeIssue, SwarmDriver,
 };
@@ -89,6 +91,8 @@ pub struct NodeBuilder {
     metrics_server_port: Option<u16>,
     no_upnp: bool,
     relay_client: bool,
+    /// Perform reachability check on the node and auto set networking flags if needed.
+    pub reachability_check: bool,
     root_dir: PathBuf,
 }
 
@@ -115,8 +119,20 @@ impl NodeBuilder {
             metrics_server_port: None,
             no_upnp: false,
             relay_client: false,
+            reachability_check: false,
             root_dir,
         }
+    }
+
+    /// Set the socket address for the node to listen on.
+    pub fn with_socket_addr(&mut self, addr: SocketAddr) {
+        self.addr = addr;
+    }
+
+    /// Enabling this would run external reachability check before starting the node.
+    /// This would override some of the networking flags, like `upnp` and `is_behind_home_network`, etc.
+    pub fn with_reachability_check(&mut self, enable: bool) {
+        self.reachability_check = enable;
     }
 
     /// Set the flag to indicate if the node is running in local mode
@@ -145,6 +161,43 @@ impl NodeBuilder {
         self.no_upnp = no_upnp;
     }
 
+    /// Check if the node is publicly reachable.
+    pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
+        let mut network_builder = NetworkBuilder::new(
+            self.identity_keypair.clone(),
+            self.local,
+            self.initial_peers.clone(),
+        );
+
+        #[cfg(feature = "open-metrics")]
+        let _ = if self.metrics_server_port.is_some() {
+            // metadata registry
+            let mut metrics_registries = MetricsRegistries::default();
+            let metrics_recorder = NodeMetricsRecorder::new(&mut metrics_registries);
+
+            network_builder.metrics_registries(metrics_registries);
+
+            Some(metrics_recorder)
+        } else {
+            None
+        };
+
+        #[cfg(feature = "open-metrics")]
+        network_builder.metrics_server_port(self.metrics_server_port);
+        network_builder.listen_addr(self.addr);
+
+        let (swarm_driver, metrics_shutdown_tx) =
+            network_builder.build_reachability_check_swarm()?;
+        let status = swarm_driver.detect().await?;
+
+        // Shutdown the metrics server if it was started
+        if let Some(shutdown_tx) = metrics_shutdown_tx {
+            let _ = shutdown_tx.send(true);
+        }
+
+        Ok(status)
+    }
+
     /// Asynchronously runs a new node instance, setting up the swarm driver,
     /// creating a data storage, and handling network events. Returns the
     /// created `RunningNode` which contains a `NodeEventsChannel` for listening
@@ -157,9 +210,48 @@ impl NodeBuilder {
     /// # Errors
     ///
     /// Returns an error if there is a problem initializing the `SwarmDriver`.
-    pub fn build_and_run(self) -> Result<RunningNode> {
-        let mut network_builder =
-            NetworkBuilder::new(self.identity_keypair, self.local, self.initial_peers);
+    pub async fn build_and_run(mut self) -> Result<RunningNode> {
+        let mut network_builder = NetworkBuilder::new(
+            self.identity_keypair.clone(),
+            self.local,
+            self.initial_peers.clone(),
+        );
+
+        if self.reachability_check {
+            info!("Running reachability check ... This might take a few minutes to complete.");
+            let status = self.run_reachability_check().await;
+            if let Ok(reachability_status) = &status {
+                network_builder.reachability_status(reachability_status.clone());
+            }
+            match status {
+                Ok(ReachabilityStatus::Relay { upnp }) => {
+                    info!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    println!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                    self.relay_client(true);
+                    self.no_upnp(!upnp);
+                }
+                Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                    info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
+                    println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
+                    self.no_upnp(!upnp);
+                    self.with_socket_addr(addr);
+                }
+                Ok(ReachabilityStatus::NotRoutable { .. }) => {
+                    info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    return Err(Error::UnRoutableNode);
+                }
+                Err(err) => {
+                    info!("Reachability check error: {err}. Terminating the node.");
+                    println!("Reachability check error: {err}. Terminating the node.");
+                    return Err(err);
+                }
+            }
+        }
 
         #[cfg(feature = "open-metrics")]
         let metrics_recorder = if self.metrics_server_port.is_some() {
@@ -184,7 +276,7 @@ impl NodeBuilder {
 
         network_builder.no_upnp(self.no_upnp);
 
-        let (network, network_event_receiver, swarm_driver) =
+        let (network, network_event_receiver, swarm_driver, metrics_shutdown_tx) =
             network_builder.build_node(self.root_dir.clone())?;
 
         let node_events_channel = NodeEventsChannel::default();
@@ -210,6 +302,7 @@ impl NodeBuilder {
 
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
+            metrics_server_shutdown_sender: metrics_shutdown_tx,
             network,
             node_events_channel,
             root_dir_path: self.root_dir,

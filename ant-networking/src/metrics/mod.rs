@@ -6,11 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
+mod metadata;
+mod reachability_check;
 mod relay_client;
 pub mod service;
 mod upnp;
+
+pub use metadata::MetadataRecorder;
+pub use reachability_check::ReachabilityStatusMetric;
 
 use crate::MetricsRegistries;
 use crate::{log_markers::Marker, time::sleep};
@@ -38,7 +42,7 @@ pub(crate) struct VersionLabels {
 }
 
 /// The shared recorders that are used to record metrics.
-pub(crate) struct NetworkMetricsRecorder {
+pub struct NetworkMetricsRecorder {
     // Records libp2p related metrics
     // Must directly call self.libp2p_metrics.record(libp2p_event) with Recorder trait in scope. But since we have
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)
@@ -83,13 +87,26 @@ pub(crate) struct NetworkMetricsRecorder {
 }
 
 impl NetworkMetricsRecorder {
-    pub fn new(registries: &mut MetricsRegistries) -> Self {
+    pub fn new(
+        registries: &mut MetricsRegistries,
+        reachability_check_metric: ReachabilityStatusMetric,
+    ) -> Self {
         // ==== Standard metrics =====
 
         let libp2p_metrics = Libp2pMetrics::new(&mut registries.standard_metrics);
         let sub_registry = registries
             .standard_metrics
             .sub_registry_with_prefix("ant_networking");
+
+        // reachability check should be a part of the standard metrics and is a gauge value, but never changes.
+        let reachability_check_metric =
+            reachability_check::get_reachability_status_metric(reachability_check_metric);
+
+        sub_registry.register(
+            "reachability_status",
+            "The reachability status of the node.",
+            reachability_check_metric,
+        );
 
         let records_stored = Gauge::default();
         sub_registry.register(

@@ -24,6 +24,7 @@ use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
+    metric::MetricsClient,
     rpc::RpcClient,
     NodeRegistry, NodeService, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
 };
@@ -31,7 +32,7 @@ use color_eyre::{eyre::eyre, Help, Result};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
-use std::{cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, time::Duration};
+use std::{cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr};
 use tracing::debug;
 
 /// Returns the added service names
@@ -41,7 +42,6 @@ pub async fn add(
     auto_set_nat_flags: bool,
     count: Option<u16>,
     data_dir_path: Option<PathBuf>,
-    enable_metrics_server: bool,
     env_variables: Option<Vec<(String, String)>>,
     evm_network: Option<EvmNetwork>,
     log_dir_path: Option<PathBuf>,
@@ -54,6 +54,7 @@ pub async fn add(
     node_port: Option<PortRange>,
     mut init_peers_config: InitialPeersConfig,
     relay: bool,
+    reachability_check: bool,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,
@@ -121,7 +122,6 @@ pub async fn add(
         auto_set_nat_flags,
         count,
         delete_antnode_src: src_path.is_none(),
-        enable_metrics_server,
         evm_network: evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         env_variables,
         relay,
@@ -133,6 +133,7 @@ pub async fn add(
         node_ip,
         node_port,
         init_peers_config,
+        reachability_check,
         rewards_address,
         rpc_address,
         rpc_port,
@@ -184,10 +185,8 @@ pub async fn balance(
 
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-        println!("{}: {}", service.service_data.service_name, 0,);
+        println!("{}: {}", node.service_name, 0,);
     }
     Ok(())
 }
@@ -226,7 +225,9 @@ pub async fn remove(
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(node, Box::new(rpc_client), Box::new(metrics_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         match service_manager.remove(keep_directories).await {
@@ -278,16 +279,15 @@ pub async fn reset(force: bool, verbosity: VerbosityLevel) -> Result<()> {
 }
 
 pub async fn start(
-    connection_timeout_s: u64,
-    fixed_interval: Option<u64>,
+    fixed_interval: u64,
     peer_ids: Vec<String>,
     service_names: Vec<String>,
     verbosity: VerbosityLevel,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
-        print_banner("Start Antnode Services");
+        print_banner("Start Antnode Services (Batch Mode)");
     }
-    info!("Starting antnode services for: {peer_ids:?}, {service_names:?}");
+    info!("Starting antnode services in batch for: {peer_ids:?}, {service_names:?}");
 
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     refresh_node_registry(
@@ -301,39 +301,66 @@ pub async fn start(
     let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
     if service_indices.is_empty() {
         info!("No services are eligible to be started");
-        // This could be the case if all services are at `Removed` status.
         if verbosity != VerbosityLevel::Minimal {
             println!("No services were eligible to be started");
         }
         return Ok(());
     }
-
     let mut failed_services = Vec::new();
+
+    // First start all the services.
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
+        let service_name = node.service_name.clone();
+        let user_mode = node.user_mode;
+
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
 
-        let service = NodeService::new(node, Box::new(rpc_client));
-
-        // set dynamic startup delay if fixed_interval is not set
-        let service = if fixed_interval.is_none() {
-            service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
-        } else {
-            service
-        };
-
-        let mut service_manager =
+        let service = NodeService::new(node, Box::new(rpc_client), Box::new(metrics_client));
+        let service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
+
+        info!("Attempting to start service: {service_name}");
+        if verbosity != VerbosityLevel::Minimal {
+            println!("Starting {service_name}...");
+        }
+
         if service_manager.service.status() != ServiceStatus::Running {
             // It would be possible here to check if the service *is* running and then just
             // continue without applying the delay. The reason for not doing so is because when
             // `start` is called below, the user will get a message to say the service was already
             // started, which I think is useful behaviour to retain.
-            if let Some(interval) = fixed_interval {
-                debug!("Sleeping for {} milliseconds", interval);
-                std::thread::sleep(std::time::Duration::from_millis(interval));
-            }
+            debug!("Sleeping for {} milliseconds", fixed_interval);
+            std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
         }
+
+        match service_manager
+            .service_control
+            .start(&service_name, user_mode)
+        {
+            Ok(_) => {
+                info!("Started service {service_name}");
+            }
+            Err(err) => {
+                error!("Failed to start service {service_name}: {}", err);
+                failed_services.push((service_name.clone(), err.to_string()));
+            }
+        };
+    }
+
+    // Now we wait for the nodes to be started.
+    for &index in &service_indices {
+        let node = &mut node_registry.nodes[index];
+        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(node, Box::new(rpc_client), Box::new(metrics_client));
+
+        let mut service_manager =
+            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
+
         match service_manager.start().await {
             Ok(start_duration) => {
                 debug!(
@@ -385,13 +412,7 @@ pub async fn stop(
     info!("Stopping antnode services for: {peer_ids:?}, {service_names:?}");
 
     let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
-    refresh_node_registry(
-        &mut node_registry,
-        &ServiceController {},
-        verbosity != VerbosityLevel::Minimal,
-        false,
-    )
-    .await?;
+    refresh_node_registry(&mut node_registry, &ServiceController {}, false, false).await?;
 
     let service_indices = get_services_for_ops(&node_registry, peer_ids, service_names)?;
     if service_indices.is_empty() {
@@ -407,7 +428,9 @@ pub async fn stop(
     for &index in &service_indices {
         let node = &mut node_registry.nodes[index];
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(node, Box::new(rpc_client), Box::new(metrics_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
 
@@ -433,11 +456,10 @@ pub async fn stop(
 }
 
 pub async fn upgrade(
-    connection_timeout_s: u64,
     do_not_start: bool,
     custom_bin_path: Option<PathBuf>,
     force: bool,
-    fixed_interval: Option<u64>,
+    fixed_interval: u64,
     peer_ids: Vec<String>,
     provided_env_variables: Option<Vec<(String, String)>>,
     service_names: Vec<String>,
@@ -521,13 +543,9 @@ pub async fn upgrade(
         let service_name = node.service_name.clone();
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(node, Box::new(rpc_client));
-        // set dynamic startup delay if fixed_interval is not set
-        let service = if fixed_interval.is_none() {
-            service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
-        } else {
-            service
-        };
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(node, Box::new(rpc_client), Box::new(metrics_client));
 
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
@@ -536,12 +554,10 @@ pub async fn upgrade(
             Ok(upgrade_result) => {
                 info!("Service: {service_name} has been upgraded, result: {upgrade_result:?}",);
                 if upgrade_result != UpgradeResult::NotRequired {
-                    // It doesn't seem useful to apply the interval if there was no upgrade
+                    // It doesn't seem useful to apply the fixed_interval if there was no upgrade
                     // required for the previous service.
-                    if let Some(interval) = fixed_interval {
-                        debug!("Sleeping for {interval} milliseconds",);
-                        std::thread::sleep(std::time::Duration::from_millis(interval));
-                    }
+                    debug!("Sleeping for {fixed_interval} milliseconds",);
+                    std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
                 }
                 upgrade_summary.push((
                     service_manager.service.service_data.service_name.clone(),
@@ -583,10 +599,8 @@ pub async fn maintain_n_running_nodes(
     alpha: bool,
     auto_restart: bool,
     auto_set_nat_flags: bool,
-    connection_timeout_s: u64,
     max_nodes_to_run: u16,
     data_dir_path: Option<PathBuf>,
-    enable_metrics_server: bool,
     env_variables: Option<Vec<(String, String)>>,
     evm_network: Option<EvmNetwork>,
     log_dir_path: Option<PathBuf>,
@@ -598,6 +612,7 @@ pub async fn maintain_n_running_nodes(
     node_ip: Option<Ipv4Addr>,
     node_port: Option<PortRange>,
     peers_args: InitialPeersConfig,
+    reachability_check: bool,
     relay: bool,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
@@ -608,7 +623,7 @@ pub async fn maintain_n_running_nodes(
     user: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
-    start_node_interval: Option<u64>,
+    start_node_interval: u64,
 ) -> Result<()> {
     let node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
     let running_nodes = node_registry
@@ -660,14 +675,7 @@ pub async fn maintain_n_running_nodes(
                     "Starting {} existing inactive nodes: {:?}",
                     to_start_count, nodes_to_start
                 );
-                start(
-                    connection_timeout_s,
-                    start_node_interval,
-                    vec![],
-                    nodes_to_start,
-                    verbosity,
-                )
-                .await?;
+                start(start_node_interval, vec![], nodes_to_start, verbosity).await?;
             } else {
                 let to_add_count = to_start_count - inactive_nodes.len();
                 info!(
@@ -691,7 +699,6 @@ pub async fn maintain_n_running_nodes(
                         auto_set_nat_flags,
                         Some(1),
                         data_dir_path.clone(),
-                        enable_metrics_server,
                         env_variables.clone(),
                         evm_network.clone(),
                         log_dir_path.clone(),
@@ -704,6 +711,7 @@ pub async fn maintain_n_running_nodes(
                         Some(PortRange::Single(port)),
                         peers_args.clone(),
                         relay,
+                        reachability_check,
                         rewards_address,
                         rpc_address,
                         rpc_port.clone(),
@@ -717,26 +725,12 @@ pub async fn maintain_n_running_nodes(
                     .await?;
 
                     if i == 0 {
-                        start(
-                            connection_timeout_s,
-                            start_node_interval,
-                            vec![],
-                            added_service,
-                            verbosity,
-                        )
-                        .await?;
+                        start(start_node_interval, vec![], added_service, verbosity).await?;
                     }
                 }
 
                 if !inactive_nodes.is_empty() {
-                    start(
-                        connection_timeout_s,
-                        start_node_interval,
-                        vec![],
-                        inactive_nodes,
-                        verbosity,
-                    )
-                    .await?;
+                    start(start_node_interval, vec![], inactive_nodes, verbosity).await?;
                 }
             }
         }

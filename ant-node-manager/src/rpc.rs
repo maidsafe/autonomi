@@ -12,6 +12,7 @@ use crate::{
 };
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
+    metric::MetricsClient,
     node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
     NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
@@ -39,7 +40,16 @@ pub async fn restart_node_service(
     let current_node_clone = current_node_mut.clone();
 
     let rpc_client = RpcClient::from_socket_addr(current_node_mut.rpc_socket_addr);
-    let service = NodeService::new(current_node_mut, Box::new(rpc_client));
+    let metrics_client = MetricsClient::new(
+        current_node_mut
+            .metrics_port
+            .expect("TEMP: metrics port is required"),
+    );
+    let service = NodeService::new(
+        current_node_mut,
+        Box::new(rpc_client),
+        Box::new(metrics_client),
+    );
     let mut service_manager = ServiceManager::new(
         service,
         Box::new(ServiceController {}),
@@ -81,6 +91,7 @@ pub async fn restart_node_service(
             node_ip: current_node_clone.node_ip,
             node_port: current_node_clone.get_antnode_port(),
             no_upnp: current_node_clone.no_upnp,
+            reachability_check: current_node_clone.reachability_check,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
@@ -197,6 +208,7 @@ pub async fn restart_node_service(
             node_ip: current_node_clone.node_ip,
             node_port: None,
             no_upnp: current_node_clone.no_upnp,
+            reachability_check: current_node_clone.reachability_check,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),
@@ -229,6 +241,7 @@ pub async fn restart_node_service(
             number: new_node_number as u16,
             peer_id: None,
             pid: None,
+            reachability_check: current_node_clone.reachability_check,
             rewards_address: current_node_clone.rewards_address,
             reward_balance: current_node_clone.reward_balance,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
@@ -241,7 +254,9 @@ pub async fn restart_node_service(
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(&mut node, Box::new(rpc_client));
+        let metrics_client =
+            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let service = NodeService::new(&mut node, Box::new(rpc_client), Box::new(metrics_client));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(ServiceController {}),
