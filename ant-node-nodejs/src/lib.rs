@@ -89,6 +89,7 @@ impl RunningNode {
     ///  - Linux: $HOME/.local/share/autonomi/node/<peer-id>
     ///  - macOS: $HOME/Library/Application Support/autonomi/node/<peer-id>
     ///  - Windows: C:\Users\<username>\AppData\Roaming\autonomi\node\<peer-id>
+    #[expect(rustdoc::invalid_html_tags)]
     #[napi]
     pub fn root_dir_path(&self) -> String {
         self.0.root_dir_path().to_string_lossy().to_string()
