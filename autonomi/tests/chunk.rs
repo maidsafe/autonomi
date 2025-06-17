@@ -16,6 +16,7 @@ use test_utils::{
     gen_random_data,
     local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE},
 };
+use tokio::time::Duration;
 
 async fn chunk_put_with_size(size: usize) -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
@@ -24,6 +25,9 @@ async fn chunk_put_with_size(size: usize) -> Result<()> {
     let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
     let client = spawned_local_network.client;
     let wallet = spawned_local_network.wallet;
+
+    // Wait for the network to be ready (CI Windows machine is slower)
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     let data = gen_random_data(size);
     let data_len = data.len();
