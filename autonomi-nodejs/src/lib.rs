@@ -1541,6 +1541,14 @@ impl Network {
         let network = autonomi::Network::new(local).map_err(map_error)?;
         Ok(Self(network))
     }
+
+    #[napi]
+    pub fn from_string(name: String) -> Result<Self> {
+        let network = autonomi::Network::from_str(&name).map_err(|()| {
+            napi::Error::new(Status::InvalidArg, format!("Invalid network name '{name}'"))
+        })?;
+        Ok(Self(network))
+    }
 }
 
 #[napi]

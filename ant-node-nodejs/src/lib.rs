@@ -8,6 +8,7 @@ use napi::tokio::sync::Mutex;
 use napi::{Result, Status};
 use napi_derive::napi;
 use std::path::PathBuf;
+use std::str::FromStr as _;
 
 // Convert Rust errors to JavaScript errors
 fn map_error<E>(err: E) -> napi::Error
@@ -253,10 +254,30 @@ impl NetworkSpawner {
 
 #[napi(object)]
 pub struct NetworkSpawnerFields {
-    // pub evm_network: Option<EvmNetwork>,
+    // pub evm_network: Option<ant_node::spawn::node_spawner::EvmNetwork>,
     // pub rewards_address: Option<RewardsAddress>,
     pub local: Option<bool>,
     pub no_upnp: Option<bool>,
     pub root_dir: Option<Option<String>>,
     pub size: Option<u32>,
+}
+
+#[napi]
+pub struct Network(ant_node::spawn::node_spawner::EvmNetwork);
+
+#[napi]
+impl Network {
+    #[napi(constructor)]
+    pub fn new(local: bool) -> Result<Self> {
+        let network = ant_node::spawn::node_spawner::EvmNetwork::new(local).map_err(map_error)?;
+        Ok(Self(network))
+    }
+
+    #[napi]
+    pub fn from_string(name: String) -> Result<Self> {
+        let network = ant_node::spawn::node_spawner::EvmNetwork::from_str(&name).map_err(|()| {
+            napi::Error::new(Status::InvalidArg, format!("Invalid network name '{name}'"))
+        })?;
+        Ok(Self(network))
+    }
 }

@@ -8,7 +8,7 @@
 
 use crate::utils::get_root_dir_and_keypair;
 use crate::{NodeBuilder, RunningNode};
-use ant_evm::{EvmNetwork, RewardsAddress};
+pub use ant_evm::{EvmNetwork, RewardsAddress};
 use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
