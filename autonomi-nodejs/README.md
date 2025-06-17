@@ -31,23 +31,23 @@ For example usage, see the [`__test__`](./__test__) directory. Replace `import {
 
 # Contributing, compilation and publishing
 
-To contribute or develop on the source code directly, we need a few requirements.
+To contribute or develop on the source code directly, Node.js must be installed (installation instructions [here](https://nodejs.org/en/download)).
 
-- Yarn
-  - `npm install --global yarn`
-- We need the NAPI RS CLI tool
-  - `yarn global add @napi-rs/cli`
-
-Install the dependencies for the project:
+With Node.js installed, change the working directory to `autonomi-nodejs/`:
 ```console
-$ yarn install
+$ cd ./autonomi-nodejs/
+```
+
+Then install the dependencies for the project:
+```console
+$ npm install
 ```
 
 ## Build
 
-Then build using the `napi` CLI:
+Then build using the build script (which calls the `napi` CLI):
 ```console
-$ npx napi build
+$ npm run build
 ```
 
 ## Running tests
@@ -55,9 +55,9 @@ $ npx napi build
 Run the `test` script:
 
 ```console
-yarn test
+npm test
 # Or run a specific test
-yarn test __test__/register.spec.mjs -m 'registers errors'
+npm test __test__/register.spec.mjs -m 'registers errors'
 ```
 
 ## Publishing
@@ -73,4 +73,4 @@ It's a good practice to have an unreleased version number ready to go. So if `0.
 
 ### Workflow
 
-Use the 'JS publish to NPM' workflow (`nodejs-publish.yml`) to publish the package from `main` or a tag. This workflow has to be manually dispatched through GitHub.
+Use the 'Node.js (release)' workflow (`nodejs-publish.yml`) to publish the package from `main` or a tag. This workflow has to be manually dispatched through GitHub.

@@ -1,7 +1,6 @@
-name: JS tests
+name: Node.js
 env:
   DEBUG: napi:*
-  APP_NAME: autonomi
   MACOSX_DEPLOYMENT_TARGET: '10.13'
 permissions:
   contents: write
@@ -16,13 +15,20 @@ on:
     branches: [main, alpha*, beta*, rc*]
   pull_request:
     branches: ["*"]
+defaults:
+  run:
+    shell: bash
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
-        # We build in both the client and node directories
-        dir: [autonomi-nodejs, ant-node-nodejs]
+        # We build both the client and node directories
+        packages:
+          - app_name: autonomi   # Name in package.json
+            dir: autonomi-nodejs # Directory containing package.json
+          - app_name: ant-node
+            dir: ant-node-nodejs
         settings:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -38,8 +44,9 @@ jobs:
             build: npm run build -- --target x86_64-apple-darwin
     defaults:
       run:
-        working-directory: ${{ matrix.dir }}
-    name: Build ${{ matrix.dir }} (${{ matrix.settings.target }})
+        working-directory: ${{ matrix.packages.dir }}
+        shell: bash
+    name: Build ${{ matrix.packages.app_name }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
@@ -51,7 +58,6 @@ jobs:
 
       - name: Get npm cache directory
         id: npm-cache-dir
-        shell: bash
         run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
       - uses: actions/cache@v4
         with:
@@ -79,20 +85,15 @@ jobs:
         if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' || matrix.settings.target == 'armv7-unknown-linux-musleabihf' }}
         with:
           version: 0.13.0
-      - name: Setup toolchain
-        run: ${{ matrix.settings.setup }}
-        if: ${{ matrix.settings.setup }}
-        shell: bash
       - name: Install dependencies
         run: npm install
       - name: Build
         run: ${{ matrix.settings.build }}
-        shell: bash
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bindings-${{ matrix.settings.target }}
-          path: ${{ matrix.dir }}/${{ env.APP_NAME }}.*.node
+          name: bindings-${{ matrix.settings.target }}-${{ matrix.packages.app_name }}
+          path: ${{ matrix.packages.dir }}/${{ matrix.packages.app_name }}.*.node
           if-no-files-found: error
   test:
     name: Tests (${{ matrix.settings.target }})
@@ -101,6 +102,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        packages:
+          - app_name: autonomi
+            dir: autonomi-nodejs
+          - app_name: ant-node
+            dir: ant-node-nodejs
         settings:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
@@ -110,6 +116,9 @@ jobs:
             target: aarch64-apple-darwin
           - host: macos-13 # Intel
             target: x86_64-apple-darwin
+    defaults:
+      run:
+        working-directory: ${{ matrix.packages.dir }}
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v4
@@ -147,8 +156,8 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: bindings-${{ matrix.settings.target }}
-          path: ${{ matrix.dir }}/.
+          name: bindings-${{ matrix.settings.target }}-${{ matrix.packages.app_name }}
+          path: ${{ matrix.packages.dir }}/.
       - name: List packages
         run: ls -R .
         shell: bash
