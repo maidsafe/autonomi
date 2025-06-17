@@ -9,6 +9,15 @@ export interface NetworkSpawnerFields {
   rootDir?: string | undefined | null
   size?: number
 }
+export interface NodeSpawnerFields {
+  evmNetwork?: string
+  socketAddr?: string
+  rewardsAddress?: string
+  initialPeers?: Array<string>
+  local?: boolean
+  noUpnp?: boolean
+  rootDir?: string | undefined | null
+}
 export declare class SwarmLocalState {
   get connectedPeers(): Array<string>
   get peersInRoutingTable(): bigint
@@ -41,6 +50,8 @@ export declare class RunningNode {
   getAllRecordAddresses(): Promise<Array<Array<number>>>
   /** Returns the node's reward address */
   rewardAddress(): Array<number>
+  /** Shutdown the SwarmDriver loop and the node (NetworkEvents) loop. */
+  shutdown(): void
 }
 /** Represents a running test network. */
 export declare class RunningNetwork {
@@ -56,4 +67,14 @@ export declare class NetworkSpawner {
   constructor(args?: NetworkSpawnerFields | undefined | null)
   /** Spawns the network with the configured parameters. */
   spawn(): Promise<RunningNetwork>
+}
+/** A spawner for creating local SAFE networks for testing and development. */
+export declare class NodeSpawner {
+  constructor(args?: NodeSpawnerFields | undefined | null, network?: Network | undefined | null)
+  /** Spawns the network with the configured parameters. */
+  spawn(): Promise<RunningNode>
+}
+export declare class Network {
+  constructor(local: boolean)
+  static fromString(name: string): Network
 }

@@ -3,10 +3,12 @@
 //! This library provides Node.js bindings for the ant-node library, which
 //! provides network spawning capabilities and convergent encryption on file-based data.
 
+use ant_node::spawn::node_spawner::Multiaddr;
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
 use napi::{Result, Status};
 use napi_derive::napi;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr as _;
 
@@ -157,11 +159,11 @@ impl RunningNode {
         self.0.reward_address().to_vec()
     }
 
-    // /// Shutdown the SwarmDriver loop and the node (NetworkEvents) loop.
-    // #[napi]
-    // pub fn shutdown(self) {
-    //     self.0.shutdown()
-    // }
+    /// Shutdown the SwarmDriver loop and the node (NetworkEvents) loop.
+    #[napi]
+    pub fn shutdown(&self) {
+        self.0.clone().shutdown()
+    }
 }
 
 /// Represents a running test network.
@@ -260,6 +262,84 @@ pub struct NetworkSpawnerFields {
     pub no_upnp: Option<bool>,
     pub root_dir: Option<Option<String>>,
     pub size: Option<u32>,
+}
+
+#[napi(object)]
+pub struct NodeSpawnerFields {
+    pub evm_network: Option<String>,
+    pub socket_addr: Option<String>,
+    pub rewards_address: Option<String>,
+    pub initial_peers: Option<Vec<String>>,
+    pub local: Option<bool>,
+    pub no_upnp: Option<bool>,
+    pub root_dir: Option<Option<String>>,
+}
+
+/// A spawner for creating local SAFE networks for testing and development.
+#[napi]
+pub struct NodeSpawner(ant_node::spawn::node_spawner::NodeSpawner);
+
+#[napi]
+impl NodeSpawner {
+    #[napi(constructor)]
+    pub fn new(args: Option<NodeSpawnerFields>, network: Option<&Network>) -> Result<Self> {
+        let mut spawner = ant_node::spawn::node_spawner::NodeSpawner::new();
+        if let Some(args) = args {
+            if let Some(evm_network) = network {
+                spawner = spawner.with_evm_network(evm_network.0.clone());
+            }
+            if let Some(socket_addr) = args.socket_addr {
+                spawner =
+                    spawner.with_socket_addr(SocketAddr::from_str(&socket_addr).map_err(|_| {
+                        napi::Error::new(Status::InvalidArg, "Invalid socket address format")
+                    })?);
+            }
+            if let Some(rewards_address) = args.rewards_address {
+                spawner = spawner.with_rewards_address(
+                    ant_node::spawn::node_spawner::RewardsAddress::from_str(&rewards_address)
+                        .map_err(|_| {
+                            napi::Error::new(Status::InvalidArg, "Invalid rewards address format")
+                        })?,
+                );
+            }
+            if let Some(initial_peers) = args.initial_peers {
+                spawner = spawner.with_initial_peers(
+                    initial_peers
+                        .iter()
+                        .map(|peer| {
+                            peer.parse::<Multiaddr>().map_err(|_| {
+                                napi::Error::new(
+                                    Status::InvalidArg,
+                                    "Invalid initial peer address format",
+                                )
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+            }
+            if let Some(local) = args.local {
+                spawner = spawner.with_local(local);
+            }
+            if let Some(no_upnp) = args.no_upnp {
+                spawner = spawner.with_no_upnp(no_upnp);
+            }
+            if let Some(root_dir) = args.root_dir {
+                spawner = spawner.with_root_dir(root_dir.map(PathBuf::from));
+            }
+        }
+
+        Ok(Self(spawner))
+    }
+
+    /// Spawns the network with the configured parameters.
+    #[napi]
+    pub async fn spawn(&self) -> Result<RunningNode> {
+        let running_node = self.0.clone().spawn().await.map_err(|e| {
+            napi::Error::new(Status::GenericFailure, format!("Failed to spawn node: {e}"))
+        })?;
+
+        Ok(RunningNode(running_node))
+    }
 }
 
 #[napi]

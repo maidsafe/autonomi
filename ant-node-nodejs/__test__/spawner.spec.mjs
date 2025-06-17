@@ -1,5 +1,5 @@
 import test from 'ava'
-import { NetworkSpawner } from '../index.js'
+import { Network, NetworkSpawner, NodeSpawner } from '../index.js'
 import { setTimeout } from 'node:timers/promises';
 
 test('construct NetworkSpawner', async (t) => {
@@ -20,4 +20,12 @@ test('construct NetworkSpawner', async (t) => {
     }
 
     await runningNetwork.shutdown();
+});
+
+test('construct NodeSpawner', async (t) => {
+    const spawner = new NodeSpawner({ local: true }, Network.fromString('evm-arbitrum-one'));
+    const runningNode = await spawner.spawn();
+    runningNode.shutdown();
+
+    t.true(typeof runningNode.peerId() === 'string' && runningNode.peerId().length > 0);
 });
