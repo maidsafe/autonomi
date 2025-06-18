@@ -159,7 +159,7 @@ impl BadNodeMetrics {
                     }
                 }
             }
-        });
+        }.instrument(tracing::Span::current()));
         tx
     }
 }

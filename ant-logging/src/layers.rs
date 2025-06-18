@@ -319,9 +319,9 @@ fn get_log_level_from_str(log_level: &str) -> Result<Level> {
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tracing_appender::non_blocking::NonBlocking;
 use tracing::field::{Field, Visit};
 use tracing::span::{Attributes, Id};
+use tracing_appender::non_blocking::NonBlocking;
 
 /// Metadata stored with each node span for routing purposes
 #[derive(Debug)]

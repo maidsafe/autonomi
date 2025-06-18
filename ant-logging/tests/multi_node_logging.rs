@@ -63,8 +63,8 @@ async fn test_multi_node_logging_e2e() {
     let node_1_content = read_log_content(&node_1_dir).expect("Failed to read node 1 logs");
     let node_2_content = read_log_content(&node_2_dir).expect("Failed to read node 2 logs");
 
-    println!("Node 1 logs:\n{}", node_1_content);
-    println!("Node 2 logs:\n{}", node_2_content);
+    println!("Node 1 logs:\n{node_1_content}");
+    println!("Node 2 logs:\n{node_2_content}");
 
     // Check node 1 logs contain all its messages
     assert!(
@@ -108,27 +108,27 @@ async fn test_multi_node_logging_e2e() {
         "Should contain span information with /node"
     );
 
-    println!("Node 1 logs:\n{}", node_1_content);
-    println!("Node 2 logs:\n{}", node_2_content);
+    println!("Node 1 logs:\n{node_1_content}");
+    println!("Node 2 logs:\n{node_2_content}");
 }
 
 #[test]
 fn test_unlimited_node_span_creation() {
     // Test that we can create spans for nodes beyond the old 20-node limit
     // This tests the span creation functionality without requiring a full logging setup
-    
+
     let test_nodes = vec![1, 15, 21, 25, 50, 100];
-    
+
     for &node_id in &test_nodes {
         // This should work for any node_id now (no hardcoded limit)
         let node_span = tracing::info_span!("node", node_id = node_id);
-        
+
         // Verify the span can be entered and used
         let _enter = node_span.enter();
         // If we get here without panicking, the span creation works
     }
-    
-    println!("Successfully created spans for node IDs: {:?}", test_nodes);
+
+    println!("Successfully created spans for node IDs: {test_nodes:?}");
 }
 
 /// Helper function to read log content from a node directory

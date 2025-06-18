@@ -366,7 +366,7 @@ impl Node {
                         let _handle = spawn(async move {
                             Self::try_interval_replication(network);
                             trace!("Periodic replication took {:?}", start.elapsed());
-                        });
+                        }.instrument(tracing::Span::current()));
                     }
                     _ = uptime_metrics_update_interval.tick() => {
                         #[cfg(feature = "open-metrics")]
