@@ -14,73 +14,11 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use tracing::Instrument;
 
-/// Macro to create node spans in a clean way.
-/// This handles the limitation that tracing span names must be compile-time constants
-/// while still providing a clean interface for node IDs up to 20 nodes.
-macro_rules! create_node_span {
-    (1) => {
-        tracing::info_span!("node_1")
-    };
-    (2) => {
-        tracing::info_span!("node_2")
-    };
-    (3) => {
-        tracing::info_span!("node_3")
-    };
-    (4) => {
-        tracing::info_span!("node_4")
-    };
-    (5) => {
-        tracing::info_span!("node_5")
-    };
-    (6) => {
-        tracing::info_span!("node_6")
-    };
-    (7) => {
-        tracing::info_span!("node_7")
-    };
-    (8) => {
-        tracing::info_span!("node_8")
-    };
-    (9) => {
-        tracing::info_span!("node_9")
-    };
-    (10) => {
-        tracing::info_span!("node_10")
-    };
-    (11) => {
-        tracing::info_span!("node_11")
-    };
-    (12) => {
-        tracing::info_span!("node_12")
-    };
-    (13) => {
-        tracing::info_span!("node_13")
-    };
-    (14) => {
-        tracing::info_span!("node_14")
-    };
-    (15) => {
-        tracing::info_span!("node_15")
-    };
-    (16) => {
-        tracing::info_span!("node_16")
-    };
-    (17) => {
-        tracing::info_span!("node_17")
-    };
-    (18) => {
-        tracing::info_span!("node_18")
-    };
-    (19) => {
-        tracing::info_span!("node_19")
-    };
-    (20) => {
-        tracing::info_span!("node_20")
-    };
-    ($id:expr) => {
-        tracing::info_span!("node_other", node_id = $id)
-    };
+/// Create a node span with unlimited node ID support.
+/// Uses a static span name "node" with the node_id as a field to work around
+/// the tracing library's requirement for compile-time span names.
+fn create_node_span(node_id: usize) -> tracing::Span {
+    tracing::info_span!("node", node_id = node_id)
 }
 
 pub struct NetworkSpawner {
@@ -251,8 +189,7 @@ async fn spawn_network(
     for i in 0..size {
         let node_id = i + 1;
         // Create a span with a unique name for this specific node
-        // Since tracing requires compile-time span names, we use a cleaner macro approach
-        let node_span = create_node_span!(node_id);
+        let node_span = create_node_span(node_id);
 
         // Instrument the entire node spawn with the node_id span
         let spawn_future = async {
