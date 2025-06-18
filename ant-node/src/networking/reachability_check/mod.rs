@@ -760,7 +760,7 @@ impl ReachabilityCheckSwarmDriver {
             .ok_or(ReachabilityCheckError::EmptyPort)?;
         if port == 0 {
             error!("Observed port is 0. This should not happen. Terminating the node.");
-            result.relay = true;
+            result.terminate = true;
             return Ok(result);
         }
 
