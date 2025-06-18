@@ -320,6 +320,43 @@ fn get_log_level_from_str(log_level: &str) -> Result<Level> {
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tracing_appender::non_blocking::NonBlocking;
+use tracing::field::{Field, Visit};
+use tracing::span::{Attributes, Id};
+
+/// Metadata stored with each node span for routing purposes
+#[derive(Debug)]
+struct NodeMetadata {
+    node_name: String,
+}
+
+/// Visitor to extract node_id field from span attributes
+struct NodeIdVisitor {
+    node_id: Option<usize>,
+}
+
+impl Visit for NodeIdVisitor {
+    fn record_u64(&mut self, field: &Field, value: u64) {
+        if field.name() == "node_id" {
+            self.node_id = Some(value as usize);
+        }
+    }
+
+    fn record_i64(&mut self, field: &Field, value: i64) {
+        if field.name() == "node_id" {
+            self.node_id = Some(value as usize);
+        }
+    }
+
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "node_id" {
+            // Try to extract from debug representation as fallback
+            let debug_str = format!("{value:?}");
+            if let Ok(parsed) = debug_str.parse::<usize>() {
+                self.node_id = Some(parsed);
+            }
+        }
+    }
+}
 
 /// Layer that routes events to different file appenders based on span context
 pub struct NodeRoutingLayer {
@@ -353,6 +390,22 @@ where
         Filter::enabled(&self.targets_filter, meta, &ctx)
     }
 
+    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+        let span = ctx.span(id).expect("Span should exist in registry");
+        let span_name = span.name();
+
+        // Extract node_id from spans named "node"
+        if span_name == "node" {
+            let mut visitor = NodeIdVisitor { node_id: None };
+            attrs.record(&mut visitor);
+
+            if let Some(node_id) = visitor.node_id {
+                let node_name = format!("node_{node_id}");
+                span.extensions_mut().insert(NodeMetadata { node_name });
+            }
+        }
+    }
+
     fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
         // Find which node this event belongs to based on span hierarchy
         let mut target_node = None;
@@ -362,7 +415,15 @@ where
             while let Some(span) = current {
                 let span_name = span.name();
 
-                // Check for standard node spans: node_1, node_2, etc.
+                // Check for dynamic node spans with stored metadata
+                if span_name == "node" {
+                    if let Some(metadata) = span.extensions().get::<NodeMetadata>() {
+                        target_node = Some(metadata.node_name.clone());
+                        break;
+                    }
+                }
+
+                // Check for legacy node spans: node_1, node_2, etc. (backwards compatibility)
                 if span_name.starts_with("node_") {
                     target_node = Some(span_name.to_string());
                     break;
