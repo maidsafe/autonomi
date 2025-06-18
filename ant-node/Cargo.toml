@@ -2,7 +2,7 @@
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "The Autonomi node binary"
 name = "ant-node"
-version = "0.4.0"
+version = "0.4.1-rc.1"
 edition = "2021"
 license = "GPL-3.0"
 homepage = "https://maidsafe.net"
@@ -22,13 +22,13 @@ open-metrics = ["ant-networking/open-metrics", "prometheus-client"]
 otlp = ["ant-logging/otlp"]
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.3" }
-ant-build-info = { path = "../ant-build-info", version = "0.1.27" }
-ant-evm = { path = "../ant-evm", version = "0.1.14" }
-ant-logging = { path = "../ant-logging", version = "0.2.49", features = ["process-metrics"] }
-ant-networking = { path = "../ant-networking", version = "0.3.12" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.5" }
-ant-service-management = { path = "../ant-service-management", version = "0.4.13" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.4-rc.1" }
+ant-build-info = { path = "../ant-build-info", version = "0.1.28-rc.1" }
+ant-evm = { path = "../ant-evm", version = "0.1.15-rc.1" }
+ant-logging = { path = "../ant-logging", version = "0.2.50-rc.1", features = ["process-metrics"] }
+ant-networking = { path = "../ant-networking", version = "0.3.13-rc.1" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.6-rc.1" }
+ant-service-management = { path = "../ant-service-management", version = "0.4.14-rc.1" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
 bytes = { version = "1.0.1", features = ["serde"] }
@@ -78,10 +78,10 @@ walkdir = "~2.5.0"
 xor_name = "5.0.0"
 
 [dev-dependencies]
-ant-protocol = { path = "../ant-protocol", version = "1.0.5", features = ["rpc"] }
+ant-protocol = { path = "../ant-protocol", version = "1.0.6-rc.1", features = ["rpc"] }
 assert_fs = "1.0.0"
-evmlib = { path = "../evmlib", version = "0.4.0" }
-autonomi = { path = "../autonomi", version = "0.4.6" }
+evmlib = { path = "../evmlib", version = "0.4.1-rc.1" }
+autonomi = { path = "../autonomi", version = "0.5.0-rc.1" }
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }

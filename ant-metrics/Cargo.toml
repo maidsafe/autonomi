@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-metrics"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.1.28"
+version = "0.1.29-rc.1"
 
 [[bin]]
 path = "src/main.rs"

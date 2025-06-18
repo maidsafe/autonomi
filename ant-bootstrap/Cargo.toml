@@ -7,11 +7,11 @@ license = "GPL-3.0"
 name = "ant-bootstrap"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.2.3"
+version = "0.2.4-rc.1"
 
 [dependencies]
-ant-logging = { path = "../ant-logging", version = "0.2.49" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.5" }
+ant-logging = { path = "../ant-logging", version = "0.2.50-rc.1" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.6-rc.1" }
 atomic-write-file = "0.2.2"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.2.1", features = ["derive", "env"] }

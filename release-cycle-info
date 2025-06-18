@@ -13,6 +13,6 @@
 # Both of these numbers are used in the packaged version number, which is a collective version
 # number for all the released binaries.
 release-year: 2025
-release-month: 5
+release-month: 6
 release-cycle: 1
-release-cycle-counter: 3
+release-cycle-counter: 1

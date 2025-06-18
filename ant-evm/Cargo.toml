@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-evm"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.1.14"
+version = "0.1.15-rc.1"
 
 [features]
 external-signer = ["evmlib/external-signer"]
@@ -15,7 +15,7 @@ test-utils = []
 
 [dependencies]
 custom_debug = "~0.6.1"
-evmlib = { path = "../evmlib", version = "0.4.0" }
+evmlib = { path = "../evmlib", version = "0.4.1-rc.1" }
 hex = "~0.4.3"
 libp2p = { version = "0.55.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }

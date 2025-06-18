@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-logging"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "0.2.49"
+version = "0.2.50-rc.1"
 
 [dependencies]
 chrono = "~0.4.19"
