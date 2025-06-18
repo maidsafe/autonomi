@@ -1,0 +1,59 @@
+{
+  "name": "@withautonomi/ant-node",
+  "version": "0.1.1",
+  "description": "NodeJS bindings for Autonomi client",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maidsafe/autonomi.git",
+    "directory": "nodejs"
+  },
+  "napi": {
+    "name": "ant-node",
+    "triples": {
+      "additional": [
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^22.13.10",
+    "ava": "^6.0.1",
+    "typedoc": "^0.28.2",
+    "typescript": "^5.8.3"
+  },
+  "ava": {
+    "timeout": "3m"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "docs": "typedoc",
+    "prepublishOnly": "napi prepublish --tagstyle npm --skip-gh-release",
+    "test": "ava",
+    "universal": "napi universal",
+    "version": "napi version"
+  },
+  "keywords": [
+    "autonomi",
+    "client",
+    "network",
+    "graph",
+    "pointer",
+    "vault",
+    "encryption"
+  ],
+  "typedocOptions": {
+    "entryPoints": [
+      "./index.d.ts"
+    ],
+    "includeVersion": true
+  }
+}
