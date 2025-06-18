@@ -12,6 +12,7 @@ use crate::{
 };
 use libp2p::kad::{self, GetClosestPeersError, InboundRequest, QueryResult, K_VALUE};
 use std::collections::hash_map::Entry;
+use tracing::Instrument;
 
 impl SwarmDriver {
     pub(super) fn handle_kad_event(&mut self, kad_event: libp2p::kad::Event) -> Result<()> {
@@ -102,9 +103,12 @@ impl SwarmDriver {
                         .network_discovery
                         .handle_get_closest_query(current_closest),
                     PendingGetClosestType::FunctionCall(sender) => {
-                        tokio::spawn(async move {
-                            let _ = sender.send(vec![]);
-                        });
+                        tokio::spawn(
+                            async move {
+                                let _ = sender.send(vec![]);
+                            }
+                            .instrument(tracing::Span::current()),
+                        );
                     }
                 }
             }

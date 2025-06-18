@@ -18,6 +18,7 @@ use std::{
     time::{Duration, Instant},
 };
 use strum::IntoEnumIterator;
+use tracing::Instrument;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -158,7 +159,7 @@ impl BadNodeMetrics {
                     }
                 }
             }
-        });
+        }.instrument(tracing::Span::current()));
         tx
     }
 }

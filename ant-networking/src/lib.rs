@@ -71,6 +71,7 @@ use tokio::sync::{
     mpsc::{self, Sender},
     oneshot,
 };
+use tracing::Instrument;
 
 /// Majority of a given group (i.e. > 1/2).
 #[inline]
@@ -690,11 +691,14 @@ pub(crate) fn send_local_swarm_cmd(swarm_cmd_sender: Sender<LocalSwarmCmd>, cmd:
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = spawn(async move {
-        if let Err(error) = swarm_cmd_sender.send(cmd).await {
-            error!("Failed to send SwarmCmd: {}", error);
+    let _handle = spawn(
+        async move {
+            if let Err(error) = swarm_cmd_sender.send(cmd).await {
+                error!("Failed to send SwarmCmd: {}", error);
+            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
 }
 
 pub(crate) fn send_network_swarm_cmd(
@@ -711,9 +715,12 @@ pub(crate) fn send_network_swarm_cmd(
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = spawn(async move {
-        if let Err(error) = swarm_cmd_sender.send(cmd).await {
-            error!("Failed to send SwarmCmd: {}", error);
+    let _handle = spawn(
+        async move {
+            if let Err(error) = swarm_cmd_sender.send(cmd).await {
+                error!("Failed to send SwarmCmd: {}", error);
+            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
 }

@@ -27,6 +27,7 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
 use tokio::time::Duration;
+use tracing::Instrument;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 const TO_MB: u64 = 1_000_000;
@@ -302,24 +303,27 @@ impl NetworkMetricsRecorder {
         let mut system = System::new();
         let physical_core_count = system.physical_core_count();
 
-        tokio::spawn(async move {
-            loop {
-                system.refresh_process_specifics(pid, process_refresh_kind);
-                if let (Some(process), Some(core_count)) =
-                    (system.process(pid), physical_core_count)
-                {
-                    let mem_used =
-                        ((process.memory() as f64 / TO_MB as f64) * 10000.0).round() / 10000.0;
-                    let _ = process_memory_used_mb.set(mem_used);
-                    // divide by core_count to get value between 0-100
-                    let cpu_usage = ((process.cpu_usage() as f64 / core_count as f64) * 10000.0)
-                        .round()
-                        / 10000.0;
-                    let _ = process_cpu_usage_percentage.set(cpu_usage);
+        tokio::spawn(
+            async move {
+                loop {
+                    system.refresh_process_specifics(pid, process_refresh_kind);
+                    if let (Some(process), Some(core_count)) =
+                        (system.process(pid), physical_core_count)
+                    {
+                        let mem_used =
+                            ((process.memory() as f64 / TO_MB as f64) * 10000.0).round() / 10000.0;
+                        let _ = process_memory_used_mb.set(mem_used);
+                        // divide by core_count to get value between 0-100
+                        let cpu_usage =
+                            ((process.cpu_usage() as f64 / core_count as f64) * 10000.0).round()
+                                / 10000.0;
+                        let _ = process_cpu_usage_percentage.set(cpu_usage);
+                    }
+                    sleep(UPDATE_INTERVAL).await;
                 }
-                sleep(UPDATE_INTERVAL).await;
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     // Records the metric
@@ -332,14 +336,17 @@ impl NetworkMetricsRecorder {
                 let _ = self.shunned_count.inc();
                 let bad_nodes_notifier = self.bad_nodes_notifier.clone();
                 let flagged_by = *flagged_by;
-                crate::time::spawn(async move {
-                    if let Err(err) = bad_nodes_notifier
-                        .send(BadNodeMetricsMsg::ShunnedByPeer(flagged_by))
-                        .await
-                    {
-                        error!("Failed to send shunned report via notifier: {err:?}");
+                crate::time::spawn(
+                    async move {
+                        if let Err(err) = bad_nodes_notifier
+                            .send(BadNodeMetricsMsg::ShunnedByPeer(flagged_by))
+                            .await
+                        {
+                            error!("Failed to send shunned report via notifier: {err:?}");
+                        }
                     }
-                });
+                    .instrument(tracing::Span::current()),
+                );
             }
             Marker::QuotingMetrics { quoting_metrics } => {
                 let _ = self.relevant_records.set(
@@ -363,14 +370,17 @@ impl NetworkMetricsRecorder {
 
     pub(crate) fn record_change_in_close_group(&self, new_close_group: Vec<PeerId>) {
         let bad_nodes_notifier = self.bad_nodes_notifier.clone();
-        crate::time::spawn(async move {
-            if let Err(err) = bad_nodes_notifier
-                .send(BadNodeMetricsMsg::CloseGroupUpdated(new_close_group))
-                .await
-            {
-                error!("Failed to send shunned report via notifier: {err:?}");
+        crate::time::spawn(
+            async move {
+                if let Err(err) = bad_nodes_notifier
+                    .send(BadNodeMetricsMsg::CloseGroupUpdated(new_close_group))
+                    .await
+                {
+                    error!("Failed to send shunned report via notifier: {err:?}");
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {

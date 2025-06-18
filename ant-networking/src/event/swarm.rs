@@ -24,6 +24,7 @@ use libp2p::{
     Multiaddr, TransportError,
 };
 use tokio::time::Duration;
+use tracing::Instrument;
 
 impl SwarmDriver {
     /// Handle `SwarmEvents`
@@ -188,11 +189,14 @@ impl SwarmDriver {
                                 old_cache.add_addr(address.clone());
 
                                 // Save cache to disk.
-                                crate::time::spawn(async move {
-                                    if let Err(err) = old_cache.sync_and_flush_to_disk() {
-                                        error!("Failed to save bootstrap cache: {err}");
+                                crate::time::spawn(
+                                    async move {
+                                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
+                                            error!("Failed to save bootstrap cache: {err}");
+                                        }
                                     }
-                                });
+                                    .instrument(tracing::Span::current()),
+                                );
                             }
                         }
                     } else if let Some(external_add_manager) =
