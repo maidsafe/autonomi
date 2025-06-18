@@ -205,6 +205,7 @@ impl NodeBuilder {
         };
 
         // Run the node
+
         node.run(network_event_receiver, shutdown_rx);
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
@@ -275,9 +276,12 @@ impl Node {
 
         let peers_connected = Arc::new(AtomicUsize::new(0));
 
+        let current_span = tracing::Span::current();
+        let node_span = current_span.clone();
         let _node_task = spawn(async move {
-            // use a random activity timeout to ensure that the nodes do not sync when messages
-            // are being transmitted.
+            let _guard = node_span.enter(); // Enter span in spawned task
+                                            // use a random activity timeout to ensure that the nodes do not sync when messages
+                                            // are being transmitted.
             let replication_interval: u64 = rng.gen_range(
                 PERIODIC_REPLICATION_INTERVAL_MAX_S / 2..PERIODIC_REPLICATION_INTERVAL_MAX_S,
             );

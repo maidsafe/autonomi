@@ -19,6 +19,7 @@ use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use libp2p::swarm::ConnectionId;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument;
 
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
@@ -68,7 +69,7 @@ impl Network {
         };
 
         // Run the swarm driver as a background task
-        let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx));
+        let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx).in_current_span());
 
         Ok((network, network_event_receiver))
     }

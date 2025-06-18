@@ -13,6 +13,7 @@ use crate::{
 };
 use std::collections::BTreeMap;
 use tracing_appender::non_blocking::WorkerGuard;
+use tracing_core::Metadata;
 use tracing_core::{Event, Level, Subscriber};
 use tracing_subscriber::{
     filter::Targets,
@@ -22,15 +23,15 @@ use tracing_subscriber::{
         time::{FormatTime, SystemTime},
         FmtContext, FormatEvent, FormatFields,
     },
-    layer::Filter,
+    layer::{Context, Filter},
     registry::LookupSpan,
     reload::{self, Handle},
     Layer, Registry,
 };
 
-const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
-const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
-const MAX_LOG_FILES: usize = 1000;
+pub(crate) const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
+pub(crate) const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
+pub(crate) const MAX_LOG_FILES: usize = 1000;
 // Everything is logged by default
 const ALL_ANT_LOGS: &str = "all";
 // Trace at nodes, clients, debug at networking layer
@@ -239,7 +240,7 @@ impl TracingLayers {
 /// `export ANT_LOG = libp2p=DEBUG, tokio=INFO, all, sn_client=ERROR`
 /// Custom keywords will take less precedence if the same target has been manually specified in the CSV.
 /// `sn_client=ERROR` in the above example will be used instead of the TRACE level set by "all" keyword.
-fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> {
+pub(crate) fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> {
     let mut targets = BTreeMap::new();
     let mut contains_keyword_all_sn_logs = false;
     let mut contains_keyword_verbose_sn_logs = false;
@@ -313,5 +314,87 @@ fn get_log_level_from_str(log_level: &str) -> Result<Level> {
         _ => Err(Error::LoggingConfiguration(format!(
             "Log level {log_level} is not supported"
         ))),
+    }
+}
+
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use tracing_appender::non_blocking::NonBlocking;
+
+/// Layer that routes events to different file appenders based on span context
+pub struct NodeRoutingLayer {
+    node_writers: Arc<Mutex<HashMap<String, NonBlocking>>>,
+    targets_filter: Targets,
+}
+
+impl NodeRoutingLayer {
+    pub fn new(targets: Vec<(String, Level)>) -> Self {
+        Self {
+            node_writers: Arc::new(Mutex::new(HashMap::new())),
+            targets_filter: Targets::new().with_targets(targets),
+        }
+    }
+
+    pub fn add_node_writer(&mut self, node_name: String, writer: NonBlocking) {
+        let mut writers = self
+            .node_writers
+            .lock()
+            .expect("Failed to acquire node writers lock");
+        writers.insert(node_name, writer);
+    }
+}
+
+impl<S> Layer<S> for NodeRoutingLayer
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    fn enabled(&self, meta: &Metadata<'_>, ctx: Context<'_, S>) -> bool {
+        use tracing_subscriber::layer::Filter;
+        Filter::enabled(&self.targets_filter, meta, &ctx)
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+        // Find which node this event belongs to based on span hierarchy
+        let mut target_node = None;
+
+        if let Some(span_ref) = ctx.lookup_current() {
+            let mut current = Some(span_ref);
+            while let Some(span) = current {
+                let span_name = span.name();
+
+                // Check for standard node spans: node_1, node_2, etc.
+                if span_name.starts_with("node_") {
+                    target_node = Some(span_name.to_string());
+                    break;
+                }
+
+                // Check for node_other spans (for nodes > 20)
+                if span_name == "node_other" {
+                    // For node_other, we'll route to a default "node_other" directory
+                    target_node = Some("node_other".to_string());
+                    break;
+                }
+
+                current = span.parent();
+            }
+        }
+
+        // Route to the appropriate writer
+        if let Some(node_name) = target_node {
+            let writers = self
+                .node_writers
+                .lock()
+                .expect("Failed to acquire node writers lock");
+            if let Some(writer) = writers.get(&node_name) {
+                // Create a temporary fmt layer to format and write the event
+                let temp_layer = tracing_fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(writer.clone())
+                    .event_format(LogFormatter);
+
+                // Forward the event to the temporary layer for proper formatting
+                temp_layer.on_event(event, ctx);
+            }
+        }
     }
 }
