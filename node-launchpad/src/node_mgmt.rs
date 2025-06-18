@@ -151,6 +151,7 @@ async fn stop_nodes(
         vec![],
         services.clone(),
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     {
@@ -288,6 +289,7 @@ async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryManage
         vec![],
         args.service_names.clone(),
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     {
@@ -313,6 +315,7 @@ async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryManage
         args.url,
         args.version,
         VerbosityLevel::Minimal,
+        false
     )
     .await
     {
@@ -347,6 +350,7 @@ async fn remove_nodes(
         vec![],
         services.clone(),
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     {
@@ -366,6 +370,7 @@ async fn remove_nodes(
         node_registry.clone(),
         services.clone(),
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     {
@@ -492,6 +497,7 @@ async fn start_nodes(
         vec![],
         services.clone(),
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     {

@@ -1008,6 +1008,7 @@ async fn main() -> Result<()> {
                 node_registry,
                 service_names,
                 verbosity,
+                true,
             )
             .await
         }
@@ -1025,6 +1026,7 @@ async fn main() -> Result<()> {
                 peer_ids,
                 service_names,
                 verbosity,
+                true,
             )
             .await
         }
@@ -1037,7 +1039,7 @@ async fn main() -> Result<()> {
             interval,
             peer_id: peer_ids,
             service_name: service_names,
-        }) => cmd::node::stop(interval, node_registry, peer_ids, service_names, verbosity).await,
+        }) => cmd::node::stop(interval, node_registry, peer_ids, service_names, verbosity, true).await,
         Some(SubCmd::Upgrade {
             connection_timeout,
             do_not_start,
@@ -1063,6 +1065,7 @@ async fn main() -> Result<()> {
                 url,
                 version,
                 verbosity,
+                true,
             )
             .await
         }

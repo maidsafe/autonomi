@@ -373,6 +373,7 @@ pub async fn status_report(
         service_control,
         !output_json,
         is_local_network,
+        true,
     )
     .await?;
 
@@ -522,26 +523,30 @@ pub async fn refresh_node_registry(
     service_control: &dyn ServiceControl,
     full_refresh: bool,
     is_local_network: bool,
+    display_progress: bool,
 ) -> Result<()> {
     // This message is useful for users, but needs to be suppressed when a JSON output is
     // requested.
 
     info!("Refreshing the node registry");
 
-    let total_nodes = node_registry.nodes.read().await.len() as u64;
-    // Create a progress bar
-    let pb = ProgressBar::new(total_nodes);
-    pb.set_style(
-        ProgressStyle::default_bar()
-            .template("{msg} {spinner:.green} [{bar:40.cyan/blue}] ({percent}%)")
-            .unwrap_or_else(|_e| {
-                // Fallback to default style if template fails
-                ProgressStyle::default_bar()
-            })
-            .progress_chars("#>-"),
-    );
-    pb.set_message("Refreshing the node registry");
-
+    let mut pb = None;
+    if display_progress {
+        let total_nodes = node_registry.nodes.read().await.len() as u64;
+        // Create a progress bar
+        let progress_bar = ProgressBar::new(total_nodes);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("{msg} {spinner:.green} [{bar:40.cyan/blue}] ({percent}%)")
+                .unwrap_or_else(|_e| {
+                    // Fallback to default style if template fails
+                    ProgressStyle::default_bar()
+                })
+                .progress_chars("#>-"),
+        );
+        progress_bar.set_message("Refreshing the node registry");
+        pb = Some(progress_bar);
+    }
     // Main processing loop
     for node in node_registry.nodes.read().await.iter() {
         // The `status` command can run before a node is started and therefore before its wallet
@@ -598,9 +603,14 @@ pub async fn refresh_node_registry(
                 }
             }
         }
-        pb.inc(1);
+        if let Some(ref pb) = pb {
+            pb.inc(1);
+        }
     }
-    pb.finish_and_clear();
+
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+    }
 
     info!("Node registry refresh complete!");
 

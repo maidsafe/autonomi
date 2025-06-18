@@ -174,6 +174,7 @@ pub async fn balance(
         &ServiceController {},
         verbosity != VerbosityLevel::Minimal,
         false,
+        true,
     )
     .await?;
 
@@ -200,6 +201,7 @@ pub async fn remove(
     node_registry: NodeRegistryManager,
     service_names: Vec<String>,
     verbosity: VerbosityLevel,
+    display_progress: bool,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
         print_banner("Remove Antnode Services");
@@ -211,6 +213,7 @@ pub async fn remove(
         &ServiceController {},
         verbosity != VerbosityLevel::Minimal,
         false,
+        display_progress,
     )
     .await?;
 
@@ -268,8 +271,8 @@ pub async fn reset(
         }
     }
 
-    stop(None, node_registry.clone(), vec![], vec![], verbosity).await?;
-    remove(false, vec![], node_registry, vec![], verbosity).await?;
+    stop(None, node_registry.clone(), vec![], vec![], verbosity, false).await?;
+    remove(false, vec![], node_registry, vec![], verbosity, true).await?;
 
     // Due the possibility of repeated runs of the `reset` command, we need to check for the
     // existence of this file before attempting to delete it, since `remove_file` will return an
@@ -290,6 +293,7 @@ pub async fn start(
     peer_ids: Vec<String>,
     service_names: Vec<String>,
     verbosity: VerbosityLevel,
+    display_progress: bool,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
         print_banner("Start Antnode Services");
@@ -301,6 +305,7 @@ pub async fn start(
         &ServiceController {},
         verbosity != VerbosityLevel::Minimal,
         false,
+        display_progress,
     )
     .await?;
 
@@ -386,6 +391,7 @@ pub async fn stop(
     peer_ids: Vec<String>,
     service_names: Vec<String>,
     verbosity: VerbosityLevel,
+    display_progress: bool,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
         print_banner("Stop Antnode Services");
@@ -397,6 +403,7 @@ pub async fn stop(
         &ServiceController {},
         verbosity != VerbosityLevel::Minimal,
         false,
+        display_progress,
     )
     .await?;
 
@@ -452,6 +459,7 @@ pub async fn upgrade(
     url: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
+    display_progress: bool,
 ) -> Result<()> {
     // In the case of a custom binary, we want to force the use of it. Regardless of its version
     // number, the user has probably built it for some special case. They may have not used the
@@ -479,6 +487,7 @@ pub async fn upgrade(
         &ServiceController {},
         verbosity != VerbosityLevel::Minimal,
         false,
+        display_progress,
     )
     .await?;
 
@@ -655,6 +664,7 @@ pub async fn maintain_n_running_nodes(
                 vec![],
                 services_to_stop,
                 verbosity,
+                false,
             )
             .await?;
         }
@@ -683,6 +693,7 @@ pub async fn maintain_n_running_nodes(
                     vec![],
                     nodes_to_start,
                     verbosity,
+                    false,
                 )
                 .await?;
             } else {
@@ -742,6 +753,7 @@ pub async fn maintain_n_running_nodes(
                             vec![],
                             added_service,
                             verbosity,
+                            false,
                         )
                         .await?;
                     }
@@ -755,6 +767,7 @@ pub async fn maintain_n_running_nodes(
                         vec![],
                         inactive_nodes,
                         verbosity,
+                        false,
                     )
                     .await?;
                 }

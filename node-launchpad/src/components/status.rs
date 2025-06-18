@@ -168,6 +168,7 @@ impl Status<'_> {
             &ServiceController {},
             false,
             true,
+            false,
         )
         .await?;
         node_registry.save().await?;
