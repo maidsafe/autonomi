@@ -40,7 +40,7 @@ pub static IDENTIFY_CLIENT_VERSION_STR: LazyLock<RwLock<String>> = LazyLock::new
 pub static IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR: LazyLock<RwLock<String>> =
     LazyLock::new(|| {
         RwLock::new(format!(
-            "ant/reachability-check-client/{}/{}",
+            "ant/reachability-check-peer/{}/{}",
             get_truncate_version_str(),
             *NETWORK_ID
                 .read()
