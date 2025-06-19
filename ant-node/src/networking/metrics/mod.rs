@@ -9,11 +9,11 @@
 // Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
 mod relay_client;
-pub mod service;
+pub(super) mod service;
 mod upnp;
 
-use crate::MetricsRegistries;
-use crate::{log_markers::Marker, time::sleep};
+use crate::networking::log_markers::Marker;
+use crate::networking::MetricsRegistries;
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     metrics::{Metrics as Libp2pMetrics, Recorder},
@@ -26,6 +26,7 @@ use prometheus_client::{
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
+use tokio::time::sleep;
 use tokio::time::Duration;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
@@ -83,7 +84,7 @@ pub(crate) struct NetworkMetricsRecorder {
 }
 
 impl NetworkMetricsRecorder {
-    pub fn new(registries: &mut MetricsRegistries) -> Self {
+    pub(crate) fn new(registries: &mut MetricsRegistries) -> Self {
         // ==== Standard metrics =====
 
         let libp2p_metrics = Libp2pMetrics::new(&mut registries.standard_metrics);
@@ -302,9 +303,10 @@ impl NetworkMetricsRecorder {
         let mut system = System::new();
         let physical_core_count = system.physical_core_count();
 
-        tokio::spawn(async move {
+        #[allow(clippy::let_underscore_future)]
+        let _ = tokio::spawn(async move {
             loop {
-                system.refresh_process_specifics(pid, process_refresh_kind);
+                let _ = system.refresh_process_specifics(pid, process_refresh_kind);
                 if let (Some(process), Some(core_count)) =
                     (system.process(pid), physical_core_count)
                 {
@@ -332,7 +334,8 @@ impl NetworkMetricsRecorder {
                 let _ = self.shunned_count.inc();
                 let bad_nodes_notifier = self.bad_nodes_notifier.clone();
                 let flagged_by = *flagged_by;
-                crate::time::spawn(async move {
+                #[allow(clippy::let_underscore_future)]
+                let _ = tokio::spawn(async move {
                     if let Err(err) = bad_nodes_notifier
                         .send(BadNodeMetricsMsg::ShunnedByPeer(flagged_by))
                         .await
@@ -363,7 +366,8 @@ impl NetworkMetricsRecorder {
 
     pub(crate) fn record_change_in_close_group(&self, new_close_group: Vec<PeerId>) {
         let bad_nodes_notifier = self.bad_nodes_notifier.clone();
-        crate::time::spawn(async move {
+        #[allow(clippy::let_underscore_future)]
+        let _ = tokio::spawn(async move {
             if let Err(err) = bad_nodes_notifier
                 .send(BadNodeMetricsMsg::CloseGroupUpdated(new_close_group))
                 .await
@@ -385,7 +389,8 @@ impl NetworkMetricsRecorder {
 
         // Update metrics
         for (version, count) in version_counts {
-            self.node_versions
+            let _ = self
+                .node_versions
                 .get_or_create(&VersionLabels { version })
                 .set(count as i64);
         }

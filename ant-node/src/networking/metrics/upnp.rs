@@ -34,7 +34,8 @@ impl From<&libp2p::upnp::Event> for EventType {
 
 impl super::Recorder<libp2p::upnp::Event> for super::NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::upnp::Event) {
-        self.upnp_events
+        let _ = self
+            .upnp_events
             .get_or_create(&UpnpEventLabels {
                 event: event.into(),
             })

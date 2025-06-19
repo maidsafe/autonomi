@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    driver::PendingGetClosestType, time::Instant, Addresses, NetworkError, Result, SwarmDriver,
-    CLOSE_GROUP_SIZE,
+use crate::networking::{
+    driver::PendingGetClosestType, Addresses, NetworkError, Result, SwarmDriver, CLOSE_GROUP_SIZE,
 };
 use libp2p::kad::{self, GetClosestPeersError, InboundRequest, QueryResult, K_VALUE};
 use std::collections::hash_map::Entry;
+use std::time::Instant;
 
 impl SwarmDriver {
     pub(super) fn handle_kad_event(&mut self, kad_event: libp2p::kad::Event) -> Result<()> {
@@ -52,9 +52,9 @@ impl SwarmDriver {
                                 .network_discovery
                                 .handle_get_closest_query(current_closest),
                             PendingGetClosestType::FunctionCall(sender) => {
-                                sender
-                                    .send(current_closest)
-                                    .map_err(|_| NetworkError::InternalMsgChannelDropped)?;
+                                if let Err(e) = sender.send(current_closest) {
+                                    warn!("Failed to send closest peers response - receiver dropped: {e:?}");
+                                }
                             }
                         }
                     }
@@ -102,7 +102,8 @@ impl SwarmDriver {
                         .network_discovery
                         .handle_get_closest_query(current_closest),
                     PendingGetClosestType::FunctionCall(sender) => {
-                        tokio::spawn(async move {
+                        #[allow(clippy::let_underscore_future)]
+                        let _ = tokio::spawn(async move {
                             let _ = sender.send(vec![]);
                         });
                     }

@@ -230,19 +230,13 @@ impl LogBuilder {
     /// Initialize just the fmt_layer for testing purposes.
     ///
     /// Also overwrites the ANT_LOG variable to log everything including the test_file_name
-    fn get_test_layers(test_file_name: &str, disable_networking_logs: bool) -> TracingLayers {
+    // TODO: remove the _disable_networking_logs parameter
+    fn get_test_layers(test_file_name: &str, _disable_networking_logs: bool) -> TracingLayers {
         // overwrite ANT_LOG
-        if disable_networking_logs {
-            std::env::set_var(
-                "ANT_LOG",
-                format!("{test_file_name}=TRACE,all,ant_networking=WARN,all,autonomi=DEBUG,all"),
-            );
-        } else {
-            std::env::set_var(
-                "ANT_LOG",
-                format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all"),
-            );
-        }
+        std::env::set_var(
+            "ANT_LOG",
+            format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all"),
+        );
 
         let output_dest = match dirs_next::data_dir() {
             Some(dir) => {

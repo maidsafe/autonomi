@@ -8,10 +8,10 @@
 
 use std::collections::BTreeSet;
 
+use crate::networking::NetworkError;
 use crate::{node::Node, Error, Marker, Result};
 use ant_evm::payment_vault::verify_data_payment;
 use ant_evm::ProofOfPayment;
-use ant_networking::NetworkError;
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::Error as ProtocolError;
 use ant_protocol::{

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{NetworkError, Result};
+use crate::networking::{NetworkError, Result};
 use futures::Future;
 use hyper::{service::Service, Body, Method, Request, Response, Server, StatusCode};
 use prometheus_client::{encoding::text::encode, registry::Registry};
@@ -18,7 +18,7 @@ use std::{
 
 /// The types of metrics that are exposed via the various endpoints.
 #[derive(Default, Debug)]
-pub struct MetricsRegistries {
+pub(crate) struct MetricsRegistries {
     pub standard_metrics: Registry,
     pub extended_metrics: Registry,
     pub metadata: Registry,
@@ -30,7 +30,8 @@ pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) {
     // todo: containers don't work with localhost.
     let addr = ([127, 0, 0, 1], port).into();
 
-    tokio::spawn(async move {
+    #[allow(clippy::let_underscore_future)]
+    let _ = tokio::spawn(async move {
         let server = Server::bind(&addr).serve(MakeMetricService::new(registries));
         // keep these for programs that might be grepping this info
         info!("Metrics server on http://{}/metrics", server.local_addr());
@@ -68,7 +69,7 @@ impl MetricService {
     fn respond_with_metrics(&mut self) -> Result<Response<String>> {
         let mut response: Response<String> = Response::default();
 
-        response.headers_mut().insert(
+        let _ = response.headers_mut().insert(
             hyper::header::CONTENT_TYPE,
             METRICS_CONTENT_TYPE
                 .try_into()
@@ -90,7 +91,7 @@ impl MetricService {
     fn respond_with_metrics_extended(&mut self) -> Result<Response<String>> {
         let mut response: Response<String> = Response::default();
 
-        response.headers_mut().insert(
+        let _ = response.headers_mut().insert(
             hyper::header::CONTENT_TYPE,
             METRICS_CONTENT_TYPE
                 .try_into()
@@ -133,7 +134,7 @@ impl MetricService {
     fn respond_with_metadata(&mut self) -> Result<Response<String>> {
         let mut response: Response<String> = Response::default();
 
-        response.headers_mut().insert(
+        let _ = response.headers_mut().insert(
             hyper::header::CONTENT_TYPE,
             METRICS_CONTENT_TYPE
                 .try_into()

@@ -7,11 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 #![allow(clippy::mutable_key_type)] // for the Bytes in NetworkAddress
 
-use crate::cmd::LocalSwarmCmd;
-use crate::network_builder::MAX_PACKET_SIZE;
-use crate::send_local_swarm_cmd;
-use crate::time::{spawn, Instant};
-use crate::{event::NetworkEvent, log_markers::Marker};
+use crate::networking::cmd::LocalSwarmCmd;
+use crate::networking::network_builder::MAX_PACKET_SIZE;
+use crate::networking::send_local_swarm_cmd;
+use crate::networking::{event::NetworkEvent, log_markers::Marker};
 use aes_gcm_siv::{
     aead::{Aead, KeyInit},
     Aes256GcmSiv, Key as AesKey, Nonce,
@@ -35,6 +34,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
+use std::time::Instant;
 use std::{
     borrow::Cow,
     collections::{BTreeMap, HashMap},
@@ -43,6 +43,7 @@ use std::{
     time::SystemTime,
     vec,
 };
+use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
 use walkdir::{DirEntry, WalkDir};
 use xor_name::XorName;
@@ -147,7 +148,7 @@ impl RecordCache {
 }
 
 /// A `RecordStore` that stores records on disk.
-pub struct NodeRecordStore {
+pub(crate) struct NodeRecordStore {
     /// The address of the peer owning the store
     local_address: NetworkAddress,
     /// The configuration of the store.
@@ -182,7 +183,7 @@ pub struct NodeRecordStore {
 
 /// Configuration for a `DiskBackedRecordStore`.
 #[derive(Debug, Clone)]
-pub struct NodeRecordStoreConfig {
+pub(crate) struct NodeRecordStoreConfig {
     /// The directory where the records are stored.
     pub storage_dir: PathBuf,
     /// The directory where the historic quote to be stored
@@ -353,7 +354,8 @@ impl NodeRecordStore {
             timestamp: self.timestamp,
         };
 
-        spawn(async move {
+        #[allow(clippy::let_underscore_future)]
+        let _ = spawn(async move {
             if let Ok(mut file) = fs::File::create(file_path) {
                 let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
                 let _ = historic_quoting_metrics.serialize(&mut serialiser);
@@ -362,7 +364,7 @@ impl NodeRecordStore {
     }
 
     /// Creates a new `DiskBackedStore` with the given configuration.
-    pub fn with_config(
+    pub(crate) fn with_config(
         local_id: PeerId,
         config: NodeRecordStoreConfig,
         network_event_sender: mpsc::Sender<NetworkEvent>,
@@ -501,7 +503,7 @@ impl NodeRecordStore {
     }
 
     // Returns the farthest record_key to self.
-    pub fn get_farthest(&self) -> Option<Key> {
+    pub(crate) fn get_farthest(&self) -> Option<Key> {
         if let Some((ref key, _distance)) = self.farthest_record {
             Some(key.clone())
         } else {
@@ -564,7 +566,7 @@ impl NodeRecordStore {
     //   * holding too many irrelevant record, which occupies disk space
     //   * `over-quoting` during restart, when RT is not fully populated,
     //     result in mis-calculation of relevant records.
-    pub fn cleanup_irrelevant_records(&mut self) {
+    pub(crate) fn cleanup_irrelevant_records(&mut self) {
         let accumulated_records = self.records.len();
         if accumulated_records < MAX_RECORDS_COUNT / 10 {
             return;
@@ -632,7 +634,8 @@ impl NodeRecordStore {
         let distance = self.local_address.distance(&addr);
 
         // Update main records store
-        self.records
+        let _ = self
+            .records
             .insert(key.clone(), (addr.clone(), validate_type, data_type));
 
         #[cfg(feature = "open-metrics")]
@@ -717,7 +720,8 @@ impl NodeRecordStore {
         let cloned_cmd_sender = self.local_swarm_cmd_sender.clone();
 
         let record_key2 = record_key.clone();
-        spawn(async move {
+        #[allow(clippy::let_underscore_future)]
+        let _ = spawn(async move {
             let key = r.key.clone();
             let data_type = match RecordHeader::get_data_type(&r) {
                 Ok(data_type) => data_type,
@@ -811,7 +815,7 @@ impl NodeRecordStore {
     }
 
     /// Calculate how many records are stored within a distance range
-    pub fn get_records_within_distance_range(&self, range: Distance) -> usize {
+    pub(crate) fn get_records_within_distance_range(&self, range: Distance) -> usize {
         let within_range = self
             .records_by_distance
             .range(..range)
@@ -937,7 +941,7 @@ impl RecordStore for NodeRecordStore {
             let _ = self.records_by_distance.remove(&distance);
         }
 
-        self.records_cache.remove(k);
+        let _ = self.records_cache.remove(k);
 
         #[cfg(feature = "open-metrics")]
         if let Some(metric) = &self.record_count_metric {

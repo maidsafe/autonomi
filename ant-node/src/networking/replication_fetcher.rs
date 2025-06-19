@@ -7,8 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 #![allow(clippy::mutable_key_type)]
 
-use crate::time::spawn;
-use crate::{event::NetworkEvent, time::Instant, CLOSE_GROUP_SIZE};
+use crate::networking::{event::NetworkEvent, CLOSE_GROUP_SIZE};
 use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
@@ -18,6 +17,8 @@ use libp2p::{
     PeerId,
 };
 use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
+use std::time::Instant;
+use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
 
 // Max parallel fetches that can be undertaken at the same time.
@@ -596,7 +597,7 @@ impl ReplicationFetcher {
 #[cfg(test)]
 mod tests {
     use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
-    use crate::CLOSE_GROUP_SIZE;
+    use crate::networking::CLOSE_GROUP_SIZE;
     use ant_protocol::{storage::ValidationType, NetworkAddress};
     use eyre::Result;
     use libp2p::{kad::RecordKey, PeerId};

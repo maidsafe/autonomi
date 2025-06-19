@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::networking::Network;
 use crate::{node::Node, Error, Result};
 use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
-use ant_networking::Network;
 use ant_protocol::{error::Error as ProtocolError, storage::ChunkAddress, NetworkAddress};
 use libp2p::PeerId;
 use std::time::Duration;

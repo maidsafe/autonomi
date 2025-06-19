@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::networking::Network;
 use crate::{error::Result, node::Node};
 use ant_evm::ProofOfPayment;
-use ant_networking::Network;
 use ant_protocol::{
     messages::{Query, QueryResponse, Request, Response},
     storage::{DataTypes, ValidationType},

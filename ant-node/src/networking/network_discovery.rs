@@ -6,11 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    driver::PendingGetClosestType,
-    time::{interval, Instant, Interval},
-    Addresses, NetworkEvent, SwarmDriver,
-};
+use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent, SwarmDriver};
 use ant_protocol::NetworkAddress;
 use libp2p::{
     kad::{KBucketKey, K_VALUE},
@@ -19,7 +15,8 @@ use libp2p::{
 use rand::{rngs::OsRng, Rng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::{btree_map::Entry, BTreeMap};
-use tokio::time::Duration;
+use std::time::Instant;
+use tokio::time::{interval, Duration, Interval};
 
 // The number of PeerId to generate when starting an instance of NetworkDiscoveryCandidate.
 const INITIAL_GENERATION_ATTEMPTS: usize = 10_000;
@@ -269,7 +266,7 @@ impl NetworkDiscovery {
                 );
 
             let mut new_interval = interval(no_peer_added_slowdown_interval_duration);
-            new_interval.tick().await;
+            let _ = new_interval.tick().await;
 
             return (should_network_discover, Some(new_interval));
         }
@@ -279,7 +276,7 @@ impl NetworkDiscovery {
             info!("More peers have been added to our RT!. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {duration_based_on_peers:?}");
 
             let mut interval = interval(duration_based_on_peers);
-            interval.tick().await;
+            let _ = interval.tick().await;
 
             Some(interval)
         } else {
@@ -440,11 +437,11 @@ impl NetworkDiscoveryCandidates {
                     .len()
                     .saturating_sub(MAX_PEERS_PER_BUCKET);
                 if excess > 0 {
-                    existing_candidates.drain(..excess);
+                    let _ = existing_candidates.drain(..excess);
                 }
             }
             Entry::Vacant(entry) => {
-                entry.insert(new_candidates);
+                let _ = entry.insert(new_candidates);
             }
         }
     }

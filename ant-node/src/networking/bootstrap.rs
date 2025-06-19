@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
+use crate::networking::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
 use libp2p::{
     core::ConnectedPoint,
     swarm::{
@@ -111,7 +111,7 @@ impl InitialBootstrap {
     /// This should be called only ONCE and then the `on_connection_established` and `on_outgoing_connection_error`
     /// should be used to continue the process.
     /// Once the process is completed, the `bootstrap_completed` flag will be set to true, and this becomes a no-op.
-    pub(crate) fn trigger_bootstrapping_process(
+    pub(super) fn trigger_bootstrapping_process(
         &mut self,
         swarm: &mut Swarm<NodeBehaviour>,
         peers_in_rt: usize,
@@ -142,7 +142,7 @@ impl InitialBootstrap {
             match swarm.dial(opts) {
                 Ok(()) => {
                     info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.ongoing_dials.len()+1);
-                    self.ongoing_dials.insert(addr_clone);
+                    let _ = self.ongoing_dials.insert(addr_clone);
                 }
                 Err(err) => match err {
                     DialError::LocalPeerId { .. } => {
@@ -233,7 +233,7 @@ impl InitialBootstrap {
         true
     }
 
-    pub(crate) fn on_connection_established(
+    pub(super) fn on_connection_established(
         &mut self,
         endpoint: &ConnectedPoint,
         swarm: &mut Swarm<NodeBehaviour>,
@@ -263,7 +263,7 @@ impl InitialBootstrap {
         self.trigger_bootstrapping_process(swarm, peers_in_rt);
     }
 
-    pub(crate) fn on_outgoing_connection_error(
+    pub(super) fn on_outgoing_connection_error(
         &mut self,
         peer_id: Option<PeerId>,
         swarm: &mut Swarm<NodeBehaviour>,
