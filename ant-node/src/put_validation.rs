@@ -663,29 +663,32 @@ impl Node {
 
         // verify the claimed payees are all known to us within the certain range.
         // note: self is already included in the returned list
-        let closest_k_peers = self
-            .network()
-            .get_k_closest_local_peers_to_the_target(Some(address.clone()))
-            .await?;
-        let mut payees = payment.payees();
-        payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
-        if !payees.is_empty() {
-            // There might be payee got blocked by us or churned out from our perspective.
-            // We shall still consider the payment is valid whenever payees are close enough.
-            // In case we don't have enough knowledge of the network, we shall trust the payment.
-            if let Some(network_density) = self.network().get_network_density().await? {
-                payees.retain(|peer_id| {
-                    NetworkAddress::from(*peer_id).distance(address) > network_density
-                });
+        //
+        // TODO: Currently disabled due to high rejection rate during the upscale private nodes test.
+        //
+        // let closest_k_peers = self
+        //     .network()
+        //     .get_k_closest_local_peers_to_the_target(Some(address.clone()))
+        //     .await?;
+        // let mut payees = payment.payees();
+        // payees.retain(|peer_id| !closest_k_peers.iter().any(|(p, _)| p == peer_id));
+        // if !payees.is_empty() {
+        //     // There might be payee got blocked by us or churned out from our perspective.
+        //     // We shall still consider the payment is valid whenever payees are close enough.
+        //     // In case we don't have enough knowledge of the network, we shall trust the payment.
+        //     if let Some(network_density) = self.network().get_network_density().await? {
+        //         payees.retain(|peer_id| {
+        //             NetworkAddress::from(*peer_id).distance(address) > network_density
+        //         });
 
-                if !payees.is_empty() {
-                    warn!("Payment quote has out-of-range payees for record {pretty_key}");
-                    return Err(Error::InvalidRequest(format!(
-                        "Payment quote has out-of-range payees {payees:?}"
-                    )));
-                }
-            }
-        }
+        //         if !payees.is_empty() {
+        //             warn!("Payment quote has out-of-range payees for record {pretty_key}");
+        //             return Err(Error::InvalidRequest(format!(
+        //                 "Payment quote has out-of-range payees {payees:?}"
+        //             )));
+        //         }
+        //     }
+        // }
 
         // check if payment is valid on chain
         let payments_to_verify = payment.digest();
