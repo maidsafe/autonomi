@@ -44,6 +44,7 @@ use std::{
     vec,
 };
 use tokio::{sync::mpsc, time::Duration};
+use tracing::Instrument;
 use walkdir::{DirEntry, WalkDir};
 use xor_name::XorName;
 
@@ -353,12 +354,15 @@ impl NodeRecordStore {
             timestamp: self.timestamp,
         };
 
-        spawn(async move {
-            if let Ok(mut file) = fs::File::create(file_path) {
-                let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
-                let _ = historic_quoting_metrics.serialize(&mut serialiser);
+        spawn(
+            async move {
+                if let Ok(mut file) = fs::File::create(file_path) {
+                    let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
+                    let _ = historic_quoting_metrics.serialize(&mut serialiser);
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     /// Creates a new `DiskBackedStore` with the given configuration.
@@ -750,7 +754,7 @@ impl NodeRecordStore {
 
                 send_local_swarm_cmd(cloned_cmd_sender, cmd);
             }
-        });
+        }.instrument(tracing::Span::current()));
 
         Ok(())
     }
@@ -918,14 +922,17 @@ impl RecordStore for NodeRecordStore {
         debug!("Unverified Record {record_key:?} try to validate and store");
         let event_sender = self.network_event_sender.clone();
         // push the event off thread so as to be non-blocking
-        let _handle = spawn(async move {
-            if let Err(error) = event_sender
-                .send(NetworkEvent::UnverifiedRecord(record))
-                .await
-            {
-                error!("SwarmDriver failed to send event: {}", error);
+        let _handle = spawn(
+            async move {
+                if let Err(error) = event_sender
+                    .send(NetworkEvent::UnverifiedRecord(record))
+                    .await
+                {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
 
         Ok(())
     }
@@ -953,16 +960,19 @@ impl RecordStore for NodeRecordStore {
         let filename = Self::generate_filename(k);
         let file_path = self.config.storage_dir.join(&filename);
 
-        let _handle = spawn(async move {
-            match fs::remove_file(file_path) {
-                Ok(_) => {
-                    info!("Removed record from disk! filename: {filename}");
-                }
-                Err(err) => {
-                    error!("Error while removing file. filename: {filename}, error: {err:?}");
+        let _handle = spawn(
+            async move {
+                match fs::remove_file(file_path) {
+                    Ok(_) => {
+                        info!("Removed record from disk! filename: {filename}");
+                    }
+                    Err(err) => {
+                        error!("Error while removing file. filename: {filename}, error: {err:?}");
+                    }
                 }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     fn records(&self) -> Self::RecordsIter<'_> {
@@ -1008,6 +1018,7 @@ mod tests {
     use eyre::ContextCompat;
     use libp2p::{core::multihash::Multihash, kad::RecordKey};
     use quickcheck::*;
+    use serial_test::serial;
     use tokio::runtime::Runtime;
     use tokio::time::{sleep, Duration};
 
@@ -1047,6 +1058,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn put_get_remove_record() {
         fn prop(r: ArbitraryRecord) {
             let rt = if let Ok(rt) = Runtime::new() {
@@ -1128,6 +1140,8 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
+    //TODO: Remove [serial] when data race is fixed - @Roland
     async fn can_store_after_restart() -> eyre::Result<()> {
         let tmp_dir = TempDir::new()?;
         let current_test_dir = tmp_dir.child("can_store_after_restart");
@@ -1245,6 +1259,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn can_store_and_retrieve_chunk() {
         let temp_dir = std::env::temp_dir();
         let store_config = NodeRecordStoreConfig {
@@ -1311,6 +1326,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn can_store_and_retrieve_scratchpad() -> eyre::Result<()> {
         let temp_dir = std::env::temp_dir();
         let store_config = NodeRecordStoreConfig {
@@ -1393,6 +1409,7 @@ mod tests {
         Ok(())
     }
     #[tokio::test]
+    #[serial]
     async fn pruning_on_full() -> Result<()> {
         let max_iterations = 10;
         // lower max records for faster testing
@@ -1527,6 +1544,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn get_records_within_range() -> eyre::Result<()> {
         let max_records = 50;
 
@@ -1615,6 +1633,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn historic_quoting_metrics() -> Result<()> {
         let temp_dir = std::env::temp_dir();
         let unique_dir_name = uuid::Uuid::new_v4().to_string();
@@ -1661,6 +1680,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_cache_pruning_and_size_limit() {
         // Create cache with small size and short timeout for testing
         let cache_size = 3;

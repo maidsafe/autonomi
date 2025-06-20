@@ -11,13 +11,15 @@ use ant_evm::Amount;
 use ant_protocol::antnode_proto::{NodeInfoRequest, RestartRequest};
 use ant_service_management::{get_local_node_registry_path, NodeRegistryManager};
 use autonomi::Client;
-use evmlib::wallet::Wallet;
+use evmlib::{wallet::Wallet, Network};
 use eyre::Result;
 use std::str::FromStr;
 use std::{net::SocketAddr, path::Path};
-use test_utils::evm::get_funded_wallet;
-use test_utils::evm::get_new_wallet;
-use test_utils::testnet::DeploymentInventory;
+use test_utils::{
+    evm::{get_funded_wallet, get_new_wallet},
+    local_network_spawner::SpawnedLocalNetwork,
+    testnet::DeploymentInventory,
+};
 use tokio::sync::Mutex;
 use tonic::Request;
 use tracing::{debug, info};
@@ -61,6 +63,17 @@ pub fn get_node_count() -> usize {
         }
         Err(_) => LOCAL_NODE_COUNT,
     }
+}
+
+/// Get the number of nodes in a spawned network
+///
+/// # Arguments
+/// * `network` - A reference to a spawned local network
+///
+/// # Returns
+/// The number of nodes in the network
+pub fn get_spawned_network_node_count(network: &SpawnedLocalNetwork) -> usize {
+    network.ant_network.running_nodes().len()
 }
 
 /// Get the list of all RPC addresses
@@ -121,6 +134,32 @@ pub async fn transfer_to_new_wallet(from: &Wallet, amount: usize) -> Result<Wall
         }
         Err(_) => LocalNetwork::transfer_to_new_wallet(from, amount).await,
     }
+}
+
+/// Transfer tokens from the provided wallet to a newly created wallet with the provided EVM network
+/// Returns the newly created wallet
+pub async fn transfer_to_new_wallet_with_evm_network(
+    from: &Wallet,
+    amount: usize,
+    evm_network: Network,
+) -> Result<Wallet> {
+    let wallet_balance = from.balance_of_tokens().await?;
+    let gas_balance = from.balance_of_gas_tokens().await?;
+
+    debug!("Wallet balance: {wallet_balance}, Gas balance: {gas_balance}");
+
+    let new_wallet = Wallet::new_with_random_wallet(evm_network);
+
+    from.transfer_tokens(new_wallet.address(), Amount::from(amount))
+        .await?;
+
+    from.transfer_gas_tokens(
+        new_wallet.address(),
+        Amount::from_str("10000000000000000000")?,
+    )
+    .await?;
+
+    Ok(new_wallet)
 }
 
 pub struct LocalNetwork;

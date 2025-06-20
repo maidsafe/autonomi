@@ -49,6 +49,7 @@ use std::{
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Duration;
 use tracing::warn;
+use tracing::Instrument;
 
 /// 10 is the max number of issues per node we track to avoid mem leaks
 /// The boolean flag to indicate whether the node is considered as bad or not
@@ -366,7 +367,7 @@ impl SwarmDriver {
                         if let Err(err) = old_cache.sync_and_flush_to_disk() {
                             error!("Failed to save bootstrap cache: {err}");
                         }
-                    });
+                    }.instrument(tracing::Span::current()));
 
                     if current_interval.period() >= bootstrap_cache.config().max_cache_save_duration {
                         continue;
@@ -402,17 +403,20 @@ impl SwarmDriver {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = spawn(async move {
-            if capacity == 0 {
-                warn!(
-                    "NetworkSwarmCmd channel is full. Await capacity to send: {:?}",
-                    event
-                );
+        let _handle = spawn(
+            async move {
+                if capacity == 0 {
+                    warn!(
+                        "NetworkSwarmCmd channel is full. Await capacity to send: {:?}",
+                        event
+                    );
+                }
+                if let Err(error) = event_sender.send(event).await {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-            if let Err(error) = event_sender.send(event).await {
-                error!("SwarmDriver failed to send event: {}", error);
-            }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     /// Sends an event after pushing it off thread so as to be non-blocking
@@ -422,17 +426,20 @@ impl SwarmDriver {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = spawn(async move {
-            if capacity == 0 {
-                warn!(
-                    "NetworkEvent channel is full. Await capacity to send: {:?}",
-                    event
-                );
+        let _handle = spawn(
+            async move {
+                if capacity == 0 {
+                    warn!(
+                        "NetworkEvent channel is full. Await capacity to send: {:?}",
+                        event
+                    );
+                }
+                if let Err(error) = event_sender.send(event).await {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-            if let Err(error) = event_sender.send(event).await {
-                error!("SwarmDriver failed to send event: {}", error);
-            }
-        });
+            .instrument(tracing::Span::current()),
+        );
     }
 
     /// Get K closest peers to self, from our local RoutingTable.

@@ -12,6 +12,14 @@ use ant_evm::{EvmNetwork, RewardsAddress};
 use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use tracing::Instrument;
+
+/// Create a node span with unlimited node ID support.
+/// Uses a static span name "node" with the node_id as a field to work around
+/// the tracing library's requirement for compile-time span names.
+fn create_node_span(node_id: usize) -> tracing::Span {
+    tracing::info_span!("node", node_id = node_id)
+}
 
 pub struct NetworkSpawner {
     /// The EVM network to which the spawned nodes will connect.
@@ -166,6 +174,19 @@ impl RunningNetwork {
             node.shutdown();
         }
     }
+
+    pub fn update_peer(&mut self, index: usize, new_peer: RunningNode) {
+        if index < self.running_nodes.len() {
+            self.running_nodes[index] = new_peer.clone();
+            println!(
+                "Updated index: {} with peer_id: {}",
+                index,
+                new_peer.peer_id()
+            );
+        } else {
+            println!("Invalid index: {index}");
+        }
+    }
 }
 
 async fn spawn_network(
@@ -179,42 +200,53 @@ async fn spawn_network(
     let mut running_nodes: Vec<RunningNode> = vec![];
 
     for i in 0..size {
-        let ip = match local {
-            true => IpAddr::V4(Ipv4Addr::LOCALHOST),
-            false => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-        };
+        let node_id = i + 1;
+        // Create a span with a unique name for this specific node
+        let node_span = create_node_span(node_id);
 
-        let socket_addr = SocketAddr::new(ip, 0);
+        // Instrument the entire node spawn with the node_id span
+        let spawn_future = async {
+            let ip = match local {
+                true => IpAddr::V4(Ipv4Addr::LOCALHOST),
+                false => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+            };
 
-        // Get the initial peers from the previously spawned nodes
-        let mut initial_peers: Vec<Multiaddr> = vec![];
+            let socket_addr = SocketAddr::new(ip, 0);
 
-        for peer in running_nodes.iter() {
-            if let Ok(listen_addrs_with_peer_id) = peer.get_listen_addrs_with_peer_id().await {
-                initial_peers.extend(listen_addrs_with_peer_id);
+            // Get the initial peers from the previously spawned nodes
+            let mut initial_peers: Vec<Multiaddr> = vec![];
+
+            for peer in running_nodes.iter() {
+                if let Ok(listen_addrs_with_peer_id) = peer.get_listen_addrs_with_peer_id().await {
+                    initial_peers.extend(listen_addrs_with_peer_id);
+                }
             }
+
+            let node = NodeSpawner::new()
+                .with_socket_addr(socket_addr)
+                .with_evm_network(evm_network.clone())
+                .with_rewards_address(rewards_address)
+                .with_initial_peers(initial_peers)
+                .with_local(local)
+                .with_no_upnp(no_upnp)
+                .with_root_dir(root_dir.clone())
+                .spawn()
+                .await?;
+
+            let listen_addrs = node.get_listen_addrs().await;
+
+            info!(
+                "Spawned node #{} with listen addresses: {:?}",
+                i + 1,
+                listen_addrs
+            );
+
+            Ok::<_, eyre::Error>(node)
         }
+        .instrument(node_span); // ALL sub-operations inherit this span
 
-        let node = NodeSpawner::new()
-            .with_socket_addr(socket_addr)
-            .with_evm_network(evm_network.clone())
-            .with_rewards_address(rewards_address)
-            .with_initial_peers(initial_peers)
-            .with_local(local)
-            .with_no_upnp(no_upnp)
-            .with_root_dir(root_dir.clone())
-            .spawn()
-            .await?;
-
-        let listen_addrs = node.get_listen_addrs().await;
-
-        info!(
-            "Spawned node #{} with listen addresses: {:?}",
-            i + 1,
-            listen_addrs
-        );
-
-        running_nodes.push(node);
+        let running_node = spawn_future.await?;
+        running_nodes.push(running_node);
     }
 
     Ok(RunningNetwork { running_nodes })

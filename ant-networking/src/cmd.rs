@@ -35,6 +35,7 @@ use std::{
     time::Duration,
 };
 use tokio::sync::oneshot;
+use tracing::Instrument;
 use xor_name::XorName;
 
 const MAX_CONTINUOUS_HDD_WRITE_ERROR: usize = 5;
@@ -975,7 +976,7 @@ impl SwarmDriver {
                             error!("Failed to get response from one shot channel for Cmd::PeerConsideredAsBad : {err:?}");
                         }
                     }
-                });
+                }.instrument(tracing::Span::current()));
 
                 // request
                 let request = Request::Cmd(Cmd::PeerConsideredAsBad {

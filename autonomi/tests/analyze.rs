@@ -10,19 +10,22 @@ use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::pointer::PointerTarget;
 use autonomi::GraphEntryAddress;
-use autonomi::{client::analyze::Analysis, GraphEntry, Pointer, Scratchpad};
-use autonomi::{client::chunk::Chunk, Bytes, Client};
+use autonomi::{
+    client::{analyze::Analysis, chunk::Chunk},
+    Bytes, Client, GraphEntry, Pointer, Scratchpad,
+};
 use eyre::Result;
-use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_chunk() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze chunk", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let chunk = Chunk::new(Bytes::from("Chunk content example"));
@@ -32,7 +35,7 @@ async fn test_analyze_chunk() -> Result<()> {
     println!("Chunk: {chunk_addr}");
 
     // sleep to ensure data is replicated
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(120)).await;
 
     let analysis = client.analyze_address(&chunk_addr, true).await?;
     assert_eq!(analysis, Analysis::Chunk(chunk));
@@ -40,12 +43,14 @@ async fn test_analyze_chunk() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_data() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze data", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let data = Bytes::from("Private data example");
@@ -63,13 +68,15 @@ async fn test_analyze_data() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_public_data() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze public data", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let data = Bytes::from("Public data example");
@@ -87,13 +94,15 @@ async fn test_analyze_public_data() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_graph_entry() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze graph entry", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let key = bls::SecretKey::random();
@@ -122,12 +131,15 @@ async fn test_analyze_graph_entry() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
+
 async fn test_analyze_pointer() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze pointer", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let target_addr = GraphEntryAddress::from_hex("b6f6ca699551882e2306ad9045e35c8837a3b99810af55ed358efe7166b7f6b4213ded09b200465f25d5d013fc7c35f9")?;
@@ -148,13 +160,15 @@ async fn test_analyze_pointer() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_scratchpad() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze scratchpad", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let key = bls::SecretKey::random();
@@ -176,13 +190,15 @@ async fn test_analyze_scratchpad() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_register() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze register", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let key = bls::SecretKey::random();
@@ -203,13 +219,15 @@ async fn test_analyze_register() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_private_dir() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze private dir", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let path = "tests/file/test_dir/".into();
@@ -227,13 +245,15 @@ async fn test_analyze_private_dir() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_analyze_public_dir() -> Result<()> {
     let _log_appender_guard =
         LogBuilder::init_single_threaded_tokio_test("analyze public dir", false);
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let payment_option = PaymentOption::from(&wallet);
 
     let path = "tests/file/test_dir/".into();

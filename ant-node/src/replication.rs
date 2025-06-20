@@ -19,6 +19,7 @@ use libp2p::{
     PeerId,
 };
 use tokio::task::spawn;
+use tracing::Instrument;
 
 impl Node {
     /// Sends _all_ record keys every interval to all peers within the REPLICATE_RANGE.
@@ -82,7 +83,7 @@ impl Node {
                 } else {
                     debug!("Completed storing Replication Record {pretty_key:?} from holder {holder:?}.");
                 }
-            });
+            }.instrument(tracing::Span::current()));
         }
         Ok(())
     }
@@ -228,6 +229,6 @@ impl Node {
                 node.network()
                     .add_fresh_records_to_the_replication_fetcher(holder, new_keys);
             }
-        });
+        }.instrument(tracing::Span::current()));
     }
 }

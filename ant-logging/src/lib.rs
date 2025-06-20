@@ -188,6 +188,123 @@ impl LogBuilder {
         Ok((reload_handle, layers.log_appender_guard))
     }
 
+    /// Initialize multi-node logging with per-node log files.
+    /// Each node gets its own log directory and rotation.
+    ///
+    /// # Arguments
+    /// * `node_count` - Number of nodes to create logging for
+    ///
+    /// # Returns
+    /// * `ReloadHandle` - Handle to modify log levels
+    /// * `Vec<WorkerGuard>` - Guards for all node appenders
+    pub fn initialize_with_multi_node_logging(
+        self,
+        node_count: usize,
+    ) -> Result<(ReloadHandle, Vec<WorkerGuard>)> {
+        use crate::appender;
+        use crate::layers::{NodeRoutingLayer, TracingLayers};
+
+        if node_count == 1 {
+            // Fall back to existing single-node implementation
+            let (handle, guard) = self.initialize()?;
+            return Ok((
+                handle,
+                vec![guard.unwrap_or_else(|| {
+                    // Create a dummy guard if none exists
+                    let (_, guard) = tracing_appender::non_blocking(std::io::sink());
+                    guard
+                })],
+            ));
+        }
+
+        // Multi-node logging requires file output
+        let base_log_dir = match &self.output_dest {
+            LogOutputDest::Path(path) => path.clone(),
+            _ => {
+                return Err(Error::LoggingConfiguration(
+                    "Multi-node logging requires file output".to_string(),
+                ))
+            }
+        };
+
+        // Get logging targets
+        let targets = match std::env::var("ANT_LOG") {
+            Ok(sn_log_val) => {
+                if self.print_updates_to_stdout {
+                    println!("Using ANT_LOG={sn_log_val}");
+                }
+                crate::layers::get_logging_targets(&sn_log_val)?
+            }
+            Err(_) => self.default_logging_targets.clone(),
+        };
+
+        // Create NodeRoutingLayer and set up per-node appenders
+        let mut routing_layer = NodeRoutingLayer::new(targets);
+        let mut guards = Vec::new();
+
+        for i in 1..=node_count {
+            let node_name = format!("node_{i}");
+
+            let node_log_dir = base_log_dir.join(&node_name);
+            std::fs::create_dir_all(&node_log_dir)?;
+
+            if self.print_updates_to_stdout {
+                println!("Logging for {node_name} to directory: {node_log_dir:?}");
+            }
+
+            let (appender, guard) = appender::file_rotater(
+                &node_log_dir,
+                crate::layers::MAX_LOG_SIZE,
+                self.max_log_files
+                    .unwrap_or(crate::layers::MAX_UNCOMPRESSED_LOG_FILES),
+                self.max_archived_log_files
+                    .map(|max_archived| {
+                        max_archived
+                            + self
+                                .max_log_files
+                                .unwrap_or(crate::layers::MAX_UNCOMPRESSED_LOG_FILES)
+                    })
+                    .unwrap_or(crate::layers::MAX_LOG_FILES),
+            );
+
+            routing_layer.add_node_writer(node_name, appender);
+            guards.push(guard);
+        }
+
+        let mut layers = TracingLayers::default();
+        layers.layers.push(Box::new(routing_layer));
+
+        #[cfg(feature = "otlp")]
+        {
+            match std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+                Ok(_) => layers.otlp_layer(self.default_logging_targets)?,
+                Err(_) => println!(
+                    "The OTLP feature is enabled but the OTEL_EXPORTER_OTLP_ENDPOINT variable is not \
+                    set, so traces will not be submitted."
+                ),
+            }
+        }
+
+        if tracing_subscriber::registry()
+            .with(layers.layers)
+            .try_init()
+            .is_err()
+        {
+            return Err(Error::LoggingConfiguration(
+                "Global subscriber already initialized".to_string(),
+            ));
+        }
+
+        // Create reload handle for log level changes
+        let targets_filter: Box<
+            dyn tracing_subscriber::layer::Filter<tracing_subscriber::Registry> + Send + Sync,
+        > = Box::new(tracing_subscriber::filter::Targets::new());
+        let (_, reload_handle) = tracing_subscriber::reload::Layer::new(targets_filter);
+        let reload_handle = ReloadHandle(reload_handle);
+
+        Ok((reload_handle, guards))
+    }
+
     /// Logs to the data_dir. Should be called from a single threaded tokio/non-tokio context.
     /// Provide the test file name to capture tracings from the test.
     ///
