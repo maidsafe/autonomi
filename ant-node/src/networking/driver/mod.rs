@@ -6,18 +6,22 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+pub(crate) mod cmd;
+pub(crate) mod event;
+pub(crate) mod network_discovery;
+
+use event::NodeEvent;
+use network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL};
+
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
     bootstrap::{InitialBootstrap, InitialBootstrapTrigger, INITIAL_BOOTSTRAP_CHECK_INTERVAL},
     circular_vec::CircularVec,
-    cmd::{LocalSwarmCmd, NetworkSwarmCmd},
     driver::kad::U256,
     error::Result,
-    event::{NetworkEvent, NodeEvent},
     external_address::ExternalAddressManager,
     log_markers::Marker,
-    network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     Addresses, NodeIssue, NodeRecordStore, CLOSE_GROUP_SIZE,
@@ -51,6 +55,8 @@ use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{interval, Duration, Interval};
 
 use tracing::warn;
+
+use super::interface::{LocalSwarmCmd, NetworkEvent, NetworkSwarmCmd};
 
 /// 10 is the max number of issues per node we track to avoid mem leaks
 /// The boolean flag to indicate whether the node is considered as bad or not
@@ -174,8 +180,7 @@ impl SwarmDriver {
                 None
             } else {
                 // add a variance of 10% to the interval, to avoid all nodes writing to disk at the same time.
-                let duration =
-                    Self::duration_with_variance(cache.config().min_cache_save_duration, 10);
+                let duration = duration_with_variance(cache.config().min_cache_save_duration, 10);
                 Some(interval(duration))
             }
         });
@@ -255,7 +260,7 @@ impl SwarmDriver {
 
                 // check if we can trigger the initial bootstrap process
                 // once it is triggered, we don't re-trigger it
-                Some(()) = Self::conditional_interval(&mut initial_bootstrap_trigger_check_interval) => {
+                Some(()) = conditional_interval(&mut initial_bootstrap_trigger_check_interval) => {
                     if self.initial_bootstrap_trigger.should_trigger_initial_bootstrap() {
                         info!("Triggering initial bootstrap process. This is a one-time operation.");
                         self.initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
@@ -342,7 +347,7 @@ impl SwarmDriver {
                         relay_manager.try_connecting_to_relay(&mut self.swarm, &self.bad_nodes)
                     }
                 },
-                Some(()) = Self::conditional_interval(&mut bootstrap_cache_save_interval) => {
+                Some(()) = conditional_interval(&mut bootstrap_cache_save_interval) => {
                     let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() else {
                         continue;
                     };
@@ -377,7 +382,7 @@ impl SwarmDriver {
 
                     // add a variance of 1% to the max interval to avoid all nodes writing to disk at the same time.
                     let max_cache_save_duration =
-                        Self::duration_with_variance(bootstrap_cache.config().max_cache_save_duration, 1);
+                        duration_with_variance(bootstrap_cache.config().max_cache_save_duration, 1);
 
                     // scale up the interval until we reach the max
                     let scaled = current_interval.period().as_secs().saturating_mul(bootstrap_cache.config().cache_save_scaling_factor);
@@ -558,34 +563,34 @@ impl SwarmDriver {
         info!("Listening on {id:?} with addr: {addr:?}");
         Ok(())
     }
+}
 
-    /// Returns a new duration that is within +/- variance of the provided duration.
-    fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
-        let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
+/// Returns a new duration that is within +/- variance of the provided duration.
+fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
+    let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
 
-        let random_adjustment =
-            Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
-        if random_adjustment.as_secs() % 2 == 0 {
-            duration - random_adjustment
-        } else {
-            duration + random_adjustment
-        }
+    let random_adjustment = Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
+    if random_adjustment.as_secs() % 2 == 0 {
+        duration - random_adjustment
+    } else {
+        duration + random_adjustment
     }
+}
 
-    /// To tick an optional interval inside tokio::select! without looping forever.
-    async fn conditional_interval(i: &mut Option<Interval>) -> Option<()> {
-        match i {
-            Some(i) => {
-                let _ = i.tick().await;
-                Some(())
-            }
-            None => None,
+/// To tick an optional interval inside tokio::select! without looping forever.
+async fn conditional_interval(i: &mut Option<Interval>) -> Option<()> {
+    match i {
+        Some(i) => {
+            let _ = i.tick().await;
+            Some(())
         }
+        None => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::duration_with_variance;
     use std::time::Duration;
 
     #[tokio::test]
@@ -594,8 +599,7 @@ mod tests {
         let variance = 10;
         let expected_variance = Duration::from_secs(15); // 10% of 150
         for _ in 0..10000 {
-            let new_duration =
-                crate::networking::SwarmDriver::duration_with_variance(duration, variance);
+            let new_duration = duration_with_variance(duration, variance);
             println!("new_duration: {new_duration:?}");
             if new_duration < duration - expected_variance
                 || new_duration > duration + expected_variance

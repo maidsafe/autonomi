@@ -7,15 +7,15 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 #![allow(clippy::mutable_key_type)] // for the Bytes in NetworkAddress
 
-use crate::networking::cmd::LocalSwarmCmd;
-use crate::networking::network_builder::MAX_PACKET_SIZE;
-use crate::networking::send_local_swarm_cmd;
-use crate::networking::{event::NetworkEvent, log_markers::Marker};
+use crate::networking::interface::{LocalSwarmCmd, NetworkEvent};
+use crate::networking::log_markers::Marker;
+use crate::networking::network::send_local_swarm_cmd;
 use aes_gcm_siv::{
     aead::{Aead, KeyInit},
     Aes256GcmSiv, Key as AesKey, Nonce,
 };
 use ant_evm::QuotingMetrics;
+use ant_protocol::constants::MAX_PACKET_SIZE;
 use ant_protocol::{
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,

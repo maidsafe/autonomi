@@ -7,8 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 #![allow(clippy::mutable_key_type)]
 
-use crate::networking::{event::NetworkEvent, CLOSE_GROUP_SIZE};
+use crate::networking::interface::NetworkEvent;
 use ant_protocol::{
+    constants::CLOSE_GROUP_SIZE,
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
@@ -597,8 +598,7 @@ impl ReplicationFetcher {
 #[cfg(test)]
 mod tests {
     use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
-    use crate::networking::CLOSE_GROUP_SIZE;
-    use ant_protocol::{storage::ValidationType, NetworkAddress};
+    use ant_protocol::{constants::CLOSE_GROUP_SIZE, storage::ValidationType, NetworkAddress};
     use eyre::Result;
     use libp2p::{kad::RecordKey, PeerId};
     use std::{

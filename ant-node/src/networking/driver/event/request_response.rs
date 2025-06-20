@@ -6,10 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    cmd::NetworkSwarmCmd, log_markers::Marker, MsgResponder, NetworkError, NetworkEvent,
-    SwarmDriver,
-};
+use super::SwarmDriver;
+use crate::networking::driver::event::MsgResponder;
+use crate::networking::interface::NetworkSwarmCmd;
+use crate::networking::{log_markers::Marker, NetworkError, NetworkEvent};
+
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     messages::{CmdResponse, Request, Response},

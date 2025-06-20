@@ -11,34 +11,22 @@ mod kad;
 mod request_response;
 mod swarm;
 
+use crate::networking::NetworkEvent;
 use crate::networking::{
     driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
 };
-use core::fmt;
-use custom_debug::Debug as CustomDebug;
-use libp2p::{
-    kad::{Record, RecordKey, K_VALUE},
-    request_response::ResponseChannel as PeerResponseChannel,
-    Multiaddr, PeerId,
-};
-
-use ant_evm::{PaymentQuote, ProofOfPayment};
 use ant_protocol::messages::ConnectionInfo;
-use ant_protocol::storage::DataTypes;
-#[cfg(feature = "open-metrics")]
+use custom_debug::Debug as CustomDebug;
+use libp2p::kad::K_VALUE;
+use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
+
 use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::{
-    messages::{Query, Request, Response},
-    storage::ValidationType,
-    NetworkAddress, PrettyPrintRecordKey,
+    messages::{Request, Response},
+    NetworkAddress,
 };
 #[cfg(feature = "open-metrics")]
 use std::collections::HashSet;
-use std::fmt::Display;
-use std::{
-    collections::BTreeMap,
-    fmt::{Debug, Formatter},
-};
 use tokio::sync::oneshot;
 
 #[derive(Debug, Clone)]
@@ -71,7 +59,7 @@ impl KBucketStatus {
 
 /// NodeEvent enum
 #[derive(CustomDebug)]
-pub(super) enum NodeEvent {
+pub(crate) enum NodeEvent {
     Upnp(libp2p::upnp::Event),
     MsgReceived(libp2p::request_response::Event<Request, Response>),
     Kademlia(libp2p::kad::Event),
@@ -131,157 +119,12 @@ pub(crate) enum MsgResponder {
     FromPeer(PeerResponseChannel<Response>),
 }
 
-/// Events forwarded by the underlying Network; to be used by the upper layers
-pub(crate) enum NetworkEvent {
-    /// Incoming `Query` from a peer
-    QueryRequestReceived {
-        /// Query
-        query: Query,
-        /// The channel to send the `Response` through
-        channel: MsgResponder,
-    },
-    /// Handles the responses that are not awaited at the call site
-    ResponseReceived {
-        /// Response
-        res: Response,
-    },
-    /// Peer has been added to the Routing Table. And the number of connected peers.
-    PeerAdded(PeerId, usize),
-    /// Peer has been removed from the Routing Table. And the number of connected peers.
-    PeerRemoved(PeerId, usize),
-    /// The peer does not support our protocol
-    PeerWithUnsupportedProtocol {
-        our_protocol: String,
-        their_protocol: String,
-    },
-    /// The records bearing these keys are to be fetched from the holder or the network
-    KeysToFetchForReplication(Vec<(PeerId, RecordKey)>),
-    /// Started listening on a new address
-    NewListenAddr(Multiaddr),
-    /// Report unverified record
-    UnverifiedRecord(Record),
-    /// Terminate Node on unrecoverable errors
-    TerminateNode { reason: TerminateNodeReason },
-    /// List of peer nodes that failed to fetch replication copy from.
-    FailedToFetchHolders(BTreeMap<PeerId, RecordKey>),
-    /// Quotes to be verified
-    #[allow(dead_code)]
-    QuoteVerification { quotes: Vec<(PeerId, PaymentQuote)> },
-    /// Fresh replicate to fetch
-    FreshReplicateToFetch {
-        holder: NetworkAddress,
-        keys: Vec<(
-            NetworkAddress,
-            DataTypes,
-            ValidationType,
-            Option<ProofOfPayment>,
-        )>,
-    },
-    /// Peers of picked bucket for version query.
-    PeersForVersionQuery(Vec<(PeerId, Addresses)>),
-}
-
-/// Terminate node for the following reason
-#[derive(Debug, Clone)]
-pub(crate) enum TerminateNodeReason {
-    HardDiskWriteError,
-    UpnpGatewayNotFound,
-}
-
-// Manually implement Debug as `#[debug(with = "unverified_record_fmt")]` not working as expected.
-impl Debug for NetworkEvent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            NetworkEvent::QueryRequestReceived { query, .. } => {
-                write!(f, "NetworkEvent::QueryRequestReceived({query:?})")
-            }
-            NetworkEvent::ResponseReceived { res, .. } => {
-                write!(f, "NetworkEvent::ResponseReceived({res:?})")
-            }
-            NetworkEvent::PeerAdded(peer_id, connected_peers) => {
-                write!(f, "NetworkEvent::PeerAdded({peer_id:?}, {connected_peers})")
-            }
-            NetworkEvent::PeerRemoved(peer_id, connected_peers) => {
-                write!(
-                    f,
-                    "NetworkEvent::PeerRemoved({peer_id:?}, {connected_peers})"
-                )
-            }
-            NetworkEvent::PeerWithUnsupportedProtocol {
-                our_protocol,
-                their_protocol,
-            } => {
-                write!(f, "NetworkEvent::PeerWithUnsupportedProtocol({our_protocol:?}, {their_protocol:?})")
-            }
-            NetworkEvent::KeysToFetchForReplication(list) => {
-                let keys_len = list.len();
-                write!(f, "NetworkEvent::KeysForReplication({keys_len:?})")
-            }
-            NetworkEvent::NewListenAddr(addr) => {
-                write!(f, "NetworkEvent::NewListenAddr({addr:?})")
-            }
-            NetworkEvent::UnverifiedRecord(record) => {
-                let pretty_key = PrettyPrintRecordKey::from(&record.key);
-                write!(f, "NetworkEvent::UnverifiedRecord({pretty_key:?})")
-            }
-            NetworkEvent::TerminateNode { reason } => {
-                write!(f, "NetworkEvent::TerminateNode({reason:?})")
-            }
-            NetworkEvent::FailedToFetchHolders(bad_nodes) => {
-                let pretty_log: Vec<_> = bad_nodes
-                    .iter()
-                    .map(|(peer_id, record_key)| {
-                        let pretty_key = PrettyPrintRecordKey::from(record_key);
-                        (peer_id, pretty_key)
-                    })
-                    .collect();
-                write!(f, "NetworkEvent::FailedToFetchHolders({pretty_log:?})")
-            }
-            NetworkEvent::QuoteVerification { quotes } => {
-                write!(
-                    f,
-                    "NetworkEvent::QuoteVerification({} quotes)",
-                    quotes.len()
-                )
-            }
-            NetworkEvent::FreshReplicateToFetch { holder, keys } => {
-                write!(
-                    f,
-                    "NetworkEvent::FreshReplicateToFetch({holder:?}, {keys:?})"
-                )
-            }
-            NetworkEvent::PeersForVersionQuery(peers) => {
-                write!(
-                    f,
-                    "NetworkEvent::PeersForVersionQuery({:?})",
-                    peers
-                        .iter()
-                        .map(|(peer, _addrs)| peer)
-                        .collect::<Vec<&PeerId>>()
-                )
-            }
-        }
-    }
-}
-
-impl Display for TerminateNodeReason {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            TerminateNodeReason::HardDiskWriteError => {
-                write!(f, "HardDiskWriteError")
-            }
-            TerminateNodeReason::UpnpGatewayNotFound => {
-                write!(f, "UPnP gateway not found. Enable UPnP on your router to allow incoming connections or manually port forward.")
-            }
-        }
-    }
-}
-
 impl SwarmDriver {
     /// Check for changes in our close group
     #[cfg(feature = "open-metrics")]
     pub(crate) fn check_for_change_in_our_close_group(&mut self) {
         // this includes self
+
         let closest_k_peers = self.get_closest_k_local_peers_to_self();
 
         let new_closest_peers: Vec<PeerId> = closest_k_peers

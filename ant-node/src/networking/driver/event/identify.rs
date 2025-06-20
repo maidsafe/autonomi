@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::relay_manager::is_a_relayed_peer;
-use crate::networking::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent, SwarmDriver};
+use crate::networking::{multiaddr_is_global, multiaddr_strip_p2p, NetworkEvent};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
@@ -16,6 +16,8 @@ use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::Multiaddr;
 use std::collections::HashSet;
 use std::time::Instant;
+
+use super::SwarmDriver;
 
 impl SwarmDriver {
     pub(super) fn handle_identify_event(&mut self, identify_event: libp2p::identify::Event) {

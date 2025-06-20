@@ -49,7 +49,8 @@ pub use self::{
 
 use crate::error::{Error, Result};
 
-use crate::networking::{Network, SwarmLocalState};
+use crate::networking::Network;
+use crate::networking::SwarmLocalState;
 use ant_evm::RewardsAddress;
 use ant_protocol::{get_port_from_multiaddr, NetworkAddress};
 use libp2p::{Multiaddr, PeerId};
@@ -154,7 +155,7 @@ impl RunningNode {
         &self.rewards_address
     }
 
-    /// Shutdown the SwarmDriver loop and the node (NetworkEvents) loop.
+    /// Shutdown the network driver loop and the node (NetworkEvents) loop.
     pub fn shutdown(self) {
         // Send the shutdown signal to the swarm driver and node loop
         let _ = self.shutdown_sender.send(true);

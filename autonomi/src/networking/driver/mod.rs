@@ -36,14 +36,9 @@ use libp2p::{
 use task_handler::TaskHandler;
 use tokio::sync::mpsc;
 
-// Autonomi Network Constants, this should be in the ant-protocol crate
-const KAD_STREAM_PROTOCOL_ID: StreamProtocol = StreamProtocol::new("/autonomi/kad/1.0.0");
-const MAX_PACKET_SIZE: usize = 1024 * 1024 * 5;
-const MAX_RECORD_SIZE: usize = 1024 * 1024 * 4;
-/// The replication factor we use on the network (this should be in the ant-protocol crate)
-/// Libp2p queries all depend on this, for quorum and others
-pub const REPLICATION_FACTOR: NonZeroUsize =
-    NonZeroUsize::new(7).expect("REPLICATION_FACTOR must be 7");
+use ant_protocol::constants::{
+    KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, MAX_RECORD_SIZE, REPLICATION_FACTOR,
+};
 
 /// Libp2p defaults to 10s which is quite fast, we are more patient
 pub const REQ_TIMEOUT: Duration = Duration::from_secs(30);
@@ -137,7 +132,7 @@ impl NetworkDriver {
             ..Default::default()
         };
         let store = MemoryStore::with_config(peer_id, store_cfg);
-        let mut kad_cfg = libp2p::kad::Config::new(KAD_STREAM_PROTOCOL_ID);
+        let mut kad_cfg = libp2p::kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
         kad_cfg
             .set_kbucket_inserts(libp2p::kad::BucketInserts::OnConnected)
             .set_max_packet_size(MAX_PACKET_SIZE)

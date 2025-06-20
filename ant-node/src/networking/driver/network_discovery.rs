@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent, SwarmDriver};
+use super::SwarmDriver;
+use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent};
+
 use ant_protocol::NetworkAddress;
 use libp2p::{
     kad::{KBucketKey, K_VALUE},

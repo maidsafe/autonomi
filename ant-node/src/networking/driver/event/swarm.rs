@@ -6,10 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::SwarmDriver;
 use crate::networking::{
     error::{dial_error_to_str, listen_error_to_str},
-    event::NodeEvent,
-    multiaddr_get_ip, NetworkEvent, NodeIssue, Result, SwarmDriver,
+    interface::TerminateNodeReason,
+    multiaddr_get_ip, NetworkEvent, NodeIssue, Result,
 };
 use ant_bootstrap::{multiaddr_get_peer_id, BootstrapCacheStore};
 use itertools::Itertools;
@@ -24,12 +25,11 @@ use libp2p::{
 use std::time::Instant;
 use tokio::time::Duration;
 
+use super::NodeEvent;
+
 impl SwarmDriver {
     /// Handle `SwarmEvents`
-    pub(in crate::networking) fn handle_swarm_events(
-        &mut self,
-        event: SwarmEvent<NodeEvent>,
-    ) -> Result<()> {
+    pub(crate) fn handle_swarm_events(&mut self, event: SwarmEvent<NodeEvent>) -> Result<()> {
         // This does not record all the events. `SwarmEvent::Behaviour(_)` are skipped. Hence `.record()` has to be
         // called individually on each behaviour.
         #[cfg(feature = "open-metrics")]
@@ -91,8 +91,7 @@ impl SwarmDriver {
                     libp2p::upnp::Event::GatewayNotFound => {
                         warn!("UPnP is not enabled/supported on the gateway. Please rerun with the `--no-upnp` flag");
                         self.send_event(NetworkEvent::TerminateNode {
-                            reason:
-                                crate::networking::event::TerminateNodeReason::UpnpGatewayNotFound,
+                            reason: TerminateNodeReason::UpnpGatewayNotFound,
                         });
                     }
                     libp2p::upnp::Event::NewExternalAddr(addr) => {
