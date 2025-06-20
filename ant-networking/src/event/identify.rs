@@ -81,7 +81,7 @@ impl SwarmDriver {
         let addrs = if !is_relayed_peer {
             let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
             let Some(addr) = addr else {
-                warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
+                warn!("identify: no valid multiaddr found for {peer_id:?} on {connection_id:?}");
                 return;
             };
             debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
@@ -93,13 +93,13 @@ impl SwarmDriver {
                 .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
                 .unique()
                 .collect::<Vec<_>>();
-            debug!("Peer {peer_id:?} is a relayed peer. Not using {addr_fom_connection:?} from connection info, rather using p2p addr from identify: {p2p_addrs:?}");
+            debug!("Peer {peer_id:?} is a relayed peer. Using p2p addr from identify directly: {p2p_addrs:?}");
             p2p_addrs
         };
 
         // return early for reachability-check-peer / clients
         if info.agent_version.contains("reachability-check-peer") {
-            debug!("Peer {peer_id:?} is a peer requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
+            debug!("Peer {peer_id:?} is requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
             self.dial_queue.insert(
                 peer_id,
                 (Addresses(addrs.clone()), Instant::now() + DIAL_BACK_DELAY),
