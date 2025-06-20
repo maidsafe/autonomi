@@ -27,7 +27,7 @@ async fn chunk_put_with_size(size: usize) -> Result<()> {
     let wallet = spawned_local_network.wallet;
 
     // Wait for the network to be ready (CI Windows machine is slower)
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    tokio::time::sleep(Duration::from_secs(20)).await;
 
     let data = gen_random_data(size);
     let data_len = data.len();

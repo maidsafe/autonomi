@@ -296,6 +296,13 @@ pub(crate) fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String
                     t.insert("ant_node".to_string(), Level::INFO)
                 };
             }
+
+            #[cfg(any(test, debug_assertions))]
+            {
+                t.insert("multi_node_logging".to_string(), Level::TRACE);
+                // Future test modules can be added here
+            }
+
             t
         } else {
             Default::default()
