@@ -467,7 +467,10 @@ impl NetworkBuilder {
             info!("Relay manager is disabled for this node.");
             None
         };
-        // Enable external address manager for public nodes and not behind nat
+
+        // Enable external address manager for public nodes and not behind nat.
+        // We don't get a peer's address from external address list anymore. But we should still
+        // advertise our external addresses, as the older nodes still rely on the old mechanism.
         let external_address_manager = if !self.local && !self.relay_client {
             Some(ExternalAddressManager::new(peer_id))
         } else {
@@ -487,6 +490,7 @@ impl NetworkBuilder {
             initial_bootstrap: InitialBootstrap::new(self.initial_contacts),
             initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
             bootstrap_cache: self.bootstrap_cache,
+            dial_queue: Default::default(),
             relay_manager,
             connected_relay_clients: Default::default(),
             external_address_manager,
