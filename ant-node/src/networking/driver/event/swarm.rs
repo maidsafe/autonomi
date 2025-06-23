@@ -12,7 +12,7 @@ use crate::networking::{
     interface::TerminateNodeReason,
     multiaddr_get_ip, NetworkEvent, NodeIssue, Result,
 };
-use ant_bootstrap::{multiaddr_get_peer_id, BootstrapCacheStore};
+use ant_bootstrap::BootstrapCacheStore;
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
@@ -459,18 +459,15 @@ impl SwarmDriver {
                         debug!("OutgoingConnectionError: DialPeerConditionFalse");
                         false
                     }
-                    DialError::LocalPeerId { endpoint, .. } => {
+                    DialError::LocalPeerId { address } => {
                         // This is actually _us_ So we should remove this from the RT
-                        debug!(
-                            "OutgoingConnectionError: LocalPeerId: {}",
-                            endpoint_str(endpoint)
-                        );
+                        debug!("OutgoingConnectionError: LocalPeerId: {address:?}");
                         true
                     }
-                    DialError::WrongPeerId { obtained, endpoint } => {
+                    DialError::WrongPeerId { obtained, address } => {
                         // The peer id we attempted to dial was not the one we expected
                         // cleanup
-                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, endpoint: {endpoint:?}");
+                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}");
                         true
                     }
                     DialError::Denied { cause } => {
@@ -497,6 +494,7 @@ impl SwarmDriver {
                 local_addr,
                 send_back_addr,
                 error,
+                peer_id,
             } => {
                 event_string = "Incoming ConnErr";
                 // Only log as ERROR if the connection is not adjacent to an already established connection id from
@@ -512,19 +510,15 @@ impl SwarmDriver {
                 // not critical.
 
                 if self.is_incoming_connection_error_valid(connection_id, &send_back_addr) {
-                    let remote_peer_id = match multiaddr_get_peer_id(&send_back_addr) {
-                        Some(peer_id) => format!("{peer_id:?}"),
-                        None => String::new(),
-                    };
                     debug!("IncomingConnectionError Valid from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
                     let (error_str, level) = listen_error_to_str(&error);
                     match level {
                         tracing::Level::ERROR => error!(
-                            "Node {:?} Remote {remote_peer_id} - Incoming Connection Error - {error_str:?}",
+                            "Node {:?} Remote {peer_id:?} - Incoming Connection Error - {error_str:?}",
                             self.self_peer_id,
                         ),
                         _ => debug!(
-                            "Node {:?} Remote {remote_peer_id} - Incoming Connection Error - {error_str:?}",
+                            "Node {:?} Remote {peer_id:?} - Incoming Connection Error - {error_str:?}",
                             self.self_peer_id,
                         ),
                     }

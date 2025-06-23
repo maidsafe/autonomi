@@ -338,9 +338,9 @@ impl App {
                 local_addr,
                 send_back_addr,
                 error,
-                ..
+                peer_id,
             } => {
-                warn!(conn_id=%connection_id, %local_addr, %send_back_addr, ?error, "Incoming connection error");
+                warn!(conn_id=%connection_id, %local_addr, %send_back_addr, ?error, ?peer_id, "Incoming connection error");
             }
             SwarmEvent::OutgoingConnectionError {
                 peer_id,

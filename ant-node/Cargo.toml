@@ -50,7 +50,7 @@ hyper = { version = "0.14", features = [
     "http1",
 ], optional = true }
 itertools = "~0.12.1"
-libp2p = { version = "0.55.0", features = [
+libp2p = { git = "https://github.com/libp2p/rust-libp2p.git", branch = "master", features = [
     "tokio",
     "dns",
     "upnp",
@@ -65,9 +65,11 @@ libp2p = { version = "0.55.0", features = [
     "tcp",
     "yamux",
     "websocket",
+    "metrics",
+    "autonat",
 ] }
 num-traits = "0.2"
-prometheus-client = { version = "0.22", optional = true }
+prometheus-client = { version = "0.23", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems
 # arm builds + musl are very problematic
 prost = { version = "0.9" }
