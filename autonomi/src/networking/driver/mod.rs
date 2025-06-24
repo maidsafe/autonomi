@@ -29,7 +29,7 @@ use libp2p::{
     kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
-    request_response::{self, ProtocolSupport},
+    request_response::{self, cbor::codec::Codec as CborCodec, ProtocolSupport},
     swarm::NetworkBehaviour,
     Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
 };
@@ -116,6 +116,7 @@ impl NetworkDriver {
         // autonomi requests
         let request_response = {
             let cfg = request_response::Config::default().with_request_timeout(REQ_TIMEOUT);
+
             let req_res_version_str = REQ_RESPONSE_VERSION_STR
                 .read()
                 .expect("no protocol version")
@@ -123,7 +124,11 @@ impl NetworkDriver {
             let stream = StreamProtocol::try_from_owned(req_res_version_str)
                 .expect("StreamProtocol should start with a /");
             let proto = [(stream, ProtocolSupport::Outbound)];
-            request_response::cbor::Behaviour::new(proto, cfg)
+
+            let codec = CborCodec::<Request, Response>::default()
+                .set_request_size_maximum(MAX_PACKET_SIZE as u64);
+
+            request_response::Behaviour::with_codec(codec, proto, cfg)
         };
 
         // kademlia
