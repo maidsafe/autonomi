@@ -18,7 +18,7 @@ use super::Quorum;
 /// all attempts are made at most 8 seconds apart.
 ///
 /// The default strategy is `Balanced`.
-#[derive(Clone, Debug, Copy, Default)]
+#[derive(Clone, Debug, Copy)]
 #[repr(usize)]
 pub enum RetryStrategy {
     /// Attempt once (no retries)
@@ -28,15 +28,20 @@ pub enum RetryStrategy {
     /// Try 4 times (waits 2s, 4s, 8s; max total sleep time ~14s)
     Quick = 4,
     /// Try 6 times (waits 2s, 4s, 8s, 8s, 8s; max total sleep time ~30s)
-    #[default]
     Balanced = 6,
-    /// Try 10 times (waits 2s, 4s, 8s, 8s, 8s, 8s, 8s, 8s, 8s; max total sleep time ~62s)
-    Persistent = 10,
+    /// Try N times
+    N(usize),
 }
 
 impl RetryStrategy {
     pub fn attempts(&self) -> usize {
-        *self as usize
+        match self {
+            RetryStrategy::N(n) => *n,
+            RetryStrategy::None => 1,
+            RetryStrategy::Once => 2,
+            RetryStrategy::Quick => 4,
+            RetryStrategy::Balanced => 6,
+        }
     }
 
     pub fn backoff(&self) -> Backoff {

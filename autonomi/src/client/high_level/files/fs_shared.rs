@@ -18,8 +18,6 @@ use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use std::sync::LazyLock;
-use std::time::Duration;
-use tokio::time::sleep;
 
 type AggregatedChunks = Vec<((String, Option<DataAddress>, usize, usize), Chunk)>;
 
@@ -103,48 +101,18 @@ impl Client {
 
         let total_chunks = aggregated_chunks.len();
 
-        let mut processed_chunks = 0;
-        let mut retry_on_failure = self.retry_failed != 0;
-
         // Process all chunks for this file in batches
         while !aggregated_chunks.is_empty() {
             // Take next batch of chunks (up to UPLOAD_FLOW_BATCH_SIZE)
             let batch_chunks: Vec<_> = aggregated_chunks
                 .drain(..std::cmp::min(aggregated_chunks.len(), *UPLOAD_FLOW_BATCH_SIZE))
                 .collect();
-            let candidate_chunks = batch_chunks.len();
 
-            let (retry_chunks, receipt, free_chunks_count, upload_error) = self
-                .process_chunk_batch(batch_chunks, payment_option.clone(), retry_on_failure)
-                .await;
+            let (receipt, free_chunks_count) = self
+                .process_chunk_batch(batch_chunks, payment_option.clone())
+                .await?;
             receipts.extend(receipt);
             free_chunks_counts.extend(free_chunks_count);
-            if let Some(err) = upload_error {
-                return Err(err);
-            }
-
-            // If retry_failed, tracking the processed_chunks.
-            // Flip the flag once max_allownce hit to terminate the flow.
-            if retry_on_failure {
-                processed_chunks += std::cmp::min(candidate_chunks, *UPLOAD_FLOW_BATCH_SIZE);
-
-                if processed_chunks >= total_chunks * self.retry_failed as usize {
-                    retry_on_failure = false;
-                }
-            }
-
-            if !retry_chunks.is_empty() {
-                // there was upload failure happens, in that case, carry out a short sleep
-                // to allow the glitch calm down.
-                println!("⚠️  Encountered upload failure, retrying after 1 minute pause...");
-                info!("Encountered upload failure, retrying in 1 minute...");
-
-                // Wait 1 minute before retry
-                sleep(Duration::from_secs(60)).await;
-                println!("🔄 Retrying upload...");
-                info!("🔄 Retrying upload...");
-            }
-            aggregated_chunks.extend(retry_chunks);
         }
 
         info!(
@@ -163,19 +131,13 @@ impl Client {
     }
 
     /// Processes a single batch of chunks (quote -> pay -> upload)
-    /// Returns: (failed_chunks_for_retry, receipt, free_chunks_counts, error_if_retry_on_failure_not_enabled)
+    /// Returns: (receipt, free_chunks_counts)
     #[allow(clippy::too_many_arguments)]
     async fn process_chunk_batch(
         &self,
-        mut batch: AggregatedChunks,
+        batch: AggregatedChunks,
         payment_option: PaymentOption,
-        retry_on_failure: bool,
-    ) -> (
-        AggregatedChunks,
-        Vec<Receipt>,
-        Vec<usize>,
-        Option<UploadError>,
-    ) {
+    ) -> Result<(Vec<Receipt>, Vec<usize>), UploadError> {
         // Prepare payment info for batch
         let payment_info: Vec<_> = batch
             .iter()
@@ -188,7 +150,6 @@ impl Client {
 
         let mut file_infos = vec![];
         let mut batch_chunks = vec![];
-        let mut upload_error = None;
 
         for (chunk_info, chunk) in batch.clone() {
             file_infos.push(chunk_info);
@@ -218,18 +179,7 @@ impl Client {
         {
             Ok((receipt, free_chunks)) => (receipt, free_chunks),
             Err(err) => {
-                if retry_on_failure {
-                    info!("Quoting or payment error encountered, retry scheduled {err:?}");
-                    println!("Quoting or payment error encountered, retry scheduled.");
-                    return (batch, vec![], vec![], None);
-                } else {
-                    return (
-                        vec![],
-                        vec![],
-                        vec![],
-                        Some(UploadError::from(PutError::from(err))),
-                    );
-                }
+                return Err(UploadError::from(PutError::from(err)));
             }
         };
 
@@ -245,36 +195,18 @@ impl Client {
             );
         }
 
-        // Upload all chunks in batch, schedule failed_chunks for retry (if retry_failed set)
-        let mut retry_chunks = vec![];
         match self
             .chunk_batch_upload(batch_chunks.iter().collect(), &receipt)
             .await
         {
-            // No upload failure encountered
             Ok(()) => {}
-            Err(err) if retry_on_failure => {
-                // Format error message for user
-                let error_msg = format_upload_error(&err);
-                println!("⚠️  {error_msg}. Retrying scheduled");
-                info!("Upload error: {err}. Retrying scheduled");
-
-                if let PutError::Batch(ref upload_state) = err {
-                    let failed_chunks: Vec<_> =
-                        upload_state.failed.iter().map(|(addr, _)| *addr).collect();
-                    // Filter out failed entries
-                    batch.retain(|(_, chunk)| failed_chunks.contains(chunk.address()));
-                    // Push back failed entries
-                    retry_chunks.extend(batch);
-                } else {
-                    // Encounterred Un-recoverable upload errors
-                    // Return immediately to terminate the entire upload flow
-                    upload_error = Some(UploadError::PutError(err));
-                };
+            Err(err) => {
+                #[cfg(feature = "loud")]
+                println!("Error in batch upload: {}", format_upload_error(&err));
+                return Err(UploadError::PutError(err));
             }
-            Err(err) => upload_error = Some(UploadError::PutError(err)),
         }
 
-        (retry_chunks, vec![receipt], vec![free_chunks], upload_error)
+        Ok((vec![receipt], vec![free_chunks]))
     }
 }

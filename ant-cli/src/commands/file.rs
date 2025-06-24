@@ -50,16 +50,18 @@ pub async fn upload(
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     retry_failed: u64,
 ) -> Result<(), ExitCodeError> {
-    let config = ClientOperatingStrategy::new();
+    // Configure client with retry_failed setting
+    let mut config = ClientOperatingStrategy::new();
+    if retry_failed != 0 {
+        println!("🔄 Retry mode enabled - will retry failed put operations until successful or {retry_failed} retries reached");
+        config.chunks.put_retry = RetryStrategy::N(retry_failed as usize);
+        config.scratchpad.put_retry = RetryStrategy::N(retry_failed as usize);
+        config.graph_entry.put_retry = RetryStrategy::N(retry_failed as usize);
+        config.pointer.put_retry = RetryStrategy::N(retry_failed as usize);
+    }
 
     let mut client =
         crate::actions::connect_to_network_with_config(network_context, config).await?;
-
-    // Configure client with retry_failed setting
-    if retry_failed != 0 {
-        client = client.with_retry_failed(retry_failed);
-        println!("🔄 Retry mode enabled - will persistently retry failed chunks until successful");
-    }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 
