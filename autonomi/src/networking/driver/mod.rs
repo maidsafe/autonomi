@@ -126,7 +126,7 @@ impl NetworkDriver {
             let proto = [(stream, ProtocolSupport::Outbound)];
 
             let codec = CborCodec::<Request, Response>::default()
-                .set_request_size_maximum(MAX_PACKET_SIZE as u64);
+                .set_request_size_maximum(2 * MAX_PACKET_SIZE as u64);
 
             request_response::Behaviour::with_codec(codec, proto, cfg)
         };
@@ -311,6 +311,29 @@ impl NetworkDriver {
                         peer,
                         data_type,
                         data_size,
+                        resp,
+                    },
+                );
+            }
+            NetworkTask::Request {
+                peer_id,
+                addresses,
+                req,
+                resp,
+            } => {
+                // Add the peer addresses to our cache before sending a request.
+                for addr in &addresses.0 {
+                    self.swarm.add_peer_address(peer_id, addr.clone());
+                }
+
+                let req_id = self.req().send_request(&peer_id, req.clone());
+
+                self.pending_tasks.insert_query(
+                    req_id,
+                    NetworkTask::Request {
+                        peer_id,
+                        addresses,
+                        req,
                         resp,
                     },
                 );

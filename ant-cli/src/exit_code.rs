@@ -79,6 +79,8 @@ pub(crate) fn put_error_exit_code(err: &PutError) -> i32 {
         PutError::Wallet(_) => 42,
         PutError::Batch(_) => 44,
         PutError::PayeesMissing => 45,
+        PutError::NetworkError(_) => NETWORK_ERROR,
+        PutError::ProtocolError(_) => PROTOCOL_ERROR,
     }
 }
 

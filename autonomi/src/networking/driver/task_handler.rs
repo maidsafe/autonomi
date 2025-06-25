@@ -6,10 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::interface::{Command, NetworkTask};
-use crate::networking::utils::get_quorum_amount;
-use crate::networking::NetworkError;
-use crate::networking::OneShotTaskResult;
+use crate::networking::{
+    interface::{Command, NetworkTask},
+    utils::get_quorum_amount,
+    Addresses, NetworkError, OneShotTaskResult,
+};
 use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
 use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
@@ -48,6 +49,7 @@ pub(crate) struct TaskHandler {
             PeerInfo,
         ),
     >,
+    requests: HashMap<OutboundRequestId, (OneShotTaskResult<Option<PeerId>>, PeerId, Addresses)>,
     get_record: HashMap<QueryId, (OneShotTaskResult<RecordAndHolders>, Quorum)>,
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
 }
@@ -59,6 +61,7 @@ impl TaskHandler {
             closest_peers: Default::default(),
             put_record: Default::default(),
             get_cost: Default::default(),
+            requests: Default::default(),
             get_record: Default::default(),
             get_record_accumulator: Default::default(),
         }
@@ -71,11 +74,15 @@ impl TaskHandler {
     }
 
     pub fn contains_query(&self, id: &OutboundRequestId) -> bool {
-        self.get_cost.contains_key(id)
+        self.get_cost.contains_key(id) || self.requests.contains_key(id)
+    }
+
+    pub fn contains_request(&self, id: &OutboundRequestId) -> bool {
+        self.requests.contains_key(id)
     }
 
     pub fn insert_task(&mut self, id: QueryId, task: NetworkTask) {
-        info!("New task: with QueryId({id}): {task:?}");
+        info!("New network query task: with QueryId({id}): {task:?}");
         match task {
             NetworkTask::GetClosestPeers { resp, .. } => {
                 self.closest_peers.insert(id, resp);
@@ -86,20 +93,36 @@ impl TaskHandler {
             NetworkTask::PutRecord { resp, .. } => {
                 self.put_record.insert(id, resp);
             }
-            _ => {}
+            NetworkTask::GetQuote { .. } | NetworkTask::Request { .. } => {
+                warn!("A network request task shall not be handled as a query");
+            }
         }
     }
 
     pub fn insert_query(&mut self, id: OutboundRequestId, task: NetworkTask) {
-        info!("New query: with OutboundRequestId({id}): {task:?}");
-        if let NetworkTask::GetQuote {
-            resp,
-            data_type,
-            peer,
-            ..
-        } = task
-        {
-            self.get_cost.insert(id, (resp, data_type, peer));
+        info!("New Request: with OutboundRequestId({id}): {task:?}");
+        match task {
+            NetworkTask::GetQuote {
+                resp,
+                data_type,
+                peer,
+                ..
+            } => {
+                self.get_cost.insert(id, (resp, data_type, peer));
+            }
+            NetworkTask::Request {
+                resp,
+                peer_id,
+                addresses,
+                ..
+            } => {
+                self.requests.insert(id, (resp, peer_id, addresses));
+            }
+            NetworkTask::GetClosestPeers { .. }
+            | NetworkTask::GetRecord { .. }
+            | NetworkTask::PutRecord { .. } => {
+                warn!("A network query task shall not be handled as a request");
+            }
         }
     }
 
@@ -289,6 +312,30 @@ impl TaskHandler {
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
         }
+        Ok(())
+    }
+
+    pub fn update_request(
+        &mut self,
+        id: OutboundRequestId,
+        request_res: Result<bool, ant_protocol::error::Error>,
+    ) -> Result<(), TaskHandlerError> {
+        let (resp, peer, _addresses) =
+            self.requests
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
+        trace!("OutboundRequestId({id}): got request response {request_res:?} from peer {peer:?}");
+        let result = if let Err(err) = request_res {
+            Err(NetworkError::PutRecordError(format!("{err:?}")))
+        } else {
+            Ok(Some(peer))
+        };
+
+        resp.send(result)
+            .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
+
         Ok(())
     }
 
