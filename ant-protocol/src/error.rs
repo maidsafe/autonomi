@@ -73,6 +73,14 @@ pub enum Error {
     // The record already exists at this node
     #[error("The record already exists, so do not charge for it: {0:?}")]
     RecordExists(PrettyPrintRecordKey<'static>),
+
+    #[error("There was an error when handling UploadRecord: {0}")]
+    UploadRecordFailed(String),
+
+    // ---------- other errors
+    // Place holder of other network errors
+    #[error("Other netowrk erros {0}")]
+    OtherFailure(String),
 }
 
 impl From<Error> for store::Error {

@@ -120,14 +120,18 @@ impl NetworkDriver {
             return Ok(());
         }
 
-        if let Response::Query(QueryResponse::GetStoreQuote {
-            quote,
-            peer_address,
-            storage_proofs: _,
-        }) = response
-        {
-            self.pending_tasks
-                .update_get_quote(request_id, quote, peer_address)?;
+        match response {
+            Response::Query(QueryResponse::GetStoreQuote {
+                quote,
+                peer_address,
+                storage_proofs: _,
+            }) => self
+                .pending_tasks
+                .update_get_quote(request_id, quote, peer_address)?,
+            Response::Query(QueryResponse::UploadRecord { result, .. }) => {
+                self.pending_tasks.update_request(request_id, result)?
+            }
+            _ => warn!("Unsupported response of request({request_id:?}): {response:?}"),
         }
 
         Ok(())
@@ -147,8 +151,18 @@ impl NetworkDriver {
             return Ok(());
         }
 
-        self.pending_tasks
-            .terminate_get_quote(request_id, peer, error)?;
+        if self.pending_tasks.contains_request(&request_id) {
+            info!("Request {request_id:?} to {peer:?} failed on connection with error {error:?}");
+            self.pending_tasks.update_request(
+                request_id,
+                Err(ant_protocol::error::Error::OtherFailure(format!(
+                    "{error:?}"
+                ))),
+            )?;
+        } else {
+            self.pending_tasks
+                .terminate_get_quote(request_id, peer, error)?;
+        }
 
         Ok(())
     }

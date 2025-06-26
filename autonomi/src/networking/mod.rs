@@ -19,7 +19,7 @@ pub(crate) use utils::multiaddr_is_global;
 
 // re-export the types our API exposes to avoid dependency version conflicts
 pub use ant_evm::PaymentQuote;
-pub use ant_protocol::NetworkAddress;
+pub use ant_protocol::{messages::Request, NetworkAddress};
 pub use config::{RetryStrategy, Strategy};
 pub use libp2p::kad::PeerInfo;
 pub use libp2p::{
@@ -28,6 +28,7 @@ pub use libp2p::{
 };
 
 // internal needs
+use crate::networking::common::Addresses;
 use ant_protocol::CLOSE_GROUP_SIZE;
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -257,6 +258,27 @@ impl Network {
             }
             Err(e) => Err(e),
         }
+    }
+
+    /// Send a Request message to a node, and waiting for the response.
+    pub async fn send_request(
+        &self,
+        peer_id: PeerId,
+        addresses: Addresses,
+        req: Request,
+    ) -> Result<Option<PeerId>, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::Request {
+            peer_id,
+            addresses,
+            req,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        rx.await?
     }
 
     /// Get a quote for a record from a Peer on the Network
