@@ -132,38 +132,34 @@ jobs:
         timeout-minutes: 25
         run: cargo test --release --package ant-bootstrap
 
-      - name: Run node tests
-        timeout-minutes: 25
-        run: cargo test --release --package ant-node --lib
-
-      - name: Run launchpad tests
-        timeout-minutes: 25
-        run: cargo test --release --package node-launchpad
-
       # The `can_store_after_restart` can be executed with other package tests together and passing
       # on local machine. However keeps failing (when executed together) on CI machines.
       # This is most likely due to the setup and cocurrency issues of the tests.
       # As the `record_store` is used in a single thread style, get the test passing executed
       # and passing standalone is enough.
-      - name: Run network tests
+      - name: Run node tests (except can_store_after_restart)
         timeout-minutes: 25
-        run: cargo test --release --package ant-networking --features="open-metrics" -- --skip can_store_after_restart
+        run: cargo test --release --package ant-node -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
 
-      - name: Run network tests
+      - name: Run can_store_after_restart separately
         timeout-minutes: 5
-        run: cargo test --release --package ant-networking --features="open-metrics" can_store_after_restart
+        run: cargo test --release --package ant-node can_store_after_restart
 
       # Same set of tests shall be executed with `encrypt-records` flag enabled.
       # With now changed to `always carry out encryption`, no need to re-run the same set again.
       # Re-enable the following block once default behaviour changed.
       #
-      # - name: Run network tests
+      # - name: Run node tests (except can_store_after_restart)
       #   timeout-minutes: 25
-      #   run: cargo test --release --package ant-networking --features="open-metrics, encrypt-records" -- --skip can_store_after_restart
+      #   run: cargo test --release --package ant-node --features="open-metrics, encrypt-records" -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
 
-      # - name: Run network tests
+      # - name: Run can_store_after_restart separately
       #   timeout-minutes: 5
-      #   run: cargo test --release --package ant-networking --features="open-metrics, encrypt-records" can_store_after_restart
+      #   run: cargo test --release --package ant-node --features="open-metrics, encrypt-records" can_store_after_restart
+
+      - name: Run launchpad tests
+        timeout-minutes: 25
+        run: cargo test --release --package node-launchpad
 
       - name: Run protocol tests
         timeout-minutes: 25

@@ -286,16 +286,6 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
                 ("evmlib".to_string(), Level::TRACE),
             ]);
 
-            if !t.contains_key("ant_networking") {
-                if contains_keyword_all_sn_logs {
-                    t.insert("ant_networking".to_string(), Level::TRACE)
-                } else if contains_keyword_verbose_sn_logs {
-                    t.insert("ant_networking".to_string(), Level::DEBUG)
-                } else {
-                    t.insert("ant_networking".to_string(), Level::INFO)
-                };
-            }
-
             if !t.contains_key("ant_node") {
                 if contains_keyword_all_sn_logs {
                     t.insert("ant_node".to_string(), Level::TRACE)

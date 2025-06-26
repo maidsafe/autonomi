@@ -9,7 +9,7 @@
 mod common;
 
 use ant_logging::LogBuilder;
-use ant_networking::sort_peers_by_key;
+use ant_node::sort_peers_by_key;
 use ant_protocol::{
     antnode_proto::{NodeInfoRequest, RecordAddressesRequest},
     NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,

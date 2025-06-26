@@ -92,7 +92,6 @@ async fn main() -> Result<()> {
     // For client, default to log to std::out
     let logging_targets = vec![
         ("antnode".to_string(), Level::INFO),
-        ("ant_networking".to_string(), Level::INFO),
         ("ant_node".to_string(), Level::INFO),
     ];
     let _log_appender_guard = LogBuilder::new(logging_targets).initialize()?;

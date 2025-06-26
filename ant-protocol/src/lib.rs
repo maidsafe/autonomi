@@ -9,6 +9,8 @@
 #[macro_use]
 extern crate tracing;
 
+/// Constants
+pub mod constants;
 /// Errors.
 pub mod error;
 /// Messages types
@@ -48,12 +50,7 @@ use std::{
 };
 use xor_name::XorName;
 
-/// The maximum number of peers to return in a `GetClosestPeers` response.
-/// This is the group size used in safe network protocol to be responsible for
-/// an item in the network.
-/// The peer should be present among the CLOSE_GROUP_SIZE if we're fetching the close_group(peer)
-/// The size has been set to 5 for improved performance.
-pub const CLOSE_GROUP_SIZE: usize = 5;
+pub use constants::CLOSE_GROUP_SIZE;
 
 /// Returns the UDP port from the provided MultiAddr.
 pub fn get_port_from_multiaddr(multi_addr: &Multiaddr) -> Option<u16> {
