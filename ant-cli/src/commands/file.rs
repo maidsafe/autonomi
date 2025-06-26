@@ -58,7 +58,7 @@ pub async fn upload(
     // Configure client with retry_failed setting
     if retry_failed != 0 {
         client = client.with_retry_failed(retry_failed);
-        println!("🔄 Retry mode enabled - will persistently retry failed chunks until successful");
+        println!("🔄 Retry mode enabled - will retry failed chunks until successful or exceeds the limit.");
     }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;

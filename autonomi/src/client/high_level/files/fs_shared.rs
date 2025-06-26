@@ -104,7 +104,10 @@ impl Client {
         let total_chunks = aggregated_chunks.len();
 
         let mut processed_chunks = 0;
-        let mut retry_on_failure = self.retry_failed != 0;
+        // Limited level of retry is turned on by default
+        let mut retry_on_failure = true;
+        let allowed_attempts =
+            total_chunks + std::cmp::max(20, total_chunks * self.retry_failed as usize);
 
         // Process all chunks for this file in batches
         while !aggregated_chunks.is_empty() {
@@ -128,7 +131,7 @@ impl Client {
             if retry_on_failure {
                 processed_chunks += std::cmp::min(candidate_chunks, *UPLOAD_FLOW_BATCH_SIZE);
 
-                if processed_chunks >= total_chunks * self.retry_failed as usize {
+                if processed_chunks > allowed_attempts {
                     retry_on_failure = false;
                 }
             }
@@ -136,13 +139,13 @@ impl Client {
             if !retry_chunks.is_empty() {
                 // there was upload failure happens, in that case, carry out a short sleep
                 // to allow the glitch calm down.
-                println!("⚠️  Encountered upload failure, retrying after 1 minute pause...");
-                info!("Encountered upload failure, retrying in 1 minute...");
+                println!("⚠️  Encountered upload failure, take 1 minute pause before continue...");
+                info!("Encountered upload failure, take 1 minute pause before continue...");
 
                 // Wait 1 minute before retry
                 sleep(Duration::from_secs(60)).await;
-                println!("🔄 Retrying upload...");
-                info!("🔄 Retrying upload...");
+                println!("🔄 continue with upload...");
+                info!("🔄 continue with upload...");
             }
             aggregated_chunks.extend(retry_chunks);
         }

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::Error;
+use crate::error::PutValidationError;
 use ant_protocol::PrettyPrintRecordKey;
 use libp2p::{kad::RecordKey, PeerId};
 use strum::Display;
@@ -55,7 +55,7 @@ pub enum Marker<'a> {
     ValidPointerPutFromClient(&'a PrettyPrintRecordKey<'a>),
 
     /// Record rejected
-    RecordRejected(&'a PrettyPrintRecordKey<'a>, &'a Error),
+    RecordRejected(&'a PrettyPrintRecordKey<'a>, &'a PutValidationError),
 
     /// Interval based bad_nodes check
     IntervalBadNodesCheckTriggered,

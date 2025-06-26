@@ -72,6 +72,8 @@ pub enum NetworkError {
     /// Error putting record
     #[error("Failed to put record: {0}")]
     PutRecordError(String),
+    #[error("Put verification failed: {0}")]
+    PutRecordVerification(String),
     #[error(
         "Put record quorum failed, only the following peers stored the record: {0:?}, needed {1} peers"
     )]
@@ -102,6 +104,8 @@ pub enum NetworkError {
         got_holders: usize,
         expected_holders: usize,
     },
+    #[error("Failed to get record: {0}")]
+    GetRecordError(String),
 
     /// Invalid retry strategy
     #[error("Invalid retry strategy, check your config or use the default")]

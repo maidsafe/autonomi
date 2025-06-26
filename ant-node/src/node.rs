@@ -63,7 +63,8 @@ const STORE_CHALLENGE_INTERVAL_MAX_S: u64 = 7200;
 const UPTIME_METRICS_UPDATE_INTERVAL: Duration = Duration::from_secs(10);
 
 /// Interval to clean up unrelevant records
-const UNRELEVANT_RECORDS_CLEANUP_INTERVAL: Duration = Duration::from_secs(3600);
+/// This is the max time it should take. Minimum interval at any node will be half this
+const UNRELEVANT_RECORDS_CLEANUP_INTERVAL_MAX_S: u64 = 7200;
 
 /// Highest score to achieve from each metric sub-sector during StorageChallenge.
 const HIGHEST_SCORE: usize = 100;
@@ -280,7 +281,7 @@ impl Node {
 
         let _swarm_driver_task = spawn(swarm_driver.run(shutdown_rx.clone()));
         let _node_task = spawn(async move {
-            // use a random inactivity timeout to ensure that the nodes do not sync when messages
+            // use a random activity timeout to ensure that the nodes do not sync when messages
             // are being transmitted.
             let replication_interval: u64 = rng.gen_range(
                 PERIODIC_REPLICATION_INTERVAL_MAX_S / 2..PERIODIC_REPLICATION_INTERVAL_MAX_S,
@@ -295,8 +296,16 @@ impl Node {
                 tokio::time::interval(UPTIME_METRICS_UPDATE_INTERVAL);
             let _ = uptime_metrics_update_interval.tick().await; // first tick completes immediately
 
+            // use a random activity timeout to ensure that the nodes do not sync on work,
+            // causing an overall CPU spike.
+            let irrelevant_records_cleanup_interval: u64 = rng.gen_range(
+                UNRELEVANT_RECORDS_CLEANUP_INTERVAL_MAX_S / 2
+                    ..UNRELEVANT_RECORDS_CLEANUP_INTERVAL_MAX_S,
+            );
+            let irrelevant_records_cleanup_interval_time =
+                Duration::from_secs(irrelevant_records_cleanup_interval);
             let mut irrelevant_records_cleanup_interval =
-                tokio::time::interval(UNRELEVANT_RECORDS_CLEANUP_INTERVAL);
+                tokio::time::interval(irrelevant_records_cleanup_interval_time);
             let _ = irrelevant_records_cleanup_interval.tick().await; // first tick completes immediately
 
             // use a random neighbour storage challenge ticker to ensure

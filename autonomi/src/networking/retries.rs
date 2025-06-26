@@ -15,6 +15,8 @@ use tokio::time::sleep;
 
 impl Network {
     /// Put a record to the network with retries
+    ///
+    /// Will carry out network get after put success, to verify the existence of the record.
     pub async fn put_record_with_retries(
         &self,
         record: Record,
@@ -22,12 +24,36 @@ impl Network {
         strategy: &Strategy,
     ) -> Result<(), NetworkError> {
         let addr = PrettyPrintRecordKey::from(&record.key).into_owned();
-        let quorum = strategy.put_quorum;
+        let verification_strategy = Strategy {
+            get_quorum: strategy.verification_quorum,
+            ..*strategy
+        };
         let mut errors = vec![];
         for duration in strategy.put_retry.backoff() {
-            match self.put_record(record.clone(), to.clone(), quorum).await {
-                // return success
-                Ok(()) => return Ok(()),
+            match self
+                .put_record(record.clone(), to.clone(), strategy.put_quorum)
+                .await
+            {
+                // return success if verification succeeds
+                Ok(()) => {
+                    let network_address = NetworkAddress::from(&record.key);
+                    let error = match self
+                        .get_record_with_retries(network_address, &verification_strategy)
+                        .await
+                    {
+                        Ok(Some(_)) => return Ok(()),
+                        Ok(None) => NetworkError::PutRecordVerification("Not found".to_string()),
+                        Err(err) => NetworkError::PutRecordVerification(err.to_string()),
+                    };
+
+                    // retry on verification errors
+                    warn!("Put record failed at {addr}: {error:?}, retrying in {duration:?}");
+                    errors.push(error.clone());
+                    match duration {
+                        Some(retry_delay) => sleep(retry_delay).await,
+                        None => return Err(error),
+                    }
+                }
                 // return fatal errors
                 Err(err) if err.is_fatal() => {
                     return Err(err);
