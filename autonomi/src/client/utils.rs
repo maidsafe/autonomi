@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{client::PutError, networking::NetworkError};
+use crate::client::PutError;
 use futures::stream::{FuturesUnordered, StreamExt};
 use libp2p::PeerId;
 use std::future::Future;
@@ -44,15 +44,17 @@ pub(crate) async fn process_request_tasks_expect_majority_succeeds<I>(
 ) -> Result<(), PutError>
 where
     I: IntoIterator,
-    I::Item: Future<Output = Result<Option<PeerId>, NetworkError>> + Send,
+    I::Item: Future<Output = Result<Option<PeerId>, PutError>> + Send,
 {
-    let tasks_results = process_tasks_with_max_concurrency(tasks, total_tasks).await;
+    let mut tasks_results = process_tasks_with_max_concurrency(tasks, total_tasks).await;
 
     // return error only when not having enough OK responses.
-    if tasks_results.iter().filter(|res| res.is_ok()).count() <= total_tasks / 2 {
+    tasks_results.retain(|res| !res.is_ok());
+    if tasks_results.len() > total_tasks / 2 {
         // Just return the first error
-        if let Some(Err(res_err)) = tasks_results.iter().find(|res| res.is_err()) {
-            return Err(PutError::NetworkError(res_err.clone()));
+        #[allow(clippy::question_mark)]
+        if let Err(err) = tasks_results.remove(0) {
+            return Err(err);
         }
     }
     Ok(())

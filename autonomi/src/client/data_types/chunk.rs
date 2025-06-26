@@ -32,6 +32,7 @@ use libp2p::kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
     sync::LazyLock,
 };
@@ -252,7 +253,7 @@ impl Client {
         for (i, &chunk) in chunks.iter().enumerate() {
             let address = *chunk.address();
 
-            let Some((proof, _price)) = receipt.get(chunk.name()) else {
+            let Some((proof, price)) = receipt.get(chunk.name()) else {
                 debug!(
                     "({}/{}) Chunk at {address:?} was already paid for so skipping",
                     i + 1,
@@ -270,7 +271,7 @@ impl Client {
             let self_clone = self.clone();
             upload_tasks.push(async move {
                 let res = self_clone
-                    .chunk_upload_with_payment(NetworkAddress::from(address), proof, chunk)
+                    .chunk_upload_with_payment(NetworkAddress::from(address), proof, chunk, *price)
                     .await;
                 #[cfg(feature = "loud")]
                 match &res {
@@ -309,16 +310,17 @@ impl Client {
     async fn chunk_upload_with_payment(
         &self,
         address: NetworkAddress,
-        proof: &ClientProofOfPayment,
+        payment: &ClientProofOfPayment,
         chunk: &Chunk,
+        price: AttoTokens,
     ) -> Result<(), PutError> {
-        if proof.payees().is_empty() {
+        if payment.payees().is_empty() {
             return Err(PutError::PayeesMissing);
         }
 
         let record_kind = RecordKind::DataWithPayment(DataTypes::Chunk);
         let serialized_record =
-            try_serialize_record(&(proof.to_proof_of_payment(), chunk.clone()), record_kind)
+            try_serialize_record(&(payment.to_proof_of_payment(), chunk.clone()), record_kind)
                 .map_err(|e| {
                     PutError::Serialization(format!(
                         "Failed to serialize chunk with payment: {e:?}"
@@ -327,18 +329,71 @@ impl Client {
                 .to_vec();
 
         let mut tasks = vec![];
-        for (peer_id, addrs) in proof.payees() {
+        let chunk_addr = *chunk.address();
+        let chunk_name = *chunk.name();
+        for (peer_id, addrs) in payment.payees() {
+            let chunk_network_addr = chunk.network_address();
             let request = Request::Query(Query::UploadRecord {
                 holder: NetworkAddress::from(peer_id),
                 address: address.clone(),
                 serialized_record: serialized_record.clone(),
             });
             let self_clone = self.clone();
+            let serialized_record_clone = serialized_record.clone();
+            let payment_clone = payment.clone();
             tasks.push(async move {
-                self_clone
+                let result = self_clone
                     .network
-                    .send_request(peer_id, Addresses(addrs), request)
-                    .await
+                    .send_request(peer_id, Addresses(addrs.clone()), request)
+                    .await;
+
+                trace!("Uploading chunk {chunk_addr:?} to {peer_id:?} with DM completed with {result:?}");
+
+                // In case the candidate is an old version node, which will return an error of :
+                // "Io(Custom { kind: UnexpectedEof, error: Eof { name: \"enum\", expect: Small(1) } })"
+                // due to the mismatched request_response codec max_request_set configure.
+                // A retry using the old kad::put_record_to shall be undertaken.
+                //
+                // This block of code can be removed once all nodes are updated and supports req/rsp DM
+                let result = if let Err(ref err) = result {
+                    if err.to_string().contains("Small(1)") {
+                        info!("Candidate {peer_id:?} could be in old version, upload chunk {chunk_network_addr:?} again via kad::put_record_to.");
+
+                        let key = chunk_network_addr.to_record_key();
+                        let record = Record {
+                            key: key.clone(),
+                            value: serialized_record_clone,
+                            publisher: None,
+                            expires: None,
+                        };
+                        let to = vec![PeerInfo {
+                            peer_id,
+                            addrs,
+                        }];
+
+                        match self_clone.network
+                            .put_record(record, to, self_clone.config.chunks.put_quorum)
+                            .await {
+                                Ok(_) => Ok(Some(peer_id)),
+                                Err(err) => Err(err)
+                            }
+                    } else {
+                        result
+                    }
+                } else {
+                    result
+                };
+
+                // In case of still an error, the correspondent error shall be mapped
+                // to retain the payment info that can be reused later on.
+                result.map_err(|err| {
+                                let receipt = HashMap::from_iter([(chunk_name, (payment_clone, price))]);
+                                PutError::Network {
+                                    address: Box::new(NetworkAddress::from(chunk_addr)),
+                                    network_error: err,
+                                    payment: Some(receipt),
+                                }
+                            })
             });
         }
 
