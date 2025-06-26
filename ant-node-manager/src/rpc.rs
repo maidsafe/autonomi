@@ -14,7 +14,7 @@ use ant_service_management::{
     control::{ServiceControl, ServiceController},
     node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
-    NodeRegistry, NodeService, NodeServiceData, ServiceStatus,
+    NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus,
 };
 use color_eyre::{
     eyre::{eyre, OptionExt},
@@ -23,51 +23,51 @@ use color_eyre::{
 use libp2p::PeerId;
 
 pub async fn restart_node_service(
-    node_registry: &mut NodeRegistry,
+    node_registry: NodeRegistryManager,
     peer_id: PeerId,
     retain_peer_id: bool,
 ) -> Result<()> {
-    let nodes_len = node_registry.nodes.len();
-    let current_node_mut = node_registry
-        .nodes
-        .iter_mut()
-        .find(|node| node.peer_id.is_some_and(|id| id == peer_id))
-        .ok_or_eyre({
-            error!("Could not find the provided PeerId: {peer_id:?}");
-            format!("Could not find the provided PeerId: {peer_id:?}")
-        })?;
-    let current_node_clone = current_node_mut.clone();
+    let nodes_len = node_registry.nodes.read().await.len();
+    let mut current_node = None;
 
-    let rpc_client = RpcClient::from_socket_addr(current_node_mut.rpc_socket_addr);
-    let service = NodeService::new(current_node_mut, Box::new(rpc_client));
+    for node in node_registry.nodes.read().await.iter() {
+        if node.read().await.peer_id.is_some_and(|id| id == peer_id) {
+            current_node = Some(node.clone());
+            break;
+        }
+    }
+
+    let current_node = current_node.ok_or_else(|| {
+        error!("Could not find the provided PeerId: {peer_id:?}");
+        eyre!("Could not find the provided PeerId: {peer_id:?}")
+    })?;
+
+    let rpc_client = RpcClient::from_socket_addr(current_node.read().await.rpc_socket_addr);
+    let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
     let mut service_manager = ServiceManager::new(
         service,
         Box::new(ServiceController {}),
         VerbosityLevel::Normal,
     );
     service_manager.stop().await?;
+    let service_name = current_node.read().await.service_name.clone();
 
     let service_control = ServiceController {};
     if retain_peer_id {
-        debug!(
-            "Retaining the peer id: {peer_id:?} for the node: {:?}",
-            current_node_clone.service_name
-        );
+        debug!("Retaining the peer id: {peer_id:?} for the node: {service_name:?}");
         // reuse the same port and root dir to retain peer id.
         service_control
-            .uninstall(&current_node_clone.service_name, false)
-            .map_err(|err| {
-                eyre!(
-                    "Error while uninstalling node {:?} with: {err:?}",
-                    current_node_clone.service_name
-                )
-            })?;
+            .uninstall(&service_name, false)
+            .map_err(
+                |err| eyre!("Error while uninstalling node {service_name:?} with: {err:?}",),
+            )?;
+        let current_node_clone = current_node.read().await.clone();
         let install_ctx = InstallNodeServiceCtxBuilder {
             alpha: current_node_clone.alpha,
             antnode_path: current_node_clone.antnode_path.clone(),
             autostart: current_node_clone.auto_restart,
             data_dir_path: current_node_clone.data_dir_path.clone(),
-            env_variables: node_registry.environment_variables.clone(),
+            env_variables: node_registry.environment_variables.read().await.clone(),
             evm_network: current_node_clone.evm_network.clone(),
             relay: current_node_clone.relay,
             init_peers_config: current_node_clone.initial_peers_config.clone(),
@@ -86,14 +86,13 @@ pub async fn restart_node_service(
             service_user: current_node_clone.user.clone(),
         }
         .build()?;
-        service_control.install(install_ctx, false).map_err(|err| {
-            eyre!(
-                "Error while installing node {:?} with: {err:?}",
-                current_node_clone.service_name
-            )
-        })?;
+
+        service_control
+            .install(install_ctx, false)
+            .map_err(|err| eyre!("Error while installing node {service_name:?} with: {err:?}",))?;
         service_manager.start().await?;
     } else {
+        let current_node_clone = current_node.read().await.clone();
         debug!("Starting a new node since retain peer id is false.");
         let new_node_number = nodes_len + 1;
         let new_service_name = format!("antnode{new_node_number}");
@@ -183,7 +182,7 @@ pub async fn restart_node_service(
             alpha: current_node_clone.alpha,
             autostart: current_node_clone.auto_restart,
             data_dir_path: data_dir_path.clone(),
-            env_variables: node_registry.environment_variables.clone(),
+            env_variables: node_registry.environment_variables.read().await.clone(),
             evm_network: current_node_clone.evm_network.clone(),
             relay: current_node_clone.relay,
             init_peers_config: current_node_clone.initial_peers_config.clone(),
@@ -207,7 +206,7 @@ pub async fn restart_node_service(
             eyre!("Error while installing node {new_service_name:?} with: {err:?}",)
         })?;
 
-        let mut node = NodeServiceData {
+        let node = NodeServiceData {
             alpha: current_node_clone.alpha,
             antnode_path,
             auto_restart: current_node_clone.auto_restart,
@@ -241,7 +240,7 @@ pub async fn restart_node_service(
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(&mut node, Box::new(rpc_client));
+        let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(ServiceController {}),
@@ -249,8 +248,8 @@ pub async fn restart_node_service(
         );
         service_manager.start().await?;
         node_registry
-            .nodes
-            .push(service_manager.service.service_data.clone());
+            .push_node(service_manager.service.service_data.read().await.clone())
+            .await;
     };
 
     Ok(())

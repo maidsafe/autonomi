@@ -9,7 +9,7 @@
 use crate::common::get_antnode_rpc_client;
 use ant_evm::Amount;
 use ant_protocol::antnode_proto::{NodeInfoRequest, RestartRequest};
-use ant_service_management::{get_local_node_registry_path, NodeRegistry};
+use ant_service_management::{get_local_node_registry_path, NodeRegistryManager};
 use autonomi::Client;
 use evmlib::wallet::Wallet;
 use eyre::Result;
@@ -69,7 +69,7 @@ pub fn get_node_count() -> usize {
 ///
 /// The genesis address is skipped for droplets as we don't want to restart the Genesis node there.
 /// The restarted node relies on the genesis multiaddr to bootstrap after restart.
-pub fn get_all_rpc_addresses(_skip_genesis_for_droplet: bool) -> Result<Vec<SocketAddr>> {
+pub async fn get_all_rpc_addresses(_skip_genesis_for_droplet: bool) -> Result<Vec<SocketAddr>> {
     match DeploymentInventory::load() {
         Ok(_inventory) => {
             todo!("Not implemented yet for WanNetwork");
@@ -99,12 +99,13 @@ pub fn get_all_rpc_addresses(_skip_genesis_for_droplet: bool) -> Result<Vec<Sock
         }
         Err(_) => {
             let local_node_reg_path = &get_local_node_registry_path()?;
-            let local_node_registry = NodeRegistry::load(local_node_reg_path)?;
-            let rpc_endpoints = local_node_registry
-                .nodes
-                .iter()
-                .map(|n| n.rpc_socket_addr)
-                .collect::<Vec<SocketAddr>>();
+            let local_node_registry = NodeRegistryManager::load(local_node_reg_path).await?;
+            let mut rpc_endpoints = Vec::new();
+            for node in local_node_registry.nodes.read().await.iter() {
+                let node_data = node.read().await;
+                rpc_endpoints.push(node_data.rpc_socket_addr);
+            }
+
             Ok(rpc_endpoints)
         }
     }

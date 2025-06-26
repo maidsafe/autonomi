@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `ant_protocol` directory contains the core protocol logic for the Safe Network. It includes various modules that handle different aspects of the protocol, such as error handling, messages, and storage.
+The `ant_protocol` directory contains the core protocol logic for the Autonomi Network. It includes various modules that handle different aspects of the protocol, such as error handling, messages, and storage.
 
 ## Table of Contents
 
@@ -74,9 +74,9 @@ The `storage` module handles the storage aspects of the protocol.
 
 ## Protobuf Definitions
 
-The `antnode_proto` directory contains the Protocol Buffers definitions for the Safe Network.
+The `antnode_proto` directory contains the Protocol Buffers definitions for the Autonomi Network.
 
 ### Files
 
 - `req_resp_types.proto`: Definitions for request and response types.
-- `antnode.proto`: Main Protocol Buffers definitions for the Safe Network.
+- `antnode.proto`: Main Protocol Buffers definitions for the Autonomi Network.

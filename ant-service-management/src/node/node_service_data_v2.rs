@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::node_service_data_v1::NodeServiceDataV1;
 use super::NodeServiceData;
 use crate::{error::Result, ServiceStatus};
 use ant_bootstrap::InitialPeersConfig;
@@ -25,7 +24,7 @@ fn schema_v2_value() -> u32 {
     NODE_SERVICE_DATA_SCHEMA_V2
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct NodeServiceDataV2 {
     /// New field in V2: indicates if the node is running in alpha mode
     #[serde(default)]
@@ -158,39 +157,71 @@ impl NodeServiceDataV2 {
     }
 }
 
-impl From<NodeServiceDataV1> for NodeServiceDataV2 {
-    fn from(v1: NodeServiceDataV1) -> Self {
-        NodeServiceDataV2 {
+#[cfg(test)]
+mod tests {
+    use super::super::node_service_data::NodeServiceData;
+    use crate::{
+        node::{
+            node_service_data_v2::{NodeServiceDataV2, NODE_SERVICE_DATA_SCHEMA_V2},
+            NODE_SERVICE_DATA_SCHEMA_LATEST,
+        },
+        ServiceStatus,
+    };
+    use ant_bootstrap::InitialPeersConfig;
+    use ant_evm::EvmNetwork;
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+    };
+
+    #[test]
+    fn test_v2_conversion_to_latest() {
+        let v2_data = NodeServiceDataV2 {
+            alpha: true,
             schema_version: NODE_SERVICE_DATA_SCHEMA_V2,
-            antnode_path: v1.antnode_path,
-            auto_restart: v1.auto_restart,
-            connected_peers: v1.connected_peers,
-            data_dir_path: v1.data_dir_path,
-            evm_network: v1.evm_network,
-            initial_peers_config: v1.initial_peers_config,
-            listen_addr: v1.listen_addr,
-            log_dir_path: v1.log_dir_path,
-            log_format: v1.log_format,
-            max_archived_log_files: v1.max_archived_log_files,
-            max_log_files: v1.max_log_files,
-            metrics_port: v1.metrics_port,
-            network_id: v1.network_id,
-            node_ip: v1.node_ip,
-            node_port: v1.node_port,
-            no_upnp: v1.no_upnp,
-            number: v1.number,
-            peer_id: v1.peer_id,
-            pid: v1.pid,
-            relay: v1.relay,
-            rewards_address: v1.rewards_address,
-            reward_balance: v1.reward_balance,
-            rpc_socket_addr: v1.rpc_socket_addr,
-            service_name: v1.service_name,
-            status: v1.status,
-            user: v1.user,
-            user_mode: v1.user_mode,
-            version: v1.version,
-            alpha: false, // Default value for upgraded instances
-        }
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            no_upnp: false,
+            relay: true,
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v2_json = serde_json::to_value(&v2_data).unwrap();
+        let latest: NodeServiceData = serde_json::from_value(v2_json).unwrap();
+
+        // Verify it's the latest version
+        assert_eq!(latest.schema_version, NODE_SERVICE_DATA_SCHEMA_LATEST);
     }
+
+    // V2 is the latest version, so no direct conversion test needed
 }

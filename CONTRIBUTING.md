@@ -1,8 +1,8 @@
-# Contributing to the Safe Network
+# Contributing to the Autonomi Network
 
-:tada: Thank you for your interest in contributing to the Safe Network! :tada:
+:tada: Thank you for your interest in contributing to the Autonomi Network! :tada:
 
-This document is a set of guidelines for contributing to the Safe Network. These are guidelines, not rules. This guide is designed to make it easy for you to get involved.
+This document is a set of guidelines for contributing to the Autonomi Network. These are guidelines, not rules. This guide is designed to make it easy for you to get involved.
 
 Notice something amiss? Have an idea for a new feature? Feel free to create an issue in this GitHub repository about anything that you feel could be fixed or improved. Examples include:
 
@@ -22,9 +22,9 @@ This project adheres to the [Contributor Covenant](https://www.contributor-coven
 
 ## What we're working on
 
-The best way to follow our progress is to read the [MaidSafe Dev Updates](https://safenetforum.org/c/development/updates), which are published every week (on Thursdays) on the [Safe Network Forum](https://safenetforum.org/).
+The best way to follow our progress is to read the development updates, which are published on the [Autonomi Community Forum](https://forum.autonomi.community/).
 
-See our [Development Roadmap](https://safenetwork.tech/roadmap/) for more information on our near term development focus and longer term plans.
+For more information about the project, visit the [Autonomi Documentation](https://docs.autonomi.com/).
 
 ## Issues and Feature Requests
 
@@ -45,7 +45,7 @@ These labels are meant as a soft guide, if you want to work on an issue which do
 
 ## Development
 
-At MaidSafe, we follow a common development process. We use [Git](https://git-scm.com/) as our [version control system](https://en.wikipedia.org/wiki/Version_control). We develop new features in separate Git branches, raise [pull requests](https://help.github.com/en/articles/about-pull-requests), put them under peer review, and merge them only after they pass QA checks and [continuous integration](https://en.wikipedia.org/wiki/Continuous_integration) (CI). We do not commit directly to the `master` branch.
+At MaidSafe, we follow a common development process. We use [Git](https://git-scm.com/) as our [version control system](https://en.wikipedia.org/wiki/Version_control). We develop new features in separate Git branches, raise [pull requests](https://help.github.com/en/articles/about-pull-requests), put them under peer review, and merge them only after they pass QA checks and [continuous integration](https://en.wikipedia.org/wiki/Continuous_integration) (CI). We do not commit directly to the `main` branch.
 
 For useful resources, please see:
 
@@ -56,7 +56,7 @@ We ask that if you are working on a particular issue, you ensure that the issue 
 
 ### Code Style
 
-In our [Rust Programming Language](https://www.rust-lang.org/) repositories we follow the company-wide code style guide that you can find in the [the Rust Style document](https://github.com/maidsafe/QA/blob/master/Documentation/Rust%20Style.md). You should install `rustfmt` and `clippy` and run them before each of your Git commits.
+In our [Rust Programming Language](https://www.rust-lang.org/) repositories we follow standard Rust conventions. You should install `rustfmt` and `clippy` and run them before each of your Git commits.
 
 For our non-Rust repositories we follow the standard lint suggestions, pre-linting before commit. We encourage our contributors to use a sensible naming convention, split their files up accordingly, and include accompanying tests.
 
@@ -72,7 +72,7 @@ If you are a newbie to pull requests (PRs), click [here](https://github.com/firs
 
 We follow the standard procedure for submitting PRs. Please refer to the [official GitHub documentation](https://help.github.com/articles/creating-a-pull-request/) if you are unfamiliar with the procedure. If you still need help, we are more than happy to guide you along!
 
-We are in the process of adding pull request templates to each MaidSafe repository, with guidance specific to that repository detailed within. Opening a PR in each repository will auto-populate your PR with this template. PRs should clearly reference an issue to be tracked on the project board. A PR that implements/fixes an issue is linked using one of the [GitHub keywords](https://help.github.com/articles/closing-issues-using-keywords) - note that these types of PRs will not be added themselves to a project board (to avoid redundancy with the linked issue). However, PRs which were submitted spontaneously and not linked to any existing issue will be added to the project board so they can be tracked, and should go through the same process as any other task/issue.
+We are in the process of adding pull request templates to each MaidSafe repository, with guidance specific to that repository detailed within. Opening a PR in each repository will auto-populate your PR with this template. PRs should clearly reference an issue when applicable. A PR that implements/fixes an issue is linked using one of the [GitHub keywords](https://help.github.com/articles/closing-issues-using-keywords).
 
 Pull requests should strive to tackle one issue/feature, and code should be pre-linted before commit.
 
@@ -88,9 +88,38 @@ Smaller PRs can have their commits squashed together and fast-forward merged, wh
 
 Where appropriate, commits should always contain tests for the code in question.
 
-#### Running tests (CI script)
+#### Running tests
 
-Submitted PRs are expected to pass continuous integration (CI), which, among other things, runs a test suite on your PR to make sure that your code has not regressed the code base.
+Submitted PRs are expected to pass continuous integration (CI), which runs a test suite on your PR to make sure that your code has not regressed the code base.
+
+To run tests locally, use the following commands for specific packages as they require different setups:
+
+```bash
+# Unit tests for specific packages
+cargo test --release --package autonomi --lib
+cargo test --release --package ant-bootstrap
+cargo test --release --package ant-node --lib
+cargo test --release --package node-launchpad
+cargo test --release --package ant-networking --features="open-metrics"
+cargo test --release --package ant-protocol
+cargo test --release --package ant-logging
+
+# E2E tests (requires local network setup using ant-local-testnet-action)
+# The following tests are run in CI with a local testnet:
+cargo test --package autonomi --tests -- --nocapture
+cargo test --release -p ant-node --test data_with_churn -- --nocapture
+cargo test --release -p ant-node --test verify_routing_table -- --nocapture
+cargo test --release -p ant-node --test verify_data_location -- --nocapture
+
+# Check code formatting
+cargo fmt --all -- --check
+
+# Run clippy linter
+cargo clippy --all-targets --all-features -- -Dwarnings
+
+# Check documentation
+RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=ant-cli
+```
 
 #### Code Review
 
@@ -98,27 +127,10 @@ Your PR will be automatically assigned to the team member(s) specified in the `c
 
 Fixes to review comments should preferably be pushed as additional commits to make it easier for the reviewer to see the changes. As a final step once the reviewer is happy the author should consider squashing these fixes with the relevant commit.
 
-### Project board
-
-GitHub project boards are used by the maintainers of the majority of our repositories to keep track of progress and organise development priorities.
-
-There may be one or more active project boards for a repository. Typically, one main project is used to manage all tasks corresponding to the main development stream (normally the `master` branch), while a separate project would be used to manage each proof of concept or milestone, and each of them will track a dedicated development branch.
-
-New features which involve a large number of changes may be developed in a dedicated feature branch, but would normally be tracked on the same main project board as the main development branch (normally `master` branch), re-basing it with the main branch regularly and fully testing the feature on its own branch before it is fully approved and merged into the main branch.
-
-The main project boards typically contain the following Kanban columns to track the status of each development task:
-
-- **To do**: new issues which need to be reviewed and evaluated to decide their priority, add labels, clarify, etc.
-- **In Progress**: the task is assigned to a person and it is in progress
-- **Needs Review**: the task is considered complete by the assigned developer and so has been sent for peer review
-- **Reviewer approved**: the task has been approved by the reviewer(s) and is considered ready to be merged
-- **Done**: the PR associated with the task was merged (or the task was completed by any other means)
-
-The project board columns would typically include automation to move the issues between columns upon set actions, for example, if a PR was created which indicated in its description that it resolved a particular issue on the project board (using [GitHub keywords](https://help.github.com/articles/closing-issues-using-keywords)) then that issue would automatically be moved to the `Done` column on the board on PR merge.
 
 ## Releases and Changelog
 
-The majority of our repositories have a Continuous Integration, Delivery & Deployment pipeline in place (CI/CD). Any PR raised must pass the automated CI tests and a peer review from a member of the team before being merged. Once merged there is no further manual involvement - the CD process kicks in and automatically increments the versioning according to the [Semantic Versioning specification](https://semver.org/), updates the Changelog, and deploys the latest code as appropriate for that repository. Every PR merged to master will result in a new release.
+The majority of our repositories have a Continuous Integration, Delivery & Deployment pipeline in place (CI/CD). Any PR raised must pass the automated CI tests and a peer review from a member of the team before being merged. Once merged there is no further manual involvement - the CD process kicks in and automatically increments the versioning according to the [Semantic Versioning specification](https://semver.org/), updates the Changelog, and deploys the latest code as appropriate for that repository. Every PR merged to main will result in a new release.
 
 In repositories where CD has not been implemented yet, the release process is triggered by the maintainers of each repository, also with versioning increments according to the [Semantic Versioning specification](https://semver.org/). Releases are typically generated through our CI setup, which releases upon a trigger commit title (e.g. `Version change...`), or through specific programming language release tools such as `cargo release` or `yarn bump`.
 
@@ -126,11 +138,15 @@ Typically, for non CD repositories we only update/regenerate the [CHANGELOG file
 
 If a repository is for a library, or perhaps multiple libraries, then often no release artefact is produced. A tag would always be added to the repository on each release though, these tags can be viewed in the `/releases` page of each repository. Repositories which do produce artefacts, such as `.AppImage`, `.dmg` or `.exe` files, will have the release files available in the repository's `/release` page, or instructions there on how to obtain it.
 
+## Development Process
+
+PRs should target the `main` branch. Please use the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages.
+
 ## Support
 
 Contributors and users can get support through the following official channels:
 
-- GitHub issues: Log an issue in the repository where you require support.
-- [Safe Network Forum](https://safenetforum.org/): Join our community forum, say hi, and discuss your support needs and questions with likeminded people.
-- [Safe Dev Forum](https://forum.safedev.org/): Need to get technical with other developers? Join our developer forum and post your thoughts and questions.
-- [Safe Network chat rooms](https://safenetforum.org/t/safe-network-chat-rooms/26070): The General chat room is a good place to ask for help. There is also a Development chat room for more technical discussion.
+- **GitHub issues**: Log an issue in the repository where you require support.
+- **Discord**: https://discord.gg/autonomi - Join our Discord server for real-time discussions
+- **Forum**: https://forum.autonomi.community/ - Community forum for discussions and support
+- **Documentation**: https://docs.autonomi.com/ - Comprehensive project documentation

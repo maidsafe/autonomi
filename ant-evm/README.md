@@ -1,6 +1,6 @@
-# Safe Network EVM data payments
+# Autonomi Network EVM data payments
 
-This crate contains the logic for data payments on the SAFE Network using the Ethereum protocol. 
+This crate contains the logic for data payments on the Autonomi Network using the Ethereum protocol. 
 
 This crate provides a set of types and utilities for interacting with EVM-based networks. It offers abstraction over common tasks such as handling addresses, wallets, payments, and network configurations. Below is an overview of the main types exposed by the crate.
 

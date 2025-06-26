@@ -773,7 +773,7 @@ fn churn_nodes_task(
 ) {
     let start = Instant::now();
     let _handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-        let mut node_restart = NodeRestart::new(true, false)?;
+        let mut node_restart = NodeRestart::new(true, false).await?;
 
         loop {
             sleep(churn_period).await;

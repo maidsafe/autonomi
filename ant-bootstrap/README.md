@@ -18,4 +18,4 @@ A robust peer caching system for the Autonomi Network that provides persistent s
 
 ## License
 
-This SAFE Network Software is licensed under the General Public License (GPL), version 3 ([LICENSE](LICENSE) http://www.gnu.org/licenses/gpl-3.0.en.html).
+This Autonomi Network software is licensed under the General Public License (GPL), version 3 ([LICENSE](http://www.gnu.org/licenses/gpl-3.0.en.html)).

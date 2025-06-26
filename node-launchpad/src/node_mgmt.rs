@@ -10,12 +10,10 @@ use crate::action::{Action, StatusActions};
 use crate::connection_mode::ConnectionMode;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
-use ant_node_manager::{
-    add_services::config::PortRange, config::get_node_registry_path, VerbosityLevel,
-};
+use ant_node_manager::{add_services::config::PortRange, VerbosityLevel};
 use ant_releases::{self, AntReleaseRepoActions, ReleaseType};
-use ant_service_management::NodeRegistry;
-use color_eyre::eyre::{eyre, Error};
+use ant_service_management::NodeRegistryManager;
+use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use std::{path::PathBuf, str::FromStr};
 use tokio::runtime::Builder;
@@ -67,7 +65,7 @@ pub struct NodeManagement {
 }
 
 impl NodeManagement {
-    pub fn new() -> Result<Self> {
+    pub fn new(node_registry: NodeRegistryManager) -> Result<Self> {
         let (send, mut recv) = mpsc::unbounded_channel();
 
         let rt = Builder::new_current_thread().enable_all().build()?;
@@ -79,30 +77,39 @@ impl NodeManagement {
                 while let Some(new_task) = recv.recv().await {
                     match new_task {
                         NodeManagementTask::MaintainNodes { args } => {
-                            maintain_n_running_nodes(args).await;
+                            maintain_n_running_nodes(args, node_registry.clone()).await;
                         }
                         NodeManagementTask::ResetNodes {
                             start_nodes_after_reset,
                             action_sender,
                         } => {
-                            reset_nodes(action_sender, start_nodes_after_reset).await;
+                            reset_nodes(
+                                action_sender,
+                                node_registry.clone(),
+                                start_nodes_after_reset,
+                            )
+                            .await;
                         }
                         NodeManagementTask::StopNodes {
                             services,
                             action_sender,
                         } => {
-                            stop_nodes(services, action_sender).await;
+                            stop_nodes(services, action_sender, node_registry.clone()).await;
                         }
-                        NodeManagementTask::UpgradeNodes { args } => upgrade_nodes(args).await,
+                        NodeManagementTask::UpgradeNodes { args } => {
+                            upgrade_nodes(args, node_registry.clone()).await
+                        }
                         NodeManagementTask::RemoveNodes {
                             services,
                             action_sender,
-                        } => remove_nodes(services, action_sender).await,
+                        } => remove_nodes(services, action_sender, node_registry.clone()).await,
                         NodeManagementTask::StartNode {
                             services,
                             action_sender,
-                        } => start_nodes(services, action_sender).await,
-                        NodeManagementTask::AddNode { args } => add_node(args).await,
+                        } => start_nodes(services, action_sender, node_registry.clone()).await,
+                        NodeManagementTask::AddNode { args } => {
+                            add_node(args, node_registry.clone()).await
+                        }
                     }
                 }
                 // If the while loop returns, then all the LocalSpawner
@@ -133,10 +140,19 @@ impl NodeManagement {
 }
 
 /// Stop the specified services
-async fn stop_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
-    if let Err(err) =
-        ant_node_manager::cmd::node::stop(None, vec![], services.clone(), VerbosityLevel::Minimal)
-            .await
+async fn stop_nodes(
+    services: Vec<String>,
+    action_sender: UnboundedSender<Action>,
+    node_registry: NodeRegistryManager,
+) {
+    if let Err(err) = ant_node_manager::cmd::node::stop(
+        None,
+        node_registry.clone(),
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
     {
         error!("Error while stopping services {err:?}");
         send_action(
@@ -153,6 +169,8 @@ async fn stop_nodes(services: Vec<String>, action_sender: UnboundedSender<Action
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::StopNodesCompleted {
                     service_name: service,
+                    all_nodes_data: node_registry.get_node_service_data().await,
+                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
@@ -175,7 +193,7 @@ pub struct MaintainNodesArgs {
 }
 
 /// Maintain the specified number of nodes
-async fn maintain_n_running_nodes(args: MaintainNodesArgs) {
+async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
     debug!("Maintaining {} nodes", args.count);
     if args.run_nat_detection {
         run_nat_detection(&args.action_sender).await;
@@ -184,21 +202,14 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs) {
     let config = prepare_node_config(&args);
     debug_log_config(&config, &args);
 
-    let node_registry = match load_node_registry(&args.action_sender).await {
-        Ok(registry) => registry,
-        Err(err) => {
-            error!("Failed to load node registry: {:?}", err);
-            return;
-        }
-    };
-    let mut used_ports = get_used_ports(&node_registry);
+    let mut used_ports = get_used_ports(&node_registry).await;
     let (mut current_port, max_port) = get_port_range(&config.custom_ports);
 
-    let nodes_to_add = args.count as i32 - node_registry.nodes.len() as i32;
+    let nodes_to_add = args.count as i32 - node_registry.nodes.read().await.len() as i32;
 
     if nodes_to_add <= 0 {
         debug!("Scaling down nodes to {}", nodes_to_add);
-        scale_down_nodes(&config, args.count).await;
+        scale_down_nodes(&config, args.count, node_registry.clone()).await;
     } else {
         debug!("Scaling up nodes to {}", nodes_to_add);
         add_nodes(
@@ -208,6 +219,7 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs) {
             &mut used_ports,
             &mut current_port,
             max_port,
+            node_registry.clone(),
         )
         .await;
     }
@@ -217,13 +229,22 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs) {
         args.action_sender,
         Action::StatusActions(StatusActions::StartNodesCompleted {
             service_name: NODES_ALL.to_string(),
+            all_nodes_data: node_registry.get_node_service_data().await,
+            is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
         }),
     );
 }
 
 /// Reset all the nodes
-async fn reset_nodes(action_sender: UnboundedSender<Action>, start_nodes_after_reset: bool) {
-    if let Err(err) = ant_node_manager::cmd::node::reset(true, VerbosityLevel::Minimal).await {
+async fn reset_nodes(
+    action_sender: UnboundedSender<Action>,
+    node_registry: NodeRegistryManager,
+    start_nodes_after_reset: bool,
+) {
+    if let Err(err) =
+        ant_node_manager::cmd::node::reset(true, node_registry.clone(), VerbosityLevel::Minimal)
+            .await
+    {
         error!("Error while resetting services {err:?}");
         send_action(
             action_sender,
@@ -237,6 +258,8 @@ async fn reset_nodes(action_sender: UnboundedSender<Action>, start_nodes_after_r
             action_sender,
             Action::StatusActions(StatusActions::ResetNodesCompleted {
                 trigger_start_node: start_nodes_after_reset,
+                all_nodes_data: node_registry.get_node_service_data().await,
+                is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
             }),
         );
     }
@@ -257,10 +280,11 @@ pub struct UpgradeNodesArgs {
     pub version: Option<String>,
 }
 
-async fn upgrade_nodes(args: UpgradeNodesArgs) {
+async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryManager) {
     // First we stop the Nodes
     if let Err(err) = ant_node_manager::cmd::node::stop(
         None,
+        node_registry.clone(),
         vec![],
         args.service_names.clone(),
         VerbosityLevel::Minimal,
@@ -282,6 +306,7 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
         args.custom_bin_path,
         args.force,
         Some(FIXED_INTERVAL),
+        node_registry.clone(),
         args.peer_ids,
         args.provided_env_variables,
         args.service_names,
@@ -302,16 +327,28 @@ async fn upgrade_nodes(args: UpgradeNodesArgs) {
         info!("Successfully updated services");
         send_action(
             args.action_sender,
-            Action::StatusActions(StatusActions::UpdateNodesCompleted),
+            Action::StatusActions(StatusActions::UpdateNodesCompleted {
+                all_nodes_data: node_registry.get_node_service_data().await,
+                is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
+            }),
         );
     }
 }
 
-async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+async fn remove_nodes(
+    services: Vec<String>,
+    action_sender: UnboundedSender<Action>,
+    node_registry: NodeRegistryManager,
+) {
     // First we stop the nodes
-    if let Err(err) =
-        ant_node_manager::cmd::node::stop(None, vec![], services.clone(), VerbosityLevel::Minimal)
-            .await
+    if let Err(err) = ant_node_manager::cmd::node::stop(
+        None,
+        node_registry.clone(),
+        vec![],
+        services.clone(),
+        VerbosityLevel::Minimal,
+    )
+    .await
     {
         error!("Error while stopping services {err:?}");
         send_action(
@@ -326,6 +363,7 @@ async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Acti
     if let Err(err) = ant_node_manager::cmd::node::remove(
         false,
         vec![],
+        node_registry.clone(),
         services.clone(),
         VerbosityLevel::Minimal,
     )
@@ -346,13 +384,15 @@ async fn remove_nodes(services: Vec<String>, action_sender: UnboundedSender<Acti
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::RemoveNodesCompleted {
                     service_name: service,
+                    all_nodes_data: node_registry.get_node_service_data().await,
+                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
     }
 }
 
-async fn add_node(args: MaintainNodesArgs) {
+async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
     debug!("Adding node");
 
     if args.run_nat_detection {
@@ -361,14 +401,7 @@ async fn add_node(args: MaintainNodesArgs) {
 
     let config = prepare_node_config(&args);
 
-    let node_registry = match load_node_registry(&args.action_sender).await {
-        Ok(registry) => registry,
-        Err(err) => {
-            error!("Failed to load node registry: {:?}", err);
-            return;
-        }
-    };
-    let used_ports = get_used_ports(&node_registry);
+    let used_ports = get_used_ports(&node_registry).await;
     let (mut current_port, max_port) = get_port_range(&config.custom_ports);
 
     while used_ports.contains(&current_port) && current_port <= max_port {
@@ -406,6 +439,7 @@ async fn add_node(args: MaintainNodesArgs) {
         None,       // network_id
         None,       // node_ip,
         port_range, // node_port
+        node_registry.clone(),
         config.init_peers_config.clone(),
         config.relay, // relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
@@ -436,6 +470,8 @@ async fn add_node(args: MaintainNodesArgs) {
                     args.action_sender.clone(),
                     Action::StatusActions(StatusActions::AddNodesCompleted {
                         service_name: service,
+                        all_nodes_data: node_registry.get_node_service_data().await,
+                        is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                     }),
                 );
             }
@@ -443,11 +479,16 @@ async fn add_node(args: MaintainNodesArgs) {
     }
 }
 
-async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Action>) {
+async fn start_nodes(
+    services: Vec<String>,
+    action_sender: UnboundedSender<Action>,
+    node_registry: NodeRegistryManager,
+) {
     debug!("Starting node {:?}", services);
     if let Err(err) = ant_node_manager::cmd::node::start(
         CONNECTION_TIMEOUT_START,
         None,
+        node_registry.clone(),
         vec![],
         services.clone(),
         VerbosityLevel::Minimal,
@@ -469,6 +510,8 @@ async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Actio
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::StartNodesCompleted {
                     service_name: service,
+                    all_nodes_data: node_registry.get_node_service_data().await,
+                    is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
                 }),
             );
         }
@@ -480,39 +523,6 @@ async fn start_nodes(services: Vec<String>, action_sender: UnboundedSender<Actio
 fn send_action(action_sender: UnboundedSender<Action>, action: Action) {
     if let Err(err) = action_sender.send(action) {
         error!("Error while sending action: {err:?}");
-    }
-}
-
-/// Load the node registry and handle errors
-async fn load_node_registry(
-    action_sender: &UnboundedSender<Action>,
-) -> Result<NodeRegistry, Error> {
-    match get_node_registry_path() {
-        Ok(path) => match NodeRegistry::load(&path) {
-            Ok(registry) => Ok(registry),
-            Err(err) => {
-                error!("Failed to load NodeRegistry: {}", err);
-                if let Err(send_err) = action_sender.send(Action::StatusActions(
-                    StatusActions::ErrorLoadingNodeRegistry {
-                        raw_error: err.to_string(),
-                    },
-                )) {
-                    error!("Error while sending action: {}", send_err);
-                }
-                Err(eyre!("Failed to load NodeRegistry"))
-            }
-        },
-        Err(err) => {
-            error!("Failed to get node registry path: {}", err);
-            if let Err(send_err) = action_sender.send(Action::StatusActions(
-                StatusActions::ErrorGettingNodeRegistryPath {
-                    raw_error: err.to_string(),
-                },
-            )) {
-                error!("Error while sending action: {}", send_err);
-            }
-            Err(eyre!("Failed to get node registry path"))
-        }
     }
 }
 
@@ -628,12 +638,14 @@ fn debug_log_config(config: &NodeConfig, args: &MaintainNodesArgs) {
 }
 
 /// Get the currently used ports from the node registry
-fn get_used_ports(node_registry: &NodeRegistry) -> Vec<u16> {
-    let used_ports: Vec<u16> = node_registry
-        .nodes
-        .iter()
-        .filter_map(|node| node.node_port)
-        .collect();
+async fn get_used_ports(node_registry: &NodeRegistryManager) -> Vec<u16> {
+    let mut used_ports = Vec::new();
+    for node in node_registry.nodes.read().await.iter() {
+        let node = node.read().await;
+        if let Some(port) = node.node_port {
+            used_ports.push(port);
+        }
+    }
     debug!("Currently used ports: {:?}", used_ports);
     used_ports
 }
@@ -648,7 +660,7 @@ fn get_port_range(custom_ports: &Option<PortRange>) -> (u16, u16) {
 }
 
 /// Scale down the nodes
-async fn scale_down_nodes(config: &NodeConfig, count: u16) {
+async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRegistryManager) {
     match ant_node_manager::cmd::node::maintain_n_running_nodes(
         false,
         false,
@@ -667,6 +679,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16) {
         config.network_id,
         None,
         None, // We don't care about the port, as we are scaling down
+        node_registry,
         config.init_peers_config.clone(),
         config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
@@ -699,6 +712,7 @@ async fn add_nodes(
     used_ports: &mut Vec<u16>,
     current_port: &mut u16,
     max_port: u16,
+    node_registry: NodeRegistryManager,
 ) {
     let mut retry_count = 0;
 
@@ -741,6 +755,7 @@ async fn add_nodes(
             config.network_id,
             None,
             port_range,
+            node_registry.clone(),
             config.init_peers_config.clone(),
             config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),

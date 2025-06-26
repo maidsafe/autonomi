@@ -6,12 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-pub mod auditor;
 pub mod control;
 pub mod daemon;
 pub mod error;
-pub mod faucet;
 pub mod node;
+pub mod registry;
 pub mod rpc;
 
 #[macro_use]
@@ -21,20 +20,17 @@ pub mod antctl_proto {
     tonic::include_proto!("antctl_proto");
 }
 
+use std::path::PathBuf;
+
 use async_trait::async_trait;
-use auditor::AuditorServiceData;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
-use std::{
-    io::{Read, Write},
-    path::{Path, PathBuf},
-};
 
 pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
-pub use faucet::{FaucetService, FaucetServiceData};
 pub use node::{NodeService, NodeServiceData};
+pub use registry::{get_local_node_registry_path, NodeRegistryManager, StatusSummary};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ServiceStatus {
@@ -76,126 +72,20 @@ pub struct UpgradeOptions {
 
 #[async_trait]
 pub trait ServiceStateActions {
-    fn bin_path(&self) -> PathBuf;
-    fn build_upgrade_install_context(&self, options: UpgradeOptions) -> Result<ServiceInstallCtx>;
-    fn data_dir_path(&self) -> PathBuf;
-    fn is_user_mode(&self) -> bool;
-    fn log_dir_path(&self) -> PathBuf;
-    fn name(&self) -> String;
-    fn pid(&self) -> Option<u32>;
-    fn on_remove(&mut self);
-    async fn on_start(&mut self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
-    async fn on_stop(&mut self) -> Result<()>;
-    fn set_version(&mut self, version: &str);
-    fn status(&self) -> ServiceStatus;
-    fn version(&self) -> String;
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatusSummary {
-    pub nodes: Vec<NodeServiceData>,
-    pub daemon: Option<DaemonServiceData>,
-    pub faucet: Option<FaucetServiceData>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NodeRegistry {
-    pub auditor: Option<AuditorServiceData>,
-    pub daemon: Option<DaemonServiceData>,
-    pub environment_variables: Option<Vec<(String, String)>>,
-    pub faucet: Option<FaucetServiceData>,
-    pub nat_status: Option<NatDetectionStatus>,
-    pub nodes: Vec<NodeServiceData>,
-    pub save_path: PathBuf,
-}
-
-impl NodeRegistry {
-    pub fn save(&self) -> Result<()> {
-        debug!(
-            "Saving node registry to {}",
-            self.save_path.to_string_lossy()
-        );
-        let path = Path::new(&self.save_path);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).inspect_err(|err| {
-                error!("Error creating node registry parent {parent:?}: {err:?}")
-            })?;
-        }
-
-        let json = serde_json::to_string(self)?;
-        let mut file = std::fs::File::create(self.save_path.clone())
-            .inspect_err(|err| error!("Error creating node registry file: {err:?}"))?;
-        file.write_all(json.as_bytes())
-            .inspect_err(|err| error!("Error writing to node registry: {err:?}"))?;
-
-        Ok(())
-    }
-
-    pub fn load(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            debug!("Loading default node registry as {path:?} does not exist");
-            return Ok(NodeRegistry {
-                auditor: None,
-                daemon: None,
-                environment_variables: None,
-                faucet: None,
-                nat_status: None,
-                nodes: vec![],
-                save_path: path.to_path_buf(),
-            });
-        }
-        debug!("Loading node registry from {}", path.to_string_lossy());
-
-        let mut file = std::fs::File::open(path)
-            .inspect_err(|err| error!("Error opening node registry: {err:?}"))?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .inspect_err(|err| error!("Error reading node registry: {err:?}"))?;
-
-        // It's possible for the file to be empty if the user runs a `status` command before any
-        // services were added.
-        if contents.is_empty() {
-            return Ok(NodeRegistry {
-                auditor: None,
-                daemon: None,
-                environment_variables: None,
-                faucet: None,
-                nat_status: None,
-                nodes: vec![],
-                save_path: path.to_path_buf(),
-            });
-        }
-
-        Self::from_json(&contents)
-    }
-
-    pub fn from_json(json: &str) -> Result<Self> {
-        let registry = serde_json::from_str(json)
-            .inspect_err(|err| error!("Error deserializing node registry: {err:?}"))?;
-        Ok(registry)
-    }
-
-    pub fn to_status_summary(&self) -> StatusSummary {
-        StatusSummary {
-            nodes: self.nodes.clone(),
-            daemon: self.daemon.clone(),
-            faucet: self.faucet.clone(),
-        }
-    }
-}
-
-pub fn get_local_node_registry_path() -> Result<PathBuf> {
-    let path = dirs_next::data_dir()
-        .ok_or_else(|| {
-            error!("Failed to get data_dir");
-            Error::UserDataDirectoryNotObtainable
-        })?
-        .join("autonomi")
-        .join("local_node_registry.json");
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .inspect_err(|err| error!("Error creating node registry parent {parent:?}: {err:?}"))?;
-    }
-    Ok(path)
+    async fn bin_path(&self) -> PathBuf;
+    async fn build_upgrade_install_context(
+        &self,
+        options: UpgradeOptions,
+    ) -> Result<ServiceInstallCtx>;
+    async fn data_dir_path(&self) -> PathBuf;
+    async fn is_user_mode(&self) -> bool;
+    async fn log_dir_path(&self) -> PathBuf;
+    async fn name(&self) -> String;
+    async fn pid(&self) -> Option<u32>;
+    async fn on_remove(&self);
+    async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
+    async fn on_stop(&self) -> Result<()>;
+    async fn set_version(&self, version: &str);
+    async fn status(&self) -> ServiceStatus;
+    async fn version(&self) -> String;
 }

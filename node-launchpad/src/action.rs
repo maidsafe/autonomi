@@ -12,11 +12,12 @@ use crate::{
     mode::{InputMode, Scene},
     node_stats::NodeStats,
 };
+use ant_service_management::NodeServiceData;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strum::Display;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Display, Deserialize)]
 pub enum Action {
     StatusActions(StatusActions),
     OptionsActions(OptionsActions),
@@ -46,7 +47,7 @@ pub enum Action {
     Noop,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StatusActions {
     AddNode,
     StartNodes,
@@ -55,20 +56,33 @@ pub enum StatusActions {
     StartStopNode,
     StartNodesCompleted {
         service_name: String,
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
     },
     StopNodesCompleted {
         service_name: String,
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
     },
     ResetNodesCompleted {
         trigger_start_node: bool,
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
     },
     RemoveNodesCompleted {
         service_name: String,
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
     },
     AddNodesCompleted {
         service_name: String,
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
     },
-    UpdateNodesCompleted,
+    UpdateNodesCompleted {
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
+    },
     NatDetectionStarted,
     SuccessfullyDetectedNatStatus,
     ErrorWhileRunningNatDetection,

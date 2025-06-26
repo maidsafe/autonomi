@@ -424,7 +424,7 @@ List owned scratchpads.
 If you encounter any errors while using the CLI, you can use the `--log-output-dest` and `--log-format` options to specify logging details. This can help with debugging and understanding the behavior of the CLI.
 
 ## License
-This Safe Network repository is licensed under the General Public License (GPL), version 3 (LICENSE http://www.gnu.org/licenses/gpl-3.0.en.html).
+This Autonomi Network repository is licensed under the General Public License (GPL), version 3 ([LICENSE](http://www.gnu.org/licenses/gpl-3.0.en.html)).
 
 ## Contributing
 Contributions are welcome! Please read the [CONTRIBUTING.md](https://github.com/maidsafe/autonomi/blob/main/CONTRIBUTING.md) file for guidelines on how to contribute to this project.

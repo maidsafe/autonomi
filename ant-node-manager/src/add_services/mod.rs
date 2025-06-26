@@ -9,20 +9,15 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 
-use self::config::{
-    AddAuditorServiceOptions, AddDaemonServiceOptions, AddFaucetServiceOptions,
-    AddNodeServiceOptions, InstallAuditorServiceCtxBuilder, InstallFaucetServiceCtxBuilder,
-    InstallNodeServiceCtxBuilder,
-};
+use self::config::{AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
 use crate::{
     config::{create_owned_dir, get_user_antnode_data_dir},
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
     VerbosityLevel, DAEMON_SERVICE_NAME,
 };
 use ant_service_management::{
-    auditor::AuditorServiceData, control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
-    DaemonServiceData, FaucetServiceData, NatDetectionStatus, NodeRegistry, NodeServiceData,
-    ServiceStatus,
+    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST, DaemonServiceData,
+    NatDetectionStatus, NodeRegistryManager, NodeServiceData, ServiceStatus,
 };
 use color_eyre::{eyre::eyre, Help, Result};
 use colored::Colorize;
@@ -42,7 +37,7 @@ use std::{
 /// Returns the service names of the added services.
 pub async fn add_node(
     mut options: AddNodeServiceOptions,
-    node_registry: &mut NodeRegistry,
+    node_registry: NodeRegistryManager,
     service_control: &dyn ServiceControl,
     verbosity: VerbosityLevel,
 ) -> Result<Vec<String>> {
@@ -54,11 +49,15 @@ pub async fn add_node(
             }
         }
 
-        let genesis_node = node_registry
-            .nodes
-            .iter()
-            .find(|n| n.initial_peers_config.first);
-        if genesis_node.is_some() {
+        let mut genesis_node_exists = false;
+        for node in node_registry.nodes.read().await.iter() {
+            if node.read().await.initial_peers_config.first {
+                genesis_node_exists = true;
+                break;
+            }
+        }
+
+        if genesis_node_exists {
             error!("A genesis node already exists");
             return Err(eyre!("A genesis node already exists"));
         }
@@ -66,17 +65,17 @@ pub async fn add_node(
 
     if let Some(port_option) = &options.node_port {
         port_option.validate(options.count.unwrap_or(1))?;
-        check_port_availability(port_option, &node_registry.nodes)?;
+        check_port_availability(port_option, &node_registry.nodes).await?;
     }
 
     if let Some(port_option) = &options.metrics_port {
         port_option.validate(options.count.unwrap_or(1))?;
-        check_port_availability(port_option, &node_registry.nodes)?;
+        check_port_availability(port_option, &node_registry.nodes).await?;
     }
 
     if let Some(port_option) = &options.rpc_port {
         port_option.validate(options.count.unwrap_or(1))?;
-        check_port_availability(port_option, &node_registry.nodes)?;
+        check_port_availability(port_option, &node_registry.nodes).await?;
     }
 
     let antnode_file_name = options
@@ -90,16 +89,14 @@ pub async fn add_node(
         .to_string();
 
     if options.env_variables.is_some() {
-        node_registry
-            .environment_variables
-            .clone_from(&options.env_variables);
-        node_registry.save()?;
+        *node_registry.environment_variables.write().await = options.env_variables.clone();
+        node_registry.save().await?;
     }
 
     let mut added_service_data = vec![];
     let mut failed_service_data = vec![];
 
-    let current_node_count = node_registry.nodes.len() as u16;
+    let current_node_count = node_registry.nodes.read().await.len() as u16;
     let target_node_count = current_node_count + options.count.unwrap_or(1);
 
     let mut node_number = current_node_count + 1;
@@ -164,9 +161,9 @@ pub async fn add_node(
         )?;
 
         if options.auto_set_nat_flags {
-            let nat_status = node_registry.nat_status.clone();
+            let nat_status = node_registry.nat_status.read().await;
 
-            match nat_status {
+            match nat_status.as_ref() {
                 Some(NatDetectionStatus::Public) => {
                     options.no_upnp = true; // UPnP not needed
                     options.relay = false;
@@ -229,41 +226,43 @@ pub async fn add_node(
                     rpc_socket_addr,
                 ));
 
-                node_registry.nodes.push(NodeServiceData {
-                    alpha: options.alpha,
-                    antnode_path: service_antnode_path,
-                    auto_restart: options.auto_restart,
-                    connected_peers: None,
-                    data_dir_path: service_data_dir_path.clone(),
-                    evm_network: options.evm_network.clone(),
-                    relay: options.relay,
-                    initial_peers_config: options.init_peers_config.clone(),
-                    listen_addr: None,
-                    log_dir_path: service_log_dir_path.clone(),
-                    log_format: options.log_format,
-                    max_archived_log_files: options.max_archived_log_files,
-                    max_log_files: options.max_log_files,
-                    metrics_port: metrics_free_port,
-                    network_id: options.network_id,
-                    node_ip: options.node_ip,
-                    node_port,
-                    number: node_number,
-                    rewards_address: options.rewards_address,
-                    reward_balance: None,
-                    rpc_socket_addr,
-                    peer_id: None,
-                    pid: None,
-                    schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
-                    service_name,
-                    status: ServiceStatus::Added,
-                    no_upnp: options.no_upnp,
-                    user: options.user.clone(),
-                    user_mode: options.user_mode,
-                    version: options.version.clone(),
-                });
+                node_registry
+                    .push_node(NodeServiceData {
+                        alpha: options.alpha,
+                        antnode_path: service_antnode_path,
+                        auto_restart: options.auto_restart,
+                        connected_peers: None,
+                        data_dir_path: service_data_dir_path.clone(),
+                        evm_network: options.evm_network.clone(),
+                        relay: options.relay,
+                        initial_peers_config: options.init_peers_config.clone(),
+                        listen_addr: None,
+                        log_dir_path: service_log_dir_path.clone(),
+                        log_format: options.log_format,
+                        max_archived_log_files: options.max_archived_log_files,
+                        max_log_files: options.max_log_files,
+                        metrics_port: metrics_free_port,
+                        network_id: options.network_id,
+                        node_ip: options.node_ip,
+                        node_port,
+                        number: node_number,
+                        rewards_address: options.rewards_address,
+                        reward_balance: None,
+                        rpc_socket_addr,
+                        peer_id: None,
+                        pid: None,
+                        schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
+                        service_name,
+                        status: ServiceStatus::Added,
+                        no_upnp: options.no_upnp,
+                        user: options.user.clone(),
+                        user_mode: options.user_mode,
+                        version: options.version.clone(),
+                    })
+                    .await;
                 // We save the node registry for each service because it's possible any number of
                 // services could fail to be added.
-                node_registry.save()?;
+                node_registry.save().await?;
             }
             Err(e) => {
                 error!("Failed to add service {service_name}: {e}");
@@ -319,97 +318,15 @@ pub async fn add_node(
     Ok(added_services_names)
 }
 
-/// Install the auditor as a service.
-///
-/// This only defines the service; it does not start it.
-///
-/// There are several arguments that probably seem like they could be handled within the function,
-/// but they enable more controlled unit testing.
-pub fn add_auditor(
-    install_options: AddAuditorServiceOptions,
-    node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
-    verbosity: VerbosityLevel,
-) -> Result<()> {
-    if node_registry.auditor.is_some() {
-        error!("An Auditor service has already been created");
-        return Err(eyre!("An Auditor service has already been created"));
-    }
-
-    debug!(
-        "Creating log directory at {:?} as user {:?}",
-        install_options.service_log_dir_path, install_options.user
-    );
-    create_owned_dir(
-        install_options.service_log_dir_path.clone(),
-        &install_options.user,
-    )?;
-
-    debug!(
-        "Copying auditor binary file to {:?}",
-        install_options.auditor_install_bin_path
-    );
-    std::fs::copy(
-        install_options.auditor_src_bin_path.clone(),
-        install_options.auditor_install_bin_path.clone(),
-    )?;
-
-    let install_ctx = InstallAuditorServiceCtxBuilder {
-        auditor_path: install_options.auditor_install_bin_path.clone(),
-        beta_encryption_key: install_options.beta_encryption_key.clone(),
-        env_variables: install_options.env_variables.clone(),
-        log_dir_path: install_options.service_log_dir_path.clone(),
-        name: "auditor".to_string(),
-        service_user: install_options.user.clone(),
-    }
-    .build()?;
-
-    match service_control.install(install_ctx, false) {
-        Ok(()) => {
-            node_registry.auditor = Some(AuditorServiceData {
-                auditor_path: install_options.auditor_install_bin_path.clone(),
-                log_dir_path: install_options.service_log_dir_path.clone(),
-                pid: None,
-                service_name: "auditor".to_string(),
-                status: ServiceStatus::Added,
-                user: install_options.user.clone(),
-                version: install_options.version,
-            });
-            info!("Auditor service has been added successfully");
-            println!("Auditor service added {}", "✓".green());
-            if verbosity != VerbosityLevel::Minimal {
-                println!(
-                    "  - Bin path: {}",
-                    install_options.auditor_install_bin_path.to_string_lossy()
-                );
-                println!(
-                    "  - Log path: {}",
-                    install_options.service_log_dir_path.to_string_lossy()
-                );
-            }
-            println!("[!] Note: the service has not been started");
-            debug!("Removing auditor binary file");
-            std::fs::remove_file(install_options.auditor_src_bin_path)?;
-            node_registry.save()?;
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to add auditor service: {e}");
-            println!("Failed to add auditor service: {e}");
-            Err(e.into())
-        }
-    }
-}
-
 /// Install the daemon as a service.
 ///
 /// This only defines the service; it does not start it.
-pub fn add_daemon(
+pub async fn add_daemon(
     options: AddDaemonServiceOptions,
-    node_registry: &mut NodeRegistry,
+    node_registry: NodeRegistryManager,
     service_control: &dyn ServiceControl,
 ) -> Result<()> {
-    if node_registry.daemon.is_some() {
+    if node_registry.daemon.read().await.is_some() {
         error!("A antctld service has already been created");
         return Err(eyre!("A antctld service has already been created"));
     }
@@ -450,102 +367,18 @@ pub fn add_daemon(
                 status: ServiceStatus::Added,
                 version: options.version,
             };
-            node_registry.daemon = Some(daemon);
+
+            node_registry.insert_daemon(daemon).await;
             info!("Daemon service has been added successfully");
             println!("Daemon service added {}", "✓".green());
             println!("[!] Note: the service has not been started");
-            node_registry.save()?;
+            node_registry.save().await?;
             std::fs::remove_file(options.daemon_src_bin_path)?;
             Ok(())
         }
         Err(e) => {
             error!("Failed to add daemon service: {e}");
             println!("Failed to add daemon service: {e}");
-            Err(e.into())
-        }
-    }
-}
-
-/// Install the faucet as a service.
-///
-/// This only defines the service; it does not start it.
-///
-/// There are several arguments that probably seem like they could be handled within the function,
-/// but they enable more controlled unit testing.
-pub fn add_faucet(
-    install_options: AddFaucetServiceOptions,
-    node_registry: &mut NodeRegistry,
-    service_control: &dyn ServiceControl,
-    verbosity: VerbosityLevel,
-) -> Result<()> {
-    if node_registry.faucet.is_some() {
-        error!("A faucet service has already been created");
-        return Err(eyre!("A faucet service has already been created"));
-    }
-
-    debug!(
-        "Creating log directory at {:?} as user {:?}",
-        install_options.service_log_dir_path, install_options.user
-    );
-    create_owned_dir(
-        install_options.service_log_dir_path.clone(),
-        &install_options.user,
-    )?;
-    debug!(
-        "Copying faucet binary file to {:?}",
-        install_options.faucet_install_bin_path
-    );
-    std::fs::copy(
-        install_options.faucet_src_bin_path.clone(),
-        install_options.faucet_install_bin_path.clone(),
-    )?;
-
-    let install_ctx = InstallFaucetServiceCtxBuilder {
-        env_variables: install_options.env_variables.clone(),
-        faucet_path: install_options.faucet_install_bin_path.clone(),
-        local: install_options.local,
-        log_dir_path: install_options.service_log_dir_path.clone(),
-        name: "faucet".to_string(),
-        service_user: install_options.user.clone(),
-    }
-    .build()?;
-
-    match service_control.install(install_ctx, false) {
-        Ok(()) => {
-            node_registry.faucet = Some(FaucetServiceData {
-                faucet_path: install_options.faucet_install_bin_path.clone(),
-                local: false,
-                log_dir_path: install_options.service_log_dir_path.clone(),
-                pid: None,
-                service_name: "faucet".to_string(),
-                status: ServiceStatus::Added,
-                user: install_options.user.clone(),
-                version: install_options.version,
-            });
-            info!("Faucet service has been added successfully");
-            println!("Faucet service added {}", "✓".green());
-            if verbosity != VerbosityLevel::Minimal {
-                println!(
-                    "  - Bin path: {}",
-                    install_options.faucet_install_bin_path.to_string_lossy()
-                );
-                println!(
-                    "  - Data path: {}",
-                    install_options.service_data_dir_path.to_string_lossy()
-                );
-                println!(
-                    "  - Log path: {}",
-                    install_options.service_log_dir_path.to_string_lossy()
-                );
-            }
-            println!("[!] Note: the service has not been started");
-            std::fs::remove_file(install_options.faucet_src_bin_path)?;
-            node_registry.save()?;
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to add faucet service: {e}");
-            println!("Failed to add faucet service: {e}");
             Err(e.into())
         }
     }

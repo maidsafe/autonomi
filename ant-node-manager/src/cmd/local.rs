@@ -19,7 +19,7 @@ use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
-    control::ServiceController, get_local_node_registry_path, NodeRegistry,
+    control::ServiceController, get_local_node_registry_path, NodeRegistryManager,
 };
 use color_eyre::{eyre::eyre, Help, Report, Result};
 use std::path::PathBuf;
@@ -54,7 +54,7 @@ pub async fn join(
     }
 
     let local_node_reg_path = &get_local_node_registry_path()?;
-    let mut local_node_registry = NodeRegistry::load(local_node_reg_path)?;
+    let local_node_registry = NodeRegistryManager::load(local_node_reg_path).await?;
 
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
 
@@ -83,14 +83,14 @@ pub async fn join(
         rewards_address,
         evm_network,
     };
-    run_network(options, &mut local_node_registry, &ServiceController {}).await?;
+    run_network(options, local_node_registry, &ServiceController {}).await?;
     Ok(())
 }
 
-pub fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<()> {
+pub async fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<()> {
     let local_reg_path = &get_local_node_registry_path()?;
-    let local_node_registry = NodeRegistry::load(local_reg_path)?;
-    if local_node_registry.nodes.is_empty() {
+    let local_node_registry = NodeRegistryManager::load(local_reg_path).await?;
+    if local_node_registry.nodes.read().await.is_empty() {
         info!("No local network is currently running, cannot kill it");
         println!("No local network is currently running");
     } else {
@@ -98,7 +98,7 @@ pub fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<()> {
             print_banner("Killing Local Network");
         }
         info!("Kill local network");
-        kill_network(&local_node_registry, keep_directories)?;
+        kill_network(local_node_registry, keep_directories).await?;
         std::fs::remove_file(local_reg_path)?;
     }
     Ok(())
@@ -131,7 +131,7 @@ pub async fn run(
     // In the clean case, the node registry must be loaded *after* the existing network has
     // been killed, which clears it out.
     let local_node_reg_path = &get_local_node_registry_path()?;
-    let mut local_node_registry: NodeRegistry = if clean {
+    let local_node_registry: NodeRegistryManager = if clean {
         debug!(
             "Clean set to true, removing client, node dir, local registry and killing the network."
         );
@@ -145,11 +145,11 @@ pub async fn run(
         if local_node_reg_path.exists() {
             std::fs::remove_file(local_node_reg_path)?;
         }
-        kill(false, verbosity)?;
-        NodeRegistry::load(local_node_reg_path)?
+        kill(false, verbosity).await?;
+        NodeRegistryManager::load(local_node_reg_path).await?
     } else {
-        let local_node_registry = NodeRegistry::load(local_node_reg_path)?;
-        if !local_node_registry.nodes.is_empty() {
+        let local_node_registry = NodeRegistryManager::load(local_node_reg_path).await?;
+        if !local_node_registry.nodes.read().await.is_empty() {
             error!("A local network is already running, cannot run a new one");
             return Err(eyre!("A local network is already running")
                 .suggestion("Use the kill command to destroy the network then try again"));
@@ -189,19 +189,19 @@ pub async fn run(
         rewards_address,
         evm_network,
     };
-    run_network(options, &mut local_node_registry, &ServiceController {}).await?;
+    run_network(options, local_node_registry.clone(), &ServiceController {}).await?;
 
-    local_node_registry.save()?;
+    local_node_registry.save().await?;
     Ok(())
 }
 
 pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
-    let mut local_node_registry = NodeRegistry::load(&get_local_node_registry_path()?)?;
+    let local_node_registry = NodeRegistryManager::load(&get_local_node_registry_path()?).await?;
     if !json {
         print_banner("Local Network");
     }
     status_report(
-        &mut local_node_registry,
+        &local_node_registry,
         &ServiceController {},
         details,
         json,
@@ -209,6 +209,6 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
         true,
     )
     .await?;
-    local_node_registry.save()?;
+    local_node_registry.save().await?;
     Ok(())
 }

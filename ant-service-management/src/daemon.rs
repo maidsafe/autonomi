@@ -14,7 +14,8 @@ use crate::{
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
-use std::{ffi::OsString, net::SocketAddr, path::PathBuf};
+use std::{ffi::OsString, net::SocketAddr, path::PathBuf, sync::Arc};
+use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DaemonServiceData {
@@ -26,16 +27,16 @@ pub struct DaemonServiceData {
     pub version: String,
 }
 
-pub struct DaemonService<'a> {
-    pub service_data: &'a mut DaemonServiceData,
+pub struct DaemonService {
+    pub service_data: Arc<RwLock<DaemonServiceData>>,
     pub service_control: Box<dyn ServiceControl + Send>,
 }
 
-impl<'a> DaemonService<'a> {
+impl DaemonService {
     pub fn new(
-        service_data: &'a mut DaemonServiceData,
+        service_data: Arc<RwLock<DaemonServiceData>>,
         service_control: Box<dyn ServiceControl + Send>,
-    ) -> DaemonService<'a> {
+    ) -> DaemonService {
         DaemonService {
             service_data,
             service_control,
@@ -44,20 +45,26 @@ impl<'a> DaemonService<'a> {
 }
 
 #[async_trait]
-impl ServiceStateActions for DaemonService<'_> {
-    fn bin_path(&self) -> PathBuf {
-        self.service_data.daemon_path.clone()
+impl ServiceStateActions for DaemonService {
+    async fn bin_path(&self) -> PathBuf {
+        self.service_data.read().await.daemon_path.clone()
     }
 
-    fn build_upgrade_install_context(&self, _options: UpgradeOptions) -> Result<ServiceInstallCtx> {
+    async fn build_upgrade_install_context(
+        &self,
+        _options: UpgradeOptions,
+    ) -> Result<ServiceInstallCtx> {
         let (address, port) = self
             .service_data
+            .read()
+            .await
             .endpoint
             .ok_or_else(|| {
                 error!("Daemon endpoint not set in the service_data");
                 Error::DaemonEndpointNotSet
             })
             .map(|e| (e.ip().to_string(), e.port().to_string()))?;
+
         let install_ctx = ServiceInstallCtx {
             args: vec![
                 OsString::from("--port"),
@@ -68,8 +75,8 @@ impl ServiceStateActions for DaemonService<'_> {
             autostart: true,
             contents: None,
             environment: None,
-            label: self.service_data.service_name.parse()?,
-            program: self.service_data.daemon_path.clone(),
+            label: self.service_data.read().await.service_name.parse()?,
+            program: self.service_data.read().await.daemon_path.clone(),
             username: None,
             working_directory: None,
             disable_restart_on_failure: false,
@@ -77,52 +84,52 @@ impl ServiceStateActions for DaemonService<'_> {
         Ok(install_ctx)
     }
 
-    fn data_dir_path(&self) -> PathBuf {
+    async fn data_dir_path(&self) -> PathBuf {
         PathBuf::new()
     }
 
-    fn is_user_mode(&self) -> bool {
+    async fn is_user_mode(&self) -> bool {
         // The daemon service should never run in user mode.
         false
     }
 
-    fn log_dir_path(&self) -> PathBuf {
+    async fn log_dir_path(&self) -> PathBuf {
         PathBuf::new()
     }
 
-    fn name(&self) -> String {
-        self.service_data.service_name.clone()
+    async fn name(&self) -> String {
+        self.service_data.read().await.service_name.clone()
     }
 
-    fn pid(&self) -> Option<u32> {
-        self.service_data.pid
+    async fn pid(&self) -> Option<u32> {
+        self.service_data.read().await.pid
     }
 
-    fn on_remove(&mut self) {
-        self.service_data.status = ServiceStatus::Removed;
+    async fn on_remove(&self) {
+        self.service_data.write().await.status = ServiceStatus::Removed;
     }
 
-    async fn on_start(&mut self, pid: Option<u32>, _full_refresh: bool) -> Result<()> {
-        self.service_data.pid = pid;
-        self.service_data.status = ServiceStatus::Running;
+    async fn on_start(&self, pid: Option<u32>, _full_refresh: bool) -> Result<()> {
+        self.service_data.write().await.pid = pid;
+        self.service_data.write().await.status = ServiceStatus::Running;
         Ok(())
     }
 
-    async fn on_stop(&mut self) -> Result<()> {
-        self.service_data.pid = None;
-        self.service_data.status = ServiceStatus::Stopped;
+    async fn on_stop(&self) -> Result<()> {
+        self.service_data.write().await.pid = None;
+        self.service_data.write().await.status = ServiceStatus::Stopped;
         Ok(())
     }
 
-    fn set_version(&mut self, version: &str) {
-        self.service_data.version = version.to_string();
+    async fn set_version(&self, version: &str) {
+        self.service_data.write().await.version = version.to_string();
     }
 
-    fn status(&self) -> ServiceStatus {
-        self.service_data.status.clone()
+    async fn status(&self) -> ServiceStatus {
+        self.service_data.read().await.status.clone()
     }
 
-    fn version(&self) -> String {
-        self.service_data.version.clone()
+    async fn version(&self) -> String {
+        self.service_data.read().await.version.clone()
     }
 }

@@ -20,6 +20,7 @@ use std::{
     process::{Command, Stdio},
     sync::Arc,
 };
+use tokio::sync::RwLock;
 
 use crate::{add_services::config::PortRange, config, VerbosityLevel};
 
@@ -372,9 +373,13 @@ pub fn increment_port_option(port: Option<u16>) -> Option<u16> {
 }
 
 /// Make sure the port is not already in use by another node.
-pub fn check_port_availability(port_option: &PortRange, nodes: &[NodeServiceData]) -> Result<()> {
+pub async fn check_port_availability(
+    port_option: &PortRange,
+    nodes: &Arc<RwLock<Vec<Arc<RwLock<NodeServiceData>>>>>,
+) -> Result<()> {
     let mut all_ports = Vec::new();
-    for node in nodes {
+    for node in nodes.read().await.iter() {
+        let node = node.read().await;
         if let Some(port) = node.metrics_port {
             all_ports.push(port);
         }

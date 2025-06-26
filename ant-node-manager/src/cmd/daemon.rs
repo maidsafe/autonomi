@@ -15,7 +15,7 @@ use crate::{
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
-    DaemonService, NodeRegistry,
+    DaemonService, NodeRegistryManager,
 };
 use color_eyre::{eyre::eyre, Result};
 use std::{net::Ipv4Addr, path::PathBuf};
@@ -43,7 +43,7 @@ pub async fn add(
     debug!("Trying to create service user '{service_user}' for the daemon");
     service_manager.create_service_user(service_user)?;
 
-    let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
+    let node_registry = NodeRegistryManager::load(&config::get_node_registry_path()?).await?;
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
 
     let (daemon_src_bin_path, version) = if let Some(path) = src_path {
@@ -77,9 +77,10 @@ pub async fn add(
             user: "root".to_string(),
             version,
         },
-        &mut node_registry,
+        node_registry,
         &ServiceController {},
-    )?;
+    )
+    .await?;
     Ok(())
 }
 
@@ -89,14 +90,15 @@ pub async fn start(verbosity: VerbosityLevel) -> Result<()> {
         return Err(eyre!("The start command must run as the root user"));
     }
 
-    let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
-    if let Some(daemon) = &mut node_registry.daemon {
+    let node_registry = NodeRegistryManager::load(&config::get_node_registry_path()?).await?;
+
+    if let Some(daemon) = node_registry.daemon.read().await.as_ref() {
         if verbosity != VerbosityLevel::Minimal {
             print_banner("Start Daemon Service");
         }
         info!("Starting daemon service");
 
-        let service = DaemonService::new(daemon, Box::new(ServiceController {}));
+        let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         service_manager.start().await?;
@@ -106,11 +108,13 @@ pub async fn start(verbosity: VerbosityLevel) -> Result<()> {
             service_manager
                 .service
                 .service_data
+                .read()
+                .await
                 .endpoint
                 .map_or("-".to_string(), |e| e.to_string())
         );
 
-        node_registry.save()?;
+        node_registry.save().await?;
         return Ok(());
     }
 
@@ -124,19 +128,19 @@ pub async fn stop(verbosity: VerbosityLevel) -> Result<()> {
         return Err(eyre!("The stop command must run as the root user"));
     }
 
-    let mut node_registry = NodeRegistry::load(&config::get_node_registry_path()?)?;
-    if let Some(daemon) = &mut node_registry.daemon {
+    let node_registry = NodeRegistryManager::load(&config::get_node_registry_path()?).await?;
+    if let Some(daemon) = node_registry.daemon.read().await.as_ref() {
         if verbosity != VerbosityLevel::Minimal {
             print_banner("Stop Daemon Service");
         }
         info!("Stopping daemon service");
 
-        let service = DaemonService::new(daemon, Box::new(ServiceController {}));
+        let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         service_manager.stop().await?;
 
-        node_registry.save()?;
+        node_registry.save().await?;
 
         return Ok(());
     }

@@ -12,7 +12,7 @@ pub mod client;
 use self::client::LocalNetwork;
 use ant_protocol::antnode_proto::{ant_node_client::AntNodeClient, NodeInfoRequest};
 use ant_service_management::{
-    antctl_proto::ant_ctl_client::AntCtlClient, get_local_node_registry_path, NodeRegistry,
+    antctl_proto::ant_ctl_client::AntCtlClient, get_local_node_registry_path, NodeRegistryManager,
 };
 use eyre::{bail, eyre, OptionExt, Result};
 use itertools::Either;
@@ -119,7 +119,7 @@ pub async fn get_all_peer_ids(node_rpc_addresses: &Vec<SocketAddr>) -> Result<Ve
 /// A struct to facilitate restart of droplet/local nodes
 pub struct NodeRestart {
     // Deployment inventory is used incase of Droplet nodes and NodeRegistry incase of NonDroplet nodes.
-    inventory_file: Either<DeploymentInventory, NodeRegistry>,
+    inventory_file: Either<DeploymentInventory, NodeRegistryManager>,
     next_to_restart_idx: usize,
     skip_genesis_for_droplet: bool,
     retain_peer_id: bool,
@@ -130,11 +130,11 @@ impl NodeRestart {
     /// The restarted node relies on the genesis multiaddr to bootstrap after restart.
     ///
     /// Setting retain_peer_id will soft restart the node by keeping the old PeerId, ports, records etc.
-    pub fn new(skip_genesis_for_droplet: bool, retain_peer_id: bool) -> Result<Self> {
+    pub async fn new(skip_genesis_for_droplet: bool, retain_peer_id: bool) -> Result<Self> {
         let inventory_file = match DeploymentInventory::load() {
             Ok(inv) => Either::Left(inv),
             Err(_) => {
-                let reg = NodeRegistry::load(&get_local_node_registry_path()?)?;
+                let reg = NodeRegistryManager::load(&get_local_node_registry_path()?).await?;
                 Either::Right(reg)
             }
         };
@@ -185,17 +185,23 @@ impl NodeRestart {
             }
             Either::Right(reg) => {
                 // check if we've reached the end
-                if loop_over && self.next_to_restart_idx > reg.nodes.len() {
+                if loop_over && self.next_to_restart_idx > reg.nodes.read().await.len() {
                     self.next_to_restart_idx = 0;
                 }
 
-                if let Some((peer_id, antnode_rpc_endpoint)) = reg
+                let to_restart = reg
                     .nodes
+                    .read()
+                    .await
                     .get(self.next_to_restart_idx)
-                    .map(|node| (node.peer_id, node.rpc_socket_addr))
-                {
-                    let peer_id =
-                        peer_id.ok_or_eyre("PeerId should be present for a local node")?;
+                    .cloned();
+
+                if let Some(node_to_restart) = to_restart {
+                    let node = node_to_restart.read().await;
+                    let peer_id = node.peer_id.ok_or_eyre(
+                        "PeerId should be present for a local node in NodeRegistryManager",
+                    )?;
+                    let antnode_rpc_endpoint = node.rpc_socket_addr;
                     self.restart(peer_id, antnode_rpc_endpoint, progress_on_error)
                         .await?;
                     Some(antnode_rpc_endpoint)

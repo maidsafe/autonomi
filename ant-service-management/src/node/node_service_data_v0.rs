@@ -13,13 +13,13 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     net::{Ipv4Addr, SocketAddr},
     path::PathBuf,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub(super) struct NodeServiceDataV0 {
     pub antnode_path: PathBuf,
     #[serde(default)]
@@ -101,5 +101,116 @@ impl From<NodeServiceDataV0> for NodeServiceDataV1 {
             user_mode: v0.user_mode,
             version: v0.version,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::node_service_data::NodeServiceData;
+    use super::super::node_service_data_v1::NodeServiceDataV1;
+    use super::*;
+    use crate::{node::NODE_SERVICE_DATA_SCHEMA_LATEST, ServiceStatus};
+    use ant_bootstrap::InitialPeersConfig;
+    use ant_evm::EvmNetwork;
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        path::PathBuf,
+    };
+
+    #[test]
+    fn test_v0_conversion_to_latest() {
+        let v0_data = NodeServiceDataV0 {
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            upnp: true,
+            home_network: false,
+            // Add other required fields
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            peers_args: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v0_json = serde_json::to_value(&v0_data).unwrap();
+        let latest: NodeServiceData = serde_json::from_value(v0_json).unwrap();
+
+        // Verify it's the latest version
+        assert_eq!(latest.schema_version, NODE_SERVICE_DATA_SCHEMA_LATEST);
+    }
+
+    #[test]
+    fn test_v0_to_v1_conversion() {
+        let v0_data = NodeServiceDataV0 {
+            upnp: false,        // Should become !no_upnp in V1
+            home_network: true, // Should become relay in V1
+            peers_args: InitialPeersConfig {
+                first: true,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            // Add minimal required fields
+            antnode_path: PathBuf::from("/usr/bin/antnode"),
+            data_dir_path: PathBuf::from("/data"),
+            log_dir_path: PathBuf::from("/logs"),
+            number: 1,
+            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            service_name: "test".to_string(),
+            status: ServiceStatus::Running,
+            user_mode: true,
+            version: "0.1.0".to_string(),
+            auto_restart: false,
+            connected_peers: None,
+            evm_network: EvmNetwork::ArbitrumSepoliaTest,
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            peer_id: None,
+            pid: None,
+            rewards_address: Default::default(),
+            reward_balance: None,
+            user: None,
+        };
+
+        let v1: NodeServiceDataV1 = v0_data.into();
+
+        // Check field transformations
+        assert!(v1.no_upnp); // V0 upnp: false → V1 no_upnp: true
+        assert!(v1.relay); // V0 home_network: true → V1 relay: true
+        assert!(v1.initial_peers_config.first); // peers_args became initial_peers_config
     }
 }

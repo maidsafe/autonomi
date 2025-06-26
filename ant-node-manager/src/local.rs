@@ -15,10 +15,11 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::NodeRegistryManager;
 use ant_service_management::{
     control::ServiceControl,
     rpc::{RpcActions, RpcClient},
-    NodeRegistry, NodeServiceData, ServiceStatus,
+    NodeServiceData, ServiceStatus,
 };
 use color_eyre::eyre::OptionExt;
 use color_eyre::{eyre::eyre, Result};
@@ -130,32 +131,13 @@ impl Launcher for LocalSafeLauncher {
     }
 }
 
-pub fn kill_network(node_registry: &NodeRegistry, keep_directories: bool) -> Result<()> {
+pub async fn kill_network(
+    node_registry: NodeRegistryManager,
+    keep_directories: bool,
+) -> Result<()> {
     let mut system = System::new_all();
     system.refresh_all();
 
-    // It's possible that the faucet was not spun up because the network failed the validation
-    // process. If it wasn't running, we obviously don't need to do anything.
-    if let Some(faucet) = &node_registry.faucet {
-        // If we're here, the faucet was spun up. However, it's possible for the process to have
-        // died since then. In that case, we don't need to do anything.
-        // I think the use of `unwrap` is justified here, because for a local network, if the
-        // faucet is not `None`, the pid also must have a value.
-        if let Some(process) = system.process(Pid::from(faucet.pid.unwrap() as usize)) {
-            process.kill();
-            debug!("Faucet has been killed");
-            println!("{} Killed faucet", "✓".green());
-        }
-    }
-
-    let faucet_data_path = dirs_next::data_dir()
-        .ok_or_else(|| eyre!("Could not obtain user's data directory"))?
-        .join("autonomi")
-        .join("test_faucet");
-    if faucet_data_path.is_dir() {
-        std::fs::remove_dir_all(faucet_data_path)?;
-        debug!("Removed faucet data directory");
-    }
     let genesis_data_path = dirs_next::data_dir()
         .ok_or_else(|| eyre!("Could not obtain user's data directory"))?
         .join("autonomi")
@@ -165,7 +147,8 @@ pub fn kill_network(node_registry: &NodeRegistry, keep_directories: bool) -> Res
         std::fs::remove_dir_all(genesis_data_path)?;
     }
 
-    for node in node_registry.nodes.iter() {
+    for node in node_registry.nodes.read().await.iter() {
+        let node = node.read().await;
         println!("{}:", node.service_name);
         // If the PID is not set it means the `status` command ran and determined the node was
         // already dead anyway, so we don't need to do anything.
@@ -222,7 +205,7 @@ pub struct LocalNetworkOptions {
 
 pub async fn run_network(
     options: LocalNetworkOptions,
-    node_registry: &mut NodeRegistry,
+    node_registry: NodeRegistryManager,
     service_control: &dyn ServiceControl,
 ) -> Result<()> {
     info!("Running local network");
@@ -230,17 +213,17 @@ pub async fn run_network(
     // Check port availability when joining a local network.
     if let Some(port_range) = &options.node_port {
         port_range.validate(options.node_count)?;
-        check_port_availability(port_range, &node_registry.nodes)?;
+        check_port_availability(port_range, &node_registry.nodes).await?;
     }
 
     if let Some(port_range) = &options.metrics_port {
         port_range.validate(options.node_count)?;
-        check_port_availability(port_range, &node_registry.nodes)?;
+        check_port_availability(port_range, &node_registry.nodes).await?;
     }
 
     if let Some(port_range) = &options.rpc_port {
         port_range.validate(options.node_count)?;
-        check_port_availability(port_range, &node_registry.nodes)?;
+        check_port_availability(port_range, &node_registry.nodes).await?;
     }
 
     let launcher = LocalSafeLauncher {
@@ -256,12 +239,14 @@ pub async fn run_network(
         if let Some(peers) = options.peers {
             (peers, 1)
         } else {
-            let peer = node_registry
-                .nodes
-                .iter()
-                .find_map(|n| n.listen_addr.clone())
-                .ok_or_eyre("Unable to obtain a peer to connect to")?;
-            (peer, 1)
+            let mut peers = Vec::new();
+            for node in node_registry.nodes.read().await.iter() {
+                let node = node.read().await;
+                if let Some(listen_addr) = &node.listen_addr {
+                    peers.extend(listen_addr.clone());
+                }
+            }
+            (peers, 1)
         }
     } else {
         let rpc_free_port = if let Some(port) = rpc_port {
@@ -280,7 +265,7 @@ pub async fn run_network(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
         let rpc_client = RpcClient::from_socket_addr(rpc_socket_addr);
 
-        let number = (node_registry.nodes.len() as u16) + 1;
+        let number = (node_registry.nodes.read().await.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: true,
@@ -298,7 +283,7 @@ pub async fn run_network(
             &rpc_client,
         )
         .await?;
-        node_registry.nodes.push(node.clone());
+        node_registry.push_node(node.clone()).await;
         let bootstrap_peers = node
             .listen_addr
             .ok_or_eyre("The listen address was not set")?;
@@ -307,7 +292,7 @@ pub async fn run_network(
         rpc_port = increment_port_option(rpc_port);
         (bootstrap_peers, 2)
     };
-    node_registry.save()?;
+    node_registry.save().await?;
 
     for _ in start..=options.node_count {
         let rpc_free_port = if let Some(port) = rpc_port {
@@ -326,7 +311,7 @@ pub async fn run_network(
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
         let rpc_client = RpcClient::from_socket_addr(rpc_socket_addr);
 
-        let number = (node_registry.nodes.len() as u16) + 1;
+        let number = (node_registry.nodes.read().await.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: false,
@@ -344,13 +329,13 @@ pub async fn run_network(
             &rpc_client,
         )
         .await?;
-        node_registry.nodes.push(node);
+        node_registry.push_node(node).await;
 
         // We save the node registry for each launch because it's possible any node can fail to
         // launch, or maybe the validation will fail. In the error case, we will want to use the
         // `kill` command for the nodes that we did spin up. The `kill` command works on the basis
         // of what's in the node registry.
-        node_registry.save()?;
+        node_registry.save().await?;
 
         node_port = increment_port_option(node_port);
         metrics_port = increment_port_option(metrics_port);
@@ -453,12 +438,20 @@ pub async fn run_node(
 // Private Helpers
 //
 
-async fn validate_network(node_registry: &mut NodeRegistry, peers: Vec<Multiaddr>) -> Result<()> {
-    let mut all_peers = node_registry
-        .nodes
-        .iter()
-        .map(|n| n.peer_id.ok_or_eyre("The PeerId was not set"))
-        .collect::<Result<Vec<PeerId>>>()?;
+async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiaddr>) -> Result<()> {
+    let mut all_peers = Vec::new();
+    for node in node_registry.nodes.read().await.iter() {
+        let node = node.read().await;
+        if let Some(peer_id) = &node.peer_id {
+            all_peers.push(*peer_id);
+        } else {
+            return Err(eyre!(
+                "The PeerId was not set for node: {}",
+                node.service_name
+            ));
+        }
+    }
+
     // The additional peers are peers being managed outwith the node manager. This only applies
     // when we've joined a network not being managed by the node manager. Otherwise, this list will
     // be empty.
@@ -473,11 +466,15 @@ async fn validate_network(node_registry: &mut NodeRegistry, peers: Vec<Multiaddr
         .collect::<Vec<PeerId>>();
     all_peers.extend(additional_peers);
 
-    for node in node_registry.nodes.iter() {
-        let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
+    for node in node_registry.nodes.read().await.iter() {
+        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
         let net_info = rpc_client.network_info().await?;
         let peers = net_info.connected_peers;
-        let peer_id = node.peer_id.ok_or_eyre("The PeerId was not set")?;
+        let peer_id = node
+            .read()
+            .await
+            .peer_id
+            .ok_or_eyre("The PeerId was not set")?;
         debug!("Node {peer_id} has {} peers", peers.len());
         println!("Node {peer_id} has {} peers", peers.len());
 

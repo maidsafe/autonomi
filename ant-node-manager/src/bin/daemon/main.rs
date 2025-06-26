@@ -17,7 +17,7 @@ use ant_service_management::{
         get_status_response::Node,
         GetStatusRequest, GetStatusResponse, NodeServiceRestartRequest, NodeServiceRestartResponse,
     },
-    NodeRegistry,
+    NodeRegistryManager,
 };
 use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
@@ -60,7 +60,7 @@ impl AntCtl for AntCtlDaemon {
     ) -> Result<Response<NodeServiceRestartResponse>, Status> {
         println!("RPC request received {:?}", request.get_ref());
         info!("RPC request received {:?}", request.get_ref());
-        let node_registry = Self::load_node_registry().map_err(|err| {
+        let node_registry = Self::load_node_registry().await.map_err(|err| {
             Status::new(
                 Code::Internal,
                 format!("Failed to load node registry: {err}"),
@@ -88,45 +88,48 @@ impl AntCtl for AntCtlDaemon {
     ) -> Result<Response<GetStatusResponse>, Status> {
         println!("RPC request received {:?}", request.get_ref());
         info!("RPC request received {:?}", request.get_ref());
-        let node_registry = Self::load_node_registry().map_err(|err| {
+        let node_registry = Self::load_node_registry().await.map_err(|err| {
             Status::new(
                 Code::Internal,
                 format!("Failed to load node registry: {err}"),
             )
         })?;
 
-        let nodes_info = node_registry
-            .nodes
-            .iter()
-            .map(|node| Node {
+        let mut nodes_info = Vec::new();
+        for node in node_registry.nodes.read().await.iter() {
+            let node = node.read().await;
+
+            nodes_info.push(Node {
                 peer_id: node.peer_id.map(|id| id.to_bytes()),
                 status: node.status.clone() as i32,
                 number: node.number as u32,
-            })
-            .collect::<Vec<_>>();
+            });
+        }
+
         info!("Node status retrieved, nod len: {:?}", nodes_info.len());
         Ok(Response::new(GetStatusResponse { nodes: nodes_info }))
     }
 }
 
 impl AntCtlDaemon {
-    fn load_node_registry() -> Result<NodeRegistry> {
+    async fn load_node_registry() -> Result<NodeRegistryManager> {
         let node_registry_path = get_node_registry_path()
             .map_err(|err| eyre!("Could not obtain node registry path: {err:?}"))?;
-        let node_registry = NodeRegistry::load(&node_registry_path)
+        let node_registry = NodeRegistryManager::load(&node_registry_path)
+            .await
             .map_err(|err| eyre!("Could not load node registry: {err:?}"))?;
         Ok(node_registry)
     }
 
     async fn restart_handler(
-        mut node_registry: NodeRegistry,
+        node_registry: NodeRegistryManager,
         peer_id: PeerId,
         retain_peer_id: bool,
     ) -> Result<()> {
-        let res = rpc::restart_node_service(&mut node_registry, peer_id, retain_peer_id).await;
+        let res = rpc::restart_node_service(node_registry.clone(), peer_id, retain_peer_id).await;
 
         // make sure to save the state even if the above fn fails.
-        node_registry.save()?;
+        node_registry.save().await?;
 
         res
     }

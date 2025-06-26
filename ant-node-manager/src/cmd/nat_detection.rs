@@ -11,7 +11,7 @@ use crate::{
 };
 use ant_bootstrap::ContactsFetcher;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
-use ant_service_management::{NatDetectionStatus, NodeRegistry};
+use ant_service_management::{NatDetectionStatus, NodeRegistryManager};
 use color_eyre::eyre::{bail, Context, Result};
 use libp2p::Multiaddr;
 use rand::seq::SliceRandom;
@@ -50,10 +50,10 @@ pub async fn run_nat_detection(
     };
     info!("Running nat detection with servers: {servers:?}");
 
-    let mut node_registry = NodeRegistry::load(&get_node_registry_path()?)?;
+    let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
 
     if !force_run {
-        if let Some(status) = node_registry.nat_status {
+        if let Some(status) = node_registry.nat_status.read().await.as_ref() {
             if verbosity != VerbosityLevel::Minimal {
                 println!("NAT status has already been set as: {status:?}");
             }
@@ -157,8 +157,8 @@ pub async fn run_nat_detection(
         println!("NAT status has been found to be: {status:?}");
     }
 
-    node_registry.nat_status = Some(status);
-    node_registry.save()?;
+    *node_registry.nat_status.write().await = Some(status);
+    node_registry.save().await?;
 
     Ok(())
 }

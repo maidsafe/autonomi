@@ -1,10 +1,15 @@
-# The Autonomi Network (previously Safe Network)
+# The Autonomi Network
 
-[Autonomi.com](https://autonomi.com/)
+[Autonomi.com](https://autonomi.com/) | [Documentation](https://docs.autonomi.com/)
 
-Own your data. Share your disk space. Get paid for doing so.<br>
-The Data on the Autonomi Network is Decentralised, Autonomous, and built atop of Kademlia and
-Libp2p.<br>
+Critical infrastructure of the next web. Assembled from everyday devices and owned by us all.
+
+Autonomi is a fully autonomous data and communications network that provides:
+- **Lifetime storage** with one-time payment
+- **Private by design** with multilayered encryption
+- **Blockchainless data** architecture
+- **Decentralized infrastructure** built from everyday devices
+- **Content-addressable storage** using Kademlia and libp2p
 
 ## Table of Contents
 
@@ -245,17 +250,29 @@ metrics.
 
 ## Contributing
 
-Feel free to clone and modify this project. Pull requests are welcome.<br>You can also
-visit \* \*[The MaidSafe Forum](https://safenetforum.org/)\*\* for discussion or if you would like to join our
-online community.
+Feel free to clone and modify this project. Pull requests are welcome.
+
+### Community
+
+Join our community for support and discussions:
+- **Discord**: https://discord.gg/autonomi
+- **Forum**: https://forum.autonomi.community/
+- **X (Twitter)**: https://x.com/WithAutonomi
+- **Reddit**: https://www.reddit.com/r/autonomi/
+- **LinkedIn**: https://uk.linkedin.com/company/withautonomi
+
+For detailed contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ### Pull Request Process
 
-1. Please direct all pull requests to the `alpha` branch instead of the `main` branch.
-1. Ensure that your commit messages clearly describe the changes you have made and use
+1. Please direct all pull requests to the `main` branch.
+2. Ensure that your commit messages clearly describe the changes you have made and use
    the [Conventional Commits](https://www.conventionalcommits.org/) specification.
+3. All PRs must pass automated CI tests and peer review before being merged.
+4. PRs should be <= 200 lines changed (lines added + lines deleted).
+5. PRs should clearly reference an issue when applicable using [GitHub keywords](https://help.github.com/articles/closing-issues-using-keywords).
 
 ## License
 
-This Safe Network repository is licensed under the General Public License (GPL), version
+This Autonomi Network repository is licensed under the General Public License (GPL), version
 3 ([LICENSE](http://www.gnu.org/licenses/gpl-3.0.en.html)).
