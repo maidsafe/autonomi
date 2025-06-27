@@ -200,6 +200,8 @@ impl Client {
                 let (p1, q1, a1, _) = &quotes[0];
                 let (p2, q2, a2, _) = &quotes[1];
 
+                let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
+                trace!("Peers to pay for {content_addr}: {peer_ids:?}");
                 quotes_to_pay_per_addr.insert(
                     content_addr,
                     QuoteForAddress(vec![
