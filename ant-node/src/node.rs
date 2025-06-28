@@ -18,6 +18,7 @@ use ant_evm::RewardsAddress;
 use ant_networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use ant_networking::MetricsRegistries;
+use ant_networking::ReachabilityStatus;
 use ant_networking::{
     Instant, Network, NetworkBuilder, NetworkError, NetworkEvent, NodeIssue, SwarmDriver,
 };
@@ -90,6 +91,8 @@ pub struct NodeBuilder {
     metrics_server_port: Option<u16>,
     no_upnp: bool,
     relay_client: bool,
+    /// Perform reachability check on the node and auto set networking flags if needed.
+    pub reachability_check: bool,
     root_dir: PathBuf,
 }
 
@@ -116,8 +119,20 @@ impl NodeBuilder {
             metrics_server_port: None,
             no_upnp: false,
             relay_client: false,
+            reachability_check: false,
             root_dir,
         }
+    }
+
+    /// Set the socket address for the node to listen on.
+    pub fn with_socket_addr(&mut self, addr: SocketAddr) {
+        self.addr = addr;
+    }
+
+    /// Enabling this would run external reachability check before starting the node.
+    /// This would override some of the networking flags, like `upnp` and `is_behind_home_network`, etc.
+    pub fn with_reachability_check(&mut self, enable: bool) {
+        self.reachability_check = enable;
     }
 
     /// Set the flag to indicate if the node is running in local mode
@@ -144,6 +159,21 @@ impl NodeBuilder {
     /// Set the flag to disable UPnP for the node
     pub fn no_upnp(&mut self, no_upnp: bool) {
         self.no_upnp = no_upnp;
+    }
+
+    /// Check if the node is publicly reachable.
+    pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
+        let mut network_builder = NetworkBuilder::new(
+            self.identity_keypair.clone(),
+            self.local,
+            self.initial_peers.clone(),
+        );
+
+        network_builder.listen_addr(self.addr);
+        let swarm_driver = network_builder.build_reachability_check_swarm()?;
+        let status = swarm_driver.detect().await?;
+
+        Ok(status)
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,

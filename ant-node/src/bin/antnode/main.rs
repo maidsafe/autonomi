@@ -19,6 +19,7 @@ use ant_bootstrap::{BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
+use ant_networking::ReachabilityStatus;
 use ant_node::utils::get_root_dir_and_keypair;
 use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
 use ant_protocol::{
@@ -186,6 +187,12 @@ struct Opt {
     #[clap(long, default_value_t = 0)]
     port: u16,
 
+    /// Enabling this will run an optional reachability check before starting the node.
+    ///
+    /// Enabling this will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
+    #[clap(long, default_value_t = false)]
+    reachability_check: bool,
+
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
@@ -317,6 +324,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_reachability_check(opt.reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -358,7 +366,7 @@ fn main() -> Result<()> {
 /// - `Ok(None)` if we want to shutdown the node.
 /// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
-    node_builder: NodeBuilder,
+    mut node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
@@ -368,6 +376,43 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
+    if node_builder.reachability_check {
+        info!("Running reachability check ... This might take a few minutes to complete.");
+        let status = node_builder.run_reachability_check().await;
+        match status {
+            Ok(ReachabilityStatus::Relay { upnp }) => {
+                info!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                println!(
+                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
+                );
+                node_builder.relay_client(true);
+                node_builder.no_upnp(!upnp);
+            }
+            Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
+                println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
+                node_builder.no_upnp(!upnp);
+                node_builder.with_socket_addr(addr);
+            }
+            Ok(ReachabilityStatus::NotRoutable { .. }) => {
+                info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                return Err(eyre!(
+                    "The node will be unreachable even with Relay mode. Terminating node."
+                ));
+            }
+            Err(err) => {
+                info!("Reachability check error: {err}. Terminating the node.");
+                println!("Reachability check error: {err}. Terminating the node.");
+                return Err(eyre!(
+                    "Reachability check error: {err}. Terminating the node."
+                ));
+            }
+        }
+    }
+
     let running_node = node_builder.build_and_run()?;
 
     println!(

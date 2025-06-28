@@ -14,6 +14,7 @@ use crate::{
     event::NetworkEvent,
     external_address::ExternalAddressManager,
     network_discovery::NetworkDiscovery,
+    reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
@@ -26,7 +27,10 @@ use crate::{
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
-    version::{get_network_id_str, IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR},
+    version::{
+        get_network_id_str, IDENTIFY_PROTOCOL_STR, IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR,
+        REQ_RESPONSE_VERSION_STR,
+    },
     NetworkAddress, PrettyPrintKBucketKey,
 };
 use futures::future::Either;
@@ -244,8 +248,7 @@ impl NetworkBuilder {
 
         let listen_addr = self.listen_addr;
 
-        let (network, events_receiver, mut swarm_driver) =
-            self.build(kad_cfg, store_cfg, ProtocolSupport::Full);
+        let (network, events_receiver, mut swarm_driver) = self.build(kad_cfg, store_cfg);
 
         // Listen on the provided address
         let listen_socket_addr = listen_addr.ok_or(NetworkError::ListenAddressNotProvided)?;
@@ -254,11 +257,107 @@ impl NetworkBuilder {
         let addr_quic = Multiaddr::from(listen_socket_addr.ip())
             .with(Protocol::Udp(listen_socket_addr.port()))
             .with(Protocol::QuicV1);
-        swarm_driver
-            .listen_on(addr_quic)
-            .expect("Multiaddr should be supported by our configured transports");
+        if listen_socket_addr.port() != 0 {
+            let start_time = std::time::Instant::now();
+            let timeout = Duration::from_secs(300); // 5 minutes
+            while swarm_driver.swarm.listen_on(addr_quic.clone()).is_err() {
+                if start_time.elapsed() > timeout {
+                    panic!("Failed to listen on QUIC address {addr_quic:?} after 5 minutes");
+                }
+                warn!("Failed to listen on QUIC address {addr_quic:?}, retrying...");
+                std::thread::sleep(Duration::from_secs(1));
+            }
+        } else {
+            swarm_driver
+                .swarm
+                .listen_on(addr_quic.clone())
+                .expect("Failed to listen on QUIC address");
+        }
 
         Ok((network, events_receiver, swarm_driver))
+    }
+
+    /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
+    pub fn build_reachability_check_swarm(self) -> Result<ReachabilityCheckSwarmDriver> {
+        let identify_protocol_str = IDENTIFY_PROTOCOL_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")
+            .clone();
+
+        let peer_id = PeerId::from(self.keypair.public());
+        info!(
+            "Self PeerID {peer_id} is represented as kbucket_key {:?}",
+            PrettyPrintKBucketKey(NetworkAddress::from(peer_id).as_kbucket_key())
+        );
+
+        #[cfg(feature = "open-metrics")]
+        let mut metrics_registries = self.metrics_registries.unwrap_or_default();
+
+        // ==== Transport ====
+        #[cfg(feature = "open-metrics")]
+        let transport = transport::build_transport(&self.keypair, &mut metrics_registries);
+        #[cfg(not(feature = "open-metrics"))]
+        let transport = transport::build_transport(&self.keypair);
+        let transport = if !self.local {
+            debug!("Preventing non-global dials");
+            // Wrap upper in a transport that prevents dialing local addresses.
+            libp2p::core::transport::global_only::Transport::new(transport).boxed()
+        } else {
+            transport
+        };
+
+        let (relay_transport, _relay_client) =
+            libp2p::relay::client::new(self.keypair.public().to_peer_id());
+        let transport = relay_transport
+            .upgrade(libp2p::core::upgrade::Version::V1Lazy)
+            .authenticate(
+                libp2p::noise::Config::new(&self.keypair)
+                    .expect("Signing libp2p-noise static DH keypair failed."),
+            )
+            .multiplex(libp2p::yamux::Config::default())
+            .or_transport(transport);
+
+        let transport = transport
+            .map(|either_output, _| match either_output {
+                Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+                Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
+            })
+            .boxed();
+
+        // Listen on the provided address
+        let listen_socket_addr = self
+            .listen_addr
+            .ok_or(NetworkError::ListenAddressNotProvided)?;
+
+        // Identify Behaviour
+        let agent_version = IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR
+            .read()
+            .expect("Failed to obtain read lock for IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR")
+            .clone();
+        info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
+        let identify = {
+            let cfg = libp2p::identify::Config::new(identify_protocol_str, self.keypair.public())
+                .with_agent_version(agent_version)
+                // Enlength the identify interval from default 5 mins to 1 hour.
+                .with_interval(RESEND_IDENTIFY_INVERVAL)
+                .with_hide_listen_addrs(true);
+            libp2p::identify::Behaviour::new(cfg)
+        };
+
+        let behaviour = ReachabilityCheckBehaviour {
+            upnp: libp2p::upnp::tokio::Behaviour::default(),
+            identify,
+        };
+
+        let swarm_config = libp2p::swarm::Config::with_tokio_executor()
+            .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
+
+        let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
+
+        let swarm_driver =
+            ReachabilityCheckSwarmDriver::new(swarm, self.initial_contacts, listen_socket_addr);
+
+        Ok(swarm_driver)
     }
 
     /// Private helper to create the network components with the provided config and req/res behaviour
@@ -266,7 +365,6 @@ impl NetworkBuilder {
         self,
         kad_cfg: kad::Config,
         record_store_cfg: NodeRecordStoreConfig,
-        req_res_protocol: ProtocolSupport,
     ) -> (Network, mpsc::Receiver<NetworkEvent>, SwarmDriver) {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
@@ -289,20 +387,20 @@ impl NetworkBuilder {
 
         // ==== Transport ====
         #[cfg(feature = "open-metrics")]
-        let main_transport = transport::build_transport(&self.keypair, &mut metrics_registries);
+        let transport = transport::build_transport(&self.keypair, &mut metrics_registries);
         #[cfg(not(feature = "open-metrics"))]
-        let main_transport = transport::build_transport(&self.keypair);
+        let transport = transport::build_transport(&self.keypair);
         let transport = if !self.local {
             debug!("Preventing non-global dials");
             // Wrap upper in a transport that prevents dialing local addresses.
-            libp2p::core::transport::global_only::Transport::new(main_transport).boxed()
+            libp2p::core::transport::global_only::Transport::new(transport).boxed()
         } else {
-            main_transport
+            transport
         };
 
-        let (relay_transport, relay_behaviour) =
+        let (relay_transport, relay_client) =
             libp2p::relay::client::new(self.keypair.public().to_peer_id());
-        let relay_transport = relay_transport
+        let transport = relay_transport
             .upgrade(libp2p::core::upgrade::Version::V1Lazy)
             .authenticate(
                 libp2p::noise::Config::new(&self.keypair)
@@ -311,7 +409,7 @@ impl NetworkBuilder {
             .multiplex(libp2p::yamux::Config::default())
             .or_transport(transport);
 
-        let transport = relay_transport
+        let transport = transport
             .map(|either_output, _| match either_output {
                 Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
                 Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
@@ -359,7 +457,7 @@ impl NetworkBuilder {
                 [(
                     StreamProtocol::try_from_owned(req_res_version_str)
                         .expect("StreamProtocol should start with a /"),
-                    req_res_protocol,
+                    ProtocolSupport::Full,
                 )],
                 cfg,
             )
@@ -432,7 +530,7 @@ impl NetworkBuilder {
             do_not_disturb: crate::behaviour::do_not_disturb::Behaviour::default(),
             // `Relay client Behaviour` is enabled for all nodes. This is required for normal nodes to connect to relay
             // clients.
-            relay_client: relay_behaviour,
+            relay_client,
             relay_server,
             upnp,
             request_response,
