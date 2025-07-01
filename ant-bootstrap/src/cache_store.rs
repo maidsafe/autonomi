@@ -175,7 +175,7 @@ impl BootstrapCacheStore {
         let mut file = OpenOptions::new()
             .read(true)
             .open(&cfg.cache_file_path)
-            .inspect_err(|err| warn!("Failed to open cache file: {err}",))?;
+            .inspect_err(|err| warn!("Failed to open cache file [{:?}]: {}", &cfg.cache_file_path, err))?;
 
         // Read the file contents
         let mut contents = String::new();

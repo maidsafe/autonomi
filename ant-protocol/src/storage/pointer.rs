@@ -19,6 +19,7 @@ pub struct Pointer {
     counter: u64,
     target: PointerTarget,
     signature: Signature,
+    address: PointerAddress,
 }
 
 impl std::fmt::Debug for Pointer {
@@ -67,16 +68,18 @@ impl Pointer {
     /// Create a new pointer, signing it with the provided secret key.
     /// This pointer would be stored on the network at the provided key's public key.
     /// There can only be one pointer at a time at the same address (one per key).
-    pub fn new(owner: &SecretKey, counter: u64, target: PointerTarget) -> Self {
+    pub fn new(owner: &SecretKey, counter: u64, target: PointerTarget, address_key: PublicKey) -> Self {
         let pubkey = owner.public_key();
         let bytes_to_sign = Self::bytes_to_sign(&pubkey, counter, &target);
         let signature = owner.sign(&bytes_to_sign);
+        let address = PointerAddress::new(address_key);
 
         Self {
             owner: pubkey,
             counter,
             target,
             signature,
+            address
         }
     }
 
@@ -86,12 +89,14 @@ impl Pointer {
         counter: u64,
         target: PointerTarget,
         signature: Signature,
+        address: PointerAddress,
     ) -> Self {
         Self {
             owner,
             counter,
             target,
             signature,
+            address
         }
     }
 
@@ -120,7 +125,7 @@ impl Pointer {
 
     /// Get the address of the pointer
     pub fn address(&self) -> PointerAddress {
-        PointerAddress::new(self.owner)
+        self.address
     }
 
     /// Get the owner of the pointer
@@ -170,16 +175,17 @@ mod tests {
         let counter = 1;
         let pk = SecretKey::random().public_key();
         let target = PointerTarget::GraphEntryAddress(GraphEntryAddress::new(pk));
+        let address = SecretKey::random().public_key();
 
         // Create and sign pointer
-        let pointer = Pointer::new(&owner_sk, counter, target.clone());
+        let pointer = Pointer::new(&owner_sk, counter, target.clone(), address);
         assert!(pointer.verify_signature()); // Should be valid with correct signature
 
         // Create pointer with wrong signature
         let wrong_sk = SecretKey::random();
         let sig = wrong_sk.sign(pointer.bytes_for_signature());
         let wrong_pointer =
-            Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig);
+            Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig, PointerAddress::new(address));
         assert!(!wrong_pointer.verify_signature()); // Should be invalid with wrong signature
     }
 
@@ -238,7 +244,7 @@ mod tests {
 
         // Serialize the new pointer format
         let new_pointer =
-            Pointer::new(&sk, 42, PointerTarget::ChunkAddress(ChunkAddress::new(xor)));
+            Pointer::new(&sk, 42, PointerTarget::ChunkAddress(ChunkAddress::new(xor)), sk.public_key());
 
         // Serialize the new pointer format
         let serialized_new =

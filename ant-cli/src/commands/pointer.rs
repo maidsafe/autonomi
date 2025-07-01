@@ -123,7 +123,7 @@ pub async fn create(
     info!("Creating pointer with name: {name}");
 
     let (cost, address) = client
-        .pointer_create(&pointer_key, target, wallet.into())
+        .pointer_create(&pointer_key, target, pointer_key.public_key(), wallet.into())
         .await
         .wrap_err("Failed to create pointer")?;
 
@@ -261,7 +261,7 @@ pub async fn edit(
     info!("Updating pointer target");
 
     client
-        .pointer_update(&pointer_key, target)
+        .pointer_update(&pointer_key, target, pointer_key.public_key())
         .await
         .wrap_err("Failed to update pointer")?;
 

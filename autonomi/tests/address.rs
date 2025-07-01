@@ -84,7 +84,7 @@ async fn test_data_addresses_use() -> Result<()> {
 
     // put pointer
     let key = bls::SecretKey::random();
-    let pointer = Pointer::new(&key, 0, PointerTarget::GraphEntryAddress(addr));
+    let pointer = Pointer::new(&key, 0, PointerTarget::GraphEntryAddress(addr), key.public_key());
     let payment_option = PaymentOption::from(&wallet);
     let (_cost, addr) = client.pointer_put(pointer, payment_option).await?;
     let pointer_addr = addr.to_hex();
