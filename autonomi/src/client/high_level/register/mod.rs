@@ -158,7 +158,7 @@ impl Client {
         let target = PointerTarget::GraphEntryAddress(addr);
         let pointer_key = register_head_pointer_sk(&main_key.into());
         let (pointer_cost, _pointer_addr) = self
-            .pointer_create(&pointer_key, target, pointer_key.public_key(), payment_option.clone())
+            .pointer_create(pointer_key.public_key(), target, pointer_key.public_key(), &pointer_key, payment_option.clone())
             .await?;
         let total_cost = graph_cost
             .checked_add(pointer_cost)
@@ -216,7 +216,7 @@ impl Client {
                 // pointer is apparently not at head, update it
                 let target = PointerTarget::GraphEntryAddress(address);
                 let pointer_key = register_head_pointer_sk(&main_key.into());
-                self.pointer_update(&pointer_key, target, pointer_key.public_key()).await?;
+                self.pointer_update(pointer_key.public_key(), target, pointer_key.public_key(), &pointer_key).await?;
                 return Err(RegisterError::Corrupt(format!(
                     "Pointer doesn't point to the register latest value, attempting to heal the register by updating it to point to the next entry at {address:?}, please retry the operation"
                 )));
@@ -227,7 +227,7 @@ impl Client {
         // update the pointer to point to the new entry
         let target = PointerTarget::GraphEntryAddress(new_graph_entry_addr);
         let pointer_key = register_head_pointer_sk(&main_key.into());
-        self.pointer_update(&pointer_key, target, pointer_key.public_key()).await?;
+        self.pointer_update(pointer_key.public_key(), target, pointer_key.public_key(), &pointer_key).await?;
 
         Ok(cost)
     }
