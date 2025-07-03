@@ -165,9 +165,9 @@ impl Pointer {
     }
 
     /// Verifies if the pointer has a valid signature
-    pub fn verify_signature(&self, signer: PublicKey) -> bool {
+    pub fn verify_signature(&self) -> bool {
         let bytes = self.bytes_for_signature();
-        signer.verify(&self.signature, &bytes)
+        self.previous_owner.verify(&self.signature, &bytes)
     }
 
     /// Size of the pointer
@@ -190,14 +190,14 @@ mod tests {
 
         // Create and sign pointer
         let pointer = Pointer::new(owner_sk.public_key(), counter, target.clone(), address, &owner_sk);
-        assert!(pointer.verify_signature(owner_sk.public_key())); // Should be valid with correct signature
+        assert!(pointer.verify_signature()); // Should be valid with correct signature
 
         // Create pointer with wrong signature
         let wrong_sk = SecretKey::random();
         let sig = wrong_sk.sign(pointer.bytes_for_signature());
         let wrong_pointer =
             Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig, address, owner_sk.public_key());
-        assert!(!wrong_pointer.verify_signature(owner_sk.public_key())); // Should be invalid with wrong signature
+        assert!(!wrong_pointer.verify_signature()); // Should be invalid with wrong signature
     }
 
     #[test]

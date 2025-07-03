@@ -929,7 +929,7 @@ impl Node {
         _payment: Option<ProofOfPayment>,
     ) -> Result<(), PutValidationError> {
         // Verify the pointer's signature
-        if !pointer.verify_signature(*pointer.previous_owner()) {
+        if !pointer.verify_signature() {
             warn!("Pointer signature verification failed");
             return Err(PutValidationError::InvalidPointerSignature);
         }
@@ -954,7 +954,7 @@ impl Node {
                 // Check the current signer (i.e. previous owner) is the previous owner
                 if pointer.previous_owner().to_hex() != local_pointer.owner().to_hex() {
                     warn!("Permission denied to change pointer properties");
-                    // todo: Create PutValidationError::PermissionDenied 
+                    // todo: Create PutValidationError::PermissionDenied
                     return Err(PutValidationError::InvalidPointerSignature);
                 }
             }

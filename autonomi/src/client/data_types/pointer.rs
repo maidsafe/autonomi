@@ -103,7 +103,7 @@ impl Client {
 
     /// Verify a pointer
     pub fn pointer_verify(pointer: &Pointer) -> Result<(), PointerError> {
-        if !pointer.verify_signature(*pointer.previous_owner()) {
+        if !pointer.verify_signature() {
             return Err(PointerError::BadSignature);
         }
         Ok(())
