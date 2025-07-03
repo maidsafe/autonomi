@@ -22,11 +22,11 @@ use tokio::sync::{mpsc, oneshot};
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
 use super::interface::{LocalSwarmCmd, NetworkSwarmCmd};
-use super::{Addresses, NetworkEvent, NodeIssue, SwarmLocalState};
+use super::{send_local_swarm_cmd, send_network_swarm_cmd, Addresses, NodeIssue, SwarmLocalState};
 
 mod init;
 
-pub(crate) use init::NetworkConfig;
+pub(crate) use init::NetworkBuilder;
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm
@@ -45,31 +45,20 @@ struct NetworkInner {
 }
 
 impl Network {
-    /// Initialize the network
-    /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
-    /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub(crate) fn init(config: NetworkConfig) -> Result<(Self, mpsc::Receiver<NetworkEvent>)> {
-        let peer_id = PeerId::from(config.keypair.public());
-        let keypair = config.keypair.clone();
-        let shutdown_rx = config.shutdown_rx.clone();
-
-        // setup the swarm driver
-        let (swarm_driver, network_event_receiver) = init::init_driver(config)?;
-
-        // create a new network instance
-        let network = Network {
+    pub(crate) fn new(
+        network_swarm_cmd_sender: mpsc::Sender<NetworkSwarmCmd>,
+        local_swarm_cmd_sender: mpsc::Sender<LocalSwarmCmd>,
+        peer_id: PeerId,
+        keypair: Keypair,
+    ) -> Self {
+        Self {
             inner: Arc::new(NetworkInner {
-                network_swarm_cmd_sender: swarm_driver.network_cmd_sender.clone(),
-                local_swarm_cmd_sender: swarm_driver.local_cmd_sender.clone(),
+                network_swarm_cmd_sender,
+                local_swarm_cmd_sender,
                 peer_id,
                 keypair,
             }),
-        };
-
-        // Run the swarm driver as a background task
-        let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx));
-
-        Ok((network, network_event_receiver))
+        }
     }
 
     /// Returns the `PeerId` of the instance.
@@ -80,6 +69,15 @@ impl Network {
     /// Returns the `Keypair` of the instance.
     pub(crate) fn keypair(&self) -> &Keypair {
         &self.inner.keypair
+    }
+
+    /// Get the sender to send a `NetworkSwarmCmd` to the underlying `Swarm`.
+    pub(crate) fn network_swarm_cmd_sender(&self) -> &mpsc::Sender<NetworkSwarmCmd> {
+        &self.inner.network_swarm_cmd_sender
+    }
+    /// Get the sender to send a `LocalSwarmCmd` to the underlying `Swarm`.
+    pub(crate) fn local_swarm_cmd_sender(&self) -> &mpsc::Sender<LocalSwarmCmd> {
+        &self.inner.local_swarm_cmd_sender
     }
 
     /// Signs the given data with the node's keypair.
@@ -312,6 +310,16 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::RemovePeer { peer })
     }
 
+    /// Helper to send NetworkSwarmCmd
+    fn send_network_swarm_cmd(&self, cmd: NetworkSwarmCmd) {
+        send_network_swarm_cmd(self.network_swarm_cmd_sender().clone(), cmd);
+    }
+
+    /// Helper to send LocalSwarmCmd
+    fn send_local_swarm_cmd(&self, cmd: LocalSwarmCmd) {
+        send_local_swarm_cmd(self.local_swarm_cmd_sender().clone(), cmd);
+    }
+
     /// Returns the closest peers to the given `XorName`, sorted by their distance to the xor_name.
     #[allow(dead_code)]
     pub(crate) async fn get_closest_peers(
@@ -426,53 +434,6 @@ impl Network {
             .map_err(|_e| NetworkError::InternalMsgChannelDropped)?;
         Ok(density)
     }
-
-    /// Helper to send NetworkSwarmCmd
-    fn send_network_swarm_cmd(&self, cmd: NetworkSwarmCmd) {
-        let swarm_cmd_sender = self.inner.network_swarm_cmd_sender.clone();
-        let capacity = swarm_cmd_sender.capacity();
-
-        if capacity == 0 {
-            error!(
-                "SwarmCmd channel is full. Await capacity to send: {:?}",
-                cmd
-            );
-        }
-
-        // Spawn a task to send the SwarmCmd and keep this fn sync
-        let _handle = tokio::spawn(async move {
-            if let Err(error) = swarm_cmd_sender.send(cmd).await {
-                error!("Failed to send SwarmCmd: {}", error);
-            }
-        });
-    }
-
-    /// Helper to send LocalSwarmCmd
-    fn send_local_swarm_cmd(&self, cmd: LocalSwarmCmd) {
-        let swarm_cmd_sender = self.inner.local_swarm_cmd_sender.clone();
-        send_local_swarm_cmd(swarm_cmd_sender, cmd);
-    }
-}
-
-pub(crate) fn send_local_swarm_cmd(
-    swarm_cmd_sender: mpsc::Sender<LocalSwarmCmd>,
-    cmd: LocalSwarmCmd,
-) {
-    let capacity = swarm_cmd_sender.capacity();
-
-    if capacity == 0 {
-        error!(
-            "SwarmCmd channel is full. Await capacity to send: {:?}",
-            cmd
-        );
-    }
-
-    // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = tokio::spawn(async move {
-        if let Err(error) = swarm_cmd_sender.send(cmd).await {
-            error!("Failed to send SwarmCmd: {}", error);
-        }
-    });
 }
 
 // A standard way to log connection id & the action performed on it.
