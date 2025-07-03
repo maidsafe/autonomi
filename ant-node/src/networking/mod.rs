@@ -25,9 +25,10 @@ mod replication_fetcher;
 mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
+pub use self::interface::SwarmLocalState;
 pub(crate) use self::{
     error::NetworkError,
-    interface::{NetworkEvent, NodeIssue, SwarmLocalState},
+    interface::{NetworkEvent, NodeIssue},
     network::{Network, NetworkConfig},
     record_store::NodeRecordStore,
 };

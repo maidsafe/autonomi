@@ -1045,6 +1045,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ant-node-nodejs"
+version = "0.1.0"
+dependencies = [
+ "ant-node",
+ "hex",
+ "napi",
+ "napi-build",
+ "napi-derive",
+]
+
+[[package]]
 name = "ant-node-rpc-client"
 version = "0.6.47"
 dependencies = [

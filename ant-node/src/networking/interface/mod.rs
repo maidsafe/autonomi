@@ -10,6 +10,7 @@ mod local_cmd;
 mod network_cmd;
 mod network_event;
 
-pub(crate) use local_cmd::{LocalSwarmCmd, NodeIssue, SwarmLocalState};
+pub use local_cmd::SwarmLocalState;
+pub(crate) use local_cmd::{LocalSwarmCmd, NodeIssue};
 pub(crate) use network_cmd::NetworkSwarmCmd;
 pub(crate) use network_event::{NetworkEvent, TerminateNodeReason};

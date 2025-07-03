@@ -1,0 +1,23 @@
+{
+  "name": "@withautonomi/ant-node-win32-x64-msvc",
+  "version": "0.1.4",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maidsafe/autonomi.git",
+    "directory": "nodejs/npm/win32-x64-msvc"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "ant-node.win32-x64-msvc.node",
+  "files": [
+    "ant-node.win32-x64-msvc.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

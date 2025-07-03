@@ -18,7 +18,8 @@ members = [
     "evm-testnet",
     "nat-detection",
     "node-launchpad",
-    "nodejs",
+    "autonomi-nodejs",
+    "ant-node-nodejs",
     "test-utils",
 ]
 
