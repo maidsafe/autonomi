@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tracing::info;
 use tracing_core::dispatcher::DefaultGuard;
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{
+    prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, Layer,
+};
 
 pub use error::Error;
 pub use layers::ReloadHandle;
@@ -239,7 +241,7 @@ impl LogBuilder {
         };
 
         // Create NodeRoutingLayer and set up per-node appenders
-        let mut routing_layer = NodeRoutingLayer::new(targets);
+        let mut routing_layer = NodeRoutingLayer::new(targets.clone());
         let mut guards = Vec::new();
 
         for i in 1..=node_count {
@@ -271,8 +273,18 @@ impl LogBuilder {
             guards.push(guard);
         }
 
+        // Create reload handle for log level changes
+        let targets_filter: Box<
+            dyn tracing_subscriber::layer::Filter<tracing_subscriber::Registry> + Send + Sync,
+        > = Box::new(tracing_subscriber::filter::Targets::new().with_targets(targets));
+        let (filter, reload_handle) = tracing_subscriber::reload::Layer::new(targets_filter);
+        let reload_handle = ReloadHandle(reload_handle);
+
+        // Apply the filter to the routing layer
+        let filtered_routing_layer = routing_layer.with_filter(filter);
+
         let mut layers = TracingLayers::default();
-        layers.layers.push(Box::new(routing_layer));
+        layers.layers.push(Box::new(filtered_routing_layer));
 
         #[cfg(feature = "otlp")]
         {
@@ -294,13 +306,6 @@ impl LogBuilder {
                 "Global subscriber already initialized".to_string(),
             ));
         }
-
-        // Create reload handle for log level changes
-        let targets_filter: Box<
-            dyn tracing_subscriber::layer::Filter<tracing_subscriber::Registry> + Send + Sync,
-        > = Box::new(tracing_subscriber::filter::Targets::new());
-        let (_, reload_handle) = tracing_subscriber::reload::Layer::new(targets_filter);
-        let reload_handle = ReloadHandle(reload_handle);
 
         Ok((reload_handle, guards))
     }

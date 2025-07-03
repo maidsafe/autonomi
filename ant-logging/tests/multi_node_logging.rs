@@ -13,7 +13,7 @@ async fn test_multi_node_logging_e2e() {
 
     // Test multi-node logging with 2 nodes
     let mut log_builder = LogBuilder::new(vec![(
-        "test_multi_node_e2e".to_string(),
+        "multi_node_logging".to_string(),
         tracing::Level::INFO,
     )]);
     log_builder.output_dest(LogOutputDest::Path(log_dir.clone()));
@@ -96,7 +96,7 @@ async fn test_multi_node_logging_e2e() {
 
     // Verify proper log formatting
     assert!(
-        node_1_content.contains("test_multi_node_e2e"),
+        node_1_content.contains("multi_node_logging"),
         "Should contain target name"
     );
     assert!(
@@ -113,18 +113,18 @@ async fn test_multi_node_logging_e2e() {
 fn test_unlimited_node_span_creation() {
     // Test that we can create spans for nodes beyond the old 20-node limit
     // This tests the span creation functionality without requiring a full logging setup
-    
+
     let test_nodes = vec![1, 15, 21, 25, 50, 100];
-    
+
     for &node_id in &test_nodes {
         // This should work for any node_id now (no hardcoded limit)
         let node_span = tracing::info_span!("node", node_id = node_id);
-        
+
         // Verify the span can be entered and used
         let _enter = node_span.enter();
         // If we get here without panicking, the span creation works
     }
-    
+
     println!("Successfully created spans for node IDs: {:?}", test_nodes);
 }
 
