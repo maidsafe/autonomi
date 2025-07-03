@@ -20,7 +20,7 @@ const TIMEOUT_ON_CONNECTED_STATE: Duration = Duration::from_secs(20 + DIAL_BACK_
 
 /// Higher level struct that manages everything that is related to dialing.
 #[derive(Debug)]
-pub struct DialManager {
+pub(crate) struct DialManager {
     // The number of attempts/retries we have made with the entire Dialer workflow.
     pub(crate) current_workflow_attempt: usize,
     pub(crate) dialer: Dialer,
@@ -30,7 +30,7 @@ pub struct DialManager {
 
 /// A struct that can be re initialized to start a new reachability check attempt.
 #[derive(Debug, Clone, Default)]
-pub struct Dialer {
+pub(crate) struct Dialer {
     // Critical field, should only be managed by the DialManager. Don't try to access it directly.
     ongoing_dial_attempts: HashMap<PeerId, DialState>,
     pub(super) identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
@@ -39,14 +39,14 @@ pub struct Dialer {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct InitialContactsManager {
+pub(crate) struct InitialContactsManager {
     pub(super) initial_contacts: Vec<Multiaddr>,
     pub(super) attempted_indices: HashSet<usize>,
 }
 
 /// The final result of a dial attempt.
 #[derive(Debug, Clone)]
-pub enum DialResult {
+pub(crate) enum DialResult {
     /// We did not receive any response from the remote peer after dialing.
     TimedOutOnInitiated,
 
@@ -64,7 +64,7 @@ pub enum DialResult {
 /// The state of a dial attempt that we initiated with a remote peer.
 ///
 /// The state can only be transitioned to Connected or DialBackReceived.
-pub enum DialState {
+pub(super) enum DialState {
     /// We have initiated a dial attempt.
     Initiated { at: Instant },
     /// We got a successful response from the remote peer. We can now wait for them to contact us back after the
@@ -114,7 +114,7 @@ impl DialState {
 }
 
 impl InitialContactsManager {
-    pub fn new(initial_contacts: Vec<Multiaddr>) -> Self {
+    pub(crate) fn new(initial_contacts: Vec<Multiaddr>) -> Self {
         let len = initial_contacts.len();
         let initial_contacts: Vec<Multiaddr> = initial_contacts
             .into_iter()
@@ -136,7 +136,7 @@ impl InitialContactsManager {
     }
 
     /// Return a random contact from the initial contacts list that we haven't attempted to dial yet.
-    pub fn get_next_contact(&mut self) -> Option<Multiaddr> {
+    pub(crate) fn get_next_contact(&mut self) -> Option<Multiaddr> {
         if self.attempted_indices.len() >= self.initial_contacts.len() {
             return None;
         }
@@ -148,17 +148,17 @@ impl InitialContactsManager {
             index = rand::Rng::gen_range(&mut rng, 0..self.initial_contacts.len());
         }
 
-        self.attempted_indices.insert(index);
+        let _ = self.attempted_indices.insert(index);
         Some(self.initial_contacts[index].clone())
     }
 
-    pub fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.attempted_indices.clear();
     }
 }
 
 impl DialManager {
-    pub fn new(initial_contacts: Vec<Multiaddr>) -> Self {
+    pub(crate) fn new(initial_contacts: Vec<Multiaddr>) -> Self {
         Self {
             current_workflow_attempt: 1,
             dialer: Dialer::default(),
@@ -167,25 +167,25 @@ impl DialManager {
         }
     }
 
-    pub fn reattempt_workflow(&mut self) {
+    pub(crate) fn reattempt_workflow(&mut self) {
         self.current_workflow_attempt += 1;
         self.dialer = Dialer::default();
         self.initial_contacts_manager.reset();
     }
 
-    pub fn get_next_contact(&mut self) -> Option<Multiaddr> {
+    pub(crate) fn get_next_contact(&mut self) -> Option<Multiaddr> {
         self.initial_contacts_manager.get_next_contact()
     }
 
     /// Check if we can perform a new dial attempt.
-    pub fn can_we_perform_new_dial(&self) -> bool {
+    pub(crate) fn can_we_perform_new_dial(&self) -> bool {
         self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS
     }
 
     /// Dialing has completed if:
     /// 1. We still have peers that we haven't successfully connected to yet.
     /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
-    pub fn has_dialing_completed(&self) -> bool {
+    pub(crate) fn has_dialing_completed(&self) -> bool {
         let mut still_waiting_for_dial_back = false;
         debug!(
             "Checking if dialing has completed. Ongoing dial attempts: {:?}",
@@ -210,7 +210,7 @@ impl DialManager {
     }
 
     /// Check if we are faulty.
-    pub fn are_we_faulty(&self) -> bool {
+    pub(crate) fn are_we_faulty(&self) -> bool {
         if !self.has_dialing_completed() {
             warn!("Dialing has not completed yet. We are not faulty.");
             return false;
@@ -242,8 +242,9 @@ impl DialManager {
         faulty
     }
 
-    pub fn on_successful_dial(&mut self, peer_id: &PeerId, address: &Multiaddr) {
-        self.dialer
+    pub(crate) fn on_successful_dial(&mut self, peer_id: &PeerId, address: &Multiaddr) {
+        let _ = self
+            .dialer
             .ongoing_dial_attempts
             .insert(*peer_id, DialState::Initiated { at: Instant::now() });
         info!(
@@ -252,18 +253,19 @@ impl DialManager {
         );
     }
 
-    pub fn on_error_during_dial_attempt(&mut self, peer_id: &PeerId) {
+    pub(crate) fn on_error_during_dial_attempt(&mut self, peer_id: &PeerId) {
         // Any successful/timeout result should be preferred over a dial error.
         if self.all_dial_attempts.contains_key(peer_id) {
             debug!("Not tracking dial attempt error result for {peer_id:?} as we already have better results for it.");
             return;
         }
 
-        self.all_dial_attempts
+        let _ = self
+            .all_dial_attempts
             .insert(*peer_id, DialResult::ErrorDuringDial);
     }
 
-    pub fn on_connection_established_as_dialer(&mut self, address: &Multiaddr) {
+    pub(crate) fn on_connection_established_as_dialer(&mut self, address: &Multiaddr) {
         if let Some(peer_id) = multiaddr_get_p2p(address) {
             let entry = self.dialer.ongoing_dial_attempts
                 .entry(peer_id)
@@ -280,7 +282,7 @@ impl DialManager {
         }
     }
 
-    pub fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) {
+    pub(crate) fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) {
         let entry = self.dialer.ongoing_dial_attempts
             .entry(*peer_id)
             .and_modify(|state| {
@@ -294,15 +296,15 @@ impl DialManager {
         }
     }
 
-    pub fn on_outgoing_connection_error(&mut self, peer_id: PeerId) {
+    pub(crate) fn on_outgoing_connection_error(&mut self, peer_id: PeerId) {
         warn!(
             "Dial attempt for peer {peer_id:?} has failed. Removing it from ongoing_dial_attempts."
         );
-        self.dialer.ongoing_dial_attempts.remove(&peer_id);
+        let _ = self.dialer.ongoing_dial_attempts.remove(&peer_id);
     }
 
     // cleanup dial attempts if we're stuck in Attempted state for too long
-    pub fn cleanup_dial_attempts(&mut self) {
+    pub(crate) fn cleanup_dial_attempts(&mut self) {
         let mut to_remove_peers = Vec::new();
         for (peer, state) in self.dialer.ongoing_dial_attempts.iter() {
             let tracked_peer = self.all_dial_attempts.get(peer);
@@ -315,11 +317,13 @@ impl DialManager {
                         if tracked_peer.is_some() {
                             // only override dial errors (which are low priority, if we have established a connection on a different address)
                             if let Some(DialResult::ErrorDuringDial) = tracked_peer {
-                                self.all_dial_attempts
+                                let _ = self
+                                    .all_dial_attempts
                                     .insert(*peer, DialResult::TimedOutOnInitiated);
                             }
                         } else {
-                            self.all_dial_attempts
+                            let _ = self
+                                .all_dial_attempts
                                 .insert(*peer, DialResult::TimedOutOnInitiated);
                         }
                     }
@@ -330,11 +334,13 @@ impl DialManager {
                         if tracked_peer.is_some() {
                             // only override dial errors (which are low priority, if we have established a connection on a different address)
                             if let Some(DialResult::ErrorDuringDial) = tracked_peer {
-                                self.all_dial_attempts
+                                let _ = self
+                                    .all_dial_attempts
                                     .insert(*peer, DialResult::TimedOutAfterConnecting);
                             }
                         } else {
-                            self.all_dial_attempts
+                            let _ = self
+                                .all_dial_attempts
                                 .insert(*peer, DialResult::TimedOutAfterConnecting);
                         }
                     }
@@ -342,7 +348,8 @@ impl DialManager {
                 DialState::DialBackReceived { .. } => {
                     // override if not already successful
                     if !matches!(tracked_peer, Some(DialResult::SuccessfulDialBack)) {
-                        self.all_dial_attempts
+                        let _ = self
+                            .all_dial_attempts
                             .insert(*peer, DialResult::SuccessfulDialBack);
                     }
                 }
@@ -350,7 +357,7 @@ impl DialManager {
         }
 
         for peer in to_remove_peers {
-            self.dialer.ongoing_dial_attempts.remove(&peer);
+            let _ = self.dialer.ongoing_dial_attempts.remove(&peer);
         }
     }
 }

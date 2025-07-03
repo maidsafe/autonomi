@@ -252,7 +252,7 @@ impl NetworkBuilder {
                 std::thread::sleep(Duration::from_secs(1));
             }
         } else {
-            swarm_driver
+            let _ = swarm_driver
                 .swarm
                 .listen_on(addr_quic.clone())
                 .expect("Failed to listen on QUIC address");
@@ -265,7 +265,7 @@ impl NetworkBuilder {
     }
 
     /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
-    pub fn build_reachability_check_swarm(self) -> Result<ReachabilityCheckSwarmDriver> {
+    pub(crate) fn build_reachability_check_swarm(self) -> Result<ReachabilityCheckSwarmDriver> {
         let identify_protocol_str = IDENTIFY_PROTOCOL_STR
             .read()
             .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR")

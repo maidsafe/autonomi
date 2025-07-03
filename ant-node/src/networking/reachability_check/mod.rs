@@ -36,10 +36,25 @@ pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
 const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Clone)]
+/// The reachability status of the node.
 pub enum ReachabilityStatus {
-    Relay { upnp: bool },
-    Reachable { addr: SocketAddr, upnp: bool },
-    NotRoutable { upnp: bool },
+    /// We are not reachable directly and need to use a relay.
+    Relay {
+        /// Whether UPnP is supported or not.
+        upnp: bool,
+    },
+    /// We are reachable and have an external address.
+    Reachable {
+        /// The external address we are reachable at.
+        addr: SocketAddr,
+        /// Whether UPnP is supported or not.
+        upnp: bool,
+    },
+    /// We are not routable, meaning we cannot be reached directly or via a relay.
+    NotRoutable {
+        /// Whether UPnP is supported or not.
+        upnp: bool,
+    },
 }
 
 /// The behaviors are polled in the order they are defined.
@@ -47,14 +62,14 @@ pub enum ReachabilityStatus {
 /// Prioritize the behaviors related to connection handling.
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "ReachabilityCheckEvent")]
-pub struct ReachabilityCheckBehaviour {
+pub(crate) struct ReachabilityCheckBehaviour {
     pub(super) upnp: libp2p::upnp::tokio::Behaviour,
     pub(super) identify: libp2p::identify::Behaviour,
 }
 
 /// ReachabilityCheckEvent enum
 #[derive(CustomDebug)]
-pub enum ReachabilityCheckEvent {
+pub(crate) enum ReachabilityCheckEvent {
     Upnp(libp2p::upnp::Event),
     Identify(Box<libp2p::identify::Event>),
 }
@@ -71,7 +86,7 @@ impl From<libp2p::identify::Event> for ReachabilityCheckEvent {
     }
 }
 
-pub struct ReachabilityCheckSwarmDriver {
+pub(crate) struct ReachabilityCheckSwarmDriver {
     pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
     pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
@@ -83,7 +98,7 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// We need atleast 5 working, non-circuit contacts, with PeerId on them to be able to determine
     /// the reachability status.
-    pub fn new(
+    pub(crate) fn new(
         swarm: Swarm<ReachabilityCheckBehaviour>,
         initial_contacts: Vec<Multiaddr>,
         listen_socket_addr: SocketAddr,
@@ -109,9 +124,9 @@ impl ReachabilityCheckSwarmDriver {
         }
     }
     /// Runs the reachability check workflow.
-    pub async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
+    pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
         let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
-        dial_check_interval.tick().await; // first tick is immediate
+        let _ = dial_check_interval.tick().await; // first tick is immediate
         loop {
             tokio::select! {
                 // next take and react to external swarm events
@@ -155,7 +170,8 @@ impl ReachabilityCheckSwarmDriver {
 
                 let ip_addr = multiaddr_get_ip(&address);
                 if let Some(ip_addr) = ip_addr {
-                    self.listeners
+                    let _ = self
+                        .listeners
                         .entry(listener_id)
                         .or_default()
                         .insert(ip_addr);
@@ -213,7 +229,8 @@ impl ReachabilityCheckSwarmDriver {
 
                 match socket_addr {
                     Some(socket_addr) => {
-                        self.dial_manager
+                        let _ = self
+                            .dial_manager
                             .dialer
                             .incoming_connection_local_adapter_map
                             .insert(connection_id, socket_addr);
@@ -239,7 +256,8 @@ impl ReachabilityCheckSwarmDriver {
                     self.dial_manager
                         .on_connection_established_as_dialer(&address);
                 } else {
-                    self.dial_manager
+                    let _ = self
+                        .dial_manager
                         .dialer
                         .incoming_connection_ids
                         .insert(connection_id);
@@ -452,7 +470,7 @@ impl ReachabilityCheckSwarmDriver {
             }
             Entry::Vacant(entry) => {
                 info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
-                entry.insert(vec![(socket_addr, connection_id)]);
+                let _ = entry.insert(vec![(socket_addr, connection_id)]);
             }
         }
     }
@@ -575,7 +593,7 @@ impl ReachabilityCheckSwarmDriver {
                                 .find(|&addr| addr == &reachable_addr_ip)
                             {
                                 info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is the same as the reachable address {reachable_addr_ip:?}. Using it instead of {local_adapter_ip:?}");
-                                external_to_local_addr_map
+                                let _ = external_to_local_addr_map
                                     .entry(reachable_addr)
                                     .or_default()
                                     .insert(SocketAddr::new(
@@ -592,7 +610,7 @@ impl ReachabilityCheckSwarmDriver {
                                 })
                             {
                                 info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is private (10.0.0.0)");
-                                external_to_local_addr_map
+                                let _ = external_to_local_addr_map
                                     .entry(reachable_addr)
                                     .or_default()
                                     .insert(SocketAddr::new(
@@ -607,7 +625,7 @@ impl ReachabilityCheckSwarmDriver {
                                 .find(|&addr| addr != &IpAddr::V4(local_adapter_ip))
                             {
                                 info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is not unspecified)");
-                                external_to_local_addr_map
+                                let _ = external_to_local_addr_map
                                     .entry(reachable_addr)
                                     .or_default()
                                     .insert(SocketAddr::new(
@@ -623,7 +641,7 @@ impl ReachabilityCheckSwarmDriver {
                     }
                 } else {
                     info!("Local adapter address {local_adapter_ip:?} is valid. Adding it to the external to local address map.");
-                    external_to_local_addr_map
+                    let _ = external_to_local_addr_map
                         .entry(reachable_addr)
                         .or_default()
                         .insert(*local_adapter_addr);
@@ -741,9 +759,9 @@ impl ReachabilityCheckSwarmDriver {
             .values()
         {
             for (addr, _id) in addresses {
-                ports.insert(addr.port());
+                let _ = ports.insert(addr.port());
                 if let IpAddr::V4(ip) = addr.ip() {
-                    ips.insert(ip);
+                    let _ = ips.insert(ip);
                 }
             }
         }
