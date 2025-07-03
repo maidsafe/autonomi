@@ -13,9 +13,13 @@ use super::{
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, NetworkBuilder, ReachabilityStatus};
-use crate::networking::{Network, NetworkError, NetworkEvent, NodeIssue};
-use crate::{PutValidationError, RunningNode};
+use crate::networking::{
+    init_reachability_check_swarm, Addresses, Network, NetworkConfig, NetworkError, NetworkEvent,
+    NodeIssue,
+};
+use crate::{
+    ReachabilityStatus, {PutValidationError, RunningNode},
+};
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
@@ -166,14 +170,40 @@ impl NodeBuilder {
 
     /// Check if the node is publicly reachable.
     pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
-        let mut network_builder = NetworkBuilder::new(
-            self.identity_keypair.clone(),
-            self.local,
-            self.initial_peers.clone(),
-        );
+        // setup metrics
+        #[cfg(feature = "open-metrics")]
+        let (_metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
+            // metadata registry
+            let mut metrics_registries = MetricsRegistries::default();
+            let metrics_recorder = NodeMetricsRecorder::new(&mut metrics_registries);
 
-        network_builder.listen_addr(self.addr);
-        let swarm_driver = network_builder.build_reachability_check_swarm()?;
+            (Some(metrics_recorder), metrics_registries)
+        } else {
+            (None, MetricsRegistries::default())
+        };
+
+        // create a shutdown signal channel
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
+
+        // init network
+        let network_config = NetworkConfig {
+            keypair: self.identity_keypair.clone(),
+            local: self.local,
+            initial_contacts: self.initial_peers.clone(),
+            listen_addr: self.addr,
+            root_dir: self.root_dir.clone(),
+            shutdown_rx: shutdown_rx.clone(),
+            bootstrap_cache: self.bootstrap_cache.clone(),
+            no_upnp: self.no_upnp,
+            relay_client: self.relay_client,
+            custom_request_timeout: None,
+            #[cfg(feature = "open-metrics")]
+            metrics_registries,
+            #[cfg(feature = "open-metrics")]
+            metrics_server_port: self.metrics_server_port,
+        };
+
+        let swarm_driver = init_reachability_check_swarm(network_config)?;
         let status = swarm_driver.detect().await?;
 
         Ok(status)
@@ -192,40 +222,42 @@ impl NodeBuilder {
     ///
     /// Returns an error if there is a problem initializing the Network.
     pub fn build_and_run(self) -> Result<RunningNode> {
-        let mut network_builder =
-            NetworkBuilder::new(self.identity_keypair, self.local, self.initial_peers);
-
+        // setup metrics
         #[cfg(feature = "open-metrics")]
-        let metrics_recorder = if self.metrics_server_port.is_some() {
+        let (metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
             // metadata registry
             let mut metrics_registries = MetricsRegistries::default();
             let metrics_recorder = NodeMetricsRecorder::new(&mut metrics_registries);
 
-            network_builder.metrics_registries(metrics_registries);
-
-            Some(metrics_recorder)
+            (Some(metrics_recorder), metrics_registries)
         } else {
-            None
+            (None, MetricsRegistries::default())
         };
 
-        network_builder.listen_addr(self.addr);
-        #[cfg(feature = "open-metrics")]
-        network_builder.metrics_server_port(self.metrics_server_port);
-        network_builder.relay_client(self.relay_client);
-        if let Some(cache) = self.bootstrap_cache {
-            network_builder.bootstrap_cache(cache);
-        }
-
-        network_builder.no_upnp(self.no_upnp);
-
-        // Create a shutdown signal channel
+        // create a shutdown signal channel
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
-        let (network, network_event_receiver) =
-            network_builder.build_node(self.root_dir.clone(), shutdown_rx.clone())?;
+        // init network
+        let network_config = NetworkConfig {
+            keypair: self.identity_keypair,
+            local: self.local,
+            initial_contacts: self.initial_peers,
+            listen_addr: self.addr,
+            root_dir: self.root_dir.clone(),
+            shutdown_rx: shutdown_rx.clone(),
+            bootstrap_cache: self.bootstrap_cache,
+            no_upnp: self.no_upnp,
+            relay_client: self.relay_client,
+            custom_request_timeout: None,
+            #[cfg(feature = "open-metrics")]
+            metrics_registries,
+            #[cfg(feature = "open-metrics")]
+            metrics_server_port: self.metrics_server_port,
+        };
+        let (network, network_event_receiver) = Network::init(network_config)?;
 
+        // init node
         let node_events_channel = NodeEventsChannel::default();
-
         let node = NodeInner {
             network: network.clone(),
             events_channel: node_events_channel.clone(),
@@ -234,14 +266,12 @@ impl NodeBuilder {
             metrics_recorder,
             evm_network: self.evm_network,
         };
-
         let node = Node {
             inner: Arc::new(node),
         };
 
         // Run the node
         node.run(network_event_receiver, shutdown_rx);
-
         let running_node = RunningNode {
             shutdown_sender: shutdown_tx,
             network,
