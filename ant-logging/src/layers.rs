@@ -447,15 +447,81 @@ where
                 .lock()
                 .expect("Failed to acquire node writers lock");
             if let Some(writer) = writers.get(&node_name) {
+                // Create a custom formatter that only shows the target node span
+                let custom_formatter = NodeSpecificFormatter;
+
                 // Create a temporary fmt layer to format and write the event
                 let temp_layer = tracing_fmt::layer()
                     .with_ansi(false)
                     .with_writer(writer.clone())
-                    .event_format(LogFormatter);
+                    .event_format(custom_formatter);
 
                 // Forward the event to the temporary layer for proper formatting
                 temp_layer.on_event(event, ctx);
             }
         }
+    }
+}
+
+/// Custom formatter that only shows the target node span, avoiding nested node spans
+struct NodeSpecificFormatter;
+
+impl<S, N> FormatEvent<S, N> for NodeSpecificFormatter
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &FmtContext<'_, S, N>,
+        mut writer: Writer,
+        event: &Event<'_>,
+    ) -> std::fmt::Result {
+        // Write level and target
+        let level = *event.metadata().level();
+        let module = event.metadata().module_path().unwrap_or("<unknown module>");
+        let lno = event.metadata().line().unwrap_or(0);
+        let time = SystemTime;
+
+        write!(writer, "[")?;
+        time.format_time(&mut writer)?;
+        write!(writer, " {level} {module} {lno}")?;
+
+        // Only include spans up to and including the first "node" span
+        // This prevents nested node spans from appearing in the output
+        let mut spans_to_include = Vec::new();
+
+        if let Some(span_ref) = ctx.lookup_current() {
+            let mut current = Some(span_ref);
+
+            while let Some(span) = current {
+                let span_name = span.name();
+                spans_to_include.push(span_name);
+
+                // Stop collecting spans after we find the first "node" span
+                if span_name == "node" {
+                    break;
+                }
+
+                // Also stop for legacy node spans
+                if span_name.starts_with("node_") || span_name == "node_other" {
+                    break;
+                }
+
+                current = span.parent();
+            }
+        }
+
+        // Write spans in reverse order (from outermost to innermost, but only up to the first node)
+        for span_name in spans_to_include.iter().rev() {
+            write!(writer, "/{span_name}")?;
+        }
+
+        write!(writer, "] ")?;
+
+        // Add the log message and any fields associated with the event
+        ctx.field_format().format_fields(writer.by_ref(), event)?;
+
+        writeln!(writer)
     }
 }
