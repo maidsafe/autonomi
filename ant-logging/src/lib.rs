@@ -11,6 +11,7 @@ mod error;
 mod layers;
 #[cfg(feature = "process-metrics")]
 pub mod metrics;
+mod multi_node;
 
 use crate::error::Result;
 use layers::TracingLayers;
@@ -204,7 +205,8 @@ impl LogBuilder {
         node_count: usize,
     ) -> Result<(ReloadHandle, Vec<WorkerGuard>)> {
         use crate::appender;
-        use crate::layers::{NodeRoutingLayer, TracingLayers};
+        use crate::layers::TracingLayers;
+        use crate::multi_node::NodeRoutingLayer;
 
         if node_count == 1 {
             // Fall back to existing single-node implementation
