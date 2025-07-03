@@ -108,9 +108,6 @@ pub enum NetworkError {
     #[error("Could not get enough peers ({required}) to satisfy the request, found {found}")]
     NotEnoughPeers { found: usize, required: usize },
 
-    #[error("Node Listen Address was not provided during construction")]
-    ListenAddressNotProvided,
-
     #[cfg(feature = "open-metrics")]
     #[error("Network Metric error")]
     NetworkMetricError,
