@@ -29,12 +29,14 @@ pub use self::interface::SwarmLocalState;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue},
-    network::{Network, NetworkConfig},
+    network::{Network, NetworkBuilder},
     record_store::NodeRecordStore,
 };
 
 #[cfg(feature = "open-metrics")]
 pub(crate) use metrics::service::MetricsRegistries;
+
+use interface::{LocalSwarmCmd, NetworkSwarmCmd};
 
 use self::error::Result;
 use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress};
@@ -44,6 +46,7 @@ use libp2p::{
     multiaddr::Protocol,
 };
 use std::net::IpAddr;
+use tokio::sync::mpsc::Sender;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
 /// Return with the closest expected number of entries it has.
@@ -142,4 +145,43 @@ pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
         Protocol::Udp(port) => Some(port),
         _ => None,
     })
+}
+
+pub(crate) fn send_local_swarm_cmd(swarm_cmd_sender: Sender<LocalSwarmCmd>, cmd: LocalSwarmCmd) {
+    let capacity = swarm_cmd_sender.capacity();
+
+    if capacity == 0 {
+        error!(
+            "SwarmCmd channel is full. Await capacity to send: {:?}",
+            cmd
+        );
+    }
+
+    // Spawn a task to send the SwarmCmd and keep this fn sync
+    let _handle = tokio::spawn(async move {
+        if let Err(error) = swarm_cmd_sender.send(cmd).await {
+            error!("Failed to send SwarmCmd: {}", error);
+        }
+    });
+}
+
+pub(crate) fn send_network_swarm_cmd(
+    swarm_cmd_sender: Sender<NetworkSwarmCmd>,
+    cmd: NetworkSwarmCmd,
+) {
+    let capacity = swarm_cmd_sender.capacity();
+
+    if capacity == 0 {
+        error!(
+            "SwarmCmd channel is full. Await capacity to send: {:?}",
+            cmd
+        );
+    }
+
+    // Spawn a task to send the SwarmCmd and keep this fn sync
+    let _handle = tokio::spawn(async move {
+        if let Err(error) = swarm_cmd_sender.send(cmd).await {
+            error!("Failed to send SwarmCmd: {}", error);
+        }
+    });
 }
