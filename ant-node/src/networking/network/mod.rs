@@ -510,11 +510,14 @@ impl Network {
         }
 
         // Spawn a task to send the SwarmCmd and keep this fn sync
-        let _handle = tokio::spawn(async move {
-            if let Err(error) = swarm_cmd_sender.send(cmd).await {
-                error!("Failed to send SwarmCmd: {}", error);
+        let _handle = tokio::spawn(
+            async move {
+                if let Err(error) = swarm_cmd_sender.send(cmd).await {
+                    error!("Failed to send SwarmCmd: {}", error);
+                }
             }
-        });
+            .in_current_span(),
+        );
     }
 
     /// Helper to send LocalSwarmCmd
@@ -538,11 +541,14 @@ pub(crate) fn send_local_swarm_cmd(
     }
 
     // Spawn a task to send the SwarmCmd and keep this fn sync
-    let _handle = tokio::spawn(async move {
-        if let Err(error) = swarm_cmd_sender.send(cmd).await {
-            error!("Failed to send SwarmCmd: {}", error);
+    let _handle = tokio::spawn(
+        async move {
+            if let Err(error) = swarm_cmd_sender.send(cmd).await {
+                error!("Failed to send SwarmCmd: {}", error);
+            }
         }
-    });
+        .in_current_span(),
+    );
 }
 
 // A standard way to log connection id & the action performed on it.

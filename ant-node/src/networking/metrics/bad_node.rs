@@ -18,6 +18,7 @@ use std::{
 };
 use strum::IntoEnumIterator;
 use tokio::time::interval;
+use tracing::Instrument;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(20);
 
@@ -159,7 +160,7 @@ impl BadNodeMetrics {
                     }
                 }
             }
-        });
+        }.in_current_span());
         tx
     }
 }

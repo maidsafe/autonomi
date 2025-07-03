@@ -45,6 +45,7 @@ use std::{
 };
 use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
+use tracing::Instrument;
 use walkdir::{DirEntry, WalkDir};
 use xor_name::XorName;
 
@@ -355,12 +356,15 @@ impl NodeRecordStore {
         };
 
         #[allow(clippy::let_underscore_future)]
-        let _ = spawn(async move {
-            if let Ok(mut file) = fs::File::create(file_path) {
-                let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
-                let _ = historic_quoting_metrics.serialize(&mut serialiser);
+        let _ = spawn(
+            async move {
+                if let Ok(mut file) = fs::File::create(file_path) {
+                    let mut serialiser = rmp_serde::encode::Serializer::new(&mut file);
+                    let _ = historic_quoting_metrics.serialize(&mut serialiser);
+                }
             }
-        });
+            .in_current_span(),
+        );
     }
 
     /// Creates a new `DiskBackedStore` with the given configuration.
@@ -754,7 +758,7 @@ impl NodeRecordStore {
 
                 send_local_swarm_cmd(cloned_cmd_sender, cmd);
             }
-        });
+        }.in_current_span());
 
         Ok(())
     }
@@ -922,14 +926,17 @@ impl RecordStore for NodeRecordStore {
         debug!("Unverified Record {record_key:?} try to validate and store");
         let event_sender = self.network_event_sender.clone();
         // push the event off thread so as to be non-blocking
-        let _handle = spawn(async move {
-            if let Err(error) = event_sender
-                .send(NetworkEvent::UnverifiedRecord(record))
-                .await
-            {
-                error!("SwarmDriver failed to send event: {}", error);
+        let _handle = spawn(
+            async move {
+                if let Err(error) = event_sender
+                    .send(NetworkEvent::UnverifiedRecord(record))
+                    .await
+                {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-        });
+            .in_current_span(),
+        );
 
         Ok(())
     }
@@ -957,16 +964,19 @@ impl RecordStore for NodeRecordStore {
         let filename = Self::generate_filename(k);
         let file_path = self.config.storage_dir.join(&filename);
 
-        let _handle = spawn(async move {
-            match fs::remove_file(file_path) {
-                Ok(_) => {
-                    info!("Removed record from disk! filename: {filename}");
-                }
-                Err(err) => {
-                    error!("Error while removing file. filename: {filename}, error: {err:?}");
+        let _handle = spawn(
+            async move {
+                match fs::remove_file(file_path) {
+                    Ok(_) => {
+                        info!("Removed record from disk! filename: {filename}");
+                    }
+                    Err(err) => {
+                        error!("Error while removing file. filename: {filename}, error: {err:?}");
+                    }
                 }
             }
-        });
+            .in_current_span(),
+        );
     }
 
     fn records(&self) -> Self::RecordsIter<'_> {

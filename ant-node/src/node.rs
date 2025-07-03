@@ -47,6 +47,7 @@ use tokio::{
     sync::mpsc::Receiver,
     task::{spawn, JoinSet},
 };
+use tracing::Instrument;
 
 /// Interval to trigger replication of all records to all peers.
 /// This is the max time it should take. Minimum interval at any node will be half this
@@ -280,8 +281,9 @@ impl Node {
         let node_span = current_span.clone();
         let _node_task = spawn(async move {
             let _guard = node_span.enter(); // Enter span in spawned task
-                                            // use a random activity timeout to ensure that the nodes do not sync when messages
-                                            // are being transmitted.
+
+            // use a random activity timeout to ensure that the nodes do not sync when messages
+            // are being transmitted.
             let replication_interval: u64 = rng.gen_range(
                 PERIODIC_REPLICATION_INTERVAL_MAX_S / 2..PERIODIC_REPLICATION_INTERVAL_MAX_S,
             );
@@ -355,7 +357,7 @@ impl Node {
                         let _handle = spawn(async move {
                             Self::try_interval_replication(network);
                             trace!("Periodic replication took {:?}", start.elapsed());
-                        });
+                        }.in_current_span());
                     }
                     _ = uptime_metrics_update_interval.tick() => {
                         #[cfg(feature = "open-metrics")]
@@ -368,7 +370,7 @@ impl Node {
 
                         let _handle = spawn(async move {
                             Self::trigger_irrelevant_record_cleanup(network);
-                        });
+                        }.in_current_span());
                     }
                     // runs every storage_challenge_interval time
                     _ = storage_challenge_interval.tick() => {
@@ -379,7 +381,7 @@ impl Node {
                         let _handle = spawn(async move {
                             Self::storage_challenge(network).await;
                             trace!("Periodic storage challenge took {:?}", start.elapsed());
-                        });
+                        }.in_current_span());
                     }
                 }
             }
@@ -431,16 +433,22 @@ impl Node {
 
                 // try query peer version
                 let network = self.network().clone();
-                let _handle = spawn(async move {
-                    Self::try_query_peer_version(network, peer_id, Default::default()).await;
-                });
+                let _handle = spawn(
+                    async move {
+                        Self::try_query_peer_version(network, peer_id, Default::default()).await;
+                    }
+                    .in_current_span(),
+                );
 
                 // try replication here
                 let network = self.network().clone();
                 self.record_metrics(Marker::IntervalReplicationTriggered);
-                let _handle = spawn(async move {
-                    Self::try_interval_replication(network);
-                });
+                let _handle = spawn(
+                    async move {
+                        Self::try_interval_replication(network);
+                    }
+                    .in_current_span(),
+                );
             }
             NetworkEvent::PeerRemoved(peer_id, connected_peers) => {
                 event_header = "PeerRemoved";
@@ -454,9 +462,12 @@ impl Node {
 
                 let network = self.network().clone();
                 self.record_metrics(Marker::IntervalReplicationTriggered);
-                let _handle = spawn(async move {
-                    Self::try_interval_replication(network);
-                });
+                let _handle = spawn(
+                    async move {
+                        Self::try_interval_replication(network);
+                    }
+                    .in_current_span(),
+                );
             }
             NetworkEvent::PeerWithUnsupportedProtocol { .. } => {
                 event_header = "PeerWithUnsupportedProtocol";
@@ -483,32 +494,38 @@ impl Node {
                 let network = self.network().clone();
                 let payment_address = *self.reward_address();
 
-                let _handle = spawn(async move {
-                    let res = Self::handle_query(&network, query, payment_address).await;
+                let _handle = spawn(
+                    async move {
+                        let res = Self::handle_query(&network, query, payment_address).await;
 
-                    // Reducing non-mandatory logging
-                    if let Response::Query(QueryResponse::GetVersion { .. }) = res {
-                        trace!("Sending response {res:?}");
-                    } else {
-                        debug!("Sending response {res:?}");
+                        // Reducing non-mandatory logging
+                        if let Response::Query(QueryResponse::GetVersion { .. }) = res {
+                            trace!("Sending response {res:?}");
+                        } else {
+                            debug!("Sending response {res:?}");
+                        }
+
+                        network.send_response(res, channel);
                     }
-
-                    network.send_response(res, channel);
-                });
+                    .in_current_span(),
+                );
             }
             NetworkEvent::UnverifiedRecord(record) => {
                 event_header = "UnverifiedRecord";
                 // queries can be long running and require validation, so we spawn a task to handle them
                 let self_clone = self.clone();
-                let _handle = spawn(async move {
-                    let key = PrettyPrintRecordKey::from(&record.key).into_owned();
-                    match self_clone.validate_and_store_record(record).await {
-                        Ok(()) => debug!("UnverifiedRecord {key} has been stored"),
-                        Err(err) => {
-                            self_clone.record_metrics(Marker::RecordRejected(&key, &err));
+                let _handle = spawn(
+                    async move {
+                        let key = PrettyPrintRecordKey::from(&record.key).into_owned();
+                        match self_clone.validate_and_store_record(record).await {
+                            Ok(()) => debug!("UnverifiedRecord {key} has been stored"),
+                            Err(err) => {
+                                self_clone.record_metrics(Marker::RecordRejected(&key, &err));
+                            }
                         }
                     }
-                });
+                    .in_current_span(),
+                );
             }
             NetworkEvent::TerminateNode { reason } => {
                 event_header = "TerminateNode";
@@ -530,28 +547,35 @@ impl Node {
                 //       any change to the keyword `failed to fetch` shall incur
                 //       correspondent CI script change as well.
                 debug!("Received notification from replication_fetcher, notifying {pretty_log:?} failed to fetch replication copies from.");
-                let _handle = spawn(async move {
-                    for (peer_id, record_key) in bad_nodes {
-                        // Obsoleted fetch request (due to flooded in fresh replicates) could result
-                        // in peer to be claimed as bad, as local copy blocks the entry to be cleared.
-                        if let Ok(false) = network.is_record_key_present_locally(&record_key).await
-                        {
-                            error!(
-                                "From peer {peer_id:?}, failed to fetch record {:?}",
-                                PrettyPrintRecordKey::from(&record_key)
-                            );
-                            network.record_node_issues(peer_id, NodeIssue::ReplicationFailure);
+                let _handle = spawn(
+                    async move {
+                        for (peer_id, record_key) in bad_nodes {
+                            // Obsoleted fetch request (due to flooded in fresh replicates) could result
+                            // in peer to be claimed as bad, as local copy blocks the entry to be cleared.
+                            if let Ok(false) =
+                                network.is_record_key_present_locally(&record_key).await
+                            {
+                                error!(
+                                    "From peer {peer_id:?}, failed to fetch record {:?}",
+                                    PrettyPrintRecordKey::from(&record_key)
+                                );
+                                network.record_node_issues(peer_id, NodeIssue::ReplicationFailure);
+                            }
                         }
                     }
-                });
+                    .in_current_span(),
+                );
             }
             NetworkEvent::QuoteVerification { quotes } => {
                 event_header = "QuoteVerification";
                 let network = self.network().clone();
 
-                let _handle = spawn(async move {
-                    quotes_verification(&network, quotes).await;
-                });
+                let _handle = spawn(
+                    async move {
+                        quotes_verification(&network, quotes).await;
+                    }
+                    .in_current_span(),
+                );
             }
             NetworkEvent::FreshReplicateToFetch { holder, keys } => {
                 event_header = "FreshReplicateToFetch";
@@ -560,9 +584,12 @@ impl Node {
             NetworkEvent::PeersForVersionQuery(peers) => {
                 event_header = "PeersForVersionQuery";
                 let network = self.network().clone();
-                let _handle = spawn(async move {
-                    Self::query_peers_version(network, peers).await;
-                });
+                let _handle = spawn(
+                    async move {
+                        Self::query_peers_version(network, peers).await;
+                    }
+                    .in_current_span(),
+                );
             }
         }
 

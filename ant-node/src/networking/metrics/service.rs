@@ -15,6 +15,7 @@ use std::{
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
+use tracing::Instrument;
 
 /// The types of metrics that are exposed via the various endpoints.
 #[derive(Default, Debug)]
@@ -42,7 +43,7 @@ pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) {
         if let Err(e) = server.await {
             error!("server error: {}", e);
         }
-    });
+    }.in_current_span());
 }
 
 type SharedRegistry = Arc<Mutex<Registry>>;
