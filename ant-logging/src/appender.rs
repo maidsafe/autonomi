@@ -65,6 +65,51 @@ pub(super) fn file_rotater(
         .finish(file_appender)
 }
 
+/// Same as file_rotater but includes thread name (test name) in the log file name
+/// This prevents log file conflicts when multiple tests run in parallel
+pub(super) fn file_rotater_with_thread_name(
+    dir: &PathBuf,
+    max_bytes: usize,
+    uncompressed_files: usize,
+    max_files: usize,
+) -> (NonBlocking, WorkerGuard) {
+    let binary_name = env::current_exe()
+        .map(|path| {
+            path.file_stem()
+                .unwrap_or(OsStr::new("autonomi"))
+                .to_string_lossy()
+                .into_owned()
+        })
+        .unwrap_or_else(|_| "autonomi".to_string());
+
+    // Add thread name (which contains test name) for uniqueness
+    let file_name = if let Some(thread_name) = std::thread::current().name() {
+        // Clean up thread name: "address::test_name" -> "address_test_name"
+        let clean_name = thread_name.replace("::", "_");
+        format!("{clean_name}_{binary_name}.log")
+    } else {
+        format!("{binary_name}.log")
+    };
+
+    let file_appender = FileRotateAppender::make_rotate_appender(
+        dir,
+        file_name,
+        AppendTimestamp::default(FileLimit::MaxFiles(max_files)),
+        ContentLimit::BytesSurpassed(max_bytes),
+        Compression::OnRotate(uncompressed_files),
+    );
+
+    // configure how tracing non-blocking works: https://tracing.rs/tracing_appender/non_blocking/struct.nonblockingbuilder#method.default
+    let non_blocking_builder = tracing_appender::non_blocking::NonBlockingBuilder::default();
+
+    non_blocking_builder
+        // lose lines and keep perf, or exert backpressure?
+        .lossy(false)
+        // optionally change buffered lines limit
+        // .buffered_lines_limit(buffered_lines_limit)
+        .finish(file_appender)
+}
+
 /// `FileRotateAppender` is a `tracing_appender` with extra logrotate features:
 ///  - most recent logfile name re-used to support following (e.g. 'tail -f=logfile')
 ///  - numbered rotation (logfile.1, logfile.2 etc)

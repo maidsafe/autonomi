@@ -9,7 +9,7 @@
 use crate::{
     appender,
     error::{Error, Result},
-    LogFormat, LogOutputDest,
+    LogFormat, LogOutputDest, NODE_SPAN_NAME,
 };
 use std::collections::BTreeMap;
 use tracing_appender::non_blocking::WorkerGuard;
@@ -299,8 +299,19 @@ pub(crate) fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String
 
             #[cfg(any(test, debug_assertions))]
             {
-                t.insert("multi_node_logging".to_string(), Level::TRACE);
-                // Future test modules can be added here
+                // Auto-detect test modules by scanning the tests directory
+                if let Ok(entries) = std::fs::read_dir("tests") {
+                    for entry in entries.flatten() {
+                        if let Some(file_name) = entry.file_name().to_str() {
+                            if file_name.ends_with(".rs") {
+                                let test_module = file_name.trim_end_matches(".rs");
+                                t.insert(test_module.to_string(), Level::TRACE);
+                            }
+                        }
+                    }
+                } else {
+                    println!("Could not read tests directory");
+                }
             }
 
             t
@@ -334,6 +345,10 @@ use tracing_appender::non_blocking::NonBlocking;
 #[derive(Debug)]
 struct NodeMetadata {
     node_name: String,
+}
+
+struct SpanMetadata {
+    unique_span_name: String,
 }
 
 /// Visitor to extract node_id field from span attributes
@@ -407,7 +422,7 @@ where
             attrs.record(&mut visitor);
 
             if let Some(node_id) = visitor.node_id {
-                let node_name = format!("node_{node_id}");
+                let node_name = format!("node_{node_id:02}");
                 span.extensions_mut().insert(NodeMetadata { node_name });
             }
         }
@@ -421,6 +436,12 @@ where
             let mut current = Some(span_ref);
             while let Some(span) = current {
                 let span_name = span.name();
+
+                // Check for CLIENT spans
+                if span_name == "client" {
+                    target_node = Some("client".to_string());
+                    break;
+                }
 
                 // Check for dynamic node spans with stored metadata
                 if span_name == "node" {
@@ -465,4 +486,175 @@ where
             }
         }
     }
+}
+
+/// Unique spans routing layer that matches exact span names to writers
+pub struct UniqueSpansNodeRoutingLayer {
+    node_writers: Arc<Mutex<HashMap<String, NonBlocking>>>,
+    targets_filter: Targets,
+}
+
+impl UniqueSpansNodeRoutingLayer {
+    pub fn new(targets: Vec<(String, Level)>) -> Self {
+        Self {
+            node_writers: Arc::new(Mutex::new(HashMap::new())),
+            targets_filter: Targets::new().with_targets(targets),
+        }
+    }
+
+    pub fn add_node_writer(&mut self, node_name: String, writer: NonBlocking) {
+        let mut writers = self
+            .node_writers
+            .lock()
+            .expect("Failed to acquire node writers lock");
+        writers.insert(node_name, writer);
+    }
+}
+
+impl<S> Layer<S> for UniqueSpansNodeRoutingLayer
+where
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
+{
+    fn enabled(&self, meta: &Metadata<'_>, ctx: Context<'_, S>) -> bool {
+        use tracing_subscriber::layer::Filter;
+        Filter::enabled(&self.targets_filter, meta, &ctx)
+    }
+
+    fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
+        let span = ctx.span(id).expect("Span should exist in registry");
+        let span_name = span.name();
+
+        // Extract node_id and test name from spans named "node"
+        if span_name == NODE_SPAN_NAME {
+            let mut visitor = NodeIdVisitor { node_id: None };
+            attrs.record(&mut visitor);
+
+            if let Some(node_id) = visitor.node_id {
+                let test_name = std::thread::current()
+                    .name()
+                    .map(|name| name.replace("::", "_"))
+                    .unwrap_or_else(|| "unknown_test".to_string());
+
+                let unique_node_name = format!("node_{node_id:02}_{test_name}");
+
+                span.extensions_mut().insert(SpanMetadata {
+                    unique_span_name: unique_node_name,
+                });
+            }
+        }
+
+        // Extract test name from spans named "client"
+        if span_name == "client" {
+            let test_name = std::thread::current()
+                .name()
+                .map(|name| name.replace("::", "_"))
+                .unwrap_or_else(|| "unknown_test".to_string());
+
+            let unique_client_name = format!("client_{test_name}");
+
+            span.extensions_mut().insert(SpanMetadata {
+                unique_span_name: unique_client_name,
+            });
+        }
+    }
+
+    fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+        let mut target_writer_key = None;
+
+        if let Some(span_ref) = ctx.lookup_current() {
+            let mut current = Some(span_ref);
+
+            while let Some(span) = current {
+                let span_name = span.name();
+
+                // Check for node spans FIRST (most specific)
+                if span_name == NODE_SPAN_NAME && target_writer_key.is_none() {
+                    if let Some(metadata) = span.extensions().get::<SpanMetadata>() {
+                        target_writer_key = Some(metadata.unique_span_name.clone());
+                        break;
+                    }
+                }
+
+                // Check for client spans SECOND - now consistent with nodes using stored metadata
+                if span_name == "client" && target_writer_key.is_none() {
+                    if let Some(metadata) = span.extensions().get::<SpanMetadata>() {
+                        target_writer_key = Some(metadata.unique_span_name.clone());
+                        break;
+                    }
+                }
+
+                current = span.parent();
+            }
+        }
+
+        // Route to appropriate writer
+        if let Some(writer_key) = target_writer_key {
+            let writers = self
+                .node_writers
+                .lock()
+                .expect("Failed to acquire node writers lock");
+
+            if let Some(writer) = writers.get(&writer_key) {
+                // Create a temporary fmt layer to format and write the event
+                let temp_layer = tracing_fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(writer.clone())
+                    .event_format(LogFormatter);
+
+                // Forward the event to the temporary layer for proper formatting
+                temp_layer.on_event(event, ctx);
+            }
+        }
+    }
+
+    /* TODO: Original function, to be removed once the newer function is stress tested
+        fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
+            let mut target_writer_key = None;
+
+            if let Some(span_ref) = ctx.lookup_current() {
+                let mut current = Some(span_ref);
+                while let Some(span) = current {
+                    let span_name = span.name();
+
+                    // Check for node spans FIRST (most specific)
+                    if span_name == "node" {
+                        if let Some(metadata) = span.extensions().get::<NodeMetadata>() {
+                            target_writer_key = Some(metadata.node_name.clone());
+                            break;
+                        }
+                    }
+
+                    // Check for client spans SECOND (more general)
+                    if span_name == "client" {
+                        let test_name = std::thread::current().name()
+                            .map(|name| name.replace("::", "_"))
+                            .unwrap_or_else(|| "unknown_test".to_string());
+                        target_writer_key = Some(format!("client_{}", test_name));
+                        break;
+                    }
+
+                    current = span.parent();
+                }
+            }
+
+            // Route to appropriate writer
+            if let Some(writer_key) = target_writer_key {
+                let writers = self
+                    .node_writers
+                    .lock()
+                    .expect("Failed to acquire node writers lock");
+
+                if let Some(writer) = writers.get(&writer_key) {
+                    // Create a temporary fmt layer to format and write the event
+                    let temp_layer = tracing_fmt::layer()
+                        .with_ansi(false)
+                        .with_writer(writer.clone())
+                        .event_format(LogFormatter);
+
+                    // Forward the event to the temporary layer for proper formatting
+                    temp_layer.on_event(event, ctx);
+                }
+            }
+        }
+    */
 }

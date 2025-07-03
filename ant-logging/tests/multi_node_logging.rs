@@ -9,7 +9,15 @@ use tracing::{info, Instrument};
 #[tokio::test]
 async fn test_multi_node_logging_e2e() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
-    let log_dir = temp_dir.path().to_path_buf();
+
+    // Create the same directory structure that LogOutputDest::parse_from_str("data-dir") creates
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let log_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join("client")
+        .join("logs")
+        .join(format!("log_{timestamp}"));
 
     // Test multi-node logging with 2 nodes
     let mut log_builder = LogBuilder::new(vec![(
@@ -18,8 +26,8 @@ async fn test_multi_node_logging_e2e() {
     )]);
     log_builder.output_dest(LogOutputDest::Path(log_dir.clone()));
 
-    let (_reload_handle, guards) = log_builder
-        .initialize_with_multi_node_logging(2)
+    let multi_node_log_handle = log_builder
+        .initialize_with_multi_nodes_logging(2)
         .expect("Failed to initialize multi-node logging");
 
     // Log messages from different nodes using new dynamic span format
@@ -47,17 +55,40 @@ async fn test_multi_node_logging_e2e() {
     // Run tasks concurrently
     tokio::join!(task1, task2);
 
-    // Allow time for logs to be written and flushed
+    // Allow time for logs to be queued.
+    // Hacky architecture but okay enough for simple tests.
     tokio::time::sleep(Duration::from_millis(200)).await;
-    drop(guards);
+
+    // Drop the log handle to drop the WorkerGuards inside.
+    // Drop guards -> logs flushed. This behavior is defined in the tracing-appender crate.
+    drop(multi_node_log_handle);
+
+    // Allow time for logs to be flushed.
+    // Hacky architecture but okay enough for simple tests.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Verify node directories were created
-    let node_1_dir = log_dir.join("node_1");
-    let node_2_dir = log_dir.join("node_2");
+    let node_1_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join("node_01")
+        .join("logs");
+    let node_2_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join("node_02")
+        .join("logs");
 
-    assert!(node_1_dir.exists(), "Node 1 directory should exist");
-    assert!(node_2_dir.exists(), "Node 2 directory should exist");
+    assert!(
+        node_1_dir.exists(),
+        "Node 1 directory should exist at: {}",
+        node_1_dir.display()
+    );
+    assert!(
+        node_2_dir.exists(),
+        "Node 2 directory should exist at: {}",
+        node_2_dir.display()
+    );
 
     // Verify each node has its own log file with correct content
     let node_1_content = read_log_content(&node_1_dir).expect("Failed to read node 1 logs");
