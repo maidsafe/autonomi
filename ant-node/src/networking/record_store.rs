@@ -9,7 +9,7 @@
 
 use crate::networking::interface::{LocalSwarmCmd, NetworkEvent};
 use crate::networking::log_markers::Marker;
-use crate::networking::network::send_local_swarm_cmd;
+use crate::networking::send_local_swarm_cmd;
 use aes_gcm_siv::{
     aead::{Aead, KeyInit},
     Aes256GcmSiv, Key as AesKey, Nonce,
