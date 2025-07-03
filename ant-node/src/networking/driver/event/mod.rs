@@ -11,7 +11,7 @@ mod kad;
 mod request_response;
 mod swarm;
 
-pub use identify::DIAL_BACK_DELAY;
+pub(crate) use identify::DIAL_BACK_DELAY;
 
 use crate::networking::NetworkEvent;
 use crate::networking::{
