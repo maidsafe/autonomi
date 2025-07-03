@@ -168,7 +168,7 @@ where
 }
 
 /// Custom formatter that only shows the target node span, avoiding nested node spans
-struct NodeSpecificFormatter;
+pub struct NodeSpecificFormatter;
 
 impl<S, N> FormatEvent<S, N> for NodeSpecificFormatter
 where
@@ -193,31 +193,30 @@ where
 
         // Only include spans up to and including the first "node" span
         // This prevents nested node spans from appearing in the output
-        let mut spans_to_include = Vec::new();
+        let mut all_spans = Vec::new();
 
+        // First, collect all spans from current to root
         if let Some(span_ref) = ctx.lookup_current() {
             let mut current = Some(span_ref);
-
             while let Some(span) = current {
-                let span_name = span.name();
-                spans_to_include.push(span_name);
-
-                // Stop collecting spans after we find the first "node" span
-                if span_name == "node" {
-                    break;
-                }
-
-                // Also stop for legacy node spans
-                if span_name.starts_with("node_") || span_name == "node_other" {
-                    break;
-                }
-
+                all_spans.push(span.name());
                 current = span.parent();
             }
         }
 
-        // Write spans in reverse order (from outermost to innermost, but only up to the first node)
-        for span_name in spans_to_include.iter().rev() {
+        // Now, find spans from root down to (and including) the first node span
+        let mut spans_to_include = Vec::new();
+        for span_name in all_spans.iter().rev() {
+            spans_to_include.push(*span_name);
+            
+            // Stop after we include the first "node" span
+            if *span_name == "node" || span_name.starts_with("node_") || *span_name == "node_other" {
+                break;
+            }
+        }
+
+        // Write spans in order (from outermost to innermost, but only up to the first node)
+        for span_name in spans_to_include.iter() {
             write!(writer, "/{span_name}")?;
         }
 

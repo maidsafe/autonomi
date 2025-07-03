@@ -59,7 +59,7 @@ impl ReloadHandle {
 
 #[derive(Default)]
 /// Tracing log formatter setup for easier span viewing
-pub(crate) struct LogFormatter;
+pub struct LogFormatter;
 
 impl<S, N> FormatEvent<S, N> for LogFormatter
 where

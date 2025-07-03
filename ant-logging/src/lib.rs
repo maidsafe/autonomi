@@ -27,6 +27,12 @@ pub use error::Error;
 pub use layers::ReloadHandle;
 pub use tracing_appender::non_blocking::WorkerGuard;
 
+// Export for testing - hidden from docs but available for integration tests
+#[doc(hidden)]
+pub use layers::LogFormatter;
+#[doc(hidden)]
+pub use multi_node::NodeSpecificFormatter;
+
 // re-exporting the tracing crate's Level as it is used in our public API
 pub use tracing_core::Level;
 
