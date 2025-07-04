@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
+use ant_bootstrap::{
+    cache_store::cache_data_v1, BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig,
+};
 use ant_logging::LogBuilder;
 use ant_protocol::version::set_network_id;
 use color_eyre::Result;
@@ -14,6 +16,7 @@ use libp2p::Multiaddr;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::sleep;
+use tracing::info;
 use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
@@ -213,7 +216,7 @@ async fn test_cli_arguments_precedence() -> Result<()> {
 
 #[tokio::test]
 async fn test_cache_sync_functionality() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("version", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 
@@ -228,6 +231,12 @@ async fn test_cache_sync_functionality() -> Result<()> {
     first_store.add_addr(addr1.clone());
     first_store.write()?;
 
+    // debug by printing the cache file content
+    let cache_file = BootstrapCacheStore::cache_file_name(false);
+    let cache_path = cache_data_v1::CacheData::cache_file_path(cache_dir, &cache_file);
+    let cache_content = std::fs::read_to_string(&cache_path)?;
+    info!("Cache file content after first write:\n{cache_content}");
+
     // Create second cache with different peer
     let mut second_store = BootstrapCacheStore::new(config.clone())?;
     let addr2: Multiaddr =
@@ -238,12 +247,19 @@ async fn test_cache_sync_functionality() -> Result<()> {
     // Sync and flush - should merge with existing cache
     second_store.sync_and_flush_to_disk()?;
 
+    let cache_file = BootstrapCacheStore::cache_file_name(false);
+    let cache_path = cache_data_v1::CacheData::cache_file_path(cache_dir, &cache_file);
+    let cache_content = std::fs::read_to_string(&cache_path)?;
+    info!("Cache file content after second write:\n{cache_content}");
+
     // Create new cache store to verify
     let new_store = BootstrapCacheStore::new(config)?;
 
     // Load new cache data and verify it has both peers
     let cache_data = BootstrapCacheStore::load_cache_data(new_store.config())?;
     let addrs = cache_data.get_all_addrs().collect::<Vec<_>>();
+
+    info!("Read addresses from cache: {addrs:?}");
 
     // Both addresses should be present after sync
     let has_addr1 = addrs
@@ -252,6 +268,7 @@ async fn test_cache_sync_functionality() -> Result<()> {
     let has_addr2 = addrs
         .iter()
         .any(|&addr| addr.to_string() == addr2.to_string());
+    info!("Has addr1: {has_addr1}, Has addr2: {has_addr2}");
 
     assert!(
         has_addr1 && has_addr2,
