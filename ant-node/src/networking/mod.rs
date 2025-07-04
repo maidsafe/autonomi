@@ -15,6 +15,8 @@ mod driver;
 mod error;
 mod external_address;
 mod interface;
+#[cfg(feature = "iroh-transport")]
+pub mod iroh_adapter;
 pub mod kad;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
