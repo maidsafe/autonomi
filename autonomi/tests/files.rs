@@ -24,8 +24,7 @@ use walkdir::WalkDir;
 #[tokio::test]
 #[serial]
 async fn dir_upload_download() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("dir_upload_download", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -80,7 +79,7 @@ fn compute_dir_sha256(dir: &str) -> Result<String> {
 #[tokio::test]
 #[serial]
 async fn file_into_vault() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("file", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -116,8 +115,7 @@ async fn file_into_vault() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn file_advanced_use() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("file_advanced_use", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -181,10 +179,7 @@ async fn file_advanced_use() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn archives_use_paths_with_forward_slashes() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test(
-        "archives_use_paths_with_forward_slashes",
-        false,
-    );
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

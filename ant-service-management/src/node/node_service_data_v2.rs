@@ -67,6 +67,10 @@ pub struct NodeServiceDataV2 {
     pub user: Option<String>,
     pub user_mode: bool,
     pub version: String,
+    /// New field in V2: indicates if older cache files should be written
+    /// Serde::default is used here for backward compatibility
+    #[serde(default)]
+    pub write_older_cache_files: bool,
 }
 
 // Helper method for direct V2 deserialization
@@ -118,6 +122,8 @@ impl NodeServiceDataV2 {
             version: String,
             #[serde(default)]
             alpha: bool,
+            #[serde(default)]
+            write_older_cache_files: bool,
         }
 
         let helper = NodeServiceDataV2Helper::deserialize(deserializer)?;
@@ -153,6 +159,7 @@ impl NodeServiceDataV2 {
             user_mode: helper.user_mode,
             version: helper.version,
             alpha: helper.alpha,
+            write_older_cache_files: helper.write_older_cache_files,
         })
     }
 }
@@ -214,6 +221,7 @@ mod tests {
             rewards_address: Default::default(),
             reward_balance: None,
             user: None,
+            write_older_cache_files: false,
         };
 
         let v2_json = serde_json::to_value(&v2_data).unwrap();

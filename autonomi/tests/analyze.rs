@@ -19,7 +19,7 @@ use test_utils::evm::get_funded_wallet;
 #[tokio::test]
 #[serial]
 async fn test_analyze_chunk() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze chunk", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -42,7 +42,7 @@ async fn test_analyze_chunk() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_data() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze data", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -65,8 +65,7 @@ async fn test_analyze_data() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_public_data() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze public data", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -89,8 +88,7 @@ async fn test_analyze_public_data() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_graph_entry() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze graph entry", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -124,7 +122,7 @@ async fn test_analyze_graph_entry() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_pointer() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("analyze pointer", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -150,8 +148,7 @@ async fn test_analyze_pointer() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_scratchpad() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze scratchpad", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -178,8 +175,7 @@ async fn test_analyze_scratchpad() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_register() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze register", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -205,8 +201,7 @@ async fn test_analyze_register() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_private_dir() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze private dir", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -229,8 +224,7 @@ async fn test_analyze_private_dir() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn test_analyze_public_dir() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("analyze public dir", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

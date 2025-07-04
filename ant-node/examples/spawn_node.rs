@@ -15,10 +15,7 @@ async fn main() {
     let bootstrap_addrs = args
         .get_bootstrap_addr(None, Some(5))
         .await
-        .expect("Failed to get bootstrap addrs")
-        .into_iter()
-        .map(|addr| addr.addr)
-        .collect();
+        .expect("Failed to get bootstrap addrs");
 
     let running_node = NodeSpawner::new()
         .with_initial_peers(bootstrap_addrs)

@@ -1,0 +1,39 @@
+name: 'Upload Log Files'
+description: 'Upload log files from various operating systems'
+inputs:
+  log_file_prefix:
+    description: 'Prefix for the log file artifact name'
+    required: true
+  runner_os:
+    description: 'Operating system (Linux, macOS, or Windows)'
+    required: false
+    default: ${{ runner.os }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Upload log files (Linux)
+      if: inputs.runner_os == 'Linux'
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{ inputs.log_file_prefix }}_${{ inputs.runner_os }}
+        path: |
+          ~/.local/share/autonomi/**/*.log*
+
+    - name: Upload log files (macOS)
+      if: inputs.runner_os == 'macOS'
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{ inputs.log_file_prefix }}_${{ inputs.runner_os }}
+        path: |
+          /Users/runner/Library/Application Support/autonomi/**/*.log*
+
+    - name: Upload log files (Windows)
+      if: inputs.runner_os == 'Windows'
+      uses: actions/upload-artifact@main
+      with:
+        compression-level: 9
+        name: ${{ inputs.log_file_prefix }}_${{ inputs.runner_os }}
+        path: |
+          C:\Users\runneradmin\AppData\Roaming\autonomi\**\*.log*

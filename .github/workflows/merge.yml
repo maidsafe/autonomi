@@ -120,6 +120,9 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
+      - name: Set ANT_LOG environment variable
+        run: echo "ANT_LOG=all" >> $GITHUB_ENV
+
       - name: Run autonomi tests
         timeout-minutes: 25
         run: cargo test --release --package autonomi --lib
@@ -168,6 +171,12 @@ jobs:
       - name: Run logging tests
         timeout-minutes: 25
         run: cargo test --release --package ant-logging
+
+      - name: Upload logs
+        if: always()
+        uses: ./.github/actions/upload-logs
+        with:
+          log_file_prefix: ant_test_logs_unit
 
   e2e:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
