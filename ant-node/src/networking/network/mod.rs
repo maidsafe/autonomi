@@ -6,9 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
@@ -18,6 +15,8 @@ use libp2p::autonat::OutboundFailure;
 use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use libp2p::swarm::ConnectionId;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 use super::driver::event::MsgResponder;
@@ -27,7 +26,7 @@ use super::{Addresses, NetworkEvent, NodeIssue, SwarmLocalState};
 
 mod init;
 
-pub(crate) use init::NetworkConfig;
+pub(crate) use init::{init_reachability_check_swarm, NetworkConfig};
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm
@@ -553,4 +552,16 @@ pub(crate) fn connection_action_logging(
 ) {
     // ELK logging. Do not update without proper testing.
     info!("Action: {action_string}, performed on: {connection_id:?}, remote_peer_id: {remote_peer_id:?}, self_peer_id: {self_peer_id:?}");
+}
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
 }
