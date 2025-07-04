@@ -77,7 +77,7 @@ type ContentErredList = Arc<RwLock<BTreeMap<NetworkAddress, ContentError>>>;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn data_availability_during_churn() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_multi_threaded_tokio_test("data_with_churn", false);
+    let _log_appender_guard = LogBuilder::init_multi_threaded_tokio_test();
 
     let test_duration = if let Ok(str) = std::env::var("TEST_DURATION_MINS") {
         Duration::from_secs(60 * str.parse::<u64>()?)

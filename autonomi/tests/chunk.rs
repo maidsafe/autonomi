@@ -16,7 +16,7 @@ use serial_test::serial;
 use test_utils::{evm::get_funded_wallet, gen_random_data};
 
 async fn chunk_put_with_size(size: usize) -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("chunk", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

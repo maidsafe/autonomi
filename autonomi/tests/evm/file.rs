@@ -17,8 +17,7 @@ mod test {
 
     #[tokio::test]
     async fn file() -> Result<(), Box<dyn std::error::Error>> {
-        let _log_appender_guard =
-            ant_logging::LogBuilder::init_single_threaded_tokio_test("file", false);
+        let _log_appender_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
 
         let mut client = Client::init_local().await?;
         let mut wallet = get_funded_wallet();
