@@ -50,7 +50,7 @@ hyper = { version = "0.14", features = [
     "http1",
 ], optional = true }
 itertools = "~0.12.1"
-libp2p = { version = "0.55.0", features = [
+libp2p = { version = "0.56.0", features = [
     "tokio",
     "dns",
     "upnp",
@@ -65,11 +65,10 @@ libp2p = { version = "0.55.0", features = [
     "tcp",
     "yamux",
     "websocket",
-    "metrics",
     "autonat",
 ] }
 num-traits = "0.2"
-prometheus-client = { version = "0.22", optional = true }
+prometheus-client = { version = "0.23", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems
 # arm builds + musl are very problematic
 prost = { version = "0.9" }
@@ -117,7 +116,7 @@ tempfile = "3.6.0"
 # Removing the version field is a workaround.
 test-utils = { path = "../test-utils" }
 uuid = { version = "1.5.0", features = ["v4"] }
-libp2p-swarm-test = { version = "0.5.0", features = ["tokio"] }
+libp2p-swarm-test = { version = "0.6.0", features = ["tokio"] }
 quickcheck = "1.0.3"
 
 [lints]

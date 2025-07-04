@@ -25,6 +25,7 @@ use crate::networking::{
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
+    messages::{Request, Response},
     version::{get_network_id_str, IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR},
     NetworkAddress, PrettyPrintKBucketKey,
 };
@@ -35,7 +36,9 @@ use libp2p::{
     identity::Keypair,
     kad,
     multiaddr::Protocol,
-    request_response::{self, Config as RequestResponseConfig, ProtocolSupport},
+    request_response::{
+        self, cbor::codec::Codec as CborCodec, Config as RequestResponseConfig, ProtocolSupport,
+    },
     swarm::{StreamProtocol, Swarm},
     Multiaddr, PeerId,
 };
@@ -284,9 +287,11 @@ fn init_swarm_driver(
             .read()
             .expect("Failed to obtain read lock for REQ_RESPONSE_VERSION_STR")
             .clone();
-
-        info!("Building request response with {req_res_version_str:?}",);
-        request_response::cbor::Behaviour::new(
+        info!("Building request response with {req_res_version_str:?}");
+        let codec = CborCodec::<Request, Response>::default()
+            .set_request_size_maximum(2 * MAX_PACKET_SIZE as u64);
+        request_response::Behaviour::with_codec(
+            codec,
             [(
                 StreamProtocol::try_from_owned(req_res_version_str)
                     .expect("StreamProtocol should start with a /"),

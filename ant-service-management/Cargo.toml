@@ -16,8 +16,8 @@ ant-logging = { path = "../ant-logging", version = "0.2.50" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.6", features = ["rpc"] }
 async-trait = "0.1"
 dirs-next = "2.0.0"
-libp2p = { version = "0.55.0", features = ["kad"] }
-libp2p-identity = { version = "0.2.7", features = ["rand"] }
+libp2p = { version = "0.56.0", features = ["kad"] }
+libp2p-identity = { version = "0.2.12", features = ["rand"] }
 prost = { version = "0.9" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

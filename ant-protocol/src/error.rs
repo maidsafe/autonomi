@@ -19,12 +19,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[non_exhaustive]
 pub enum Error {
     // ---------- Misc errors
-    #[error("Could not obtain user's data directory")]
-    UserDataDirectoryNotObtainable,
-    #[error("Could not obtain port from MultiAddr")]
-    CouldNotObtainPortFromMultiAddr,
-    #[error("Could not parse RetryStrategy")]
-    ParseRetryStrategyError,
     #[error("Could not obtain data dir")]
     CouldNotObtainDataDir,
 
@@ -33,15 +27,18 @@ pub enum Error {
     ChunkDoesNotExist(NetworkAddress),
 
     // ---------- Scratchpad errors
-    /// The provided String can't be deserialized as a ScratchpadAddress
-    #[error("Failed to deserialize hex ScratchpadAddress")]
-    ScratchpadHexDeserializeFailed,
     /// The provided SecretyKey failed to decrypt the data
     #[error("Failed to derive CipherText from encrypted_data")]
     ScratchpadCipherTextFailed,
     /// The provided cypher text is invalid
     #[error("Provided cypher text is invalid")]
     ScratchpadCipherTextInvalid,
+
+    // ---------- Record Put errors
+    #[error("Error handling record put: {0}")]
+    PutRecordFailed(String),
+    #[error("Outdated record: with counter {counter}, expected any above {expected}")]
+    OutdatedRecordCounter { counter: u64, expected: u64 },
 
     // ---------- payment errors
     #[error("There was an error getting the storecost from kademlia store")]

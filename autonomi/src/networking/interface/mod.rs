@@ -40,12 +40,21 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<(Option<Record>, Vec<PeerId>)>,
     },
-    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record`]
-    PutRecord {
+    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad`]
+    PutRecordKad {
         #[debug(skip)]
         record: Record,
         /// Empty vec results in regular store to peers closest to record address
         to: Vec<PeerInfo>,
+        quorum: Quorum,
+        #[debug(skip)]
+        resp: OneShotTaskResult<()>,
+    },
+    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad_req`]
+    PutRecordReq {
+        #[debug(skip)]
+        record: Record,
+        to: PeerInfo,
         quorum: Quorum,
         #[debug(skip)]
         resp: OneShotTaskResult<()>,

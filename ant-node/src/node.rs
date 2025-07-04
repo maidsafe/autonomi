@@ -14,7 +14,7 @@ use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
 use crate::networking::{Addresses, Network, NetworkConfig, NetworkError, NetworkEvent, NodeIssue};
-use crate::RunningNode;
+use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
@@ -26,7 +26,12 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
+use libp2p::{
+    identity::Keypair,
+    kad::{Record, U256},
+    request_response::OutboundFailure,
+    Multiaddr, PeerId,
+};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},
@@ -476,11 +481,12 @@ impl Node {
             }
             NetworkEvent::QueryRequestReceived { query, channel } => {
                 event_header = "QueryRequestReceived";
-                let network = self.network().clone();
+                let node = self.clone();
                 let payment_address = *self.reward_address();
 
                 let _handle = spawn(async move {
-                    let res = Self::handle_query(&network, query, payment_address).await;
+                    let network = node.network().clone();
+                    let res = Self::handle_query(node, query, payment_address).await;
 
                     // Reducing non-mandatory logging
                     if let Response::Query(QueryResponse::GetVersion { .. }) = res {
@@ -589,11 +595,8 @@ impl Node {
         Ok(())
     }
 
-    async fn handle_query(
-        network: &Network,
-        query: Query,
-        payment_address: RewardsAddress,
-    ) -> Response {
+    async fn handle_query(node: Self, query: Query, payment_address: RewardsAddress) -> Response {
+        let network = node.network();
         let resp: QueryResponse = match query {
             Query::GetStoreQuote {
                 key,
@@ -711,6 +714,42 @@ impl Node {
                 peer: NetworkAddress::from(network.peer_id()),
                 version: ant_build_info::package_version(),
             },
+            Query::PutRecord {
+                holder,
+                address,
+                serialized_record,
+            } => {
+                let record = Record {
+                    key: address.to_record_key(),
+                    value: serialized_record,
+                    publisher: None,
+                    expires: None,
+                };
+
+                let key = PrettyPrintRecordKey::from(&record.key).into_owned();
+                let result = match node.validate_and_store_record(record).await {
+                    Ok(()) => {
+                        debug!("Uploaded record {key} has been stored");
+                        Ok(())
+                    }
+                    Err(PutValidationError::OutdatedRecordCounter { counter, expected }) => {
+                        node.record_metrics(Marker::RecordRejected(
+                            &key,
+                            &PutValidationError::OutdatedRecordCounter { counter, expected },
+                        ));
+                        Err(ProtocolError::OutdatedRecordCounter { counter, expected })
+                    }
+                    Err(err) => {
+                        node.record_metrics(Marker::RecordRejected(&key, &err));
+                        Err(ProtocolError::PutRecordFailed(format!("{err:?}")))
+                    }
+                };
+                QueryResponse::PutRecord {
+                    result,
+                    peer_address: holder,
+                    record_addr: address,
+                }
+            }
         };
         Response::Query(resp)
     }

@@ -51,6 +51,9 @@ impl SwarmDriver {
                             }
                         },
                         Request::Query(query) => match query {
+                            ant_protocol::messages::Query::PutRecord { .. } => {
+                                "Request::Query::PutRecord"
+                            }
                             ant_protocol::messages::Query::GetStoreQuote { .. } => {
                                 "Request::Query::GetStoreQuote"
                             }
@@ -172,6 +175,9 @@ impl SwarmDriver {
                             ),
                         },
                         Response::Query(query_response) => match query_response {
+                            ant_protocol::messages::QueryResponse::PutRecord { .. } => {
+                                "Response::Query::PutRecord"
+                            }
                             ant_protocol::messages::QueryResponse::GetStoreQuote { .. } => {
                                 "Respose::Query::GetStoreQuote"
                             }

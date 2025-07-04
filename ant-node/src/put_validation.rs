@@ -162,7 +162,7 @@ impl Node {
                     // if we're receiving this scratchpad PUT again, and we have been paid,
                     // we eagerly retry replicaiton as it seems like other nodes are having trouble
                     // did not manage to get this scratchpad as yet.
-                    Ok(_) | Err(PutValidationError::IgnoringOutdatedScratchpadPut) => {
+                    Ok(_) | Err(PutValidationError::OutdatedRecordCounter { .. }) => {
                         let content_hash = XorName::from_content(&record.value);
                         Marker::ValidScratchpadRecordPutFromClient(&PrettyPrintRecordKey::from(
                             &record_key,
@@ -562,9 +562,16 @@ impl Node {
                     PrettyPrintRecordKey::from(&scratchpad_key).into_owned(),
                 )
             })?;
+            if local_pad == scratchpad {
+                debug!("Scratchpad at {addr:?} already exists locally, skip to success");
+                return Ok(());
+            }
             if local_pad.counter() >= scratchpad.counter() {
                 warn!("Rejecting Scratchpad PUT with counter less than or equal to the current counter");
-                return Err(PutValidationError::IgnoringOutdatedScratchpadPut);
+                return Err(PutValidationError::OutdatedRecordCounter {
+                    counter: scratchpad.counter(),
+                    expected: local_pad.counter(),
+                });
             }
         }
 
@@ -944,13 +951,20 @@ impl Node {
 
         // Keep the pointer with the highest counter
         if let Some(local_pointer) = self.get_local_pointer(pointer.address()).await {
+            if pointer == local_pointer {
+                debug!("Pointer at {key:?} already exists locally, skipping validation");
+                return Ok(());
+            }
             if pointer.counter() <= local_pointer.counter() {
-                info!(
+                warn!(
                     "Ignoring Pointer PUT at {key:?} with counter less than or equal to the current counter ({} <= {})",
                     pointer.counter(),
                     local_pointer.counter()
                 );
-                return Ok(());
+                return Err(PutValidationError::OutdatedRecordCounter {
+                    counter: pointer.counter(),
+                    expected: local_pointer.counter(),
+                });
             }
         }
 
