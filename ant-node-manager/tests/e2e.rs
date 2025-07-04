@@ -35,14 +35,18 @@ fn cross_platform_service_install_and_control() {
         .join("release")
         .join(ANTNODE_BIN_NAME);
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("add")
+    cmd.arg("--trace")
+        .arg("add")
         .arg("--local")
         .arg("--user")
         .arg(CI_USER)
         .arg("--count")
         .arg("3")
+        .arg("--rewards-address")
+        .arg("0x03B770D9cD32077cC0bF330c13C114a87643B124")
         .arg("--path")
         .arg(antnode_path.to_string_lossy().to_string())
+        .arg("evm-local")
         .assert()
         .success();
 
@@ -59,7 +63,7 @@ fn cross_platform_service_install_and_control() {
 
     // Start each of the three services.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("start").assert().success();
+    cmd.arg("--trace").arg("start").assert().success();
 
     // After `start`, all services should be running with valid peer IDs assigned.
     let registry = get_status();
@@ -79,7 +83,7 @@ fn cross_platform_service_install_and_control() {
 
     // Stop each of the three services.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("stop").assert().success();
+    cmd.arg("--trace").arg("stop").assert().success();
 
     // After `stop`, all services should be stopped with peer IDs retained.
     let registry = get_status();
@@ -95,7 +99,7 @@ fn cross_platform_service_install_and_control() {
 
     // Start each of the three services again.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("start").assert().success();
+    cmd.arg("--trace").arg("start").assert().success();
 
     // Peer IDs again should be retained after restart.
     let registry = get_status();
@@ -111,7 +115,8 @@ fn cross_platform_service_install_and_control() {
 
     // Stop two nodes by peer ID.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("stop")
+    cmd.arg("--trace")
+        .arg("stop")
         .arg("--peer-id")
         .arg(registry.nodes[0].peer_id.unwrap().to_string())
         .arg("--peer-id")
@@ -133,7 +138,8 @@ fn cross_platform_service_install_and_control() {
 
     // Now restart the stopped nodes by service name.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("start")
+    cmd.arg("--trace")
+        .arg("start")
         .arg("--service-name")
         .arg(registry.nodes[0].service_name.clone())
         .arg("--service-name")
@@ -155,7 +161,7 @@ fn cross_platform_service_install_and_control() {
 
     // Finally, stop each of the three services.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("stop").assert().success();
+    cmd.arg("--trace").arg("stop").assert().success();
 
     // After `stop`, all services should be stopped with peer IDs retained.
     let registry = get_status();
@@ -171,7 +177,8 @@ fn cross_platform_service_install_and_control() {
 
     // Remove two nodes.
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("remove")
+    cmd.arg("--trace")
+        .arg("remove")
         .arg("--service-name")
         .arg(registry.nodes[0].service_name.clone())
         .arg("--service-name")
