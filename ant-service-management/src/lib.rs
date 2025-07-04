@@ -52,7 +52,7 @@ pub enum NatDetectionStatus {
     Private,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UpgradeResult {
     Forced(String, String),
     NotRequired,
@@ -85,6 +85,7 @@ pub trait ServiceStateActions {
     async fn pid(&self) -> Option<u32>;
     async fn on_remove(&self);
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
+    async fn wait_until_started(&self) -> Result<()>;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;
