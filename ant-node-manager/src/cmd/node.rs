@@ -15,7 +15,7 @@ use crate::{
         config::{AddNodeServiceOptions, PortRange},
     },
     config::{self, is_running_as_root},
-    helpers::{download_and_extract_release, get_bin_version},
+    helpers::{download_and_extract_release, get_bin_version, summarise_any_failed_ops},
     print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
 };
 use ant_bootstrap::InitialPeersConfig;
@@ -892,23 +892,4 @@ async fn get_services_for_ops(
     }
 
     Ok(services)
-}
-
-fn summarise_any_failed_ops(
-    failed_services: Vec<(String, String)>,
-    verb: &str,
-    verbosity: VerbosityLevel,
-) -> Result<()> {
-    if !failed_services.is_empty() {
-        if verbosity != VerbosityLevel::Minimal {
-            println!("Failed to {verb} {} service(s):", failed_services.len());
-            for failed in failed_services.iter() {
-                println!("{} {}: {}", "✕".red(), failed.0, failed.1);
-            }
-        }
-
-        error!("Failed to {verb} one or more services");
-        return Err(eyre!("Failed to {verb} one or more services"));
-    }
-    Ok(())
 }

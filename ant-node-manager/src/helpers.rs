@@ -12,6 +12,7 @@ use color_eyre::{
     eyre::{bail, eyre},
     Result,
 };
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use semver::Version;
 use std::{
@@ -404,6 +405,30 @@ pub async fn check_port_availability(
                 }
             }
         }
+    }
+    Ok(())
+}
+
+pub fn summarise_any_failed_ops<T>(
+    failed_services: T,
+    verb: &str,
+    verbosity: VerbosityLevel,
+) -> Result<()>
+where
+    T: IntoIterator<Item = (String, String)>,
+    T::IntoIter: ExactSizeIterator,
+{
+    let failed_services: Vec<_> = failed_services.into_iter().collect();
+    if !failed_services.is_empty() {
+        if verbosity != VerbosityLevel::Minimal {
+            println!("Failed to {verb} {} service(s):", failed_services.len());
+            for failed in failed_services.iter() {
+                println!("{} {}: {}", "✕".red(), failed.0, failed.1);
+            }
+        }
+
+        error!("Failed to {verb} one or more services");
+        return Err(eyre!("Failed to {verb} one or more services"));
     }
     Ok(())
 }

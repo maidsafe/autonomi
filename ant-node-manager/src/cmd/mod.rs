@@ -10,7 +10,6 @@ pub mod daemon;
 pub mod local;
 pub mod nat_detection;
 pub mod node;
-pub mod node_batch_manager;
 
 use crate::{
     helpers::{download_and_extract_release, get_bin_version},
@@ -22,6 +21,7 @@ use color_eyre::{eyre::eyre, Result};
 use colored::Colorize;
 use semver::Version;
 use std::{
+    collections::HashMap,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -97,7 +97,7 @@ pub async fn download_and_get_upgrade_bin_path(
     }
 }
 
-pub fn print_upgrade_summary(upgrade_summary: Vec<(String, UpgradeResult)>) {
+pub fn print_upgrade_summary(upgrade_summary: HashMap<String, UpgradeResult>) {
     println!("Upgrade summary:");
     for (service_name, upgrade_result) in upgrade_summary {
         match upgrade_result {
