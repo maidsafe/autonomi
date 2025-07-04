@@ -30,8 +30,7 @@ const SLEEP_BEFORE_VERIFICATION: Duration = Duration::from_secs(30);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn verify_routing_table() -> Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_multi_threaded_tokio_test("verify_routing_table", false);
+    let _log_appender_guard = LogBuilder::init_multi_threaded_tokio_test();
 
     let sleep_duration = std::env::var("SLEEP_BEFORE_VERIFICATION")
         .map(|value| {

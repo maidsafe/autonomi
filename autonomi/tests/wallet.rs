@@ -28,7 +28,7 @@ async fn from_private_key() {
 
 #[tokio::test]
 async fn send_tokens() {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("wallet", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let network =
         get_evm_network(true, None).expect("Could not get EVM network from environment variables");

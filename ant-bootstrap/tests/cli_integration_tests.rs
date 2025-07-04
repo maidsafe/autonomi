@@ -25,7 +25,7 @@ async fn setup() -> (TempDir, BootstrapCacheConfig) {
 
 #[tokio::test]
 async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let (_temp_dir, config) = setup().await;
 
     let args = InitialPeersConfig {
@@ -46,7 +46,7 @@ async fn test_first_flag() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let (_temp_dir, _config) = setup().await;
 
     let peer_addr: Multiaddr =
@@ -72,7 +72,7 @@ async fn test_peer_argument() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     let (_temp_dir, config) = setup().await;
 
@@ -108,7 +108,7 @@ async fn test_network_contacts_fallback() -> Result<(), Box<dyn std::error::Erro
 
 #[tokio::test]
 async fn test_network_peers() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     let temp_dir = TempDir::new()?;
     let cache_path = temp_dir.path().join("cache.json");

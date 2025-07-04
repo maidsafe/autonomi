@@ -22,7 +22,7 @@ use xor_name::XorName;
 #[tokio::test]
 #[serial]
 async fn pointer_put_manual() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("pointer", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
@@ -73,7 +73,7 @@ async fn pointer_put_manual() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn pointer_put() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("pointer", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

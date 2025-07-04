@@ -223,11 +223,13 @@ async fn spawn_network(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ant_logging::LogBuilder;
     use std::time::Duration;
     use tokio::time::sleep;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_spawn_network() {
+        let _guard = LogBuilder::init_multi_threaded_tokio_test();
         let network_size = 20;
 
         let running_network = NetworkSpawner::new()
