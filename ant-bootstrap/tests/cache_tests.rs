@@ -22,7 +22,7 @@ use wiremock::{
 
 #[tokio::test]
 async fn test_empty_cache() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create empty cache
@@ -45,7 +45,7 @@ async fn test_empty_cache() -> Result<()> {
 
 #[tokio::test]
 async fn test_max_peer_limit_enforcement() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create cache with small max_peers limit
@@ -141,7 +141,7 @@ async fn test_max_peer_limit_enforcement() -> Result<()> {
 
 #[tokio::test]
 async fn test_peer_removal() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create cache
@@ -169,7 +169,7 @@ async fn test_peer_removal() -> Result<()> {
 
 #[tokio::test]
 async fn peer_removal_should_not_affect_fs_cache() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create cache
@@ -206,7 +206,7 @@ async fn peer_removal_should_not_affect_fs_cache() -> Result<()> {
 
 #[tokio::test]
 async fn test_cache_file_corruption() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 
@@ -248,7 +248,7 @@ async fn test_cache_file_corruption() -> Result<()> {
 
 #[tokio::test]
 async fn test_max_addrs_per_peer() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create cache with small max_addrs_per_peer limit
@@ -283,7 +283,7 @@ async fn test_max_addrs_per_peer() -> Result<()> {
 
 #[tokio::test]
 async fn test_first_flag_behavior() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create mock server with some peers
@@ -320,7 +320,7 @@ async fn test_first_flag_behavior() -> Result<()> {
 
 #[tokio::test]
 async fn test_network_failure_recovery() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Create a ContactsFetcher with a non-existent endpoint and a valid one
     let bad_url: Url = "http://does-not-exist.example.invalid".parse()?;
@@ -363,7 +363,7 @@ async fn test_network_failure_recovery() -> Result<()> {
 
 #[tokio::test]
 async fn test_empty_response_handling() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Start mock server with empty response
     let mock_server = MockServer::start().await;

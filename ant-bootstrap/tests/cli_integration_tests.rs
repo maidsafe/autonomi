@@ -26,7 +26,7 @@ use wiremock::{
 async fn test_full_bootstrap_flow() -> Result<()> {
     // to disable fetching mainnet contacts
     set_network_id(100);
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create a mock server for network contacts
@@ -127,7 +127,7 @@ async fn test_full_bootstrap_flow() -> Result<()> {
 
 #[tokio::test]
 async fn test_concurrent_cache_access() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path().to_path_buf();
 
@@ -177,7 +177,7 @@ async fn test_concurrent_cache_access() -> Result<()> {
 
 #[tokio::test]
 async fn test_cli_arguments_precedence() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
     // Create config
@@ -216,7 +216,7 @@ async fn test_cli_arguments_precedence() -> Result<()> {
 
 #[tokio::test]
 async fn test_cache_sync_functionality() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cli_integration_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 

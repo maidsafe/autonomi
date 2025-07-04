@@ -13,7 +13,7 @@ use test_utils::{evm::get_funded_wallet, gen_random_data};
 
 #[tokio::test]
 async fn put() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("put", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

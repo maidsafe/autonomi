@@ -22,7 +22,7 @@ use wiremock::{
 
 #[tokio::test]
 async fn test_network_contacts_formats() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("contacts", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     // Start mock server
     let mock_server = MockServer::start().await;
 
@@ -103,7 +103,7 @@ async fn test_network_contacts_formats() -> Result<()> {
 
 #[tokio::test]
 async fn test_network_contacts_retries() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("contacts", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     // Start mock server
     let mock_server = MockServer::start().await;
 
@@ -138,7 +138,7 @@ async fn test_network_contacts_retries() -> Result<()> {
 #[tokio::test]
 async fn test_multiple_network_contacts() -> Result<()> {
     set_network_id(100); // to disable fetching mainnet contacts
-    let _guard = LogBuilder::init_single_threaded_tokio_test("contacts", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     // Start mock servers
     let mock_server1 = MockServer::start().await;
     let mock_server2 = MockServer::start().await;
@@ -183,7 +183,7 @@ async fn test_multiple_network_contacts() -> Result<()> {
 
 #[tokio::test]
 async fn test_env_variable_parsing() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("contacts", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     // Set ANT_PEERS environment variable
     std::env::set_var(
         ANT_PEERS_ENV,
@@ -203,7 +203,7 @@ async fn test_env_variable_parsing() -> Result<()> {
 
 #[tokio::test]
 async fn test_fetch_max_addresses() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("contacts", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     // Start mock server
     let mock_server = MockServer::start().await;
 

@@ -14,7 +14,7 @@ use tracing::info;
 
 #[tokio::test]
 async fn test_transport_protocol_variants() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Test different valid and invalid multiaddr variants
     let variants = vec![
@@ -55,7 +55,7 @@ async fn test_transport_protocol_variants() -> Result<()> {
 
 #[tokio::test]
 async fn test_craft_valid_multiaddr_from_str() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Test valid multiaddr
     let valid_addr =
@@ -85,7 +85,7 @@ async fn test_craft_valid_multiaddr_from_str() -> Result<()> {
 
 #[tokio::test]
 async fn test_craft_valid_multiaddr_ignore_peer_id() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Test addr without peer ID
     let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse()?;
@@ -109,7 +109,7 @@ async fn test_craft_valid_multiaddr_ignore_peer_id() -> Result<()> {
 
 #[tokio::test]
 async fn test_multiaddr_get_peer_id() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Test with peer ID
     let addr_with_peer: Multiaddr =

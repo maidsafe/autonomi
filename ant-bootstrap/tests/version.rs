@@ -18,7 +18,7 @@ use tempfile::TempDir;
 
 #[tokio::test]
 async fn test_cache_version_upgrade() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("version", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 
@@ -68,7 +68,7 @@ async fn test_cache_version_upgrade() -> Result<()> {
 
 #[tokio::test]
 async fn test_backwards_compatible_writes() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("version", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 
@@ -112,7 +112,7 @@ async fn test_backwards_compatible_writes() -> Result<()> {
 
 #[tokio::test]
 async fn test_version_specific_file_paths() -> Result<()> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("version", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_dir = temp_dir.path();
 
