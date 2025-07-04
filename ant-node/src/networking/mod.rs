@@ -15,6 +15,7 @@ mod driver;
 mod error;
 mod external_address;
 mod interface;
+pub mod kad;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;

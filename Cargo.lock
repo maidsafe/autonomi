@@ -947,6 +947,7 @@ dependencies = [
  "assert_fs",
  "async-trait",
  "autonomi",
+ "bincode",
  "blsttc",
  "bytes",
  "chrono",

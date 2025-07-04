@@ -30,6 +30,7 @@ ant-logging = { path = "../ant-logging", version = "0.2.50", features = ["proces
 ant-protocol = { path = "../ant-protocol", version = "1.0.6" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.14" }
 async-trait = "0.1"
+bincode = "1.3"
 bls = { package = "blsttc", version = "8.0.1" }
 bytes = { version = "1.0.1", features = ["serde"] }
 clap = { version = "4.2.1", features = ["derive"] }
