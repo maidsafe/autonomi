@@ -175,22 +175,6 @@ impl ServiceStateActions for NodeService {
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
         let (connected_peers, pid, peer_id) = if full_refresh {
-            debug!(
-                "Performing full refresh for {service_name}. We will wait for reachability check to complete"
-            );
-
-            self.metrics_action
-                .wait_until_reachability_check_completes(None)
-                .await?;
-
-            info!(
-                "Reachability check completed for {service_name}. Now waiting for the node to connect to the network"
-            );
-
-            self.rpc_actions
-                .wait_until_node_connects_to_network(None)
-                .await?;
-
             let node_info = self
                 .rpc_actions
                 .node_info()
@@ -242,6 +226,24 @@ impl ServiceStateActions for NodeService {
         self.service_data.write().await.peer_id = peer_id;
         self.service_data.write().await.pid = pid;
         self.service_data.write().await.status = ServiceStatus::Running;
+        Ok(())
+    }
+
+    async fn wait_until_started(&self) -> Result<()> {
+        let service_name = self.service_data.read().await.service_name.clone();
+        info!("Waiting for {service_name} to complete reachability check");
+        self.metrics_action
+            .wait_until_reachability_check_completes(None)
+            .await?;
+
+        info!(
+            "Reachability check completed for {service_name}. Now waiting for the node to connect to the network"
+        );
+
+        self.rpc_actions
+            .wait_until_node_connects_to_network(None)
+            .await?;
+        info!("{service_name} is now connected to the network");
         Ok(())
     }
 
