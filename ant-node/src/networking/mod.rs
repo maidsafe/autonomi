@@ -13,7 +13,6 @@ mod bootstrap;
 mod circular_vec;
 mod driver;
 mod error;
-mod external_address;
 mod interface;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
@@ -42,7 +41,6 @@ use libp2p::{
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };
-use std::net::IpAddr;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
 /// Return with the closest expected number of entries it has.
@@ -107,6 +105,23 @@ pub(crate) fn multiaddr_is_global(multiaddr: &Multiaddr) -> bool {
     })
 }
 
+/// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
+/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
+pub(crate) fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
+    let mut new_multiaddr = Multiaddr::empty();
+    let ip = addr.iter().find_map(|p| match p {
+        Protocol::Ip4(addr) => Some(addr),
+        _ => None,
+    })?;
+    let port = multiaddr_get_port(addr)?;
+
+    new_multiaddr.push(Protocol::Ip4(ip));
+    new_multiaddr.push(Protocol::Udp(port));
+    new_multiaddr.push(Protocol::QuicV1);
+
+    Some(new_multiaddr)
+}
+
 /// Pop off the `/p2p/<peer_id>`. This mutates the `Multiaddr` and returns the `PeerId` if it exists.
 pub(crate) fn multiaddr_pop_p2p(multiaddr: &mut Multiaddr) -> Option<PeerId> {
     if let Some(Protocol::P2p(peer_id)) = multiaddr.iter().last() {
@@ -125,15 +140,6 @@ pub(crate) fn multiaddr_get_p2p(multiaddr: &Multiaddr) -> Option<PeerId> {
     } else {
         None
     }
-}
-
-/// Get the `IpAddr` from the `Multiaddr`
-pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
-    addr.iter().find_map(|p| match p {
-        Protocol::Ip4(addr) => Some(IpAddr::V4(addr)),
-        Protocol::Ip6(addr) => Some(IpAddr::V6(addr)),
-        _ => None,
-    })
 }
 
 pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {

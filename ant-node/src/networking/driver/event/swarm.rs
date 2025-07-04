@@ -8,16 +8,16 @@
 
 use super::SwarmDriver;
 use crate::networking::{
+    craft_valid_multiaddr_without_p2p,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
-    NetworkEvent, NodeIssue, Result,
+    multiaddr_is_global, NetworkEvent, NodeIssue, Result,
 };
 use ant_bootstrap::multiaddr_get_peer_id;
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
 use libp2p::{
-    core::ConnectedPoint,
     multiaddr::Protocol,
     swarm::{ConnectionId, DialError, SwarmEvent},
     Multiaddr, TransportError,
@@ -184,14 +184,21 @@ impl SwarmDriver {
                         if let Err(err) = self.sync_and_flush_cache() {
                             warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
                         }
-                    } else if let Some(external_address_manager) =
-                        self.external_address_manager.as_mut()
-                    {
-                        external_address_manager
-                            .on_new_listen_addr(address.clone(), &mut self.swarm);
                     } else {
-                        // just for future reference.
-                        warn!("External address manager is not enabled for a public node. This should not happen.");
+                        // only add our global addresses
+                        if multiaddr_is_global(&address) {
+                            if let Some(mut crafted_address) =
+                                craft_valid_multiaddr_without_p2p(&address)
+                            {
+                                crafted_address.push(Protocol::P2p(self.self_peer_id));
+                                info!("Adding listen address to external addresses: {crafted_address:?}");
+                                self.swarm.add_external_address(crafted_address);
+                            } else {
+                                error!("Listen address is ill formed {address:?}");
+                            }
+                        } else {
+                            warn!("Listen address is not global, ignoring: {address:?}");
+                        };
                     }
                 }
 
@@ -249,13 +256,6 @@ impl SwarmDriver {
                     &mut self.swarm,
                     self.peers_in_rt,
                 );
-
-                if let Some(external_address_manager) = self.external_address_manager.as_mut() {
-                    if let ConnectedPoint::Listener { local_addr, .. } = &endpoint {
-                        external_address_manager
-                            .on_established_incoming_connection(local_addr.clone());
-                    }
-                }
 
                 #[cfg(feature = "open-metrics")]
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
@@ -526,10 +526,6 @@ impl SwarmDriver {
             SwarmEvent::NewExternalAddrCandidate { address } => {
                 event_string = "NewExternalAddrCandidate";
                 debug!("New external address candidate: {address:?}");
-                if let Some(external_address_manager) = self.external_address_manager.as_mut() {
-                    external_address_manager
-                        .add_external_address_candidate(address, &mut self.swarm);
-                }
             }
             SwarmEvent::ExternalAddrConfirmed { address } => {
                 event_string = "ExternalAddrConfirmed";
@@ -545,9 +541,6 @@ impl SwarmDriver {
             } => {
                 event_string = "ExpiredListenAddr";
                 info!("Listen address has expired. {listener_id:?} on {address:?}");
-                if let Some(external_address_manager) = self.external_address_manager.as_mut() {
-                    external_address_manager.on_expired_listen_addr(address, &self.swarm);
-                }
             }
             SwarmEvent::ListenerError { listener_id, error } => {
                 event_string = "ListenerError";

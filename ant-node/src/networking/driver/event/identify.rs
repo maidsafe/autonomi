@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    multiaddr_get_port,
+    craft_valid_multiaddr_without_p2p,
     network::connection_action_logging,
     relay_manager::{is_a_relayed_peer, RelayManager},
     Addresses, NetworkEvent,
@@ -356,23 +356,6 @@ fn does_the_peer_support_dnd(info: &Info) -> bool {
         }
     }
     false
-}
-
-/// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
-/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
-fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
-    let mut new_multiaddr = Multiaddr::empty();
-    let ip = addr.iter().find_map(|p| match p {
-        Protocol::Ip4(addr) => Some(addr),
-        _ => None,
-    })?;
-    let port = multiaddr_get_port(addr)?;
-
-    new_multiaddr.push(Protocol::Ip4(ip));
-    new_multiaddr.push(Protocol::Udp(port));
-    new_multiaddr.push(Protocol::QuicV1);
-
-    Some(new_multiaddr)
 }
 
 /// Build a `Multiaddr` with the p2p protocol filtered out.

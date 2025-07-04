@@ -21,7 +21,6 @@ use crate::networking::{
     circular_vec::CircularVec,
     driver::kad::U256,
     error::Result,
-    external_address::ExternalAddressManager,
     log_markers::Marker,
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
@@ -117,7 +116,6 @@ pub(crate) struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
-    pub(crate) external_address_manager: Option<ExternalAddressManager>,
     pub(crate) relay_manager: Option<RelayManager>,
     /// The peers that are using our relay service.
     pub(crate) connected_relay_clients: HashSet<PeerId>,

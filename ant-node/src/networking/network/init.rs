@@ -13,7 +13,6 @@ use crate::networking::{
     circular_vec::CircularVec,
     driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
     error::{NetworkError, Result},
-    external_address::ExternalAddressManager,
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
@@ -392,13 +391,6 @@ fn init_swarm_driver(
         info!("Relay manager is disabled for this node.");
         None
     };
-    // Enable external address manager for public nodes and not behind nat
-    let external_address_manager = if !config.local && !config.relay_client {
-        Some(ExternalAddressManager::new(peer_id))
-    } else {
-        info!("External address manager is disabled for this node.");
-        None
-    };
 
     let is_upnp_enabled = swarm.behaviour().upnp.is_enabled();
     let swarm_driver = SwarmDriver {
@@ -414,7 +406,6 @@ fn init_swarm_driver(
         bootstrap_cache: config.bootstrap_cache,
         relay_manager,
         connected_relay_clients: Default::default(),
-        external_address_manager,
         replication_fetcher,
         #[cfg(feature = "open-metrics")]
         metrics_recorder,
