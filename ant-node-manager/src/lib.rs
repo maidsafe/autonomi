@@ -10,6 +10,7 @@
 extern crate tracing;
 
 pub mod add_services;
+pub mod batch_service_manager;
 pub mod cmd;
 pub mod config;
 pub mod error;
