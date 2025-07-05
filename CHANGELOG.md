@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-06-26
+
+### API
+
+Key changes are the new networking module, `Quorum` type replacement, pointer counter expansion to
+`u64`.
+
+#### Added
+
+- Networking:
+    + `pub mod networking`: new network module.
+    + `networking::Quorum`: enum for consensus operations.
+    + Network driver, retry strategies, and utilities.
+- Enhanced transaction configuration with the new `MaxFeePerGas` type.
+
+#### Changed
+
+- Type updates:
+    + `ResponseQuorum` → `networking::Quorum` (breaking change)
+    + Pointer counter type: `u32` → `u64` (with backward compatibility)
+- Error handling improvements:
+    + Enhanced `PointerError` error variants, e.g., `PutError`, `GetError`.
+    + More specific error handling in pointer operations.
+- Internal infrastructure:
+    + Enhanced networking layer with better retry mechanisms.
+    + Improved put/get record operations with retries.
+    + Better split record handling for pointers.
+
+####  Fixed
+
+- `Client::pointer_check_existance()` → `Client::pointer_check_existence()` (typo fix)
+
+### Network
+
+- A peer's address is obtained from its connection info rather than self-advertised addresses from
+  identify requests. The earlier method was incorrect and error prone.
+- Peers are now added to the routing table only if they can be dialled back after 180 seconds, giving
+  enough time for the UDP mapping to expire. Dialling back immediately would always succeed even if the
+  peer was not externally reachable. When the routing table consists more of these reachable peers,
+  it improves network health and should subsequently lead to better performance and reliability.
+- Introduce a `DoNotDisturb` behaviour to fix an edge case with the 180-second delayed dial-back
+  queue, where a peer would get re-added if it sent constant requests. This would happen if the peer
+  thinks we are close and spams periodic messages.
+
+### Client
+
+#### Added
+
+- The `ant` binary now has a `scratchpad` subcommand for working with scratchpads. These are a
+  mutable 4MB blob of memory on the network. An initial payment is made to create one, but all
+  further mutations are free. Personal user vaults have been implemented with scratchpads and some
+  people have been using them for chat applications.
+- The `ant` binary now has a `pointer` subcommand for managing pointers. Pointers enable building
+  mutable data structures by providing authenticated, updatable references that only the owner can
+  modify. Here are the available subcommands:
+      + `cost`: calculate payment required before creating pointers
+      + `create`: point to different data types (chunks, graphs, scratchpads, other pointers) that
+        can be updated over time
+      + `edit`: update an existing pointer reference
+      + `generate-key`: create cryptographic keys for owning and updating pointers
+      + `get`: retrieve the target of a pointer from the network
+      + `list`: view all pointers controlled by the current user
+      + `share`: give others read/write access by sharing pointer secret keys
+
+#### Changed
+
+The client has fundamentally changed with a large refactor we call 'light client networking'. The
+previous networking implementation was complex and also shared between both node and client, leading
+to all kinds of exceptions and special cases in the code. After the refactor, the client now has its
+own, simpler networking implementation, and now the client and node network can evolve
+independently.
+
+This refactor made it easier to make other changes that featured in the release:
+
+* Retry strategies were adapted to limit retrying without reason.
+* Connect to peers in advance when performing libp2p put queries.
+* No periodic network discovery.
+* Improve connection success rate by using libp2p's `add_address` rather than dialling.
+* Use a batched upload flow to reduce payment rejection resulting from quote expiration.
+
+All these changes led to the following observations in our testing:
+
+* Improved performance and throughput for uploads.
+* Improved reliability and elimination of errors in uploads that were not related to payments. We do
+  still see some errors related to gas prices on the Ethereum network, but these would hopefully be
+  mitigated with retrying.
+* Improved reliability and reduction of errors in downloads.
+
+The download performance had parity with the current stable release.
+
+There should be further improvements coming for the next release. In particular we are waiting on a
+new `libp2p` release which will have a feature contributed by us that should further improve
+performance. We've been told by the `libp2p` team that this release is now forthcoming.
+
+### Launchpad
+
+#### Added
+
+- Provide a 3-minute timeout for NAT detection. If not successful, relaying will be used.
+
 ## 2025-05-14
 
 ### Client
