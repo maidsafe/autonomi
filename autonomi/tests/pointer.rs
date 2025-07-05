@@ -31,7 +31,7 @@ async fn pointer_put_manual() -> Result<()> {
     let public_key = key.public_key();
     let target =
         PointerTarget::ChunkAddress(ChunkAddress::new(XorName::random(&mut rand::thread_rng())));
-    let pointer = Pointer::new(&key, 0, target);
+    let pointer = Pointer::new(&key, 0, target, key.public_key());
 
     // estimate the cost of the pointer
     let cost = client.pointer_cost(&public_key).await?;
@@ -53,7 +53,7 @@ async fn pointer_put_manual() -> Result<()> {
 
     // try update pointer and make it point to itself
     let target2 = PointerTarget::PointerAddress(addr);
-    let pointer2 = Pointer::new(&key, 1, target2);
+    let pointer2 = Pointer::new(&key, 1, target2, key.public_key());
     let payment_option = PaymentOption::from(&wallet);
     let (cost, _) = client.pointer_put(pointer2.clone(), payment_option).await?;
     assert_eq!(cost, AttoTokens::zero());
@@ -90,7 +90,7 @@ async fn pointer_put() -> Result<()> {
     // put the pointer
     let payment_option = PaymentOption::from(&wallet);
     let (cost, addr) = client
-        .pointer_create(&key, target.clone(), payment_option)
+        .pointer_create(&key, target.clone(), key.public_key(), payment_option)
         .await?;
     println!("pointer create cost: {cost}");
 
@@ -99,19 +99,19 @@ async fn pointer_put() -> Result<()> {
 
     // check that the pointer is stored
     let got = client.pointer_get(&addr).await?;
-    assert_eq!(got, Pointer::new(&key, 0, target));
+    assert_eq!(got, Pointer::new(&key, 0, target, key.public_key()));
     println!("pointer got 1");
 
     // try update pointer and make it point to itself
     let target2 = PointerTarget::PointerAddress(addr);
-    client.pointer_update(&key, target2.clone()).await?;
+    client.pointer_update(&key, target2.clone(), key.public_key()).await?;
 
     // wait for the pointer to be replicated
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     // check that the pointer is updated
     let got = client.pointer_get(&addr).await?;
-    assert_eq!(got, Pointer::new(&key, 1, target2));
+    assert_eq!(got, Pointer::new(&key, 1, target2, key.public_key()));
     println!("pointer got 2");
 
     Ok(())

@@ -210,17 +210,19 @@ impl Client {
     /// Make sure that the owner key is not already used for another pointer as each key is associated with one pointer
     pub async fn pointer_create(
         &self,
-        owner: &SecretKey,
+        owner: PublicKey,
         target: PointerTarget,
+        address_key: PublicKey,
+        signing_key: &SecretKey,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
-        let address = PointerAddress::new(owner.public_key());
+        let address = PointerAddress::new(address_key);
         let already_exists = self.pointer_check_existence(&address).await?;
         if already_exists {
             return Err(PointerError::PointerAlreadyExists(address));
         }
 
-        let pointer = Pointer::new(owner, 0, target);
+        let pointer = Pointer::new(owner, 0, target, address_key, signing_key);
         self.pointer_put(pointer, payment_option).await
     }
 
@@ -231,10 +233,12 @@ impl Client {
     /// Only the latest version of the pointer is kept on the Network, previous versions will be overwritten and unrecoverable.
     pub async fn pointer_update(
         &self,
-        owner: &SecretKey,
+        owner: PublicKey,
         target: PointerTarget,
+        address_key: PublicKey,
+        signing_key: &SecretKey
     ) -> Result<(), PointerError> {
-        let address = PointerAddress::new(owner.public_key());
+        let address = PointerAddress::new(address_key);
         info!("Updating pointer at address {address:?} to {target:?}");
         let current = match self.pointer_get(&address).await {
             Ok(pointer) => Some(pointer),
@@ -252,7 +256,7 @@ impl Client {
         let pointer = if let Some(p) = current {
             let version = p.counter() + 1;
             info!("Updating pointer at address {address:?} to version {version}");
-            Pointer::new(owner, version, target)
+            Pointer::new(owner, version, target, address_key, signing_key)
         } else {
             warn!("Pointer at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created");
             return Err(PointerError::CannotUpdateNewPointer);
