@@ -19,6 +19,16 @@ mod interface;
 #[cfg(feature = "iroh-transport")]
 pub mod iroh_adapter;
 pub mod kad;
+
+// Phase 5: Pure iroh networking implementation  
+#[cfg(feature = "iroh-only")]
+pub mod iroh_only;
+
+// Phase 3: Dual-stack networking with libp2p and iroh
+#[cfg(feature = "dual-stack")]
+pub mod dual_stack;
+#[cfg(feature = "dual-stack")]
+pub mod libp2p_compat;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;

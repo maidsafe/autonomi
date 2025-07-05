@@ -24,6 +24,8 @@ otlp = ["ant-logging/otlp"]
 iroh-transport = ["serde_bytes", "postcard"]
 # dual-stack transport support for Phase 3 migration (parallel libp2p and iroh)
 dual-stack = ["iroh-transport"]
+# pure iroh transport support for Phase 5 migration (iroh-only networking)
+iroh-only = ["iroh-transport"]
 # libp2p compatibility layer for kad module
 libp2p-compat = []
 
