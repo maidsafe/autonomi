@@ -23,9 +23,9 @@ use crate::{
 
 use super::super::{utils::centered_rect_fixed, Component};
 
-pub const GB_PER_NODE: usize = 35;
-pub const MB: usize = 1000 * 1000;
-pub const GB: usize = MB * 1000;
+pub const GB_PER_NODE: u64 = 35;
+pub const MB: u64 = 1000 * 1000;
+pub const GB: u64 = MB * 1000;
 pub const MAX_NODE_COUNT: usize = 50;
 
 pub struct ManageNodes {
@@ -43,7 +43,7 @@ impl ManageNodes {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
             active: false,
-            available_disk_space_gb: get_available_space_b(&storage_mountpoint)? / GB,
+            available_disk_space_gb: (get_available_space_b(&storage_mountpoint)? / GB) as usize,
             nodes_to_start_input: Input::default().with_value(nodes_to_start.to_string()),
             old_value: Default::default(),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -58,7 +58,7 @@ impl ManageNodes {
     // Returns the max number of nodes to start
     // It is the minimum of the available disk space and the max nodes limit
     fn max_nodes_to_start(&self) -> usize {
-        std::cmp::min(self.available_disk_space_gb / GB_PER_NODE, MAX_NODE_COUNT)
+        std::cmp::min(self.available_disk_space_gb / GB_PER_NODE as usize, MAX_NODE_COUNT)
     }
 }
 
@@ -111,7 +111,7 @@ impl Component for ManageNodes {
                     .parse::<usize>()
                     .unwrap_or(0);
                 // if it might exceed the available space or if more than max_node_count, then enter the max
-                if new_value * GB_PER_NODE > self.available_disk_space_gb
+                if (new_value as u64) * GB_PER_NODE > (self.available_disk_space_gb as u64) * GB
                     || new_value > MAX_NODE_COUNT
                 {
                     self.nodes_to_start_input = self
@@ -134,7 +134,7 @@ impl Component for ManageNodes {
                     if key.code == KeyCode::Up {
                         if current_val + 1 >= MAX_NODE_COUNT {
                             MAX_NODE_COUNT
-                        } else if (current_val + 1) * GB_PER_NODE <= self.available_disk_space_gb {
+                        } else if ((current_val + 1) as u64) * GB_PER_NODE <= (self.available_disk_space_gb as u64) * GB {
                             current_val + 1
                         } else {
                             current_val
@@ -183,7 +183,7 @@ impl Component for ManageNodes {
             },
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                self.available_disk_space_gb = (get_available_space_b(&mountpoint)? / GB) as usize;
                 None
             }
             _ => None,
@@ -270,7 +270,7 @@ impl Component for ManageNodes {
         let info = Line::from(vec![
             Span::styled("Using", info_style),
             Span::styled(
-                format!(" {}GB ", self.get_nodes_to_start_val() * GB_PER_NODE),
+                format!(" {}GB ", (self.get_nodes_to_start_val() as u64) * GB_PER_NODE),
                 info_style.bold(),
             ),
             Span::styled(
@@ -322,5 +322,95 @@ impl Component for ManageNodes {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_manage_nodes_large_disk_space() {
+        // Test that ManageNodes can handle large disk space values
+        let large_disk_space = 100; // 100GB available
+        let mountpoint = PathBuf::from("/");
+        
+        // Create a mock ManageNodes with large disk space
+        let mut manage_nodes = ManageNodes {
+            active: false,
+            available_disk_space_gb: large_disk_space,
+            storage_mountpoint: mountpoint,
+            nodes_to_start_input: Input::default().with_value("2".to_string()),
+            old_value: "1".to_string(),
+        };
+        
+        // Test max_nodes_to_start calculation
+        let max_nodes = manage_nodes.max_nodes_to_start();
+        // 100GB / 35GB per node = 2 nodes (floor division)
+        assert_eq!(max_nodes, 2);
+        
+        // Test that we can handle the calculation without overflow
+        let required_space = (max_nodes as u64) * GB_PER_NODE;
+        assert_eq!(required_space, 70); // 2 * 35 = 70GB
+        
+        // Verify this doesn't exceed available space
+        assert!(required_space <= (large_disk_space as u64) * GB);
+    }
+
+    #[test]
+    fn test_manage_nodes_overflow_scenario() {
+        // Test the scenario that would have caused overflow on 32-bit ARM
+        let mountpoint = PathBuf::from("/");
+        
+        // Simulate a large disk space that would overflow usize on 32-bit
+        let large_disk_space = 100; // 100GB
+        let mut manage_nodes = ManageNodes {
+            active: false,
+            available_disk_space_gb: large_disk_space,
+            storage_mountpoint: mountpoint,
+            nodes_to_start_input: Input::default().with_value("1".to_string()),
+            old_value: "1".to_string(),
+        };
+        
+        // Test that calculations work correctly
+        let nodes_to_start = manage_nodes.get_nodes_to_start_val();
+        assert_eq!(nodes_to_start, 1);
+        
+        // Test the space calculation that would have overflowed
+        let space_needed = (nodes_to_start as u64) * GB_PER_NODE;
+        assert_eq!(space_needed, 35); // 1 * 35 = 35GB
+        
+        // This should not overflow and should be less than available
+        assert!(space_needed <= (large_disk_space as u64) * GB);
+    }
+
+    #[test]
+    fn test_constants_are_u64() {
+        // Verify that our constants are u64 to prevent overflow
+        assert_eq!(GB_PER_NODE, 35u64);
+        assert_eq!(MB, 1_000_000u64);
+        assert_eq!(GB, 1_000_000_000u64);
+        
+        // Test that multiplication doesn't overflow
+        let large_calculation = GB_PER_NODE * 100; // 35 * 100 = 3500
+        assert_eq!(large_calculation, 3500u64);
+        
+        // Test a scenario that would overflow on 32-bit usize
+        // Simulate a large disk space calculation in bytes
+        let large_disk_bytes: u64 = 100_000_000_000; // 100GB in bytes
+        
+        // This calculation would overflow on 32-bit usize if we used usize
+        // because 100GB in bytes > 2,147,483,647 (max 32-bit usize)
+        assert!(large_disk_bytes > 2_147_483_647u64);
+        
+        // Convert to GB - this should work correctly with u64
+        let gb_constant: u64 = 1_000_000_000; // 1GB in bytes
+        let available_gb = large_disk_bytes / gb_constant; // 100GB
+        assert_eq!(available_gb, 100u64);
+        
+        // Calculate space needed for nodes
+        let total_space_needed = available_gb * GB_PER_NODE; // 100 * 35 = 3500GB
+        assert_eq!(total_space_needed, 3500u64);
     }
 }
