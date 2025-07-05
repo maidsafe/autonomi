@@ -99,7 +99,7 @@ impl NetworkDriver {
             }
             QueryResult::PutRecord(res) => {
                 trace!("PutRecord: {:?}", res);
-                self.pending_tasks.update_put_record_kad(id, res)?;
+                self.pending_tasks.update_put_record(id, res)?;
             }
             QueryResult::GetProviders(res) => {
                 trace!("GetProviders: {:?}", res);
@@ -125,24 +125,14 @@ impl NetworkDriver {
             return Ok(());
         }
 
-        match response {
-            Response::Query(QueryResponse::GetStoreQuote {
-                quote,
-                peer_address,
-                storage_proofs: _,
-            }) => {
-                self.pending_tasks
-                    .update_get_quote(request_id, quote, peer_address)?;
-            }
-            Response::Query(QueryResponse::PutRecord {
-                result,
-                peer_address: _,
-                record_addr: _,
-            }) => {
-                self.pending_tasks
-                    .update_put_record_req(request_id, result)?;
-            }
-            _ => {}
+        if let Response::Query(QueryResponse::GetStoreQuote {
+            quote,
+            peer_address,
+            storage_proofs: _,
+        }) = response
+        {
+            self.pending_tasks
+                .update_get_quote(request_id, quote, peer_address)?;
         }
 
         Ok(())
@@ -163,7 +153,7 @@ impl NetworkDriver {
         }
 
         self.pending_tasks
-            .terminate_query(request_id, peer, error)?;
+            .terminate_get_quote(request_id, peer, error)?;
 
         Ok(())
     }

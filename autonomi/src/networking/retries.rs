@@ -55,7 +55,7 @@ impl Network {
                     }
                 }
                 // return fatal errors
-                Err(err) if err.cannot_retry() => {
+                Err(err) if err.is_fatal() => {
                     return Err(err);
                 }
                 // retry on other errors
@@ -89,7 +89,7 @@ impl Network {
                     return Err(err);
                 }
                 // return fatal errors
-                Err(err) if err.cannot_retry() => {
+                Err(err) if err.is_fatal() => {
                     return Err(err);
                 }
                 // retry on no record
@@ -127,7 +127,7 @@ impl Network {
                 // return success
                 Ok(quotes) => return Ok(quotes),
                 // return fatal errors
-                Err(err) if err.cannot_retry() => {
+                Err(err) if err.is_fatal() => {
                     return Err(err);
                 }
                 // retry on other errors
@@ -155,7 +155,7 @@ impl Network {
                 // return success
                 Ok(peers) => return Ok(peers),
                 // return fatal errors
-                Err(err) if err.cannot_retry() => {
+                Err(err) if err.is_fatal() => {
                     return Err(err);
                 }
                 // retry on other errors

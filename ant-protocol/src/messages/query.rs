@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 /// Network, and their semantics.
 ///
 /// [`protocol`]: crate
-#[derive(Eq, PartialEq, PartialOrd, Clone, Serialize, Deserialize, custom_debug::Debug)]
+#[derive(Eq, PartialEq, PartialOrd, Clone, Serialize, Deserialize, Debug)]
 pub enum Query {
     /// Retrieve the quote to store a record at the given address.
     /// The storage verification is optional to be undertaken
@@ -74,16 +74,6 @@ pub enum Query {
     /// *** From now on, the order of variants shall be retained to be backward compatible
     /// Query peer's cargo package version.
     GetVersion(NetworkAddress),
-    /// Write operation to upload a record.
-    PutRecord {
-        /// Holder of the record.
-        holder: NetworkAddress,
-        /// serialized record.
-        #[debug(skip)]
-        serialized_record: Vec<u8>,
-        /// Address of the record.
-        address: NetworkAddress,
-    },
 }
 
 impl Query {
@@ -97,7 +87,6 @@ impl Query {
             | Query::GetReplicatedRecord { key, .. }
             | Query::GetChunkExistenceProof { key, .. }
             | Query::GetClosestPeers { key, .. } => key.clone(),
-            Query::PutRecord { holder, .. } => holder.clone(),
         }
     }
 }
@@ -147,18 +136,6 @@ impl std::fmt::Display for Query {
             }
             Query::GetVersion(address) => {
                 write!(f, "Query::GetVersion({address:?})")
-            }
-            Query::PutRecord {
-                holder,
-                address,
-                serialized_record,
-            } => {
-                write!(
-                    f,
-                    "Cmd::PutRecord(To {:?}, with record {address:?} has {} data_size)",
-                    holder.as_peer_id(),
-                    serialized_record.len()
-                )
             }
         }
     }

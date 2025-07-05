@@ -76,17 +76,6 @@ pub enum QueryResponse {
         peer: NetworkAddress,
         version: String,
     },
-    /// Response to [`PutRecord`]
-    ///
-    /// [`PutRecord`]: crate::messages::Query::PutRecord
-    PutRecord {
-        /// Result of record upload.
-        result: Result<()>,
-        /// Node's Peer Address
-        peer_address: NetworkAddress,
-        /// Correspondent Record Address
-        record_addr: NetworkAddress,
-    },
 }
 
 // Debug implementation for QueryResponse, to avoid printing Vec<u8>
@@ -141,16 +130,6 @@ impl Debug for QueryResponse {
             }
             QueryResponse::GetVersion { peer, version } => {
                 write!(f, "GetVersion peer {peer:?} has version of {version:?}")
-            }
-            QueryResponse::PutRecord {
-                result,
-                peer_address,
-                record_addr,
-            } => {
-                write!(
-                    f,
-                    "PutRecord(Record {record_addr:?} uploaded to {peer_address:?} with result {result:?})",
-                )
             }
         }
     }

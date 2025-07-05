@@ -12,6 +12,7 @@ use crate::networking::{
     interface::TerminateNodeReason,
     NetworkEvent, NodeIssue, Result,
 };
+use ant_bootstrap::multiaddr_get_peer_id;
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
@@ -447,15 +448,18 @@ impl SwarmDriver {
                         debug!("OutgoingConnectionError: DialPeerConditionFalse");
                         false
                     }
-                    DialError::LocalPeerId { address } => {
+                    DialError::LocalPeerId { endpoint, .. } => {
                         // This is actually _us_ So we should remove this from the RT
-                        debug!("OutgoingConnectionError: LocalPeerId: {address}");
+                        debug!(
+                            "OutgoingConnectionError: LocalPeerId: {}",
+                            endpoint_str(endpoint)
+                        );
                         true
                     }
-                    DialError::WrongPeerId { obtained, address } => {
+                    DialError::WrongPeerId { obtained, endpoint } => {
                         // The peer id we attempted to dial was not the one we expected
                         // cleanup
-                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}");
+                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, endpoint: {endpoint:?}");
                         true
                     }
                     DialError::Denied { cause } => {
@@ -482,23 +486,27 @@ impl SwarmDriver {
                 local_addr,
                 send_back_addr,
                 error,
-                peer_id,
             } => {
                 event_string = "Incoming ConnErr";
+
+                let remote_peer_id = match multiaddr_get_peer_id(&send_back_addr) {
+                    Some(peer_id) => format!("{peer_id:?}"),
+                    None => String::new(),
+                };
                 debug!("IncomingConnectionError from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
 
                 // ELK logging. Do not update without proper testing.
                 let (error_str, level) = listen_error_to_str(&error);
                 match level {
-                    tracing::Level::ERROR => error!(
-                        "Node {:?} Remote {peer_id:?} - Incoming Connection Error - {error_str:?}",
-                        self.self_peer_id,
-                    ),
-                    _ => debug!(
-                        "Node {:?} Remote {peer_id:?} - Incoming Connection Error - {error_str:?}",
-                        self.self_peer_id,
-                    ),
-                }
+                        tracing::Level::ERROR => error!(
+                            "Node {:?} Remote {remote_peer_id} - Incoming Connection Error - {error_str:?}",
+                            self.self_peer_id,
+                        ),
+                        _ => debug!(
+                            "Node {:?} Remote {remote_peer_id} - Incoming Connection Error - {error_str:?}",
+                            self.self_peer_id,
+                        ),
+                    }
 
                 #[cfg(feature = "open-metrics")]
                 if let Some(relay_manager) = self.relay_manager.as_mut() {

@@ -98,9 +98,7 @@ pub async fn sync(force: bool, network_context: NetworkContext) -> Result<()> {
     client
         .put_user_data_to_vault(&vault_sk, wallet.into(), local_user_data.clone())
         .await
-        .with_suggestion(|| {
-            "Make sure you have already created a vault on the network or try again"
-        })?;
+        .with_suggestion(|| "Make sure you have already created a vault on the network")?;
 
     println!("✅ Successfully synced vault");
     println!("Vault contains:");

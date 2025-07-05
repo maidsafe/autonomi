@@ -221,7 +221,7 @@ enum PutRecordErrorType {
     PaymentQuoteOutOfRange,
     PaymentVerificationFailed,
     OversizedChunk,
-    OutdatedRecordCounter,
+    IgnoringOutdatedScratchpadPut,
     InvalidScratchpadSignature,
     ScratchpadTooBig,
     EmptyGraphEntry,
@@ -253,7 +253,9 @@ impl From<&crate::PutValidationError> for PutRecordErrorType {
                 Self::PaymentVerificationFailed
             }
             crate::PutValidationError::OversizedChunk(_, _) => Self::OversizedChunk,
-            crate::PutValidationError::OutdatedRecordCounter { .. } => Self::OutdatedRecordCounter,
+            crate::PutValidationError::IgnoringOutdatedScratchpadPut => {
+                Self::IgnoringOutdatedScratchpadPut
+            }
             crate::PutValidationError::InvalidScratchpadSignature => {
                 Self::InvalidScratchpadSignature
             }

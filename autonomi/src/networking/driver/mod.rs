@@ -15,7 +15,7 @@ use std::{num::NonZeroUsize, time::Duration};
 use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
-use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
 use ant_protocol::{
     messages::{Query, Request, Response},
     version::REQ_RESPONSE_VERSION_STR,
@@ -30,7 +30,7 @@ use libp2p::{
     kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
-    request_response::{self, cbor::codec::Codec as CborCodec, ProtocolSupport},
+    request_response::{self, ProtocolSupport},
     swarm::NetworkBehaviour,
     Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
 };
@@ -133,7 +133,6 @@ impl NetworkDriver {
         // autonomi requests
         let request_response = {
             let cfg = request_response::Config::default().with_request_timeout(REQ_TIMEOUT);
-
             let req_res_version_str = REQ_RESPONSE_VERSION_STR
                 .read()
                 .expect("no protocol version")
@@ -141,11 +140,7 @@ impl NetworkDriver {
             let stream = StreamProtocol::try_from_owned(req_res_version_str)
                 .expect("StreamProtocol should start with a /");
             let proto = [(stream, ProtocolSupport::Outbound)];
-
-            let codec = CborCodec::<Request, Response>::default()
-                .set_request_size_maximum(2 * MAX_PACKET_SIZE as u64);
-
-            request_response::Behaviour::with_codec(codec, proto, cfg)
+            request_response::cbor::Behaviour::new(proto, cfg)
         };
 
         // kademlia
@@ -251,14 +246,17 @@ impl NetworkDriver {
                 self.pending_tasks
                     .insert_task(query_id, NetworkTask::GetRecord { addr, quorum, resp });
             }
-            NetworkTask::PutRecordKad {
+            NetworkTask::PutRecord {
                 record,
                 to,
                 quorum,
                 resp,
             } => {
                 let query_id = if to.is_empty() {
-                    if let Err(e) = resp.send(Err(NetworkError::PutRecordMissingTargets)) {
+                    let _pretty_key = PrettyPrintRecordKey::from(&record.key);
+                    let error_str =
+                        "Target holders of record {_pretty_key:?} shall be provided".to_string();
+                    if let Err(e) = resp.send(Err(NetworkError::PutRecordError(error_str))) {
                         error!("Error sending put record response: {e:?}");
                     }
                     return;
@@ -277,38 +275,7 @@ impl NetworkDriver {
 
                 self.pending_tasks.insert_task(
                     query_id,
-                    NetworkTask::PutRecordKad {
-                        record,
-                        to,
-                        quorum,
-                        resp,
-                    },
-                );
-            }
-            NetworkTask::PutRecordReq {
-                record,
-                to,
-                quorum,
-                resp,
-            } => {
-                let record_address = NetworkAddress::from(&record.key);
-                let peer_address = NetworkAddress::from(to.peer_id);
-                let req = Request::Query(Query::PutRecord {
-                    holder: peer_address,
-                    serialized_record: record.value.clone(),
-                    address: record_address,
-                });
-
-                // Add the peer addresses to our cache before sending a request.
-                for addr in &to.addrs {
-                    self.swarm.add_peer_address(to.peer_id, addr.clone());
-                }
-
-                let req_id = self.req().send_request(&to.peer_id, req);
-
-                self.pending_tasks.insert_query(
-                    req_id,
-                    NetworkTask::PutRecordReq {
+                    NetworkTask::PutRecord {
                         record,
                         to,
                         quorum,

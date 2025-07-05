@@ -339,8 +339,7 @@ impl Client {
                 payment: None,
             })?;
         debug!(
-            "Updating scratchpad at address {address:?} (counter {}) to the network on nodes {target_nodes:?}",
-            scratchpad.counter()
+            "Updating scratchpad at address {address:?} to the network on nodes {target_nodes:?}"
         );
 
         self.network

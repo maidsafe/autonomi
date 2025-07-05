@@ -28,7 +28,7 @@ pub use libp2p::{
 };
 
 // internal needs
-use ant_protocol::{PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
+use ant_protocol::CLOSE_GROUP_SIZE;
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use interface::NetworkTask;
@@ -58,9 +58,6 @@ pub enum NetworkError {
     /// Failed to receive task from network driver, better restart the client
     #[error("Failed to receive task from network driver: {0}")]
     NetworkDriverReceive(#[from] tokio::sync::oneshot::error::RecvError),
-    /// Incompatible network protocol, either the client or the nodes are outdated
-    #[error("Incompatible network protocol, either the client or the nodes are outdated")]
-    IncompatibleNetworkProtocol,
 
     /// Error getting closest peers
     #[error("Get closest peers request timeout")]
@@ -73,22 +70,16 @@ pub enum NetworkError {
     },
 
     /// Error putting record
-    #[error("Cannot put record to 0 targets, provide at least one target in the `to` field")]
-    PutRecordMissingTargets,
+    #[error("Failed to put record: {0}")]
+    PutRecordError(String),
     #[error("Put verification failed: {0}")]
     PutRecordVerification(String),
     #[error(
         "Put record quorum failed, only the following peers stored the record: {0:?}, needed {1} peers"
     )]
     PutRecordQuorumFailed(Vec<PeerId>, NonZeroUsize),
-    #[error("Put record failed, the following peers stored the record: {0:?}, errors: {1:?}")]
-    PutRecordTooManyPeerFailed(Vec<PeerId>, Vec<(PeerId, String)>),
     #[error("Put record timeout, only the following peers stored the record: {0:?}")]
     PutRecordTimeout(Vec<PeerId>),
-    #[error("Put record rejected: {0}")]
-    PutRecordRejected(String),
-    #[error("Outdated record rejected: with counter {counter}, expected any above {expected}")]
-    OutdatedRecordRejected { counter: u64, expected: u64 },
 
     /// Error getting quote
     #[error("Failed to get quote: {0}")]
@@ -126,15 +117,8 @@ impl NetworkError {
     pub fn is_fatal(&self) -> bool {
         matches!(
             self,
-            NetworkError::NetworkDriverOffline
-                | NetworkError::NetworkDriverReceive(_)
-                | NetworkError::IncompatibleNetworkProtocol
+            NetworkError::NetworkDriverOffline | NetworkError::NetworkDriverReceive(_)
         )
-    }
-
-    /// When encountering these, the request should not be retried
-    pub fn cannot_retry(&self) -> bool {
-        matches!(self, NetworkError::OutdatedRecordRejected { .. }) || self.is_fatal()
     }
 }
 
@@ -205,115 +189,9 @@ impl Network {
     }
 
     /// Put a record to the network
-    /// The `to` field should not be empty else [`NetworkError::PutRecordMissingTargets`] is returned
+    /// When the `to` field is empty, the record is stored at the closest nodes to the record address,
+    /// else it is specifically stored to the nodes in the `to` field
     pub async fn put_record(
-        &self,
-        record: Record,
-        to: Vec<PeerInfo>,
-        quorum: Quorum,
-    ) -> Result<(), NetworkError> {
-        let key = PrettyPrintRecordKey::from(&record.key);
-        let total = NonZeroUsize::new(to.len()).ok_or(NetworkError::PutRecordMissingTargets)?;
-        let expected_holders = expected_holders(quorum, total);
-
-        trace!(
-            "Put record {key} to {} peers with quorum {quorum:?}",
-            to.len()
-        );
-        // put record using the request response protocol
-        let mut tasks = FuturesUnordered::new();
-        for peer in to {
-            let record_clone = record.clone();
-            tasks.push(async move {
-                let res = self
-                    .put_record_req(record_clone, peer.clone(), quorum)
-                    .await;
-                (res, peer)
-            });
-        }
-
-        // collect results
-        let mut ok_res = vec![];
-        let mut err_res = vec![];
-        let mut old_nodes_tasks = vec![];
-        while let Some((res, peer)) = tasks.next().await {
-            match res {
-                // redirect to old protocol on old nodes
-                Err(NetworkError::IncompatibleNetworkProtocol) => {
-                    let record_clone = record.clone();
-                    let self_clone = self.clone();
-                    let handle = tokio::spawn(async move {
-                        let res = self_clone
-                            .put_record_kad(record_clone, vec![peer.clone()], Quorum::One)
-                            .await;
-                        (res, peer)
-                    });
-                    old_nodes_tasks.push(handle);
-                }
-                // accumulate oks until Quorum is met
-                Ok(()) => {
-                    ok_res.push(peer);
-                    if ok_res.len() >= expected_holders.get() {
-                        return Ok(());
-                    }
-                }
-                Err(e) => err_res.push((peer.peer_id, e.to_string())),
-            }
-        }
-        let new_nodes_ok = ok_res.len();
-
-        // complete with answers from old nodes
-        let mut old_nodes_futures = FuturesUnordered::new();
-        for handle in old_nodes_tasks {
-            old_nodes_futures.push(handle);
-        }
-        while let Some(join_result) = old_nodes_futures.next().await {
-            if let Ok((res, peer)) = join_result {
-                match res {
-                    // accumulate oks until Quorum is met
-                    Ok(()) => {
-                        ok_res.push(peer);
-                        if ok_res.len() >= expected_holders.get() {
-                            let old_nodes_ok = ok_res.len() - new_nodes_ok;
-                            trace!("Put record {key} completed with {new_nodes_ok} new nodes ok and {old_nodes_ok} old nodes ok");
-                            return Ok(());
-                        }
-                    }
-                    Err(e) => err_res.push((peer.peer_id, e.to_string())),
-                }
-            }
-        }
-
-        // we don't have enough oks, return an error
-        let ok_peers = ok_res.iter().map(|p| p.peer_id).collect::<Vec<_>>();
-        warn!("Put record {key} failed, only the following peers stored the record: {ok_peers:?}, needed {expected_holders} peers. Errors: {err_res:?}");
-
-        Err(NetworkError::PutRecordTooManyPeerFailed(ok_peers, err_res))
-    }
-
-    async fn put_record_req(
-        &self,
-        record: Record,
-        to: PeerInfo,
-        quorum: Quorum,
-    ) -> Result<(), NetworkError> {
-        let (tx, rx) = oneshot::channel();
-        let task = NetworkTask::PutRecordReq {
-            record,
-            to,
-            quorum,
-            resp: tx,
-        };
-        self.task_sender
-            .send(task)
-            .await
-            .map_err(|_| NetworkError::NetworkDriverOffline)?;
-
-        let res = rx.await?;
-        res
-    }
-
-    async fn put_record_kad(
         &self,
         record: Record,
         to: Vec<PeerInfo>,
@@ -321,7 +199,7 @@ impl Network {
     ) -> Result<(), NetworkError> {
         let (tx, rx) = oneshot::channel();
         let network_address = NetworkAddress::from(&record.key);
-        let task = NetworkTask::PutRecordKad {
+        let task = NetworkTask::PutRecord {
             record,
             to,
             quorum,
@@ -472,14 +350,5 @@ impl Network {
             errors_len,
             errors,
         })
-    }
-}
-
-fn expected_holders(quorum: Quorum, total: NonZeroUsize) -> NonZeroUsize {
-    match quorum {
-        Quorum::One => NonZeroUsize::new(1).expect("0 != 1"),
-        Quorum::Majority => NonZeroUsize::new(total.get() / 2 + 1).expect("n/2+1 != 0"),
-        Quorum::All => total,
-        Quorum::N(n) => n,
     }
 }

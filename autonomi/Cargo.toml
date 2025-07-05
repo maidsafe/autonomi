@@ -41,7 +41,7 @@ exponential-backoff = "2.0.0"
 eyre = "0.6.5"
 futures = "0.3.30"
 hex = "~0.4.3"
-libp2p = { version = "0.56.0", features = [
+libp2p = { version = "0.55.0", features = [
     "autonat",
     "tokio",
     "dns",
