@@ -11,9 +11,11 @@
 //! This module provides a transport-agnostic interface for storing and retrieving
 //! DHT records locally.
 
+#![allow(dead_code)]
+
 use std::{
     collections::HashMap,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
     path::PathBuf,
 };
 
@@ -21,7 +23,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::networking::kad::transport::{RecordKey, Record, KadPeerId, KadError};
+use crate::networking::kad::transport::{RecordKey, Record, KadError};
 
 /// Configuration for record store behavior
 #[derive(Clone, Debug)]
@@ -156,10 +158,10 @@ pub struct MemoryRecordStore {
 struct StoredRecord {
     /// The actual record
     record: Record,
-    /// When this record was stored
-    stored_at: Instant,
-    /// When this record was last accessed
-    last_accessed: Instant,
+    /// When this record was stored (serializable)
+    stored_at: SystemTime,
+    /// When this record was last accessed (serializable)
+    last_accessed: SystemTime,
     /// Size of the record in bytes
     size: usize,
 }
@@ -167,7 +169,7 @@ struct StoredRecord {
 impl StoredRecord {
     fn new(record: Record) -> Self {
         let size = bincode::serialized_size(&record).unwrap_or(0) as usize;
-        let now = Instant::now();
+        let now = SystemTime::now();
         
         Self {
             record,
@@ -178,19 +180,19 @@ impl StoredRecord {
     }
     
     fn access(&mut self) -> &Record {
-        self.last_accessed = Instant::now();
+        self.last_accessed = SystemTime::now();
         &self.record
     }
     
     fn is_expired(&self, default_ttl: Option<Duration>) -> bool {
         // Check explicit expiration first
         if let Some(expires) = self.record.expires {
-            return Instant::now() > expires;
+            return SystemTime::now() > expires;
         }
         
         // Check default TTL
         if let Some(ttl) = default_ttl {
-            return self.stored_at.elapsed() > ttl;
+            return self.stored_at.elapsed().unwrap_or_default() > ttl;
         }
         
         false

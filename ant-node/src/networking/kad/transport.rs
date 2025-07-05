@@ -11,14 +11,14 @@
 //! This module provides transport-agnostic interfaces that allow Kademlia logic
 //! to work with different underlying networking implementations (libp2p, iroh, etc.).
 
+#![allow(dead_code, unused_imports, unused_variables)]
+
 use std::{
-    collections::HashMap,
     fmt::{Debug, Display},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use async_trait::async_trait;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -162,7 +162,7 @@ pub struct Record {
     pub key: RecordKey,
     pub value: Vec<u8>,
     pub publisher: Option<KadPeerId>,
-    pub expires: Option<Instant>,
+    pub expires: Option<SystemTime>,
 }
 
 impl Record {
@@ -180,18 +180,19 @@ impl Record {
         self
     }
 
-    pub fn with_expiration(mut self, expires: Instant) -> Self {
+    pub fn with_expiration(mut self, expires: SystemTime) -> Self {
         self.expires = Some(expires);
         self
     }
 }
 
 /// Information about a peer in the network
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerInfo {
     pub peer_id: KadPeerId,
     pub addresses: Vec<KadAddress>,
     pub connection_status: ConnectionStatus,
+    #[serde(skip)] // Skip serialization of Instant
     pub last_seen: Option<Instant>,
 }
 
@@ -207,7 +208,7 @@ impl PeerInfo {
 }
 
 /// Connection status to a peer
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConnectionStatus {
     Connected,
     Disconnected,

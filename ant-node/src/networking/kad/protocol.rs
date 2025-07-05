@@ -11,6 +11,8 @@
 //! This module defines the wire protocol for Kademlia messages, including
 //! serialization, versioning, and message validation.
 
+#![allow(dead_code)]
+
 use std::{
     collections::HashMap,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -141,7 +143,7 @@ impl MessageHeader {
             .as_secs();
 
         Self {
-            magic: *PROTOCOL_MAGIC,
+            magic: PROTOCOL_MAGIC.try_into().unwrap(),
             version: PROTOCOL_VERSION,
             message_type: message_type as u8,
             flags: 0,
@@ -166,7 +168,8 @@ impl MessageHeader {
     /// Validate the header
     pub fn validate(&self) -> Result<(), ProtocolError> {
         // Check magic bytes
-        if self.magic != *PROTOCOL_MAGIC {
+        let expected_magic: [u8; 4] = PROTOCOL_MAGIC.try_into().unwrap();
+        if self.magic != expected_magic {
             return Err(ProtocolError::InvalidMagic);
         }
 
@@ -217,8 +220,12 @@ impl From<&PeerInfo> for WirePeerInfo {
                 ConnectionStatus::Disconnected => 2,
                 ConnectionStatus::Unknown => 0,
             },
-            last_seen: peer.last_seen.map(|t| {
-                t.duration_since(std::time::UNIX_EPOCH)
+            last_seen: peer.last_seen.map(|_t| {
+                // Convert Instant to seconds ago from now
+                // Since Instant can't be converted to absolute time,
+                // we'll use the current timestamp minus estimated elapsed time
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs()
             }),

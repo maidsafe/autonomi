@@ -11,6 +11,8 @@
 //! This module implements the iterative query algorithm used in Kademlia for
 //! operations like FindNode, FindValue, and PutValue.
 
+#![allow(dead_code)]
+
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::{Duration, Instant},
@@ -314,7 +316,7 @@ impl Query {
         
         for _ in 0..slots_available {
             if let Some(peer_id) = self.find_next_peer_to_contact() {
-                peers_to_contact.push(peer_id);
+                peers_to_contact.push(peer_id.clone());
                 self.active_requests += 1;
                 
                 // Mark peer as waiting
@@ -397,7 +399,7 @@ impl Query {
                 }
             }
             
-            (QueryType::PutValue { record }, KadResponse::Ack { .. }) => {
+            (QueryType::PutValue { record: _ }, KadResponse::Ack { .. }) => {
                 // Successful store, continue to replicate to more peers
                 // TODO: Track replication count
             }
@@ -494,7 +496,7 @@ impl Query {
                     .filter(|p| matches!(p.state, PeerState::Succeeded { .. }))
                     .count();
                 
-                if successful_stores >= self.config.replication_factor.min(self.config.min_peers) {
+                if successful_stores >= self.config.min_peers {
                     self.complete_with_result(QueryResult::PutRecord {
                         key: record.key.clone(),
                         success: true,
@@ -513,17 +515,19 @@ impl Query {
         if self.active_requests == 0 && self.peer_queue.is_empty() {
             match &self.query_type {
                 QueryType::FindValue { key } => {
+                    let successful_peers_clone = self.get_closest_successful_peers();
                     self.complete_with_result(QueryResult::GetRecord {
                         key: key.clone(),
                         record: None,
-                        closest_peers: successful_peers,
+                        closest_peers: successful_peers_clone,
                     });
                 }
                 QueryType::GetProviders { key } => {
+                    let successful_peers_clone = self.get_closest_successful_peers();
                     self.complete_with_result(QueryResult::GetProviders {
                         key: key.clone(),
                         providers: Vec::new(),
-                        closest_peers: successful_peers,
+                        closest_peers: successful_peers_clone,
                     });
                 }
                 QueryType::PutValue { record } => {

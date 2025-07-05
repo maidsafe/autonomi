@@ -11,9 +11,11 @@
 //! This module provides the core k-bucket data structure that manages peers
 //! at different distances in the Kademlia keyspace.
 
+#![allow(dead_code)]
+
 use std::{
     collections::VecDeque,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 use serde::{Deserialize, Serialize};
@@ -80,10 +82,10 @@ pub struct KBucketEntry {
     pub addresses: Vec<KadAddress>,
     /// Current connection status
     pub status: ConnectionStatus,
-    /// When this peer was last seen active
-    pub last_seen: Instant,
-    /// When this entry was first added
-    pub added_at: Instant,
+    /// When this peer was last seen active (serializable)
+    pub last_seen: SystemTime,
+    /// When this entry was first added (serializable)
+    pub added_at: SystemTime,
     /// Number of successful interactions
     pub successful_interactions: u32,
     /// Number of failed interactions
@@ -95,7 +97,7 @@ pub struct KBucketEntry {
 impl KBucketEntry {
     /// Create a new k-bucket entry
     pub fn new(peer_id: KadPeerId, addresses: Vec<KadAddress>) -> Self {
-        let now = Instant::now();
+        let now = SystemTime::now();
         Self {
             peer_id,
             addresses,
@@ -110,7 +112,7 @@ impl KBucketEntry {
 
     /// Update the entry after a successful interaction
     pub fn mark_successful(&mut self) {
-        self.last_seen = Instant::now();
+        self.last_seen = SystemTime::now();
         self.successful_interactions += 1;
         self.status = ConnectionStatus::Connected;
         self.querying = false;
@@ -130,7 +132,7 @@ impl KBucketEntry {
 
     /// Check if this peer is considered stale (not seen recently)
     pub fn is_stale(&self, timeout: Duration) -> bool {
-        self.last_seen.elapsed() > timeout
+        self.last_seen.elapsed().unwrap_or_default() > timeout
     }
 
     /// Calculate a reliability score for this peer (0.0 to 1.0)
@@ -146,7 +148,7 @@ impl KBucketEntry {
     /// Update addresses for this peer
     pub fn update_addresses(&mut self, new_addresses: Vec<KadAddress>) {
         self.addresses = new_addresses;
-        self.last_seen = Instant::now();
+        self.last_seen = SystemTime::now();
     }
 }
 

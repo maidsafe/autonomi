@@ -11,31 +11,38 @@
 //! This module provides the main Kademlia behavior that orchestrates routing table
 //! management, query processing, and record storage.
 
+#![allow(dead_code)]
+
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use async_trait::async_trait;
 use tokio::{
     sync::{mpsc, oneshot, RwLock},
     task::JoinHandle,
     time::interval,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::networking::kad::{
     transport::{
-        KademliaTransport, KadEventHandler, KadPeerId, KadAddress, KadMessage, KadResponse,
+        KademliaTransport, KadPeerId,
         KadEvent, KadError, KadConfig, KadStats, QueryId, RecordKey, Record, PeerInfo,
-        ConnectionStatus, QueryResult, RoutingAction,
+        QueryResult, RoutingAction,
     },
     kbucket::{KBucket, KBucketEntry, KBucketKey, KBucketConfig},
-    query::{Query, QueryPool, QueryType, QueryConfig},
+    query::{QueryPool, QueryType, QueryConfig},
     record_store::{RecordStore, MemoryRecordStore, RecordStoreConfig},
-    MAX_BUCKETS,
 };
+
+
+#[cfg(test)]
+use crate::networking::kad::transport::{KadAddress, KadMessage, KadResponse};
+
+#[cfg(test)]
+use crate::networking::kad::query::Query;
 
 /// Commands that can be sent to the Kademlia behavior
 #[derive(Debug)]
@@ -172,8 +179,9 @@ where
         let query_pool = QueryPool::new(query_config, config.max_concurrent_queries);
         
         // Initialize routing table with empty buckets
-        let mut routing_table = Vec::with_capacity(MAX_BUCKETS);
-        for _ in 0..MAX_BUCKETS {
+        let max_buckets = 256; // For 256-bit key space
+        let mut routing_table = Vec::with_capacity(max_buckets);
+        for _ in 0..max_buckets {
             routing_table.push(KBucket::new(bucket_config.clone()));
         }
         
@@ -282,7 +290,7 @@ where
         if let Some(interval) = self.config.bootstrap_interval {
             let handle = self.handle();
             let task = tokio::spawn(async move {
-                let mut timer = interval(interval);
+                let mut timer = tokio::time::interval(interval);
                 loop {
                     timer.tick().await;
                     let (tx, _rx) = oneshot::channel();
@@ -381,7 +389,12 @@ where
         self.stats.queries_initiated += 1;
         
         // Process the query
-        self.process_single_query(query_id).await
+        match self.process_single_query(query_id).await? {
+            QueryResult::GetClosestPeers { peers, .. } => Ok(peers),
+            _ => Err(KadError::QueryFailed { 
+                reason: "Unexpected query result type for find_node".to_string() 
+            }),
+        }
     }
 
     /// Perform a FindValue query
@@ -389,7 +402,8 @@ where
         debug!("Starting FindValue query for key: {:?}", key);
         
         // First check local store
-        if let Ok(store) = self.record_store.read().await {
+        {
+            let store = self.record_store.read().await;
             if let Ok(Some(record)) = store.get(&key).await {
                 debug!("Found record locally");
                 return Ok(Some(record));
@@ -424,7 +438,8 @@ where
         debug!("Starting PutRecord for key: {:?}", record.key);
         
         // Store locally first
-        if let Ok(mut store) = self.record_store.write().await {
+        {
+            let mut store = self.record_store.write().await;
             store.put(record.clone()).await
                 .map_err(|e| KadError::Storage(e.to_string()))?;
         }
@@ -507,7 +522,8 @@ where
         }
         
         // Add bootstrap peers to routing table
-        for peer in &self.bootstrap_peers {
+        let bootstrap_peers = self.bootstrap_peers.clone();
+        for peer in &bootstrap_peers {
             self.add_peer_to_routing_table(peer.clone()).await;
         }
         
@@ -711,7 +727,7 @@ where
                     peer_id: entry.peer_id.clone(),
                     addresses: entry.addresses.clone(),
                     connection_status: entry.status,
-                    last_seen: Some(entry.last_seen),
+                    last_seen: entry.last_seen.elapsed().ok().map(|elapsed| Instant::now() - elapsed),
                 });
             }
         }
@@ -739,7 +755,7 @@ where
                         peer_id: entry.peer_id.clone(),
                         addresses: entry.addresses.clone(),
                         connection_status: entry.status,
-                        last_seen: Some(entry.last_seen),
+                        last_seen: entry.last_seen.elapsed().ok().map(|elapsed| Instant::now() - elapsed),
                     });
                 }
             }

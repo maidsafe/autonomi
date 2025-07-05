@@ -20,10 +20,9 @@ use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
 use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
 
-use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::{
     messages::{Request, Response},
-    NetworkAddress,
+    NetworkAddress, CLOSE_GROUP_SIZE,
 };
 #[cfg(feature = "open-metrics")]
 use std::collections::HashSet;

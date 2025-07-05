@@ -182,6 +182,7 @@ pub struct AggregatedMetrics {
 impl IrohMetrics {
     /// Create a new metrics collector
     pub fn new(config: MetricsConfig) -> Self {
+        let enabled = config.enabled;
         let metrics = Self {
             config,
             connection_metrics: Arc::new(RwLock::new(ConnectionMetrics::default())),
@@ -199,7 +200,7 @@ impl IrohMetrics {
             shutdown: Arc::new(tokio::sync::Notify::new()),
         };
         
-        if config.enabled {
+        if enabled {
             let metrics_clone = metrics.clone();
             tokio::spawn(async move {
                 metrics_clone.start_background_tasks().await;

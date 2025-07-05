@@ -154,6 +154,10 @@ pub struct DiscoveryStats {
 impl DiscoveryBridge {
     /// Create a new discovery bridge
     pub fn new(config: DiscoveryConfig) -> Self {
+        let custom_endpoints = config.custom_endpoints.clone();
+        #[cfg(feature = "discovery-n0")]
+        let use_n0_dns = config.use_n0_dns;
+        
         let bridge = Self {
             config,
             kad_peers: Arc::new(RwLock::new(HashMap::new())),
@@ -161,12 +165,12 @@ impl DiscoveryBridge {
             peer_mapping: Arc::new(RwLock::new(HashMap::new())),
             node_mapping: Arc::new(RwLock::new(HashMap::new())),
             #[cfg(feature = "discovery-n0")]
-            n0_discovery: if config.use_n0_dns {
+            n0_discovery: if use_n0_dns {
                 Some(Arc::new(iroh_net::discovery::dns::DnsDiscovery::n0()))
             } else {
                 None
             },
-            custom_endpoints: config.custom_endpoints.clone(),
+            custom_endpoints,
             stats: Arc::new(RwLock::new(DiscoveryStats::default())),
             tasks: Arc::new(Mutex::new(Vec::new())),
             shutdown: Arc::new(tokio::sync::Notify::new()),

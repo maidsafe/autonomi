@@ -11,43 +11,35 @@
 //! This module provides a Kademlia DHT implementation that can work with different
 //! underlying transport layers (libp2p, iroh, etc.) through the transport abstraction.
 
+#![allow(dead_code, unused_imports)]
+
 pub mod transport;
 pub mod behaviour;
 pub mod kbucket;
 pub mod query;
 pub mod record_store;
 pub mod protocol;
+#[cfg(feature = "libp2p-compat")]
 pub mod libp2p_compat;
 
 #[cfg(test)]
 mod tests;
 
 // Re-export key types for convenience
+// Most kad types are only used by dual-stack and iroh features
+#[cfg(any(feature = "dual-stack", feature = "iroh-transport"))]
 pub use transport::{
-    KadPeerId, KadDistance, KadAddress, QueryId, RecordKey, Record, PeerInfo,
-    ConnectionStatus, KadMessage, KadResponse, KadEvent, KadError, KadConfig,
-    KadStats, KademliaTransport, KadEventHandler, QueryResult, RoutingAction,
+    KadPeerId, KadAddress, QueryId, RecordKey, Record, PeerInfo,
+    ConnectionStatus, KadMessage, KadResponse, KadError,
+    KademliaTransport, QueryResult,
 };
 
+#[cfg(any(feature = "dual-stack", feature = "iroh-transport"))]
 pub use behaviour::Kademlia;
-pub use kbucket::{KBucket, KBucketEntry, KBucketKey};
-pub use query::{QueryPool, Query, QueryState};
-pub use record_store::{RecordStore, MemoryRecordStore};
-pub use protocol::KadProtocol;
+#[cfg(feature = "libp2p-compat")]
 pub use libp2p_compat::LibP2pTransport;
 
-/// Version of our Kademlia implementation
-pub const VERSION: &str = "1.0.0";
-
 /// Maximum number of K-buckets (for 256-bit key space)
+#[cfg(any(feature = "dual-stack", feature = "iroh-transport"))]
 pub const MAX_BUCKETS: usize = 256;
-
-/// Default replication factor (k value)
-pub const DEFAULT_K_VALUE: usize = 20;
-
-/// Default timeout for queries
-pub const DEFAULT_QUERY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-
-/// Stream protocol identifier for Kademlia
-pub const KAD_STREAM_PROTOCOL_ID: &str = "/autonomi/kad/1.0.0";
 

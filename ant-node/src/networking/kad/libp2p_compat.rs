@@ -10,6 +10,11 @@
 //! 
 //! This module provides adapters and converters that allow the existing libp2p-based
 //! code to work with our transport-agnostic Kademlia implementation.
+//! 
+//! NOTE: This module is currently disabled pending resolution of complex libp2p trait bounds.
+//! Enable with --features libp2p-compat
+
+#![cfg(feature = "libp2p-compat")]
 
 use std::{
     collections::HashMap,
@@ -20,7 +25,7 @@ use std::{
 use async_trait::async_trait;
 use libp2p::{
     kad,
-    swarm::Swarm,
+    swarm::{Swarm, NetworkBehaviour},
     PeerId, Multiaddr,
 };
 use tokio::sync::RwLock;
@@ -33,7 +38,10 @@ use crate::networking::kad::transport::{
 
 /// Adapter that implements KademliaTransport using libp2p infrastructure
 #[derive(Debug)]
-pub struct LibP2pTransport<TBehaviour> {
+pub struct LibP2pTransport<TBehaviour>
+where
+    TBehaviour: NetworkBehaviour + Send + Sync + 'static,
+{
     /// Reference to the libp2p swarm
     swarm: Arc<RwLock<Swarm<TBehaviour>>>,
     /// Local peer ID converted to our format
@@ -112,7 +120,10 @@ where
     }
 }
 
-impl<TBehaviour> LibP2pTransport<TBehaviour> {
+impl<TBehaviour> LibP2pTransport<TBehaviour>
+where
+    TBehaviour: NetworkBehaviour + Send + Sync + 'static,
+{
     /// Create a new libp2p transport adapter
     pub fn new(swarm: Arc<RwLock<Swarm<TBehaviour>>>) -> Self {
         // Get local peer ID from swarm
@@ -233,7 +244,7 @@ impl<TBehaviour> LibP2pTransport<TBehaviour> {
 #[async_trait]
 impl<TBehaviour> KademliaTransport for LibP2pTransport<TBehaviour>
 where
-    TBehaviour: Send + Sync + 'static,
+    TBehaviour: NetworkBehaviour + Send + Sync + 'static,
 {
     type Error = KadError;
 
@@ -527,8 +538,8 @@ impl<S> kad::store::RecordStore for LibP2pRecordStoreAdapter<S>
 where
     S: crate::networking::kad::record_store::RecordStore + Send + Sync,
 {
-    type RecordsIter = std::vec::IntoIter<libp2p::kad::Record>;
-    type ProvidedIter = std::iter::Empty<libp2p::kad::ProviderRecord>;
+    type RecordsIter<'a> = std::vec::IntoIter<std::borrow::Cow<'a, libp2p::kad::Record>>;
+    type ProvidedIter<'a> = std::iter::Empty<std::borrow::Cow<'a, libp2p::kad::ProviderRecord>>;
 
     fn get(&self, key: &kad::RecordKey) -> Option<kad::Record> {
         // This would need to be async in real implementation
@@ -545,7 +556,7 @@ where
         // Remove record - would need async context
     }
 
-    fn records(&self) -> Self::RecordsIter {
+    fn records(&self) -> Self::RecordsIter<'_> {
         // Return iterator over all records
         vec![].into_iter()
     }
@@ -560,7 +571,7 @@ where
         vec![]
     }
 
-    fn provided(&self) -> Self::ProvidedIter {
+    fn provided(&self) -> Self::ProvidedIter<'_> {
         // Return iterator over provided records
         std::iter::empty()
     }

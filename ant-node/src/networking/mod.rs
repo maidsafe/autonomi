@@ -8,6 +8,7 @@
 
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
+#![allow(dead_code, unused_imports)]
 
 mod bootstrap;
 mod circular_vec;

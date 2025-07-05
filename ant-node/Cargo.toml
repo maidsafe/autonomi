@@ -22,6 +22,10 @@ open-metrics = ["libp2p/metrics", "prometheus-client", "hyper", "sysinfo"]
 otlp = ["ant-logging/otlp"]
 # iroh transport support for Phase 2 migration (architectural implementation complete)
 iroh-transport = ["serde_bytes", "postcard"]
+# dual-stack transport support for Phase 3 migration (parallel libp2p and iroh)
+dual-stack = ["iroh-transport"]
+# libp2p compatibility layer for kad module
+libp2p-compat = []
 
 [dependencies]
 aes-gcm-siv = "0.11.1"
