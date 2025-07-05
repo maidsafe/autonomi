@@ -34,6 +34,9 @@ cargo test --release --package ant-logging
 # Run E2E tests (requires local network setup)
 cargo test --package autonomi --tests
 
+# Run dual-stack compatibility tests (Phase 3 backwards compatibility)
+cargo test --test dual_stack_compatibility --no-default-features
+
 # Check code formatting
 cargo fmt --all -- --check
 

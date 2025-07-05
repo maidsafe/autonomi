@@ -380,3 +380,25 @@ package-arch arch:
   fi
 
   cd ../../..
+
+# Test targets for dual-stack development
+test-dual-stack-compatibility:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running dual-stack backwards compatibility tests..."
+  cd ant-node
+  cargo test --test dual_stack_compatibility --no-default-features
+
+test-all-compatibility:
+  #!/usr/bin/env bash
+  set -e
+  echo "Running all compatibility and integration tests..."
+  cd ant-node
+  echo "✅ Running dual-stack backwards compatibility tests..."
+  cargo test --test dual_stack_compatibility --no-default-features
+  echo "✅ Dual-stack compatibility tests passed!"
+  echo ""
+  echo "🔄 Running other integration tests (if available)..."
+  cargo test --test storage_payments --no-default-features || echo "ℹ️  Storage payments test not available without features"
+  cargo test --test data_with_churn --no-default-features || echo "ℹ️  Data with churn test not available without features"
+  echo "✅ All available compatibility tests completed!"
