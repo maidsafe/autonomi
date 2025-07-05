@@ -17,11 +17,12 @@ use crate::networking::{
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    transport, NetworkEvent, CLOSE_GROUP_SIZE,
+    transport, NetworkEvent,
 };
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
     metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+    CLOSE_GROUP_SIZE,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{

@@ -8,6 +8,7 @@
 
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
+#![allow(dead_code, unused_imports)]
 
 mod bootstrap;
 mod circular_vec;
@@ -15,6 +16,9 @@ mod driver;
 mod error;
 mod external_address;
 mod interface;
+#[cfg(feature = "iroh-transport")]
+pub mod iroh_adapter;
+pub mod kad;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
