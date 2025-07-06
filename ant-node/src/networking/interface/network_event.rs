@@ -9,12 +9,12 @@
 use std::collections::BTreeMap;
 
 use ant_evm::{PaymentQuote, ProofOfPayment};
+use ant_kad::{Record, RecordKey};
 use ant_protocol::{
     messages::{Query, Response},
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use ant_kad::{Record, RecordKey};
 use libp2p::{Multiaddr, PeerId};
 
 use crate::networking::{driver::event::MsgResponder, Addresses};

@@ -39,10 +39,7 @@ use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadA
 pub use bytes::Bytes;
 
 use ant_kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey};
-use libp2p::{
-    multiaddr::Protocol,
-    Multiaddr, PeerId,
-};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
     borrow::Cow,

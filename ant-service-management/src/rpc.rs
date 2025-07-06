@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::{Error, Result};
+use ant_kad::RecordKey;
 use ant_protocol::{
     antnode_proto::{
         ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest,
@@ -15,7 +16,6 @@ use ant_protocol::{
     CLOSE_GROUP_SIZE,
 };
 use async_trait::async_trait;
-use ant_kad::RecordKey;
 use libp2p::{Multiaddr, PeerId};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use tokio::time::Duration;

@@ -462,7 +462,8 @@ mod tests {
                         indices.swap(i, j);
                     }
                     // Take first num_to_select unique indices
-                    indices.into_iter()
+                    indices
+                        .into_iter()
                         .take(num_to_select)
                         .map(|idx| peers[idx])
                         .collect::<Vec<_>>()
@@ -730,10 +731,13 @@ mod tests {
 
     impl Arbitrary for Graph {
         fn arbitrary(g: &mut Gen) -> Self {
-            let mut peer_ids = random_peers((usize::arbitrary(g) % (200 - K_VALUE.get())) + K_VALUE.get(), g)
-                .into_iter()
-                .map(|peer_id| (peer_id, Key::from(peer_id)))
-                .collect::<Vec<_>>();
+            let mut peer_ids = random_peers(
+                (usize::arbitrary(g) % (200 - K_VALUE.get())) + K_VALUE.get(),
+                g,
+            )
+            .into_iter()
+            .map(|peer_id| (peer_id, Key::from(peer_id)))
+            .collect::<Vec<_>>();
 
             // Make each peer aware of its direct neighborhood.
             let mut peers = peer_ids
@@ -771,7 +775,7 @@ mod tests {
                 } else {
                     (usize::arbitrary(g) % (peer_ids.len() - K_VALUE.get() + 1)) + K_VALUE.get()
                 };
-                
+
                 let mut random_peer_ids = shuffled_indices
                     .into_iter()
                     .take(num_peers)

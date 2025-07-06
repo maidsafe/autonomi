@@ -18,6 +18,7 @@ use crate::RunningNode;
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
+use ant_kad::U256;
 use ant_protocol::{
     error::Error as ProtocolError,
     messages::{ChunkProof, CmdResponse, Nonce, Query, QueryResponse, Request, Response},
@@ -26,7 +27,6 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use ant_kad::U256;
 use libp2p::{identity::Keypair, request_response::OutboundFailure, Multiaddr, PeerId};
 use num_traits::cast::ToPrimitive;
 use rand::{

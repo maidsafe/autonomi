@@ -18,13 +18,13 @@ use crate::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
+use ant_kad::Record;
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
 };
 use bytes::Bytes;
-use ant_kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{

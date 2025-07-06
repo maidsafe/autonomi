@@ -479,7 +479,10 @@ impl Handler {
         FullyNegotiatedOutbound {
             protocol: stream,
             info: (),
-        }: FullyNegotiatedOutbound<<Self as ConnectionHandler>::OutboundProtocol, <Self as ConnectionHandler>::OutboundOpenInfo>,
+        }: FullyNegotiatedOutbound<
+            <Self as ConnectionHandler>::OutboundProtocol,
+            <Self as ConnectionHandler>::OutboundOpenInfo,
+        >,
     ) {
         if let Some(sender) = self.pending_streams.pop_front() {
             let _ = sender.send(Ok(stream));
@@ -509,7 +512,7 @@ impl Handler {
             future::Either::Left(p) => p,
             // TODO: remove when Rust 1.82 is MSRV
             #[allow(unreachable_patterns)]
-            future::Either::Right(p) => match p {}
+            future::Either::Right(p) => match p {},
         };
 
         if self.protocol_status.is_none() {
@@ -786,7 +789,12 @@ impl ConnectionHandler for Handler {
 
     fn on_connection_event(
         &mut self,
-        event: ConnectionEvent<Self::InboundProtocol, Self::OutboundProtocol, Self::InboundOpenInfo, Self::OutboundOpenInfo>,
+        event: ConnectionEvent<
+            Self::InboundProtocol,
+            Self::OutboundProtocol,
+            Self::InboundOpenInfo,
+            Self::OutboundOpenInfo,
+        >,
     ) {
         match event {
             ConnectionEvent::FullyNegotiatedOutbound(fully_negotiated_outbound) => {

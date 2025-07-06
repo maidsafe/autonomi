@@ -9,12 +9,12 @@
 use crate::client::payment::{PayError, PaymentOption};
 use crate::{client::quote::CostError, Client};
 use crate::{Amount, AttoTokens};
+use ant_kad::Record;
 use ant_protocol::storage::{try_serialize_record, RecordKind};
 use ant_protocol::{
     storage::{try_deserialize_record, DataTypes},
     NetworkAddress,
 };
-use ant_kad::Record;
 
 use crate::client::{GetError, PutError};
 use crate::networking::{NetworkError, PeerInfo};

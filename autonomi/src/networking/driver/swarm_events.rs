@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_kad::{Event as KadEvent, ProgressStep, QueryId, QueryResult, QueryStats};
 use ant_protocol::messages::{QueryResponse, Response};
 use libp2p::autonat::OutboundFailure;
-use ant_kad::{Event as KadEvent, ProgressStep, QueryId, QueryResult, QueryStats};
 use libp2p::request_response::{Event as ReqEvent, Message, OutboundRequestId};
 use libp2p::swarm::SwarmEvent;
 use libp2p::PeerId;

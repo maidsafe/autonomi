@@ -48,3 +48,6 @@ node_modules/
 # MkDocs
 site/
 /evmlib/tests/private.rs
+# Test artifacts
+autonomi/tests/file/test_dir_fetched*
+**/test_dir_fetched*

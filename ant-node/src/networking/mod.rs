@@ -36,12 +36,9 @@ pub(crate) use self::{
 pub(crate) use metrics::service::MetricsRegistries;
 
 use self::error::Result;
-use ant_protocol::{NetworkAddress, CLOSE_GROUP_SIZE};
 use ant_kad::{KBucketDistance, KBucketKey};
-use libp2p::{
-    multiaddr::Protocol,
-    Multiaddr, PeerId,
-};
+use ant_protocol::{NetworkAddress, CLOSE_GROUP_SIZE};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use std::net::IpAddr;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.

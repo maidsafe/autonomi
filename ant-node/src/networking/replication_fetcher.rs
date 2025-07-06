@@ -8,12 +8,12 @@
 #![allow(clippy::mutable_key_type)]
 
 use crate::networking::interface::NetworkEvent;
+use ant_kad::{KBucketDistance as Distance, RecordKey};
 use ant_protocol::{
     constants::CLOSE_GROUP_SIZE,
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use ant_kad::{KBucketDistance as Distance, RecordKey};
 use libp2p::PeerId;
 use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
@@ -596,9 +596,9 @@ impl ReplicationFetcher {
 #[cfg(test)]
 mod tests {
     use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
+    use ant_kad::RecordKey;
     use ant_protocol::{constants::CLOSE_GROUP_SIZE, storage::ValidationType, NetworkAddress};
     use eyre::Result;
-    use ant_kad::RecordKey;
     use libp2p::PeerId;
     use std::{
         collections::{HashMap, HashSet},

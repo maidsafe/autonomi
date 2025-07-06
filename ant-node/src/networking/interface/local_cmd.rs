@@ -12,15 +12,12 @@ use std::{
 };
 
 use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_kad::{KBucketDistance as Distance, Record, RecordKey};
 use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use ant_kad::{KBucketDistance as Distance, Record, RecordKey};
-use libp2p::{
-    core::Multiaddr,
-    PeerId,
-};
+use libp2p::{core::Multiaddr, PeerId};
 use tokio::sync::oneshot;
 
 use crate::networking::Addresses;

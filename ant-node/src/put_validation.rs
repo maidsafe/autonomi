@@ -12,6 +12,7 @@ use crate::error::PutValidationError;
 use crate::{node::Node, Marker, Result};
 use ant_evm::payment_vault::verify_data_payment;
 use ant_evm::ProofOfPayment;
+use ant_kad::{Record, RecordKey};
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
     storage::{
@@ -20,7 +21,6 @@ use ant_protocol::{
     },
     NetworkAddress, PrettyPrintRecordKey,
 };
-use ant_kad::{Record, RecordKey};
 use xor_name::XorName;
 
 // We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync

@@ -9,12 +9,12 @@
 use crate::networking::Network;
 use crate::{error::Result, node::Node};
 use ant_evm::ProofOfPayment;
+use ant_kad::{Record, RecordKey};
 use ant_protocol::{
     messages::{Query, QueryResponse, Request, Response},
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use ant_kad::{Record, RecordKey};
 use libp2p::PeerId;
 use tokio::task::spawn;
 

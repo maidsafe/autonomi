@@ -14,6 +14,9 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
+use ant_kad::store::MemoryStoreConfig;
+use ant_kad::NoKnownPeers;
+use ant_kad::{self, store::MemoryStore};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::PrettyPrintRecordKey;
 use ant_protocol::{
@@ -21,9 +24,6 @@ use ant_protocol::{
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use ant_kad::store::MemoryStoreConfig;
-use ant_kad::NoKnownPeers;
-use ant_kad::{self, store::MemoryStore};
 use libp2p::{
     core::muxing::StreamMuxerBox,
     futures::StreamExt,

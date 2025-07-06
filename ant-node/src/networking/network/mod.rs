@@ -10,12 +10,12 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use ant_evm::{PaymentQuote, QuotingMetrics};
+use ant_kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
 use ant_protocol::{NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey};
 use futures::future::select_all;
 use libp2p::autonat::OutboundFailure;
-use ant_kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use libp2p::swarm::ConnectionId;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
 use tokio::sync::{mpsc, oneshot};

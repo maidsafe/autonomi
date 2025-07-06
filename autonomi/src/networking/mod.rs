@@ -19,17 +19,17 @@ pub(crate) use utils::multiaddr_is_global;
 
 // re-export the types our API exposes to avoid dependency version conflicts
 pub use ant_evm::PaymentQuote;
+pub use ant_kad::{PeerInfo, Quorum, Record};
 pub use ant_protocol::NetworkAddress;
 pub use config::{RetryStrategy, Strategy};
-pub use ant_kad::{PeerInfo, Quorum, Record};
 pub use libp2p::{Multiaddr, PeerId};
 
 // internal needs
+use ant_kad::NoKnownPeers;
 use ant_protocol::CLOSE_GROUP_SIZE;
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use interface::NetworkTask;
-use ant_kad::NoKnownPeers;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;

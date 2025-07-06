@@ -14,14 +14,14 @@ use crate::networking::{
     Addresses, NetworkEvent, NodeIssue, SwarmLocalState, CLOSE_GROUP_SIZE,
 };
 use ant_evm::PaymentQuote;
+use ant_kad::{
+    store::{Error as StoreError, RecordStore},
+    KBucketDistance as Distance,
+};
 use ant_protocol::{
     messages::{Cmd, Request},
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
-};
-use ant_kad::{
-    store::{Error as StoreError, RecordStore},
-    KBucketDistance as Distance,
 };
 use libp2p::{
     swarm::dial_opts::{DialOpts, PeerCondition},

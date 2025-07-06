@@ -15,9 +15,9 @@ use crate::networking::NetworkEvent;
 use crate::networking::{
     driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
 };
+use ant_kad::K_VALUE;
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
-use ant_kad::K_VALUE;
 use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
 
 use ant_protocol::CLOSE_GROUP_SIZE;

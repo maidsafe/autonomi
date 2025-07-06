@@ -15,6 +15,7 @@ use crate::client::UploadSummary;
 use crate::client::{Client, GetError};
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
+use ant_kad::Record;
 use ant_protocol::storage::try_deserialize_record;
 use ant_protocol::storage::RecordHeader;
 use ant_protocol::PrettyPrintRecordKey;
@@ -23,7 +24,6 @@ use ant_protocol::{
     NetworkAddress,
 };
 use bls::PublicKey;
-use ant_kad::Record;
 
 use crate::networking::{NetworkError, PeerInfo};
 pub use crate::SecretKey;

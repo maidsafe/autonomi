@@ -12,10 +12,10 @@ use crate::networking::{
     relay_manager::{is_a_relayed_peer, RelayManager},
     Addresses, NetworkEvent,
 };
+use ant_kad::K_VALUE;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use itertools::Itertools;
 use libp2p::identify::Info;
-use ant_kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use std::collections::{hash_map, HashSet};
