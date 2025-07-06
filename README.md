@@ -248,6 +248,226 @@ imported into any visualization tool (for e.g., Grafana) to be further analyzed.
 this [Guide](./metrics/README.md) to easily setup a dockerized Grafana dashboard to visualize the
 metrics.
 
+## Testing
+
+The Autonomi Network includes a comprehensive testing infrastructure with enhanced logging capabilities to validate network functionality across all supported data types and operations.
+
+### Test Levels
+
+The test suite provides three distinct testing levels:
+
+#### 1. Unit Tests (`./test.sh unit`)
+Fast, isolated tests that don't require network connectivity:
+- Tests individual functions and modules
+- No network dependencies or EVM integration required
+- Typically completes in under 30 seconds
+- Tests core logic in isolation
+
+```bash
+./test.sh unit
+```
+
+Example output:
+```
+🧪 Unit Tests Summary
+================================================
+✅ ant-bootstrap: 8 tests passed
+✅ ant-logging: 12 tests passed  
+✅ autonomi (lib): 45 tests passed
+✅ ant-networking: 23 tests passed
+✅ ant-protocol: 15 tests passed
+✅ node-launchpad: 7 tests passed
+
+Total: 110 unit tests passed in 28.3s
+```
+
+#### 2. Integration Tests (`./test.sh integration`)
+Network-based tests using a local test network:
+- Requires local EVM testnet and Autonomi network
+- Tests basic network connectivity and operations
+- Moderate test duration (2-5 minutes)
+- Validates network integration without comprehensive data operations
+
+```bash
+./test.sh integration
+```
+
+#### 3. Full Network Tests (`./test.sh full`)
+Comprehensive end-to-end testing with complete logging infrastructure:
+- Tests all data types: Chunks, Files, Registers, Vaults, GraphEntries, ScratchPads, Pointers
+- Validates upload/download operations for every supported data structure
+- Tests eventual consistency and network resilience
+- Comprehensive logging with per-node log capture
+- Automatic failure analysis and log interrogation
+- Typically takes 10-15 minutes
+
+```bash
+./test.sh full
+```
+
+### Enhanced Logging and Analysis
+
+The test runner includes sophisticated logging capabilities for debugging and failure analysis:
+
+#### Command Line Options
+
+```bash
+# Enable debug logging and save all logs
+./test.sh full --debug
+
+# Save logs without debug verbosity  
+./test.sh full --save-logs
+
+# Enable automatic failure analysis
+./test.sh full --analyze-failures
+
+# Combine options
+./test.sh full --debug --analyze-failures
+```
+
+#### Log Structure
+
+When logging is enabled, tests create a timestamped directory structure:
+
+```
+/tmp/autonomi_test_run_2025-07-06_20-21-55/
+├── logs/
+│   ├── network/
+│   │   ├── antctl.log           # Network startup logs
+│   │   ├── evm-testnet.log      # EVM blockchain logs  
+│   │   └── status-checks.log    # Network health monitoring
+│   ├── tests/
+│   │   ├── address.log          # Address/chunk tests
+│   │   ├── files.log            # File upload/download tests
+│   │   ├── vault.log            # Vault operations tests
+│   │   ├── registers.log        # Register tests
+│   │   ├── graph.log            # Graph entry tests
+│   │   └── [other test logs]
+│   ├── nodes/
+│   │   ├── 12D3KooW.../logs/    # Individual node logs
+│   │   └── [25 node directories]
+│   └── summary/
+│       ├── final-summary.txt    # Complete test summary
+│       ├── test-runner.log      # Main execution log
+│       └── failure-analysis.txt # Automatic failure analysis
+```
+
+#### Automatic Failure Analysis
+
+When tests fail, the system automatically:
+
+1. **Captures comprehensive logs** from all network components
+2. **Analyzes failure patterns** in node logs and test output  
+3. **Provides diagnostic summaries** with specific error locations
+4. **Suggests remediation steps** based on common failure patterns
+
+Example failure analysis:
+```
+🔍 FAILURE ANALYSIS
+==================
+Test: large.dat download failed
+Location: /tmp/autonomi_test_run_2025-07-06_20-21-55/logs/tests/files.log:127
+
+Error Pattern: "Connection timeout"
+Node Logs: 3 nodes reported connectivity issues
+Recommendation: Check network startup sequence and peer discovery
+
+Detailed Logs:
+- Network: /tmp/autonomi_test_run_2025-07-06_20-21-55/logs/network/
+- Tests: /tmp/autonomi_test_run_2025-07-06_20-21-55/logs/tests/  
+- Nodes: /tmp/autonomi_test_run_2025-07-06_20-21-55/logs/nodes/
+```
+
+### API vs CLI Test Distinction
+
+The full test suite clearly separates:
+
+#### API Integration Tests (Core Functionality)
+Tests the core Rust client API and network integration:
+- ✅ Address/chunk operations
+- ✅ File upload/download
+- ✅ Vault operations  
+- ✅ Register management
+- ✅ Graph entries
+- ✅ Wallet functionality
+- ✅ Payment processing
+
+**When API tests pass → Core network functionality is healthy**
+
+#### CLI Interface Tests (Optional/Diagnostic)  
+Tests the command-line interface wrapper:
+- Command parsing and validation
+- File I/O operations
+- User interface functionality
+
+CLI test failures typically indicate interface issues rather than core network problems.
+
+### Retrospective Analysis
+
+Analyze previous test runs using saved logs:
+
+```bash
+# Analyze a specific test run
+./test.sh analyze /tmp/autonomi_test_run_2025-07-06_20-21-55
+
+# View summary of recent test runs
+./test.sh analyze --recent
+```
+
+### Prerequisites for Testing
+
+Before running network tests, ensure:
+
+1. **Foundry/Anvil installed** for EVM testing:
+   ```bash
+   curl -L https://foundry.paradigm.xyz | bash
+   foundryup
+   ```
+
+2. **Rust toolchain** up to date:
+   ```bash
+   rustup update
+   ```
+
+3. **Network ports available** (EVM testnet and node ports)
+
+### Troubleshooting Common Issues
+
+#### "Anvil not found"
+- Install Foundry: `curl -L https://foundry.paradigm.xyz | bash && foundryup`
+- Ensure `~/.foundry/bin` is in your PATH
+
+#### "Network startup timeout"  
+- Check available memory (network requires ~2GB)
+- Verify no conflicting processes on required ports
+- Review network logs in test output directory
+
+#### "Token insufficient errors"
+- EVM testnet may not be ready - wait 10-15 seconds after startup
+- Check EVM testnet logs for deployment issues
+
+#### "Node connection failures"
+- Network discovery can take 60-90 seconds for full connectivity
+- Check individual node logs for connectivity issues
+- Verify firewall isn't blocking local connections
+
+### Running Tests in CI/CD
+
+For automated testing environments:
+
+```bash
+# Run with comprehensive logging for CI analysis
+./test.sh full --save-logs --analyze-failures
+
+# Parse exit codes
+if ./test.sh unit; then
+    echo "Unit tests passed"
+else  
+    echo "Unit tests failed - check compilation issues"
+    exit 1
+fi
+```
+
 ## Contributing
 
 Feel free to clone and modify this project. Pull requests are welcome.
