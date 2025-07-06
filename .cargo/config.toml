@@ -1,0 +1,23 @@
+[alias]
+# Enhanced test aliases for different test levels
+test-unit = "! ./test.sh unit"
+test-integration = "! ./test.sh integration" 
+test-full = "! ./test.sh full"
+
+# Clean separation of unit and integration tests
+# Unit tests only (from src/ directories) - fast, no network required
+test = [
+    "test",
+    "--workspace", 
+    "--lib",
+    "--release",
+    "--exclude", "ant-node"
+]
+
+# Unit tests with better exclusions
+test-safe = "test --workspace --lib --release --exclude ant-node"
+
+# Integration tests for specific packages (requires running network)
+test-integration-chunk = "test --release --package autonomi --test chunk"
+test-integration-files = "test --release --package autonomi --test files"
+test-integration-address = "test --release --package autonomi --test address"
