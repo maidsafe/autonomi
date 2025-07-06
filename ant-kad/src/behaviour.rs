@@ -829,7 +829,7 @@ where
             self.queued_events
                 .push_back(ToSwarm::GenerateEvent(Event::OutboundQueryProgressed {
                     id,
-                    result: QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(Box::new(record)))),
+                    result: QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(record))),
                     step,
                     stats,
                 }));
@@ -2465,7 +2465,7 @@ where
                                 Event::OutboundQueryProgressed {
                                     id: query_id,
                                     result: QueryResult::GetRecord(Ok(GetRecordOk::FoundRecord(
-                                        Box::new(record),
+                                        record,
                                     ))),
                                     step: step.clone(),
                                     stats,
@@ -2916,7 +2916,7 @@ pub type GetRecordResult = Result<GetRecordOk, GetRecordError>;
 /// The successful result of [`Behaviour::get_record`].
 #[derive(Debug, Clone)]
 pub enum GetRecordOk {
-    FoundRecord(Box<PeerRecord>),
+    FoundRecord(PeerRecord),
     FinishedWithNoAdditionalRecord {
         /// If caching is enabled, these are the peers closest
         /// _to the record key_ (not the local node) that were queried but

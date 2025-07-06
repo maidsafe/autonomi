@@ -599,6 +599,10 @@ mod tests {
     use ant_kad::RecordKey;
     use ant_protocol::{constants::CLOSE_GROUP_SIZE, storage::ValidationType, NetworkAddress};
     use eyre::Result;
+<<<<<<< HEAD
+=======
+    use ant_kad::RecordKey;
+>>>>>>> ec6e3aa14 (feat: migrate libp2p-kad to internal ant-kad module)
     use libp2p::PeerId;
     use std::{
         collections::{HashMap, HashSet},

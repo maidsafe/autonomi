@@ -37,14 +37,11 @@ use ant_protocol::{
 };
 use futures::StreamExt;
 use libp2p::{
-    request_response,
-    swarm::{behaviour::toggle::Toggle, NetworkBehaviour},
-};
-use libp2p::{
-    request_response::OutboundRequestId,
+    request_response::{self, OutboundRequestId},
     swarm::{
+        behaviour::toggle::Toggle, 
         dial_opts::{DialOpts, PeerCondition},
-        ConnectionId, Swarm,
+        ConnectionId, NetworkBehaviour, Swarm,
     },
     Multiaddr, PeerId,
 };

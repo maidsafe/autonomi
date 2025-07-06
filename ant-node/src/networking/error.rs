@@ -10,6 +10,7 @@ use ant_kad::{self as kad, QueryId};
 use ant_protocol::storage::GraphEntryAddress;
 use ant_protocol::{messages::Response, storage::RecordKind, NetworkAddress};
 use libp2p::swarm::ListenError;
+use ant_kad::{self as kad, QueryId};
 use libp2p::{
     request_response::{OutboundFailure, OutboundRequestId},
     swarm::DialError,
