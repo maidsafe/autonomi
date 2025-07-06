@@ -21,13 +21,13 @@ use ant_protocol::{
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use libp2p::kad::store::MemoryStoreConfig;
-use libp2p::kad::NoKnownPeers;
+use ant_kad::store::MemoryStoreConfig;
+use ant_kad::NoKnownPeers;
+use ant_kad::{self, store::MemoryStore};
 use libp2p::{
     core::muxing::StreamMuxerBox,
     futures::StreamExt,
     identity::Keypair,
-    kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
     request_response::{self, ProtocolSupport},
@@ -74,7 +74,7 @@ pub(crate) struct NetworkDriver {
 
 #[derive(NetworkBehaviour)]
 pub(crate) struct AutonomiClientBehaviour {
-    pub kademlia: kad::Behaviour<MemoryStore>,
+    pub kademlia: ant_kad::Behaviour<MemoryStore>,
     pub identify: libp2p::identify::Behaviour,
     pub relay_client: libp2p::relay::client::Behaviour,
     pub request_response: request_response::cbor::Behaviour<Request, Response>,
@@ -149,9 +149,9 @@ impl NetworkDriver {
             ..Default::default()
         };
         let store = MemoryStore::with_config(peer_id, store_cfg);
-        let mut kad_cfg = libp2p::kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
+        let mut kad_cfg = ant_kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
         kad_cfg
-            .set_kbucket_inserts(libp2p::kad::BucketInserts::OnConnected)
+            .set_kbucket_inserts(ant_kad::BucketInserts::OnConnected)
             .set_max_packet_size(MAX_PACKET_SIZE)
             .set_parallelism(KAD_ALPHA)
             .set_replication_factor(REPLICATION_FACTOR)
@@ -160,7 +160,7 @@ impl NetworkDriver {
 
         // setup kad and autonomi requests as our behaviour
         let behaviour = AutonomiClientBehaviour {
-            kademlia: libp2p::kad::Behaviour::with_config(peer_id, store, kad_cfg),
+            kademlia: ant_kad::Behaviour::with_config(peer_id, store, kad_cfg),
             relay_client: relay_client_behaviour,
             identify,
             request_response,
@@ -204,7 +204,7 @@ impl NetworkDriver {
     }
 
     /// Shorthand for kad behaviour mut
-    fn kad(&mut self) -> &mut kad::Behaviour<MemoryStore> {
+    fn kad(&mut self) -> &mut ant_kad::Behaviour<MemoryStore> {
         &mut self.swarm.behaviour_mut().kademlia
     }
 

@@ -15,7 +15,7 @@ use ant_protocol::storage::ValidationType;
 use ant_protocol::{NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey};
 use futures::future::select_all;
 use libp2p::autonat::OutboundFailure;
-use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
+use ant_kad::{KBucketDistance, Record, RecordKey, K_VALUE};
 use libp2p::swarm::ConnectionId;
 use libp2p::{identity::Keypair, Multiaddr, PeerId};
 use tokio::sync::{mpsc, oneshot};

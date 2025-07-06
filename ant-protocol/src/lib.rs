@@ -38,8 +38,8 @@ use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadA
 /// Re-export of Bytes used throughout the protocol
 pub use bytes::Bytes;
 
+use ant_kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey};
 use libp2p::{
-    kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey},
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };

@@ -21,18 +21,15 @@ pub(crate) use utils::multiaddr_is_global;
 pub use ant_evm::PaymentQuote;
 pub use ant_protocol::NetworkAddress;
 pub use config::{RetryStrategy, Strategy};
-pub use libp2p::kad::PeerInfo;
-pub use libp2p::{
-    kad::{Quorum, Record},
-    Multiaddr, PeerId,
-};
+pub use ant_kad::{PeerInfo, Quorum, Record};
+pub use libp2p::{Multiaddr, PeerId};
 
 // internal needs
 use ant_protocol::CLOSE_GROUP_SIZE;
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use interface::NetworkTask;
-use libp2p::kad::NoKnownPeers;
+use ant_kad::NoKnownPeers;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;

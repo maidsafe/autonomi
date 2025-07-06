@@ -706,7 +706,9 @@ analyze_previous_test_run() {
 UNIT_TEST_PACKAGES=(
     "ant-bootstrap"
     "ant-evm" 
+    "ant-kad"
     "ant-logging"
+    "ant-node"
     "ant-node-manager"
     "ant-protocol"
     "ant-service-management"
@@ -717,7 +719,7 @@ UNIT_TEST_PACKAGES=(
 
 # Exclude packages with known issues
 EXCLUDE_PACKAGES=(
-    "ant-node"  # Has compilation errors
+    # ant-node no longer excluded - now compiles successfully with ant-kad migration
 )
 
 # Test results tracking
@@ -865,6 +867,11 @@ run_unit_tests() {
                     continue
                 fi
             fi
+        fi
+        
+        # Special note for ant-kad package (tests may have legacy issues)
+        if [ "$package" = "ant-kad" ]; then
+            print_status "$package - testing library compilation (some test code may have legacy dependencies)"
         fi
         
         # Run unit tests only (--lib flag excludes integration tests)

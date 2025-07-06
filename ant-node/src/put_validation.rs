@@ -20,7 +20,7 @@ use ant_protocol::{
     },
     NetworkAddress, PrettyPrintRecordKey,
 };
-use libp2p::kad::{Record, RecordKey};
+use ant_kad::{Record, RecordKey};
 use xor_name::XorName;
 
 // We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync

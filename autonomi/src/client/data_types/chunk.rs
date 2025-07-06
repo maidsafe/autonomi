@@ -24,7 +24,7 @@ use ant_protocol::{
     NetworkAddress,
 };
 use bytes::Bytes;
-use libp2p::kad::Record;
+use ant_kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{

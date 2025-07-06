@@ -1,6 +1,6 @@
 use crate::Multiaddr;
 use ant_protocol::CLOSE_GROUP_SIZE;
-use libp2p::kad::Quorum;
+use ant_kad::Quorum;
 use libp2p::multiaddr::Protocol;
 // @anselme: this is a duplicate function from ant_networking, wasn't sure where to place it
 

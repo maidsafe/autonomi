@@ -16,9 +16,9 @@ use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
+use ant_kad::{KBucketDistance as Distance, Record, RecordKey};
 use libp2p::{
     core::Multiaddr,
-    kad::{KBucketDistance as Distance, Record, RecordKey},
     PeerId,
 };
 use tokio::sync::oneshot;

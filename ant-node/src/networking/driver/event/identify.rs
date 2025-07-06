@@ -15,7 +15,7 @@ use crate::networking::{
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use itertools::Itertools;
 use libp2p::identify::Info;
-use libp2p::kad::K_VALUE;
+use ant_kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
 use std::collections::{hash_map, HashSet};

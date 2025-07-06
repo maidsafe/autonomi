@@ -26,7 +26,8 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{identity::Keypair, kad::U256, request_response::OutboundFailure, Multiaddr, PeerId};
+use ant_kad::U256;
+use libp2p::{identity::Keypair, request_response::OutboundFailure, Multiaddr, PeerId};
 use num_traits::cast::ToPrimitive;
 use rand::{
     rngs::{OsRng, StdRng},

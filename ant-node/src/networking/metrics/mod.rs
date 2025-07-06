@@ -398,9 +398,10 @@ impl NetworkMetricsRecorder {
 }
 
 /// Impl the Recorder traits again for our struct.
-impl Recorder<libp2p::kad::Event> for NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::kad::Event) {
-        self.libp2p_metrics.record(event)
+impl Recorder<ant_kad::Event> for NetworkMetricsRecorder {
+    fn record(&self, _event: &ant_kad::Event) {
+        // Note: ant_kad::Event is our internal type, so we don't delegate to libp2p_metrics
+        // for these events. Custom ant_kad metrics can be added here if needed.
     }
 }
 

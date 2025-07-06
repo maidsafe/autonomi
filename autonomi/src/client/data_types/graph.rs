@@ -23,7 +23,7 @@ use ant_protocol::{
     NetworkAddress,
 };
 use bls::PublicKey;
-use libp2p::kad::Record;
+use ant_kad::Record;
 
 use crate::networking::{NetworkError, PeerInfo};
 pub use crate::SecretKey;

@@ -35,8 +35,8 @@ use ant_protocol::{
     NetworkAddress,
 };
 use futures::StreamExt;
+use ant_kad::{self as kad, KBucketDistance as Distance, QueryId, K_VALUE};
 use libp2p::{
-    kad::{self, KBucketDistance as Distance, QueryId, K_VALUE},
     request_response::OutboundRequestId,
     swarm::{
         dial_opts::{DialOpts, PeerCondition},

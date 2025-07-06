@@ -54,7 +54,6 @@ libp2p = { version = "0.55.0", features = [
     "tokio",
     "dns",
     "upnp",
-    "kad",
     "macros",
     "request-response",
     "cbor",
@@ -68,6 +67,7 @@ libp2p = { version = "0.55.0", features = [
     "metrics",
     "autonat",
 ] }
+ant-kad = { path = "../ant-kad", version = "0.1.0" }
 num-traits = "0.2"
 prometheus-client = { version = "0.22", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems

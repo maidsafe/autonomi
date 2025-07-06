@@ -37,8 +37,8 @@ pub(crate) use metrics::service::MetricsRegistries;
 
 use self::error::Result;
 use ant_protocol::{NetworkAddress, CLOSE_GROUP_SIZE};
+use ant_kad::{KBucketDistance, KBucketKey};
 use libp2p::{
-    kad::{KBucketDistance, KBucketKey},
     multiaddr::Protocol,
     Multiaddr, PeerId,
 };

@@ -17,7 +17,7 @@ use crate::networking::{
 };
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
-use libp2p::kad::K_VALUE;
+use ant_kad::K_VALUE;
 use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
 
 use ant_protocol::CLOSE_GROUP_SIZE;
@@ -62,7 +62,7 @@ impl KBucketStatus {
 pub(crate) enum NodeEvent {
     Upnp(libp2p::upnp::Event),
     MsgReceived(libp2p::request_response::Event<Request, Response>),
-    Kademlia(libp2p::kad::Event),
+    Kademlia(ant_kad::Event),
     Identify(Box<libp2p::identify::Event>),
     RelayClient(Box<libp2p::relay::client::Event>),
     RelayServer(Box<libp2p::relay::Event>),
@@ -82,8 +82,8 @@ impl From<libp2p::request_response::Event<Request, Response>> for NodeEvent {
     }
 }
 
-impl From<libp2p::kad::Event> for NodeEvent {
-    fn from(event: libp2p::kad::Event) -> Self {
+impl From<ant_kad::Event> for NodeEvent {
+    fn from(event: ant_kad::Event) -> Self {
         NodeEvent::Kademlia(event)
     }
 }

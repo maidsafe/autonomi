@@ -14,7 +14,7 @@ use ant_protocol::{
     storage::{try_deserialize_record, DataTypes},
     NetworkAddress,
 };
-use libp2p::kad::Record;
+use ant_kad::Record;
 
 use crate::client::{GetError, PutError};
 use crate::networking::{NetworkError, PeerInfo};

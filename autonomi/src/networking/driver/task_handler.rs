@@ -12,7 +12,7 @@ use crate::networking::NetworkError;
 use crate::networking::OneShotTaskResult;
 use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
-use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
+use ant_kad::{self, PeerInfo, QueryId, Quorum, Record};
 use libp2p::request_response::OutboundRequestId;
 use libp2p::PeerId;
 use std::collections::HashMap;
@@ -102,7 +102,7 @@ impl TaskHandler {
     pub fn update_closest_peers(
         &mut self,
         id: QueryId,
-        res: Result<kad::GetClosestPeersOk, kad::GetClosestPeersError>,
+        res: Result<ant_kad::GetClosestPeersOk, ant_kad::GetClosestPeersError>,
     ) -> Result<(), TaskHandlerError> {
         let responder = self
             .closest_peers
@@ -110,12 +110,12 @@ impl TaskHandler {
             .ok_or(TaskHandlerError::UnknownQuery(format!("QueryId {id:?}")))?;
 
         match res {
-            Ok(kad::GetClosestPeersOk { peers, .. }) => {
+            Ok(ant_kad::GetClosestPeersOk { peers, .. }) => {
                 responder
                     .send(Ok(peers))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(kad::GetClosestPeersError::Timeout { key, peers }) => {
+            Err(ant_kad::GetClosestPeersError::Timeout { key, peers }) => {
                 trace!(
                     "QueryId({id}): GetClosestPeersError::Timeout {:?}, peers: {:?}",
                     hex::encode(key),
@@ -133,10 +133,10 @@ impl TaskHandler {
     pub fn update_get_record(
         &mut self,
         id: QueryId,
-        res: Result<kad::GetRecordOk, kad::GetRecordError>,
+        res: Result<ant_kad::GetRecordOk, ant_kad::GetRecordError>,
     ) -> Result<bool, TaskHandlerError> {
         match res {
-            Ok(kad::GetRecordOk::FoundRecord(record)) => {
+            Ok(ant_kad::GetRecordOk::FoundRecord(record)) => {
                 trace!(
                     "QueryId({id}): GetRecordOk::FoundRecord {:?}",
                     PrettyPrintRecordKey::from(&record.record.key)
@@ -158,12 +158,12 @@ impl TaskHandler {
                     }
                 }
             }
-            Ok(kad::GetRecordOk::FinishedWithNoAdditionalRecord { .. }) => {
+            Ok(ant_kad::GetRecordOk::FinishedWithNoAdditionalRecord { .. }) => {
                 trace!("QueryId({id}): GetRecordOk::FinishedWithNoAdditionalRecord");
                 self.send_get_record_result(id)?;
                 return Ok(true);
             }
-            Err(kad::GetRecordError::NotFound { key, closest_peers }) => {
+            Err(ant_kad::GetRecordError::NotFound { key, closest_peers }) => {
                 trace!(
                     "QueryId({id}): GetRecordError::NotFound {:?}, closest_peers: {:?}",
                     hex::encode(key),
@@ -176,7 +176,7 @@ impl TaskHandler {
                     .send(Ok((None, peers)))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(kad::GetRecordError::QuorumFailed {
+            Err(ant_kad::GetRecordError::QuorumFailed {
                 key,
                 records,
                 quorum,
@@ -194,7 +194,7 @@ impl TaskHandler {
                     .send(Ok((None, peers)))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(kad::GetRecordError::Timeout { key }) => {
+            Err(ant_kad::GetRecordError::Timeout { key }) => {
                 trace!(
                     "QueryId({id}): GetRecordError::Timeout {:?}",
                     hex::encode(key)
@@ -249,7 +249,7 @@ impl TaskHandler {
     pub fn update_put_record(
         &mut self,
         id: QueryId,
-        res: Result<kad::PutRecordOk, kad::PutRecordError>,
+        res: Result<ant_kad::PutRecordOk, ant_kad::PutRecordError>,
     ) -> Result<(), TaskHandlerError> {
         let responder = self
             .put_record
@@ -257,13 +257,13 @@ impl TaskHandler {
             .ok_or(TaskHandlerError::UnknownQuery(format!("QueryId {id:?}")))?;
 
         match res {
-            Ok(kad::PutRecordOk { key: _ }) => {
+            Ok(ant_kad::PutRecordOk { key: _ }) => {
                 trace!("QueryId({id}): PutRecordOk");
                 responder
                     .send(Ok(()))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(kad::PutRecordError::QuorumFailed {
+            Err(ant_kad::PutRecordError::QuorumFailed {
                 key,
                 success,
                 quorum,
@@ -278,7 +278,7 @@ impl TaskHandler {
                     .send(Err(NetworkError::PutRecordQuorumFailed(success, quorum)))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped)?;
             }
-            Err(kad::PutRecordError::Timeout { success, .. }) => {
+            Err(ant_kad::PutRecordError::Timeout { success, .. }) => {
                 trace!("QueryId({id}): PutRecordError::Timeout");
                 responder
                     .send(Err(NetworkError::PutRecordTimeout(success)))

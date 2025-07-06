@@ -115,7 +115,7 @@ pub enum ConnectError {
 
     /// The routing table does not contain any known peers to bootstrap from.
     #[error("No known peers available in the routing table to bootstrap the client")]
-    NoKnownPeers(#[from] libp2p::kad::NoKnownPeers),
+    NoKnownPeers(#[from] ant_kad::NoKnownPeers),
 
     /// An error occurred while initializing the EVM network.
     #[error("Failed to initialize the EVM network: {0}")]

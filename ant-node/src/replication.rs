@@ -14,10 +14,8 @@ use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use libp2p::{
-    kad::{Record, RecordKey},
-    PeerId,
-};
+use ant_kad::{Record, RecordKey};
+use libp2p::PeerId;
 use tokio::task::spawn;
 
 impl Node {

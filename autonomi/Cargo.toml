@@ -46,7 +46,6 @@ libp2p = { version = "0.55.0", features = [
     "tokio",
     "dns",
     "upnp",
-    "kad",
     "macros",
     "request-response",
     "cbor",
@@ -58,6 +57,7 @@ libp2p = { version = "0.55.0", features = [
     "yamux",
     "websocket",
 ] }
+ant-kad = { path = "../ant-kad", version = "0.1.0" }
 pyo3 = { version = "0.23.4", optional = true, features = ["extension-module", "abi3-py38"] }
 pyo3-async-runtimes = { version = "0.23", optional = true, features = ["tokio-runtime"] }
 rand = "0.8.5"

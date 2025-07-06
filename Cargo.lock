@@ -879,6 +879,7 @@ dependencies = [
 name = "ant-evm"
 version = "0.1.15"
 dependencies = [
+ "ant-kad",
  "custom_debug",
  "evmlib",
  "hex",
@@ -894,6 +895,42 @@ dependencies = [
  "tokio",
  "tracing",
  "xor_name",
+]
+
+[[package]]
+name = "ant-kad"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "asynchronous-codec",
+ "bytes",
+ "either",
+ "env_logger 0.10.2",
+ "fnv",
+ "futures",
+ "futures-bounded",
+ "futures-timer",
+ "libp2p-core",
+ "libp2p-identify",
+ "libp2p-identity",
+ "libp2p-noise",
+ "libp2p-swarm",
+ "libp2p-swarm-test",
+ "libp2p-tcp",
+ "libp2p-yamux",
+ "quick-protobuf",
+ "quick-protobuf-codec",
+ "quickcheck",
+ "rand 0.8.5",
+ "serde",
+ "sha2",
+ "smallvec",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uint 0.10.0",
+ "web-time",
 ]
 
 [[package]]
@@ -943,6 +980,7 @@ dependencies = [
  "ant-bootstrap",
  "ant-build-info",
  "ant-evm",
+ "ant-kad",
  "ant-logging",
  "ant-protocol",
  "ant-service-management",
@@ -1049,6 +1087,7 @@ name = "ant-node-rpc-client"
 version = "0.6.47"
 dependencies = [
  "ant-build-info",
+ "ant-kad",
  "ant-logging",
  "ant-node",
  "ant-protocol",
@@ -1074,6 +1113,7 @@ version = "1.0.6"
 dependencies = [
  "ant-build-info",
  "ant-evm",
+ "ant-kad",
  "bincode",
  "blsttc",
  "bytes",
@@ -1124,6 +1164,7 @@ version = "0.4.14"
 dependencies = [
  "ant-bootstrap",
  "ant-evm",
+ "ant-kad",
  "ant-logging",
  "ant-protocol",
  "async-trait",
@@ -1422,6 +1463,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
+name = "async-attributes"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1579,6 +1630,7 @@ version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "730294c1c08c2e0f85759590518f6333f0d5a0a766a27d519c1b244c3dfd8a24"
 dependencies = [
+ "async-attributes",
  "async-channel 1.9.0",
  "async-global-executor",
  "async-io",
@@ -1713,6 +1765,7 @@ dependencies = [
  "alloy",
  "ant-bootstrap",
  "ant-evm",
+ "ant-kad",
  "ant-logging",
  "ant-protocol",
  "bip39",
@@ -3347,6 +3400,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
+dependencies = [
+ "humantime",
+ "is-terminal",
+ "log",
+ "regex",
+ "termcolor",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4834,6 +4900,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "humantime"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b112acc8b3adf4b107a8ec20977da0273a8c386765a3ec0229bd500a1443f9f"
+
+[[package]]
 name = "hyper"
 version = "0.14.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5739,7 +5811,6 @@ dependencies = [
  "libp2p-core",
  "libp2p-identify",
  "libp2p-identity",
- "libp2p-kad",
  "libp2p-relay",
  "libp2p-swarm",
  "pin-project",
@@ -7734,7 +7805,7 @@ version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "588f6378e4dd99458b60ec275b4477add41ce4fa9f64dcba6f15adccb19b50d6"
 dependencies = [
- "env_logger",
+ "env_logger 0.8.4",
  "log",
  "rand 0.8.5",
 ]
@@ -9284,6 +9355,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "termcolor"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+dependencies = [
+ "winapi-util",
+]
+
+[[package]]
 name = "terminal_size"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9303,6 +9383,7 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 name = "test-utils"
 version = "0.4.20"
 dependencies = [
+ "ant-kad",
  "bytes",
  "color-eyre",
  "dirs-next",

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{NetworkAddress, PrettyPrintRecordKey};
-use libp2p::kad::store;
+use ant_kad::store;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

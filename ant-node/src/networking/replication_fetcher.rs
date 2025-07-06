@@ -13,10 +13,8 @@ use ant_protocol::{
     storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
-use libp2p::{
-    kad::{KBucketDistance as Distance, RecordKey},
-    PeerId,
-};
+use ant_kad::{KBucketDistance as Distance, RecordKey};
+use libp2p::PeerId;
 use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use tokio::spawn;
@@ -600,7 +598,8 @@ mod tests {
     use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
     use ant_protocol::{constants::CLOSE_GROUP_SIZE, storage::ValidationType, NetworkAddress};
     use eyre::Result;
-    use libp2p::{kad::RecordKey, PeerId};
+    use ant_kad::RecordKey;
+    use libp2p::PeerId;
     use std::{
         collections::{HashMap, HashSet},
         time::Duration,

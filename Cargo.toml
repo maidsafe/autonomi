@@ -5,6 +5,7 @@ members = [
     "ant-build-info",
     "ant-cli",
     "ant-evm",
+    "ant-kad",
     "ant-logging",
     "ant-metrics",
     "ant-node",

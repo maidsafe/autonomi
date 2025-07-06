@@ -22,13 +22,11 @@ use ant_protocol::{
 };
 use hkdf::Hkdf;
 use itertools::Itertools;
-use libp2p::{
-    identity::PeerId,
-    kad::{
-        store::{Error, RecordStore, Result},
-        KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
-    },
+use ant_kad::{
+    store::{Error, RecordStore, Result},
+    KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
 };
+use libp2p::identity::PeerId;
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -1010,7 +1008,8 @@ mod tests {
     };
     use bytes::Bytes;
     use eyre::ContextCompat;
-    use libp2p::{core::multihash::Multihash, kad::RecordKey};
+    use ant_kad::RecordKey;
+    use libp2p::core::multihash::Multihash;
     use quickcheck::*;
     use tokio::runtime::Runtime;
     use tokio::time::{sleep, Duration};

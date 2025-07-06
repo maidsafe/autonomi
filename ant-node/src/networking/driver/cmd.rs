@@ -19,11 +19,11 @@ use ant_protocol::{
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
 };
+use ant_kad::{
+    store::{Error as StoreError, RecordStore},
+    KBucketDistance as Distance,
+};
 use libp2p::{
-    kad::{
-        store::{Error as StoreError, RecordStore},
-        KBucketDistance as Distance,
-    },
     swarm::dial_opts::{DialOpts, PeerCondition},
     Multiaddr, PeerId,
 };
