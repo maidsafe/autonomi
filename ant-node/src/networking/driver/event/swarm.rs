@@ -448,18 +448,15 @@ impl SwarmDriver {
                         debug!("OutgoingConnectionError: DialPeerConditionFalse");
                         false
                     }
-                    DialError::LocalPeerId { endpoint, .. } => {
+                    DialError::LocalPeerId { address } => {
                         // This is actually _us_ So we should remove this from the RT
-                        debug!(
-                            "OutgoingConnectionError: LocalPeerId: {}",
-                            endpoint_str(endpoint)
-                        );
+                        debug!("OutgoingConnectionError: LocalPeerId: {address}");
                         true
                     }
-                    DialError::WrongPeerId { obtained, endpoint } => {
+                    DialError::WrongPeerId { obtained, address } => {
                         // The peer id we attempted to dial was not the one we expected
                         // cleanup
-                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, endpoint: {endpoint:?}");
+                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}");
                         true
                     }
                     DialError::Denied { cause } => {
@@ -482,6 +479,7 @@ impl SwarmDriver {
                 }
             }
             SwarmEvent::IncomingConnectionError {
+                peer_id: _,
                 connection_id,
                 local_addr,
                 send_back_addr,
