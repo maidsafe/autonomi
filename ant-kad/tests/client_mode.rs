@@ -1,12 +1,39 @@
 use libp2p_identify as identify;
 use libp2p_identity as identity;
+use libp2p_core::{transport::MemoryTransport, upgrade, Transport};
+use libp2p_tcp as tcp;
+use libp2p_noise as noise;
+use libp2p_yamux as yamux;
+use libp2p_swarm::{self as swarm, Swarm, SwarmEvent};
+use libp2p_swarm_test::SwarmExt;
 use ant_kad::{store::MemoryStore, Behaviour, Config, Mode};
 use ant_kad::Event::*;
-use libp2p_swarm::{Swarm, SwarmEvent};
-use libp2p_swarm_test::SwarmExt;
 use serial_test::serial;
 use tracing_subscriber::EnvFilter;
 use MyBehaviourEvent::*;
+
+fn create_swarm() -> Swarm<MyBehaviour> {
+    let local_key = identity::Keypair::generate_ed25519();
+    let local_id = local_key.public().to_peer_id();
+    
+    // Create a transport that supports both TCP and memory
+    let tcp_transport = tcp::tokio::Transport::default();
+    let memory_transport = MemoryTransport::default();
+    let transport = tcp_transport
+        .or_transport(memory_transport)
+        .upgrade(upgrade::Version::V1)
+        .authenticate(noise::Config::new(&local_key).unwrap())
+        .multiplex(yamux::Config::default())
+        .boxed();
+
+    let behaviour = MyBehaviour::new(local_key);
+    Swarm::new(
+        transport,
+        behaviour,
+        local_id,
+        swarm::Config::without_executor(),
+    )
+}
 
 #[tokio::test]
 #[serial]
@@ -15,8 +42,8 @@ async fn server_gets_added_to_routing_table_by_client() {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
-    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut client = create_swarm();
+    let mut server = create_swarm();
 
     server.listen().with_memory_addr_external().await;
     client.connect(&mut server).await;
@@ -48,8 +75,8 @@ async fn two_servers_add_each_other_to_routing_table() {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut server1 = Swarm::new_ephemeral(MyBehaviour::new);
-    let mut server2 = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut server1 = create_swarm();
+    let mut server2 = create_swarm();
 
     server2.listen().with_memory_addr_external().await;
     server1.connect(&mut server2).await;
@@ -90,8 +117,8 @@ async fn adding_an_external_addresses_activates_server_mode_on_existing_connecti
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
-    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut client = create_swarm();
+    let mut server = create_swarm();
     let server_peer_id = *server.local_peer_id();
 
     let (memory_addr, _) = server.listen().await;
@@ -129,10 +156,10 @@ async fn set_client_to_server_mode() {
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut client = create_swarm();
     client.behaviour_mut().kad.set_mode(Some(Mode::Client));
 
-    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut server = create_swarm();
 
     server.listen().with_memory_addr_external().await;
     client.connect(&mut server).await;
