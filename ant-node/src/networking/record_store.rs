@@ -1129,8 +1129,9 @@ mod tests {
 
     // This test has timing issues when run concurrently with other tests
     // due to async file I/O operations. It passes reliably when run in isolation.
+    // TODO: Fix async task synchronization to ensure file writes complete before restart
     #[tokio::test]
-    #[ignore = "Run separately with: cargo test can_store_after_restart -- --ignored --nocapture"]
+    #[serial]
     async fn can_store_after_restart() -> eyre::Result<()> {
         // Create a completely isolated test directory using a truly unique path
         let test_id = uuid::Uuid::new_v4();
