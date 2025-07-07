@@ -13,10 +13,8 @@ use crate::common::{client::get_all_rpc_addresses, get_all_peer_ids, get_antnode
 use ant_logging::LogBuilder;
 use ant_protocol::antnode_proto::KBucketsRequest;
 use color_eyre::Result;
-use libp2p::{
-    kad::{KBucketKey, K_VALUE},
-    PeerId,
-};
+use ant_kad::{KBucketKey, K_VALUE};
+use libp2p::PeerId;
 use std::{
     collections::{BTreeMap, HashSet},
     time::Duration,
