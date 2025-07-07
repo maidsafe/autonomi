@@ -1018,6 +1018,7 @@ dependencies = [
  "self_encryption",
  "serde",
  "serde_json",
+ "serial_test",
  "sha2",
  "strum 0.26.3",
  "sysinfo",

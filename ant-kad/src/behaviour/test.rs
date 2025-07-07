@@ -1317,10 +1317,10 @@ fn disjoint_query_does_not_finish_before_all_paths_did() {
     }));
 
     assert_eq!(1, records.len());
-    assert!(records.contains(&PeerRecord {
+    assert!(records.contains(&Box::new(PeerRecord {
         peer: Some(*Swarm::local_peer_id(&bob)),
         record: record_bob,
-    }));
+    })));
 }
 
 /// Tests that peers are not automatically inserted into
