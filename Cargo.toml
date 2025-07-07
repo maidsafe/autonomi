@@ -8,6 +8,7 @@ members = [
     "ant-kad",
     "ant-logging",
     "ant-metrics",
+    "ant-net",
     "ant-node",
     "ant-node-manager",
     "ant-node-rpc-client",

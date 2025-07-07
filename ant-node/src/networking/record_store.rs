@@ -1050,6 +1050,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn put_get_remove_record() {
         fn prop(r: ArbitraryRecord) {
             let rt = if let Ok(rt) = Runtime::new() {
@@ -1131,6 +1132,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn can_store_after_restart() -> eyre::Result<()> {
         let tmp_dir = TempDir::new()?;
         let current_test_dir = tmp_dir.child("can_store_after_restart");
@@ -1156,8 +1158,9 @@ mod tests {
             None,
         );
 
-        // Create a chunk
-        let chunk_data = Bytes::from_static(b"Test chunk data");
+        // Create a unique chunk for this test
+        let test_uuid = uuid::Uuid::new_v4();
+        let chunk_data = Bytes::from(format!("Test chunk data for restart test: {}", test_uuid));
         let chunk = Chunk::new(chunk_data);
         let chunk_address = *chunk.address();
 
@@ -1174,33 +1177,58 @@ mod tests {
             .put_verified(record.clone(), ValidationType::Chunk, true)
             .is_ok());
 
-        // Wait for the async write operation to complete
-        if let Some(cmd) = swarm_cmd_receiver.recv().await {
-            match cmd {
-                LocalSwarmCmd::AddLocalRecordAsStored {
-                    key,
-                    record_type,
-                    data_type,
-                } => {
-                    store.mark_as_stored(key, record_type, data_type);
+        // Wait for the async write operation to complete with timeout
+        let timeout_duration = Duration::from_secs(10);
+        
+        let write_completed = match tokio::time::timeout(timeout_duration, async {
+            while let Some(cmd) = swarm_cmd_receiver.recv().await {
+                match cmd {
+                    LocalSwarmCmd::AddLocalRecordAsStored {
+                        key,
+                        record_type,
+                        data_type,
+                    } => {
+                        if key == record.key {
+                            store.mark_as_stored(key, record_type, data_type);
+                            return true;
+                        }
+                    }
+                    LocalSwarmCmd::RemoveFailedLocalRecord { key } => {
+                        if key == record.key {
+                            panic!("Record write failed: {}", hex::encode(key.as_ref()));
+                        }
+                    }
+                    _ => {
+                        // Ignore other commands that might be in the queue
+                    }
                 }
-                _ => panic!("Unexpected command received"),
             }
+            false
+        }).await {
+            Ok(completed) => completed,
+            Err(_) => panic!("Timeout waiting for disk write completion"),
+        };
+        
+        if !write_completed {
+            panic!("Did not receive write completion signal");
         }
 
-        // Verify the chunk is stored
+        // Verify the chunk is stored in memory
         let stored_record = store.get(&record.key);
         assert!(stored_record.is_some(), "Chunk should be stored initially");
 
-        // Sleep a while to let OS completes the flush to disk
-        sleep(Duration::from_secs(1)).await;
+        // Explicitly drop the store to ensure proper cleanup
+        drop(store);
+        drop(swarm_cmd_receiver);
+        
+        // Brief wait for cleanup
+        sleep(Duration::from_millis(500)).await;
 
         // Create new channels for the restarted store
         let (new_network_event_sender, _new_network_event_receiver) = mpsc::channel(1);
         let (new_swarm_cmd_sender, _new_swarm_cmd_receiver) = mpsc::channel(1);
 
         // Restart the store with same encrypt_seed but new channels
-        drop(store);
         let store = NodeRecordStore::with_config(
             self_id,
             store_config,
@@ -1210,7 +1238,7 @@ mod tests {
             None,
         );
 
-        // Verify the record still exists
+        // Verify the record still exists after restart
         let stored_record = store.get(&record.key);
         assert!(
             stored_record.is_some(),
@@ -1248,10 +1276,14 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn can_store_and_retrieve_chunk() {
-        let temp_dir = std::env::temp_dir();
+        let tmp_dir = TempDir::new().unwrap();
+        let current_test_dir = tmp_dir.child("can_store_and_retrieve_chunk");
+        current_test_dir.create_dir_all().unwrap();
+        
         let store_config = NodeRecordStoreConfig {
-            storage_dir: temp_dir,
+            storage_dir: current_test_dir.to_path_buf(),
             ..Default::default()
         };
         let self_id = PeerId::random();
@@ -1314,10 +1346,14 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn can_store_and_retrieve_scratchpad() -> eyre::Result<()> {
-        let temp_dir = std::env::temp_dir();
+        let tmp_dir = TempDir::new()?;
+        let current_test_dir = tmp_dir.child("can_store_and_retrieve_scratchpad");
+        current_test_dir.create_dir_all()?;
+        
         let store_config = NodeRecordStoreConfig {
-            storage_dir: temp_dir,
+            storage_dir: current_test_dir.to_path_buf(),
             ..Default::default()
         };
         let self_id = PeerId::random();
@@ -1396,15 +1432,16 @@ mod tests {
         Ok(())
     }
     #[tokio::test]
+    #[serial_test::serial]
     async fn pruning_on_full() -> Result<()> {
         let max_iterations = 10;
         // lower max records for faster testing
         let max_records = 50;
 
-        let temp_dir = std::env::temp_dir();
-        let unique_dir_name = uuid::Uuid::new_v4().to_string();
-        let storage_dir = temp_dir.join(unique_dir_name);
-        fs::create_dir_all(&storage_dir).expect("Failed to create directory");
+        let tmp_dir = TempDir::new().expect("Failed to create temp dir");
+        let current_test_dir = tmp_dir.child("pruning_on_full");
+        current_test_dir.create_dir_all().expect("Failed to create directory");
+        let storage_dir = current_test_dir.to_path_buf();
 
         // Set the config::max_record to be 50, then generate 100 records
         // On storing the 51st to 100th record,
@@ -1530,12 +1567,14 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn get_records_within_range() -> eyre::Result<()> {
         let max_records = 50;
 
-        let temp_dir = std::env::temp_dir();
-        let unique_dir_name = uuid::Uuid::new_v4().to_string();
-        let storage_dir = temp_dir.join(unique_dir_name);
+        let tmp_dir = TempDir::new()?;
+        let current_test_dir = tmp_dir.child("get_records_within_range");
+        current_test_dir.create_dir_all()?;
+        let storage_dir = current_test_dir.to_path_buf();
 
         // setup the store
         let store_config = NodeRecordStoreConfig {
@@ -1618,11 +1657,12 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn historic_quoting_metrics() -> Result<()> {
-        let temp_dir = std::env::temp_dir();
-        let unique_dir_name = uuid::Uuid::new_v4().to_string();
-        let storage_dir = temp_dir.join(unique_dir_name);
-        fs::create_dir_all(&storage_dir).expect("Failed to create directory");
+        let tmp_dir = TempDir::new().expect("Failed to create temp dir");
+        let current_test_dir = tmp_dir.child("historic_quoting_metrics");
+        current_test_dir.create_dir_all().expect("Failed to create directory");
+        let storage_dir = current_test_dir.to_path_buf();
         let historic_quote_dir = storage_dir.clone();
 
         let store_config = NodeRecordStoreConfig {
@@ -1664,6 +1704,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial]
     async fn test_cache_pruning_and_size_limit() {
         // Create cache with small size and short timeout for testing
         let cache_size = 3;
