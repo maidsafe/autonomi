@@ -1197,7 +1197,7 @@ mod tests {
                 } => {
                     store.mark_as_stored(key, record_type, data_type);
                 }
-                _ => panic!("Unexpected command received: {:?}", cmd),
+                _ => panic!("Unexpected command received: {cmd:?}"),
             },
             Ok(None) => panic!("Channel closed without receiving AddLocalRecordAsStored"),
             Err(_) => panic!("Timeout waiting for AddLocalRecordAsStored command"),
@@ -1238,14 +1238,13 @@ mod tests {
                     .filter_map(|e| e.ok())
                     .filter_map(|e| e.file_name().into_string().ok())
                     .collect();
-                eprintln!("Files in directory after waiting: {:?}", files);
+                eprintln!("Files in directory after waiting: {files:?}");
             }
         }
 
         assert!(
             file_exists,
-            "Record file {} was not written to disk",
-            expected_filename
+            "Record file {expected_filename} was not written to disk"
         );
 
         // Create new channels for the restarted store
@@ -1279,7 +1278,7 @@ mod tests {
                     .filter_map(|e| e.ok())
                     .filter_map(|e| e.file_name().into_string().ok())
                     .collect();
-                eprintln!("Files in test directory: {:?}", files);
+                eprintln!("Files in test directory: {files:?}");
                 eprintln!("Looking for key: {:?}", hex::encode(record.key.as_ref()));
             }
         }

@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use ant_kad::Event::*;
 use ant_kad::{store::MemoryStore, Behaviour, Config, Mode};
 use libp2p_core::{transport::MemoryTransport, upgrade, Transport};
