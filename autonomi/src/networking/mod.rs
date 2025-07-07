@@ -22,10 +22,6 @@ pub use ant_evm::PaymentQuote;
 pub use ant_kad::{PeerInfo, Quorum, Record};
 pub use ant_protocol::NetworkAddress;
 pub use config::{RetryStrategy, Strategy};
-<<<<<<< HEAD
-=======
-pub use ant_kad::{PeerInfo, Quorum, Record};
->>>>>>> ec6e3aa14 (feat: migrate libp2p-kad to internal ant-kad module)
 pub use libp2p::{Multiaddr, PeerId};
 
 // internal needs

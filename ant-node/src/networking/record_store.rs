@@ -1009,10 +1009,7 @@ mod tests {
     };
     use bytes::Bytes;
     use eyre::ContextCompat;
-<<<<<<< HEAD
-=======
     use ant_kad::RecordKey;
->>>>>>> ec6e3aa14 (feat: migrate libp2p-kad to internal ant-kad module)
     use libp2p::core::multihash::Multihash;
     use quickcheck::*;
     use tokio::runtime::Runtime;
