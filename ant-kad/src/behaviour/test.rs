@@ -1293,7 +1293,7 @@ fn disjoint_query_does_not_finish_before_all_paths_did() {
                         match result {
                             Ok(ok) => {
                                 if let GetRecordOk::FoundRecord(record) = ok {
-                                    records.push(record);
+                                    records.push(*record);
                                 }
                                 if records.len() == 1 {
                                     return Poll::Ready(records);

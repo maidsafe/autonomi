@@ -8,6 +8,8 @@
 // Software is furnished to do so, subject to the following conditions:
 
 // Allow deprecated libp2p types that are part of the ported libp2p-kad codebase
+// NOTE: OpenInfo types are deprecated but still required in libp2p-swarm 0.46.0
+// These will be removed when upgrading to newer libp2p versions that eliminate the trait requirement
 #![allow(deprecated)]
 //
 // The above copyright notice and this permission notice shall be included in
@@ -136,7 +138,7 @@ impl InboundSubstreamState {
         &mut self,
         id: RequestId,
         msg: KadResponseMsg,
-    ) -> Result<(), KadResponseMsg> {
+    ) -> Result<(), Box<KadResponseMsg>> {
         match std::mem::replace(
             self,
             InboundSubstreamState::Poisoned {
@@ -157,7 +159,7 @@ impl InboundSubstreamState {
             other => {
                 *self = other;
 
-                Err(msg)
+                Err(Box::new(msg))
             }
         }
     }
@@ -605,7 +607,14 @@ impl ConnectionHandler for Handler {
     type ToBehaviour = HandlerEvent;
     type InboundProtocol = Either<ProtocolConfig, upgrade::DeniedUpgrade>;
     type OutboundProtocol = ProtocolConfig;
+    /// DEPRECATED: OutboundOpenInfo will be removed in future libp2p versions.
+    /// Currently using unit type () as no additional data needs to be tracked.
+    /// Future: Track data directly in Handler struct instead.
     type OutboundOpenInfo = ();
+    
+    /// DEPRECATED: InboundOpenInfo will be removed in future libp2p versions.
+    /// Currently using unit type () as no additional data needs to be tracked.
+    /// Future: Track data directly in Handler struct instead.
     type InboundOpenInfo = ();
 
     fn listen_protocol(&self) -> SubstreamProtocol<Self::InboundProtocol, Self::InboundOpenInfo> {
@@ -859,7 +868,7 @@ impl Handler {
             match state.try_answer_with(request_id, msg) {
                 Ok(()) => return,
                 Err(m) => {
-                    msg = m;
+                    msg = *m;
                 }
             }
         }
@@ -1061,6 +1070,7 @@ fn process_kad_response(event: KadResponseMsg, query_id: QueryId) -> HandlerEven
 #[cfg(test)]
 mod tests {
     use quickcheck::{Arbitrary, Gen};
+    use serial_test::serial;
     use tracing_subscriber::EnvFilter;
 
     use super::*;
@@ -1075,6 +1085,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn compute_next_protocol_status_test() {
         let _ = tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
