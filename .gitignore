@@ -51,3 +51,4 @@ site/
 # Test artifacts
 autonomi/tests/file/test_dir_fetched*
 **/test_dir_fetched*
+*.bak
