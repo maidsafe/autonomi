@@ -1,20 +1,22 @@
 use libp2p_identify as identify;
 use libp2p_identity as identity;
-use ant_kad::{store::MemoryStore, Behaviour, Config, Event, Mode};
+use ant_kad::{store::MemoryStore, Behaviour, Config, Mode};
 use ant_kad::Event::*;
 use libp2p_swarm::{Swarm, SwarmEvent};
 use libp2p_swarm_test::SwarmExt;
+use serial_test::serial;
 use tracing_subscriber::EnvFilter;
 use MyBehaviourEvent::*;
 
 #[tokio::test]
+#[serial]
 async fn server_gets_added_to_routing_table_by_client() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral_tokio(MyBehaviour::new);
-    let mut server = Swarm::new_ephemeral_tokio(MyBehaviour::new);
+    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
 
     server.listen().with_memory_addr_external().await;
     client.connect(&mut server).await;
@@ -40,13 +42,14 @@ async fn server_gets_added_to_routing_table_by_client() {
 }
 
 #[tokio::test]
+#[serial]
 async fn two_servers_add_each_other_to_routing_table() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut server1 = Swarm::new_ephemeral_tokio(MyBehaviour::new);
-    let mut server2 = Swarm::new_ephemeral_tokio(MyBehaviour::new);
+    let mut server1 = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut server2 = Swarm::new_ephemeral(MyBehaviour::new);
 
     server2.listen().with_memory_addr_external().await;
     server1.connect(&mut server2).await;
@@ -81,13 +84,14 @@ async fn two_servers_add_each_other_to_routing_table() {
 }
 
 #[tokio::test]
+#[serial]
 async fn adding_an_external_addresses_activates_server_mode_on_existing_connections() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral_tokio(MyBehaviour::new);
-    let mut server = Swarm::new_ephemeral_tokio(MyBehaviour::new);
+    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
+    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
     let server_peer_id = *server.local_peer_id();
 
     let (memory_addr, _) = server.listen().await;
@@ -119,15 +123,16 @@ async fn adding_an_external_addresses_activates_server_mode_on_existing_connecti
 }
 
 #[tokio::test]
+#[serial]
 async fn set_client_to_server_mode() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .try_init();
 
-    let mut client = Swarm::new_ephemeral_tokio(MyBehaviour::new);
+    let mut client = Swarm::new_ephemeral(MyBehaviour::new);
     client.behaviour_mut().kad.set_mode(Some(Mode::Client));
 
-    let mut server = Swarm::new_ephemeral_tokio(MyBehaviour::new);
+    let mut server = Swarm::new_ephemeral(MyBehaviour::new);
 
     server.listen().with_memory_addr_external().await;
     client.connect(&mut server).await;
