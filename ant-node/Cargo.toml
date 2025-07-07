@@ -104,6 +104,7 @@ xor_name = "5.0.0"
 void = "1.0.2"
 
 [dev-dependencies]
+ant-kad = { path = "../ant-kad", version = "0.1.0" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.6", features = ["rpc"] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.4.1" }

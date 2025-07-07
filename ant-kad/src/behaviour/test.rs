@@ -22,7 +22,6 @@
 
 use futures::{executor::block_on, future::poll_fn, prelude::*};
 use futures_timer::Delay;
-use serial_test::serial;
 use libp2p_core::{
     multiaddr::{multiaddr, Protocol},
     multihash::Multihash,
@@ -35,6 +34,7 @@ use libp2p_swarm::{self as swarm, Swarm, SwarmEvent};
 use libp2p_yamux as yamux;
 use quickcheck::*;
 use rand::{random, rngs::StdRng, thread_rng, Rng, SeedableRng};
+use serial_test::serial;
 
 use super::*;
 use crate::{

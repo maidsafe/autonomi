@@ -1136,9 +1136,13 @@ mod tests {
         // Create a completely isolated test directory using a truly unique path
         let test_id = uuid::Uuid::new_v4();
         let temp_base = std::env::temp_dir();
-        let unique_name = format!("ant_node_restart_test_{}_pid_{}", test_id, std::process::id());
+        let unique_name = format!(
+            "ant_node_restart_test_{}_pid_{}",
+            test_id,
+            std::process::id()
+        );
         let test_dir = temp_base.join(&unique_name);
-        
+
         // Ensure directory doesn't exist
         if test_dir.exists() {
             fs::remove_dir_all(&test_dir)?;
@@ -1206,15 +1210,15 @@ mod tests {
         // Force sync to ensure data is written to disk
         // First, drop the reference to allow the store to be moved
         drop(stored_record);
-        
+
         // Give async tasks time to execute
         tokio::task::yield_now().await;
         sleep(Duration::from_millis(100)).await;
-        
+
         // Wait for the file to be written to disk
         let expected_filename = hex::encode(record.key.as_ref());
         let expected_file = test_dir.join(&expected_filename);
-        
+
         // Wait up to 10 seconds for the file to appear
         let mut file_exists = false;
         for i in 0..100 {
@@ -1226,7 +1230,7 @@ mod tests {
             sleep(Duration::from_millis(100)).await;
             tokio::task::yield_now().await;
         }
-        
+
         if !file_exists {
             // Debug: Check what files exist in the directory
             if let Ok(entries) = fs::read_dir(&test_dir) {
@@ -1237,8 +1241,12 @@ mod tests {
                 eprintln!("Files in directory after waiting: {:?}", files);
             }
         }
-        
-        assert!(file_exists, "Record file {} was not written to disk", expected_filename);
+
+        assert!(
+            file_exists,
+            "Record file {} was not written to disk",
+            expected_filename
+        );
 
         // Create new channels for the restarted store
         let (new_network_event_sender, _new_network_event_receiver) = mpsc::channel(1);
@@ -1246,11 +1254,11 @@ mod tests {
 
         // Restart the store with same encrypt_seed but new channels
         drop(store);
-        
+
         // Give the OS more time to flush and release file handles
         sleep(Duration::from_secs(2)).await;
         tokio::task::yield_now().await;
-        
+
         let store = NodeRecordStore::with_config(
             self_id,
             store_config,
@@ -1262,7 +1270,7 @@ mod tests {
 
         // Verify the record still exists
         let stored_record = store.get(&record.key);
-        
+
         // Additional debugging if the test fails
         if stored_record.is_none() {
             // Check what files exist in the directory
@@ -1275,7 +1283,7 @@ mod tests {
                 eprintln!("Looking for key: {:?}", hex::encode(record.key.as_ref()));
             }
         }
-        
+
         assert!(
             stored_record.is_some(),
             "Chunk should be stored after restart with same key"

@@ -39,7 +39,7 @@ use futures::StreamExt;
 use libp2p::{
     request_response::{self, OutboundRequestId},
     swarm::{
-        behaviour::toggle::Toggle, 
+        behaviour::toggle::Toggle,
         dial_opts::{DialOpts, PeerCondition},
         ConnectionId, NetworkBehaviour, Swarm,
     },

@@ -1,13 +1,13 @@
+use ant_kad::Event::*;
+use ant_kad::{store::MemoryStore, Behaviour, Config, Mode};
+use libp2p_core::{transport::MemoryTransport, upgrade, Transport};
 use libp2p_identify as identify;
 use libp2p_identity as identity;
-use libp2p_core::{transport::MemoryTransport, upgrade, Transport};
-use libp2p_tcp as tcp;
 use libp2p_noise as noise;
-use libp2p_yamux as yamux;
 use libp2p_swarm::{self as swarm, Swarm, SwarmEvent};
 use libp2p_swarm_test::SwarmExt;
-use ant_kad::{store::MemoryStore, Behaviour, Config, Mode};
-use ant_kad::Event::*;
+use libp2p_tcp as tcp;
+use libp2p_yamux as yamux;
 use serial_test::serial;
 use tracing_subscriber::EnvFilter;
 use MyBehaviourEvent::*;
@@ -15,7 +15,7 @@ use MyBehaviourEvent::*;
 fn create_swarm() -> Swarm<MyBehaviour> {
     let local_key = identity::Keypair::generate_ed25519();
     let local_id = local_key.public().to_peer_id();
-    
+
     // Create a transport that supports both TCP and memory
     let tcp_transport = tcp::tokio::Transport::default();
     let memory_transport = MemoryTransport::default();
