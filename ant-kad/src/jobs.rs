@@ -340,6 +340,7 @@ mod tests {
     use futures::{executor::block_on, future::poll_fn};
     use quickcheck::*;
     use rand::Rng;
+    use serial_test::serial;
 
     use super::*;
     use crate::record::store::MemoryStore;
@@ -360,6 +361,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn new_job_not_running() {
         let job = rand_put_record_job();
         assert!(!job.is_running());
@@ -368,6 +370,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn run_put_record_job() {
         fn prop(records: Vec<Record>) {
             let mut job = rand_put_record_job();
@@ -396,6 +399,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn run_add_provider_job() {
         fn prop(records: Vec<ProviderRecord>) {
             let mut job = rand_add_provider_job();

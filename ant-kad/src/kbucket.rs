@@ -596,6 +596,7 @@ where
 mod tests {
     use libp2p_identity::PeerId;
     use quickcheck::*;
+    use serial_test::serial;
 
     use super::*;
 
@@ -630,6 +631,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn buckets_are_non_overlapping_and_exhaustive() {
         let local_key = Key::from(PeerId::random());
         let timeout = Duration::from_secs(0);
@@ -649,6 +651,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn bucket_contains_range() {
         fn prop(ix: u8) {
             let index = BucketIndex(ix as usize);
@@ -682,6 +685,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn rand_distance() {
         fn prop(ix: u8) -> bool {
             let d = BucketIndex(ix as usize).rand_distance(&mut rand::thread_rng());
@@ -696,6 +700,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn entry_inserted() {
         let local_key = Key::from(PeerId::random());
         let other_id = Key::from(PeerId::random());
@@ -716,6 +721,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn entry_self() {
         let local_key = Key::from(PeerId::random());
         let mut table = KBucketsTable::<_, ()>::new(local_key, KBucketConfig::default());
@@ -724,6 +730,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn closest() {
         let local_key = Key::from(PeerId::random());
         let mut table = KBucketsTable::<_, ()>::new(local_key, KBucketConfig::default());
@@ -759,6 +766,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn applied_pending() {
         let local_key = Key::from(PeerId::random());
         let mut config = KBucketConfig::default();
@@ -817,6 +825,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn count_nodes_between() {
         fn prop(mut table: TestTable, target: Key<PeerId>) -> bool {
             let num_to_target = table.count_nodes_between(&target);

@@ -118,9 +118,12 @@ impl fmt::Debug for Addresses {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
+    #[serial]
     fn given_one_address_when_removing_different_one_returns_ok() {
         let mut addresses = make_addresses([tcp_addr(1234)]);
 
@@ -135,6 +138,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn given_one_address_when_removing_correct_one_returns_err() {
         let mut addresses = make_addresses([tcp_addr(1234)]);
 
@@ -149,6 +153,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn given_many_addresses_when_removing_different_one_does_not_remove_and_returns_ok() {
         let mut addresses = make_addresses([tcp_addr(1234), tcp_addr(4321)]);
 
@@ -163,6 +168,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn given_many_addresses_when_removing_correct_one_removes_and_returns_ok() {
         let mut addresses = make_addresses([tcp_addr(1234), tcp_addr(4321)]);
 

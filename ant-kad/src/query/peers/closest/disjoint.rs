@@ -24,6 +24,8 @@ use std::{
     ops::{Index, IndexMut, Range},
 };
 
+type IteratorOrderType = Cycle<Map<Range<usize>, fn(usize) -> IteratorIndex>>;
+
 use super::*;
 
 /// Wraps around a set of [`ClosestPeersIter`], enforcing a disjoint discovery
@@ -35,7 +37,7 @@ pub(crate) struct ClosestDisjointPeersIter {
     iters: Vec<ClosestPeersIter>,
     /// Order in which to query the iterators ensuring fairness across
     /// [`ClosestPeersIter::next`] calls.
-    iter_order: Cycle<Map<Range<usize>, fn(usize) -> IteratorIndex>>,
+    iter_order: IteratorOrderType,
 
     /// Mapping of contacted peers by their [`PeerId`] to [`PeerState`]
     /// containing the corresponding iterator indices as well as the response
@@ -438,6 +440,7 @@ mod tests {
 
     use libp2p_core::multihash::Multihash;
     use quickcheck::*;
+    use serial_test::serial;
 
     use super::*;
     use crate::SHA_256_MH;
@@ -560,6 +563,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn result_iter_returns_deduplicated_ordered_peer_id_stream() {
         fn prop(result_iter: ResultIter<std::vec::IntoIter<Key<PeerId>>>) {
             let expected = {
@@ -617,6 +621,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn s_kademlia_disjoint_paths() {
         let now = Instant::now();
         let target: KeyBytes = Key::from(PeerId::random()).into();
@@ -867,6 +872,7 @@ mod tests {
 
     /// Ensure [`ClosestPeersIter`] and [`ClosestDisjointPeersIter`] yield same closest peers.
     #[test]
+    #[serial]
     fn closest_and_disjoint_closest_yield_same_result() {
         fn prop(
             target: Target,
@@ -983,6 +989,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn failure_can_not_overwrite_previous_success() {
         let now = Instant::now();
         let peer = PeerId::random();

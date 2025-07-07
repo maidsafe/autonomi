@@ -18,6 +18,8 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+#![allow(clippy::manual_div_ceil)]
+
 use std::{
     borrow::Borrow,
     hash::{Hash, Hasher},
@@ -207,6 +209,7 @@ impl Distance {
 #[cfg(test)]
 mod tests {
     use quickcheck::*;
+    use serial_test::serial;
 
     use super::*;
     use crate::SHA_256_MH;
@@ -225,6 +228,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn identity() {
         fn prop(a: Key<PeerId>) -> bool {
             a.distance(&a) == Distance::default()
@@ -233,6 +237,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn symmetry() {
         fn prop(a: Key<PeerId>, b: Key<PeerId>) -> bool {
             a.distance(&b) == b.distance(&a)
@@ -241,6 +246,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn triangle_inequality() {
         fn prop(a: Key<PeerId>, b: Key<PeerId>, c: Key<PeerId>) -> TestResult {
             let ab = a.distance(&b);
@@ -256,6 +262,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn unidirectionality() {
         fn prop(a: Key<PeerId>, b: Key<PeerId>) -> bool {
             let d = a.distance(&b);

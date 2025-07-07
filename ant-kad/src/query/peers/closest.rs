@@ -505,6 +505,7 @@ mod tests {
     use libp2p_core::multihash::Multihash;
     use quickcheck::*;
     use rand::{rngs::StdRng, Rng, SeedableRng};
+    use serial_test::serial;
 
     use super::*;
     use crate::SHA_256_MH;
@@ -562,6 +563,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn new_iter() {
         fn prop(iter: ClosestPeersIter) {
             let target = iter.target;
@@ -595,6 +597,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn termination_and_parallelism() {
         fn prop(mut iter: ClosestPeersIter, seed: Seed) {
             let now = Instant::now();
@@ -701,6 +704,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn no_duplicates() {
         fn prop(mut iter: ClosestPeersIter, closer: ArbitraryPeerId) -> bool {
             let now = Instant::now();
@@ -743,6 +747,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn timeout() {
         fn prop(mut iter: ClosestPeersIter) -> bool {
             let mut now = Instant::now();
@@ -795,6 +800,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn without_success_try_up_to_k_peers() {
         fn prop(mut iter: ClosestPeersIter) {
             let now = Instant::now();
@@ -816,6 +822,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn stalled_at_capacity() {
         fn prop(mut iter: ClosestPeersIter) {
             iter.state = State::Stalled;

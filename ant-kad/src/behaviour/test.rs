@@ -22,6 +22,7 @@
 
 use futures::{executor::block_on, future::poll_fn, prelude::*};
 use futures_timer::Delay;
+use serial_test::serial;
 use libp2p_core::{
     multiaddr::{multiaddr, Protocol},
     multihash::Multihash,
@@ -151,6 +152,7 @@ impl Arbitrary for Seed {
 }
 
 #[test]
+#[serial]
 fn bootstrap() {
     fn prop(seed: Seed) {
         let mut rng = StdRng::from_seed(seed.0);
@@ -236,6 +238,7 @@ fn bootstrap() {
 }
 
 #[test]
+#[serial]
 fn query_iter() {
     fn distances<K>(key: &kbucket::Key<K>, peers: Vec<PeerId>) -> Vec<Distance> {
         peers
@@ -322,6 +325,7 @@ fn query_iter() {
 }
 
 #[test]
+#[serial]
 fn unresponsive_not_returned_direct() {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -370,6 +374,7 @@ fn unresponsive_not_returned_direct() {
 }
 
 #[test]
+#[serial]
 fn unresponsive_not_returned_indirect() {
     // Build two nodes. Node #2 knows about node #1. Node #1 contains fake addresses to
     // non-existing nodes. We ask node #2 to find a random peer. We make sure that no fake address
@@ -431,6 +436,7 @@ fn unresponsive_not_returned_indirect() {
 // Test the result of get_closest_peers with different num_results
 // Note that the result is capped after exceeds K_VALUE
 #[test]
+#[serial]
 fn get_closest_with_different_num_results() {
     let k_value = K_VALUE.get();
     for replication_factor in [5, k_value / 2, k_value] {
@@ -491,6 +497,7 @@ fn get_closest_with_different_num_results_inner(num_results: usize, replication_
 }
 
 #[test]
+#[serial]
 fn get_record_not_found() {
     let mut swarms = build_nodes(3);
 
@@ -554,6 +561,7 @@ fn get_record_not_found() {
 /// should be able to put a record to the X closest nodes of the network where X
 /// is equal to the configured replication factor.
 #[test]
+#[serial]
 fn put_record() {
     fn prop(records: Vec<Record>, seed: Seed, filter_records: bool, drop_records: bool) {
         let mut rng = StdRng::from_seed(seed.0);
@@ -807,6 +815,7 @@ fn put_record() {
 }
 
 #[test]
+#[serial]
 fn get_record() {
     let mut swarms = build_nodes(3);
 
@@ -869,6 +878,7 @@ fn get_record() {
 }
 
 #[test]
+#[serial]
 fn get_record_many() {
     // TODO: Randomise
     let num_nodes = 12;
@@ -927,6 +937,7 @@ fn get_record_many() {
 /// should be able to add itself as a provider to the X closest nodes of the
 /// network where X is equal to the configured replication factor.
 #[test]
+#[serial]
 fn add_provider() {
     fn prop(keys: Vec<record::Key>, seed: Seed) {
         let mut rng = StdRng::from_seed(seed.0);
@@ -1116,6 +1127,7 @@ fn add_provider() {
 /// query limit for background jobs. Originally this even produced an
 /// arithmetic overflow, see https://github.com/libp2p/rust-libp2p/issues/1290.
 #[test]
+#[serial]
 fn exceed_jobs_max_queries() {
     let (_addr, mut swarm) = build_node();
     let num = JOBS_MAX_QUERIES + 1;
@@ -1161,6 +1173,7 @@ fn exp_decr_expiration_overflow() {
 }
 
 #[test]
+#[serial]
 fn disjoint_query_does_not_finish_before_all_paths_did() {
     let mut config = Config::new(PROTOCOL_NAME);
     config.disjoint_query_paths(true);
@@ -1280,7 +1293,7 @@ fn disjoint_query_does_not_finish_before_all_paths_did() {
                         match result {
                             Ok(ok) => {
                                 if let GetRecordOk::FoundRecord(record) = ok {
-                                    records.push(record);
+                                    records.push(*record);
                                 }
                                 if records.len() == 1 {
                                     return Poll::Ready(records);
@@ -1313,6 +1326,7 @@ fn disjoint_query_does_not_finish_before_all_paths_did() {
 /// Tests that peers are not automatically inserted into
 /// the routing table with `BucketInserts::Manual`.
 #[test]
+#[serial]
 fn manual_bucket_inserts() {
     let mut cfg = Config::new(PROTOCOL_NAME);
     cfg.set_kbucket_inserts(BucketInserts::Manual);
@@ -1365,6 +1379,7 @@ fn manual_bucket_inserts() {
 }
 
 #[test]
+#[serial]
 fn network_behaviour_on_address_change() {
     let local_peer_id = PeerId::random();
 
@@ -1452,6 +1467,7 @@ fn network_behaviour_on_address_change() {
 }
 
 #[test]
+#[serial]
 fn get_providers_single() {
     fn prop(key: record::Key) {
         let (_, mut single_swarm) = build_node();
@@ -1593,16 +1609,19 @@ fn get_providers_limit<const N: usize>() {
 }
 
 #[test]
+#[serial]
 fn get_providers_limit_n_1() {
     get_providers_limit::<1>();
 }
 
 #[test]
+#[serial]
 fn get_providers_limit_n_2() {
     get_providers_limit::<2>();
 }
 
 #[test]
+#[serial]
 fn get_providers_limit_n_5() {
     get_providers_limit::<5>();
 }

@@ -170,9 +170,12 @@ impl FixedPeersIter {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
+
     use super::*;
 
     #[test]
+    #[serial]
     fn decrease_num_waiting_on_failure() {
         let mut iter = FixedPeersIter::new(
             vec![PeerId::random(), PeerId::random()],

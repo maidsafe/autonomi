@@ -213,6 +213,7 @@ impl RecordStore for MemoryStore {
 mod tests {
     use quickcheck::*;
     use rand::Rng;
+    use serial_test::serial;
 
     use super::*;
     use crate::SHA_256_MH;
@@ -221,6 +222,7 @@ mod tests {
         Multihash::wrap(SHA_256_MH, &rand::thread_rng().gen::<[u8; 32]>()).unwrap()
     }
     #[test]
+    #[serial]
     fn put_get_remove_record() {
         fn prop(r: Record) {
             let mut store = MemoryStore::new(PeerId::random());
@@ -233,6 +235,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn add_get_remove_provider() {
         fn prop(r: ProviderRecord) {
             let mut store = MemoryStore::new(PeerId::random());
@@ -245,6 +248,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn provided() {
         let id = PeerId::random();
         let mut store = MemoryStore::new(id);
@@ -260,6 +264,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn update_provider() {
         let mut store = MemoryStore::new(PeerId::random());
         let key = random_multihash();
@@ -273,6 +278,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn update_provided() {
         let prv = PeerId::random();
         let mut store = MemoryStore::new(prv);
@@ -292,6 +298,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn max_providers_per_key() {
         let config = MemoryStoreConfig::default();
         let key = kbucket::Key::new(Key::from(random_multihash()));
@@ -313,6 +320,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn max_provided_keys() {
         let mut store = MemoryStore::new(PeerId::random());
         for _ in 0..store.config.max_provided_keys {

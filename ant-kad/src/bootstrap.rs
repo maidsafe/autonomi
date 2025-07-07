@@ -181,6 +181,7 @@ impl futures::Future for ThrottleTimer {
 
 #[cfg(test)]
 mod tests {
+    use serial_test::serial;
     use web_time::Instant;
 
     use super::*;
@@ -199,6 +200,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn immediate_automatic_bootstrap_is_triggered_immediately() {
         let mut status = Status::new(Some(Duration::from_secs(1)), Some(Duration::ZERO));
 
@@ -224,6 +226,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn delayed_automatic_bootstrap_is_triggered_before_periodic_bootstrap() {
         let mut status = Status::new(Some(Duration::from_secs(1)), Some(MS_5));
 
@@ -249,6 +252,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn given_no_periodic_bootstrap_and_immediate_automatic_bootstrap_try_on_next_connection() {
         let mut status = Status::new(None, Some(Duration::ZERO));
 
@@ -264,6 +268,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn given_periodic_bootstrap_when_routing_table_updated_then_wont_bootstrap_until_next_interval(
     ) {
         let mut status = Status::new(Some(MS_100), Some(MS_5));
@@ -284,6 +289,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn given_no_periodic_bootstrap_and_automatic_bootstrap_when_new_entry_then_will_bootstrap(
     ) {
         let mut status = Status::new(None, Some(Duration::ZERO));
@@ -294,6 +300,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn given_periodic_bootstrap_and_no_automatic_bootstrap_triggers_periodically() {
         let mut status = Status::new(Some(MS_100), None);
 
@@ -309,6 +316,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn given_no_periodic_bootstrap_and_automatic_bootstrap_reset_throttle_when_multiple_peers(
     ) {
         let mut status = Status::new(None, Some(MS_100));
@@ -335,6 +343,7 @@ mod tests {
     }
 
     #[async_std::test]
+    #[serial]
     async fn given_periodic_bootstrap_and_no_automatic_bootstrap_manually_triggering_prevent_periodic(
     ) {
         let mut status = Status::new(Some(MS_100), None);

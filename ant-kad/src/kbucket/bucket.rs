@@ -444,6 +444,7 @@ where
 mod tests {
     use libp2p_identity::PeerId;
     use quickcheck::*;
+    use serial_test::serial;
 
     use super::*;
 
@@ -495,6 +496,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn ordering() {
         fn prop(status: Vec<NodeStatus>) -> bool {
             let mut bucket = KBucket::<Key<PeerId>, ()>::default();
@@ -538,6 +540,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn full_bucket() {
         let mut bucket = KBucket::<Key<PeerId>, ()>::default();
 
@@ -606,6 +609,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn full_bucket_discard_pending() {
         let mut bucket = KBucket::<Key<PeerId>, ()>::default();
         fill_bucket(&mut bucket, NodeStatus::Disconnected);
@@ -643,6 +647,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn bucket_update() {
         fn prop(mut bucket: KBucket<Key<PeerId>, ()>, pos: Position, status: NodeStatus) -> bool {
             let num_nodes = bucket.num_entries();
@@ -673,6 +678,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_custom_bucket_size() {
         let bucket_sizes: [NonZeroUsize; 4] = [
             NonZeroUsize::new(2).unwrap(),
