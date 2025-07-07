@@ -138,7 +138,7 @@ impl InboundSubstreamState {
         &mut self,
         id: RequestId,
         msg: KadResponseMsg,
-    ) -> Result<(), Box<KadResponseMsg>> {
+    ) -> Result<(), KadResponseMsg> {
         match std::mem::replace(
             self,
             InboundSubstreamState::Poisoned {
@@ -159,7 +159,7 @@ impl InboundSubstreamState {
             other => {
                 *self = other;
 
-                Err(Box::new(msg))
+                Err(msg)
             }
         }
     }
@@ -868,7 +868,7 @@ impl Handler {
             match state.try_answer_with(request_id, msg) {
                 Ok(()) => return,
                 Err(m) => {
-                    msg = *m;
+                    msg = m;
                 }
             }
         }
