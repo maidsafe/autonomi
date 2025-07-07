@@ -157,6 +157,8 @@ impl NetworkDriver {
             .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(KAD_QUERY_TIMEOUT)
             .set_periodic_bootstrap_interval(None);
+            // Note: set_substreams_timeout is not available in ant-kad
+            // This was used to extend outbound_substreams timeout for clients with poor connection
 
         // setup kad and autonomi requests as our behaviour
         let behaviour = AutonomiClientBehaviour {
