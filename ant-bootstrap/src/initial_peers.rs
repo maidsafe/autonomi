@@ -276,7 +276,7 @@ impl InitialPeersConfig {
                 std::fs::create_dir_all(dir)?;
             }
 
-            let path = dir.join(cache_file_name());
+            let path = dir.join(cache_file_name()); // todo: this ignores local network when bootstrap_cache_dir specified 
             Ok(Some(path))
         } else {
             Ok(None)

@@ -582,7 +582,7 @@ fn create_pointers_task(
                 let new_target =
                     PointerTarget::ChunkAddress(ChunkAddress::new(XorName(rand::random())));
                 loop {
-                    match client.pointer_update(owner, new_target.clone()).await {
+                    match client.pointer_update(owner, new_target.clone(), owner.public_key()).await {
                         Ok(_) => {
                             println!("Updated Pointer at {addr:?} with {old_target:?} to new target {new_target:?} after a delay of: {delay:?}");
                             pointer_addr = Some((addr.clone(), None, new_target));
@@ -610,7 +610,7 @@ fn create_pointers_task(
                     PointerTarget::ChunkAddress(ChunkAddress::new(XorName(rand::random())));
                 loop {
                     match client
-                        .pointer_create(&owner, pointer_target.clone(), (&wallet).into())
+                        .pointer_create(&owner, pointer_target.clone(), owner.public_key(), (&wallet).into())
                         .await
                     {
                         Ok((cost, addr)) => {

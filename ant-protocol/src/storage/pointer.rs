@@ -12,13 +12,15 @@ use serde::{Deserialize, Serialize};
 use xor_name::XorName;
 
 /// Pointer, a mutable address pointing to other data on the Network
-/// It is stored at the owner's public key and can only be updated by the owner
+/// It is stored at the address provided, but can only be updated by the owner
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Pointer {
     owner: PublicKey,
     counter: u64,
     target: PointerTarget,
     signature: Signature,
+    address: PublicKey,
+    previous_owner: PublicKey,
 }
 
 impl std::fmt::Debug for Pointer {
@@ -28,6 +30,7 @@ impl std::fmt::Debug for Pointer {
             .field("counter", &self.counter)
             .field("target", &self.target)
             .field("signature", &hex::encode(self.signature.to_bytes()))
+            .field("address", &self.address)
             .finish()
     }
 }
@@ -65,18 +68,20 @@ impl PointerTarget {
 
 impl Pointer {
     /// Create a new pointer, signing it with the provided secret key.
-    /// This pointer would be stored on the network at the provided key's public key.
+    /// This pointer would be stored on the network at the address key.
     /// There can only be one pointer at a time at the same address (one per key).
-    pub fn new(owner: &SecretKey, counter: u64, target: PointerTarget) -> Self {
-        let pubkey = owner.public_key();
-        let bytes_to_sign = Self::bytes_to_sign(&pubkey, counter, &target);
-        let signature = owner.sign(&bytes_to_sign);
-
+    pub fn new(owner: PublicKey, counter: u64, target: PointerTarget, address: PublicKey, signing_key: &SecretKey) -> Self {
+        let previous_owner = signing_key.public_key();
+        let bytes_to_sign = Self::bytes_to_sign(&owner, counter, &target, address, previous_owner);
+        let signature = signing_key.sign(&bytes_to_sign);
+        
         Self {
-            owner: pubkey,
+            owner,
             counter,
             target,
             signature,
+            address,
+            previous_owner,
         }
     }
 
@@ -86,17 +91,21 @@ impl Pointer {
         counter: u64,
         target: PointerTarget,
         signature: Signature,
+        address: PublicKey,
+        previous_owner: PublicKey,
     ) -> Self {
         Self {
             owner,
             counter,
             target,
             signature,
+            address,
+            previous_owner
         }
     }
 
     /// Get the bytes that the signature is calculated from
-    fn bytes_to_sign(owner: &PublicKey, counter: u64, target: &PointerTarget) -> Vec<u8> {
+    fn bytes_to_sign(owner: &PublicKey, counter: u64, target: &PointerTarget, address: PublicKey, previous_owner: PublicKey) -> Vec<u8> {
         // to support retrocompatibility with old pointers (u32 counter), we need to cast the counter to u32
         // the support is limited to counters under u32::MAX
         let counter_bytes: Vec<u8> = if counter > u32::MAX as u64 {
@@ -115,17 +124,24 @@ impl Pointer {
         if let Ok(target_bytes) = rmp_serde::to_vec(target) {
             bytes.extend_from_slice(&target_bytes);
         }
+        bytes.extend_from_slice(&address.to_bytes());
+        bytes.extend_from_slice(&previous_owner.to_bytes());
         bytes
     }
 
     /// Get the address of the pointer
     pub fn address(&self) -> PointerAddress {
-        PointerAddress::new(self.owner)
+        PointerAddress::new(self.address)
     }
 
     /// Get the owner of the pointer
     pub fn owner(&self) -> &PublicKey {
         &self.owner
+    }
+
+    /// Get the previous owner of the pointer
+    pub fn previous_owner(&self) -> &PublicKey {
+        &self.previous_owner
     }
 
     /// Get the target of the pointer
@@ -135,7 +151,7 @@ impl Pointer {
 
     /// Get the bytes that were signed for this pointer
     pub fn bytes_for_signature(&self) -> Vec<u8> {
-        Self::bytes_to_sign(&self.owner, self.counter, &self.target)
+        Self::bytes_to_sign(&self.owner, self.counter, &self.target, self.address, self.previous_owner)
     }
 
     pub fn xorname(&self) -> XorName {
@@ -151,7 +167,7 @@ impl Pointer {
     /// Verifies if the pointer has a valid signature
     pub fn verify_signature(&self) -> bool {
         let bytes = self.bytes_for_signature();
-        self.owner.verify(&self.signature, &bytes)
+        self.previous_owner.verify(&self.signature, &bytes)
     }
 
     /// Size of the pointer
@@ -170,16 +186,17 @@ mod tests {
         let counter = 1;
         let pk = SecretKey::random().public_key();
         let target = PointerTarget::GraphEntryAddress(GraphEntryAddress::new(pk));
+        let address = SecretKey::random().public_key();
 
         // Create and sign pointer
-        let pointer = Pointer::new(&owner_sk, counter, target.clone());
+        let pointer = Pointer::new(owner_sk.public_key(), counter, target.clone(), address, &owner_sk);
         assert!(pointer.verify_signature()); // Should be valid with correct signature
 
         // Create pointer with wrong signature
         let wrong_sk = SecretKey::random();
         let sig = wrong_sk.sign(pointer.bytes_for_signature());
         let wrong_pointer =
-            Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig);
+            Pointer::new_with_signature(owner_sk.public_key(), counter, target.clone(), sig, address, owner_sk.public_key());
         assert!(!wrong_pointer.verify_signature()); // Should be invalid with wrong signature
     }
 
@@ -238,7 +255,7 @@ mod tests {
 
         // Serialize the new pointer format
         let new_pointer =
-            Pointer::new(&sk, 42, PointerTarget::ChunkAddress(ChunkAddress::new(xor)));
+            Pointer::new(sk.public_key(), 42, PointerTarget::ChunkAddress(ChunkAddress::new(xor)), sk.public_key(), &sk);
 
         // Serialize the new pointer format
         let serialized_new =

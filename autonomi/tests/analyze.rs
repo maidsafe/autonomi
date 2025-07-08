@@ -132,7 +132,7 @@ async fn test_analyze_pointer() -> Result<()> {
 
     let target_addr = GraphEntryAddress::from_hex("b6f6ca699551882e2306ad9045e35c8837a3b99810af55ed358efe7166b7f6b4213ded09b200465f25d5d013fc7c35f9")?;
     let key = bls::SecretKey::random();
-    let pointer = Pointer::new(&key, 0, PointerTarget::GraphEntryAddress(target_addr));
+    let pointer = Pointer::new(&key, 0, PointerTarget::GraphEntryAddress(target_addr), key.public_key());
     let (_cost, addr) = client.pointer_put(pointer.clone(), payment_option).await?;
     let pointer_addr = addr.to_hex();
     println!("Pointer: {pointer_addr}");
