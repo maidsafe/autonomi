@@ -8,15 +8,16 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use super::{download_and_get_upgrade_bin_path, print_upgrade_summary};
+use super::download_and_get_upgrade_bin_path;
 use crate::{
-    ServiceManager, VerbosityLevel,
+    VerbosityLevel,
     add_services::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
+    batch_service_manager::BatchServiceManager,
     config::{self, is_running_as_root},
-    helpers::{download_and_extract_release, get_bin_version, summarise_any_failed_ops},
+    helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report,
 };
 use ant_bootstrap::InitialPeersConfig;
@@ -24,13 +25,12 @@ use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
-    NodeRegistryManager, NodeService, NodeServiceData, ServiceStateActions, ServiceStatus,
-    UpgradeOptions, UpgradeResult,
+    NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus, UpgradeOptions,
     control::{ServiceControl, ServiceController},
     metric::MetricsClient,
     rpc::RpcClient,
 };
-use color_eyre::{Help, Result, eyre::eyre};
+use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
@@ -230,36 +230,10 @@ pub async fn remove(
         return Ok(());
     }
 
-    let mut failed_services = Vec::new();
-    for node in &services_for_ops {
-        let service_name = node.read().await.service_name.clone();
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(rpc_client),
-            Box::new(metrics_client),
-        );
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        match service_manager.remove(keep_directories).await {
-            Ok(()) => {
-                debug!("Removed service {service_name}");
-                node_registry.save().await?;
-            }
-            Err(err) => {
-                error!("Failed to remove service {service_name}: {err}");
-                failed_services.push((service_name.clone(), err.to_string()))
-            }
-        }
-    }
-
-    summarise_any_failed_ops(failed_services, "remove", verbosity)
+    let batch_manager =
+        get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
+            .await;
+    batch_manager.remove_all(keep_directories).await
 }
 
 pub async fn reset(
@@ -328,90 +302,10 @@ pub async fn start(
         }
         return Ok(());
     }
-    let mut failed_services = Vec::new();
-
-    // First start all the services.
-    for node in services_for_ops.iter() {
-        let service_name = node.read().await.service_name.clone();
-        let user_mode = node.read().await.user_mode;
-
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
-
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(rpc_client),
-            Box::new(metrics_client),
-        );
-        let service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-
-        info!("Attempting to start service: {service_name}");
-        if verbosity != VerbosityLevel::Minimal {
-            println!("Starting {service_name}...");
-        }
-
-        if service_manager.service.status().await != ServiceStatus::Running {
-            // It would be possible here to check if the service *is* running and then just
-            // continue without applying the delay. The reason for not doing so is because when
-            // `start` is called below, the user will get a message to say the service was already
-            // started, which I think is useful behaviour to retain.
-            debug!("Sleeping for {} milliseconds", fixed_interval);
-            std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
-        }
-
-        match service_manager
-            .service_control
-            .start(&service_name, user_mode)
-        {
-            Ok(_) => {
-                info!("Started service {service_name}");
-            }
-            Err(err) => {
-                error!("Failed to start service {service_name}: {}", err);
-                failed_services.push((service_name.clone(), err.to_string()));
-            }
-        };
-    }
-
-    // Now we wait for the nodes to be started.
-    for node in &services_for_ops {
-        let service_name = node.read().await.service_name.clone();
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(rpc_client),
-            Box::new(metrics_client),
-        );
-
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-
-        match service_manager.start().await {
-            Ok(start_duration) => {
-                debug!("Started service {service_name} in {start_duration:?}");
-
-                node_registry.save().await?;
-            }
-            Err(err) => {
-                error!("Failed to start service {service_name}: {err}");
-                failed_services.push((service_name.clone(), err.to_string()))
-            }
-        }
-    }
-
-    summarise_any_failed_ops(failed_services, "start", verbosity)
+    let batch_manager =
+        get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
+            .await;
+    batch_manager.start_all(fixed_interval).await
 }
 
 pub async fn status(
@@ -469,43 +363,10 @@ pub async fn stop(
         return Ok(());
     }
 
-    let mut failed_services = Vec::new();
-    for node in services_for_ops.iter() {
-        let service_name = node.read().await.service_name.clone();
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(rpc_client),
-            Box::new(metrics_client),
-        );
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-
-        if service_manager.service.status().await == ServiceStatus::Running
-            && let Some(interval) = interval
-        {
-            debug!("Sleeping for {} milliseconds", interval);
-            std::thread::sleep(std::time::Duration::from_millis(interval));
-        }
-        match service_manager.stop().await {
-            Ok(()) => {
-                debug!("Stopped service {service_name}");
-                node_registry.save().await?;
-            }
-            Err(err) => {
-                error!("Failed to stop service {service_name}: {err}");
-                failed_services.push((service_name.clone(), err.to_string()))
-            }
-        }
-    }
-
-    summarise_any_failed_ops(failed_services, "stop", verbosity)
+    let batch_manager =
+        get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
+            .await;
+    batch_manager.stop_all(interval).await
 }
 
 pub async fn upgrade(
@@ -579,80 +440,27 @@ pub async fn upgrade(
             return Ok(());
         }
     }
+    let env_variables = if provided_env_variables.is_some() {
+        provided_env_variables.clone()
+    } else {
+        node_registry.environment_variables.read().await.clone()
+    };
+    let options = UpgradeOptions {
+        auto_restart: false,
+        env_variables: env_variables.clone(),
+        force: use_force,
+        start_service: !do_not_start,
+        target_bin_path: upgrade_bin_path.clone(),
+        target_version: target_version.clone(),
+    };
 
     let services_for_ops = get_services_for_ops(&node_registry, peer_ids, service_names).await?;
     trace!("services_for_ops len: {}", services_for_ops.len());
-    let mut upgrade_summary = Vec::new();
 
-    for node in &services_for_ops {
-        let env_variables = if provided_env_variables.is_some() {
-            provided_env_variables.clone()
-        } else {
-            node_registry.environment_variables.read().await.clone()
-        };
-        let options = UpgradeOptions {
-            auto_restart: false,
-            env_variables: env_variables.clone(),
-            force: use_force,
-            start_service: !do_not_start,
-            target_bin_path: upgrade_bin_path.clone(),
-            target_version: target_version.clone(),
-        };
-        let service_name = node.read().await.service_name.clone();
-
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(rpc_client),
-            Box::new(metrics_client),
-        );
-
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-
-        match service_manager.upgrade(options).await {
-            Ok(upgrade_result) => {
-                info!("Service: {service_name} has been upgraded, result: {upgrade_result:?}",);
-                if upgrade_result != UpgradeResult::NotRequired {
-                    // It doesn't seem useful to apply the fixed_interval if there was no upgrade
-                    // required for the previous service.
-                    debug!("Sleeping for {fixed_interval} milliseconds",);
-                    std::thread::sleep(std::time::Duration::from_millis(fixed_interval));
-                }
-                upgrade_summary.push((service_name.clone(), upgrade_result));
-                node_registry.save().await?;
-            }
-            Err(err) => {
-                error!("Error upgrading service {service_name}: {err}");
-                upgrade_summary.push((
-                    service_name.clone(),
-                    UpgradeResult::Error(format!("Error: {err}")),
-                ));
-                node_registry.save().await?;
-            }
-        }
-    }
-
-    if verbosity != VerbosityLevel::Minimal {
-        print_upgrade_summary(upgrade_summary.clone());
-    }
-
-    if upgrade_summary.iter().any(|(_, r)| {
-        matches!(r, UpgradeResult::Error(_))
-            || matches!(r, UpgradeResult::UpgradedButNotStarted(_, _, _))
-    }) {
-        return Err(eyre!("There was a problem upgrading one or more nodes").suggestion(
-            "For any services that were upgraded but did not start, you can attempt to start them \
-                again using the 'start' command."));
-    }
-
-    Ok(())
+    let batch_manager =
+        get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
+            .await;
+    batch_manager.upgrade_all(options, fixed_interval).await
 }
 
 /// Ensure n nodes are running by stopping nodes or by adding and starting nodes if required.
@@ -913,4 +721,34 @@ async fn get_services_for_ops(
     }
 
     Ok(services)
+}
+
+async fn get_batch_manager_from_service_data(
+    node_registry: NodeRegistryManager,
+
+    service_data: Vec<Arc<RwLock<NodeServiceData>>>,
+    verbosity: VerbosityLevel,
+) -> BatchServiceManager<NodeService> {
+    let mut services = Vec::new();
+    for node in service_data {
+        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .expect("TEMP: metrics port is required"),
+        );
+        let service = NodeService::new(
+            Arc::clone(&node),
+            Box::new(rpc_client),
+            Box::new(metrics_client),
+        );
+        services.push(service);
+    }
+    BatchServiceManager::new(
+        services,
+        Box::new(ServiceController {}),
+        node_registry,
+        verbosity,
+    )
 }
