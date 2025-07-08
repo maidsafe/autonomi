@@ -9174,7 +9174,6 @@ dependencies = [
  "color-eyre",
  "dirs-next",
  "evmlib",
- "eyre",
  "libp2p",
  "rand 0.8.5",
  "serde",

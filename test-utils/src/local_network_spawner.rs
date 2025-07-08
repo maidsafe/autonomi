@@ -1,8 +1,8 @@
 use ant_bootstrap::InitialPeersConfig;
 use ant_node::spawn::network_spawner::{NetworkSpawner, RunningNetwork};
 use autonomi::{Client, ClientConfig};
+use color_eyre::Result;
 use evmlib::{testnet::Testnet, wallet::Wallet, Network};
-use eyre::Result;
 
 /// Default number of nodes to spawn in a local network
 pub const DEFAULT_LOCAL_NETWORK_SIZE: usize = 25;

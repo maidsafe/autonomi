@@ -23,7 +23,6 @@ use libp2p::{
 };
 use std::time::Instant;
 use tokio::time::Duration;
-use tracing::Instrument;
 
 use super::NodeEvent;
 

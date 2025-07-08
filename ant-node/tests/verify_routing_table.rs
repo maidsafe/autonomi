@@ -23,8 +23,6 @@ use std::{
     time::Duration,
 };
 use test_utils::local_network_spawner::spawn_local_network;
-use tracing::{error, info, trace};
-use tonic::Request;
 use tracing::{error, info, trace, warn};
 
 /// Sleep for some time for the nodes to discover each other before verification.

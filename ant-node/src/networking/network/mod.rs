@@ -472,8 +472,7 @@ pub(crate) fn send_local_swarm_cmd(
         if let Err(error) = swarm_cmd_sender.send(cmd).await {
             error!("Failed to send SwarmCmd: {}", error);
         }
-        .instrument(tracing::Span::current()),
-    );
+    });
 }
 
 // A standard way to log connection id & the action performed on it.

@@ -12,6 +12,7 @@ use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::Client;
 use eyre::Result;
+use serial_test::serial;
 use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -187,8 +188,14 @@ async fn file_advanced_use() -> Result<()> {
 async fn archives_use_paths_with_forward_slashes() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
+    // TODO: Remove this once the spawned network is tested
+    // let client = Client::init_local().await?;
+    // let wallet = get_funded_wallet();
 
     let (_cost, pub_archive) = client
         .dir_content_upload_public("tests/file/test_dir".into(), (&wallet).into())

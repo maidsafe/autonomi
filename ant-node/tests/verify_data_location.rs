@@ -11,14 +11,10 @@
 mod common;
 
 use ant_logging::LogBuilder;
-use ant_networking::{sleep, sort_peers_by_key};
 use ant_node::{
+    sort_peers_by_key,
     spawn::{network_spawner::RunningNetwork, node_spawner::NodeSpawner},
     RunningNode,
-use ant_node::sort_peers_by_key;
-use ant_protocol::{
-    antnode_proto::{NodeInfoRequest, RecordAddressesRequest},
-    NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
 use autonomi::Client;
@@ -131,7 +127,7 @@ async fn verify_data_location() -> Result<()> {
             );
             let mut initial_peers: Vec<Multiaddr> = vec![];
             nodes.clone().shutdown();
-            sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_secs(1)).await;
 
             for peer in ant_network.running_nodes() {
                 if let Ok(listen_addrs_with_peer_id) = peer.get_listen_addrs_with_peer_id().await {
@@ -149,7 +145,7 @@ async fn verify_data_location() -> Result<()> {
                 .with_root_dir(None)
                 .spawn()
                 .await?;
-            sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(2)).await;
             let new_peer_id = node.peer_id();
             println!("A new Node joined the network with peer_id {new_peer_id:?}");
             restarted_nodes.push(node.clone());

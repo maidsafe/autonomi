@@ -28,7 +28,6 @@ use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
 use tokio::time::sleep;
 use tokio::time::Duration;
-use tracing::Instrument;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 const TO_MB: u64 = 1_000_000;
@@ -320,9 +319,9 @@ impl NetworkMetricsRecorder {
                         / 10000.0;
                     let _ = process_cpu_usage_percentage.set(cpu_usage);
                 }
+                sleep(UPDATE_INTERVAL).await;
             }
-            .instrument(tracing::Span::current()),
-        );
+        });
     }
 
     // Records the metric
@@ -343,8 +342,7 @@ impl NetworkMetricsRecorder {
                     {
                         error!("Failed to send shunned report via notifier: {err:?}");
                     }
-                    .instrument(tracing::Span::current()),
-                );
+                });
             }
             Marker::QuotingMetrics { quoting_metrics } => {
                 let _ = self.relevant_records.set(
@@ -376,8 +374,7 @@ impl NetworkMetricsRecorder {
             {
                 error!("Failed to send shunned report via notifier: {err:?}");
             }
-            .instrument(tracing::Span::current()),
-        );
+        });
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {

@@ -52,7 +52,6 @@ use tokio::{
     sync::mpsc::Receiver,
     task::{spawn, JoinSet},
 };
-use tracing::Instrument;
 
 /// Interval to trigger replication of all records to all peers.
 /// This is the max time it should take. Minimum interval at any node will be half this
@@ -281,18 +280,9 @@ impl Node {
 
         let peers_connected = Arc::new(AtomicUsize::new(0));
 
-        // Capture the current span to propagate to spawned tasks
-        let current_span = tracing::Span::current();
-
-        // Propagate span to swarm driver task
-        let _swarm_driver_task = spawn(swarm_driver.run(shutdown_rx.clone()).in_current_span());
-
-        // Propagate span to node task
-        let node_span = current_span.clone();
         let _node_task = spawn(async move {
-            let _guard = node_span.enter(); // Enter span in spawned task
-                                            // use a random inactivity timeout to ensure that the nodes do not sync when messages
-                                            // are being transmitted.
+            // use a random activity timeout to ensure that the nodes do not sync when messages
+            // are being transmitted.
             let replication_interval: u64 = rng.gen_range(
                 PERIODIC_REPLICATION_INTERVAL_MAX_S / 2..PERIODIC_REPLICATION_INTERVAL_MAX_S,
             );
@@ -366,7 +356,7 @@ impl Node {
                         let _handle = spawn(async move {
                             Self::try_interval_replication(network);
                             trace!("Periodic replication took {:?}", start.elapsed());
-                        }.instrument(tracing::Span::current()));
+                        });
                     }
                     _ = uptime_metrics_update_interval.tick() => {
                         #[cfg(feature = "open-metrics")]
