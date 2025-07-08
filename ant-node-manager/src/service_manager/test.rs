@@ -5505,7 +5505,7 @@ async fn upgrade_should_retain_write_older_cache_files() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -5573,17 +5573,6 @@ async fn upgrade_should_retain_write_older_cache_files() -> Result<()> {
         .with(eq(current_node_bin.to_path_buf().clone()))
         .times(1)
         .returning(|_| Ok(100));
-
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
 
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
