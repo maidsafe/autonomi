@@ -5878,6 +5878,11 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
         .times(1)
         .returning(|| Ok(8081))
         .in_sequence(&mut seq);
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
 
     let install_ctx = InstallNodeServiceCtxBuilder {
         alpha: false,
@@ -5898,7 +5903,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: Some(6001),
         network_id: None,
         name: "antnode1".to_string(),
         node_ip: None,

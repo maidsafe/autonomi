@@ -28,7 +28,7 @@ pub struct BatchServiceManager<T: ServiceStateActions + Send> {
 }
 
 impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
-    pub async fn new(
+    pub fn new(
         services: Vec<T>,
         service_control: Box<dyn ServiceControl>,
         node_registry: NodeRegistryManager,

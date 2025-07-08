@@ -76,12 +76,7 @@ mock! {
 async fn start_should_start_a_newly_installed_service() -> Result<()> {
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
+    let mock_metrics_client = MockMetricsClient::new();
 
     mock_service_control
         .expect_start()
@@ -99,10 +94,6 @@ async fn start_should_start_a_newly_installed_service() -> Result<()> {
         .times(1)
         .returning(|_| Ok(1000));
 
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 1000,
@@ -206,12 +197,7 @@ async fn start_should_start_a_newly_installed_service() -> Result<()> {
 async fn start_should_start_a_stopped_service() -> Result<()> {
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
+    let mock_metrics_client = MockMetricsClient::new();
 
     mock_service_control
         .expect_start()
@@ -229,10 +215,6 @@ async fn start_should_start_a_stopped_service() -> Result<()> {
         .times(1)
         .returning(|_| Ok(1000));
 
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 1000,
@@ -416,12 +398,7 @@ async fn start_should_not_attempt_to_start_a_running_service() -> Result<()> {
 async fn start_should_start_a_service_marked_as_running_but_had_since_stopped() -> Result<()> {
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
+    let mock_metrics_client = MockMetricsClient::new();
 
     mock_service_control
         .expect_get_process_pid()
@@ -448,10 +425,6 @@ async fn start_should_start_a_service_marked_as_running_but_had_since_stopped() 
         .times(1)
         .returning(|_| Ok(1000));
 
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 1000,
@@ -643,12 +616,7 @@ async fn start_should_return_an_error_if_the_process_was_not_found() -> Result<(
 async fn start_should_start_a_user_mode_service() -> Result<()> {
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
+    let mock_metrics_client = MockMetricsClient::new();
 
     mock_service_control
         .expect_start()
@@ -666,10 +634,6 @@ async fn start_should_start_a_user_mode_service() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 1000,
@@ -1130,7 +1094,7 @@ async fn upgrade_should_upgrade_a_service_to_a_new_version() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -1173,16 +1137,6 @@ async fn upgrade_should_upgrade_a_service_to_a_new_version() -> Result<()> {
         .times(1)
         .returning(|_| Ok(2000));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -1399,7 +1353,7 @@ async fn upgrade_should_downgrade_to_a_previous_version_if_force_is_used() -> Re
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -1442,16 +1396,6 @@ async fn upgrade_should_downgrade_to_a_previous_version_if_force_is_used() -> Re
         .times(1)
         .returning(|_| Ok(2000));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -1578,7 +1522,7 @@ async fn upgrade_should_upgrade_and_not_start_the_service() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -1605,11 +1549,6 @@ async fn upgrade_should_upgrade_and_not_start_the_service() -> Result<()> {
         .returning(|_, _| Ok(()));
 
     // after service restart
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(0)
-        .returning(|_| Ok(()));
     mock_service_control
         .expect_start()
         .with(eq("antnode1"), eq(false))
@@ -1749,7 +1688,7 @@ async fn upgrade_should_return_upgraded_but_not_started_if_service_did_not_start
 
     let mut mock_service_control = MockServiceControl::new();
     let mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -1795,11 +1734,6 @@ async fn upgrade_should_return_upgraded_but_not_started_if_service_did_not_start
                 current_node_bin_str.clone(),
             ))
         });
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(0)
-        .returning(|_| Ok(()));
 
     let service_data = NodeServiceData {
         alpha: false,
@@ -1897,7 +1831,7 @@ async fn upgrade_should_upgrade_a_service_in_user_mode() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -1940,16 +1874,6 @@ async fn upgrade_should_upgrade_a_service_in_user_mode() -> Result<()> {
         .times(1)
         .returning(|_| Ok(2000));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -2076,7 +2000,7 @@ async fn upgrade_should_retain_the_first_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -2143,16 +2067,6 @@ async fn upgrade_should_retain_the_first_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -2263,7 +2177,7 @@ async fn upgrade_should_retain_the_peers_arg() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -2333,16 +2247,6 @@ async fn upgrade_should_retain_the_peers_arg() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -2456,7 +2360,7 @@ async fn upgrade_should_retain_the_network_id_arg() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -2524,16 +2428,6 @@ async fn upgrade_should_retain_the_network_id_arg() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -2637,7 +2531,7 @@ async fn upgrade_should_retain_the_local_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -2704,16 +2598,6 @@ async fn upgrade_should_retain_the_local_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -2824,7 +2708,7 @@ async fn upgrade_should_retain_the_network_contacts_url_arg() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -2894,16 +2778,6 @@ async fn upgrade_should_retain_the_network_contacts_url_arg() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3020,7 +2894,7 @@ async fn upgrade_should_retain_the_ignore_cache_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -3087,16 +2961,6 @@ async fn upgrade_should_retain_the_ignore_cache_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3207,7 +3071,7 @@ async fn upgrade_should_retain_the_custom_bootstrap_cache_path() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -3275,16 +3139,6 @@ async fn upgrade_should_retain_the_custom_bootstrap_cache_path() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3402,7 +3256,7 @@ async fn upgrade_should_retain_the_no_upnp_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -3469,16 +3323,6 @@ async fn upgrade_should_retain_the_no_upnp_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3582,7 +3426,7 @@ async fn upgrade_should_retain_the_log_format_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -3650,16 +3494,6 @@ async fn upgrade_should_retain_the_log_format_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3764,7 +3598,7 @@ async fn upgrade_should_retain_the_relay_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -3831,16 +3665,6 @@ async fn upgrade_should_retain_the_relay_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -3944,7 +3768,7 @@ async fn upgrade_should_retain_the_reachability_check_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4011,16 +3835,6 @@ async fn upgrade_should_retain_the_reachability_check_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -4125,7 +3939,7 @@ async fn upgrade_should_retain_custom_node_ip() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4193,16 +4007,6 @@ async fn upgrade_should_retain_custom_node_ip() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -4306,7 +4110,7 @@ async fn upgrade_should_retain_custom_node_ports() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4374,16 +4178,6 @@ async fn upgrade_should_retain_custom_node_ports() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -4487,7 +4281,7 @@ async fn upgrade_should_retain_max_archived_log_files() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4555,16 +4349,6 @@ async fn upgrade_should_retain_max_archived_log_files() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -4668,7 +4452,7 @@ async fn upgrade_should_retain_max_log_files() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4736,16 +4520,6 @@ async fn upgrade_should_retain_max_log_files() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -4849,7 +4623,7 @@ async fn upgrade_should_retain_custom_metrics_ports() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -4917,15 +4691,6 @@ async fn upgrade_should_retain_custom_metrics_ports() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -5029,7 +4794,7 @@ async fn upgrade_should_retain_custom_rpc_ports() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -5097,16 +4862,6 @@ async fn upgrade_should_retain_custom_rpc_ports() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -5213,7 +4968,7 @@ async fn upgrade_should_retain_auto_restart() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -5278,15 +5033,7 @@ async fn upgrade_should_retain_auto_restart() -> Result<()> {
         .with(eq(current_node_bin.to_path_buf().clone()))
         .times(1)
         .returning(|_| Ok(100));
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .times(1)
-        .returning(|_| Ok(()));
 
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -5390,7 +5137,7 @@ async fn upgrade_should_retain_evm_network_settings() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -5462,16 +5209,6 @@ async fn upgrade_should_retain_evm_network_settings() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -5584,7 +5321,7 @@ async fn upgrade_should_retain_the_rewards_address() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -5656,16 +5393,6 @@ async fn upgrade_should_retain_the_rewards_address() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
@@ -6363,7 +6090,7 @@ async fn upgrade_should_retain_the_alpha_flag() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
     let mut mock_rpc_client = MockRpcClient::new();
-    let mut mock_metrics_client = MockMetricsClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
 
     // before binary upgrade
     mock_service_control
@@ -6430,16 +6157,6 @@ async fn upgrade_should_retain_the_alpha_flag() -> Result<()> {
         .times(1)
         .returning(|_| Ok(100));
 
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
-
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .times(1)
-        .returning(|_| Ok(()));
     mock_rpc_client.expect_node_info().times(1).returning(|| {
         Ok(NodeInfo {
             pid: 2000,
