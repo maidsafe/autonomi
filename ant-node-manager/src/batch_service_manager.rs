@@ -43,7 +43,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     }
 
     /// Starts all the services in the batch with a fixed interval between each start.
-    pub async fn start_all(&mut self, fixed_interval: u64) -> color_eyre::Result<()> {
+    pub async fn start_all(&self, fixed_interval: u64) -> color_eyre::Result<()> {
         let batch_result = self
             .start_all_inner(fixed_interval, Default::default())
             .await;
@@ -55,11 +55,18 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         batch_result.summarise("start", self.verbosity)
     }
 
-    pub async fn stop_all(&mut self) -> color_eyre::Result<()> {
+    pub async fn stop_all(&self, interval: Option<u64>) -> color_eyre::Result<()> {
         let mut batch_result = BatchResult::default();
 
         for service in &self.services {
             let service_name = service.name().await.clone();
+            if service.status().await == ServiceStatus::Running {
+                if let Some(interval) = interval {
+                    debug!("Sleeping for {interval} milliseconds before stopping service {service_name}");
+                    std::thread::sleep(std::time::Duration::from_millis(interval));
+                }
+            }
+
             match Self::stop(service, self.service_control.as_ref(), self.verbosity).await {
                 Ok(()) => {
                     info!("Stopped service {service_name}");
@@ -80,7 +87,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     }
 
     pub async fn upgrade_all(
-        &mut self,
+        &self,
         options: UpgradeOptions,
         fixed_interval: u64,
     ) -> color_eyre::Result<()> {
