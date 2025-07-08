@@ -14,7 +14,8 @@ use crate::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
-    batch_service_manager::BatchServiceManager,
+    batch_service_manager::{summarise_batch_result, BatchServiceManager},
+    cmd::print_upgrade_summary,
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report, VerbosityLevel,
@@ -29,7 +30,7 @@ use ant_service_management::{
     rpc::RpcClient,
     NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus, UpgradeOptions,
 };
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{eyre::eyre, Result, Section};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
@@ -230,7 +231,8 @@ pub async fn remove(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await;
-    batch_manager.remove_all(keep_directories).await
+    let batch_result = batch_manager.remove_all(keep_directories).await;
+    summarise_batch_result(&batch_result, "remove", verbosity)
 }
 
 pub async fn reset(
@@ -302,7 +304,8 @@ pub async fn start(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await;
-    batch_manager.start_all(fixed_interval).await
+    let batch_result = batch_manager.start_all(fixed_interval).await;
+    summarise_batch_result(&batch_result, "start", verbosity)
 }
 
 pub async fn status(
@@ -363,7 +366,8 @@ pub async fn stop(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await;
-    batch_manager.stop_all(interval).await
+    let batch_result = batch_manager.stop_all(interval).await;
+    summarise_batch_result(&batch_result, "stop", verbosity)
 }
 
 pub async fn upgrade(
@@ -457,7 +461,28 @@ pub async fn upgrade(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await;
-    batch_manager.upgrade_all(options, fixed_interval).await
+    let (batch_result, upgrade_summary) = batch_manager.upgrade_all(options, fixed_interval).await;
+
+    if verbosity != VerbosityLevel::Minimal {
+        print_upgrade_summary(upgrade_summary.clone());
+    }
+
+    // dont return error from here.
+    let _result = summarise_batch_result(&batch_result, "upgrade", verbosity);
+
+    // Check if there were any upgrade failures
+    if upgrade_summary.iter().any(|(_, r)| {
+        matches!(r, ant_service_management::UpgradeResult::Error(_))
+            || matches!(
+                r,
+                ant_service_management::UpgradeResult::UpgradedButNotStarted(_, _, _)
+            )
+    }) {
+        return Err(color_eyre::eyre::eyre!("There was a problem upgrading one or more nodes")
+            .suggestion("For any services that were upgraded but did not start, you can attempt to start them again using the 'start' command."));
+    }
+
+    Ok(())
 }
 
 /// Ensure n nodes are running by stopping nodes or by adding and starting nodes if required.
