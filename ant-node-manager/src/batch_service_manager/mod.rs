@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{VerbosityLevel, cmd::print_upgrade_summary, error::Error};
+use crate::{VerbosityLevel, error::Error};
 use ant_service_management::{
     Error as ServiceError, NodeRegistryManager, ServiceStateActions, ServiceStatus, UpgradeOptions,
     UpgradeResult, control::ServiceControl,
 };
-use color_eyre::{Section, eyre::eyre};
+use color_eyre::eyre::eyre;
 use colored::Colorize;
 use semver::Version;
 use std::collections::{HashMap, HashSet};
@@ -43,7 +43,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     }
 
     /// Starts all the services in the batch with a fixed interval between each start.
-    pub async fn start_all(&self, fixed_interval: u64) -> color_eyre::Result<()> {
+    pub async fn start_all(&self, fixed_interval: u64) -> BatchResult {
         let batch_result = self
             .start_all_inner(fixed_interval, Default::default())
             .await;
@@ -52,10 +52,10 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             error!("Failed to start one or more services: {batch_result:?}");
         }
 
-        batch_result.summarise("start", self.verbosity)
+        batch_result
     }
 
-    pub async fn stop_all(&self, interval: Option<u64>) -> color_eyre::Result<()> {
+    pub async fn stop_all(&self, interval: Option<u64>) -> BatchResult {
         let mut batch_result = BatchResult::default();
 
         for service in &self.services {
@@ -72,7 +72,15 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             match Self::stop(service, self.service_control.as_ref(), self.verbosity).await {
                 Ok(()) => {
                     info!("Stopped service {service_name}");
-                    self.node_registry.save().await?;
+                    if let Err(err) = self.node_registry.save().await {
+                        error!(
+                            "Failed to save node registry after stopping service {service_name}: {err}"
+                        );
+                    }
+
+                    if self.verbosity != VerbosityLevel::Minimal {
+                        println!("{} Service {service_name} was stopped", "✓".green());
+                    }
                 }
                 Err(err) => {
                     error!("Failed to stop service {service_name}: {err}");
@@ -82,17 +90,18 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             }
         }
 
-        self.node_registry.save().await?;
+        if let Err(err) = self.node_registry.save().await {
+            error!("Failed to save node registry after stopping all services: {err}");
+        }
 
-        batch_result.summarise("stop", self.verbosity)?;
-        Ok(())
+        batch_result
     }
 
     pub async fn upgrade_all(
         &self,
         options: UpgradeOptions,
         fixed_interval: u64,
-    ) -> color_eyre::Result<()> {
+    ) -> (BatchResult, HashMap<String, UpgradeResult>) {
         let mut skip_services = HashSet::new();
         let mut batch_result = BatchResult::default();
         let mut upgrade_summary: HashMap<String, UpgradeResult> = HashMap::new();
@@ -126,14 +135,21 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             }
         }
 
-        let batch_result = self
+        let start_batch_result = self
             .start_all_inner(fixed_interval, skip_services.clone())
             .await;
 
+        // Merge the start errors into the main batch result
+        for (service_name, errors) in start_batch_result.errors {
+            for error in errors {
+                batch_result.insert_error(service_name.clone(), error);
+            }
+        }
+
         if !batch_result.errors.is_empty() {
-            info!("All services have been started after upgrade.");
-        } else {
             error!("Failed to start one or more services after upgrade: {batch_result:?}");
+        } else {
+            info!("All services have been started after upgrade.");
         }
 
         for service in &self.services {
@@ -183,23 +199,10 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             error!("Failed to save node registry after setting new version post upgrade: {err}");
         }
 
-        if self.verbosity != VerbosityLevel::Minimal {
-            print_upgrade_summary(upgrade_summary.clone());
-        }
-
-        if upgrade_summary.iter().any(|(_, r)| {
-            matches!(r, UpgradeResult::Error(_))
-                || matches!(r, UpgradeResult::UpgradedButNotStarted(_, _, _))
-        }) {
-            return Err(eyre!("There was a problem upgrading one or more nodes").suggestion(
-            "For any services that were upgraded but did not start, you can attempt to start them \
-                again using the 'start' command."));
-        }
-
-        Ok(())
+        (batch_result, upgrade_summary)
     }
 
-    pub async fn remove_all(&self, keep_directories: bool) -> color_eyre::Result<()> {
+    pub async fn remove_all(&self, keep_directories: bool) -> BatchResult {
         let mut batch_result = BatchResult::default();
 
         for service in &self.services {
@@ -289,7 +292,11 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 let data_dir_path = service.data_dir_path().await;
                 if data_dir_path.exists() {
                     debug!("Removing data directory {data_dir_path:?}");
-                    std::fs::remove_dir_all(data_dir_path)?;
+                    if let Err(err) = std::fs::remove_dir_all(&data_dir_path) {
+                        error!("Failed to remove data directory {data_dir_path:?}: {err}");
+                        batch_result.insert_error(service_name.clone(), err.into());
+                        continue;
+                    }
                 }
                 let log_dir_path = service.log_dir_path().await;
 
@@ -318,7 +325,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             error!("Failed to save node registry after removing all services: {err}");
         }
 
-        batch_result.summarise("remove", self.verbosity)
+        batch_result
     }
 
     async fn start_all_inner(
@@ -578,7 +585,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 }
 
 #[derive(Default, Debug)]
-struct BatchResult {
+pub struct BatchResult {
     errors: std::collections::HashMap<String, Vec<crate::error::Error>>,
 }
 
@@ -593,7 +600,7 @@ impl BatchResult {
             .is_some_and(|errors| !errors.is_empty())
     }
 
-    fn get_errors(&self, service_name: &str) -> Option<&crate::error::Error> {
+    pub fn get_errors(&self, service_name: &str) -> Option<&crate::error::Error> {
         self.errors.get(service_name).and_then(|errors| {
             if errors.is_empty() {
                 None
@@ -603,29 +610,34 @@ impl BatchResult {
             }
         })
     }
+}
 
-    fn summarise(&self, verb: &str, verbosity: VerbosityLevel) -> color_eyre::Result<()> {
-        let failed_services: Vec<(String, String)> = self
-            .errors
-            .iter()
-            .flat_map(|(service_name, errors)| {
-                errors
-                    .iter()
-                    .map(move |error| (service_name.clone(), error.to_string()))
-            })
-            .collect();
+/// Summarise the batch result and print errors if any
+pub fn summarise_batch_result(
+    batch_result: &BatchResult,
+    verb: &str,
+    verbosity: VerbosityLevel,
+) -> color_eyre::Result<()> {
+    let failed_services: Vec<(String, String)> = batch_result
+        .errors
+        .iter()
+        .flat_map(|(service_name, errors)| {
+            errors
+                .iter()
+                .map(move |error| (service_name.clone(), error.to_string()))
+        })
+        .collect();
 
-        if !failed_services.is_empty() {
-            if verbosity != VerbosityLevel::Minimal {
-                println!("Failed to {verb} {} service(s):", failed_services.len());
-                for failed in failed_services.iter() {
-                    println!("{} {}: {}", "✕".red(), failed.0, failed.1);
-                }
+    if !failed_services.is_empty() {
+        if verbosity != VerbosityLevel::Minimal {
+            println!("Failed to {verb} {} service(s):", failed_services.len());
+            for failed in failed_services.iter() {
+                println!("{} {}: {}", "✕".red(), failed.0, failed.1);
             }
-
-            error!("Failed to {verb} one or more services");
-            return Err(eyre!("Failed to {verb} one or more services"));
         }
-        Ok(())
+
+        error!("Failed to {verb} one or more services");
+        return Err(eyre!("Failed to {verb} one or more services"));
     }
+    Ok(())
 }
