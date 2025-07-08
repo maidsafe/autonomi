@@ -6,6 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{VerbosityLevel, error::Error};
 use ant_service_management::{
     Error as ServiceError, NodeRegistryManager, ServiceStateActions, ServiceStatus, UpgradeOptions,
