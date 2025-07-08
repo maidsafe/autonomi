@@ -21,7 +21,7 @@ use test_utils::evm::get_funded_wallet;
 #[tokio::test]
 #[serial]
 async fn graph_entry_put() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("graph_entry", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

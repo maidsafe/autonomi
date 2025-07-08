@@ -103,8 +103,7 @@ async fn pay_for_content_addresses(
 // Example of how put would be done using external signers.
 #[tokio::test]
 async fn external_signer_put() -> eyre::Result<()> {
-    let _log_appender_guard =
-        LogBuilder::init_single_threaded_tokio_test("external_signer_put", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

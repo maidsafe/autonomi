@@ -29,7 +29,7 @@ async fn setup() -> (TempDir, BootstrapCacheConfig) {
 
 #[tokio::test]
 async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     // Test various multiaddr formats
     let addrs = vec![
@@ -65,7 +65,7 @@ async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error
 
 #[tokio::test]
 async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("address_format_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     let (_temp_dir, _config) = setup().await;
 

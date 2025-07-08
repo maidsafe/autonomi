@@ -24,7 +24,7 @@ use test_utils::evm::get_funded_wallet;
 #[tokio::test]
 #[serial]
 async fn test_data_addresses_use() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("data_addresses", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();

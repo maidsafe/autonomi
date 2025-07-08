@@ -188,37 +188,47 @@ impl LogBuilder {
         Ok((reload_handle, layers.log_appender_guard))
     }
 
-    /// Logs to the data_dir. Should be called from a single threaded tokio/non-tokio context.
-    /// Provide the test file name to capture tracings from the test.
+    /// Logs to the data_dir with per-test log files. Should be called from a single threaded tokio/non-tokio context.
+    /// Each test gets its own log file based on the test name.
     ///
+    /// This function creates separate log files for each test to avoid mixing logs from different tests.
+    /// The test file name is automatically detected from the test module path.
     /// subscriber.set_default() should be used if under a single threaded tokio / single threaded non-tokio context.
     /// Refer here for more details: <https://github.com/tokio-rs/tracing/discussions/1626>
-    pub fn init_single_threaded_tokio_test(
-        test_file_name: &str,
-        disable_networking_logs: bool,
-    ) -> (Option<WorkerGuard>, DefaultGuard) {
-        let layers = Self::get_test_layers(test_file_name, disable_networking_logs);
+    pub fn init_single_threaded_tokio_test() -> (Option<WorkerGuard>, DefaultGuard) {
+        let test_name = std::thread::current()
+            .name()
+            .unwrap_or("unknown_test")
+            .to_string();
+
+        // Auto-detect test file name from the test name
+        let test_file_name = Self::extract_test_file_name(&test_name);
+
+        let layers = Self::get_test_layers(&test_name, &test_file_name);
         let log_guard = tracing_subscriber::registry()
             .with(layers.layers)
             .set_default();
-        // this is the test_name and not the test_file_name
-        if let Some(test_name) = std::thread::current().name() {
-            info!("Running test: {test_name}");
-        }
+
+        info!("Running test: {test_name}");
         (layers.log_appender_guard, log_guard)
     }
 
     /// Logs to the data_dir. Should be called from a multi threaded tokio context.
-    /// Provide the test file name to capture tracings from the test.
+    /// The test file name is automatically detected from the test module path.
     ///
     /// subscriber.init() should be used under multi threaded tokio context. If you have 1+ multithreaded tokio tests under
     /// the same integration test, this might result in loss of logs. Hence use .init() (instead of .try_init()) to panic
     /// if called more than once.
-    pub fn init_multi_threaded_tokio_test(
-        test_file_name: &str,
-        disable_networking_logs: bool,
-    ) -> Option<WorkerGuard> {
-        let layers = Self::get_test_layers(test_file_name, disable_networking_logs);
+    pub fn init_multi_threaded_tokio_test() -> Option<WorkerGuard> {
+        let test_name = std::thread::current()
+            .name()
+            .unwrap_or("unknown_test")
+            .to_string();
+
+        // Auto-detect test file name from the test name
+        let test_file_name = Self::extract_test_file_name(&test_name);
+
+        let layers = Self::get_test_layers(&test_name, &test_file_name);
         tracing_subscriber::registry()
         .with(layers.layers)
         .try_init()
@@ -227,32 +237,82 @@ impl LogBuilder {
         layers.log_appender_guard
     }
 
-    /// Initialize just the fmt_layer for testing purposes.
+    /// Extract the test file name from the test name.
+    /// Test names typically follow the pattern: module::path::test_name
+    /// We extract the module path and use it as the test file name.
+    fn extract_test_file_name(test_name: &str) -> String {
+        // Try to extract from structured test name first (e.g., "ant_bootstrap::tests::test_something")
+        if let Some(module_name) = Self::extract_from_structured_test_name(test_name) {
+            return module_name;
+        }
+
+        // For integration tests, try to extract from the current executable name
+        if let Some(integration_test_name) = Self::extract_from_executable_name() {
+            return integration_test_name;
+        }
+
+        // Fallback to the full test name if all parsing methods fail
+        test_name.to_string()
+    }
+
+    /// Extract module name from structured test names like "ant_bootstrap::tests::test_something"
+    fn extract_from_structured_test_name(test_name: &str) -> Option<String> {
+        let parts: Vec<&str> = test_name.split("::").collect();
+        if parts.len() >= 2 {
+            Some(parts[0].to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Extract test name from the current executable for integration tests
+    fn extract_from_executable_name() -> Option<String> {
+        let current_exe = std::env::current_exe().ok()?;
+        let file_name = current_exe.file_name()?;
+        let exe_name = file_name.to_string_lossy();
+
+        // Integration test binaries are typically named like "test_name-<hash>"
+        // Extract the test file name part before the first dash
+        exe_name.split('-').next().map(|s| s.to_string())
+    }
+
+    /// Initialize just the fmt_layer for testing purposes with per-test log files.
     ///
+    /// Each test gets its own log file based on the test name to avoid mixing logs.
     /// Also overwrites the ANT_LOG variable to log everything including the test_file_name
-    // TODO: remove the _disable_networking_logs parameter
-    fn get_test_layers(test_file_name: &str, _disable_networking_logs: bool) -> TracingLayers {
+    fn get_test_layers(test_name: &str, test_file_name: &str) -> TracingLayers {
         // overwrite ANT_LOG
-        std::env::set_var(
-            "ANT_LOG",
-            format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all"),
-        );
+        // Use a more inclusive pattern to capture all logs from the test module
+        // For integration tests, we need to capture logs from the test file itself
+        let log_pattern = if test_file_name.contains("_tests") || test_file_name.contains("test_") {
+            // For integration tests, include the test file name directly
+            format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all")
+        } else {
+            // For unit tests, use the original pattern
+            format!("{test_file_name}=TRACE,{test_file_name}::tests=TRACE,all,autonomi=DEBUG,all")
+        };
+
+        println!("Setting ANT_LOG to: {log_pattern}");
+
+        std::env::set_var("ANT_LOG", log_pattern);
 
         let output_dest = match dirs_next::data_dir() {
             Some(dir) => {
                 // Get the current timestamp and format it to be human readable
                 let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                // Create unique filename using test name and timestamp
+                let test_name = test_name.replace("::", "_").replace(" ", "_");
                 let path = dir
                     .join("autonomi")
                     .join("client")
                     .join("logs")
-                    .join(format!("log_{timestamp}"));
+                    .join(format!("log_{timestamp}_{test_name}"));
                 LogOutputDest::Path(path)
             }
             None => LogOutputDest::Stdout,
         };
 
-        println!("Logging test at {test_file_name:?} to {output_dest:?}");
+        println!("Logging test {test_name:?} from {test_file_name:?} to {output_dest:?}");
 
         let mut layers = TracingLayers::default();
 

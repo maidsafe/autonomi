@@ -15,7 +15,7 @@ use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_cache_store_operations() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     let temp_dir = TempDir::new()?;
     let cache_path = temp_dir.path().join("cache.json");
@@ -44,7 +44,7 @@ async fn test_cache_store_operations() -> Result<(), Box<dyn std::error::Error>>
 
 #[tokio::test]
 async fn test_cache_max_peers() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
 
     let temp_dir = TempDir::new()?;
     let cache_path = temp_dir.path().join("cache.json");
@@ -86,7 +86,7 @@ async fn test_cache_max_peers() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::test]
 async fn test_cache_file_corruption() -> Result<(), Box<dyn std::error::Error>> {
-    let _guard = LogBuilder::init_single_threaded_tokio_test("cache_tests", false);
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
     let cache_path = temp_dir.path().join("cache.json");
 

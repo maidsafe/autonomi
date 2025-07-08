@@ -16,7 +16,7 @@ use test_utils::{evm::get_funded_wallet, gen_random_data};
 #[tokio::test]
 #[serial]
 async fn vault_cost() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("vault", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
     let client = Client::init_local().await?;
     let main_key = bls::SecretKey::random();
 
@@ -34,7 +34,7 @@ async fn vault_cost() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn vault_expand() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("vault", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
     let main_key = bls::SecretKey::random();

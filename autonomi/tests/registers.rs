@@ -20,7 +20,7 @@ use test_utils::evm::get_funded_wallet;
 #[tokio::test]
 #[serial]
 async fn registers_usage() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("registers", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
     let main_key = bls::SecretKey::random();
@@ -64,7 +64,7 @@ async fn registers_usage() -> Result<()> {
 #[tokio::test]
 #[serial]
 async fn registers_errors() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test("registers2", false);
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
     let main_key = bls::SecretKey::random();
