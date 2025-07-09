@@ -111,6 +111,7 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unused_async)]
 pub async fn configure_winsw(_dest_path: &Path, _verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
