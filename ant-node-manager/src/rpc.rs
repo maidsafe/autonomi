@@ -33,7 +33,7 @@ pub async fn restart_node_service(
 
     for node in node_registry.nodes.read().await.iter() {
         if node.read().await.peer_id.is_some_and(|id| id == peer_id) {
-            current_node = Some(node.clone());
+            current_node = Some(Arc::clone(node));
             break;
         }
     }

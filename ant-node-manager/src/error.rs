@@ -6,6 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow enum variant names that end with Error - common pattern with thiserror
+#![allow(clippy::enum_variant_names)]
+
 use thiserror::Error;
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
