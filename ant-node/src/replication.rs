@@ -19,7 +19,6 @@ use libp2p::{
     PeerId,
 };
 use tokio::task::spawn;
-use tracing::Instrument;
 
 impl Node {
     /// Sends _all_ record keys every interval to all peers within the REPLICATE_RANGE.
@@ -40,7 +39,9 @@ impl Node {
         for (holder, key) in keys_to_fetch {
             let node = self.clone();
             let requester = NetworkAddress::from(self.network().peer_id());
+            let current_span = tracing::Span::current();
             let _handle = spawn(async move {
+                let _guard = current_span.enter();
                 let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
                 debug!("Fetching record {pretty_key:?} from node {holder:?}");
                 let req = Request::Query(Query::GetReplicatedRecord {
@@ -83,7 +84,7 @@ impl Node {
                 } else {
                     debug!("Completed storing Replication Record {pretty_key:?} from holder {holder:?}.");
                 }
-            }.instrument(tracing::Span::current()));
+            });
         }
         Ok(())
     }
@@ -186,7 +187,9 @@ impl Node {
         )>,
     ) {
         let node = self.clone();
+        let current_span = tracing::Span::current();
         let _handle = spawn(async move {
+            let _guard = current_span.enter();
             let mut new_keys = vec![];
             for (addr, data_type, val_type, payment) in keys {
                 if let Some(payment) = payment {
@@ -229,6 +232,6 @@ impl Node {
                 node.network()
                     .add_fresh_records_to_the_replication_fetcher(holder, new_keys);
             }
-        }.instrument(tracing::Span::current()));
+        });
     }
 }

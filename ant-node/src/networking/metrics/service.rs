@@ -43,7 +43,7 @@ pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) {
         if let Err(e) = server.await {
             error!("server error: {}", e);
         }
-    }.instrument(tracing::Span::current()));
+    }.in_current_span());
 }
 
 type SharedRegistry = Arc<Mutex<Registry>>;

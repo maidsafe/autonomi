@@ -594,7 +594,7 @@ impl ReplicationFetcher {
                     error!("ReplicationFetcher failed to send event: {}", error);
                 }
             }
-            .instrument(tracing::Span::current()),
+            .in_current_span(),
         );
     }
 }
