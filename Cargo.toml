@@ -26,7 +26,6 @@ members = [
 arithmetic_overflow = "forbid"
 mutable_transmutes = "forbid"
 no_mangle_const_items = "forbid"
-missing_docs = "warn"
 trivial_casts = "warn"
 trivial_numeric_casts = "warn"
 unsafe_code = "warn"

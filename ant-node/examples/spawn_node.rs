@@ -6,6 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect/panic usage in examples
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 use ant_bootstrap::InitialPeersConfig;
 use ant_node::spawn::node_spawner::NodeSpawner;
 

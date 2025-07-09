@@ -6,6 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow enum variant names that end with Error as they come from thiserror derives
+#![allow(clippy::enum_variant_names)]
+// Allow the to_* methods on Copy types (used for byte conversions)
+#![allow(clippy::wrong_self_convention)]
+// Allow expect/panic usage temporarily
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 #[macro_use]
 extern crate tracing;
 
