@@ -20,6 +20,9 @@
 #![warn(unreachable_pub, unused_results)]
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
+// Allow expect and panic usage - to be refactored
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
 
 #[macro_use]
 extern crate tracing;
