@@ -67,18 +67,24 @@ async fn test_multi_node_logging_e2e() {
     // Hacky architecture but okay enough for simple tests.
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Verify node directories were created
+    // Extract test name automatically
+    let test_name = std::thread::current()
+        .name()
+        .map(|name| name.replace("::", "_"))
+        .unwrap_or_else(|| "unknown_test".to_string());
+
     let node_1_dir = temp_dir
         .path()
         .join("autonomi")
-        .join("node_01")
+        .join(format!("node_01_{test_name}"))
         .join("logs");
     let node_2_dir = temp_dir
         .path()
         .join("autonomi")
-        .join("node_02")
+        .join(format!("node_02_{test_name}"))
         .join("logs");
 
+    // Verify node directories were created
     assert!(
         node_1_dir.exists(),
         "Node 1 directory should exist at: {}",

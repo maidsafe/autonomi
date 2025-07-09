@@ -38,6 +38,8 @@ pub use tracing_core::Level;
 // ====== CONSTANTS ======
 
 const TIMESTAMP_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
+const UNKNOWN_TEST_NAME: &str = "unknown_test";
+// const UNKNOWN_FILE_NAME: &str = "unknown_file";
 pub const NODE_SPAN_NAME: &str = "node";
 
 // ====== PUBLIC TYPES ======
@@ -203,83 +205,6 @@ impl LogBuilder {
         Ok((reload_handle, layers.log_appender_guard))
     }
 
-    // ====== PUBLIC METHODS OF LogBuilder ======
-    /* TODO: original function, to be removed once the newer function is 100% stress tested
-        /// Initialize multi-node logging with per-node log files and client separation.
-        /// Each node gets its own log directory, and client operations get a separate directory.
-        /// To be used with the Node Spawner, in this case Client and Nodes will share the same process.
-        ///
-        /// # Arguments
-        /// * `node_count` - Number of nodes to create logging for
-        ///
-        /// # Returns
-        /// * `MultiNodeLogHandle` - Handle with access to reload functionality and log copying
-        pub fn initialize_with_multi_node_logging(
-            self,
-            node_count: usize,
-        ) -> Result<MultiNodeLogHandle> {
-            // Remove the single node special case - multi-node can handle any count
-            let base_log_dir = self.get_base_log_path()?;
-
-            let targets = self.get_logging_targets()?;
-
-            let (routing_layer, guards) =
-                self.setup_node_routing_and_appenders(&base_log_dir, node_count, targets)?;
-
-            let layers = self.configure_tracing_layers(routing_layer)?;
-
-            self.initialize_subscriber(layers)?;
-
-            let reload_handle = self.create_reload_handle();
-
-            Ok(MultiNodeLogHandle {
-                base_log_dir,
-                node_count,
-                reload_handle,
-                guards,
-            })
-        }
-    */
-
-    // TODO: original function + test_name field.
-    // Still used by the multi_node_logging test module
-    // To be removed once the newer function is 100% stress tested (unique span one)
-    /// Initialize multi-node logging with automatic test-specific directory naming
-    pub fn initialize_with_multi_nodes_logging(
-        self,
-        node_count: usize,
-    ) -> Result<MultiNodeLogHandle> {
-        let base_log_dir = self.get_base_log_path()?;
-        let targets = self.get_logging_targets()?;
-
-        // Get test name from current thread (like in appender.rs)
-        let test_name = std::thread::current()
-            .name()
-            .map(|name| name.replace("::", "_")) // Clean up "address::test_name" -> "address_test_name"
-            .unwrap_or_else(|| "unknown_test".to_string());
-
-        let (routing_layer, _appender_guards) =
-            self.setup_node_routing_and_appenders(&base_log_dir, node_count, targets, &test_name)?; // NEW
-        let layers = self.configure_tracing_layers(routing_layer)?;
-
-        let _subscriber_guard = tracing_subscriber::registry()
-            .with(layers.layers)
-            .set_default();
-
-        let reload_handle = self.create_reload_handle();
-
-        let multi_node_log_handle = MultiNodeLogHandle {
-            base_log_dir,
-            node_count,
-            _appender_guards,
-            _subscriber_guard,
-            reload_handle,
-            test_name: Some(test_name), // NEW
-        };
-
-        Ok(multi_node_log_handle)
-    }
-
     /// Logs to the data_dir. Should be called from a single threaded tokio/non-tokio context.
     /// Provide the test file name to capture tracings from the test.
     ///
@@ -329,6 +254,38 @@ impl LogBuilder {
         layers.log_appender_guard
     }
 
+    /// Initialize multi-node logging with automatic test-specific directory naming
+    pub fn initialize_with_multi_nodes_logging(
+        self,
+        node_count: usize,
+    ) -> Result<MultiNodeLogHandle> {
+        let base_log_dir = self.get_base_log_path()?;
+        let targets = self.get_logging_targets()?;
+
+        let test_name = get_thread_name().unwrap_or(UNKNOWN_TEST_NAME.to_string());
+
+        let (routing_layer, _appender_guards) =
+            self.setup_node_routing_and_appenders(&base_log_dir, node_count, targets, &test_name)?; // NEW
+        let layers = self.configure_tracing_layers(routing_layer)?;
+
+        let _subscriber_guard = tracing_subscriber::registry()
+            .with(layers.layers)
+            .set_default();
+
+        let reload_handle = self.create_reload_handle();
+
+        let multi_node_log_handle = MultiNodeLogHandle {
+            base_log_dir,
+            node_count,
+            _appender_guards,
+            _subscriber_guard,
+            reload_handle,
+            test_name: Some(test_name), // NEW
+        };
+
+        Ok(multi_node_log_handle)
+    }
+
     //TODO: To be renamed once it's 100% stress tested
     /// Initialize multi-node logging with support for unique test spans
     /// Automatically extracts test name and sets up routing for client_testname and node_XX_testname patterns
@@ -339,11 +296,7 @@ impl LogBuilder {
         let base_log_dir = self.get_base_log_path()?;
         let targets = self.get_logging_targets()?;
 
-        // Extract test name automatically
-        let test_name = std::thread::current()
-            .name()
-            .map(|name| name.replace("::", "_"))
-            .unwrap_or_else(|| "unknown_test".to_string());
+        let test_name = get_thread_name().unwrap_or(UNKNOWN_TEST_NAME.to_string());
 
         let (routing_layer, _appender_guards) = self.setup_unique_span_routing_and_appenders(
             &base_log_dir,
@@ -370,6 +323,8 @@ impl LogBuilder {
 
         Ok(multi_node_log_handle)
     }
+
+    // ====== PRIVATE METHODS OF LogBuilder ======
 
     /// Set up routing layer and appenders for unique span patterns
     fn setup_unique_span_routing_and_appenders(
@@ -439,8 +394,6 @@ impl LogBuilder {
 
         Ok(guard)
     }
-
-    // ====== PRIVATE METHODS OF LogBuilder ======
 
     /// Extract the test file name from the test name.
     /// Test names typically follow the pattern: module::path::test_name
@@ -888,6 +841,16 @@ fn copy_dir_contents(source: &Path, dest: &Path) -> std::io::Result<()> {
         }
     }
     Ok(())
+}
+
+// ====== PRIVATE UTILITY FUNCTIONS ======
+
+/// Extract and clean the current thread name
+/// Returns None if no thread name is available
+fn get_thread_name() -> Option<String> {
+    std::thread::current()
+        .name()
+        .map(|name| name.replace("::", "_"))
 }
 
 // ====== TESTS ======

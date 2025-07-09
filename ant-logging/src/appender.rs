@@ -83,10 +83,9 @@ pub(super) fn file_rotater_with_thread_name(
         .unwrap_or_else(|_| "autonomi".to_string());
 
     // Add thread name (which contains test name) for uniqueness
-    let file_name = if let Some(thread_name) = std::thread::current().name() {
+    let file_name = if let Some(thread_name) = crate::get_thread_name() {
         // Clean up thread name: "address::test_name" -> "address_test_name"
-        let clean_name = thread_name.replace("::", "_");
-        format!("{clean_name}_{binary_name}.log")
+        format!("{binary_name}_{thread_name}.log")
     } else {
         format!("{binary_name}.log")
     };
