@@ -65,6 +65,7 @@ impl NodeRegistryManager {
 
     /// Loads the node registry from the specified path.
     /// If the file does not exist, it returns a default `NodeRegistryManager` with an empty state.
+    #[allow(clippy::unused_async)]
     pub async fn load(path: &Path) -> Result<Self> {
         let registry = NodeRegistry::load(path)?;
         let manager = NodeRegistryManager::from(registry);

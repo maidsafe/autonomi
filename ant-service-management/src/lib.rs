@@ -21,6 +21,7 @@ pub mod rpc;
 extern crate tracing;
 
 pub mod antctl_proto {
+    #![allow(clippy::clone_on_ref_ptr)]
     tonic::include_proto!("antctl_proto");
 }
 
