@@ -820,7 +820,7 @@ async fn main() -> Result<()> {
         None
     };
 
-    configure_winsw(verbosity)?;
+    configure_winsw(verbosity).await?;
 
     tracing::info!("Executing cmd: {:?}", args.cmd);
 
@@ -1103,7 +1103,7 @@ fn parse_environment_variables(env_var: &str) -> Result<(String, String)> {
 }
 
 #[cfg(windows)]
-fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
+async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
     use ant_node_manager::config::get_node_manager_path;
 
     // If the node manager was installed using `antup`, it would have put the winsw.exe binary at
@@ -1116,19 +1116,18 @@ fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
         .ok_or_else(|| eyre!("Could not obtain user home directory"))?
         .join("autonomi")
         .join("winsw.exe");
-    let rt = tokio::runtime::Runtime::new()?;
     if antup_winsw_path.exists() {
-        rt.block_on(ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity))?;
+        ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity).await?;
     } else {
-        rt.block_on(ant_node_manager::helpers::configure_winsw(
+        ant_node_manager::helpers::configure_winsw(
             &get_node_manager_path()?.join("winsw.exe"),
             verbosity,
-        ))?;
+        ).await?;
     }
     Ok(())
 }
 
 #[cfg(not(windows))]
-fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
+async fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
