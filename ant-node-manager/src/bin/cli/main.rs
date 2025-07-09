@@ -1116,13 +1116,14 @@ fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
         .ok_or_else(|| eyre!("Could not obtain user home directory"))?
         .join("autonomi")
         .join("winsw.exe");
+    let rt = tokio::runtime::Runtime::new()?;
     if antup_winsw_path.exists() {
-        ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity)?;
+        rt.block_on(ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity))?;
     } else {
-        ant_node_manager::helpers::configure_winsw(
+        rt.block_on(ant_node_manager::helpers::configure_winsw(
             &get_node_manager_path()?.join("winsw.exe"),
             verbosity,
-        )?;
+        ))?;
     }
     Ok(())
 }
