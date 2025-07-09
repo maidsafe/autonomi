@@ -1275,11 +1275,11 @@ test_file_operations() {
             echo "# File size: $(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo 'unknown')" >> "$file_ops_log"
         fi
         
-        # Upload file
-        if upload_output=$(cargo run --bin ant -- --local file upload "$file" 2>&1); then
+        # Upload file as public (required for simple download)
+        if upload_output=$(cargo run --bin ant -- --local file upload --public "$file" 2>&1); then
             # Log successful upload
             if [ -n "$file_ops_log" ]; then
-                echo "# Upload command: cargo run --bin ant -- --local file upload $file" >> "$file_ops_log"
+                echo "# Upload command: cargo run --bin ant -- --local file upload --public $file" >> "$file_ops_log"
                 echo "# Upload output:" >> "$file_ops_log"
                 echo "$upload_output" >> "$file_ops_log"
             fi
