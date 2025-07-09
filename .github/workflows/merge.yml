@@ -563,6 +563,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_e2e
+          build: true
 
   # token_distribution_test:
   #   if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
@@ -704,6 +705,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_churn
+          build: true
 
       - name: Get total node count
         shell: bash
@@ -858,6 +860,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_data_location
+          build: true
 
       - name: Verify restart of nodes using rg
         shell: bash
