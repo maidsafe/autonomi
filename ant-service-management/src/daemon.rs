@@ -137,4 +137,11 @@ impl ServiceStateActions for DaemonService {
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
     }
+
+    async fn set_metrics_port_if_not_set(
+        &self,
+        _service_control: &dyn ServiceControl,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
