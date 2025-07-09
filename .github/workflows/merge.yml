@@ -199,8 +199,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
+          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
 
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
@@ -653,8 +661,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build binaries
-        run: cargo build --release --bin antnode
+        run: cargo build --release --bin antnode --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
+          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
 
       - name: Build churn tests
         run: cargo test --release -p ant-node --test data_with_churn --no-run
@@ -943,8 +959,16 @@ jobs:
           ls -l
 
       - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
+          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
 
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
