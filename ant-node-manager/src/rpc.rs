@@ -10,7 +10,6 @@ use crate::{
     add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, ServiceManager,
     VerbosityLevel,
 };
-use std::sync::Arc;
 use ant_service_management::{
     control::{ServiceControl, ServiceController},
     node::NODE_SERVICE_DATA_SCHEMA_LATEST,
@@ -22,6 +21,7 @@ use color_eyre::{
     Result,
 };
 use libp2p::PeerId;
+use std::sync::Arc;
 
 pub async fn restart_node_service(
     node_registry: NodeRegistryManager,
