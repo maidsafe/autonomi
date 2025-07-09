@@ -233,7 +233,7 @@ pub async fn remove(
 
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
-            .await;
+            .await?;
     let batch_result = batch_manager.remove_all(keep_directories).await;
     summarise_batch_result(&batch_result, "remove", verbosity)
 }
@@ -306,7 +306,7 @@ pub async fn start(
     }
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
-            .await;
+            .await?;
     let batch_result = batch_manager.start_all(fixed_interval).await;
     summarise_batch_result(&batch_result, "start", verbosity)
 }
@@ -368,7 +368,7 @@ pub async fn stop(
 
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
-            .await;
+            .await?;
     let batch_result = batch_manager.stop_all(interval).await;
     summarise_batch_result(&batch_result, "stop", verbosity)
 }
@@ -463,7 +463,7 @@ pub async fn upgrade(
 
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
-            .await;
+            .await?;
     let (batch_result, upgrade_summary) = batch_manager.upgrade_all(options, fixed_interval).await;
 
     if verbosity != VerbosityLevel::Minimal {
@@ -753,16 +753,13 @@ async fn get_batch_manager_from_service_data(
 
     service_data: Vec<Arc<RwLock<NodeServiceData>>>,
     verbosity: VerbosityLevel,
-) -> BatchServiceManager<NodeService> {
+) -> Result<BatchServiceManager<NodeService>> {
     let mut services = Vec::new();
     for node in service_data {
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .expect("TEMP: metrics port is required"),
-        );
+        let metrics_client = MetricsClient::new(node.read().await.metrics_port.ok_or(
+            crate::error::Error::MetricsPortNotSet(node.read().await.service_name.clone()),
+        )?);
         let service = NodeService::new(
             Arc::clone(&node),
             Box::new(rpc_client),
@@ -770,10 +767,12 @@ async fn get_batch_manager_from_service_data(
         );
         services.push(service);
     }
-    BatchServiceManager::new(
+    let batch_manager = BatchServiceManager::new(
         services,
         Box::new(ServiceController {}),
         node_registry,
         verbosity,
-    )
+    );
+
+    Ok(batch_manager)
 }
