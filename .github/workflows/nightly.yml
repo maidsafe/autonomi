@@ -38,8 +38,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
           Write-Host "antctl installed to $destination"
 
       - name: Start a local network
@@ -312,8 +312,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
           Write-Host "antctl installed to $destination"
 
       - name: Build churn tests

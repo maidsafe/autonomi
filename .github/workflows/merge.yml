@@ -206,8 +206,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
           Write-Host "antctl installed to $destination"
 
       - name: Start a local network
@@ -668,9 +668,17 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
-          Write-Host "antctl installed to $destination"
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          if (Test-Path "target\\release\\antctl.exe") {
+            Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+            Write-Host "antctl installed to $destination from target\\release"
+          } elseif (Test-Path ".\\test-target\\release\\antctl.exe") {
+            Copy-Item ".\\test-target\\release\\antctl.exe" -Destination $destination -Force
+            Write-Host "antctl installed to $destination from test-target\\release"
+          } else {
+            Write-Host "ERROR: antctl.exe not found in either target\\release or test-target\\release"
+            exit 1
+          }
 
       - name: Build churn tests
         run: cargo test --release -p ant-node --test data_with_churn --no-run
@@ -966,8 +974,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          $destination = "C:\Users\runneradmin\AppData\Local\Microsoft\WindowsApps"
-          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
           Write-Host "antctl installed to $destination"
 
       - name: Start a local network
