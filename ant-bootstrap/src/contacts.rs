@@ -364,16 +364,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_invalid_multiaddr() {
+    async fn test_mutliaddr_without_peerid() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
             .and(path("/"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(
-                    "/ip4/127.0.0.1/tcp/8080\n/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
-                ),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string("/ip4/127.0.0.1/tcp/8080"))
             .mount(&mock_server)
             .await;
 
@@ -381,10 +377,8 @@ mod tests {
         fetcher.endpoints = vec![mock_server.uri().parse().unwrap()];
 
         let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
-        let valid_addr: Multiaddr =
-            "/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
-                .parse()
-                .unwrap();
+
+        let valid_addr: Multiaddr = "/ip4/127.0.0.1/tcp/8080".parse().unwrap();
         assert_eq!(addrs[0], valid_addr);
     }
 
