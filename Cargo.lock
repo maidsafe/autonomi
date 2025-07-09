@@ -819,6 +819,7 @@ dependencies = [
  "atomic-write-file",
  "chrono",
  "clap",
+ "color-eyre",
  "dirs-next",
  "futures",
  "libp2p",

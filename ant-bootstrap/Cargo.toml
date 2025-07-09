@@ -32,6 +32,7 @@ url = "2.4.0"
 workspace = true
 
 [dev-dependencies]
+color-eyre = "0.6.3"
 wiremock = "0.5"
 tokio = { version = "1.43", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

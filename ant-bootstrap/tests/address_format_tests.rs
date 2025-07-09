@@ -6,104 +6,125 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig};
+use ant_bootstrap::{craft_valid_multiaddr, craft_valid_multiaddr_from_str, multiaddr_get_peer_id};
 use ant_logging::LogBuilder;
+use color_eyre::Result;
 use libp2p::Multiaddr;
-use tempfile::TempDir;
-use wiremock::{
-    matchers::{method, path},
-    Mock, MockServer, ResponseTemplate,
-};
-
-// Setup function to create a new temp directory and config for each test
-async fn setup() -> (TempDir, BootstrapCacheConfig) {
-    let temp_dir = TempDir::new().unwrap();
-    let cache_path = temp_dir.path().join("cache.json");
-
-    let config = BootstrapCacheConfig::empty()
-        .with_cache_path(&cache_path)
-        .with_max_peers(50);
-
-    (temp_dir, config)
-}
+use tracing::info;
 
 #[tokio::test]
-async fn test_multiaddr_format_parsing() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_transport_protocol_variants() -> Result<()> {
     let _guard = LogBuilder::init_single_threaded_tokio_test();
 
-    // Test various multiaddr formats
-    let addrs = vec![
-        // quic
-        "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
-        // ws
-        "/ip4/127.0.0.1/tcp/8080/ws/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+    // Test different valid and invalid multiaddr variants
+    let variants = vec![
+        // QUIC format (valid)
+        ("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        // WebSocket format (valid)
+        ("/ip4/127.0.0.1/tcp/8080/ws/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        // TCP format (valid)
+        ("/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        // Missing peer ID (invalid)
+        ("/ip4/127.0.0.1/tcp/8080", false),
+        // No transport protocol (invalid)
+        ("/ip4/127.0.0.1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", false),
+        // Invalid protocol chain (invalid)
+        ("/ip4/127.0.0.1/wss/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", false),
     ];
 
-    for addr_str in addrs {
-        let (_temp_dir, _config) = setup().await; // Fresh config for each test case
+    for (addr_str, should_be_valid) in variants {
         let addr = addr_str.parse::<Multiaddr>()?;
-        let args = InitialPeersConfig {
-            first: false,
-            addrs: vec![addr.clone()],
-            network_contacts_url: vec![],
-            local: false,
-            ignore_cache: true,
-            bootstrap_cache_dir: None,
-        };
+        info!("Testing multiaddr: {}", addr_str);
+        let result = craft_valid_multiaddr(&addr, false);
 
-        // Without limiting the code to 1 address it will fetch peers from the production network.
-        let bootstrap_addresses = args.get_bootstrap_addr(None, Some(1)).await?;
-        assert_eq!(bootstrap_addresses.len(), 1, "Should have one peer");
-        assert_eq!(
-            bootstrap_addresses[0].addr, addr,
-            "Address format should match"
-        );
+        if should_be_valid {
+            assert!(
+                result.is_some(),
+                "Should accept valid multiaddr: {addr_str}"
+            );
+        } else {
+            assert!(
+                result.is_none(),
+                "Should reject invalid multiaddr: {addr_str}"
+            );
+        }
     }
 
     Ok(())
 }
 
 #[tokio::test]
-async fn test_network_contacts_format() -> Result<(), Box<dyn std::error::Error>> {
+async fn test_craft_valid_multiaddr_from_str() -> Result<()> {
     let _guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let (_temp_dir, _config) = setup().await;
+    // Test valid multiaddr
+    let valid_addr =
+        "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
+    let result = craft_valid_multiaddr_from_str(valid_addr, false);
+    assert!(result.is_some(), "Should accept valid multiaddr string");
 
-    // Create a mock server with network contacts format
-    let mock_server = MockServer::start().await;
-    Mock::given(method("GET"))
-        .and(path("/peers"))
-        .respond_with(ResponseTemplate::new(200).set_body_string(
-            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE\n\
-             /ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERF"
-        ))
-        .mount(&mock_server)
-        .await;
+    // Test invalid multiaddr
+    let invalid_addr = "not a multiaddr";
+    let result = craft_valid_multiaddr_from_str(invalid_addr, false);
+    assert!(result.is_none(), "Should reject invalid multiaddr string");
 
-    let args = InitialPeersConfig {
-        first: false,
-        addrs: vec![],
-        network_contacts_url: vec![format!("{}/peers", mock_server.uri()).parse()?],
-        local: false,
-        ignore_cache: true,
-        bootstrap_cache_dir: None,
-    };
+    // Test with malformed but parseable multiaddr
+    let malformed_addr = "/ip4/127.0.0.1/tcp/8080"; // Missing peer ID
+    let result = craft_valid_multiaddr_from_str(malformed_addr, false);
+    assert!(result.is_none(), "Should reject malformed multiaddr");
 
-    let addrs = args.get_bootstrap_addr(None, Some(2)).await?;
-    assert_eq!(
-        addrs.len(),
-        2,
-        "Should have two peers from network contacts"
+    // Same address with ignore_peer_id=true should succeed
+    let result = craft_valid_multiaddr_from_str(malformed_addr, true);
+    assert!(
+        result.is_some(),
+        "Should accept multiaddr without peer ID when ignoring peer ID"
     );
 
-    // Verify address formats
-    for addr in addrs {
-        let addr_str = addr.addr.to_string();
-        assert!(addr_str.contains("/ip4/"), "Should have IPv4 address");
-        assert!(addr_str.contains("/udp/"), "Should have UDP port");
-        assert!(addr_str.contains("/quic-v1/"), "Should have QUIC protocol");
-        assert!(addr_str.contains("/p2p/"), "Should have peer ID");
-    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_craft_valid_multiaddr_ignore_peer_id() -> Result<()> {
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+    // Test addr without peer ID
+    let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse()?;
+
+    // Should fail with ignore_peer_id = false
+    let result1 = craft_valid_multiaddr(&addr_without_peer, false);
+    assert!(
+        result1.is_none(),
+        "Should reject addr without peer ID by default"
+    );
+
+    // Should pass with ignore_peer_id = true
+    let result2 = craft_valid_multiaddr(&addr_without_peer, true);
+    assert!(
+        result2.is_some(),
+        "Should accept addr without peer ID when ignore flag is set"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_multiaddr_get_peer_id() -> Result<()> {
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+    // Test with peer ID
+    let addr_with_peer: Multiaddr =
+        "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()?;
+    let peer_id = multiaddr_get_peer_id(&addr_with_peer);
+    assert!(peer_id.is_some(), "Should extract peer ID when present");
+
+    // Test without peer ID
+    let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse()?;
+    let peer_id = multiaddr_get_peer_id(&addr_without_peer);
+    assert!(
+        peer_id.is_none(),
+        "Should return None when peer ID is missing"
+    );
 
     Ok(())
 }
