@@ -49,7 +49,7 @@ use colored::Colorize;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use semver::Version;
-
+use std::sync::Arc;
 use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
@@ -557,7 +557,7 @@ pub async fn refresh_node_registry(
 
         let mut rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
         rpc_client.set_max_attempts(1);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client.clone()));
+        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client.clone()));
         let service_name = service.service_data.read().await.service_name.clone();
 
         if is_local_network {

@@ -820,7 +820,7 @@ async fn main() -> Result<()> {
         None
     };
 
-    configure_winsw(verbosity).await?;
+    configure_winsw(verbosity)?;
 
     tracing::info!("Executing cmd: {:?}", args.cmd);
 
@@ -1103,7 +1103,7 @@ fn parse_environment_variables(env_var: &str) -> Result<(String, String)> {
 }
 
 #[cfg(windows)]
-async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
+fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
     use ant_node_manager::config::get_node_manager_path;
 
     // If the node manager was installed using `antup`, it would have put the winsw.exe binary at
@@ -1117,18 +1117,17 @@ async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
         .join("autonomi")
         .join("winsw.exe");
     if antup_winsw_path.exists() {
-        ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity).await?;
+        ant_node_manager::helpers::configure_winsw(&antup_winsw_path, verbosity)?;
     } else {
         ant_node_manager::helpers::configure_winsw(
             &get_node_manager_path()?.join("winsw.exe"),
             verbosity,
-        )
-        .await?;
+        )?;
     }
     Ok(())
 }
 
 #[cfg(not(windows))]
-async fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
+fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
