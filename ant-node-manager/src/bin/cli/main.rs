@@ -1128,6 +1128,7 @@ async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unused_async)]
 async fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
