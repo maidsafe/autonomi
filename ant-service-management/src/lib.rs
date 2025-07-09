@@ -26,12 +26,12 @@ pub mod antctl_proto {
     tonic::include_proto!("antctl_proto");
 }
 
-use std::path::PathBuf;
-
+use crate::control::ServiceControl;
 use async_trait::async_trait;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
+use std::path::PathBuf;
 
 pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
@@ -94,5 +94,7 @@ pub trait ServiceStateActions {
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;
+    async fn set_metrics_port_if_not_set(&self, service_control: &dyn ServiceControl)
+    -> Result<()>;
     async fn version(&self) -> String;
 }

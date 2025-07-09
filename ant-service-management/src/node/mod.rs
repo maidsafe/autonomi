@@ -16,8 +16,8 @@ mod node_service_data_v3;
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
 use crate::{
-    ServiceStateActions, ServiceStatus, UpgradeOptions, error::Result, metric::MetricsAction,
-    rpc::RpcActions,
+    ServiceStateActions, ServiceStatus, UpgradeOptions, control::ServiceControl, error::Result,
+    metric::MetricsAction, rpc::RpcActions,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
@@ -101,10 +101,16 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from("--port"));
             args.push(OsString::from(node_port.to_string()));
         }
+
         if let Some(metrics_port) = service_data.metrics_port {
             args.push(OsString::from("--metrics-server-port"));
             args.push(OsString::from(metrics_port.to_string()));
+        } else {
+            error!(
+                "Metrics port not available during upgrade_install_context. Make sure to call ServiceStateActions::set_metrics_port_if_not_set before building context"
+            );
         }
+
         if let Some(max_archived_log_files) = service_data.max_archived_log_files {
             args.push(OsString::from("--max-archived-log-files"));
             args.push(OsString::from(max_archived_log_files.to_string()));
@@ -266,6 +272,22 @@ impl ServiceStateActions for NodeService {
 
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
+    }
+
+    async fn set_metrics_port_if_not_set(
+        &self,
+        service_control: &dyn ServiceControl,
+    ) -> Result<()> {
+        if self.service_data.read().await.metrics_port.is_none() {
+            info!(
+                "Setting port for {} as it does not have any",
+                self.service_data.read().await.service_name
+            );
+            let port = service_control.get_available_port()?;
+            self.service_data.write().await.metrics_port = Some(port);
+        }
+
+        Ok(())
     }
 }
 
