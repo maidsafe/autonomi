@@ -289,6 +289,10 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
             &self.service.name().await,
             self.service.is_user_mode().await,
         )?;
+
+        self.service
+            .set_metrics_port_if_not_set(self.service_control.as_ref())
+            .await?;
         self.service_control.install(
             self.service
                 .build_upgrade_install_context(options.clone())

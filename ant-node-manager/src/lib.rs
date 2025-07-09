@@ -252,17 +252,18 @@ pub async fn refresh_node_registry(
         // The `status` command can run before a node is started and therefore before its wallet
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-
         node.write().await.reward_balance = None;
 
         let mut rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
         rpc_client.set_max_attempts(1);
 
+        let service_name = node.read().await.service_name.clone();
+
         let metrics_client = MetricsClient::new(
             node.read()
                 .await
                 .metrics_port
-                .expect("TEMP: metrics port is required"),
+                .ok_or(Error::MetricsPortNotSet(service_name.clone()))?,
         );
 
         let service = NodeService::new(
@@ -270,7 +271,6 @@ pub async fn refresh_node_registry(
             Box::new(rpc_client.clone()),
             Box::new(metrics_client),
         );
-        let service_name = node.read().await.service_name.clone();
 
         if is_local_network {
             // For a local network, retrieving the process by its path does not work, because the

@@ -580,6 +580,8 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             .inspect_err(|err| {
                 error!("Failed to uninstall service {service_name}: {err}");
             })?;
+
+        service.set_metrics_port_if_not_set(service_control).await?;
         service_control.install(
             service
                 .build_upgrade_install_context(options.clone())

@@ -45,13 +45,9 @@ pub async fn restart_node_service(
     })?;
 
     let rpc_client = RpcClient::from_socket_addr(current_node.read().await.rpc_socket_addr);
-    let metrics_client = MetricsClient::new(
-        current_node
-            .read()
-            .await
-            .metrics_port
-            .expect("TEMP: metrics port is required"),
-    );
+    let metrics_client = MetricsClient::new(current_node.read().await.metrics_port.ok_or(
+        crate::error::Error::MetricsPortNotSet(current_node.read().await.service_name.clone()),
+    )?);
     let service = NodeService::new(
         Arc::clone(&current_node),
         Box::new(rpc_client),
@@ -259,8 +255,9 @@ pub async fn restart_node_service(
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let metrics_client =
-            MetricsClient::new(node.metrics_port.expect("TEMP: metrics port is required"));
+        let metrics_client = MetricsClient::new(node.metrics_port.ok_or(
+            crate::error::Error::MetricsPortNotSet(node.service_name.clone()),
+        )?);
         let service = NodeService::new(
             Arc::clone(&current_node),
             Box::new(rpc_client),
