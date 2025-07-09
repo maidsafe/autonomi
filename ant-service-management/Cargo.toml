@@ -31,6 +31,9 @@ tracing = { version = "~0.1.26" }
 tracing-core = "0.1.30"
 chrono = "0.4.39"
 
+[lints]
+workspace = true
+
 [build-dependencies]
 # watch out updating this, protoc compiler needs to be installed on all build systems
 # arm builds + musl are very problematic

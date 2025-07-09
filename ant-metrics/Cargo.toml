@@ -22,3 +22,6 @@ serde = { version = "1.0.133", features = ["derive"] }
 serde_yaml = "0.9.25"
 url = "2.4.1"
 walkdir = "~2.5"
+
+[lints]
+workspace = true

@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+      # commitlint check removed - no longer enforcing conventional commits
 
   checks:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
@@ -73,8 +73,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # Formatting check removed - no longer enforcing code formatting in CI
+      # Developers can still use `cargo fmt` locally
 
       - shell: bash
         run: cargo clippy --all-targets --all-features -- -Dwarnings

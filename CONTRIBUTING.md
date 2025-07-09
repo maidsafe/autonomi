@@ -62,7 +62,7 @@ For our non-Rust repositories we follow the standard lint suggestions, pre-linti
 
 ### Commits
 
-We use the [Conventional Commit](https://www.conventionalcommits.org/en/v1.0.0-beta.3/) message style, usually including a scope. You can have a look at the commit history within each repository to see examples of our commits.
+We recommend using clear, descriptive commit messages that explain the purpose of your changes. While not required, you may find [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0-beta.3/) helpful for structuring your messages.
 
 All code should be pre-linted before commit. The use of pre-commit Git hooks is highly recommended to catch formatting and linting errors early.
 
@@ -76,7 +76,7 @@ We are in the process of adding pull request templates to each MaidSafe reposito
 
 Pull requests should strive to tackle one issue/feature, and code should be pre-linted before commit.
 
-Each pull request's total lines changed should be <= 200 lines. This is calculated as `lines added` + `lines deleted`. Please split up any PRs which are larger than this, otherwise they may be rejected. A CI check has been added to fail PRs which are larger than 200 lines changed.
+Each pull request's total lines changed should be <= 200 lines. This is calculated as `lines added` + `lines deleted`. Please split up any PRs which are larger than this, otherwise they may be rejected.
 
 Ideally, a multi-commit PR should be a sequence of commits "telling a story", going in atomic and easily reviewable steps from the initial to the final state.
 
@@ -140,7 +140,7 @@ If a repository is for a library, or perhaps multiple libraries, then often no r
 
 ## Development Process
 
-PRs should target the `main` branch. Please use the [Conventional Commits](https://www.conventionalcommits.org/) specification for commit messages.
+PRs should target the `main` branch. We recommend using clear, descriptive commit messages that explain the purpose of your changes.
 
 ## Support
 
