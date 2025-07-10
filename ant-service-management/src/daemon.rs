@@ -134,6 +134,10 @@ impl ServiceStateActions for DaemonService {
         self.service_data.read().await.status.clone()
     }
 
+    async fn set_status(&self, status: ServiceStatus) {
+        self.service_data.write().await.status = status;
+    }
+
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
     }
