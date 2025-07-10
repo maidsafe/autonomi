@@ -1,7 +1,7 @@
 [package]
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "EVM testnet for development on Autonomi"
-edition = "2021"
+edition = "2024"
 homepage = "https://maidsafe.net"
 license = "GPL-3.0"
 name = "evm-testnet"

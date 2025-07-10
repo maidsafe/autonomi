@@ -294,7 +294,9 @@ impl LogBuilder {
 
         println!("Setting ANT_LOG to: {log_pattern}");
 
-        std::env::set_var("ANT_LOG", log_pattern);
+        unsafe {
+            std::env::set_var("ANT_LOG", log_pattern);
+        }
 
         let output_dest = match dirs_next::data_dir() {
             Some(dir) => {

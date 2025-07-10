@@ -90,7 +90,7 @@ pub(crate) fn format_upload_error(err: &PutError) -> String {
         }
     } else if err_str.contains("insufficient funds") {
         "💰 Insufficient funds for transaction".to_string()
-    } else if let PutError::Batch(ref upload_state) = err {
+    } else if let PutError::Batch(upload_state) = err {
         format!(
             "❌ Upload batch failed: {} chunks failed",
             upload_state.failed.len()

@@ -18,7 +18,6 @@ use alloy::providers::fillers::{
 use alloy::providers::{Identity, ProviderBuilder, RootProvider};
 use alloy::transports::http::reqwest;
 use dirs_next::data_dir;
-use rand::Rng;
 use std::env;
 use std::path::PathBuf;
 
@@ -43,12 +42,14 @@ pub enum Error {
 
 /// Generate a random Address.
 pub fn dummy_address() -> Address {
-    Address::new(rand::rngs::OsRng.gen())
+    use rand::Rng;
+    Address::new(rand::rngs::OsRng.r#gen())
 }
 
 /// Generate a random Hash.
 pub fn dummy_hash() -> Hash {
-    Hash::new(rand::rngs::OsRng.gen())
+    use rand::Rng;
+    Hash::new(rand::rngs::OsRng.r#gen())
 }
 
 use std::sync::OnceLock;

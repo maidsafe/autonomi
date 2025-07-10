@@ -79,15 +79,17 @@ pub fn initialize_logging() -> Result<()> {
     std::fs::create_dir_all(&log_path)?;
     let log_file = std::fs::File::create(log_path.join(format!("launchpad_{timestamp}.log")))
         .context(format!("Failed to create file {log_path:?}"))?;
-    std::env::set_var(
-        "RUST_LOG",
-        std::env::var("RUST_LOG").unwrap_or_else(|_| {
-            format!(
-                "{}=trace,ant_node_manager=trace,ant_service_management=trace,ant_bootstrap=debug",
-                env!("CARGO_CRATE_NAME")
-            )
-        }),
-    );
+    unsafe {
+        std::env::set_var(
+            "RUST_LOG",
+            std::env::var("RUST_LOG").unwrap_or_else(|_| {
+                format!(
+                    "{}=trace,ant_node_manager=trace,ant_service_management=trace,ant_bootstrap=debug",
+                    env!("CARGO_CRATE_NAME")
+                )
+            }),
+        );
+    }
     let file_subscriber = tracing_subscriber::fmt::layer()
         .with_file(true)
         .with_line_number(true)

@@ -1,5 +1,5 @@
 [package]
-edition = "2021"
+edition = "2024"
 name = "autonomi-nodejs"
 version = "0.1.1"
 description = "NodeJS bindings for the autonomi client"

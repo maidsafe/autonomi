@@ -85,7 +85,7 @@ fn generate_file(path: &PathBuf, file_size_mb: usize) {
     // can create [u8; 32] max at time. Thus each mb has 1024*32 such small chunks
     let n_small_chunks = file_size_mb * 1024 * 32;
     for _ in 0..n_small_chunks {
-        let random_data: [u8; 32] = rng.gen();
+        let random_data: [u8; 32] = rng.r#gen();
         file.write_all(&random_data)
             .expect("Failed to write to file");
     }
