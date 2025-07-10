@@ -910,6 +910,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sysinfo",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -9146,6 +9147,9 @@ checksum = "8f50febec83f5ee1df3015341d8bd429f2d1cc62bcba7ea2076759d315084683"
 name = "test-utils"
 version = "0.4.20"
 dependencies = [
+ "ant-bootstrap",
+ "ant-node",
+ "autonomi",
  "bytes",
  "color-eyre",
  "dirs-next",

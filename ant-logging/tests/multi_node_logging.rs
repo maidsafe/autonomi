@@ -1,0 +1,199 @@
+// Copyright 2025 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
+// Integration test for multi-node logging functionality
+
+use ant_logging::{LogBuilder, LogOutputDest};
+use std::path::PathBuf;
+use std::time::Duration;
+use tempfile::TempDir;
+use tracing::{info, Instrument};
+
+#[tokio::test]
+#[ignore] // TODO: Fix path and issues with temp folder needing root
+async fn test_multi_node_logging_e2e() {
+    let temp_dir = TempDir::new().expect("Failed to create temp directory");
+
+    // Create the same directory structure that LogOutputDest::parse_from_str("data-dir") creates
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let log_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join("client")
+        .join("logs")
+        .join(format!("log_{timestamp}"));
+
+    println!("Log directory: {}", log_dir.display());
+
+    // Test multi-node logging with 2 nodes
+    let mut log_builder = LogBuilder::new(vec![(
+        "multi_node_logging".to_string(),
+        tracing::Level::INFO,
+    )]);
+    log_builder.output_dest(LogOutputDest::Path(log_dir.clone()));
+
+    let multi_node_log_handle = log_builder
+        .initialize_with_multi_node_logging(2)
+        .expect("Failed to initialize multi-node logging");
+
+    // Log messages from different nodes using new dynamic span format
+    let node_1_span = tracing::info_span!("node", node_id = 1);
+    let task1 = async {
+        info!("Message from node 1");
+        info!("Another message from node 1");
+
+        // Test nested spans
+        let inner_span = tracing::info_span!("inner_task");
+        let inner_task = async {
+            info!("Inner message from node 1");
+        }
+        .instrument(inner_span);
+        inner_task.await;
+    }
+    .instrument(node_1_span);
+
+    let node_2_span = tracing::info_span!("node", node_id = 2);
+    let task2 = async {
+        info!("Message from node 2");
+    }
+    .instrument(node_2_span);
+
+    // Run tasks concurrently
+    tokio::join!(task1, task2);
+
+    // Allow time for logs to be queued.
+    // Hacky architecture but okay enough for simple tests.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Drop the log handle to drop the WorkerGuards inside.
+    // Drop guards -> logs flushed. This behavior is defined in the tracing-appender crate.
+    drop(multi_node_log_handle);
+
+    // Allow time for logs to be flushed.
+    // Hacky architecture but okay enough for simple tests.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Extract test name automatically
+    let test_name = std::thread::current()
+        .name()
+        .map(|name| name.replace("::", "_"))
+        .unwrap_or_else(|| "unknown_test".to_string());
+
+    let node_1_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join(format!("node_01_{test_name}"))
+        .join("logs");
+    let node_2_dir = temp_dir
+        .path()
+        .join("autonomi")
+        .join(format!("node_02_{test_name}"))
+        .join("logs");
+
+    println!("node 1 directory: {}", node_1_dir.display());
+    println!("node 2 directory: {}", node_2_dir.display());
+
+    // Verify node directories were created
+    assert!(
+        node_1_dir.exists(),
+        "Node 1 directory should exist at: {}",
+        node_1_dir.display()
+    );
+    assert!(
+        node_2_dir.exists(),
+        "Node 2 directory should exist at: {}",
+        node_2_dir.display()
+    );
+
+    // Verify each node has its own log file with correct content
+    let node_1_content = read_log_content(&node_1_dir).expect("Failed to read node 1 logs");
+    let node_2_content = read_log_content(&node_2_dir).expect("Failed to read node 2 logs");
+
+    println!("Node 1 logs:\n{node_1_content}");
+    println!("Node 2 logs:\n{node_2_content}");
+
+    // Check node 1 logs contain all its messages
+    assert!(
+        node_1_content.contains("Message from node 1"),
+        "Node 1 logs should contain its messages"
+    );
+    assert!(
+        node_1_content.contains("Another message from node 1"),
+        "Node 1 logs should contain all its messages"
+    );
+    assert!(
+        node_1_content.contains("Inner message from node 1"),
+        "Node 1 logs should contain nested span messages"
+    );
+    assert!(
+        !node_1_content.contains("Message from node 2"),
+        "Node 1 logs should not contain node 2 messages"
+    );
+
+    // Check node 2 logs contain only its messages
+    assert!(
+        node_2_content.contains("Message from node 2"),
+        "Node 2 logs should contain its messages"
+    );
+    assert!(
+        !node_2_content.contains("Message from node 1"),
+        "Node 2 logs should not contain node 1 messages"
+    );
+
+    // Verify proper log formatting
+    assert!(
+        node_1_content.contains("multi_node_logging"),
+        "Should contain target name"
+    );
+    assert!(
+        node_1_content.contains("/node"),
+        "Should contain span information with /node"
+    );
+    assert!(
+        node_2_content.contains("/node"),
+        "Should contain span information with /node"
+    );
+}
+
+#[test]
+fn test_unlimited_node_span_creation() {
+    // Test that we can create spans for nodes beyond the old 20-node limit
+    // This tests the span creation functionality without requiring a full logging setup
+
+    let test_nodes = vec![1, 15, 21, 25, 50, 100];
+
+    for &node_id in &test_nodes {
+        // This should work for any node_id now (no hardcoded limit)
+        let node_span = tracing::info_span!("node", node_id = node_id);
+
+        // Verify the span can be entered and used
+        let _enter = node_span.enter();
+        // If we get here without panicking, the span creation works
+    }
+
+    println!("Successfully created spans for node IDs: {test_nodes:?}");
+}
+
+/// Helper function to read log content from a node directory
+fn read_log_content(node_dir: &PathBuf) -> Result<String, Box<dyn std::error::Error>> {
+    let mut content = String::new();
+
+    for entry in std::fs::read_dir(node_dir)? {
+        let entry = entry?;
+        if entry.path().extension().is_some_and(|ext| ext == "log") {
+            let file_content = std::fs::read_to_string(entry.path())?;
+            content.push_str(&file_content);
+        }
+    }
+
+    if content.is_empty() {
+        return Err("No log content found".into());
+    }
+
+    Ok(content)
+}

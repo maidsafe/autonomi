@@ -28,6 +28,7 @@ use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
 use tokio::time::sleep;
 use tokio::time::Duration;
+use tracing::Instrument;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 const TO_MB: u64 = 1_000_000;
@@ -335,14 +336,17 @@ impl NetworkMetricsRecorder {
                 let bad_nodes_notifier = self.bad_nodes_notifier.clone();
                 let flagged_by = *flagged_by;
                 #[allow(clippy::let_underscore_future)]
-                let _ = tokio::spawn(async move {
-                    if let Err(err) = bad_nodes_notifier
-                        .send(BadNodeMetricsMsg::ShunnedByPeer(flagged_by))
-                        .await
-                    {
-                        error!("Failed to send shunned report via notifier: {err:?}");
+                let _ = tokio::spawn(
+                    async move {
+                        if let Err(err) = bad_nodes_notifier
+                            .send(BadNodeMetricsMsg::ShunnedByPeer(flagged_by))
+                            .await
+                        {
+                            error!("Failed to send shunned report via notifier: {err:?}");
+                        }
                     }
-                });
+                    .in_current_span(),
+                );
             }
             Marker::QuotingMetrics { quoting_metrics } => {
                 let _ = self.relevant_records.set(
@@ -367,14 +371,17 @@ impl NetworkMetricsRecorder {
     pub(crate) fn record_change_in_close_group(&self, new_close_group: Vec<PeerId>) {
         let bad_nodes_notifier = self.bad_nodes_notifier.clone();
         #[allow(clippy::let_underscore_future)]
-        let _ = tokio::spawn(async move {
-            if let Err(err) = bad_nodes_notifier
-                .send(BadNodeMetricsMsg::CloseGroupUpdated(new_close_group))
-                .await
-            {
-                error!("Failed to send shunned report via notifier: {err:?}");
+        let _ = tokio::spawn(
+            async move {
+                if let Err(err) = bad_nodes_notifier
+                    .send(BadNodeMetricsMsg::CloseGroupUpdated(new_close_group))
+                    .await
+                {
+                    error!("Failed to send shunned report via notifier: {err:?}");
+                }
             }
-        });
+            .in_current_span(),
+        );
     }
 
     pub(crate) fn update_node_versions(&self, versions: &HashMap<PeerId, String>) {

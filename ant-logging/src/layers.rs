@@ -28,9 +28,9 @@ use tracing_subscriber::{
     Layer, Registry,
 };
 
-const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
-const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
-const MAX_LOG_FILES: usize = 1000;
+pub(crate) const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
+pub(crate) const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
+pub(crate) const MAX_LOG_FILES: usize = 1000;
 // Everything is logged by default
 const ALL_ANT_LOGS: &str = "all";
 // Trace at nodes, clients, debug at networking layer
@@ -59,7 +59,7 @@ impl ReloadHandle {
 
 #[derive(Default)]
 /// Tracing log formatter setup for easier span viewing
-pub(crate) struct LogFormatter;
+pub struct LogFormatter;
 
 impl<S, N> FormatEvent<S, N> for LogFormatter
 where
@@ -239,7 +239,7 @@ impl TracingLayers {
 /// `export ANT_LOG = libp2p=DEBUG, tokio=INFO, all, sn_client=ERROR`
 /// Custom keywords will take less precedence if the same target has been manually specified in the CSV.
 /// `sn_client=ERROR` in the above example will be used instead of the TRACE level set by "all" keyword.
-fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> {
+pub(crate) fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> {
     let mut targets = BTreeMap::new();
     let mut contains_keyword_all_sn_logs = false;
     let mut contains_keyword_verbose_sn_logs = false;
@@ -295,6 +295,24 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
                     t.insert("ant_node".to_string(), Level::INFO)
                 };
             }
+
+            #[cfg(any(test, debug_assertions))]
+            {
+                // Auto-detect test modules by scanning the tests directory
+                if let Ok(entries) = std::fs::read_dir("tests") {
+                    for entry in entries.flatten() {
+                        if let Some(file_name) = entry.file_name().to_str() {
+                            if file_name.ends_with(".rs") {
+                                let test_module = file_name.trim_end_matches(".rs");
+                                t.insert(test_module.to_string(), Level::TRACE);
+                            }
+                        }
+                    }
+                } else {
+                    println!("Could not read tests directory");
+                }
+            }
+
             t
         } else {
             Default::default()

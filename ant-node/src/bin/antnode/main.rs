@@ -41,6 +41,7 @@ use tokio::{
     sync::{broadcast::error::RecvError, mpsc},
     time::sleep,
 };
+use tracing::Instrument;
 use tracing_appender::non_blocking::WorkerGuard;
 
 #[derive(Debug, Clone)]
@@ -402,21 +403,24 @@ You can check your reward balance by running:
 
     // Monitor ctrl-c
     let ctrl_tx_clone = ctrl_tx.clone();
-    tokio::spawn(async move {
-        if let Err(err) = tokio::signal::ctrl_c().await {
-            // I/O error, ignore/print the error, but continue to handle as if ctrl-c was received
-            warn!("Listening to ctrl-c error: {err}");
+    tokio::spawn(
+        async move {
+            if let Err(err) = tokio::signal::ctrl_c().await {
+                // I/O error, ignore/print the error, but continue to handle as if ctrl-c was received
+                warn!("Listening to ctrl-c error: {err}");
+            }
+            if let Err(err) = ctrl_tx_clone
+                .send(NodeCtrl::Stop {
+                    delay: Duration::from_secs(1),
+                    result: StopResult::Error(eyre!("Ctrl-C received!")),
+                })
+                .await
+            {
+                error!("Failed to send node control msg to antnode bin main thread: {err}");
+            }
         }
-        if let Err(err) = ctrl_tx_clone
-            .send(NodeCtrl::Stop {
-                delay: Duration::from_secs(1),
-                result: StopResult::Error(eyre!("Ctrl-C received!")),
-            })
-            .await
-        {
-            error!("Failed to send node control msg to antnode bin main thread: {err}");
-        }
-    });
+        .instrument(tracing::Span::current()),
+    );
 
     // Start up gRPC interface if enabled by user
     if let Some(addr) = rpc {
