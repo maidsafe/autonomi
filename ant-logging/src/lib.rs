@@ -13,9 +13,10 @@
 
 mod appender;
 mod error;
-mod layers;
+pub mod layers;
 #[cfg(feature = "process-metrics")]
 pub mod metrics;
+pub mod spawned_nodes_layers;
 
 use crate::error::Result;
 use layers::TracingLayers;
@@ -255,7 +256,7 @@ impl LogBuilder {
     }
 
     /// Initialize multi-node logging with automatic test-specific directory naming
-    pub fn initialize_with_multi_nodes_logging(
+    pub fn initialize_with_multi_node_logging(
         self,
         node_count: usize,
     ) -> Result<MultiNodeLogHandle> {
@@ -333,8 +334,12 @@ impl LogBuilder {
         node_count: usize,
         targets: Vec<(String, Level)>,
         test_name: &str,
-    ) -> Result<(crate::layers::UniqueSpansNodeRoutingLayer, Vec<WorkerGuard>)> {
-        let mut routing_layer = crate::layers::UniqueSpansNodeRoutingLayer::new(targets);
+    ) -> Result<(
+        crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
+        Vec<WorkerGuard>,
+    )> {
+        let mut routing_layer =
+            crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer::new(targets);
         let mut guards = Vec::new();
 
         // Set up client appender for client_testname spans
@@ -364,7 +369,7 @@ impl LogBuilder {
     fn setup_client_appender_with_key(
         &self,
         base_log_dir: &PathBuf,
-        routing_layer: &mut crate::layers::UniqueSpansNodeRoutingLayer,
+        routing_layer: &mut crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
         routing_key: &str,
     ) -> Result<WorkerGuard> {
         self.create_directory(base_log_dir)?;
@@ -380,7 +385,7 @@ impl LogBuilder {
         &self,
         data_root: &Path,
         node_index: usize,
-        routing_layer: &mut crate::layers::UniqueSpansNodeRoutingLayer,
+        routing_layer: &mut crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
         test_name: &str,
         routing_key: &str,
     ) -> Result<WorkerGuard> {
@@ -506,8 +511,11 @@ impl LogBuilder {
         node_count: usize,
         targets: Vec<(String, Level)>,
         test_name: &str, // NEW
-    ) -> Result<(crate::layers::NodeRoutingLayer, Vec<WorkerGuard>)> {
-        let mut routing_layer = crate::layers::NodeRoutingLayer::new(targets);
+    ) -> Result<(
+        crate::spawned_nodes_layers::NodeRoutingLayer,
+        Vec<WorkerGuard>,
+    )> {
+        let mut routing_layer = crate::spawned_nodes_layers::NodeRoutingLayer::new(targets);
         let mut guards = Vec::new();
 
         // Set up client appender
@@ -526,7 +534,7 @@ impl LogBuilder {
     fn setup_client_appender(
         &self,
         base_log_dir: &PathBuf,
-        routing_layer: &mut crate::layers::NodeRoutingLayer,
+        routing_layer: &mut crate::spawned_nodes_layers::NodeRoutingLayer,
     ) -> Result<WorkerGuard> {
         self.create_directory(base_log_dir)?;
 
@@ -541,7 +549,7 @@ impl LogBuilder {
         &self,
         base_log_dir: &Path,
         node_count: usize,
-        routing_layer: &mut crate::layers::NodeRoutingLayer,
+        routing_layer: &mut crate::spawned_nodes_layers::NodeRoutingLayer,
         test_name: &str, // NEW
     ) -> Result<Vec<WorkerGuard>> {
         let data_root = self.calculate_data_root(base_log_dir)?;
@@ -560,7 +568,7 @@ impl LogBuilder {
         &self,
         data_root: &Path,
         node_index: usize,
-        routing_layer: &mut crate::layers::NodeRoutingLayer,
+        routing_layer: &mut crate::spawned_nodes_layers::NodeRoutingLayer,
         test_name: &str, // NEW
     ) -> Result<WorkerGuard> {
         let node_name = format!("node_{node_index:02}_{test_name}");
@@ -621,7 +629,7 @@ impl LogBuilder {
     /// Configure all tracing layers including OTLP if enabled (for original NodeRoutingLayer)
     fn configure_tracing_layers(
         &self,
-        routing_layer: crate::layers::NodeRoutingLayer,
+        routing_layer: crate::spawned_nodes_layers::NodeRoutingLayer,
     ) -> Result<TracingLayers> {
         let mut layers = TracingLayers::default();
         layers.layers.push(Box::new(routing_layer));
@@ -634,7 +642,7 @@ impl LogBuilder {
     /// Configure all tracing layers including OTLP if enabled (for UniqueSpansNodeRoutingLayer)
     fn configure_tracing_layers_for_unique_spans(
         &self,
-        routing_layer: crate::layers::UniqueSpansNodeRoutingLayer,
+        routing_layer: crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
     ) -> Result<TracingLayers> {
         let mut layers = TracingLayers::default();
         layers.layers.push(Box::new(routing_layer));
