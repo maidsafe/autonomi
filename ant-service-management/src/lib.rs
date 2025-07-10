@@ -95,6 +95,7 @@ pub trait ServiceStateActions {
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;
+    async fn set_status(&self, status: ServiceStatus);
     async fn set_metrics_port_if_not_set(&self, service_control: &dyn ServiceControl)
     -> Result<()>;
     async fn version(&self) -> String;
