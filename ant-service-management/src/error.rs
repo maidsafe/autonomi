@@ -73,4 +73,12 @@ pub enum Error {
     UserDataDirectoryNotObtainable,
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error("File watcher error: {0}")]
+    WatcherError(String),
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        Error::WatcherError(err.to_string())
+    }
 }
