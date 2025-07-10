@@ -34,6 +34,7 @@ tonic = { version = "0.6.2" }
 tracing = { version = "~0.1.26" }
 tracing-core = "0.1.30"
 chrono = "0.4.39"
+notify = "6.1.1"
 
 [lints]
 workspace = true
@@ -45,3 +46,4 @@ tonic-build = { version = "~0.6.2" }
 
 [dev-dependencies]
 mockall = "0.11.3"
+tempfile = "3.8.1"
