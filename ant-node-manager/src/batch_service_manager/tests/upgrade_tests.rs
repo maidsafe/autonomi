@@ -883,7 +883,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
             .returning(|_| Ok(()));
 
         let service = NodeService::new(
-            service_data.clone(),
+            Arc::clone(&service_data),
             Box::new(mock_rpc_client),
             Box::new(mock_metrics_client),
         );
@@ -895,7 +895,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         .with(eq(1000))
         .returning(|_| ());
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control).await;
+    let batch_manager = setup_batch_service_manager(services, mock_service_control);
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 

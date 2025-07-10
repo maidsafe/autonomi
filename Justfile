@@ -59,10 +59,6 @@ build-release-artifacts arch nightly="false":
     build_cmd="cargo build --release --target $arch"
   fi
 
-  if [[ "${BUILD_NAT_DETECTION:-true}" == "true" ]]; then
-    $build_cmd --bin nat-detection $nightly_feature
-  fi
-
   if [[ "${BUILD_NODE_LAUNCHPAD:-true}" == "true" ]]; then
     $build_cmd --bin node-launchpad $nightly_feature
   fi
@@ -121,7 +117,6 @@ make-artifacts-directory:
 package-all-bins:
   #!/usr/bin/env bash
   set -e
-  just package-bin "nat-detection"
   just package-bin "node-launchpad"
   just package-bin "ant"
   just package-bin "antnode"
@@ -147,7 +142,6 @@ package-bin bin version="":
   bin="{{bin}}"
 
   supported_bins=(\
-    "nat-detection" \
     "node-launchpad" \
     "ant" \
     "antnode" \
@@ -159,9 +153,6 @@ package-bin bin version="":
 
   bin="{{bin}}"
   case "$bin" in
-    nat-detection)
-      crate_dir_name="nat-detection"
-      ;;
     node-launchpad)
       crate_dir_name="node-launchpad"
       ;;
@@ -219,7 +210,6 @@ upload-all-packaged-bins-to-s3:
   set -e
 
   binaries=(
-    nat-detection
     node-launchpad
     ant
     antnode
@@ -237,9 +227,6 @@ upload-packaged-bin-to-s3 bin_name:
   set -e
 
   case "{{bin_name}}" in
-    nat-detection)
-      bucket="nat-detection"
-      ;;
     node-launchpad)
       bucket="node-launchpad"
       ;;
@@ -290,9 +277,6 @@ delete-s3-bin bin_name version:
   set -e
 
   case "{{bin_name}}" in
-    nat-detection)
-      bucket="nat-detection"
-      ;;
     node-launchpad)
       bucket="node-launchpad"
       ;;
@@ -381,7 +365,6 @@ package-arch arch:
   cd artifacts/$architecture/release
 
   binaries=(
-    nat-detection
     node-launchpad
     ant
     antnode

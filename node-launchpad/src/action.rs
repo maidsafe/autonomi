@@ -57,35 +57,26 @@ pub enum StatusActions {
     StartNodesCompleted {
         service_name: String,
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     StopNodesCompleted {
         service_name: String,
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     ResetNodesCompleted {
         trigger_start_node: bool,
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     RemoveNodesCompleted {
         service_name: String,
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     AddNodesCompleted {
         service_name: String,
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     UpdateNodesCompleted {
         all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
-    NatDetectionStarted,
-    SuccessfullyDetectedNatStatus,
-    ErrorWhileRunningNatDetection,
     ErrorLoadingNodeRegistry {
         raw_error: String,
     },

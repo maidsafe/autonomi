@@ -51,6 +51,7 @@ pub enum ServiceStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Deprecated. We don't use this anymore, but keeping it for backward compatibility.
 pub enum NatDetectionStatus {
     Public,
     UPnP,
