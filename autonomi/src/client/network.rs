@@ -8,8 +8,8 @@
 
 use crate::networking::NetworkError;
 use crate::Client;
+use ant_kad::PeerInfo;
 use ant_protocol::NetworkAddress;
-use libp2p::kad::PeerInfo;
 
 impl Client {
     /// Retrieve the closest peers to the given network address.

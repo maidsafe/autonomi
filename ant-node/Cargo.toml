@@ -54,7 +54,6 @@ libp2p = { version = "0.56.0", features = [
     "tokio",
     "dns",
     "upnp",
-    "kad",
     "macros",
     "request-response",
     "cbor",
@@ -68,6 +67,7 @@ libp2p = { version = "0.56.0", features = [
     "metrics",
     "autonat",
 ] }
+ant-kad = { path = "../ant-kad", version = "0.1.0" }
 num-traits = "0.2"
 prometheus-client = { version = "0.23.1", optional = true }
 # watch out updating this, protoc compiler needs to be installed on all build systems
@@ -104,6 +104,7 @@ xor_name = "5.0.0"
 void = "1.0.2"
 
 [dev-dependencies]
+ant-kad = { path = "../ant-kad", version = "0.1.0" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.6", features = ["rpc"] }
 assert_fs = "1.0.0"
 evmlib = { path = "../evmlib", version = "0.4.1" }
@@ -119,6 +120,7 @@ test-utils = { path = "../test-utils" }
 uuid = { version = "1.5.0", features = ["v4"] }
 libp2p-swarm-test = { version = "0.6.0", features = ["tokio"] }
 quickcheck = "1.0.3"
+serial_test = "3.0"
 
 [lints]
 workspace = true

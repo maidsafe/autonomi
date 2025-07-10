@@ -6,11 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_kad::{self as kad, QueryId};
 use ant_protocol::storage::GraphEntryAddress;
 use ant_protocol::{messages::Response, storage::RecordKind, NetworkAddress};
 use libp2p::swarm::ListenError;
 use libp2p::{
-    kad::{self, QueryId},
     request_response::{OutboundFailure, OutboundRequestId},
     swarm::DialError,
     TransportError,

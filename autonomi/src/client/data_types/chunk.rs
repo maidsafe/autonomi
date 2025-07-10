@@ -18,13 +18,13 @@ use crate::{
     Client,
 };
 use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
+use ant_kad::Record;
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
 use ant_protocol::{
     storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
 };
 use bytes::Bytes;
-use libp2p::kad::Record;
 use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -121,6 +121,15 @@ impl Client {
             .inspect_err(|err| error!("Error fetching chunk: {err:?}"))?
             .ok_or(GetError::RecordNotFound)?;
 
+        debug!(
+            "Retrieved record with {} bytes for address: {addr:?}",
+            record.value.len()
+        );
+        debug!(
+            "Record header check with first {} bytes: {:?}",
+            RecordHeader::SIZE + 1,
+            &record.value[..record.value.len().min(RecordHeader::SIZE + 1)]
+        );
         let header = RecordHeader::from_record(&record)?;
 
         if let Ok(true) = RecordHeader::is_record_of_type_chunk(&record) {
@@ -369,6 +378,14 @@ impl Client {
         &self,
         data_map_bytes: &Bytes,
     ) -> Result<Bytes, GetError> {
+        debug!(
+            "Attempting to deserialize {} bytes as DataMapLevel",
+            data_map_bytes.len()
+        );
+        debug!(
+            "First 32 bytes: {:?}",
+            &data_map_bytes[..data_map_bytes.len().min(32)]
+        );
         let mut data_map_level: DataMapLevel = rmp_serde::from_slice(data_map_bytes)
             .map_err(GetError::InvalidDataMap)
             .inspect_err(|err| error!("Error deserializing data map: {err:?}"))?;

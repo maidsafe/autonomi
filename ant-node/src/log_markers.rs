@@ -7,8 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::PutValidationError;
+use ant_kad::RecordKey;
 use ant_protocol::PrettyPrintRecordKey;
-use libp2p::{kad::RecordKey, PeerId};
+use libp2p::PeerId;
 use strum::Display;
 
 /// Public Markers for generating log output,

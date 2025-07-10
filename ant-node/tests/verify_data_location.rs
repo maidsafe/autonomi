@@ -8,6 +8,7 @@
 
 mod common;
 
+use ant_kad::{KBucketKey, RecordKey};
 use ant_logging::LogBuilder;
 use ant_node::sort_peers_by_key;
 use ant_protocol::{
@@ -22,10 +23,7 @@ use common::{
 };
 use eyre::{eyre, Result};
 use itertools::Itertools;
-use libp2p::{
-    kad::{KBucketKey, RecordKey},
-    PeerId,
-};
+use libp2p::PeerId;
 use rand::{rngs::OsRng, Rng};
 use std::{
     collections::{BTreeSet, HashMap, HashSet},

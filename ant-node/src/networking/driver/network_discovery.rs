@@ -9,11 +9,9 @@
 use super::SwarmDriver;
 use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent};
 
+use ant_kad::{KBucketKey, K_VALUE};
 use ant_protocol::NetworkAddress;
-use libp2p::{
-    kad::{KBucketKey, K_VALUE},
-    PeerId,
-};
+use libp2p::PeerId;
 use rand::{rngs::OsRng, Rng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::collections::{btree_map::Entry, BTreeMap};

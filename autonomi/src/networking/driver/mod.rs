@@ -14,6 +14,9 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
+use ant_kad::store::MemoryStoreConfig;
+use ant_kad::NoKnownPeers;
+use ant_kad::{self, store::MemoryStore};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::PrettyPrintRecordKey;
 use ant_protocol::{
@@ -21,13 +24,10 @@ use ant_protocol::{
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use libp2p::kad::store::MemoryStoreConfig;
-use libp2p::kad::NoKnownPeers;
 use libp2p::{
     core::muxing::StreamMuxerBox,
     futures::StreamExt,
     identity::Keypair,
-    kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
     request_response::{self, ProtocolSupport},
@@ -53,8 +53,6 @@ const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600); // todo: t
 /// Size of the LRU cache for peers and their addresses.
 /// Libp2p defaults to 100, we use 2k.
 const PEER_CACHE_SIZE: usize = 2_000;
-/// Client with poor connection requires a longer time to transmit large sized recrod to production network, via put_record_to
-const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
 
 /// Driver for the Autonomi Client Network
 ///
@@ -76,7 +74,7 @@ pub(crate) struct NetworkDriver {
 
 #[derive(NetworkBehaviour)]
 pub(crate) struct AutonomiClientBehaviour {
-    pub kademlia: kad::Behaviour<MemoryStore>,
+    pub kademlia: ant_kad::Behaviour<MemoryStore>,
     pub identify: libp2p::identify::Behaviour,
     pub relay_client: libp2p::relay::client::Behaviour,
     pub request_response: request_response::cbor::Behaviour<Request, Response>,
@@ -151,21 +149,20 @@ impl NetworkDriver {
             ..Default::default()
         };
         let store = MemoryStore::with_config(peer_id, store_cfg);
-        let mut kad_cfg = libp2p::kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
+        let mut kad_cfg = ant_kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
         kad_cfg
-            .set_kbucket_inserts(libp2p::kad::BucketInserts::OnConnected)
+            .set_kbucket_inserts(ant_kad::BucketInserts::OnConnected)
             .set_max_packet_size(MAX_PACKET_SIZE)
             .set_parallelism(KAD_ALPHA)
             .set_replication_factor(REPLICATION_FACTOR)
             .set_query_timeout(KAD_QUERY_TIMEOUT)
-            .set_periodic_bootstrap_interval(None)
-            // Extend outbound_substreams timeout to allow client with poor connection
-            // still able to upload large sized record with higher success rate.
-            .set_substreams_timeout(CLIENT_SUBSTREAMS_TIMEOUT_S);
+            .set_periodic_bootstrap_interval(None);
+        // Note: set_substreams_timeout is not available in ant-kad
+        // This was used to extend outbound_substreams timeout for clients with poor connection
 
         // setup kad and autonomi requests as our behaviour
         let behaviour = AutonomiClientBehaviour {
-            kademlia: libp2p::kad::Behaviour::with_config(peer_id, store, kad_cfg),
+            kademlia: ant_kad::Behaviour::with_config(peer_id, store, kad_cfg),
             relay_client: relay_client_behaviour,
             identify,
             request_response,
@@ -209,7 +206,7 @@ impl NetworkDriver {
     }
 
     /// Shorthand for kad behaviour mut
-    fn kad(&mut self) -> &mut kad::Behaviour<MemoryStore> {
+    fn kad(&mut self) -> &mut ant_kad::Behaviour<MemoryStore> {
         &mut self.swarm.behaviour_mut().kademlia
     }
 

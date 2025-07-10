@@ -29,6 +29,7 @@ use crate::networking::{
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
+use ant_kad::{self as kad, KBucketDistance as Distance, QueryId, K_VALUE};
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     messages::{Request, Response},
@@ -36,17 +37,13 @@ use ant_protocol::{
 };
 use futures::StreamExt;
 use libp2p::{
-    kad::{self, KBucketDistance as Distance, QueryId, K_VALUE},
-    request_response::OutboundRequestId,
+    request_response::{self, OutboundRequestId},
     swarm::{
+        behaviour::toggle::Toggle,
         dial_opts::{DialOpts, PeerCondition},
-        ConnectionId, Swarm,
+        ConnectionId, NetworkBehaviour, Swarm,
     },
     Multiaddr, PeerId,
-};
-use libp2p::{
-    request_response,
-    swarm::{behaviour::toggle::Toggle, NetworkBehaviour},
 };
 use rand::Rng;
 use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};

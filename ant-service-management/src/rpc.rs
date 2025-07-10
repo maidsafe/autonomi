@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::{Error, Result};
+use ant_kad::RecordKey;
 use ant_protocol::{
     antnode_proto::{
         ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest,
@@ -15,7 +16,7 @@ use ant_protocol::{
     CLOSE_GROUP_SIZE,
 };
 use async_trait::async_trait;
-use libp2p::{kad::RecordKey, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use tokio::time::Duration;
 use tonic::Request;
@@ -182,7 +183,7 @@ impl RpcActions for RpcClient {
             })?;
         let mut record_addresses = vec![];
         for bytes in response.get_ref().addresses.iter() {
-            let key = libp2p::kad::RecordKey::from(bytes.clone());
+            let key = ant_kad::RecordKey::from(bytes.clone());
             record_addresses.push(RecordAddress { key });
         }
         Ok(record_addresses)

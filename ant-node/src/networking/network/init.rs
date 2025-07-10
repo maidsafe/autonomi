@@ -33,7 +33,6 @@ use libp2p::Transport as _;
 use libp2p::{core::muxing::StreamMuxerBox, relay};
 use libp2p::{
     identity::Keypair,
-    kad,
     multiaddr::Protocol,
     request_response::{self, Config as RequestResponseConfig, ProtocolSupport},
     swarm::{StreamProtocol, Swarm},
@@ -67,7 +66,7 @@ const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 /// Time before a Kad query times out if no response is received
 const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
 
-/// Interval to trigger native libp2p::kad bootstrap.
+/// Interval to trigger native ant_kad bootstrap.
 /// This is the max time it should take. Minimum interval at any node will be half this
 const PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S: u64 = 21600;
 
@@ -109,9 +108,9 @@ pub(super) fn init_driver(
         PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S / 2..PERIODIC_KAD_BOOTSTRAP_INTERVAL_MAX_S,
     );
 
-    let mut kad_cfg = kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
+    let mut kad_cfg = ant_kad::Config::new(StreamProtocol::new(KAD_STREAM_PROTOCOL_ID));
     let _ = kad_cfg
-        .set_kbucket_inserts(libp2p::kad::BucketInserts::Manual)
+        .set_kbucket_inserts(ant_kad::BucketInserts::Manual)
         // how often a node will replicate records that it has stored, aka copying the key-value pair to other nodes
         // this is a heavier operation than publication, so it is done less frequently
         // Set to `None` to ensure periodic replication disabled.
@@ -191,7 +190,7 @@ pub(super) fn init_driver(
 
 /// Private helper to create the network components with the provided config and req/res behaviour
 fn init_swarm_driver(
-    kad_cfg: kad::Config,
+    kad_cfg: ant_kad::Config,
     record_store_cfg: NodeRecordStoreConfig,
     req_res_protocol: ProtocolSupport,
     config: NetworkConfig,
@@ -316,7 +315,7 @@ fn init_swarm_driver(
 
         let store = node_record_store;
         debug!("Using Kademlia with NodeRecordStore!");
-        kad::Behaviour::with_config(peer_id, store, kad_cfg)
+        ant_kad::Behaviour::with_config(peer_id, store, kad_cfg)
     };
 
     let agent_version =
@@ -428,7 +427,7 @@ fn init_swarm_driver(
         pending_get_closest_peers: Default::default(),
         pending_requests: Default::default(),
         // We use 255 here which allows covering a network larger than 64k without any rotating.
-        // This is based on the libp2p kad::kBuckets peers distribution.
+        // This is based on the libp2p ant_kad::kBuckets peers distribution.
         dialed_peers: CircularVec::new(255),
         network_discovery: NetworkDiscovery::new(&peer_id),
         live_connected_peers: Default::default(),

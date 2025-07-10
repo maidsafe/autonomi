@@ -9,14 +9,14 @@
 use crate::networking::{
     driver::PendingGetClosestType, Addresses, NetworkError, Result, CLOSE_GROUP_SIZE,
 };
-use libp2p::kad::{self, GetClosestPeersError, InboundRequest, QueryResult, K_VALUE};
+use ant_kad::{self as kad, GetClosestPeersError, InboundRequest, QueryResult, K_VALUE};
 use std::collections::hash_map::Entry;
 use std::time::Instant;
 
 use super::SwarmDriver;
 
 impl SwarmDriver {
-    pub(super) fn handle_kad_event(&mut self, kad_event: libp2p::kad::Event) -> Result<()> {
+    pub(super) fn handle_kad_event(&mut self, kad_event: ant_kad::Event) -> Result<()> {
         let start = Instant::now();
         let event_string;
 

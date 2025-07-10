@@ -8,8 +8,8 @@
 
 use crate::error::Error;
 use crate::PrettyPrintRecordKey;
+use ant_kad::Record;
 use bytes::{BufMut, Bytes, BytesMut};
-use libp2p::kad::Record;
 use prometheus_client::encoding::EncodeLabelValue;
 use rmp_serde::Serializer;
 use serde::{Deserialize, Serialize};

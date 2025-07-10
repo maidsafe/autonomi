@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{messages::Nonce, NetworkAddress};
-use libp2p::kad::U256;
+use ant_kad::U256;
 use serde::{Deserialize, Serialize};
 
 /// Data queries - retrieving data and inspecting their structure.

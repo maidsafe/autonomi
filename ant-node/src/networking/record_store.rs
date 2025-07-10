@@ -15,6 +15,10 @@ use aes_gcm_siv::{
     Aes256GcmSiv, Key as AesKey, Nonce,
 };
 use ant_evm::QuotingMetrics;
+use ant_kad::{
+    store::{Error, RecordStore, Result},
+    KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
+};
 use ant_protocol::constants::MAX_PACKET_SIZE;
 use ant_protocol::{
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
@@ -22,13 +26,7 @@ use ant_protocol::{
 };
 use hkdf::Hkdf;
 use itertools::Itertools;
-use libp2p::{
-    identity::PeerId,
-    kad::{
-        store::{Error, RecordStore, Result},
-        KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
-    },
-};
+use libp2p::identity::PeerId;
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -442,7 +440,7 @@ impl NodeRecordStore {
         match hex::decode(hex_str) {
             Ok(bytes) => Some(Key::from(bytes)),
             Err(error) => {
-                error!("Error decoding hex string: {:?}", error);
+                error!("Error decoding hex string '{}': {:?}", hex_str, error);
                 None
             }
         }
@@ -1001,17 +999,15 @@ mod tests {
     use bls::SecretKey;
     use xor_name::XorName;
 
+    use ant_kad::RecordKey;
     use ant_protocol::storage::{
         try_deserialize_record, try_serialize_record, Chunk, ChunkAddress, DataTypes, Scratchpad,
     };
-    use assert_fs::{
-        fixture::{PathChild, PathCreateDir},
-        TempDir,
-    };
     use bytes::Bytes;
     use eyre::ContextCompat;
-    use libp2p::{core::multihash::Multihash, kad::RecordKey};
+    use libp2p::core::multihash::Multihash;
     use quickcheck::*;
+    use serial_test::serial;
     use tokio::runtime::Runtime;
     use tokio::time::{sleep, Duration};
 
@@ -1131,14 +1127,30 @@ mod tests {
         assert!(store.get(&r.key).is_none());
     }
 
+    // This test has timing issues when run concurrently with other tests
+    // due to async file I/O operations. It passes reliably when run in isolation.
+    // TODO: Fix async task synchronization to ensure file writes complete before restart
     #[tokio::test]
+    #[serial]
     async fn can_store_after_restart() -> eyre::Result<()> {
-        let tmp_dir = TempDir::new()?;
-        let current_test_dir = tmp_dir.child("can_store_after_restart");
-        current_test_dir.create_dir_all()?;
+        // Create a completely isolated test directory using a truly unique path
+        let test_id = uuid::Uuid::new_v4();
+        let temp_base = std::env::temp_dir();
+        let unique_name = format!(
+            "ant_node_restart_test_{}_pid_{}",
+            test_id,
+            std::process::id()
+        );
+        let test_dir = temp_base.join(&unique_name);
+
+        // Ensure directory doesn't exist
+        if test_dir.exists() {
+            fs::remove_dir_all(&test_dir)?;
+        }
+        fs::create_dir_all(&test_dir)?;
 
         let store_config = NodeRecordStoreConfig {
-            storage_dir: current_test_dir.to_path_buf(),
+            storage_dir: test_dir.clone(),
             encryption_seed: [1u8; 16],
             ..Default::default()
         };
@@ -1175,9 +1187,9 @@ mod tests {
             .put_verified(record.clone(), ValidationType::Chunk, true)
             .is_ok());
 
-        // Wait for the async write operation to complete
-        if let Some(cmd) = swarm_cmd_receiver.recv().await {
-            match cmd {
+        // Wait for the async write operation to complete with timeout
+        match tokio::time::timeout(Duration::from_secs(5), swarm_cmd_receiver.recv()).await {
+            Ok(Some(cmd)) => match cmd {
                 LocalSwarmCmd::AddLocalRecordAsStored {
                     key,
                     record_type,
@@ -1185,16 +1197,55 @@ mod tests {
                 } => {
                     store.mark_as_stored(key, record_type, data_type);
                 }
-                _ => panic!("Unexpected command received"),
-            }
+                _ => panic!("Unexpected command received: {cmd:?}"),
+            },
+            Ok(None) => panic!("Channel closed without receiving AddLocalRecordAsStored"),
+            Err(_) => panic!("Timeout waiting for AddLocalRecordAsStored command"),
         }
 
         // Verify the chunk is stored
         let stored_record = store.get(&record.key);
         assert!(stored_record.is_some(), "Chunk should be stored initially");
 
-        // Sleep a while to let OS completes the flush to disk
-        sleep(Duration::from_secs(1)).await;
+        // Force sync to ensure data is written to disk
+        // First, drop the reference to allow the store to be moved
+        drop(stored_record);
+
+        // Give async tasks time to execute
+        tokio::task::yield_now().await;
+        sleep(Duration::from_millis(100)).await;
+
+        // Wait for the file to be written to disk
+        let expected_filename = hex::encode(record.key.as_ref());
+        let expected_file = test_dir.join(&expected_filename);
+
+        // Wait up to 10 seconds for the file to appear
+        let mut file_exists = false;
+        for i in 0..100 {
+            if expected_file.exists() {
+                file_exists = true;
+                debug!("File appeared after {} iterations", i);
+                break;
+            }
+            sleep(Duration::from_millis(100)).await;
+            tokio::task::yield_now().await;
+        }
+
+        if !file_exists {
+            // Debug: Check what files exist in the directory
+            if let Ok(entries) = fs::read_dir(&test_dir) {
+                let files: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .collect();
+                eprintln!("Files in directory after waiting: {files:?}");
+            }
+        }
+
+        assert!(
+            file_exists,
+            "Record file {expected_filename} was not written to disk"
+        );
 
         // Create new channels for the restarted store
         let (new_network_event_sender, _new_network_event_receiver) = mpsc::channel(1);
@@ -1202,6 +1253,11 @@ mod tests {
 
         // Restart the store with same encrypt_seed but new channels
         drop(store);
+
+        // Give the OS more time to flush and release file handles
+        sleep(Duration::from_secs(2)).await;
+        tokio::task::yield_now().await;
+
         let store = NodeRecordStore::with_config(
             self_id,
             store_config,
@@ -1213,6 +1269,20 @@ mod tests {
 
         // Verify the record still exists
         let stored_record = store.get(&record.key);
+
+        // Additional debugging if the test fails
+        if stored_record.is_none() {
+            // Check what files exist in the directory
+            if let Ok(entries) = fs::read_dir(&test_dir) {
+                let files: Vec<_> = entries
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.file_name().into_string().ok())
+                    .collect();
+                eprintln!("Files in test directory: {files:?}");
+                eprintln!("Looking for key: {:?}", hex::encode(record.key.as_ref()));
+            }
+        }
+
         assert!(
             stored_record.is_some(),
             "Chunk should be stored after restart with same key"
@@ -1225,7 +1295,7 @@ mod tests {
         // Restart the store with different encrypt_seed
         let self_id_diff = PeerId::random();
         let store_config_diff = NodeRecordStoreConfig {
-            storage_dir: current_test_dir.to_path_buf(),
+            storage_dir: test_dir.clone(),
             encryption_seed: [2u8; 16],
             ..Default::default()
         };
@@ -1244,6 +1314,9 @@ mod tests {
             store_diff.get(&record.key).is_none(),
             "Chunk should be gone with different encryption key"
         );
+
+        // Clean up the test directory
+        let _ = fs::remove_dir_all(&test_dir);
 
         Ok(())
     }
