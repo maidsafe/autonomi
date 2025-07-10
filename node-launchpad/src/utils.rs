@@ -79,6 +79,11 @@ pub fn initialize_logging() -> Result<()> {
     std::fs::create_dir_all(&log_path)?;
     let log_file = std::fs::File::create(log_path.join(format!("launchpad_{timestamp}.log")))
         .context(format!("Failed to create file {log_path:?}"))?;
+    
+    // SAFETY: This is called during application initialization before any other threads
+    // are spawned, so there's no risk of data races. Setting RUST_LOG is necessary 
+    // to configure logging levels for the application.
+    #[allow(unsafe_code)]
     unsafe {
         std::env::set_var(
             "RUST_LOG",

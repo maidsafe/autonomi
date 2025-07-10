@@ -114,7 +114,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     if std::env::var("SECRET_KEY").is_err() {
-        std::env::set_var("SECRET_KEY", DEFAULT_WALLET_PRIVATE_KEY);
+        // SAFETY: This is called during benchmark initialization before any other threads
+        // are spawned, so there's no risk of data races. Setting SECRET_KEY is necessary
+        // for benchmark execution.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("SECRET_KEY", DEFAULT_WALLET_PRIVATE_KEY);
+        }
     }
 
     let sizes: [u64; 2] = [1, 10]; // File sizes in MB. Add more sizes as needed

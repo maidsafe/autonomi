@@ -424,8 +424,7 @@ pub fn parse_key_sequence(raw: &str) -> Result<Vec<KeyEvent>, String> {
     }
     let raw = if !raw.contains("><") {
         let raw = raw.strip_prefix('<').unwrap_or(raw);
-        let raw = raw.strip_prefix('>').unwrap_or(raw);
-        raw
+        raw.strip_prefix('>').unwrap_or(raw)
     } else {
         raw
     };

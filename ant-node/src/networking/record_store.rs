@@ -320,14 +320,13 @@ impl NodeRecordStore {
         };
 
         info!("Attempting to repopulate records from existing store...");
-        let records = WalkDir::new(&config.storage_dir)
+        WalkDir::new(&config.storage_dir)
             .into_iter()
             .filter_map(|e| e.ok())
             .collect_vec()
             .par_iter()
             .filter_map(process_entry)
-            .collect();
-        records
+            .collect()
     }
 
     /// If quote_metrics file already exists, using the existing parameters.
