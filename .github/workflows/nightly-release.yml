@@ -112,7 +112,6 @@ jobs:
       - name: remove latest nightly release
         shell: bash
         run: |
-          just delete-s3-bin "nat-detection" "nightly"
           just delete-s3-bin "node-launchpad" "nightly"
           just delete-s3-bin "autonomi" "nightly"
           just delete-s3-bin "antnode" "nightly"
@@ -124,7 +123,6 @@ jobs:
         shell: bash
         run: |
           version=$(date +"%Y.%m.%d")
-          just package-bin "nat-detection" "$version"
           just package-bin "node-launchpad" "$version"
           just package-bin "autonomi" "$version"
           just package-bin "antnode" "$version"
@@ -134,7 +132,6 @@ jobs:
           just upload-all-packaged-bins-to-s3
 
           rm -rf packaged_bins
-          just package-bin "nat-detection" "nightly"
           just package-bin "node-launchpad" "nightly"
           just package-bin "autonomi" "nightly"
           just package-bin "antnode" "nightly"
