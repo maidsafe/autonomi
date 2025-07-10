@@ -8,13 +8,14 @@
 
 use crate::error::{Error, Result};
 use crate::{DaemonServiceData, NatDetectionStatus, NodeServiceData};
+use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, RwLock};
 
 /// Used to manage the NodeRegistry data and allows us to share the data across multiple threads.
 ///
@@ -124,6 +125,87 @@ impl NodeRegistryManager {
         }
         node_services
     }
+
+    /// Starts watching the registry file for changes and automatically reloads when modified
+    /// Returns a channel receiver that notifies when the registry has been reloaded
+    ///
+    /// The returned receiver can be ignored if you are not interested in the notifications.
+    pub fn watch_registry_file(&self) -> Result<mpsc::UnboundedReceiver<()>> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let (event_tx, mut event_rx) = mpsc::unbounded_channel();
+        let manager = self.clone();
+        let save_path = self.save_path.clone();
+
+        // Create watcher that sends events through a channel
+        let mut watcher = RecommendedWatcher::new(
+            move |res: notify::Result<Event>| {
+                if let Ok(event) = res {
+                    debug!("File watcher event: {event:?}");
+                    // Only handle modify and create events
+                    match event.kind {
+                        EventKind::Modify(_) | EventKind::Create(_) => {
+                            // Check if the event is for our registry file
+                            for path in &event.paths {
+                                // Use canonicalized paths for comparison to handle symlinks/different representations
+                                let path_canonical =
+                                    path.canonicalize().unwrap_or_else(|_| path.clone());
+                                let save_path_canonical = save_path
+                                    .canonicalize()
+                                    .unwrap_or_else(|_| save_path.clone());
+
+                                if path_canonical == save_path_canonical {
+                                    debug!("Registry file change detected for: {path:?}");
+                                    let _ = event_tx.send(event.clone());
+                                    break;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                } else {
+                    debug!("File watcher error: {res:?}",);
+                }
+            },
+            Config::default(),
+        )?;
+
+        // Watch the parent directory of the registry file
+        if let Some(parent) = self.save_path.parent() {
+            watcher.watch(parent, RecursiveMode::NonRecursive)?;
+        }
+
+        // Spawn task to handle events and perform reloads
+        tokio::spawn(async move {
+            let _watcher = watcher; // Keep watcher alive
+
+            while let Some(_event) = event_rx.recv().await {
+                debug!("Processing registry file change event...");
+                // Reload the registry from disk
+                match manager.reload().await {
+                    Ok(()) => {
+                        info!("Registry reloaded successfully from file change");
+                        let _ = tx.send(());
+                    }
+                    Err(e) => {
+                        error!("Failed to reload registry after file change: {e:?}");
+                    }
+                }
+            }
+        });
+
+        Ok(rx)
+    }
+
+    async fn reload(&self) -> Result<()> {
+        let registry = NodeRegistry::load(&self.save_path)?;
+        let new_manager = NodeRegistryManager::from(registry);
+        *self.daemon.write().await = new_manager.daemon.read().await.clone();
+        *self.environment_variables.write().await =
+            new_manager.environment_variables.read().await.clone();
+        *self.nat_status.write().await = new_manager.nat_status.read().await.clone();
+        *self.nodes.write().await = new_manager.nodes.read().await.clone();
+        Ok(())
+    }
 }
 
 /// The struct that is written to the fs.
@@ -226,4 +308,354 @@ pub fn get_local_node_registry_path() -> Result<PathBuf> {
             .inspect_err(|err| error!("Error creating node registry parent {parent:?}: {err:?}"))?;
     }
     Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ant_logging::LogBuilder;
+    use tempfile::TempDir;
+    use tokio::time::{sleep, Duration};
+
+    #[tokio::test]
+    async fn test_two_registry_managers_sync_via_file_watching() {
+        let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let registry_path = temp_dir.path().join("test_registry.json");
+
+        // Create an initial empty registry file
+        let initial_registry = NodeRegistry {
+            daemon: None,
+            environment_variables: None,
+            nat_status: None,
+            nodes: vec![],
+            save_path: registry_path.clone(),
+        };
+        initial_registry.save().unwrap();
+
+        // Create first registry manager instance
+        let manager1 = NodeRegistryManager::load(&registry_path).await.unwrap();
+
+        // Create second registry manager instance (watching the same file)
+        let manager2 = NodeRegistryManager::load(&registry_path).await.unwrap();
+
+        // Start watching on manager2 - this should detect changes made by manager1
+        let mut change_receiver = manager2.watch_registry_file().unwrap();
+
+        // Give the watcher time to start
+        sleep(Duration::from_millis(500)).await;
+
+        // Verify both managers start empty
+        assert_eq!(manager1.get_node_service_data().await.len(), 0);
+        assert_eq!(manager2.get_node_service_data().await.len(), 0);
+
+        // Add a node to manager1 and save
+        manager1
+            .push_node(NodeServiceData {
+                alpha: false,
+                antnode_path: PathBuf::from("/tmp/antnode"),
+                auto_restart: false,
+                connected_peers: None,
+                data_dir_path: PathBuf::from("/tmp/data"),
+                evm_network: ant_evm::EvmNetwork::default(),
+                initial_peers_config: ant_bootstrap::InitialPeersConfig::default(),
+                listen_addr: None,
+                log_dir_path: PathBuf::from("/tmp/logs"),
+                log_format: None,
+                max_archived_log_files: None,
+                max_log_files: None,
+                metrics_port: None,
+                network_id: None,
+                node_ip: None,
+                node_port: Some(8080),
+                no_upnp: false,
+                number: 1,
+                peer_id: None,
+                pid: Some(12345),
+                reachability_check: false,
+                relay: false,
+                rewards_address: ant_evm::RewardsAddress::default(),
+                reward_balance: None,
+                rpc_socket_addr: "127.0.0.1:8081".parse().unwrap(),
+                schema_version: 3,
+                service_name: "test-node-1".to_string(),
+                status: crate::ServiceStatus::Running,
+                user: Some("test-user".to_string()),
+                user_mode: false,
+                version: "1.0.0".to_string(),
+                write_older_cache_files: false,
+            })
+            .await;
+
+        // Save changes from manager1 to file - this should trigger manager2's watcher
+        manager1.save().await.unwrap();
+
+        // Wait for manager2 to receive the change notification
+        tokio::time::timeout(Duration::from_secs(3), change_receiver.recv())
+            .await
+            .expect("Timeout waiting for file change notification from manager1's save")
+            .expect("Channel closed unexpectedly");
+
+        // Verify manager2 was automatically updated
+        let manager2_nodes = manager2.get_node_service_data().await;
+        assert_eq!(manager2_nodes.len(), 1);
+        assert_eq!(manager2_nodes[0].service_name, "test-node-1");
+
+        // Now add another node via manager1 and test again
+        manager1
+            .push_node(NodeServiceData {
+                alpha: false,
+                antnode_path: PathBuf::from("/tmp/antnode"),
+                auto_restart: false,
+                connected_peers: None,
+                data_dir_path: PathBuf::from("/tmp/data"),
+                evm_network: ant_evm::EvmNetwork::default(),
+                initial_peers_config: ant_bootstrap::InitialPeersConfig::default(),
+                listen_addr: None,
+                log_dir_path: PathBuf::from("/tmp/logs"),
+                log_format: None,
+                max_archived_log_files: None,
+                max_log_files: None,
+                metrics_port: None,
+                network_id: None,
+                node_ip: None,
+                node_port: Some(8082),
+                no_upnp: false,
+                number: 2,
+                peer_id: None,
+                pid: Some(12346),
+                reachability_check: false,
+                relay: false,
+                rewards_address: ant_evm::RewardsAddress::default(),
+                reward_balance: None,
+                rpc_socket_addr: "127.0.0.1:8082".parse().unwrap(),
+                schema_version: 3,
+                service_name: "test-node-2".to_string(),
+                status: crate::ServiceStatus::Running,
+                user: Some("test-user".to_string()),
+                user_mode: false,
+                version: "1.0.0".to_string(),
+                write_older_cache_files: false,
+            })
+            .await;
+
+        // Verify manager1 now has both nodes before saving
+        let manager1_nodes = manager1.get_node_service_data().await;
+        println!(
+            "Before second save, Manager1 has {} nodes",
+            manager1_nodes.len()
+        );
+        for node in &manager1_nodes {
+            println!("  - {}", node.service_name);
+        }
+
+        // Save again
+        manager1.save().await.unwrap();
+
+        // Add a small delay to ensure file system has time to process
+        sleep(Duration::from_millis(100)).await;
+
+        // Wait for the second change notification
+        tokio::time::timeout(Duration::from_secs(3), change_receiver.recv())
+            .await
+            .expect("Timeout waiting for second file change notification")
+            .expect("Channel closed unexpectedly");
+
+        // Verify manager2 now has both nodes
+        let manager2_nodes = manager2.get_node_service_data().await;
+        println!(
+            "After second save, Manager2 has {} nodes",
+            manager2_nodes.len()
+        );
+        for node in &manager2_nodes {
+            println!("  - {}", node.service_name);
+        }
+
+        assert_eq!(
+            manager2_nodes.len(),
+            2,
+            "Manager2 should have 2 nodes after both additions"
+        );
+        assert!(manager2_nodes
+            .iter()
+            .any(|n| n.service_name == "test-node-1"));
+        assert!(manager2_nodes
+            .iter()
+            .any(|n| n.service_name == "test-node-2"));
+    }
+
+    #[tokio::test]
+    async fn test_registry_without_file_watcher_stays_out_of_sync() {
+        let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let registry_path = temp_dir.path().join("test_registry_no_sync.json");
+
+        // Create an initial empty registry file
+        let initial_registry = NodeRegistry {
+            daemon: None,
+            environment_variables: None,
+            nat_status: None,
+            nodes: vec![],
+            save_path: registry_path.clone(),
+        };
+        initial_registry.save().unwrap();
+
+        // Create two registry manager instances
+        let manager1 = NodeRegistryManager::load(&registry_path).await.unwrap();
+        let manager2 = NodeRegistryManager::load(&registry_path).await.unwrap();
+
+        // NOTE: We intentionally do NOT start file watching on manager2
+
+        // Verify both managers start empty
+        assert_eq!(manager1.get_node_service_data().await.len(), 0);
+        assert_eq!(manager2.get_node_service_data().await.len(), 0);
+
+        // Add a node to manager1 and save
+        manager1
+            .push_node(NodeServiceData {
+                alpha: false,
+                antnode_path: PathBuf::from("/tmp/antnode"),
+                auto_restart: false,
+                connected_peers: None,
+                data_dir_path: PathBuf::from("/tmp/data"),
+                evm_network: ant_evm::EvmNetwork::default(),
+                initial_peers_config: ant_bootstrap::InitialPeersConfig::default(),
+                listen_addr: None,
+                log_dir_path: PathBuf::from("/tmp/logs"),
+                log_format: None,
+                max_archived_log_files: None,
+                max_log_files: None,
+                metrics_port: None,
+                network_id: None,
+                node_ip: None,
+                node_port: Some(8080),
+                no_upnp: false,
+                number: 1,
+                peer_id: None,
+                pid: Some(12345),
+                reachability_check: false,
+                relay: false,
+                rewards_address: ant_evm::RewardsAddress::default(),
+                reward_balance: None,
+                rpc_socket_addr: "127.0.0.1:8081".parse().unwrap(),
+                schema_version: 3,
+                service_name: "test-node-1".to_string(),
+                status: crate::ServiceStatus::Running,
+                user: Some("test-user".to_string()),
+                user_mode: false,
+                version: "1.0.0".to_string(),
+                write_older_cache_files: false,
+            })
+            .await;
+
+        // Save changes from manager1 to file
+        manager1.save().await.unwrap();
+
+        // Wait a moment to ensure any potential file events have time to process
+        sleep(Duration::from_millis(500)).await;
+
+        // Verify manager1 has the node
+        let manager1_nodes = manager1.get_node_service_data().await;
+        assert_eq!(manager1_nodes.len(), 1);
+        assert_eq!(manager1_nodes[0].service_name, "test-node-1");
+
+        // Verify manager2 still has NO nodes (because no file watcher was started)
+        let manager2_nodes = manager2.get_node_service_data().await;
+        assert_eq!(
+            manager2_nodes.len(),
+            0,
+            "Manager2 should remain empty without file watching"
+        );
+
+        // Verify that manager2 can manually reload to get the updates
+        manager2.reload().await.unwrap();
+        let manager2_nodes_after_reload = manager2.get_node_service_data().await;
+        assert_eq!(manager2_nodes_after_reload.len(), 1);
+        assert_eq!(manager2_nodes_after_reload[0].service_name, "test-node-1");
+    }
+
+    #[tokio::test]
+    async fn test_registry_reload_functionality() {
+        let _guard = LogBuilder::init_single_threaded_tokio_test();
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let registry_path = temp_dir.path().join("test_registry_reload.json");
+
+        // Create an initial empty registry
+        let initial_registry = NodeRegistry {
+            daemon: None,
+            environment_variables: None,
+            nat_status: None,
+            nodes: vec![],
+            save_path: registry_path.clone(),
+        };
+        initial_registry.save().unwrap();
+
+        // Load the registry manager
+        let manager = NodeRegistryManager::load(&registry_path).await.unwrap();
+
+        // Start watching (even if notifications might not work in tests, the setup should work)
+        let _change_receiver = manager.watch_registry_file().unwrap();
+
+        // Test that reload works by manually modifying the file and calling reload
+        for i in 1..=3 {
+            let mut nodes = vec![];
+            for j in 1..=i {
+                nodes.push(NodeServiceData {
+                    alpha: false,
+                    antnode_path: PathBuf::from("/tmp/antnode"),
+                    auto_restart: false,
+                    connected_peers: None,
+                    data_dir_path: PathBuf::from("/tmp/data"),
+                    evm_network: ant_evm::EvmNetwork::default(),
+                    initial_peers_config: ant_bootstrap::InitialPeersConfig::default(),
+                    listen_addr: None,
+                    log_dir_path: PathBuf::from("/tmp/logs"),
+                    log_format: None,
+                    max_archived_log_files: None,
+                    max_log_files: None,
+                    metrics_port: None,
+                    network_id: None,
+                    node_ip: None,
+                    node_port: Some(8080 + j as u16),
+                    no_upnp: false,
+                    number: j as u16,
+                    peer_id: None,
+                    pid: Some(12345 + j as u32),
+                    reachability_check: false,
+                    relay: false,
+                    rewards_address: ant_evm::RewardsAddress::default(),
+                    reward_balance: None,
+                    rpc_socket_addr: format!("127.0.0.1:{}", 8180 + j as u16).parse().unwrap(),
+                    schema_version: 3,
+                    service_name: format!("test-node-{j}"),
+                    status: crate::ServiceStatus::Running,
+                    user: Some("test-user".to_string()),
+                    user_mode: false,
+                    version: "1.0.0".to_string(),
+                    write_older_cache_files: false,
+                });
+            }
+
+            let registry = NodeRegistry {
+                daemon: None,
+                environment_variables: None,
+                nat_status: None,
+                nodes,
+                save_path: registry_path.clone(),
+            };
+            registry.save().unwrap();
+
+            // Test manual reload functionality
+            manager.reload().await.unwrap();
+
+            // Verify the manager was updated
+            let current_nodes = manager.get_node_service_data().await;
+            assert_eq!(current_nodes.len(), i);
+        }
+    }
 }
