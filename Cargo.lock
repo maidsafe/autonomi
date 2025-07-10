@@ -2260,16 +2260,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap-verbosity-flag"
-version = "2.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c77f67047557f62582784fd7482884697731b2932c7d37ced54bce2312e1e2"
-dependencies = [
- "clap",
- "log",
-]
-
-[[package]]
 name = "clap_builder"
 version = "4.5.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6305,23 +6295,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "427802e8ec3a734331fec1035594a210ce1ff4dc5bc1950530920ab717964ea3"
 dependencies = [
  "libloading",
-]
-
-[[package]]
-name = "nat-detection"
-version = "0.2.22"
-dependencies = [
- "ant-build-info",
- "ant-protocol",
- "clap",
- "clap-verbosity-flag",
- "color-eyre",
- "futures",
- "libp2p",
- "tokio",
- "tracing",
- "tracing-log 0.2.0",
- "tracing-subscriber",
 ]
 
 [[package]]

@@ -16,7 +16,7 @@ use crate::{
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
 };
 use ant_service_management::{
-    DaemonServiceData, NatDetectionStatus, NodeRegistryManager, NodeServiceData, ServiceStatus,
+    DaemonServiceData, NodeRegistryManager, NodeServiceData, ServiceStatus,
     control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
 };
 use color_eyre::{Help, Result, eyre::eyre};
@@ -36,7 +36,7 @@ use std::{
 ///
 /// Returns the service names of the added services.
 pub async fn add_node(
-    mut options: AddNodeServiceOptions,
+    options: AddNodeServiceOptions,
     node_registry: NodeRegistryManager,
     service_control: &dyn ServiceControl,
     verbosity: VerbosityLevel,
@@ -157,36 +157,6 @@ pub async fn add_node(
             options.antnode_src_path.clone(),
             service_antnode_path.clone(),
         )?;
-
-        if options.auto_set_nat_flags {
-            let nat_status = node_registry.nat_status.read().await;
-
-            match nat_status.as_ref() {
-                Some(NatDetectionStatus::Public) => {
-                    options.no_upnp = true; // UPnP not needed
-                    options.relay = false;
-                }
-                Some(NatDetectionStatus::UPnP) => {
-                    options.no_upnp = false;
-                    options.relay = false;
-                }
-                Some(NatDetectionStatus::Private) => {
-                    options.no_upnp = true;
-                    options.relay = true;
-                }
-                None => {
-                    // Fallback to private defaults
-                    options.no_upnp = true;
-                    options.relay = true;
-                    debug!("NAT status not set; defaulting to no_upnp=true and relay=true");
-                }
-            }
-
-            debug!(
-                "Auto-setting NAT flags: no_upnp={}, relay={}",
-                options.no_upnp, options.relay
-            );
-        }
 
         let install_ctx = InstallNodeServiceCtxBuilder {
             alpha: options.alpha,
