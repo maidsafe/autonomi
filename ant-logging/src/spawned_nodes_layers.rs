@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::NODE_SPAN_NAME;
+use crate::{get_thread_name, NODE_SPAN_ID_FIELD_NAME, NODE_SPAN_NAME, UNKNOWN_TEST_NAME};
 
 use std::{
     collections::HashMap,
@@ -39,32 +39,35 @@ struct NodeMetadata {
 }
 
 struct SpanMetadata {
-    unique_span_name: String,
+    test_name: String,
+    node_id: Option<u16>, //  Optional: store the raw node_id if it exists (e.g. Client spans don't have a node_id)
+    unique_span_name: String, // For routing: "node_01_testname"
+    display_name: String, // For formatting: "node_XX" or "client"
 }
 
 /// Visitor to extract node_id field from span attributes
 struct NodeIdVisitor {
-    node_id: Option<usize>,
+    node_id: Option<u16>, // Changed from usize to u16
 }
 
 impl Visit for NodeIdVisitor {
     fn record_u64(&mut self, field: &Field, value: u64) {
-        if field.name() == "node_id" {
-            self.node_id = Some(value as usize);
+        if field.name() == NODE_SPAN_ID_FIELD_NAME {
+            self.node_id = Some(value as u16);
         }
     }
 
     fn record_i64(&mut self, field: &Field, value: i64) {
-        if field.name() == "node_id" {
-            self.node_id = Some(value as usize);
+        if field.name() == NODE_SPAN_ID_FIELD_NAME {
+            self.node_id = Some(value as u16);
         }
     }
 
     fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-        if field.name() == "node_id" {
+        if field.name() == NODE_SPAN_ID_FIELD_NAME {
             // Try to extract from debug representation as fallback
             let debug_str = format!("{value:?}");
-            if let Ok(parsed) = debug_str.parse::<usize>() {
+            if let Ok(parsed) = debug_str.parse::<u16>() {
                 self.node_id = Some(parsed);
             }
         }
@@ -213,39 +216,34 @@ where
 
     fn on_new_span(&self, attrs: &Attributes<'_>, id: &Id, ctx: Context<'_, S>) {
         let span = ctx.span(id).expect("Span should exist in registry");
+
         let span_name = span.name();
 
-        // Extract node_id and test name from spans named "node"
+        let test_name = get_thread_name().unwrap_or(UNKNOWN_TEST_NAME.to_string());
+
+        let mut visitor = NodeIdVisitor { node_id: None };
+        attrs.record(&mut visitor);
+
+        // Create metadata with raw extracted data
+        let mut metadata = SpanMetadata {
+            test_name,
+            node_id: visitor.node_id,
+            unique_span_name: String::new(),
+            display_name: String::new(),
+        };
+
+        // Now fill computed fields based on span type using metadata values
         if span_name == NODE_SPAN_NAME {
-            let mut visitor = NodeIdVisitor { node_id: None };
-            attrs.record(&mut visitor);
-
-            if let Some(node_id) = visitor.node_id {
-                let test_name = std::thread::current()
-                    .name()
-                    .map(|name| name.replace("::", "_"))
-                    .unwrap_or_else(|| "unknown_test".to_string());
-
-                let unique_node_name = format!("node_{node_id:02}_{test_name}");
-
-                span.extensions_mut().insert(SpanMetadata {
-                    unique_span_name: unique_node_name,
-                });
-            }
-        }
-
-        // Extract test name from spans named "client"
-        if span_name == "client" {
-            let test_name = std::thread::current()
-                .name()
-                .map(|name| name.replace("::", "_"))
-                .unwrap_or_else(|| "unknown_test".to_string());
-
-            let unique_client_name = format!("client_{test_name}");
-
-            span.extensions_mut().insert(SpanMetadata {
-                unique_span_name: unique_client_name,
-            });
+            let node_id = metadata
+                .node_id
+                .expect("Node spans must have node_id field");
+            metadata.unique_span_name = format!("node_{node_id:02}_{}", metadata.test_name);
+            metadata.display_name = format!("node_{node_id}");
+            span.extensions_mut().insert(metadata);
+        } else if span_name == "client" {
+            metadata.unique_span_name = format!("client_{}", metadata.test_name);
+            metadata.display_name = "client".to_string();
+            span.extensions_mut().insert(metadata);
         }
     }
 
@@ -297,60 +295,11 @@ where
             }
         }
     }
-
-    /* TODO: Original function, to be removed once the newer function is stress tested
-        fn on_event(&self, event: &tracing::Event<'_>, ctx: Context<'_, S>) {
-            let mut target_writer_key = None;
-
-            if let Some(span_ref) = ctx.lookup_current() {
-                let mut current = Some(span_ref);
-                while let Some(span) = current {
-                    let span_name = span.name();
-
-                    // Check for node spans FIRST (most specific)
-                    if span_name == "node" {
-                        if let Some(metadata) = span.extensions().get::<NodeMetadata>() {
-                            target_writer_key = Some(metadata.node_name.clone());
-                            break;
-                        }
-                    }
-
-                    // Check for client spans SECOND (more general)
-                    if span_name == "client" {
-                        let test_name = std::thread::current().name()
-                            .map(|name| name.replace("::", "_"))
-                            .unwrap_or_else(|| "unknown_test".to_string());
-                        target_writer_key = Some(format!("client_{}", test_name));
-                        break;
-                    }
-
-                    current = span.parent();
-                }
-            }
-
-            // Route to appropriate writer
-            if let Some(writer_key) = target_writer_key {
-                let writers = self
-                    .node_writers
-                    .lock()
-                    .expect("Failed to acquire node writers lock");
-
-                if let Some(writer) = writers.get(&writer_key) {
-                    // Create a temporary fmt layer to format and write the event
-                    let temp_layer = tracing_fmt::layer()
-                        .with_ansi(false)
-                        .with_writer(writer.clone())
-                        .event_format(LogFormatter);
-
-                    // Forward the event to the temporary layer for proper formatting
-                    temp_layer.on_event(event, ctx);
-                }
-            }
-        }
-    */
 }
 
-/// Custom formatter that only shows the target node span, avoiding nested node spans
+/// Custom formatter that only prints the target node or client span
+/// Node spans + client span are nested by order of creation when nodes are spawned in the same thread. Only the last one will be printed.
+/// This is only a trick not to print the whole tree of nested spans, it doesn't fix it.
 pub struct SpawnedNodesLogFormatter;
 
 impl<S, N> FormatEvent<S, N> for SpawnedNodesLogFormatter
@@ -364,66 +313,25 @@ where
         mut writer: Writer,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        // Write level and target
         let level = *event.metadata().level();
         let module = event.metadata().module_path().unwrap_or("<unknown module>");
         let lno = event.metadata().line().unwrap_or(0);
-        let time = SystemTime;
 
-        //=======================================================================================
-        
         write!(writer, "[")?;
-        time.format_time(&mut writer)?;
+        SystemTime.format_time(&mut writer)?;
         write!(writer, " {level} {module} {lno}")?;
 
-        // Only include spans up to and including the first "node" span
-        // This prevents nested node spans from appearing in the output
-        let mut all_spans = Vec::new();
-
-        // First, collect all spans from current to root
+        // No loop - just check current span directly
         if let Some(span_ref) = ctx.lookup_current() {
-            let mut current = Some(span_ref);
-            while let Some(span) = current {
-                all_spans.push(span.name());
-                current = span.parent();
+            if let Some(metadata) = span_ref.extensions().get::<SpanMetadata>() {
+                write!(writer, "/{}", metadata.display_name)?;
+            } else {
+                write!(writer, "/{}", span_ref.name())?;
             }
-        }
-
-        // Now, find spans from root down to (and including) the first node span
-        let mut spans_to_include = Vec::new();
-        for span_name in all_spans.iter().rev() {
-            spans_to_include.push(*span_name);
-
-            // Stop after we include the first "node" span
-            if *span_name == "node" || span_name.starts_with("node_") || *span_name == "node_other"
-            {
-                break;
-            }
-        }
-
-        // Write spans in order (from outermost to innermost, but only up to the first node)
-        for span_name in spans_to_include.iter() {
-            write!(writer, "/{span_name}")?;
         }
 
         write!(writer, "] ")?;
-
-        // Add the log message and any fields associated with the event
         ctx.field_format().format_fields(writer.by_ref(), event)?;
-
         writeln!(writer)
-        
-        //=======================================================================================
-        
-        // write!(writer, "[")?;
-        // time.format_time(&mut writer)?;
-        // write!(writer, " {level} {module} {lno}")?;
-        // ctx.visit_spans(|span| write!(writer, "/{}", span.name()))?;
-        // write!(writer, "] ")?;
-
-        // // Add the log message and any fields associated with the event
-        // ctx.field_format().format_fields(writer.by_ref(), event)?;
-
-        // writeln!(writer)
     }
 }

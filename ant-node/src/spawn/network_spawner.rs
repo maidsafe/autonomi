@@ -14,13 +14,13 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use tracing::Instrument;
 
-use ant_logging::NODE_SPAN_NAME;
+use ant_logging::{NODE_SPAN_ID_FIELD_NAME, NODE_SPAN_NAME};
 
 /// Create a node span with unlimited node ID support.
 /// Uses a static span name "node" with the node_id as a field to work around
 /// the tracing library's requirement for compile-time span names.
 fn create_node_span(node_id: usize) -> tracing::Span {
-    tracing::info_span!(NODE_SPAN_NAME, node_id = node_id)
+    tracing::info_span!(NODE_SPAN_NAME, { NODE_SPAN_ID_FIELD_NAME } = node_id)
 }
 
 #[derive(Debug, Clone)]

@@ -38,8 +38,6 @@ fn setup_logging_client_and_nodes(node_count: usize) -> Result<ant_logging::Mult
 
     let multi_node_log_handle = log_builder
         .initialize_with_multi_nodes_logging_for_unique_spans(node_count)
-        /* TODO: Original function, to be removed once the newer function is stress tested
-        .initialize_with_multi_node_logging_for_tests(node_count) */
         .expect("Failed to initialize logging");
 
     Ok(multi_node_log_handle)
@@ -48,9 +46,6 @@ fn setup_logging_client_and_nodes(node_count: usize) -> Result<ant_logging::Mult
 #[tokio::test]
 async fn test_data_addresses_use() -> Result<()> {
     let multi_node_log_handle = setup_logging_client_and_nodes(DEFAULT_LOCAL_NETWORK_SIZE)?;
-
-    // TODO: To be removed once all tests are done.
-    // let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
     let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
     let client = spawned_local_network.client;

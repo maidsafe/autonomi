@@ -499,9 +499,10 @@ impl Node {
                 let node = self.clone();
                 let payment_address = *self.reward_address();
 
-                let _handle = spawn(async move {
-                    let network = node.network().clone();
-                    let res = Self::handle_query(node, query, payment_address).await;
+                let _handle = spawn(
+                    async move {
+                        let network = node.network().clone();
+                        let res = Self::handle_query(node, query, payment_address).await;
 
                         // Reducing non-mandatory logging
                         if let Response::Query(QueryResponse::GetVersion { .. }) = res {

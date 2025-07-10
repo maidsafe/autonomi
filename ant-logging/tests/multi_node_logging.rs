@@ -8,37 +8,31 @@
 
 // Integration test for multi-node logging functionality
 
-use ant_logging::{LogBuilder, LogOutputDest};
+use ant_logging::LogBuilder;
 use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::TempDir;
 use tracing::{info, Instrument};
 
 #[tokio::test]
-#[ignore] // TODO: Fix path and issues with temp folder needing root
 async fn test_multi_node_logging_e2e() {
     let temp_dir = TempDir::new().expect("Failed to create temp directory");
 
-    // Create the same directory structure that LogOutputDest::parse_from_str("data-dir") creates
-    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-    let log_dir = temp_dir
-        .path()
-        .join("autonomi")
-        .join("client")
-        .join("logs")
-        .join(format!("log_{timestamp}"));
+    // Use the clean data root approach
+    let data_root = temp_dir.path().to_path_buf();
 
-    println!("Log directory: {}", log_dir.display());
+    // Print the paths for debugging
+    println!("Data root: {}", data_root.display());
 
-    // Test multi-node logging with 2 nodes
-    let mut log_builder = LogBuilder::new(vec![(
-        "multi_node_logging".to_string(),
-        tracing::Level::INFO,
-    )]);
-    log_builder.output_dest(LogOutputDest::Path(log_dir.clone()));
+    // Test multi-node logging setup with 2 nodes
+    let log_builder = LogBuilder::new(vec![]); // Remove mut since we don't need output_dest
 
+    // Remove this line completely:
+    // log_builder.output_dest(LogOutputDest::multi_node(data_root.clone()));
+
+    // Use the new clean API:
     let multi_node_log_handle = log_builder
-        .initialize_with_multi_node_logging(2)
+        .initialize_with_multi_nodes_logging_for_unique_spans_at(2, Some(data_root.clone()))
         .expect("Failed to initialize multi-node logging");
 
     // Log messages from different nodes using new dynamic span format
