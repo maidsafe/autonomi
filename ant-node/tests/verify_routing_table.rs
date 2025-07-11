@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 #![allow(clippy::mutable_key_type)]
+#![allow(clippy::expect_used)]
 mod common;
 
 use crate::common::{client::get_all_rpc_addresses, get_all_peer_ids, get_antnode_rpc_client};

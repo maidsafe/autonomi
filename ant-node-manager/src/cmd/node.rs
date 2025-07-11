@@ -232,7 +232,7 @@ pub async fn remove(
     for node in &services_for_ops {
         let service_name = node.read().await.service_name.clone();
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client));
+        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         match service_manager.remove(keep_directories).await {
@@ -324,7 +324,7 @@ pub async fn start(
         let service_name = node.read().await.service_name.clone();
 
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client));
+        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
 
         // set dynamic startup delay if fixed_interval is not set
         let service = if fixed_interval.is_none() {
@@ -420,7 +420,7 @@ pub async fn stop(
     for node in services_for_ops.iter() {
         let service_name = node.read().await.service_name.clone();
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client));
+        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
 
@@ -539,7 +539,7 @@ pub async fn upgrade(
         let service_name = node.read().await.service_name.clone();
 
         let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let service = NodeService::new(node.clone(), Box::new(rpc_client));
+        let service = NodeService::new(Arc::clone(node), Box::new(rpc_client));
         // set dynamic startup delay if fixed_interval is not set
         let service = if fixed_interval.is_none() {
             service.with_connection_timeout(Duration::from_secs(connection_timeout_s))
@@ -803,7 +803,7 @@ async fn get_services_for_ops(
     if service_names.is_empty() && peer_ids.is_empty() {
         for node in node_registry.nodes.read().await.iter() {
             if node.read().await.status != ServiceStatus::Removed {
-                services.push(node.clone());
+                services.push(Arc::clone(node));
             }
         }
     } else {
@@ -813,7 +813,7 @@ async fn get_services_for_ops(
                 let node_read = node.read().await;
                 if node_read.service_name == *name && node_read.status != ServiceStatus::Removed {
                     {
-                        services.push(node.clone());
+                        services.push(Arc::clone(node));
                         found_service_with_name = true;
                         break;
                     }
@@ -834,7 +834,7 @@ async fn get_services_for_ops(
                 let node_read = node.read().await;
                 if let Some(peer_id) = node_read.peer_id {
                     if peer_id == given_peer_id && node_read.status != ServiceStatus::Removed {
-                        services.push(node.clone());
+                        services.push(Arc::clone(node));
                         found_service_with_peer_id = true;
                         break;
                     }

@@ -6,6 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect usage - to be refactored
+#![allow(clippy::expect_used)]
+
 use ant_releases::{get_running_platform, AntReleaseRepoActions, ArchiveType, ReleaseType};
 use ant_service_management::NodeServiceData;
 use color_eyre::{
@@ -58,8 +61,8 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
             progress_bar.set_style(ProgressStyle::default_bar()
                 .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")?
                 .progress_chars("#>-"));
-            pb = Some(progress_bar.clone());
-            let pb_clone = progress_bar.clone();
+            pb = Some(Arc::clone(&progress_bar));
+            let pb_clone = Arc::clone(&progress_bar);
             let callback: Box<dyn Fn(u64, u64) + Send + Sync> =
                 Box::new(move |downloaded, total| {
                     pb_clone.set_length(total);
@@ -108,6 +111,7 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unused_async)]
 pub async fn configure_winsw(_dest_path: &Path, _verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
@@ -134,8 +138,8 @@ pub async fn download_and_extract_release(
         progress_bar.set_style(ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")?
             .progress_chars("#>-"));
-        pb = Some(progress_bar.clone());
-        let pb_clone = progress_bar.clone();
+        pb = Some(Arc::clone(&progress_bar));
+        let pb_clone = Arc::clone(&progress_bar);
         let callback: Box<dyn Fn(u64, u64) + Send + Sync> = Box::new(move |downloaded, total| {
             pb_clone.set_length(total);
             pb_clone.set_position(downloaded);

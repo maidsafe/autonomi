@@ -21,6 +21,7 @@ use color_eyre::{
     Result,
 };
 use libp2p::PeerId;
+use std::sync::Arc;
 
 pub async fn restart_node_service(
     node_registry: NodeRegistryManager,
@@ -32,7 +33,7 @@ pub async fn restart_node_service(
 
     for node in node_registry.nodes.read().await.iter() {
         if node.read().await.peer_id.is_some_and(|id| id == peer_id) {
-            current_node = Some(node.clone());
+            current_node = Some(Arc::clone(node));
             break;
         }
     }
@@ -43,7 +44,7 @@ pub async fn restart_node_service(
     })?;
 
     let rpc_client = RpcClient::from_socket_addr(current_node.read().await.rpc_socket_addr);
-    let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
+    let service = NodeService::new(Arc::clone(&current_node), Box::new(rpc_client));
     let mut service_manager = ServiceManager::new(
         service,
         Box::new(ServiceController {}),
@@ -243,7 +244,7 @@ pub async fn restart_node_service(
         };
 
         let rpc_client = RpcClient::from_socket_addr(node.rpc_socket_addr);
-        let service = NodeService::new(current_node.clone(), Box::new(rpc_client));
+        let service = NodeService::new(Arc::clone(&current_node), Box::new(rpc_client));
         let mut service_manager = ServiceManager::new(
             service,
             Box::new(ServiceController {}),

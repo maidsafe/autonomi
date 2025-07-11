@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)]
+
 mod common;
 
 use crate::common::quote::random_quote_payment;
