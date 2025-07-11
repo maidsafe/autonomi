@@ -214,23 +214,20 @@ impl Network {
         }
 
         // Collect results
-        let mut successful_records = HashSet::new();
+        let mut got_unique_records = HashSet::new();
         let mut successful_responses = HashMap::new();
         let mut err_res = vec![];
-        let mut old_nodes = vec![];
 
         while let Some((res, peer)) = tasks.next().await {
             match res {
-                // collect old nodes
-                Err(NetworkError::IncompatibleNetworkProtocol) => old_nodes.push(peer),
                 // collect errors
-                Err(e) => err_res.push((peer.peer_id, e.to_string())),
+                Err(e) => err_res.push(e),
                 // not found, ignore
                 Ok(None) => {}
                 // accumulate successful responses
                 Ok(Some(record_data)) => {
                     successful_responses.insert(peer.peer_id, record_data.clone());
-                    let is_new = successful_records.insert(record_data.clone());
+                    let is_new = got_unique_records.insert(record_data.clone());
 
                     // check for forks
                     if is_new && successful_responses.len() > 1 {
@@ -244,7 +241,7 @@ impl Network {
                     }
 
                     // Check if we have enough responses to meet quorum
-                    if successful_records.len() >= expected_holders.get() {
+                    if successful_responses.len() >= expected_holders.get() {
                         let record = record_from_value(record_data, &addr);
                         let holders = successful_responses.keys().cloned().collect();
                         return Ok((Some(record), holders));
@@ -253,9 +250,19 @@ impl Network {
             }
         }
 
-        println!("err_res: {err_res:?}");
-        // If we don't have enough responses, try the KAD protocol as a last resort
-        self.get_record_kad(addr.clone(), quorum).await
+        // if no records were found, return an error if we have an error, otherwise the record is not found: None
+        if successful_responses.is_empty() {
+            if let Some(err) = err_res.first() {
+                return Err(err.clone());
+            } else {
+                return Ok((None, vec![]));
+            }
+        }
+
+        Err(NetworkError::GetRecordQuorumFailed {
+            got_holders: successful_responses.len(),
+            expected_holders: expected_holders.get(),
+        })
     }
 
     /// Put a record to the network
@@ -361,24 +368,6 @@ impl Network {
 
         let res = rx.await?;
         res
-    }
-
-    async fn get_record_kad(
-        &self,
-        addr: NetworkAddress,
-        quorum: Quorum,
-    ) -> Result<(Option<Record>, Vec<PeerId>), NetworkError> {
-        let (tx, rx) = oneshot::channel();
-        let task = NetworkTask::GetRecordKad {
-            addr,
-            quorum,
-            resp: tx,
-        };
-        self.task_sender
-            .send(task)
-            .await
-            .map_err(|_| NetworkError::NetworkDriverOffline)?;
-        rx.await?
     }
 
     async fn put_record_req(&self, record: Record, to: PeerInfo) -> Result<(), NetworkError> {
