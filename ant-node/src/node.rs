@@ -940,7 +940,7 @@ impl Node {
         let difficulty = CLOSE_GROUP_SIZE;
         verify_candidates.sort_by_key(|addr| target.distance(addr));
         let expected_targets = verify_candidates.into_iter().take(difficulty);
-        let nonce: Nonce = thread_rng().gen::<u64>();
+        let nonce: Nonce = thread_rng().r#gen::<u64>();
         let mut expected_proofs = HashMap::new();
         for addr in expected_targets {
             if let Ok(Some(record)) = network.get_local_record(&addr.to_record_key()).await {

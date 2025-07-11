@@ -68,7 +68,7 @@ impl RewardsAddress {
     }
 
     fn capture_inputs(&mut self, key: KeyEvent) -> Vec<Action> {
-        let send_back = match key.code {
+        match key.code {
             KeyCode::Enter => {
                 self.validate();
                 if self.can_save {
@@ -139,8 +139,7 @@ impl RewardsAddress {
                 }
                 vec![]
             }
-        };
-        send_back
+        }
     }
 }
 

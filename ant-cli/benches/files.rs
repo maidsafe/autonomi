@@ -85,7 +85,7 @@ fn generate_file(path: &PathBuf, file_size_mb: usize) {
     // can create [u8; 32] max at time. Thus each mb has 1024*32 such small chunks
     let n_small_chunks = file_size_mb * 1024 * 32;
     for _ in 0..n_small_chunks {
-        let random_data: [u8; 32] = rng.gen();
+        let random_data: [u8; 32] = rng.r#gen();
         file.write_all(&random_data)
             .expect("Failed to write to file");
     }
@@ -114,7 +114,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     if std::env::var("SECRET_KEY").is_err() {
-        std::env::set_var("SECRET_KEY", DEFAULT_WALLET_PRIVATE_KEY);
+        // SAFETY: This is called during benchmark initialization before any other threads
+        // are spawned, so there's no risk of data races. Setting SECRET_KEY is necessary
+        // for benchmark execution.
+        #[allow(unsafe_code)]
+        unsafe {
+            std::env::set_var("SECRET_KEY", DEFAULT_WALLET_PRIVATE_KEY);
+        }
     }
 
     let sizes: [u64; 2] = [1, 10]; // File sizes in MB. Add more sizes as needed

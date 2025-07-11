@@ -78,8 +78,8 @@ impl Serialize for RecordKind {
         S: serde::Serializer,
     {
         let index = match self {
-            Self::DataOnly(ref data_types) => data_types.get_index(),
-            Self::DataWithPayment(ref data_types) => {
+            Self::DataOnly(data_types) => data_types.get_index(),
+            Self::DataWithPayment(data_types) => {
                 RECORD_KIND_PAYMENT_STARTING_INDEX + data_types.get_index()
             }
         };

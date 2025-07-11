@@ -349,7 +349,7 @@ async fn store_chunks(
         }
 
         let random_bytes: Vec<u8> = ::std::iter::repeat(())
-            .map(|()| rng.gen::<u8>())
+            .map(|()| rng.r#gen::<u8>())
             .take(CHUNK_SIZE)
             .collect();
 
