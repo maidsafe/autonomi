@@ -387,11 +387,13 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             {
                 Ok(_) => {
                     info!(
-                        "Started service {service_name}, waiting for fixed interval of {fixed_interval} seconds before checking if it has started"
+                        "Started service {service_name}, waiting for fixed interval of {fixed_interval} ms before checking if it has started"
                     );
                     self.service_control.wait(fixed_interval);
 
-                    debug!("Setting service {service_name} status to Running. This is done to ensure that the service is marked as running even if it fails to start.");
+                    debug!(
+                        "Setting service {service_name} status to Running. This is done to ensure that the service is marked as running even if it fails to start."
+                    );
                     service.set_status(ServiceStatus::Running).await;
                 }
                 Err(err) => {
