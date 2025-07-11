@@ -15,7 +15,7 @@ use std::{
     io::{Read, Write},
     path::{Path, PathBuf},
 };
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 /// Used to manage the NodeRegistry data and allows us to share the data across multiple threads.
 ///
@@ -155,7 +155,11 @@ impl NodeRegistryManager {
 
                                 if path_canonical == save_path_canonical {
                                     debug!("Registry file change detected for: {path:?}");
-                                    let _ = event_tx.send(event.clone());
+                                    if let Err(err) = event_tx.send(event.clone()) {
+                                        error!(
+                                            "Failed to send registry file change event to internal rx: {err}"
+                                        );
+                                    }
                                     break;
                                 }
                             }
@@ -184,7 +188,11 @@ impl NodeRegistryManager {
                 match manager.reload().await {
                     Ok(()) => {
                         info!("Registry reloaded successfully from file change");
-                        let _ = tx.send(());
+                        if let Err(er) = tx.send(()) {
+                            error!("Failed to send registry reload notification: {er}");
+                        } else {
+                            debug!("Registry reload notification sent");
+                        }
                     }
                     Err(e) => {
                         error!("Failed to reload registry after file change: {e:?}");
@@ -204,6 +212,7 @@ impl NodeRegistryManager {
             new_manager.environment_variables.read().await.clone();
         *self.nat_status.write().await = new_manager.nat_status.read().await.clone();
         *self.nodes.write().await = new_manager.nodes.read().await.clone();
+
         Ok(())
     }
 }
@@ -315,7 +324,7 @@ mod tests {
     use super::*;
     use ant_logging::LogBuilder;
     use tempfile::TempDir;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_two_registry_managers_sync_via_file_watching() {
@@ -478,12 +487,16 @@ mod tests {
             2,
             "Manager2 should have 2 nodes after both additions"
         );
-        assert!(manager2_nodes
-            .iter()
-            .any(|n| n.service_name == "test-node-1"));
-        assert!(manager2_nodes
-            .iter()
-            .any(|n| n.service_name == "test-node-2"));
+        assert!(
+            manager2_nodes
+                .iter()
+                .any(|n| n.service_name == "test-node-1")
+        );
+        assert!(
+            manager2_nodes
+                .iter()
+                .any(|n| n.service_name == "test-node-2")
+        );
     }
 
     #[tokio::test]

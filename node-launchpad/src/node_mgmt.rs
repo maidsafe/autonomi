@@ -167,7 +167,6 @@ async fn stop_nodes(
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::StopNodesCompleted {
                     service_name: service,
-                    all_nodes_data: node_registry.get_node_service_data().await,
                 }),
             );
         }
@@ -222,7 +221,6 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRe
         args.action_sender,
         Action::StatusActions(StatusActions::StartNodesCompleted {
             service_name: NODES_ALL.to_string(),
-            all_nodes_data: node_registry.get_node_service_data().await,
         }),
     );
 }
@@ -250,7 +248,6 @@ async fn reset_nodes(
             action_sender,
             Action::StatusActions(StatusActions::ResetNodesCompleted {
                 trigger_start_node: start_nodes_after_reset,
-                all_nodes_data: node_registry.get_node_service_data().await,
             }),
         );
     }
@@ -317,9 +314,7 @@ async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryManage
         info!("Successfully updated services");
         send_action(
             args.action_sender,
-            Action::StatusActions(StatusActions::UpdateNodesCompleted {
-                all_nodes_data: node_registry.get_node_service_data().await,
-            }),
+            Action::StatusActions(StatusActions::UpdateNodesCompleted),
         );
     }
 }
@@ -373,7 +368,6 @@ async fn remove_nodes(
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::RemoveNodesCompleted {
                     service_name: service,
-                    all_nodes_data: node_registry.get_node_service_data().await,
                 }),
             );
         }
@@ -453,7 +447,6 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
                     args.action_sender.clone(),
                     Action::StatusActions(StatusActions::AddNodesCompleted {
                         service_name: service,
-                        all_nodes_data: node_registry.get_node_service_data().await,
                     }),
                 );
             }
@@ -491,7 +484,6 @@ async fn start_nodes(
                 action_sender.clone(),
                 Action::StatusActions(StatusActions::StartNodesCompleted {
                     service_name: service,
-                    all_nodes_data: node_registry.get_node_service_data().await,
                 }),
             );
         }
@@ -516,6 +508,7 @@ struct NodeConfig {
     owner: Option<String>,
     init_peers_config: InitialPeersConfig,
     rewards_address: String,
+    reachability_check: bool,
     upnp: bool,
 }
 
@@ -537,6 +530,7 @@ fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
         relay: args.connection_mode == ConnectionMode::HomeNetwork,
         network_id: args.network_id,
         init_peers_config: args.init_peers_config.clone(),
+        reachability_check: args.connection_mode == ConnectionMode::Automatic,
         rewards_address: args.rewards_address.clone(),
         upnp: args.connection_mode == ConnectionMode::UPnP,
     }
@@ -600,7 +594,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         None, // We don't care about the port, as we are scaling down
         node_registry,
         config.init_peers_config.clone(),
-        false,
+        config.reachability_check,
         config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,
@@ -674,7 +668,7 @@ async fn add_nodes(
             port_range,
             node_registry.clone(),
             config.init_peers_config.clone(),
-            false,
+            config.reachability_check,
             config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
             None,
