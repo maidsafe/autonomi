@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    ServiceManager, VerbosityLevel,
+    BatchServiceManager, VerbosityLevel,
     add_services::{add_daemon, config::AddDaemonServiceOptions},
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
@@ -100,15 +100,18 @@ pub async fn start(verbosity: VerbosityLevel) -> Result<()> {
         info!("Starting daemon service");
 
         let service = DaemonService::new(Arc::clone(daemon), Box::new(ServiceController {}));
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        service_manager.start().await?;
+        let service_manager = BatchServiceManager::new(
+            vec![service],
+            Box::new(ServiceController {}),
+            node_registry.clone(),
+            verbosity,
+        );
+        let result = service_manager.start_all(0).await;
+        result.into_eyre()?;
 
         println!(
             "Endpoint: {}",
-            service_manager
-                .service
-                .service_data
+            daemon
                 .read()
                 .await
                 .endpoint
@@ -137,9 +140,13 @@ pub async fn stop(verbosity: VerbosityLevel) -> Result<()> {
         info!("Stopping daemon service");
 
         let service = DaemonService::new(Arc::clone(daemon), Box::new(ServiceController {}));
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        service_manager.stop().await?;
+        let service_manager = BatchServiceManager::new(
+            vec![service],
+            Box::new(ServiceController {}),
+            node_registry.clone(),
+            verbosity,
+        );
+        service_manager.stop_all(None).await;
 
         node_registry.save().await?;
 

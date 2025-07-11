@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    ServiceManager, VerbosityLevel, add_services::config::InstallNodeServiceCtxBuilder,
+    BatchServiceManager, VerbosityLevel, add_services::config::InstallNodeServiceCtxBuilder,
     config::create_owned_dir,
 };
 use ant_service_management::{
@@ -53,12 +53,13 @@ pub async fn restart_node_service(
         Box::new(rpc_client),
         Box::new(metrics_client),
     );
-    let mut service_manager = ServiceManager::new(
-        service,
+    let service_manager = BatchServiceManager::new(
+        vec![service],
         Box::new(ServiceController {}),
+        node_registry.clone(),
         VerbosityLevel::Normal,
     );
-    service_manager.stop().await?;
+    service_manager.stop_all(None).await.into_eyre()?;
     let service_name = current_node.read().await.service_name.clone();
 
     let service_control = ServiceController {};
@@ -101,7 +102,7 @@ pub async fn restart_node_service(
         service_control
             .install(install_ctx, false)
             .map_err(|err| eyre!("Error while installing node {service_name:?} with: {err:?}",))?;
-        service_manager.start().await?;
+        service_manager.start_all(0).await.into_eyre()?;
     } else {
         let current_node_clone = current_node.read().await.clone();
         debug!("Starting a new node since retain peer id is false.");
@@ -263,14 +264,15 @@ pub async fn restart_node_service(
             Box::new(rpc_client),
             Box::new(metrics_client),
         );
-        let mut service_manager = ServiceManager::new(
-            service,
+        let service_manager = BatchServiceManager::new(
+            vec![service],
             Box::new(ServiceController {}),
+            node_registry.clone(),
             VerbosityLevel::Normal,
         );
-        service_manager.start().await?;
+        service_manager.start_all(0).await.into_eyre()?;
         node_registry
-            .push_node(service_manager.service.service_data.read().await.clone())
+            .push_node(current_node.read().await.clone())
             .await;
     };
 

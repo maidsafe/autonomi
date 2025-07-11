@@ -18,7 +18,6 @@ pub mod helpers;
 pub mod local;
 pub mod rpc;
 pub mod rpc_client;
-pub mod service_manager;
 
 use std::sync::Arc;
 
@@ -57,8 +56,6 @@ use tracing::debug;
 
 pub const DAEMON_DEFAULT_PORT: u16 = 12500;
 pub const DAEMON_SERVICE_NAME: &str = "antctld";
-
-const RPC_START_UP_DELAY_MS: u64 = 3000;
 
 pub async fn status_report(
     node_registry: &NodeRegistryManager,
