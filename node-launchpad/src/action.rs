@@ -56,27 +56,20 @@ pub enum StatusActions {
     StartStopNode,
     StartNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
     },
     StopNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
     },
     ResetNodesCompleted {
         trigger_start_node: bool,
-        all_nodes_data: Vec<NodeServiceData>,
     },
     RemoveNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
     },
     AddNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
     },
-    UpdateNodesCompleted {
-        all_nodes_data: Vec<NodeServiceData>,
-    },
+    UpdateNodesCompleted,
     ErrorLoadingNodeRegistry {
         raw_error: String,
     },
@@ -108,6 +101,10 @@ pub enum StatusActions {
         raw_error: String,
     },
     NodesStatsObtained(NodeStats),
+
+    RegistryUpdated {
+        all_nodes_data: Vec<NodeServiceData>,
+    },
 
     TriggerManageNodes,
     TriggerRewardsAddress,
