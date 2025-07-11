@@ -8,6 +8,7 @@
 
 use crate::Error;
 use prometheus_parse::{Sample, Value};
+use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tonic::async_trait;
 
@@ -15,7 +16,7 @@ const REACHABILITY_STATUS_METRIC: &str = "ant_networking_reachability_status";
 
 const REACHABILITY_CHECK_TIMEOUT_SEC: u64 = 14 * 60;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReachabilityStatusValues {
     pub not_performed: bool,
     pub ongoing: bool,
