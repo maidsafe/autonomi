@@ -251,10 +251,10 @@ impl NetworkDriver {
                 self.pending_tasks
                     .insert_task(query_id, NetworkTask::GetClosestPeers { addr, resp, n });
             }
-            NetworkTask::GetRecord { addr, quorum, resp } => {
+            NetworkTask::GetRecordKad { addr, quorum, resp } => {
                 let query_id = self.kad().get_record(addr.to_record_key());
                 self.pending_tasks
-                    .insert_task(query_id, NetworkTask::GetRecord { addr, quorum, resp });
+                    .insert_task(query_id, NetworkTask::GetRecordKad { addr, quorum, resp });
             }
             NetworkTask::PutRecordKad {
                 record,
@@ -305,6 +305,17 @@ impl NetworkDriver {
 
                 self.pending_tasks
                     .insert_query(req_id, NetworkTask::PutRecordReq { record, to, resp });
+            }
+            NetworkTask::GetRecordReq { addr, from, resp } => {
+                let req = Request::Query(Query::GetReplicatedRecord {
+                    requester: NetworkAddress::from(from.peer_id), //NB TODO placeholder
+                    key: addr.clone(),
+                });
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&from.peer_id, req, from.addrs.clone());
+                self.pending_tasks
+                    .insert_query(req_id, NetworkTask::GetRecordReq { addr, from, resp });
             }
             NetworkTask::GetQuote {
                 addr,

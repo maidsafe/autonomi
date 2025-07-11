@@ -142,6 +142,10 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_put_record_req(request_id, result)?;
             }
+            Response::Query(QueryResponse::GetReplicatedRecord(result)) => {
+                self.pending_tasks
+                    .update_get_record_req(request_id, result)?;
+            }
             _ => {}
         }
 

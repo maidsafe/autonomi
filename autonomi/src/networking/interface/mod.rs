@@ -34,11 +34,18 @@ pub(super) enum NetworkTask {
         n: NonZeroUsize,
     },
     /// cf [`crate::driver::task_handler::TaskHandler::update_get_record`]
-    GetRecord {
+    GetRecordKad {
         addr: NetworkAddress,
         quorum: Quorum,
         #[debug(skip)]
         resp: OneShotTaskResult<(Option<Record>, Vec<PeerId>)>,
+    },
+    /// cf [`crate::driver::task_handler::TaskHandler::update_get_record_req`]
+    GetRecordReq {
+        addr: NetworkAddress,
+        from: PeerInfo,
+        #[debug(skip)]
+        resp: OneShotTaskResult<Option<Vec<u8>>>,
     },
     /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad`]
     PutRecordKad {
@@ -50,7 +57,7 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<()>,
     },
-    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad_req`]
+    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_req`]
     PutRecordReq {
         #[debug(skip)]
         record: Record,

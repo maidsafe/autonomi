@@ -71,7 +71,6 @@ pub enum Query {
         // For future econ usage,
         sign_result: bool,
     },
-    /// *** From now on, the order of variants shall be retained to be backward compatible
     /// Query peer's cargo package version.
     GetVersion(NetworkAddress),
     /// Write operation to upload a record.
