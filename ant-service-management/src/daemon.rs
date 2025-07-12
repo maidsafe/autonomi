@@ -115,6 +115,11 @@ impl ServiceStateActions for DaemonService {
         Ok(())
     }
 
+    async fn wait_until_started(&self) -> Result<()> {
+        // Daemon service does not require waiting for start.
+        Ok(())
+    }
+
     async fn on_stop(&self) -> Result<()> {
         self.service_data.write().await.pid = None;
         self.service_data.write().await.status = ServiceStatus::Stopped;
@@ -129,7 +134,18 @@ impl ServiceStateActions for DaemonService {
         self.service_data.read().await.status.clone()
     }
 
+    async fn set_status(&self, status: ServiceStatus) {
+        self.service_data.write().await.status = status;
+    }
+
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
+    }
+
+    async fn set_metrics_port_if_not_set(
+        &self,
+        _service_control: &dyn ServiceControl,
+    ) -> Result<()> {
+        Ok(())
     }
 }

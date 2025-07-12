@@ -11,7 +11,9 @@ use crate::networking::{
     craft_valid_multiaddr_without_p2p,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
-    multiaddr_is_global, NetworkEvent, NodeIssue, Result,
+    multiaddr_is_global,
+    network::endpoint_str,
+    NetworkEvent, NodeIssue, Result,
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
@@ -169,6 +171,11 @@ impl SwarmDriver {
                     address.push(Protocol::P2p(local_peer_id));
                 }
 
+                // Update the listen address writer
+                if let Some(writer) = self.listen_addr_writer.as_mut() {
+                    writer.add_listener(listener_id, address.clone());
+                }
+
                 if !self.is_relay_client {
                     if self.local {
                         // all addresses are effectively external here...
@@ -219,6 +226,12 @@ impl SwarmDriver {
             } => {
                 event_string = "listener closed";
                 info!("Listener {listener_id:?} with add {addresses:?} has been closed for {reason:?}");
+                
+                // Update the listen address writer
+                if let Some(writer) = self.listen_addr_writer.as_mut() {
+                    writer.remove_listener(&listener_id);
+                }
+                
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
                     relay_manager.on_listener_closed(&listener_id, &mut self.swarm);
                 }
@@ -522,10 +535,18 @@ impl SwarmDriver {
             } => {
                 event_string = "ExpiredListenAddr";
                 info!("Listen address has expired. {listener_id:?} on {address:?}");
+                
+                // Update the listen address writer
+                if let Some(writer) = self.listen_addr_writer.as_mut() {
+                    writer.remove_address(&address);
+                }
             }
             SwarmEvent::ListenerError { listener_id, error } => {
                 event_string = "ListenerError";
                 warn!("ListenerError {listener_id:?} with non-fatal error {error:?}");
+                
+                // For critical errors, we might want to remove the listener
+                // but since this is described as "non-fatal", we'll keep it
             }
             other => {
                 event_string = "Other";
@@ -648,18 +669,6 @@ impl SwarmDriver {
             };
 
             let _ = self.latest_established_connection_ids.remove(&oldest_key);
-        }
-    }
-}
-
-/// Helper function to print formatted connection role info.
-fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
-    match endpoint {
-        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
-            format!("outgoing ({address})")
-        }
-        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
-            format!("incoming ({send_back_addr})")
         }
     }
 }

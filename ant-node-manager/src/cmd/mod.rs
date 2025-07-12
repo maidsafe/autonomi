@@ -8,7 +8,6 @@
 
 pub mod daemon;
 pub mod local;
-pub mod nat_detection;
 pub mod node;
 
 use crate::{
@@ -21,6 +20,7 @@ use color_eyre::{eyre::eyre, Result};
 use colored::Colorize;
 use semver::Version;
 use std::{
+    collections::HashMap,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -96,7 +96,7 @@ pub async fn download_and_get_upgrade_bin_path(
     }
 }
 
-pub fn print_upgrade_summary(upgrade_summary: Vec<(String, UpgradeResult)>) {
+pub fn print_upgrade_summary(upgrade_summary: HashMap<String, UpgradeResult>) {
     println!("Upgrade summary:");
     for (service_name, upgrade_result) in upgrade_summary {
         match upgrade_result {

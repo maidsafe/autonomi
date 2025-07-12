@@ -16,7 +16,6 @@ members = [
     "autonomi",
     "evmlib",
     "evm-testnet",
-    "nat-detection",
     "node-launchpad",
     "nodejs",
     "test-utils",

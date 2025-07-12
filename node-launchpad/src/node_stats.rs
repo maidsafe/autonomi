@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_service_management::{NodeServiceData, ServiceStatus};
+use ant_service_management::{metric::ReachabilityStatusValues, NodeServiceData, ServiceStatus};
 use color_eyre::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -29,6 +29,7 @@ pub struct IndividualNodeStats {
     pub bandwidth_outbound_rate: usize,
     pub max_records: usize,
     pub peers: usize,
+    pub reachability_status: ReachabilityStatusValues,
     pub connections: usize,
 }
 
@@ -70,7 +71,7 @@ impl NodeStats {
         let node_details = nodes
             .iter()
             .filter_map(|node| {
-                if node.status == ServiceStatus::Running {
+                if node.status == ServiceStatus::Running || node.status == ServiceStatus::Added {
                     if let Some(metrics_port) = node.metrics_port {
                         Some((
                             node.service_name.clone(),
@@ -124,7 +125,7 @@ impl NodeStats {
         let mut stream = futures::stream::iter(node_details)
             .map(|(service_name, metrics_port, data_dir)| async move {
                 (
-                    Self::fetch_stat_per_node(metrics_port, data_dir).await,
+                    Self::fetch_stat_per_node(service_name.clone(), metrics_port, data_dir).await,
                     service_name,
                 )
             })
@@ -134,20 +135,7 @@ impl NodeStats {
 
         while let Some((result, service_name)) = stream.next().await {
             match result {
-                Ok(stats) => {
-                    let individual_stats = IndividualNodeStats {
-                        service_name: service_name.clone(),
-                        forwarded_rewards: stats.forwarded_rewards,
-                        rewards_wallet_balance: stats.rewards_wallet_balance,
-                        memory_usage_mb: stats.memory_usage_mb,
-                        bandwidth_inbound: stats.bandwidth_inbound,
-                        bandwidth_outbound: stats.bandwidth_outbound,
-                        max_records: stats.max_records,
-                        peers: stats.peers,
-                        connections: stats.connections,
-                        bandwidth_inbound_rate: stats.bandwidth_inbound_rate,
-                        bandwidth_outbound_rate: stats.bandwidth_outbound_rate,
-                    };
+                Ok(individual_stats) => {
                     all_node_stats.merge(&individual_stats);
                 }
                 Err(err) => {
@@ -164,6 +152,7 @@ impl NodeStats {
     }
 
     async fn fetch_stat_per_node(
+        service_name: String,
         metrics_port: u16,
         _data_dir: PathBuf,
     ) -> Result<IndividualNodeStats> {
@@ -176,7 +165,11 @@ impl NodeStats {
         let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
         let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
 
-        let mut stats = IndividualNodeStats::default();
+        let mut stats = IndividualNodeStats {
+            service_name,
+            reachability_status: ReachabilityStatusValues::from(&all_metrics.samples),
+            ..Default::default()
+        };
 
         for sample in all_metrics.samples.iter() {
             if sample.metric == "ant_node_total_forwarded_rewards" {

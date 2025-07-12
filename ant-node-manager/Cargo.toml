@@ -44,8 +44,12 @@ dirs-next = "2.0.0"
 indicatif = { version = "0.17.5", features = ["tokio"] }
 libp2p = { version = "0.56.0", features = [] }
 libp2p-identity = { version = "0.2.12", features = ["rand"] }
+prometheus-parse = "0.2.5"
 prost = { version = "0.9" }
 rand = "0.8.5"
+reqwest = { version = "0.12.2", default-features = false, features = [
+    "rustls-tls-manual-roots",
+] }
 semver = "1.0.20"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

@@ -161,7 +161,7 @@ async fn spawn_node(
     node_builder.local(local);
     node_builder.no_upnp(no_upnp);
 
-    let running_node = node_builder.build_and_run()?;
+    let running_node = node_builder.build_and_run().await?;
 
     // Verify that node is running
     let mut retries: u8 = 0;

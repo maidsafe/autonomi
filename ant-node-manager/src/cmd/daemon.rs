@@ -10,7 +10,7 @@ use crate::{
     add_services::{add_daemon, config::AddDaemonServiceOptions},
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
-    print_banner, ServiceManager, VerbosityLevel,
+    print_banner, BatchServiceManager, VerbosityLevel,
 };
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
@@ -99,15 +99,19 @@ pub async fn start(verbosity: VerbosityLevel) -> Result<()> {
         info!("Starting daemon service");
 
         let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        service_manager.start().await?;
+        let service_manager = BatchServiceManager::new(
+            vec![service],
+            Box::new(ServiceController {}),
+            node_registry.clone(),
+            verbosity,
+        )
+        .await;
+        let result = service_manager.start_all(0).await;
+        result.into_eyre()?;
 
         println!(
             "Endpoint: {}",
-            service_manager
-                .service
-                .service_data
+            daemon
                 .read()
                 .await
                 .endpoint
@@ -136,9 +140,14 @@ pub async fn stop(verbosity: VerbosityLevel) -> Result<()> {
         info!("Stopping daemon service");
 
         let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
-        let mut service_manager =
-            ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
-        service_manager.stop().await?;
+        let service_manager = BatchServiceManager::new(
+            vec![service],
+            Box::new(ServiceController {}),
+            node_registry.clone(),
+            verbosity,
+        )
+        .await;
+        service_manager.stop_all(None).await;
 
         node_registry.save().await?;
 

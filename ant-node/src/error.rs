@@ -105,4 +105,6 @@ pub enum Error {
 
     #[error("The payment quote's signature is invalid")]
     InvalidQuoteSignature,
+    #[error("The node is not externally reachable by the network")]
+    UnreachableNode,
 }

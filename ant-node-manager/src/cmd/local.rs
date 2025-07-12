@@ -27,7 +27,6 @@ use std::path::PathBuf;
 pub async fn join(
     build: bool,
     count: u16,
-    enable_metrics_server: bool,
     interval: u64,
     metrics_port: Option<PortRange>,
     node_path: Option<PathBuf>,
@@ -46,8 +45,7 @@ pub async fn join(
     }
     info!("Joining local network");
 
-    if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
-    {
+    if metrics_port.is_some() && !cfg!(feature = "open-metrics") && build {
         return Err(eyre!(
         "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
     ));
@@ -70,7 +68,6 @@ pub async fn join(
 
     let options = LocalNetworkOptions {
         antnode_bin_path,
-        enable_metrics_server,
         interval,
         join: true,
         metrics_port,
@@ -108,7 +105,6 @@ pub async fn run(
     build: bool,
     clean: bool,
     count: u16,
-    enable_metrics_server: bool,
     interval: u64,
     metrics_port: Option<PortRange>,
     node_path: Option<PathBuf>,
@@ -121,8 +117,7 @@ pub async fn run(
     skip_validation: bool,
     verbosity: VerbosityLevel,
 ) -> Result<(), Report> {
-    if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
-    {
+    if metrics_port.is_some() && !cfg!(feature = "open-metrics") && build {
         return Err(eyre!(
         "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
     ));
@@ -176,7 +171,6 @@ pub async fn run(
 
     let options = LocalNetworkOptions {
         antnode_bin_path,
-        enable_metrics_server,
         join: false,
         interval,
         metrics_port,
