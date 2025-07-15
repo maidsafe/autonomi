@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Python package build: replaced wildcard pattern in `sdist-include` with explicit crate listing to
   fix CI builds after ant-networking removal.
+- CI workflow: removed ant-networking from hardcoded workspace members in python-publish-client.yml.
 
 ## 2025-06-26
 

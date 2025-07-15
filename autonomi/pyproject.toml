@@ -60,9 +60,6 @@ sdist-include = [
     "../ant-token-supplies/**/*",
     "../test-utils/**/*",
     "../evmlib/**/*",
-    "../evm-testnet/**/*",
-    "../nat-detection/**/*",
-    "../node-launchpad/**/*",
     "../Cargo.toml",
 ]
 workspace = false

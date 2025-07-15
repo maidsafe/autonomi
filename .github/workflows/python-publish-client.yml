@@ -170,7 +170,6 @@ jobs:
               "ant-evm",
               "ant-logging",
               "ant-metrics",
-              "ant-networking",
               "ant-node",
               "ant-node-manager",
               "ant-node-rpc-client",
