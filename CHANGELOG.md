@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## [Unreleased]
+
+### Fixed
+
+- Python package build: replaced wildcard pattern in `sdist-include` with explicit crate listing to
+  fix CI builds after ant-networking removal.
+
 ## 2025-06-26
 
 ### API
