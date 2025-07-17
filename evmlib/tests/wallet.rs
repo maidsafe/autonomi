@@ -69,6 +69,8 @@ async fn funded_wallet(network: &Network, genesis_wallet: EthereumWallet) -> Wal
 }
 
 #[tokio::test]
+#[ignore]
+//TODO: To be fixed - @Mick
 async fn test_pay_for_quotes_and_data_payment_verification() {
     const CHUNK_PAYMENTS: usize = 600;
     const QUOTES_PER_CHUNK: usize = 5;

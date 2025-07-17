@@ -21,6 +21,7 @@ use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
+use tracing::Instrument;
 
 // Max parallel fetches that can be undertaken at the same time.
 const MAX_PARALLEL_FETCH: usize = 5;
@@ -581,17 +582,20 @@ impl ReplicationFetcher {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = spawn(async move {
-            if capacity == 0 {
-                warn!(
-                    "NetworkEvent channel is full. Await capacity to send: {:?}",
-                    event
-                );
+        let _handle = spawn(
+            async move {
+                if capacity == 0 {
+                    warn!(
+                        "NetworkEvent channel is full. Await capacity to send: {:?}",
+                        event
+                    );
+                }
+                if let Err(error) = event_sender.send(event).await {
+                    error!("ReplicationFetcher failed to send event: {}", error);
+                }
             }
-            if let Err(error) = event_sender.send(event).await {
-                error!("ReplicationFetcher failed to send event: {}", error);
-            }
-        });
+            .in_current_span(),
+        );
     }
 }
 

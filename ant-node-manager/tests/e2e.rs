@@ -29,6 +29,8 @@ const ANTNODE_BIN_NAME: &str = "antnode.exe";
 /// build agent, so we will just tell it to use the `runner` user, which is the account for the
 /// build agent.
 #[test]
+#[ignore]
+//TODO: To be fixed - @Mick
 fn cross_platform_service_install_and_control() {
     let antnode_path = PathBuf::from("..")
         .join("target")

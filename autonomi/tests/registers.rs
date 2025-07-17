@@ -14,15 +14,17 @@ use autonomi::{
     Client,
 };
 use eyre::Result;
-use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
-#[serial]
 async fn registers_usage() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let main_key = bls::SecretKey::random();
 
     let register_key = Client::register_key_from_name(&main_key, "register1");
@@ -62,11 +64,14 @@ async fn registers_usage() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn registers_errors() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let main_key = bls::SecretKey::random();
 
     let register_key = Client::register_key_from_name(&main_key, "register1");
@@ -108,10 +113,12 @@ async fn registers_errors() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn test_register_history() -> Result<()> {
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let main_key = bls::SecretKey::random();
     let register_key = Client::register_key_from_name(&main_key, "history_test");
     let content1 = Client::register_value_from_bytes(b"Massive")?;

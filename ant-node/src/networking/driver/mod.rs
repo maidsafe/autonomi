@@ -52,7 +52,7 @@ use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::{interval, Duration, Interval};
-use tracing::warn;
+use tracing::{warn, Instrument};
 
 use super::interface::{LocalSwarmCmd, NetworkEvent, NetworkSwarmCmd};
 
@@ -404,17 +404,20 @@ impl SwarmDriver {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = tokio::spawn(async move {
-            if capacity == 0 {
-                warn!(
-                    "NetworkSwarmCmd channel is full. Await capacity to send: {:?}",
-                    event
-                );
+        let _handle = tokio::spawn(
+            async move {
+                if capacity == 0 {
+                    warn!(
+                        "NetworkSwarmCmd channel is full. Await capacity to send: {:?}",
+                        event
+                    );
+                }
+                if let Err(error) = event_sender.send(event).await {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-            if let Err(error) = event_sender.send(event).await {
-                error!("SwarmDriver failed to send event: {}", error);
-            }
-        });
+            .in_current_span(),
+        );
     }
 
     /// Sends an event after pushing it off thread so as to be non-blocking
@@ -424,17 +427,20 @@ impl SwarmDriver {
         let capacity = event_sender.capacity();
 
         // push the event off thread so as to be non-blocking
-        let _handle = tokio::spawn(async move {
-            if capacity == 0 {
-                warn!(
-                    "NetworkEvent channel is full. Await capacity to send: {:?}",
-                    event
-                );
+        let _handle = tokio::spawn(
+            async move {
+                if capacity == 0 {
+                    warn!(
+                        "NetworkEvent channel is full. Await capacity to send: {:?}",
+                        event
+                    );
+                }
+                if let Err(error) = event_sender.send(event).await {
+                    error!("SwarmDriver failed to send event: {}", error);
+                }
             }
-            if let Err(error) = event_sender.send(event).await {
-                error!("SwarmDriver failed to send event: {}", error);
-            }
-        });
+            .in_current_span(),
+        );
     }
 
     /// Get K closest peers to self, from our local RoutingTable.
@@ -571,11 +577,14 @@ impl SwarmDriver {
 
                 // Save cache to disk.
                 #[allow(clippy::let_underscore_future)]
-                let _ = tokio::spawn(async move {
-                    if let Err(err) = old_cache.sync_and_flush_to_disk() {
-                        error!("Failed to save bootstrap cache: {err}");
+                let _ = tokio::spawn(
+                    async move {
+                        if let Err(err) = old_cache.sync_and_flush_to_disk() {
+                            error!("Failed to save bootstrap cache: {err}");
+                        }
                     }
-                });
+                    .in_current_span(),
+                );
             }
         }
         Ok(())

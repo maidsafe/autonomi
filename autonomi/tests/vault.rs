@@ -8,16 +8,21 @@
 
 use ant_evm::AttoTokens;
 use ant_logging::LogBuilder;
-use autonomi::{vault::app_name_to_vault_content_type, Client};
+use autonomi::vault::app_name_to_vault_content_type;
 use eyre::Result;
-use serial_test::serial;
-use test_utils::{evm::get_funded_wallet, gen_random_data};
+use test_utils::{
+    gen_random_data,
+    local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE},
+};
 
 #[tokio::test]
-#[serial]
 async fn vault_cost() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-    let client = Client::init_local().await?;
+
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+
     let main_key = bls::SecretKey::random();
 
     // Quoting cost for a Vault with 1TB max_size
@@ -32,11 +37,14 @@ async fn vault_cost() -> Result<()> {
 }
 
 #[tokio::test]
-#[serial]
 async fn vault_expand() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
+
     let main_key = bls::SecretKey::random();
 
     let content_type = app_name_to_vault_content_type("TestData");
