@@ -142,6 +142,9 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_put_record_req(request_id, result)?;
             }
+            Response::Query(QueryResponse::GetVersion { peer: _, version }) => {
+                self.pending_tasks.update_get_version(request_id, version)?;
+            }
             _ => {}
         }
 
