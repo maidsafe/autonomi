@@ -45,6 +45,7 @@ pub use self::{
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
     networking::sort_peers_by_key,
+    networking::ReachabilityStatus,
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
 

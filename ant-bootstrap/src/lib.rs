@@ -39,8 +39,8 @@ pub use initial_peers::{InitialPeersConfig, ANT_PEERS_ENV};
 
 /// Craft a proper address to avoid any ill formed addresses
 ///
-/// ignore_peer_id is only used for nat-detection contact list
-pub fn craft_valid_multiaddr(addr: &Multiaddr, ignore_peer_id: bool) -> Option<Multiaddr> {
+/// PeerId is optional, if not present, it will be ignored.
+pub fn craft_valid_multiaddr(addr: &Multiaddr) -> Option<Multiaddr> {
     let peer_id = addr
         .iter()
         .find(|protocol| matches!(protocol, Protocol::P2p(_)));
@@ -83,20 +83,20 @@ pub fn craft_valid_multiaddr(addr: &Multiaddr, ignore_peer_id: bool) -> Option<M
 
     if let Some(peer_id) = peer_id {
         output_address.push(peer_id);
-    } else if !ignore_peer_id {
-        return None;
     }
 
     Some(output_address)
 }
 
-/// ignore_peer_id is only used for nat-detection contact list
-pub fn craft_valid_multiaddr_from_str(addr_str: &str, ignore_peer_id: bool) -> Option<Multiaddr> {
+/// Craft a proper address to avoid any ill formed addresses
+///
+/// PeerId is optional, if not present, it will be ignored.
+pub fn craft_valid_multiaddr_from_str(addr_str: &str) -> Option<Multiaddr> {
     let Ok(addr) = addr_str.parse::<Multiaddr>() else {
         warn!("Failed to parse multiaddr from str {addr_str}");
         return None;
     };
-    craft_valid_multiaddr(&addr, ignore_peer_id)
+    craft_valid_multiaddr(&addr)
 }
 
 pub fn multiaddr_get_peer_id(addr: &Multiaddr) -> Option<PeerId> {

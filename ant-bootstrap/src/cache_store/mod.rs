@@ -101,7 +101,7 @@ impl BootstrapCacheStore {
 
     /// Add an address to the cache
     pub fn add_addr(&mut self, addr: Multiaddr) {
-        let Some(addr) = craft_valid_multiaddr(&addr, false) else {
+        let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
         let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
@@ -167,6 +167,11 @@ impl BootstrapCacheStore {
     pub fn sync_and_flush_to_disk(&mut self) -> Result<()> {
         if self.config.disable_cache_writing {
             info!("Cache writing is disabled, skipping sync to disk");
+            return Ok(());
+        }
+
+        if self.data.peers.is_empty() {
+            info!("No peers to write to disk, skipping sync to disk");
             return Ok(());
         }
 
