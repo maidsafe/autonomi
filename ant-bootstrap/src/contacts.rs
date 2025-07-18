@@ -80,6 +80,7 @@ impl ContactsFetcher {
     /// Create a new struct with the mainnet endpoints
     pub fn with_mainnet_endpoints() -> Result<Self> {
         let mut fetcher = Self::new()?;
+        #[allow(clippy::expect_used)]
         let mainnet_contact = MAINNET_CONTACTS
             .iter()
             .map(|url| url.parse().expect("Failed to parse static URL"))
@@ -91,6 +92,7 @@ impl ContactsFetcher {
     /// Create a new struct with the alphanet endpoints
     pub fn with_alphanet_endpoints() -> Result<Self> {
         let mut fetcher = Self::new()?;
+        #[allow(clippy::expect_used)]
         let alphanet_contact = ALPHANET_CONTACTS
             .iter()
             .map(|url| url.parse().expect("Failed to parse static URL"))

@@ -6,6 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect/panic usage in benchmarks
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 use criterion::{criterion_group, criterion_main, Criterion, Throughput};
 use rand::{thread_rng, Rng};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};

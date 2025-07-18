@@ -58,6 +58,9 @@ tonic = { version = "0.6.2" }
 uuid = { version = "1.5.0", features = ["v4"] }
 anyhow = "1.0.98"
 
+[lints]
+workspace = true
+
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 nix = { version = "0.27.1", features = ["fs", "user"] }
 users = "0.11"

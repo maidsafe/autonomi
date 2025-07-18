@@ -6,6 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect/panic in this crate temporarily until proper error handling is implemented
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+// Allow the to_bytes_le method name
+#![allow(clippy::wrong_self_convention)]
+
 #[macro_use]
 extern crate tracing;
 

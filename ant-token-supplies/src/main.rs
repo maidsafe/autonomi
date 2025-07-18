@@ -6,6 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect usage in this binary
+#![allow(clippy::expect_used)]
+
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Read};

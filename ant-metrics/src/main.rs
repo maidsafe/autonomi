@@ -6,6 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect/unwrap usage in this metrics binary
+#![allow(clippy::expect_used)]
+#![allow(clippy::unwrap_used)]
+
 use clap::{command, Arg, ArgAction};
 use color_eyre::{eyre::eyre, Result};
 use regex::Regex;

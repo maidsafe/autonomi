@@ -18,7 +18,7 @@ use ant_service_management::{
     DaemonService, NodeRegistryManager,
 };
 use color_eyre::{eyre::eyre, Result};
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::{net::Ipv4Addr, path::PathBuf, sync::Arc};
 
 pub async fn add(
     address: Ipv4Addr,
@@ -98,7 +98,7 @@ pub async fn start(verbosity: VerbosityLevel) -> Result<()> {
         }
         info!("Starting daemon service");
 
-        let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
+        let service = DaemonService::new(Arc::clone(daemon), Box::new(ServiceController {}));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         service_manager.start().await?;
@@ -135,7 +135,7 @@ pub async fn stop(verbosity: VerbosityLevel) -> Result<()> {
         }
         info!("Stopping daemon service");
 
-        let service = DaemonService::new(daemon.clone(), Box::new(ServiceController {}));
+        let service = DaemonService::new(Arc::clone(daemon), Box::new(ServiceController {}));
         let mut service_manager =
             ServiceManager::new(service, Box::new(ServiceController {}), verbosity);
         service_manager.stop().await?;

@@ -1,3 +1,5 @@
+#![allow(clippy::expect_used)]
+
 mod common;
 
 use alloy::network::{Ethereum, EthereumWallet, NetworkWallet};

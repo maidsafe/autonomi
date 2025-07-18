@@ -6,6 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+#![allow(clippy::expect_used)]
+
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::Client;

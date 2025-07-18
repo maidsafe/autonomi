@@ -1,3 +1,6 @@
+// Allow unused_async as NAPI bindings may require async signatures
+#![allow(clippy::unused_async)]
+
 use std::{path::PathBuf, str::FromStr};
 
 use autonomi::{AttoTokens, Bytes, Chunk, Multiaddr, Signature};
