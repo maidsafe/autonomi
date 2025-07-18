@@ -13,6 +13,7 @@ mod driver;
 mod interface;
 mod retries;
 mod utils;
+pub mod version;
 
 // export the utils
 pub(crate) use utils::multiaddr_is_global;
@@ -28,6 +29,7 @@ pub use libp2p::{
 };
 
 // internal needs
+use crate::networking::version::PackageVersion;
 use ant_protocol::{PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -119,6 +121,10 @@ pub enum NetworkError {
     /// Invalid retry strategy
     #[error("Invalid retry strategy, check your config or use the default")]
     InvalidRetryStrategy,
+
+    /// Error getting node version
+    #[error("Failed to get node version: {0}")]
+    GetVersionError(String),
 }
 
 impl NetworkError {
@@ -464,6 +470,26 @@ impl Network {
             errors_len,
             errors,
         })
+    }
+
+    /// Request the node version of a peer on the network.
+    /// Requires the node address(es) to be passed if the node is not in the local routing table.
+    pub async fn get_node_version(&self, peer: PeerInfo) -> Result<PackageVersion, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetVersion { peer, resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+
+        let version_string = rx.await?;
+
+        match version_string {
+            Ok(version_str) => {
+                PackageVersion::try_from(version_str).map_err(NetworkError::GetVersionError)
+            }
+            Err(e) => Err(NetworkError::GetVersionError(format!("Network error: {e}"))),
+        }
     }
 }
 
