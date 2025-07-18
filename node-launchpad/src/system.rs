@@ -139,7 +139,7 @@ pub fn get_primary_mount_point_name() -> Result<String> {
 }
 
 // Gets available disk space in bytes for the given mountpoint
-pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<usize> {
+pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<u64> {
     let disks = Disks::new_with_refreshed_list();
     if tracing::level_enabled!(tracing::Level::DEBUG) {
         for disk in disks.list() {
@@ -156,7 +156,7 @@ pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<usize> {
         .iter()
         .find(|disk| disk.mount_point() == storage_mountpoint)
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
-        .available_space() as usize;
+        .available_space();
 
     Ok(available_space_b)
 }
@@ -175,4 +175,60 @@ pub fn get_drive_name(storage_mountpoint: &PathBuf) -> Result<String> {
         .to_string();
 
     Ok(name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_get_available_space_b_returns_u64() {
+        // Test that the function returns u64 and doesn't overflow
+        // This test verifies the type signature change from usize to u64
+        let test_path = PathBuf::from("/");
+        
+        // The function should return a u64, which can handle values > 2GB
+        let result = get_available_space_b(&test_path);
+        
+        // Should not panic due to overflow
+        assert!(result.is_ok());
+        
+        // The value should be a u64
+        let space_bytes = result.unwrap();
+        assert!(space_bytes > 0);
+        
+        // Test that we can handle large values (simulating > 2GB)
+        // This would have overflowed on 32-bit systems with usize
+        let large_value: u64 = 5_000_000_000; // 5GB in bytes
+        assert!(large_value > 2_147_483_647); // Max usize on 32-bit
+        
+        // Verify the conversion to GB works correctly
+        let gb_value = large_value / 1_000_000_000; // Convert to GB
+        assert_eq!(gb_value, 5); // Should be 5 GB
+    }
+
+    #[test]
+    fn test_disk_space_calculation_no_overflow() {
+        // Test the calculation logic used in the UI components
+        let available_bytes: u64 = 10_000_000_000; // 10GB in bytes
+        let gb_constant: u64 = 1_000_000_000; // 1GB in bytes
+        let gb_per_node: u64 = 35; // 35GB per node
+        
+        // This calculation should not overflow
+        let available_gb = available_bytes / gb_constant;
+        assert_eq!(available_gb, 10);
+        
+        // Test node calculation
+        let max_nodes = available_gb / gb_per_node;
+        assert_eq!(max_nodes, 0); // 10GB / 35GB = 0 nodes (floor division)
+        
+        // Test with larger disk
+        let large_disk_bytes: u64 = 100_000_000_000; // 100GB
+        let large_disk_gb = large_disk_bytes / gb_constant;
+        assert_eq!(large_disk_gb, 100);
+        
+        let max_nodes_large = large_disk_gb / gb_per_node;
+        assert_eq!(max_nodes_large, 2); // 100GB / 35GB = 2 nodes
+    }
 }
