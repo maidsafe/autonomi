@@ -328,4 +328,151 @@ See the `examples/` directory for complete examples:
 6. Consider using pointers for updatable references
 7. Properly manage and backup vault keys
 
+#### Register Operations
+
+Registers are mutable data structures on the Autonomi network that allow you to create updateable content with a versioned history. Each register is owned by a specific key and can only be updated by the owner.
+
+##### Register Class
+
+Registers are accessed through the Client and require a unique key for each register:
+
+```python
+from autonomi_client import *
+
+# Initialize client and wallet
+client = await Client.init()
+wallet = Wallet.new_from_private_key(Network(True), "your_private_key")
+payment = PaymentOption.wallet(wallet)
+
+# Create a register key from a name
+main_key = SecretKey.random()
+register_key = Client.register_key_from_name(main_key, "my-register-1")
+```
+
+##### Key Register Methods
+
+- `register_cost(public_key: PublicKey) -> str`
+    - Calculate the cost to create a register
+    - `public_key`: The public key for the register
+    - Returns cost in atto tokens
+
+- `register_create(key: SecretKey, content: RegisterValue, payment: PaymentOption) -> Tuple[str, RegisterAddress]`
+    - Create a new register on the network
+    - `key`: Secret key that owns this register
+    - `content`: Initial content as RegisterValue
+    - `payment`: Payment method
+    - Returns (cost, address) tuple
+
+- `register_get(address: RegisterAddress) -> RegisterValue`
+    - Retrieve current value of a register
+    - `address`: RegisterAddress to retrieve from
+
+- `register_update(key: SecretKey, content: RegisterValue, payment: PaymentOption) -> str`
+    - Update an existing register with new content
+    - `key`: Secret key that owns the register
+    - `content`: New content as RegisterValue
+    - Returns cost in atto tokens
+
+- `register_history(address: RegisterAddress) -> RegisterHistory`
+    - Get the complete version history of a register
+    - Returns iterator over all versions
+
+##### Utility Methods
+
+- `Client.register_key_from_name(main_key: SecretKey, name: str) -> SecretKey`
+    - Generate a deterministic register key from a main key and name
+    - Allows you to recreate the same register key later
+
+- `Client.register_value_from_bytes(data: bytes) -> RegisterValue`
+    - Create RegisterValue from byte data (limited to 32 bytes)
+
+##### RegisterAddress Class
+
+- `RegisterAddress(public_key: PublicKey) -> RegisterAddress`
+    - Create register address from owner's public key
+
+- `from_hex(hex: str) -> RegisterAddress`
+    - Create register address from hex string
+
+- `to_hex() -> str`
+    - Convert register address to hex string
+
+- `owner() -> PublicKey`
+    - Get the public key that owns this register
+
+##### Complete Register Example
+
+```python
+from autonomi_client import *
+
+async def register_example():
+    # Initialize client and wallet
+    client = await Client.init()
+    wallet = Wallet.new_from_private_key(Network(True), 
+        "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80")
+    payment = PaymentOption.wallet(wallet)
+    
+    # Generate keys
+    main_key = SecretKey.random()
+    register_key = Client.register_key_from_name(main_key, "my-counter")
+    
+    # Create register content (max 32 bytes)
+    initial_content = Client.register_value_from_bytes(b"counter: 0")
+    
+    # Check cost before creating
+    cost = await client.register_cost(register_key.public_key())
+    print(f"Register creation cost: {cost} AttoTokens")
+    
+    # Create the register
+    creation_cost, address = await client.register_create(
+        register_key, initial_content, payment)
+    print(f"Register created at: {address.to_hex()}")
+    
+    # Wait for network replication
+    await asyncio.sleep(5)
+    
+    # Read current value
+    current_value = await client.register_get(address)
+    print(f"Current value: {current_value}")
+    
+    # Update the register
+    new_content = Client.register_value_from_bytes(b"counter: 1")
+    update_cost = await client.register_update(register_key, new_content, payment)
+    print(f"Update cost: {update_cost} AttoTokens")
+    
+    # Wait for replication
+    await asyncio.sleep(5)
+    
+    # Get updated value
+    updated_value = await client.register_get(address)
+    print(f"Updated value: {updated_value}")
+    
+    # Get complete history
+    history = client.register_history(address)
+    all_versions = await history.collect()
+    print(f"History has {len(all_versions)} versions:")
+    for i, version in enumerate(all_versions):
+        print(f"  Version {i}: {version}")
+
+# Run the example
+asyncio.run(register_example())
+```
+
+##### Register Use Cases
+
+1. **Mutable Configuration**: Store application settings that need periodic updates
+2. **Status Updates**: Maintain current status or state information
+3. **Version Control**: Track document or data versions with full history
+4. **Counters**: Implement distributed counters or sequence numbers
+5. **Metadata**: Store changeable metadata for files or applications
+
+##### Important Register Notes
+
+1. **Size Limit**: Register values are limited to 32 bytes maximum
+2. **Ownership**: Only the key holder can update a register
+3. **Network Delays**: Allow time for network replication after operations
+4. **Deterministic Keys**: Use `register_key_from_name()` for consistent key generation
+5. **Payment Required**: Both creation and updates require payment
+6. **History Preserved**: All versions are permanently stored and accessible
+
 For more examples and detailed usage, see the examples in the repository.
