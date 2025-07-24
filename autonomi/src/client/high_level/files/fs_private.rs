@@ -11,7 +11,6 @@ use super::{DownloadError, UploadError};
 
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::payment::PaymentOption;
-use crate::data::CombinedChunks;
 use crate::{AttoTokens, Client};
 use bytes::Bytes;
 use std::path::PathBuf;
@@ -58,21 +57,20 @@ impl Client {
     ) -> Result<(AttoTokens, PrivateArchive), UploadError> {
         info!("Uploading directory as private: {dir_path:?}");
 
-        let encryption_results = self.encrypt_directory_files_private(dir_path).await?;
-
-        let mut combined_chunks: CombinedChunks = vec![];
-        let mut private_archive = PrivateArchive::new();
-
+        // encrypt
+        let encryption_results = self
+            .encrypt_directory_files_in_memory(dir_path, false)
+            .await?;
+        let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
             match encryption_result {
-                Ok((file_path, chunked_file, file_data)) => {
+                Ok((file_chunk_iterator, _)) => {
+                    let file_path = file_chunk_iterator.file_path.clone();
                     info!("Successfully encrypted file: {file_path:?}");
                     #[cfg(feature = "loud")]
                     println!("Successfully encrypted file: {file_path:?}");
 
-                    combined_chunks.push(((file_path, None), chunked_file));
-                    let (relative_path, data_map_chunk, file_metadata) = file_data;
-                    private_archive.add_file(relative_path, data_map_chunk, file_metadata);
+                    chunk_iterators.push(file_chunk_iterator);
                 }
                 Err(err_msg) => {
                     error!("Error during file encryption: {err_msg}");
@@ -82,7 +80,26 @@ impl Client {
             }
         }
 
-        let total_cost = self.pay_and_upload(payment_option, combined_chunks).await?;
+        // pay and upload
+        let total_cost = self
+            .pay_and_upload(payment_option, &mut chunk_iterators)
+            .await?;
+
+        // create an archive
+        let mut private_archive = PrivateArchive::new();
+        for file in chunk_iterators {
+            let file_path = file.file_path.clone();
+            let relative_path = file.relative_path.clone();
+            let file_metadata = file.metadata.clone();
+            let datamap = match file.data_map_chunk() {
+                Some(datamap) => datamap,
+                None => {
+                    error!("Data map chunk not found for file: {file_path:?}, this is a BUG");
+                    continue;
+                }
+            };
+            private_archive.add_file(relative_path, datamap, file_metadata);
+        }
 
         Ok((total_cost, private_archive))
     }

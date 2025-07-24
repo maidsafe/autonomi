@@ -18,7 +18,6 @@ use crate::client::{quote::CostError, GetError, PutError};
 
 pub mod archive_private;
 pub mod archive_public;
-pub(super) mod encryption;
 pub mod fs_private;
 pub mod fs_public;
 

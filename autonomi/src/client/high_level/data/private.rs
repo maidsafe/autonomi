@@ -8,11 +8,11 @@
 
 use std::time::Instant;
 
+use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::{GetError, PutError};
-use crate::data::DataAddress;
 use crate::AttoTokens;
-use crate::{self_encryption::encrypt, Client};
+use crate::Client;
 
 pub use crate::client::data_types::chunk::DataMapChunk;
 pub use crate::Bytes;
@@ -69,19 +69,15 @@ impl Client {
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
         let now = Instant::now();
-        let (data_map_chunk, chunks) = encrypt(data)?;
+
+        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, false)?;
         debug!("Encryption took: {:.2?}", now.elapsed());
 
-        let data_address = DataAddress::new(*data_map_chunk.address().xorname());
-        let combined_chunks = vec![(
-            (format!("Private Data {data_address:?}"), Some(data_address)),
-            chunks,
-        )];
-
-        // Note within the `pay_and_upload`, UploadSummary will be sent to cli via event_channel.
-        self.pay_and_upload(payment_option, combined_chunks)
+        // Note within the `pay_and_upload`, UploadSummary will be sent to client via event_channel.
+        let mut chunk_streams = vec![chunk_stream];
+        self.pay_and_upload(payment_option, &mut chunk_streams)
             .await
-            .map(|total_cost| (total_cost, DataMapChunk(data_map_chunk)))
+            .map(|total_cost| (total_cost, data_map_chunk))
     }
 }
 

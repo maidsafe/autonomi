@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::high_level::data::DataAddress;
+use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
 use crate::client::utils::format_upload_error;
@@ -19,9 +19,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::time::sleep;
 
-type AggregatedChunks = Vec<((String, Option<DataAddress>, usize, usize), Chunk)>;
-
-pub(crate) type CombinedChunks = Vec<((String, Option<DataAddress>), Vec<Chunk>)>;
+type AggregatedChunks = Vec<((String, usize, usize), Chunk)>;
 
 /// Number of batch size of an entire quote-pay-upload flow to process.
 /// Suggested to be multiples of `MAX_TRANSFERS_PER_TRANSACTION  / 3` (records-payouts-per-transaction).
@@ -42,15 +40,13 @@ impl Client {
         &self,
         total_chunks: usize,
         payment_receipts: Vec<Receipt>,
-        free_chunks_counts: Vec<usize>,
+        total_free_chunks: usize,
     ) -> AttoTokens {
         // Calculate total tokens spent across all receipts
         let total_tokens: Amount = payment_receipts
             .into_iter()
             .flat_map(|receipt| receipt.into_values().map(|(_, cost)| cost.as_atto()))
             .sum();
-
-        let total_free_chunks = free_chunks_counts.iter().sum::<usize>();
 
         // Send completion event if channel exists
         if let Some(sender) = &self.client_event_sender {
@@ -74,69 +70,118 @@ impl Client {
     pub(crate) async fn pay_and_upload(
         &self,
         payment_option: PaymentOption,
-        combined_chunks: CombinedChunks,
+        encryption_streams: &mut [EncryptionStream],
     ) -> Result<AttoTokens, PutError> {
         let start = tokio::time::Instant::now();
-        let total_files = combined_chunks.len();
+        let total_files = encryption_streams.len();
         let mut receipts = Vec::new();
-        let mut free_chunks_counts = Vec::new();
+        let mut total_free_chunks = 0;
+        let mut total_chunks = 0;
 
-        // Process all combined chunks in batches.
-        // zip the file infos together for the better batch progressing print out.
-        let mut aggregated_chunks = vec![];
-        for ((file_name, data_address), chunks) in combined_chunks {
-            let total = chunks.len();
-            for (i, chunk) in chunks.into_iter().enumerate() {
-                aggregated_chunks.push(((file_name.clone(), data_address, i, total), chunk));
+        // Estimate total chunks to be processed
+        let maybe_file = if total_files > 1 {
+            &format!(" of {total_files} files")
+        } else {
+            ""
+        };
+        let est_total_chunks: usize = encryption_streams
+            .iter()
+            .map(|stream| stream.total_chunks())
+            .sum();
+        info!("Processing estimated total {est_total_chunks} chunks{maybe_file}");
+        #[cfg(feature = "loud")]
+        println!("Processing estimated total {est_total_chunks} chunks{maybe_file}");
+
+        // Process to upload file by file
+        for stream in encryption_streams.iter_mut() {
+            if !stream.file_path.is_empty() {
+                info!("Uploading file: {}", stream.file_path);
+                #[cfg(feature = "loud")]
+                println!("Uploading file: {}", stream.file_path);
             }
+            let (processed_chunks, free_chunks, receipt) = self
+                .pay_and_upload_file(payment_option.clone(), stream)
+                .await?;
+            total_chunks += processed_chunks;
+            total_free_chunks += free_chunks;
+            receipts.extend(receipt);
+
+            // Report upload completion
+            let filename = stream.file_path.clone();
+            let addr_if_pub = stream
+                .data_address()
+                .map(|addr| format!(" at {}", addr.to_hex()))
+                .unwrap_or_else(|| "".to_string());
+            let filename_if_any = if !filename.is_empty() {
+                &format!(" for file {filename}")
+            } else {
+                ""
+            };
+            info!("Upload completed{filename_if_any}{addr_if_pub}");
+            #[cfg(feature = "loud")]
+            println!("Upload completed{filename_if_any}{addr_if_pub}");
         }
 
-        info!(
-            "Processing total {} chunks of {total_files} files",
-            aggregated_chunks.len()
-        );
+        // Report
+        let total_elapsed = start.elapsed();
+        info!("Upload{maybe_file} completed in {total_elapsed:?}");
         #[cfg(feature = "loud")]
-        println!(
-            "Processing total {} chunks of {total_files} files",
-            aggregated_chunks.len()
-        );
+        println!("Upload{maybe_file} completed in {total_elapsed:?}");
 
-        let total_chunks = aggregated_chunks.len();
+        Ok(self
+            .calculate_total_cost(total_chunks, receipts, total_free_chunks)
+            .await)
+    }
 
+    /// Returns: (processed_chunks, total_free_chunks, receipt)
+    async fn pay_and_upload_file(
+        &self,
+        payment_option: PaymentOption,
+        file: &mut EncryptionStream,
+    ) -> Result<(usize, usize, Vec<Receipt>), PutError> {
+        let est_total_todo = file.total_chunks();
         let mut processed_chunks = 0;
-        // Limited level of retry is turned on by default
+        let mut total_free_chunks = 0;
+        let mut receipts = vec![];
+
+        // Allow up to `retry_failed` * est_total_chunks total uploads to be attempted
         let mut retry_on_failure = true;
+        let mut attempted_uploads = 0;
         let allowed_attempts =
-            total_chunks + std::cmp::max(20, total_chunks * self.retry_failed as usize);
+            est_total_todo + std::cmp::max(20, est_total_todo * self.retry_failed as usize);
 
         // Process all chunks for this file in batches
-        while !aggregated_chunks.is_empty() {
-            // Take next batch of chunks (up to UPLOAD_FLOW_BATCH_SIZE)
-            let batch_chunks: Vec<_> = aggregated_chunks
-                .drain(..std::cmp::min(aggregated_chunks.len(), *UPLOAD_FLOW_BATCH_SIZE))
+        let mut current_batch = vec![];
+        while let Some(next_batch) = file.next_batch(*UPLOAD_FLOW_BATCH_SIZE - current_batch.len())
+        {
+            // prepare batch
+            let next_batch_len = next_batch.len();
+            let path = file.file_path.clone();
+            let aggr_batch: AggregatedChunks = next_batch
+                .into_iter()
+                .enumerate()
+                .map(|(i, chunk)| ((path.clone(), processed_chunks + i, est_total_todo), chunk))
                 .collect();
-            let candidate_chunks = batch_chunks.len();
+            current_batch.extend(aggr_batch);
 
+            // process batch
+            processed_chunks += next_batch_len;
+            attempted_uploads += current_batch.len();
             let (retry_chunks, receipt, free_chunks_count, put_error) = self
-                .process_chunk_batch(batch_chunks, payment_option.clone(), retry_on_failure)
+                .process_chunk_batch(current_batch, payment_option.clone(), retry_on_failure)
                 .await;
             receipts.extend(receipt);
-            free_chunks_counts.extend(free_chunks_count);
+            total_free_chunks += free_chunks_count;
             if let Some(err) = put_error {
                 return Err(err);
             }
 
-            // If retry_failed, tracking the processed_chunks.
-            // Flip the flag once max_allownce hit to terminate the flow.
-            if retry_on_failure {
-                processed_chunks += std::cmp::min(candidate_chunks, *UPLOAD_FLOW_BATCH_SIZE);
-
-                if processed_chunks > allowed_attempts {
+            // retry failed chunks
+            if !retry_chunks.is_empty() {
+                if attempted_uploads > allowed_attempts {
                     retry_on_failure = false;
                 }
-            }
 
-            if !retry_chunks.is_empty() {
                 // there was upload failure happens, in that case, carry out a short sleep
                 // to allow the glitch calm down.
                 println!("⚠️  Encountered upload failure, take 1 minute pause before continue...");
@@ -147,22 +192,10 @@ impl Client {
                 println!("🔄 continue with upload...");
                 info!("🔄 continue with upload...");
             }
-            aggregated_chunks.extend(retry_chunks);
+            current_batch = retry_chunks;
         }
 
-        info!(
-            "Upload of {total_files} files completed in {:?}",
-            start.elapsed()
-        );
-        #[cfg(feature = "loud")]
-        println!(
-            "Upload of {total_files} files completed in {:?}",
-            start.elapsed()
-        );
-
-        Ok(self
-            .calculate_total_cost(total_chunks, receipts, free_chunks_counts)
-            .await)
+        Ok((processed_chunks, total_free_chunks, receipts))
     }
 
     /// Processes a single batch of chunks (quote -> pay -> upload)
@@ -173,7 +206,7 @@ impl Client {
         mut batch: AggregatedChunks,
         payment_option: PaymentOption,
         retry_on_failure: bool,
-    ) -> (AggregatedChunks, Vec<Receipt>, Vec<usize>, Option<PutError>) {
+    ) -> (AggregatedChunks, Vec<Receipt>, usize, Option<PutError>) {
         // Prepare payment info for batch
         let payment_info: Vec<_> = batch
             .iter()
@@ -193,20 +226,15 @@ impl Client {
             batch_chunks.push(chunk);
         }
 
-        for (file_name, file_addr, i, total) in file_infos.iter() {
-            // File won't have address info if uploaded as private,
-            // hence using different output messaging to avoid confusion.
-            let output_str = if let Some(addr) = file_addr {
-                format!(
-                    "Processing chunk ({}/{total}) of {file_name:?} at {addr:?}",
-                    i + 1
-                )
+        for (file_name, i, est_total) in file_infos.iter() {
+            let maybe_file = if !file_name.is_empty() {
+                &format!(" of {file_name}")
             } else {
-                format!("Processing chunk ({}/{total}) of {file_name:?}", i + 1)
+                ""
             };
-            info!("{output_str}");
+            info!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
             #[cfg(feature = "loud")]
-            println!("{output_str}");
+            println!("Processing chunk ({}/{est_total}){maybe_file}", i + 1);
         }
 
         // Process payment for this batch
@@ -219,9 +247,9 @@ impl Client {
                 if retry_on_failure {
                     info!("Quoting or payment error encountered, retry scheduled {err:?}");
                     println!("Quoting or payment error encountered, retry scheduled.");
-                    return (batch, vec![], vec![], None);
+                    return (batch, vec![], 0, None);
                 } else {
-                    return (vec![], vec![], vec![], Some(PutError::from(err)));
+                    return (vec![], vec![], 0, Some(PutError::from(err)));
                 }
             }
         };
@@ -268,6 +296,6 @@ impl Client {
             Err(err) => put_error = Some(err),
         }
 
-        (retry_chunks, vec![receipt], vec![free_chunks], put_error)
+        (retry_chunks, vec![receipt], free_chunks, put_error)
     }
 }

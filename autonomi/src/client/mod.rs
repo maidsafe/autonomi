@@ -39,6 +39,7 @@ pub mod quote;
 pub mod external_signer;
 
 // private module with utility functions
+mod encryption;
 mod network;
 mod put_error_state;
 mod utils;
