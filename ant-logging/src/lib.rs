@@ -8,14 +8,18 @@
 
 mod appender;
 mod error;
-mod layers;
+pub mod layers;
 #[cfg(feature = "process-metrics")]
 pub mod metrics;
+pub mod spawned_nodes_layers;
 
 use crate::error::Result;
 use layers::TracingLayers;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use tracing::info;
 use tracing_core::dispatcher::DefaultGuard;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -26,6 +30,16 @@ pub use tracing_appender::non_blocking::WorkerGuard;
 
 // re-exporting the tracing crate's Level as it is used in our public API
 pub use tracing_core::Level;
+
+// ====== CONSTANTS ======
+
+const TIMESTAMP_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
+const UNKNOWN_TEST_NAME: &str = "unknown_test";
+// const UNKNOWN_FILE_NAME: &str = "unknown_file";
+pub const NODE_SPAN_NAME: &str = "node";
+pub const NODE_SPAN_ID_FIELD_NAME: &str = "node_id";
+
+// ====== PUBLIC TYPES ======
 
 #[derive(Debug, Clone)]
 pub enum LogOutputDest {
@@ -40,7 +54,7 @@ impl LogOutputDest {
             "stdout" => Ok(LogOutputDest::Stdout),
             "data-dir" => {
                 // Get the current timestamp and format it to be human readable
-                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let timestamp = chrono::Local::now().format(TIMESTAMP_FORMAT).to_string();
 
                 // Get the data directory path and append the timestamp to the log file name
                 let dir = match dirs_next::data_dir() {
@@ -113,7 +127,7 @@ impl LogBuilder {
     /// Create a new builder
     /// Provide the default_logging_targets that are used if the `ANT_LOG` env variable is not set.
     ///
-    /// By default, we use log to the StdOut with the default format.
+    /// By default, we use log to the StdErr with the default format.
     pub fn new(default_logging_targets: Vec<(String, Level)>) -> Self {
         Self {
             default_logging_targets,
@@ -132,7 +146,7 @@ impl LogBuilder {
 
     /// Set the logging format
     pub fn format(&mut self, format: LogFormat) {
-        self.format = format
+        self.format = format;
     }
 
     /// The max number of uncompressed log files to store
@@ -188,8 +202,8 @@ impl LogBuilder {
         Ok((reload_handle, layers.log_appender_guard))
     }
 
-    /// Logs to the data_dir with per-test log files. Should be called from a single threaded tokio/non-tokio context.
-    /// Each test gets its own log file based on the test name.
+    /// Logs to the data_dir. Should be called from a single threaded tokio/non-tokio context.
+    /// Provide the test file name to capture tracings from the test.
     ///
     /// This function creates separate log files for each test to avoid mixing logs from different tests.
     /// The test file name is automatically detected from the test module path.
@@ -235,6 +249,138 @@ impl LogBuilder {
         .expect("You have tried to init multi_threaded tokio logging twice\nRefer ant_logging::get_test_layers docs for more.");
 
         layers.log_appender_guard
+    }
+
+    //TODO: To be renamed once it's 100% stress tested
+    /// Initialize multi-node logging with support for unique test spans
+    /// Automatically extracts test name and sets up routing for client_testname and node_XX_testname patterns
+    pub fn initialize_with_multi_nodes_logging_for_unique_spans(
+        self,
+        node_count: usize,
+    ) -> Result<MultiNodeLogHandle> {
+        self.initialize_with_multi_nodes_logging_for_unique_spans_at(node_count, None)
+    }
+
+    // Add new method
+    pub fn initialize_with_multi_nodes_logging_for_unique_spans_at(
+        self,
+        node_count: usize,
+        data_root: Option<PathBuf>,
+    ) -> Result<MultiNodeLogHandle> {
+        // Same data_root logic as the other method
+        let data_root = match data_root {
+            Some(path) => path,
+            None => dirs_next::data_dir().ok_or_else(|| {
+                Error::LoggingConfiguration("Could not obtain OS data directory".to_string())
+            })?,
+        };
+
+        let targets = self.get_logging_targets()?;
+        let test_name = get_thread_name().unwrap_or(UNKNOWN_TEST_NAME.to_string());
+
+        let (routing_layer, _appender_guards) = self
+            .setup_unique_span_routing_and_appenders(&data_root, node_count, targets, &test_name)?;
+        let layers = self.configure_tracing_layers_for_unique_spans(routing_layer)?;
+
+        let _subscriber_guard = tracing_subscriber::registry()
+            .with(layers.layers)
+            .set_default();
+
+        let reload_handle = self.create_reload_handle();
+
+        let multi_node_log_handle = MultiNodeLogHandle {
+            data_root,
+            node_count,
+            _appender_guards,
+            _subscriber_guard,
+            reload_handle,
+            test_name: Some(test_name),
+        };
+
+        Ok(multi_node_log_handle)
+    }
+
+    // ====== PRIVATE METHODS OF LogBuilder ======
+
+    /// Set up routing layer and appenders for unique span patterns
+    fn setup_unique_span_routing_and_appenders(
+        &self,
+        data_root: &Path,
+        node_count: usize,
+        targets: Vec<(String, Level)>,
+        test_name: &str,
+    ) -> Result<(
+        crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
+        Vec<WorkerGuard>,
+    )> {
+        let mut routing_layer =
+            crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer::new(targets);
+        let mut guards = Vec::new();
+
+        // Set up client appender for client_testname spans
+        let client_key = format!("client_{test_name}");
+        let client_guard =
+            self.setup_client_appender_with_key(data_root, &mut routing_layer, &client_key)?;
+        guards.push(client_guard);
+
+        // Set up node appenders for node_XX_testname spans
+        let autonomi_root = data_root.join("autonomi");
+        for i in 1..=node_count {
+            let node_key = format!("node_{i:02}_{test_name}");
+            let node_guard = self.setup_single_node_appender_for_unique_spans(
+                &autonomi_root,
+                i,
+                &mut routing_layer,
+                test_name,
+                &node_key,
+            )?;
+            guards.push(node_guard);
+        }
+
+        Ok((routing_layer, guards))
+    }
+
+    /// Modified client appender setup that accepts custom routing key
+    fn setup_client_appender_with_key(
+        &self,
+        data_root: &Path,
+        routing_layer: &mut crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
+        routing_key: &str,
+    ) -> Result<WorkerGuard> {
+        // Create client log directory: data_root/autonomi/client/logs/log_timestamp
+        let timestamp = chrono::Local::now().format(TIMESTAMP_FORMAT).to_string();
+        let client_log_dir = data_root
+            .join("autonomi")
+            .join("client")
+            .join("logs")
+            .join(format!("log_{timestamp}"));
+
+        self.create_directory(&client_log_dir)?;
+
+        let (client_appender, client_guard) = self.create_file_appender(&client_log_dir);
+        routing_layer.add_node_writer(routing_key.to_string(), client_appender);
+
+        Ok(client_guard)
+    }
+
+    /// Set up node appender with unique span routing key
+    fn setup_single_node_appender_for_unique_spans(
+        &self,
+        autonomi_root: &Path,
+        node_index: usize,
+        routing_layer: &mut crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
+        test_name: &str,
+        routing_key: &str,
+    ) -> Result<WorkerGuard> {
+        let node_dir_name = format!("node_{node_index:02}_{test_name}");
+        let node_log_dir = autonomi_root.join(&node_dir_name).join("logs");
+
+        self.create_directory(&node_log_dir)?;
+
+        let (appender, guard) = self.create_file_appender(&node_log_dir);
+        routing_layer.add_node_writer(routing_key.to_string(), appender);
+
+        Ok(guard)
     }
 
     /// Extract the test file name from the test name.
@@ -299,7 +445,8 @@ impl LogBuilder {
         let output_dest = match dirs_next::data_dir() {
             Some(dir) => {
                 // Get the current timestamp and format it to be human readable
-                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                let timestamp = chrono::Local::now().format(TIMESTAMP_FORMAT).to_string();
+
                 // Create unique filename using test name and timestamp
                 let test_name = test_name.replace("::", "_").replace(" ", "_");
                 let path = dir
@@ -321,7 +468,258 @@ impl LogBuilder {
             .expect("Failed to get TracingLayers");
         layers
     }
+
+    /// Get logging targets from environment or defaults
+    fn get_logging_targets(&self) -> Result<Vec<(String, Level)>> {
+        match std::env::var("ANT_LOG") {
+            Ok(ant_log_val) => crate::layers::get_logging_targets(&ant_log_val),
+            Err(_) => Ok(self.default_logging_targets.clone()),
+        }
+    }
+
+    /// Create file appender with configured rotation settings
+    fn create_file_appender(
+        &self,
+        log_dir: &PathBuf,
+    ) -> (tracing_appender::non_blocking::NonBlocking, WorkerGuard) {
+        appender::file_rotater_with_thread_name(
+            log_dir,
+            crate::layers::MAX_LOG_SIZE,
+            self.max_log_files
+                .unwrap_or(crate::layers::MAX_UNCOMPRESSED_LOG_FILES),
+            self.max_archived_log_files
+                .map(|max_archived| {
+                    max_archived
+                        + self
+                            .max_log_files
+                            .unwrap_or(crate::layers::MAX_UNCOMPRESSED_LOG_FILES)
+                })
+                .unwrap_or(crate::layers::MAX_LOG_FILES),
+        )
+    }
+
+    /// Create a directory and handle errors
+    fn create_directory(&self, dir: &Path) -> Result<()> {
+        std::fs::create_dir_all(dir).map_err(|e| {
+            Error::LoggingConfiguration(format!(
+                "Failed to create directory {}: {}",
+                dir.display(),
+                e
+            ))
+        })
+    }
+
+    /// Configure all tracing layers including OTLP if enabled (for UniqueSpansNodeRoutingLayer)
+    fn configure_tracing_layers_for_unique_spans(
+        &self,
+        routing_layer: crate::spawned_nodes_layers::UniqueSpansNodeRoutingLayer,
+    ) -> Result<TracingLayers> {
+        let mut layers = TracingLayers::default();
+        layers.layers.push(Box::new(routing_layer));
+
+        self.add_otlp_layer_if_enabled(&mut layers)?;
+
+        Ok(layers)
+    }
+
+    /// Add OTLP layer if the feature is enabled and configured
+    #[cfg(feature = "otlp")]
+    fn add_otlp_layer_if_enabled(&self, layers: &mut TracingLayers) -> Result<()> {
+        match std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
+            Ok(_) => layers.otlp_layer(self.default_logging_targets.clone()),
+            Err(_) => {
+                println!(
+                    "The OTLP feature is enabled but the OTEL_EXPORTER_OTLP_ENDPOINT variable is not \
+                        set, so traces will not be submitted."
+                );
+                Ok(())
+            }
+        }
+    }
+
+    /// Add OTLP layer if the feature is enabled and configured (no-op when disabled)
+    #[cfg(not(feature = "otlp"))]
+    fn add_otlp_layer_if_enabled(&self, _layers: &mut TracingLayers) -> Result<()> {
+        Ok(())
+    }
+
+    /// Create a reload handle for dynamic log level changes
+    fn create_reload_handle(&self) -> ReloadHandle {
+        let targets_filter: Box<
+            dyn tracing_subscriber::layer::Filter<tracing_subscriber::Registry> + Send + Sync,
+        > = Box::new(tracing_subscriber::filter::Targets::new());
+        let (_, reload_handle) = tracing_subscriber::reload::Layer::new(targets_filter);
+        ReloadHandle(reload_handle)
+    }
 }
+
+/// Handle returned from multi-node logging initialization
+/// Provides access to multi-node specific operations
+// pub struct MultiNodeLogHandle {
+//     base_log_dir: PathBuf,
+//     node_count: usize,
+//     reload_handle: ReloadHandle,
+//     guards: Vec<WorkerGuard>,
+// }
+pub struct MultiNodeLogHandle {
+    data_root: PathBuf,
+    node_count: usize,
+    _appender_guards: Vec<WorkerGuard>, // Keep the background writer threads alive for each log appender (client and nodes)
+    _subscriber_guard: DefaultGuard,    // Keep the tracing subscriber alive
+    reload_handle: ReloadHandle,        // Handle for dynamic log level changes
+    test_name: Option<String>,          // Add this field // NEW
+}
+
+impl MultiNodeLogHandle {
+    /// Get the data root directory
+    pub fn data_root(&self) -> &PathBuf {
+        &self.data_root
+    }
+
+    /// Get the node count
+    pub fn node_count(&self) -> usize {
+        self.node_count
+    }
+
+    /// Get the test name (if any)
+    pub fn test_name(&self) -> Option<&String> {
+        self.test_name.as_ref()
+    }
+
+    /// Get the appender guards (should be held for the lifetime of the log handle)
+    pub fn appender_guards(&self) -> &Vec<WorkerGuard> {
+        &self._appender_guards
+    }
+
+    /// Get the reload handle for dynamic log level changes
+    pub fn reload_handle(&self) -> &ReloadHandle {
+        &self.reload_handle
+    }
+
+    /// Copy logs from temporary node_XX_testname directories to actual node data directories
+    pub fn copy_logs_to_node_data_dirs(&self, peer_ids: &[String]) -> Result<()> {
+        if peer_ids.len() != self.node_count {
+            return Err(Error::LoggingConfiguration(format!(
+                "Expected {} peer IDs but got {}",
+                self.node_count,
+                peer_ids.len()
+            )));
+        }
+
+        let autonomi_root = self.data_root.join("autonomi");
+
+        for (i, peer_id) in peer_ids.iter().enumerate() {
+            let node_index = i + 1;
+
+            // For debugging purposes, put in comment to not pollute the CI because tests are run with --nocapture flag.
+            println!("\n--- Node {node_index:02} ---");
+            println!("Peer ID: {peer_id}");
+
+            // Source: node_01_testname/logs/ or node_01/logs/ (if no test name)
+            let source_dir = if let Some(ref test_name) = self.test_name {
+                autonomi_root
+                    .join(format!("node_{node_index:02}_{test_name}"))
+                    .join("logs") // NEW
+            } else {
+                autonomi_root
+                    .join(format!("node_{node_index:02}"))
+                    .join("logs") // OLD
+            };
+
+            // Destination: data_dir/node/{peer_id}/logs/
+            let dest_dir = autonomi_root.join("node").join(peer_id).join("logs");
+
+            // For debugging purposes, put in comment to not pollute the CI because tests are run with --nocapture flag.
+            println!("Source: {}", source_dir.display());
+            println!("Destination: {}", dest_dir.display());
+
+            if source_dir.exists() {
+                // Create the full destination directory path (including logs subfolder)
+                std::fs::create_dir_all(&dest_dir).map_err(|e| {
+                    Error::LoggingConfiguration(format!(
+                        "Failed to create destination directory {}: {}",
+                        dest_dir.display(),
+                        e
+                    ))
+                })?;
+
+                // Copy all files from source to destination
+                copy_dir_contents(&source_dir, &dest_dir)?;
+            } else {
+                println!(
+                    "⚠ Source directory does not exist: {}",
+                    source_dir.display()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Delete the temporary node_XX_testname directories after copying logs
+    ///
+    /// This removes temporary directories:
+    /// - `node_01_testname/`
+    /// - `node_02_testname/`
+    /// - etc.
+    ///
+    /// Should typically be called after `copy_logs_to_node_data_dirs()` to clean up.
+    pub fn delete_temp_node_dirs(&self) -> Result<()> {
+        let autonomi_root = self.data_root.join("autonomi");
+
+        for i in 1..=self.node_count {
+            let node_dir = if let Some(ref test_name) = self.test_name {
+                // NEW
+                autonomi_root.join(format!("node_{i:02}_{test_name}")) // NEW
+            } else {
+                autonomi_root.join(format!("node_{i:02}")) // OLD
+            };
+
+            if node_dir.exists() {
+                std::fs::remove_dir_all(&node_dir).map_err(|e| {
+                    Error::LoggingConfiguration(format!(
+                        "Failed to remove temporary node directory {}: {}",
+                        node_dir.display(),
+                        e
+                    ))
+                })?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// ====== PRIVATE FUNCTIONS ======
+
+/// Recursively copy all contents from source directory to destination directory
+fn copy_dir_contents(source: &Path, dest: &Path) -> std::io::Result<()> {
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+
+        if source_path.is_dir() {
+            fs::create_dir_all(&dest_path)?;
+            copy_dir_contents(&source_path, &dest_path)?;
+        } else {
+            fs::copy(&source_path, &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
+// ====== PRIVATE UTILITY FUNCTIONS ======
+
+/// Extract and clean the current thread name
+/// Returns None if no thread name is available
+fn get_thread_name() -> Option<String> {
+    std::thread::current()
+        .name()
+        .map(|name| name.replace("::", "_"))
+}
+
+// ====== TESTS ======
 
 #[cfg(test)]
 mod tests {

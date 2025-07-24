@@ -7,24 +7,21 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::{
-    client::{
-        graph::{GraphEntry, GraphError},
-        payment::PaymentOption,
-    },
-    Client,
+use autonomi::client::{
+    graph::{GraphEntry, GraphError},
+    payment::PaymentOption,
 };
 use eyre::Result;
-use serial_test::serial;
-use test_utils::evm::get_funded_wallet;
+use test_utils::local_network_spawner::{spawn_local_network, DEFAULT_LOCAL_NETWORK_SIZE};
 
 #[tokio::test]
-#[serial]
 async fn graph_entry_put() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
-    let client = Client::init_local().await?;
-    let wallet = get_funded_wallet();
+    // Spawn local network
+    let spawned_local_network = spawn_local_network(DEFAULT_LOCAL_NETWORK_SIZE).await?;
+    let client = spawned_local_network.client;
+    let wallet = spawned_local_network.wallet;
 
     let key = bls::SecretKey::random();
     let content = [0u8; 32];

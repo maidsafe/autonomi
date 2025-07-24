@@ -38,6 +38,7 @@ use std::num::NonZeroUsize;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tracing::Instrument;
 
 /// Result type for tasks responses sent by the [`crate::driver::NetworkDriver`] to the [`crate::Network`]
 pub(in crate::networking) type OneShotTaskResult<T> = oneshot::Sender<Result<T, NetworkError>>;
@@ -156,9 +157,12 @@ impl Network {
         driver.connect_to_peers(initial_contacts)?;
 
         // run the network driver in a background task
-        tokio::spawn(async move {
-            let _ = driver.run().await;
-        });
+        tokio::spawn(
+            async move {
+                let _ = driver.run().await;
+            }
+            .instrument(tracing::Span::current()),
+        );
 
         let network = Self {
             task_sender: Arc::new(task_sender),
