@@ -67,7 +67,7 @@ pub struct CustomNetwork {
 }
 
 impl CustomNetwork {
-    fn new(rpc_url: &str, payment_token_addr: &str, data_payments_addr: &str) -> Self {
+    pub fn new(rpc_url: &str, payment_token_addr: &str, data_payments_addr: &str) -> Self {
         Self {
             rpc_url_http: reqwest::Url::parse(rpc_url).expect("Invalid RPC URL"),
             payment_token_address: Address::from_str(payment_token_addr)

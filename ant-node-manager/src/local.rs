@@ -47,7 +47,7 @@ pub trait Launcher {
         node_port: Option<u16>,
         rpc_socket_addr: SocketAddr,
         rewards_address: RewardsAddress,
-        evm_network: Option<EvmNetwork>,
+        evm_network: EvmNetwork,
     ) -> Result<()>;
     fn wait(&self, delay: u64);
 }
@@ -70,7 +70,7 @@ impl Launcher for LocalSafeLauncher {
         node_port: Option<u16>,
         rpc_socket_addr: SocketAddr,
         rewards_address: RewardsAddress,
-        evm_network: Option<EvmNetwork>,
+        evm_network: EvmNetwork,
     ) -> Result<()> {
         let mut args = Vec::new();
 
@@ -100,17 +100,15 @@ impl Launcher for LocalSafeLauncher {
         args.push("--rewards-address".to_string());
         args.push(rewards_address.to_string());
 
-        if let Some(network) = evm_network {
-            args.push(format!("evm-{}", network.identifier()));
+        args.push(format!("evm-{}", evm_network.identifier()));
 
-            if let EvmNetwork::Custom(custom) = network {
-                args.push("--rpc-url".to_string());
-                args.push(custom.rpc_url_http.to_string());
-                args.push("--payment-token-address".to_string());
-                args.push(custom.payment_token_address.to_string());
-                args.push("--data-payments-address".to_string());
-                args.push(custom.data_payments_address.to_string());
-            }
+        if let EvmNetwork::Custom(custom) = evm_network {
+            args.push("--rpc-url".to_string());
+            args.push(custom.rpc_url_http.to_string());
+            args.push("--payment-token-address".to_string());
+            args.push(custom.payment_token_address.to_string());
+            args.push("--data-payments-address".to_string());
+            args.push(custom.data_payments_address.to_string());
         }
 
         Command::new(self.antnode_bin_path.clone())
@@ -131,6 +129,19 @@ impl Launcher for LocalSafeLauncher {
     }
 }
 
+/// Kill any running EVM testnet processes
+async fn kill_evm_testnet_processes(system: &mut System) {
+    // Look for anvil processes (which are used by evm-testnet)
+    for (pid, process) in system.processes() {
+        let process_name = process.name().to_lowercase();
+        if process_name.contains("anvil") || process_name.contains("evm-testnet") {
+            debug!("Killing EVM testnet process: {} ({})", process_name, pid);
+            process.kill();
+            println!("  {} Killed EVM testnet process ({})", "✓".green(), pid);
+        }
+    }
+}
+
 pub async fn kill_network(
     node_registry: NodeRegistryManager,
     keep_directories: bool,
@@ -146,6 +157,9 @@ pub async fn kill_network(
         debug!("Removed genesis data directory");
         std::fs::remove_dir_all(genesis_data_path)?;
     }
+
+    // Kill any running EVM testnet processes
+    kill_evm_testnet_processes(&mut system).await;
 
     for node in node_registry.nodes.read().await.iter() {
         let node = node.read().await;
@@ -200,7 +214,7 @@ pub struct LocalNetworkOptions {
     pub skip_validation: bool,
     pub log_format: Option<LogFormat>,
     pub rewards_address: RewardsAddress,
-    pub evm_network: Option<EvmNetwork>,
+    pub evm_network: EvmNetwork,
 }
 
 pub async fn run_network(
@@ -361,7 +375,7 @@ pub struct RunNodeOptions {
     pub number: u16,
     pub rpc_socket_addr: SocketAddr,
     pub rewards_address: RewardsAddress,
-    pub evm_network: Option<EvmNetwork>,
+    pub evm_network: EvmNetwork,
     pub version: String,
 }
 
@@ -399,7 +413,7 @@ pub async fn run_node(
         auto_restart: false,
         connected_peers,
         data_dir_path: node_info.data_path,
-        evm_network: run_options.evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
+        evm_network: run_options.evm_network,
         relay: false,
         initial_peers_config: InitialPeersConfig {
             first: run_options.first,
@@ -506,6 +520,7 @@ mod tests {
         rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
     };
     use async_trait::async_trait;
+    use evmlib::CustomNetwork;
     use libp2p_identity::PeerId;
     use mockall::mock;
     use mockall::predicate::*;
@@ -543,7 +558,11 @@ mod tests {
                 eq(None),
                 eq(rpc_socket_addr),
                 eq(rewards_address),
-                eq(None),
+                eq(EvmNetwork::Custom(CustomNetwork::new(
+                    "http://localhost:61611",
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                ))),
             )
             .times(1)
             .returning(|_, _, _, _, _, _, _| Ok(()));
@@ -591,7 +610,11 @@ mod tests {
                 number: 1,
                 rpc_socket_addr,
                 rewards_address,
-                evm_network: None,
+                evm_network: EvmNetwork::Custom(CustomNetwork::new(
+                    "http://localhost:61611",
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                )),
                 version: "0.100.12".to_string(),
             },
             &mock_launcher,

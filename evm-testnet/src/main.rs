@@ -24,10 +24,6 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
-    start_node(args.genesis_wallet).await;
-}
-
-async fn start_node(genesis_wallet: Option<Address>) {
     let testnet = Testnet::new().await;
 
     println!("*************************");
@@ -35,17 +31,16 @@ async fn start_node(genesis_wallet: Option<Address>) {
     println!("*************************");
 
     // Transfer all gas and payment tokens to the genesis wallet.
-    if let Some(genesis) = genesis_wallet {
+    if let Some(genesis) = args.genesis_wallet {
         transfer_funds(&testnet, genesis).await;
     }
 
-    let testnet_data = TestnetData::new(&testnet, genesis_wallet).await;
-    testnet_data.save_csv();
+    let testnet_data = TestnetData::new(&testnet, args.genesis_wallet).await;
+
     testnet_data.print();
     keep_alive(testnet).await;
 
     println!("Ethereum node stopped.");
-    TestnetData::remove_csv();
 }
 
 async fn transfer_funds(testnet: &Testnet, genesis_wallet: Address) {
@@ -143,38 +138,5 @@ impl TestnetData {
         println!("SECRET_KEY=\"{}\"", self.deployer_wallet_private_key);
         println!("--------------");
         println!();
-    }
-
-    fn save_csv(&self) {
-        let csv_path = evmlib::utils::get_evm_testnet_csv_path()
-            .expect("Could not get data_dir to save evm testnet data");
-        let path = csv_path
-            .parent()
-            .expect("Could not get parent dir of csv_path");
-        if !path.exists() {
-            std::fs::create_dir_all(path).expect("Could not create safe directory");
-        }
-
-        let csv = format!(
-            "{},{},{},{}",
-            self.rpc_url,
-            self.payment_token_address,
-            self.data_payments_address,
-            self.deployer_wallet_private_key
-        );
-        std::fs::write(&csv_path, csv).expect("Could not write to evm_testnet_data.csv file");
-        println!("EVM testnet data saved to: {csv_path:?}");
-        println!("When running the Node or CLI in local mode, it will automatically use this network by loading the EVM Network's info from the CSV file.");
-        println!();
-    }
-
-    fn remove_csv() {
-        let csv_path = evmlib::utils::get_evm_testnet_csv_path()
-            .expect("Could not get data_dir to remove evm testnet data");
-        if csv_path.exists() {
-            std::fs::remove_file(&csv_path).expect("Could not remove evm_testnet_data.csv file");
-        } else {
-            eprintln!("No EVM testnet data CSV file found to remove");
-        }
     }
 }

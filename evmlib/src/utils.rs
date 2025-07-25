@@ -17,15 +17,11 @@ use alloy::providers::fillers::{
 };
 use alloy::providers::{Identity, ProviderBuilder, RootProvider};
 use alloy::transports::http::reqwest;
-use dirs_next::data_dir;
 use rand::Rng;
 use std::env;
-use std::path::PathBuf;
 
 const MAINNET_ID: u8 = 1;
 const ALPHANET_ID: u8 = 2;
-
-pub const EVM_TESTNET_CSV_FILENAME: &str = "evm_testnet_data.csv";
 
 /// environment variable to connect to a custom EVM network
 pub const RPC_URL: &str = "RPC_URL";
@@ -58,7 +54,7 @@ static EVM_NETWORK: OnceLock<Network> = OnceLock::new();
 /// Initialize the EVM Network.
 ///
 /// Try to obtain it first from environment variables. If that fails and `local` is true,
-/// try to get it from the local CSV file. Lastly, attempt to obtain it based on the network ID,
+/// try to get it from hardcoded values. Lastly, attempt to obtain it based on the network ID,
 /// where 1 is reserved for the mainnet, 2 is reserved for the alpha network, and any other value
 /// between 3 and 255 is reserved for testnets. In the case of a testnet, the network to use must
 /// be configured via the environment variables. We can't just default to Sepolia because sometimes
@@ -74,8 +70,7 @@ pub fn get_evm_network(local: bool, network_id: Option<u8>) -> Result<Network, E
 
     let res = match get_evm_network_from_env() {
         Ok(evm_network) => Ok(evm_network),
-        Err(_) if local => Ok(local_evm_network_from_csv()
-            .map_err(|e| Error::FailedToGetEvmNetwork(e.to_string()))?),
+        Err(_) if local => Ok(local_evm_network_hardcoded()),
         Err(_) => {
             if let Some(id) = network_id {
                 match id {
@@ -108,16 +103,6 @@ pub fn get_evm_network(local: bool, network_id: Option<u8>) -> Result<Network, E
     }
 
     res
-}
-
-pub fn get_evm_testnet_csv_path() -> Result<PathBuf, Error> {
-    let file = data_dir()
-        .ok_or(Error::FailedToGetEvmNetwork(
-            "failed to get data dir when fetching evm testnet CSV file".to_string(),
-        ))?
-        .join("autonomi")
-        .join(EVM_TESTNET_CSV_FILENAME);
-    Ok(file)
 }
 
 /// Get the `Network` from environment variables.
@@ -172,7 +157,7 @@ fn get_evm_network_from_env() -> Result<Network, Error> {
             &evm_vars[2],
         )))
     } else if use_local_evm {
-        local_evm_network_from_csv()
+        Ok(local_evm_network_hardcoded())
     } else {
         error!("Failed to obtain the desired EVM network through environment variables");
         Err(Error::FailedToGetEvmNetwork(
@@ -181,33 +166,13 @@ fn get_evm_network_from_env() -> Result<Network, Error> {
     }
 }
 
-/// Get the `Network::Custom` from the local EVM testnet CSV file
-fn local_evm_network_from_csv() -> Result<Network, Error> {
-    // load the csv
-    let csv_path = get_evm_testnet_csv_path()?;
-
-    if !csv_path.exists() {
-        error!("evm data csv path does not exist {:?}", csv_path);
-        return Err(Error::FailedToGetEvmNetwork(format!(
-            "evm data csv path does not exist {csv_path:?}"
-        )));
-    }
-
-    let csv = std::fs::read_to_string(&csv_path).map_err(|_| {
-        Error::FailedToGetEvmNetwork(format!("failed to read evm testnet CSV file {csv_path:?}"))
-    })?;
-    let parts: Vec<&str> = csv.split(',').collect();
-    match parts.as_slice() {
-        [rpc_url, payment_token_address, chunk_payments_address, _] => Ok(Network::Custom(
-            CustomNetwork::new(rpc_url, payment_token_address, chunk_payments_address),
-        )),
-        _ => {
-            error!("Invalid data in evm testnet CSV file");
-            Err(Error::FailedToGetEvmNetwork(
-                "invalid data in evm testnet CSV file".to_string(),
-            ))
-        }
-    }
+/// Get the `Network::Custom` from the hardcoded values.
+fn local_evm_network_hardcoded() -> Network {
+    Network::Custom(CustomNetwork::new(
+        "http://localhost:61611",
+        "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+        "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+    ))
 }
 
 #[allow(clippy::type_complexity)]

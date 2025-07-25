@@ -22,7 +22,12 @@ use ant_service_management::{
     control::ServiceController, get_local_node_registry_path, NodeRegistryManager,
 };
 use color_eyre::{eyre::eyre, Help, Report, Result};
-use std::path::PathBuf;
+use std::{
+    path::PathBuf,
+    process::{Command, Stdio},
+};
+use sysinfo::System;
+use tokio::time::{sleep, Duration};
 
 pub async fn join(
     build: bool,
@@ -37,7 +42,7 @@ pub async fn join(
     _peers_args: InitialPeersConfig,
     rpc_port: Option<PortRange>,
     rewards_address: RewardsAddress,
-    evm_network: Option<EvmNetwork>,
+    evm_network: EvmNetwork,
     skip_validation: bool,
     verbosity: VerbosityLevel,
 ) -> Result<(), Report> {
@@ -83,6 +88,10 @@ pub async fn join(
         rewards_address,
         evm_network,
     };
+
+    // Ensure EVM testnet is running before starting the local network
+    ensure_evm_testnet_running(build, verbosity).await?;
+
     run_network(options, local_node_registry, &ServiceController {}).await?;
     Ok(())
 }
@@ -101,6 +110,7 @@ pub async fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<(
         kill_network(local_node_registry, keep_directories).await?;
         std::fs::remove_file(local_reg_path)?;
     }
+
     Ok(())
 }
 
@@ -117,7 +127,7 @@ pub async fn run(
     log_format: Option<LogFormat>,
     rpc_port: Option<PortRange>,
     rewards_address: RewardsAddress,
-    evm_network: Option<EvmNetwork>,
+    evm_network: EvmNetwork,
     skip_validation: bool,
     verbosity: VerbosityLevel,
 ) -> Result<(), Report> {
@@ -174,6 +184,9 @@ pub async fn run(
     )
     .await?;
 
+    // Ensure EVM testnet is running before starting the local network
+    ensure_evm_testnet_running(build, verbosity).await?;
+
     let options = LocalNetworkOptions {
         antnode_bin_path,
         enable_metrics_server,
@@ -192,6 +205,148 @@ pub async fn run(
     run_network(options, local_node_registry.clone(), &ServiceController {}).await?;
 
     local_node_registry.save().await?;
+    Ok(())
+}
+
+/// Get the path to the evm-testnet binary, building it if necessary
+async fn get_evm_testnet_bin_path(build: bool, verbosity: VerbosityLevel) -> Result<PathBuf> {
+    if build {
+        // Build the evm-testnet binary from source
+        if verbosity != VerbosityLevel::Minimal {
+            print_banner("Building evm-testnet binary");
+        }
+
+        let mut cmd = Command::new("cargo");
+        cmd.args(["build", "--release", "--bin", "evm-testnet"])
+            .stdout(if verbosity == VerbosityLevel::Minimal {
+                Stdio::null()
+            } else {
+                Stdio::inherit()
+            })
+            .stderr(if verbosity == VerbosityLevel::Minimal {
+                Stdio::null()
+            } else {
+                Stdio::inherit()
+            });
+
+        let output = cmd.output()?;
+        if !output.status.success() {
+            return Err(eyre!("Failed to build evm-testnet binary"));
+        }
+
+        let target_dir = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+        Ok(PathBuf::from(target_dir)
+            .join("release")
+            .join("evm-testnet"))
+    } else {
+        // Try to find evm-testnet in PATH
+        match which::which("evm-testnet") {
+            Ok(path) => Ok(path),
+            Err(_) => {
+                // Fallback to building from source
+                if verbosity != VerbosityLevel::Minimal {
+                    println!("evm-testnet not found in PATH, building from source...");
+                }
+
+                let mut cmd = Command::new("cargo");
+                cmd.args(["build", "--release", "--bin", "evm-testnet"])
+                    .stdout(if verbosity == VerbosityLevel::Minimal {
+                        Stdio::null()
+                    } else {
+                        Stdio::inherit()
+                    })
+                    .stderr(if verbosity == VerbosityLevel::Minimal {
+                        Stdio::null()
+                    } else {
+                        Stdio::inherit()
+                    });
+
+                let output = cmd.output()?;
+                if !output.status.success() {
+                    return Err(eyre!("Failed to build evm-testnet binary"));
+                }
+
+                let target_dir =
+                    std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| "target".to_string());
+                Ok(PathBuf::from(target_dir)
+                    .join("release")
+                    .join("evm-testnet"))
+            }
+        }
+    }
+}
+
+/// Spawn the evm-testnet binary as a child process
+async fn spawn_evm_testnet(build: bool, verbosity: VerbosityLevel) -> Result<()> {
+    let evm_testnet_path = get_evm_testnet_bin_path(build, verbosity).await?;
+
+    if verbosity != VerbosityLevel::Minimal {
+        print_banner("Starting EVM testnet");
+    }
+
+    let mut cmd = Command::new(&evm_testnet_path);
+    cmd.stdout(if verbosity == VerbosityLevel::Minimal {
+        Stdio::null()
+    } else {
+        Stdio::inherit()
+    })
+    .stderr(if verbosity == VerbosityLevel::Minimal {
+        Stdio::null()
+    } else {
+        Stdio::inherit()
+    });
+
+    let _ = cmd.spawn()?;
+
+    // Wait a moment for the testnet to start up
+    sleep(Duration::from_millis(2000)).await;
+
+    Ok(())
+}
+
+/// Check if EVM testnet is already running by checking the process list
+async fn check_evm_testnet_running() -> bool {
+    let mut system = System::new_all();
+    system.refresh_all();
+
+    // Look for evm-testnet or anvil processes
+    for process in system.processes().values() {
+        let process_name = process.name().to_lowercase();
+        if process_name.contains("evm-testnet") || process_name.contains("anvil") {
+            return true;
+        }
+    }
+    false
+}
+
+/// Ensure an EVM testnet is running, starting one if necessary
+async fn ensure_evm_testnet_running(build: bool, verbosity: VerbosityLevel) -> Result<()> {
+    if check_evm_testnet_running().await {
+        if verbosity != VerbosityLevel::Minimal {
+            println!("EVM testnet is already running");
+        }
+        return Ok(());
+    }
+
+    spawn_evm_testnet(build, verbosity).await?;
+
+    // Wait for the testnet to be fully ready
+    let mut attempts = 0;
+    while !check_evm_testnet_running().await && attempts < 30 {
+        sleep(Duration::from_millis(1000)).await;
+        attempts += 1;
+    }
+
+    if !check_evm_testnet_running().await {
+        return Err(eyre!(
+            "Failed to start EVM testnet - not responding after 30 seconds"
+        ));
+    }
+
+    if verbosity != VerbosityLevel::Minimal {
+        println!("EVM testnet started successfully");
+    }
+
     Ok(())
 }
 

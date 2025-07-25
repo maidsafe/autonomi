@@ -920,11 +920,10 @@ async fn main() -> Result<()> {
                 evm_network,
                 skip_validation: _,
             } => {
-                let evm_network = if let Some(evm_network) = evm_network {
-                    Some(evm_network.try_into()?)
-                } else {
-                    None
-                };
+                let evm_network = evm_network
+                    .unwrap_or(EvmNetworkCommand::EvmLocal)
+                    .try_into()?;
+
                 cmd::local::join(
                     build,
                     count,
@@ -963,11 +962,10 @@ async fn main() -> Result<()> {
                 evm_network,
                 skip_validation: _,
             } => {
-                let evm_network = if let Some(evm_network) = evm_network {
-                    Some(evm_network.try_into()?)
-                } else {
-                    None
-                };
+                let evm_network = evm_network
+                    .unwrap_or(EvmNetworkCommand::EvmLocal)
+                    .try_into()?;
+
                 cmd::local::run(
                     build,
                     clean,

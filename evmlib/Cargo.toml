@@ -13,7 +13,6 @@ external-signer = []
 
 [dependencies]
 alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
-dirs-next = "~2.0.0"
 serde = "1"
 serde_with = { version = "3.11.0", features = ["macros"] }
 thiserror = "1.0"

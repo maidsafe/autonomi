@@ -22,6 +22,8 @@ use alloy::providers::fillers::{
 use alloy::providers::{Identity, ProviderBuilder, RootProvider};
 use alloy::signers::local::PrivateKeySigner;
 
+const ANVIL_DEFAULT_PORT: u16 = 61611;
+
 pub struct Testnet {
     anvil: AnvilInstance,
     rpc_url: Url,
@@ -70,7 +72,7 @@ impl Testnet {
 pub fn start_node() -> (AnvilInstance, Url) {
     let host = std::env::var("ANVIL_IP_ADDR").unwrap_or_else(|_| "localhost".to_string());
     let port = std::env::var("ANVIL_PORT")
-        .unwrap_or(0.to_string())
+        .unwrap_or(ANVIL_DEFAULT_PORT.to_string())
         .parse::<u16>()
         .expect("Invalid port number");
 

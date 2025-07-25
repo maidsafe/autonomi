@@ -1020,6 +1020,7 @@ dependencies = [
  "color-eyre",
  "colored",
  "dirs-next",
+ "evmlib",
  "indicatif",
  "libp2p",
  "libp2p-identity",
@@ -3283,7 +3284,6 @@ name = "evmlib"
 version = "0.4.2"
 dependencies = [
  "alloy",
- "dirs-next",
  "rand 0.8.5",
  "serde",
  "serde_with",
