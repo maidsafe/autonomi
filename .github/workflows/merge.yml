@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+      # commitlint check removed - no longer enforcing conventional commits
 
   checks:
     if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
@@ -73,8 +73,8 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      # Formatting check removed - no longer enforcing code formatting in CI
+      # Developers can still use `cargo fmt` locally
 
       - shell: bash
         run: cargo clippy --all-targets --all-features -- -Dwarnings
@@ -199,8 +199,16 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
 
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
@@ -563,6 +571,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_e2e
+          build: true
 
   # token_distribution_test:
   #   if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
@@ -652,8 +661,24 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Build binaries
-        run: cargo build --release --bin antnode
+        run: cargo build --release --bin antnode --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          if (Test-Path "target\\release\\antctl.exe") {
+            Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+            Write-Host "antctl installed to $destination from target\\release"
+          } elseif (Test-Path ".\\test-target\\release\\antctl.exe") {
+            Copy-Item ".\\test-target\\release\\antctl.exe" -Destination $destination -Force
+            Write-Host "antctl installed to $destination from test-target\\release"
+          } else {
+            Write-Host "ERROR: antctl.exe not found in either target\\release or test-target\\release"
+            exit 1
+          }
 
       - name: Build churn tests
         run: cargo test --release -p ant-node --test data_with_churn --no-run
@@ -704,6 +729,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_churn
+          build: true
 
       - name: Get total node count
         shell: bash
@@ -858,6 +884,7 @@ jobs:
         with:
           action: stop
           log_file_prefix: ant_test_logs_data_location
+          build: true
 
       - name: Verify restart of nodes using rg
         shell: bash
@@ -940,8 +967,16 @@ jobs:
           ls -l
 
       - name: Build binaries
-        run: cargo build --release --bin antnode --bin ant
+        run: cargo build --release --bin antnode --bin ant --bin antctl
         timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
 
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main

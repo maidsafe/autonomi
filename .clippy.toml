@@ -1,1 +1,8 @@
+# Allow unwrap, panic, and expect in tests but not in production code
+# This ensures test code can use these freely while production code is restricted
 allow-unwrap-in-tests = true
+allow-panic-in-tests = true
+allow-expect-in-tests = true
+
+# Avoid noisy lints that don't add significant value
+avoid-breaking-exported-api = false

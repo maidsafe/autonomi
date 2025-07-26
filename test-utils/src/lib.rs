@@ -6,6 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// This is a test utility crate, so allow expect/panic usage
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 pub mod evm;
 pub mod testnet;
 

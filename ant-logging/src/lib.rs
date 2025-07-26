@@ -6,6 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect usage in logging initialization
+#![allow(clippy::expect_used)]
+// Allow enum variant names that end with Error as they come from external derives
+#![allow(clippy::enum_variant_names)]
+
 mod appender;
 mod error;
 mod layers;

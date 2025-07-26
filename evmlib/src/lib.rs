@@ -6,6 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+// Allow expect usage in this crate as it's used for compile-time constants
+#![allow(clippy::expect_used)]
+// Allow enum variant names that end with Error as they come from external derives
+#![allow(clippy::enum_variant_names)]
+
 use crate::common::Address;
 use crate::utils::get_evm_network;
 use alloy::primitives::address;

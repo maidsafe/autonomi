@@ -1122,13 +1122,13 @@ async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
         ant_node_manager::helpers::configure_winsw(
             &get_node_manager_path()?.join("winsw.exe"),
             verbosity,
-        )
-        .await?;
+        ).await?;
     }
     Ok(())
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unused_async)]
 async fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
