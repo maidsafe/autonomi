@@ -13,11 +13,10 @@ use autonomi::{
     client::{
         analyze::Analysis,
         files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
-        GetError,
     },
     data::DataAddress,
     files::{PrivateArchive, PublicArchive},
-    Client,
+    Bytes, Client,
 };
 use color_eyre::{eyre::eyre, Section};
 use std::path::PathBuf;
@@ -125,21 +124,29 @@ async fn download_public(
     dest_path: &str,
     client: &Client,
 ) -> Result<(), ExitCodeError> {
-    let archive = match client.archive_get_public(&address).await {
-        Ok(archive) => archive,
-        Err(GetError::Deserialization(_)) => {
-            info!("Failed to deserialize Public Archive from address {addr}, trying to fetch data assuming it is a single file instead");
-            return download_public_single_file(addr, address, dest_path, client).await;
-        }
+    // Download data once and try both archive and single file approaches
+    let data = match client.data_get_public(&address).await {
+        Ok(data) => data,
         Err(err) => {
             let exit_code = exit_code::get_error_exit_code(&err);
             return Err((
-                eyre!(err).wrap_err("Failed to fetch Public Archive from address"),
+                eyre!(err).wrap_err("Failed to fetch data from address"),
                 exit_code,
             ));
         }
     };
-    download_pub_archive_to_disk(addr, archive, dest_path, client).await
+
+    // Try to deserialize as PublicArchive first
+    match PublicArchive::from_bytes(data.clone()) {
+        Ok(archive) => {
+            info!("Successfully deserialized as Public Archive from address {addr}");
+            download_pub_archive_to_disk(addr, archive, dest_path, client).await
+        }
+        Err(_) => {
+            info!("Failed to deserialize Public Archive from address {addr}, treating as single file instead");
+            flush_single_file_data_to_disk(addr, data, dest_path).await
+        }
+    }
 }
 
 async fn download_pub_archive_to_disk(
@@ -195,24 +202,13 @@ async fn download_pub_archive_to_disk(
     }
 }
 
-async fn download_public_single_file(
+/// Flush single file data bytes to disk
+/// This writes already-downloaded data to disk without additional network calls
+async fn flush_single_file_data_to_disk(
     addr: &str,
-    address: DataAddress,
+    bytes: Bytes,
     dest_path: &str,
-    client: &Client,
 ) -> Result<(), ExitCodeError> {
-    let bytes = match client.data_get_public(&address).await {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            let exit_code = exit_code::get_error_exit_code(&e);
-            let err = format!("Failed to fetch file at {addr:?}: {e}");
-            return Err((
-                eyre!(err).wrap_err("Failed to fetch file content from address"),
-                exit_code,
-            ));
-        }
-    };
-
     let path = PathBuf::from(dest_path);
     let here = PathBuf::from(".");
     let parent = path.parent().unwrap_or_else(|| &here);
