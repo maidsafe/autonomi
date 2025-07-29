@@ -1,9 +1,15 @@
 name: Label Check
 
 on:
+  # wait for the Auto Label PR to mark every PR as DoNotMerge
+  # before running this workflow
+  workflow_run:
+    workflows: ["Auto Label PR"]
+    types:
+      - completed
   pull_request:
       branches: ["*"]
-      types: [labeled, unlabeled, opened, synchronize, auto_merge_enabled]
+      types: [labeled, unlabeled, synchronize, auto_merge_enabled]
 
 jobs:
   fail-by-label:
