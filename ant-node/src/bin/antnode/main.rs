@@ -198,6 +198,10 @@ struct Opt {
     #[clap(long, value_parser = parse_rewards_address, verbatim_doc_comment)]
     rewards_address: Option<RewardsAddress>,
 
+    /// DEPRECATED: This does nothing from this version onwards.
+    #[clap(long, default_value_t = false)]
+    relay: bool,
+
     /// Specify the node's data directory.
     ///
     /// If not provided, the default location is platform specific:
