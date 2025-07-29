@@ -55,3 +55,6 @@ site/
 # Some test run artifacts
 autonomi/tests/file/test_dir_fetched*
 .serena/
+
+# Claude
+.claude/
