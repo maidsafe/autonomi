@@ -54,7 +54,6 @@ impl ChangeConnectionModePopUp {
     pub fn new(connection_mode: ConnectionMode) -> Result<Self> {
         let mut selected_connection_mode: ConnectionModeItem = ConnectionModeItem::default();
         let connection_modes_items: Vec<ConnectionModeItem> = ConnectionMode::iter()
-            .filter(|cm| cm != &ConnectionMode::HomeNetwork)
             .map(|connection_mode_item| ConnectionModeItem {
                 connection_mode: connection_mode_item,
                 status: if connection_mode == connection_mode_item {
