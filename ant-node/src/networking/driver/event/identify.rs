@@ -273,8 +273,6 @@ impl SwarmDriver {
     }
 
     /// If the peer is part already of the RT, try updating the addresses based on the new push info.
-    ///
-    /// new_addrs will not contain non-p2p-circuit (non-relayed) addresses if the peer is a relayed peer.
     fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addrs: &[Multiaddr]) {
         if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
             let new_addrs = new_addrs.iter().cloned().collect::<HashSet<_>>();
