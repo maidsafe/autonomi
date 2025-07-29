@@ -180,7 +180,7 @@ impl SwarmDriver {
             debug!(
                 "Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new."
             );
-            self.update_pre_existing_peer(peer_id, &addrs, false);
+            self.update_pre_existing_peer(peer_id, &addrs);
         } else if !self.local && !has_dialed {
             // When received an identify from un-dialed peer, try to dial it
             // The dial shall trigger the same identify to be sent again and confirm
@@ -283,14 +283,7 @@ impl SwarmDriver {
     }
 
     /// If the peer is part already of the RT, try updating the addresses based on the new push info.
-    ///
-    /// new_addrs will not contain non-p2p-circuit (non-relayed) addresses if the peer is a relayed peer.
-    fn update_pre_existing_peer(
-        &mut self,
-        peer_id: libp2p::PeerId,
-        new_addrs: &[Multiaddr],
-        is_relayed_peer: bool,
-    ) {
+    fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addrs: &[Multiaddr]) {
         if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
             let new_addrs = new_addrs.iter().cloned().collect::<HashSet<_>>();
             let mut addresses_to_add = Vec::new();
@@ -309,25 +302,6 @@ impl SwarmDriver {
                 .map(multiaddr_strip_p2p)
                 .collect::<HashSet<_>>();
             addresses_to_add.extend(new_addrs.difference(&existing_addrs));
-
-            // remove addresses only for relayed peers.
-            if is_relayed_peer {
-                let mut addresses_to_remove = Vec::new();
-                addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
-
-                if !addresses_to_remove.is_empty() {
-                    debug!(
-                        "Removing addresses from RT for {peer_id:?} (relayed) as the new identify does not contain them: {addresses_to_remove:?}"
-                    );
-                    for multiaddr in addresses_to_remove {
-                        let _routing_update = self
-                            .swarm
-                            .behaviour_mut()
-                            .kademlia
-                            .remove_address(&peer_id, multiaddr);
-                    }
-                }
-            }
 
             if !addresses_to_add.is_empty() {
                 debug!(
