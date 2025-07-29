@@ -59,10 +59,10 @@ use tokio::sync::mpsc;
 pub const CONNECT_TIMEOUT_SECS: u64 = 10;
 
 const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
+const MAX_BOOTSTRAP_PEERS: usize = 50;
 
 // Amount of peers to confirm into our routing table before we consider the client ready.
 use crate::client::config::ClientOperatingStrategy;
-use crate::networking::bootstrap::BOOTSTRAP_MAX_REQUIRED_PEERS;
 use crate::networking::{
     bootstrap, multiaddr_is_global, Multiaddr, Network, NetworkAddress, NetworkError,
 };
@@ -266,7 +266,7 @@ impl Client {
 
         let initial_peers = match config
             .init_peers_config
-            .get_bootstrap_addr(None, Some(BOOTSTRAP_MAX_REQUIRED_PEERS as usize))
+            .get_bootstrap_addr(None, Some(MAX_BOOTSTRAP_PEERS))
             .await
         {
             Ok(peers) => peers,

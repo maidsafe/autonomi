@@ -4,7 +4,7 @@ use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::error;
 
-pub(crate) const BOOTSTRAP_MAX_REQUIRED_PEERS: u32 = 25;
+pub(crate) const BOOTSTRAP_MAX_REQUIRED_PEERS: u32 = 20;
 pub(crate) const BOOTSTRAP_MAX_DURATION_SECS: u64 = 30;
 
 /// Errors that can occur during network Bootstrap
