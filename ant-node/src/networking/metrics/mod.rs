@@ -9,7 +9,6 @@
 mod bad_node;
 mod metadata;
 mod reachability_check;
-mod relay_client;
 pub(super) mod service;
 mod upnp;
 
@@ -49,18 +48,13 @@ pub(crate) struct NetworkMetricsRecorder {
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)
     libp2p_metrics: Libp2pMetrics,
     upnp_events: Family<upnp::UpnpEventLabels, Counter>,
-    relay_client_events: Family<relay_client::RelayClientEventLabels, Counter>,
 
     // metrics from ant-networking
     pub(crate) connected_peers: Gauge,
-    pub(crate) connected_relay_clients: Gauge,
     pub(crate) estimated_network_size: Gauge,
-    pub(crate) relay_peers_percentage: Gauge<f64, AtomicU64>,
     pub(crate) open_connections: Gauge,
     pub(crate) peers_in_routing_table: Gauge,
-    pub(crate) relay_peers_in_routing_table: Gauge,
     pub(crate) records_stored: Gauge,
-    pub(crate) relay_reservation_health: Gauge<f64, AtomicU64>,
     pub(crate) node_versions: Family<VersionLabels, Gauge>,
     pub(crate) reachability_check_progress: Gauge<f64, AtomicU64>,
 
@@ -129,12 +123,6 @@ impl NetworkMetricsRecorder {
             "The number of records stored locally",
             records_stored.clone(),
         );
-        let relay_reservation_health = Gauge::<f64, AtomicU64>::default();
-        sub_registry.register(
-            "relay_reservation_health",
-            "The average health of all the relay reservation connections. Value is between 0-1",
-            relay_reservation_health.clone(),
-        );
 
         let connected_peers = Gauge::default();
         sub_registry.register(
@@ -142,24 +130,11 @@ impl NetworkMetricsRecorder {
             "The number of peers that we are currently connected to",
             connected_peers.clone(),
         );
-        let connected_relay_clients = Gauge::default();
-        sub_registry.register(
-            "connected_relay_clients",
-            "The number of relay clients that are currently connected to us",
-            connected_relay_clients.clone(),
-        );
-
         let estimated_network_size = Gauge::default();
         sub_registry.register(
             "estimated_network_size",
             "The estimated number of nodes in the network calculated by the peers in our RT",
             estimated_network_size.clone(),
-        );
-        let relay_peers_percentage = Gauge::<f64, AtomicU64>::default();
-        sub_registry.register(
-            "relay_peers_percentage",
-            "The percentage of relay peers in our routing table",
-            relay_peers_percentage.clone(),
         );
         let open_connections = Gauge::default();
         sub_registry.register(
@@ -172,12 +147,6 @@ impl NetworkMetricsRecorder {
             "peers_in_routing_table",
             "The total number of peers in our routing table",
             peers_in_routing_table.clone(),
-        );
-        let relay_peers_in_routing_table = Gauge::default();
-        sub_registry.register(
-            "relay_peers_in_routing_table",
-            "The total number of relay peers in our routing table",
-            relay_peers_in_routing_table.clone(),
         );
 
         let shunned_count = Counter::default();
@@ -199,13 +168,6 @@ impl NetworkMetricsRecorder {
             "upnp_events",
             "Events emitted by the UPnP behaviour",
             upnp_events.clone(),
-        );
-
-        let relay_client_events = Family::default();
-        sub_registry.register(
-            "relay_client_events",
-            "Events emitted by the relay client",
-            relay_client_events.clone(),
         );
 
         // Add this new metric registration
@@ -290,17 +252,12 @@ impl NetworkMetricsRecorder {
         let network_metrics = Self {
             libp2p_metrics,
             upnp_events,
-            relay_client_events,
 
             records_stored,
             estimated_network_size,
-            relay_peers_percentage,
             connected_peers,
-            connected_relay_clients,
             open_connections,
-            relay_reservation_health,
             peers_in_routing_table,
-            relay_peers_in_routing_table,
             relevant_records,
             max_records,
             received_payment_count,
@@ -432,12 +389,6 @@ impl NetworkMetricsRecorder {
 /// Impl the Recorder traits again for our struct.
 impl Recorder<libp2p::kad::Event> for NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::kad::Event) {
-        self.libp2p_metrics.record(event)
-    }
-}
-
-impl Recorder<libp2p::relay::Event> for NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::relay::Event) {
         self.libp2p_metrics.record(event)
     }
 }
