@@ -197,6 +197,10 @@ struct Opt {
     #[clap(long)]
     rewards_address: Option<String>,
 
+    /// DEPRECATED: This does nothing from this version onwards.
+    #[clap(long, default_value_t = false)]
+    relay: bool,
+
     /// Specify the node's data directory.
     ///
     /// If not provided, the default location is platform specific:
