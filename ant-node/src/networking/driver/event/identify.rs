@@ -7,13 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    multiaddr_get_port,
-    network::connection_action_logging,
-    relay_manager::{is_a_relayed_peer, RelayManager},
-    Addresses, NetworkEvent,
+    multiaddr_get_port, network::connection_action_logging, Addresses, NetworkEvent,
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
-use itertools::Itertools;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
@@ -117,25 +113,13 @@ impl SwarmDriver {
         }
 
         let has_dialed = self.dialed_peers.contains(&peer_id);
-        let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
-        let addrs = if !is_relayed_peer {
-            let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
-            let Some(addr) = addr else {
-                warn!("identify: no valid multiaddr found for {peer_id:?} on {connection_id:?}");
-                return;
-            };
-            debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
-            vec![addr]
-        } else {
-            let p2p_addrs = info
-                .listen_addrs
-                .iter()
-                .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
-                .unique()
-                .collect::<Vec<_>>();
-            debug!("Peer {peer_id:?} is a relayed peer. Using p2p addr from identify directly: {p2p_addrs:?}");
-            p2p_addrs
+        let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
+        let Some(addr) = addr else {
+            warn!("identify: no valid multiaddr found for {peer_id:?} on {connection_id:?}");
+            return;
         };
+        debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
+        let addrs = vec![addr];
 
         // return early for reachability-check-peer / clients
         if info.agent_version.contains("reachability-check-peer") {
@@ -152,14 +136,6 @@ impl SwarmDriver {
         } else if info.agent_version.contains("client") {
             debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
             return;
-        }
-
-        // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
-        if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
-            if let Some(relay_manager) = self.relay_manager.as_mut() {
-                debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
-                relay_manager.add_potential_candidates(&peer_id, &addrs, &info.protocols);
-            }
         }
 
         let (kbucket_full, already_present_in_rt, ilog2) =
@@ -183,7 +159,7 @@ impl SwarmDriver {
             // We don't have to dial it back.
 
             debug!("Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new.");
-            self.update_pre_existing_peer(peer_id, &addrs, is_relayed_peer);
+            self.update_pre_existing_peer(peer_id, &addrs, false);
         } else if !self.local && !has_dialed {
             // When received an identify from un-dialed peer, try to dial it
             // The dial shall trigger the same identify to be sent again and confirm
@@ -234,21 +210,6 @@ impl SwarmDriver {
                             old_addrs.0.push(addr.clone());
                         } else {
                             debug!("Already have addr {addr:?} in dial queue for {peer_id:?}.");
-                        }
-                    }
-
-                    if is_relayed_peer {
-                        let mut removed = false;
-                        old_addrs.0.retain(|addr| {
-                            if addr.iter().any(|seg| matches!(seg, Protocol::P2pCircuit)) {
-                                true
-                            } else {
-                                removed = true;
-                                false
-                            }
-                        });
-                        if removed {
-                            debug!("Removed non-p2p addr from dial queue for {peer_id:?}. Remaining addrs: {old_addrs:?}");
                         }
                     }
                 }

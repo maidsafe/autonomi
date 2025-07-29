@@ -52,33 +52,6 @@ impl SwarmDriver {
                 event_string = "kad_event";
                 self.handle_kad_event(kad_event)?;
             }
-            SwarmEvent::Behaviour(NodeEvent::RelayClient(event)) => {
-                #[cfg(feature = "open-metrics")]
-                if let Some(metrics_recorder) = &self.metrics_recorder {
-                    metrics_recorder.record(&(*event));
-                }
-                event_string = "relay_client_event";
-                debug!("relay client event: {event:?}");
-
-                if let libp2p::relay::client::Event::ReservationReqAccepted {
-                    relay_peer_id,
-                    renewal,
-                    ..
-                } = *event
-                {
-                    if !renewal {
-                        if let Some(relay_manager) = self.relay_manager.as_mut() {
-                            relay_manager.on_successful_reservation_by_client(
-                                &relay_peer_id,
-                                &mut self.swarm,
-                                &self.live_connected_peers,
-                            );
-                        }
-                    } else {
-                        info!("Relay reservation was renewed with {relay_peer_id:?}");
-                    }
-                }
-            }
             SwarmEvent::Behaviour(NodeEvent::Upnp(upnp_event)) => {
                 #[cfg(feature = "open-metrics")]
                 if let Some(metrics_recorder) = &self.metrics_recorder {
@@ -107,45 +80,6 @@ impl SwarmDriver {
                 }
             }
 
-            SwarmEvent::Behaviour(NodeEvent::RelayServer(event)) => {
-                #[cfg(feature = "open-metrics")]
-                if let Some(metrics_recorder) = &self.metrics_recorder {
-                    metrics_recorder.record(&(*event));
-                }
-
-                event_string = "relay_server_event";
-
-                debug!(?event, "relay server event");
-
-                match *event {
-                    libp2p::relay::Event::ReservationReqAccepted {
-                        src_peer_id,
-                        renewed: _,
-                    } => {
-                        let _ = self.connected_relay_clients.insert(src_peer_id);
-                        info!("Relay reservation accepted from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
-
-                        #[cfg(feature = "open-metrics")]
-                        if let Some(metrics_recorder) = &self.metrics_recorder {
-                            let _ = metrics_recorder
-                                .connected_relay_clients
-                                .set(self.connected_relay_clients.len() as i64);
-                        }
-                    }
-                    libp2p::relay::Event::ReservationTimedOut { src_peer_id } => {
-                        let _ = self.connected_relay_clients.remove(&src_peer_id);
-                        info!("Relay reservation timed out from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
-
-                        #[cfg(feature = "open-metrics")]
-                        if let Some(metrics_recorder) = &self.metrics_recorder {
-                            let _ = metrics_recorder
-                                .connected_relay_clients
-                                .set(self.connected_relay_clients.len() as i64);
-                        }
-                    }
-                    _ => {}
-                }
-            }
             SwarmEvent::Behaviour(NodeEvent::Identify(event)) => {
                 // Record the Identify event for metrics if the feature is enabled.
                 #[cfg(feature = "open-metrics")]
@@ -169,29 +103,26 @@ impl SwarmDriver {
                     address.push(Protocol::P2p(local_peer_id));
                 }
 
-                if !self.is_relay_client {
-                    if self.local {
-                        // all addresses are effectively external here...
-                        // this is needed for Kad Mode::Server
-                        self.swarm.add_external_address(address.clone());
+                if self.local {
+                    // all addresses are effectively external here...
+                    // this is needed for Kad Mode::Server
+                    self.swarm.add_external_address(address.clone());
 
-                        // If we are local, add our own address(es) to cache
-                        if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
-                            info!("Adding listen address to bootstrap cache (local): {address:?}");
-                            bootstrap_cache.add_addr(address.clone());
-                        }
-                        if let Err(err) = self.sync_and_flush_cache() {
-                            warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
-                        }
-                    } else if let Some(external_address_manager) =
-                        self.external_address_manager.as_mut()
-                    {
-                        external_address_manager
-                            .on_new_listen_addr(address.clone(), &mut self.swarm);
-                    } else {
-                        // just for future reference.
-                        warn!("External address manager is not enabled for a public node. This should not happen.");
+                    // If we are local, add our own address(es) to cache
+                    if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
+                        info!("Adding listen address to bootstrap cache (local): {address:?}");
+                        bootstrap_cache.add_addr(address.clone());
                     }
+                    if let Err(err) = self.sync_and_flush_cache() {
+                        warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
+                    }
+                } else if let Some(external_address_manager) =
+                    self.external_address_manager.as_mut()
+                {
+                    external_address_manager.on_new_listen_addr(address.clone(), &mut self.swarm);
+                } else {
+                    // just for future reference.
+                    warn!("External address manager is not enabled for a public node. This should not happen.");
                 }
 
                 if tracing::level_enabled!(tracing::Level::DEBUG) {
@@ -212,9 +143,6 @@ impl SwarmDriver {
             } => {
                 event_string = "listener closed";
                 info!("Listener {listener_id:?} with add {addresses:?} has been closed for {reason:?}");
-                if let Some(relay_manager) = self.relay_manager.as_mut() {
-                    relay_manager.on_listener_closed(&listener_id, &mut self.swarm);
-                }
             }
             SwarmEvent::IncomingConnection {
                 connection_id,
@@ -223,14 +151,6 @@ impl SwarmDriver {
             } => {
                 event_string = "incoming";
                 debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
-                #[cfg(feature = "open-metrics")]
-                if let Some(relay_manager) = self.relay_manager.as_mut() {
-                    relay_manager.on_incoming_connection(
-                        &connection_id,
-                        &local_addr,
-                        &send_back_addr,
-                    );
-                }
             }
             SwarmEvent::ConnectionEstablished {
                 peer_id,
@@ -254,11 +174,6 @@ impl SwarmDriver {
                         external_address_manager
                             .on_established_incoming_connection(local_addr.clone());
                     }
-                }
-
-                #[cfg(feature = "open-metrics")]
-                if let Some(relay_manager) = self.relay_manager.as_mut() {
-                    relay_manager.on_connection_established(&peer_id, &connection_id);
                 }
 
                 let _ = self.live_connected_peers.insert(
@@ -290,13 +205,6 @@ impl SwarmDriver {
                 event_string = "ConnectionClosed";
                 debug!(%peer_id, ?connection_id, ?cause, num_established, "ConnectionClosed: {}", endpoint_str(&endpoint));
                 let _ = self.live_connected_peers.remove(&connection_id);
-
-                if num_established == 0 && self.connected_relay_clients.remove(&peer_id) {
-                    info!(
-                        "Relay client has been disconnected: {peer_id:?}. Relay client count: {}",
-                        self.connected_relay_clients.len()
-                    );
-                }
 
                 self.record_connection_metrics();
             }
@@ -489,11 +397,6 @@ impl SwarmDriver {
                     ),
                 }
 
-                #[cfg(feature = "open-metrics")]
-                if let Some(relay_manager) = self.relay_manager.as_mut() {
-                    relay_manager.on_incomming_connection_error(&send_back_addr, &connection_id);
-                }
-
                 let _ = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
             }
@@ -578,17 +481,6 @@ impl SwarmDriver {
                 }
             }
 
-            // skip if the peer is a relay server that we're connected to
-            if let Some(relay_manager) = self.relay_manager.as_ref() {
-                if relay_manager.keep_alive_peer(peer_id) {
-                    return true; // retain peer
-                }
-            }
-
-            // skip if the peer is a node that is being relayed through us
-            if self.connected_relay_clients.contains(peer_id) {
-                return true; // retain peer
-            }
 
             // actually remove connection
             let result = self.swarm.close_connection(*connection_id);
@@ -626,10 +518,6 @@ impl SwarmDriver {
             let _ = metrics_recorder
                 .connected_peers
                 .set(self.swarm.connected_peers().count() as i64);
-
-            let _ = metrics_recorder
-                .connected_relay_clients
-                .set(self.connected_relay_clients.len() as i64);
         }
     }
 
