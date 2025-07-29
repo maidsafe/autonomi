@@ -259,14 +259,14 @@ impl Client {
 
         let initial_peers = match config
             .init_peers_config
-            .get_bootstrap_addr(None, None)
+            .get_bootstrap_addr(None, Some(25))
             .await
         {
             Ok(peers) => peers,
             Err(e) => return Err(e.into()),
         };
 
-        let network = Network::new(initial_peers)?;
+        let network = Network::new(initial_peers).await?;
 
         Ok(Self {
             network,

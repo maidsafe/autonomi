@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 // all modules are private to this networking module
+mod bootstrap;
 pub(crate) mod common;
 mod config;
 mod driver;
@@ -14,6 +15,7 @@ mod interface;
 mod retries;
 mod utils;
 
+use std::cmp::min;
 // export the utils
 pub(crate) use utils::multiaddr_is_global;
 
@@ -28,6 +30,7 @@ pub use libp2p::{
 };
 
 // internal needs
+use crate::networking::bootstrap::{MAX_BOOTSTRAP_DURATION_SECS, MAX_REQUIRED_PEERS};
 use ant_protocol::{PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -36,8 +39,10 @@ use libp2p::kad::NoKnownPeers;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::timeout;
 
 /// Result type for tasks responses sent by the [`crate::driver::NetworkDriver`] to the [`crate::Network`]
 pub(in crate::networking) type OneShotTaskResult<T> = oneshot::Sender<Result<T, NetworkError>>;
@@ -119,6 +124,10 @@ pub enum NetworkError {
     /// Invalid retry strategy
     #[error("Invalid retry strategy, check your config or use the default")]
     InvalidRetryStrategy,
+
+    /// Bootstrap failure
+    #[error("Bootstrap failure: {0}")]
+    BootstrapFailure(String),
 }
 
 impl NetworkError {
@@ -148,12 +157,9 @@ impl Network {
     /// Create a new network client
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub fn new(initial_contacts: Vec<Multiaddr>) -> Result<Self, NoKnownPeers> {
+    pub async fn new(initial_contacts: Vec<Multiaddr>) -> Result<Self, NoKnownPeers> {
         let (task_sender, task_receiver) = mpsc::channel(100);
-        let mut driver = NetworkDriver::new(task_receiver);
-
-        // Bootstrap here so we can early detect a failure
-        driver.connect_to_peers(initial_contacts)?;
+        let driver = NetworkDriver::new(task_receiver);
 
         // run the network driver in a background task
         tokio::spawn(async move {
@@ -164,7 +170,78 @@ impl Network {
             task_sender: Arc::new(task_sender),
         };
 
+        let (sender, receiver) = oneshot::channel::<u32>();
+
+        network
+            .register_bootstrap_observer(
+                min(initial_contacts.len() as u32, MAX_REQUIRED_PEERS),
+                sender,
+            )
+            .await?;
+
+        network.connect_to_peers(initial_contacts).await?;
+
+        match timeout(Duration::from_secs(MAX_BOOTSTRAP_DURATION_SECS), receiver).await {
+            Ok(result) => match result {
+                Ok(peers_count) => {
+                    debug!("Bootstrap complete. Connected to {peers_count} peers.");
+                    network.trigger_bootstrap().await?;
+                }
+                Err(err) => {
+                    debug!("Bootstrap sender closed: {err:?}");
+                    return Err(NoKnownPeers());
+                }
+            },
+            Err(err) => {
+                error!("Bootstrap timeout: {err:?}");
+                return Err(NoKnownPeers());
+            }
+        };
+
         Ok(network)
+    }
+
+    /// Connect to peers via the network driver
+    pub async fn connect_to_peers(&self, peers: Vec<Multiaddr>) -> Result<(), NoKnownPeers> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::ConnectToPeers { peers, resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NoKnownPeers())?;
+        rx.await
+            .map_err(|_| NoKnownPeers())?
+            .map_err(|_| NoKnownPeers())
+    }
+
+    /// Register a bootstrap observer
+    pub async fn register_bootstrap_observer(
+        &self,
+        required_peers: u32,
+        sender: oneshot::Sender<u32>,
+    ) -> Result<(), NoKnownPeers> {
+        let task = NetworkTask::RegisterBootstrapObserver {
+            required_peers,
+            observer_callback: sender,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NoKnownPeers())?;
+        Ok(())
+    }
+
+    /// Trigger bootstrap process
+    pub async fn trigger_bootstrap(&self) -> Result<(), NoKnownPeers> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::TriggerBootstrap { resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NoKnownPeers())?;
+        rx.await
+            .map_err(|_| NoKnownPeers())?
+            .map_err(|_| NoKnownPeers())
     }
 
     /// Get a record from the network

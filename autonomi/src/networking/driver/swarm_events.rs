@@ -6,12 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_protocol::constants::KAD_STREAM_PROTOCOL_ID;
 use ant_protocol::messages::{QueryResponse, Response};
 use libp2p::autonat::OutboundFailure;
+use libp2p::identify::Event;
 use libp2p::kad::{Event as KadEvent, ProgressStep, QueryId, QueryResult, QueryStats};
 use libp2p::request_response::{Event as ReqEvent, Message, OutboundRequestId};
 use libp2p::swarm::SwarmEvent;
-use libp2p::PeerId;
+use libp2p::{PeerId, StreamProtocol};
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -57,6 +59,11 @@ impl NetworkDriver {
                     step,
                 },
             )) => self.handle_kad_progress_event(id, result, &stats, &step),
+            SwarmEvent::Behaviour(AutonomiClientBehaviourEvent::Identify(Event::Received {
+                peer_id,
+                info,
+                ..
+            })) => self.handle_identify_received_event(peer_id, info),
             _other_event => {
                 trace!("Other event: {:?}", _other_event);
                 Ok(())
@@ -164,6 +171,28 @@ impl NetworkDriver {
 
         self.pending_tasks
             .terminate_query(request_id, peer, error)?;
+
+        Ok(())
+    }
+
+    fn handle_identify_received_event(
+        &mut self,
+        peer_id: PeerId,
+        info: libp2p::identify::Info,
+    ) -> Result<(), NetworkDriverError> {
+        if info
+            .protocols
+            .contains(&StreamProtocol::new(KAD_STREAM_PROTOCOL_ID))
+        {
+            for listen_addr in info.listen_addrs {
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .add_address(&peer_id, listen_addr);
+
+                self.bootstrap_manager.add_connected_peer(peer_id);
+            }
+        }
 
         Ok(())
     }

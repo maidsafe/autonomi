@@ -12,8 +12,12 @@ mod task_handler;
 
 use std::{num::NonZeroUsize, time::Duration};
 
+use crate::networking::bootstrap::BootstrapManager;
 use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
+use ant_protocol::constants::{
+    KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, MAX_RECORD_SIZE, REPLICATION_FACTOR,
+};
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::NetworkAddress;
 use ant_protocol::{
@@ -23,6 +27,7 @@ use ant_protocol::{
 use futures::future::Either;
 use libp2p::kad::store::MemoryStoreConfig;
 use libp2p::kad::NoKnownPeers;
+use libp2p::swarm::dial_opts::DialOpts;
 use libp2p::{
     core::muxing::StreamMuxerBox,
     futures::StreamExt,
@@ -35,11 +40,7 @@ use libp2p::{
     Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
 };
 use task_handler::TaskHandler;
-use tokio::sync::mpsc;
-
-use ant_protocol::constants::{
-    KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, MAX_RECORD_SIZE, REPLICATION_FACTOR,
-};
+use tokio::sync::{mpsc, oneshot};
 
 /// Libp2p defaults to 10s which is quite fast, we are more patient
 pub const REQ_TIMEOUT: Duration = Duration::from_secs(30);
@@ -72,6 +73,8 @@ pub(crate) struct NetworkDriver {
     /// pending tasks currently awaiting swarm events to progress
     /// this is an opaque struct that can only be mutated by the module were [`crate::driver::task_handler::TaskHandler`] is defined
     pending_tasks: TaskHandler,
+    /// sends a message on a successful bootstrap
+    bootstrap_manager: BootstrapManager,
 }
 
 #[derive(NetworkBehaviour)]
@@ -182,10 +185,13 @@ impl NetworkDriver {
 
         let task_handler = TaskHandler::new();
 
+        let bootstrap_manager = BootstrapManager::new();
+
         Self {
             swarm,
             task_receiver,
             pending_tasks: task_handler,
+            bootstrap_manager,
         }
     }
 
@@ -223,20 +229,35 @@ impl NetworkDriver {
         &mut self.swarm.behaviour_mut().request_response
     }
 
-    /// Add peers to our routing table
-    pub(crate) fn connect_to_peers(&mut self, peers: Vec<Multiaddr>) -> Result<(), NoKnownPeers> {
+    pub(crate) fn register_bootstrap_observer(
+        &mut self,
+        required_peers: u32,
+        observer_callback: oneshot::Sender<u32>,
+    ) {
+        self.bootstrap_manager
+            .register_observer((observer_callback, required_peers));
+    }
+
+    /// Connect to peers
+    pub(crate) fn connect_to_peers(&mut self, peers: Vec<Multiaddr>) {
         for contact in peers {
             let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
                 Some(Protocol::P2p(id)) => id,
                 _ => panic!("No peer id found in contact"),
             };
 
-            self.swarm
-                .behaviour_mut()
-                .kademlia
-                .add_address(&contact_id, contact);
-        }
+            let opts = DialOpts::peer_id(contact_id)
+                .addresses(vec![contact])
+                .build();
 
+            if let Err(err) = self.swarm.dial(opts) {
+                error!("Failed to dial peer: {err:?}");
+            }
+        }
+    }
+
+    /// Trigger bootstrap process
+    pub(crate) fn trigger_bootstrap(&mut self) -> Result<(), NoKnownPeers> {
         self.swarm.behaviour_mut().kademlia.bootstrap().map(|_| ())
     }
 
@@ -335,6 +356,33 @@ impl NetworkDriver {
                         resp,
                     },
                 );
+            }
+            NetworkTask::ConnectToPeers { peers, resp } => {
+                self.connect_to_peers(peers);
+                let _ = resp.send(Ok(()));
+            }
+            NetworkTask::RegisterBootstrapObserver {
+                required_peers,
+                observer_callback,
+            } => {
+                self.register_bootstrap_observer(required_peers, observer_callback);
+            }
+            NetworkTask::TriggerBootstrap { resp } => {
+                let result = self.trigger_bootstrap();
+                match result {
+                    Ok(()) => {
+                        if let Err(e) = resp.send(Ok(())) {
+                            error!("Error sending trigger_bootstrap response: {e:?}");
+                        }
+                    }
+                    Err(e) => {
+                        if let Err(send_err) =
+                            resp.send(Err(NetworkError::BootstrapFailure(e.to_string())))
+                        {
+                            error!("Error sending trigger_bootstrap error response: {send_err:?}");
+                        }
+                    }
+                }
             }
         }
     }

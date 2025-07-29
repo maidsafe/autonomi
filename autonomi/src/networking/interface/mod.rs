@@ -11,9 +11,10 @@ use ant_evm::PaymentQuote;
 use ant_protocol::NetworkAddress;
 use libp2p::{
     kad::{PeerInfo, Quorum, Record},
-    PeerId,
+    Multiaddr, PeerId,
 };
 use std::num::NonZeroUsize;
+use tokio::sync::oneshot;
 
 /// Task for the underlying network driver
 /// Sent by the [`crate::Network`], handled by the [`crate::driver::NetworkDriver`]
@@ -66,5 +67,21 @@ pub(super) enum NetworkTask {
         data_size: usize,
         #[debug(skip)]
         resp: OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
+    },
+    /// Connect to peers
+    ConnectToPeers {
+        peers: Vec<Multiaddr>,
+        #[debug(skip)]
+        resp: OneShotTaskResult<()>,
+    },
+    /// Register a bootstrap observer
+    RegisterBootstrapObserver {
+        required_peers: u32,
+        observer_callback: oneshot::Sender<u32>,
+    },
+    /// Trigger bootstrap process
+    TriggerBootstrap {
+        #[debug(skip)]
+        resp: OneShotTaskResult<()>,
     },
 }
