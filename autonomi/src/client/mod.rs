@@ -62,7 +62,10 @@ const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
 // Amount of peers to confirm into our routing table before we consider the client ready.
 use crate::client::config::ClientOperatingStrategy;
-use crate::networking::{multiaddr_is_global, Multiaddr, Network, NetworkAddress, NetworkError};
+use crate::networking::bootstrap::BOOTSTRAP_MAX_REQUIRED_PEERS;
+use crate::networking::{
+    bootstrap, multiaddr_is_global, Multiaddr, Network, NetworkAddress, NetworkError,
+};
 use ant_protocol::storage::RecordKind;
 pub use ant_protocol::CLOSE_GROUP_SIZE;
 
@@ -117,6 +120,10 @@ pub enum ConnectError {
     /// An error occurred while initializing the EVM network.
     #[error("Failed to initialize the EVM network: {0}")]
     EvmNetworkError(String),
+
+    /// An error occurred while bootstrapping the client.
+    #[error("Failure during the bootstrapping process: {0}")]
+    BootstrapFailure(#[from] bootstrap::BootstrapError),
 }
 
 /// Errors that can occur during the put operation.
@@ -259,7 +266,7 @@ impl Client {
 
         let initial_peers = match config
             .init_peers_config
-            .get_bootstrap_addr(None, Some(25))
+            .get_bootstrap_addr(None, Some(BOOTSTRAP_MAX_REQUIRED_PEERS as usize))
             .await
         {
             Ok(peers) => peers,

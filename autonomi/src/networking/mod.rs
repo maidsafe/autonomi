@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 // all modules are private to this networking module
-mod bootstrap;
+pub(crate) mod bootstrap;
 pub(crate) mod common;
 mod config;
 mod driver;
@@ -30,7 +30,9 @@ pub use libp2p::{
 };
 
 // internal needs
-use crate::networking::bootstrap::{MAX_BOOTSTRAP_DURATION_SECS, MAX_REQUIRED_PEERS};
+use crate::networking::bootstrap::{
+    BootstrapError, BOOTSTRAP_MAX_DURATION_SECS, BOOTSTRAP_MAX_REQUIRED_PEERS,
+};
 use ant_protocol::{PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -157,7 +159,7 @@ impl Network {
     /// Create a new network client
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub async fn new(initial_contacts: Vec<Multiaddr>) -> Result<Self, NoKnownPeers> {
+    pub async fn new(initial_contacts: Vec<Multiaddr>) -> Result<Self, BootstrapError> {
         let (task_sender, task_receiver) = mpsc::channel(100);
         let driver = NetworkDriver::new(task_receiver);
 
@@ -170,31 +172,48 @@ impl Network {
             task_sender: Arc::new(task_sender),
         };
 
+        // Start of the bootstrap flow.
+        // During bootstrap, we need to filter out any bad nodes (nodes that don't support kad).
         let (sender, receiver) = oneshot::channel::<u32>();
 
         network
             .register_bootstrap_observer(
-                min(initial_contacts.len() as u32, MAX_REQUIRED_PEERS),
+                min(initial_contacts.len() as u32, BOOTSTRAP_MAX_REQUIRED_PEERS),
                 sender,
             )
-            .await?;
+            .await
+            .map_err(|err| BootstrapError::BootstrapObserverRegistrationFailed {
+                reason: err.to_string(),
+            })?;
 
-        network.connect_to_peers(initial_contacts).await?;
+        network
+            .connect_to_peers(initial_contacts)
+            .await
+            .map_err(|err| BootstrapError::PeerConnectionFailed {
+                reason: err.to_string(),
+            })?;
 
-        match timeout(Duration::from_secs(MAX_BOOTSTRAP_DURATION_SECS), receiver).await {
+        match timeout(Duration::from_secs(BOOTSTRAP_MAX_DURATION_SECS), receiver).await {
             Ok(result) => match result {
                 Ok(peers_count) => {
                     debug!("Bootstrap complete. Connected to {peers_count} peers.");
-                    network.trigger_bootstrap().await?;
+                    network.trigger_bootstrap().await.map_err(|err| {
+                        BootstrapError::KademliaBootstrapFailed {
+                            reason: err.to_string(),
+                        }
+                    })?;
                 }
                 Err(err) => {
                     debug!("Bootstrap sender closed: {err:?}");
-                    return Err(NoKnownPeers());
+                    return Err(BootstrapError::BootstrapObserverClosed);
                 }
             },
             Err(err) => {
                 error!("Bootstrap timeout: {err:?}");
-                return Err(NoKnownPeers());
+                return Err(BootstrapError::BootstrapTimeout {
+                    timeout_secs: BOOTSTRAP_MAX_DURATION_SECS,
+                    required_peers: BOOTSTRAP_MAX_REQUIRED_PEERS,
+                });
             }
         };
 
