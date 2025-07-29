@@ -11,3 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/labeler@v5
+  
+  check-labels:
+    needs: labeler
+    uses: ./.github/workflows/check-do-not-merge.yml
