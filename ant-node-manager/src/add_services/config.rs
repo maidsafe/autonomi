@@ -116,9 +116,6 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
-        if self.relay {
-            args.push(OsString::from("--relay"));
-        }
         if let Some(log_format) = self.log_format {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_format.as_str()));
@@ -465,7 +462,6 @@ mod tests {
             "--alpha",
             "--network-id",
             "5",
-            "--relay",
             "--log-format",
             "json",
             "--no-upnp",
