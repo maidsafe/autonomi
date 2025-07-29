@@ -443,12 +443,6 @@ impl Recorder<libp2p::kad::Event> for NetworkMetricsRecorder {
     }
 }
 
-impl Recorder<libp2p::relay::Event> for NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::relay::Event) {
-        self.libp2p_metrics.record(event)
-    }
-}
-
 impl Recorder<libp2p::identify::Event> for NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::identify::Event) {
         self.libp2p_metrics.record(event)
