@@ -6,14 +6,5 @@ on:
       types: [labeled, unlabeled, opened, synchronize, auto_merge_enabled]
 
 jobs:
-  fail-by-label:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fail if PR is labeled as DoNotMerge
-        run: |
-          LABELS=$(echo '${{ toJson(github.event.pull_request.labels) }}' | jq -r '.[].name')
-          echo -e "This PR has the following Labels:\n$LABELS"
-          if [[ $LABELS == *"DoNotMerge"* ]]; then
-            echo "This PR is labeled as DoNotMerge!"
-            exit 1
-          fi
+  check-labels:
+    uses: ./.github/workflows/check-do-not-merge.yml
