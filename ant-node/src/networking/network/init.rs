@@ -219,9 +219,6 @@ fn init_swarm_driver(
         main_transport
     };
 
-    // Use the main transport directly (QUIC only)
-    let transport = transport;
-
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
         let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
