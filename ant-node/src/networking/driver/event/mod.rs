@@ -15,9 +15,7 @@ pub(crate) use identify::DIAL_BACK_DELAY;
 
 use crate::networking::NetworkEvent;
 use crate::networking::driver::behaviour::upnp;
-use crate::networking::{
-    Addresses, driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer,
-};
+use crate::networking::{Addresses, driver::SwarmDriver, error::Result};
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
@@ -36,10 +34,7 @@ use tokio::sync::oneshot;
 pub(crate) struct KBucketStatus {
     pub(crate) total_buckets: usize,
     pub(crate) total_peers: usize,
-    pub(crate) total_relay_peers: usize,
     pub(crate) peers_in_non_full_buckets: usize,
-    #[cfg(feature = "open-metrics")]
-    pub(crate) relay_peers_in_non_full_buckets: usize,
     pub(crate) num_of_full_buckets: usize,
     pub(crate) kbucket_table_stats: Vec<(usize, usize, u32)>,
     pub(crate) estimated_network_size: usize,
@@ -48,10 +43,9 @@ pub(crate) struct KBucketStatus {
 impl KBucketStatus {
     pub(crate) fn log(&self) {
         info!(
-            "kBucketTable has {:?} kbuckets {:?} peers ({} relay peers), {:?}, estimated network size: {:?}",
+            "kBucketTable has {:?} kbuckets {:?} peers, {:?}, estimated network size: {:?}",
             self.total_buckets,
             self.total_peers,
-            self.total_relay_peers,
             self.kbucket_table_stats,
             self.estimated_network_size
         );
@@ -67,8 +61,6 @@ pub(crate) enum NodeEvent {
     MsgReceived(libp2p::request_response::Event<Request, Response>),
     Kademlia(libp2p::kad::Event),
     Identify(Box<libp2p::identify::Event>),
-    RelayClient(Box<libp2p::relay::client::Event>),
-    RelayServer(Box<libp2p::relay::Event>),
     DoNotDisturb(super::behaviour::do_not_disturb::DoNotDisturbEvent),
     Void(void::Void),
 }
@@ -94,16 +86,6 @@ impl From<libp2p::kad::Event> for NodeEvent {
 impl From<libp2p::identify::Event> for NodeEvent {
     fn from(event: libp2p::identify::Event) -> Self {
         NodeEvent::Identify(Box::new(event))
-    }
-}
-impl From<libp2p::relay::client::Event> for NodeEvent {
-    fn from(event: libp2p::relay::client::Event) -> Self {
-        NodeEvent::RelayClient(Box::new(event))
-    }
-}
-impl From<libp2p::relay::Event> for NodeEvent {
-    fn from(event: libp2p::relay::Event) -> Self {
-        NodeEvent::RelayServer(Box::new(event))
     }
 }
 
@@ -238,24 +220,12 @@ impl SwarmDriver {
         let mut kbucket_table_stats = vec![];
         let mut index = 0;
         let mut total_peers = 0;
-        let mut total_relay_peers = 0;
-
         let mut peers_in_non_full_buckets = 0;
-        let mut relay_peers_in_non_full_buckets = 0;
         let mut num_of_full_buckets = 0;
 
         for kbucket in self.swarm.behaviour_mut().kademlia.kbuckets() {
             let range = kbucket.range();
             let num_entires = kbucket.num_entries();
-
-            kbucket.iter().for_each(|entry| {
-                if is_a_relayed_peer(entry.node.value.iter()) {
-                    total_relay_peers += 1;
-                    if num_entires < K_VALUE.get() {
-                        relay_peers_in_non_full_buckets += 1;
-                    }
-                }
-            });
 
             if num_entires >= K_VALUE.get() {
                 num_of_full_buckets += 1;
@@ -279,10 +249,7 @@ impl SwarmDriver {
         KBucketStatus {
             total_buckets: index,
             total_peers,
-            total_relay_peers,
             peers_in_non_full_buckets,
-            #[cfg(feature = "open-metrics")]
-            relay_peers_in_non_full_buckets,
             num_of_full_buckets,
             kbucket_table_stats,
             estimated_network_size,
@@ -298,10 +265,6 @@ impl SwarmDriver {
                 .peers_in_routing_table
                 .set(status.total_peers as i64);
 
-            let _ = metrics_recorder
-                .relay_peers_in_routing_table
-                .set(status.total_relay_peers as i64);
-
             let estimated_network_size = Self::estimate_network_size(
                 status.peers_in_non_full_buckets,
                 status.num_of_full_buckets,
@@ -309,12 +272,6 @@ impl SwarmDriver {
             let _ = metrics_recorder
                 .estimated_network_size
                 .set(estimated_network_size as i64);
-
-            let _ = metrics_recorder.relay_peers_percentage.set(
-                (status.relay_peers_in_non_full_buckets as f64
-                    / status.peers_in_non_full_buckets as f64)
-                    * 100.0,
-            );
         }
     }
 

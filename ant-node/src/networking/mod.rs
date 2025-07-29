@@ -21,7 +21,6 @@ mod metrics;
 mod network;
 mod reachability_check;
 mod record_store;
-mod relay_manager;
 mod replication_fetcher;
 mod transport;
 
