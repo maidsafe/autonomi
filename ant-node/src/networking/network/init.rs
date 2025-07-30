@@ -332,7 +332,11 @@ fn init_swarm_driver(
     let swarm_config = libp2p::swarm::Config::with_tokio_executor()
         .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
 
-    let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
+    let mut swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
+    swarm
+        .behaviour_mut()
+        .kademlia
+        .set_mode(Some(kad::Mode::Server));
 
     let replication_fetcher = ReplicationFetcher::new(peer_id, network_event_sender.clone());
 
