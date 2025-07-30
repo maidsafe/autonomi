@@ -180,6 +180,15 @@ impl NetworkDriver {
         peer_id: PeerId,
         info: libp2p::identify::Info,
     ) -> Result<(), NetworkDriverError> {
+        self.handle_bootstrap(peer_id, info);
+        Ok(())
+    }
+
+    fn handle_bootstrap(&mut self, peer_id: PeerId, info: libp2p::identify::Info) {
+        if !self.bootstrap_manager.has_observers() {
+            return;
+        }
+
         if info
             .protocols
             .contains(&StreamProtocol::new(KAD_STREAM_PROTOCOL_ID))
@@ -193,7 +202,5 @@ impl NetworkDriver {
                 self.bootstrap_manager.add_connected_peer(peer_id);
             }
         }
-
-        Ok(())
     }
 }

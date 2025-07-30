@@ -55,6 +55,10 @@ impl BootstrapManager {
         self.observers.push(observer);
     }
 
+    pub fn has_observers(&self) -> bool {
+        !self.observers.is_empty()
+    }
+
     pub fn add_connected_peer(&mut self, peer_id: PeerId) {
         self.connected_peers.insert(peer_id);
 
