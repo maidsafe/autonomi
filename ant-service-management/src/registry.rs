@@ -88,15 +88,14 @@ impl NodeRegistryManager {
                 daemon = Some(d.read().await.clone());
             }
         }
-        let registry = NodeRegistry {
+
+        NodeRegistry {
             daemon,
             environment_variables: self.environment_variables.read().await.clone(),
             nat_status: self.nat_status.read().await.clone(),
             nodes,
             save_path: self.save_path.clone(),
-        };
-
-        registry
+        }
     }
 
     /// Converts the current state of the `NodeRegistryManager` to a `StatusSummary`.

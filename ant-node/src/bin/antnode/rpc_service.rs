@@ -27,6 +27,7 @@ use std::{
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{transport::Server, Code, Request, Response, Status};
+use tracing::Instrument;
 use tracing::{debug, info};
 
 // Defining a struct to hold information used by our gRPC service backend
@@ -113,29 +114,32 @@ impl AntNode for SafeNodeRpcService {
         let (client_tx, client_rx) = mpsc::channel(4);
 
         let mut events_rx = self.running_node.node_events_channel().subscribe();
-        let _handle = tokio::spawn(async move {
-            while let Ok(event) = events_rx.recv().await {
-                let event_bytes = match event.to_bytes() {
-                    Ok(bytes) => bytes,
-                    Err(err) => {
-                        debug!(
+        let _handle = tokio::spawn(
+            async move {
+                while let Ok(event) = events_rx.recv().await {
+                    let event_bytes = match event.to_bytes() {
+                        Ok(bytes) => bytes,
+                        Err(err) => {
+                            debug!(
                             "Error {err:?} while converting NodeEvent to bytes, ignoring the error"
                         );
-                        continue;
-                    }
-                };
+                            continue;
+                        }
+                    };
 
-                let event = NodeEvent { event: event_bytes };
+                    let event = NodeEvent { event: event_bytes };
 
-                if let Err(err) = client_tx.send(Ok(event)).await {
-                    debug!(
-                        "Dropping stream sender to RPC client due to failure in \
+                    if let Err(err) = client_tx.send(Ok(event)).await {
+                        debug!(
+                            "Dropping stream sender to RPC client due to failure in \
                         last attempt to notify an event: {err}"
-                    );
-                    break;
+                        );
+                        break;
+                    }
                 }
             }
-        });
+            .instrument(tracing::Span::current()),
+        );
 
         Ok(Response::new(ReceiverStream::new(client_rx)))
     }
@@ -314,14 +318,17 @@ pub(crate) fn start_rpc_service(
     info!("RPC Server listening on {addr}");
     println!("RPC Server listening on {addr}");
 
-    let _handle = tokio::spawn(async move {
-        // adding our service to our server.
-        if let Err(e) = Server::builder()
-            .add_service(AntNodeServer::new(service))
-            .serve(addr)
-            .await
-        {
-            error!("RPC Server failed to start: {e:?}");
+    let _handle = tokio::spawn(
+        async move {
+            // adding our service to our server.
+            if let Err(e) = Server::builder()
+                .add_service(AntNodeServer::new(service))
+                .serve(addr)
+                .await
+            {
+                error!("RPC Server failed to start: {e:?}");
+            }
         }
-    });
+        .instrument(tracing::Span::current()),
+    );
 }
