@@ -9,7 +9,8 @@
 use ant_logging::LogBuilder;
 use autonomi::Client;
 use eyre::Result;
-use test_utils::{evm::get_funded_wallet, gen_random_data};
+use test_utils::evm::get_funded_wallet;
+use test_utils::gen_random_data;
 
 #[tokio::test]
 async fn put() -> Result<()> {

@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use autonomi::client::{Amount, ClientEvent, UploadSummary};
+use autonomi::client::Amount;
+use autonomi::client::ClientEvent;
+use autonomi::client::UploadSummary;
 
 /// Collects upload summary from the event receiver.
 /// Send a signal to the returned sender to stop collecting and to return the result via the join handle.

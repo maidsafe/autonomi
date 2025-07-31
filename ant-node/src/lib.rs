@@ -40,25 +40,28 @@ pub mod spawn;
 #[allow(missing_docs)]
 pub mod utils;
 
-pub use self::{
-    error::{Error, PutValidationError},
-    event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
-    log_markers::Marker,
-    networking::sort_peers_by_key,
-    node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
-};
+pub use self::error::Error;
+pub use self::error::PutValidationError;
+pub use self::event::NodeEvent;
+pub use self::event::NodeEventsChannel;
+pub use self::event::NodeEventsReceiver;
+pub use self::log_markers::Marker;
+pub use self::networking::sort_peers_by_key;
+pub use self::node::NodeBuilder;
+pub use self::node::PERIODIC_REPLICATION_INTERVAL_MAX_S;
 
 use crate::error::Result;
 
 use crate::networking::Network;
 pub use crate::networking::SwarmLocalState;
 use ant_evm::RewardsAddress;
-use ant_protocol::{get_port_from_multiaddr, NetworkAddress};
-use libp2p::{Multiaddr, PeerId};
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::PathBuf,
-};
+use ant_protocol::get_port_from_multiaddr;
+use ant_protocol::NetworkAddress;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use std::collections::BTreeMap;
+use std::collections::HashSet;
+use std::path::PathBuf;
 use tokio::sync::watch;
 
 /// Once a node is started and running, the user obtains

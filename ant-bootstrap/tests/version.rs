@@ -6,13 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{
-    cache_store::{cache_data_v0, cache_data_v1},
-    BootstrapCacheConfig, BootstrapCacheStore,
-};
+use ant_bootstrap::cache_store::cache_data_v0;
+use ant_bootstrap::cache_store::cache_data_v1;
+use ant_bootstrap::BootstrapCacheConfig;
+use ant_bootstrap::BootstrapCacheStore;
 use ant_logging::LogBuilder;
 use color_eyre::Result;
-use libp2p::{Multiaddr, PeerId};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use std::time::SystemTime;
 use tempfile::TempDir;
 

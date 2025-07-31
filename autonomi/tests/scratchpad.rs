@@ -8,12 +8,11 @@
 
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
+use autonomi::client::scratchpad::Bytes;
+use autonomi::client::scratchpad::Scratchpad;
 use autonomi::scratchpad::ScratchpadError;
 use autonomi::AttoTokens;
-use autonomi::{
-    client::scratchpad::{Bytes, Scratchpad},
-    Client,
-};
+use autonomi::Client;
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;

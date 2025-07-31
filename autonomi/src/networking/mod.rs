@@ -20,24 +20,28 @@ pub(crate) use utils::multiaddr_is_global;
 // re-export the types our API exposes to avoid dependency version conflicts
 pub use ant_evm::PaymentQuote;
 pub use ant_protocol::NetworkAddress;
-pub use config::{RetryStrategy, Strategy};
+pub use config::RetryStrategy;
+pub use config::Strategy;
 pub use libp2p::kad::PeerInfo;
-pub use libp2p::{
-    kad::{Quorum, Record},
-    Multiaddr, PeerId,
-};
+pub use libp2p::kad::Quorum;
+pub use libp2p::kad::Record;
+pub use libp2p::Multiaddr;
+pub use libp2p::PeerId;
 
 // internal needs
-use ant_protocol::{PrettyPrintRecordKey, CLOSE_GROUP_SIZE};
+use ant_protocol::PrettyPrintRecordKey;
+use ant_protocol::CLOSE_GROUP_SIZE;
 use driver::NetworkDriver;
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::FuturesUnordered;
+use futures::stream::StreamExt;
 use interface::NetworkTask;
 use libp2p::kad::NoKnownPeers;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use thiserror::Error;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 /// Result type for tasks responses sent by the [`crate::driver::NetworkDriver`] to the [`crate::Network`]
 pub(in crate::networking) type OneShotTaskResult<T> = oneshot::Sender<Result<T, NetworkError>>;

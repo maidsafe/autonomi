@@ -7,8 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_service_management::StatusSummary;
-use assert_cmd::{assert::OutputAssertExt, cargo::CommandCargoExt};
-use color_eyre::{eyre::eyre, Result};
+use assert_cmd::assert::OutputAssertExt;
+use assert_cmd::cargo::CommandCargoExt;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use std::process::Command;
 
 pub async fn get_service_status() -> Result<StatusSummary> {

@@ -31,21 +31,30 @@ pub mod antnode_proto {
 pub use error::Error;
 pub use error::Error as NetworkError;
 
-use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress};
+use self::storage::ChunkAddress;
+use self::storage::GraphEntryAddress;
+use self::storage::PointerAddress;
+use self::storage::ScratchpadAddress;
 
 /// Re-export of Bytes used throughout the protocol
 pub use bytes::Bytes;
 
-use libp2p::{
-    kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey},
-    multiaddr::Protocol,
-    Multiaddr, PeerId,
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{
-    borrow::Cow,
-    fmt::{self, Debug, Display, Formatter, Write},
-};
+use libp2p::kad::KBucketDistance as Distance;
+use libp2p::kad::KBucketKey as Key;
+use libp2p::kad::RecordKey;
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use std::borrow::Cow;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Write;
+use std::fmt::{self};
 use xor_name::XorName;
 
 pub use constants::CLOSE_GROUP_SIZE;
@@ -383,12 +392,13 @@ impl std::fmt::Debug for PrettyPrintRecordKey<'_> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        messages::{Nonce, Query},
-        storage::GraphEntryAddress,
-        NetworkAddress, PeerId,
-    };
-    use serde::{Deserialize, Serialize};
+    use crate::messages::Nonce;
+    use crate::messages::Query;
+    use crate::storage::GraphEntryAddress;
+    use crate::NetworkAddress;
+    use crate::PeerId;
+    use serde::Deserialize;
+    use serde::Serialize;
 
     #[test]
     fn verify_graph_entry_addr_is_actionable() {

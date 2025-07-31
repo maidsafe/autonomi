@@ -6,23 +6,40 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use ant_evm::{PaymentQuote, QuotingMetrics};
-use ant_protocol::messages::{ConnectionInfo, Request, Response};
+use ant_evm::PaymentQuote;
+use ant_evm::QuotingMetrics;
+use ant_protocol::messages::ConnectionInfo;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
 use ant_protocol::storage::ValidationType;
-use ant_protocol::{NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey};
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintKBucketKey;
+use ant_protocol::PrettyPrintRecordKey;
 use futures::future::select_all;
-use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
+use libp2p::identity::Keypair;
+use libp2p::kad::KBucketDistance;
+use libp2p::kad::Record;
+use libp2p::kad::RecordKey;
+use libp2p::kad::K_VALUE;
 use libp2p::swarm::ConnectionId;
-use libp2p::{identity::Keypair, Multiaddr, PeerId};
-use tokio::sync::{mpsc, oneshot};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
 
 use super::driver::event::MsgResponder;
-use super::error::{NetworkError, Result};
-use super::interface::{LocalSwarmCmd, NetworkSwarmCmd};
-use super::{Addresses, NetworkEvent, NodeIssue, SwarmLocalState};
+use super::error::NetworkError;
+use super::error::Result;
+use super::interface::LocalSwarmCmd;
+use super::interface::NetworkSwarmCmd;
+use super::Addresses;
+use super::NetworkEvent;
+use super::NodeIssue;
+use super::SwarmLocalState;
 
 mod init;
 

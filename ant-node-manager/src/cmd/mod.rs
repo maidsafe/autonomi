@@ -11,19 +11,20 @@ pub mod local;
 pub mod nat_detection;
 pub mod node;
 
-use crate::{
-    helpers::{download_and_extract_release, get_bin_version},
-    print_banner, VerbosityLevel,
-};
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
+use crate::helpers::download_and_extract_release;
+use crate::helpers::get_bin_version;
+use crate::print_banner;
+use crate::VerbosityLevel;
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
 use ant_service_management::UpgradeResult;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use colored::Colorize;
 use semver::Version;
-use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 
 pub async fn download_and_get_upgrade_bin_path(
     custom_bin_path: Option<PathBuf>,

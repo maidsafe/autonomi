@@ -69,15 +69,20 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
+
+      - name: Install nightly for rustfmt
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo +nightly fmt --all -- --check
 
       - shell: bash
-        run: cargo clippy --all-targets --all-features -- -Dwarnings
+        run: cargo +stable clippy --all-targets --all-features -- -Dwarnings
 
       - name: Check documentation
         # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`. See

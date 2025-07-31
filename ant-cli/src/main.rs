@@ -26,9 +26,13 @@ use clap::Parser;
 use color_eyre::Result;
 
 use ant_logging::metrics::init_metrics;
-use ant_logging::{LogBuilder, LogFormat, ReloadHandle, WorkerGuard};
+use ant_logging::LogBuilder;
+use ant_logging::LogFormat;
+use ant_logging::ReloadHandle;
+use ant_logging::WorkerGuard;
 use autonomi::version;
-use opt::{NetworkId, Opt};
+use opt::NetworkId;
+use opt::Opt;
 use tracing::Level;
 
 #[tokio::main]

@@ -6,8 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::{eyre::bail, Result};
-use evmlib::{utils::get_evm_network, wallet::Wallet, Network};
+use color_eyre::eyre::bail;
+use color_eyre::Result;
+use evmlib::utils::get_evm_network;
+use evmlib::wallet::Wallet;
+use evmlib::Network;
 use std::env;
 
 pub fn get_funded_wallet() -> evmlib::wallet::Wallet {

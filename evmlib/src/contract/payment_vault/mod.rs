@@ -1,4 +1,6 @@
-use crate::common::{Address, Amount, QuoteHash};
+use crate::common::Address;
+use crate::common::Amount;
+use crate::common::QuoteHash;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::quoting_metrics::QuotingMetrics;
 use crate::utils::http_provider;

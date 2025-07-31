@@ -1,5 +1,7 @@
-use evmlib::common::{Amount, QuotePayment};
-use evmlib::utils::{dummy_address, dummy_hash};
+use evmlib::common::Amount;
+use evmlib::common::QuotePayment;
+use evmlib::utils::dummy_address;
+use evmlib::utils::dummy_hash;
 
 #[allow(dead_code)]
 pub fn random_quote_payment() -> QuotePayment {

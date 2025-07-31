@@ -6,54 +6,65 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
-
-use crate::networking::{
-    bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
-    circular_vec::CircularVec,
-    driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
-    error::{NetworkError, Result},
-    external_address::ExternalAddressManager,
-    record_store::{NodeRecordStore, NodeRecordStoreConfig},
-    relay_manager::RelayManager,
-    replication_fetcher::ReplicationFetcher,
-    transport, NetworkEvent, CLOSE_GROUP_SIZE,
-};
+use crate::networking::bootstrap::InitialBootstrap;
+use crate::networking::bootstrap::InitialBootstrapTrigger;
+use crate::networking::circular_vec::CircularVec;
+use crate::networking::driver::network_discovery::NetworkDiscovery;
+use crate::networking::driver::NodeBehaviour;
+use crate::networking::driver::SwarmDriver;
+use crate::networking::error::NetworkError;
+use crate::networking::error::Result;
+use crate::networking::external_address::ExternalAddressManager;
 #[cfg(feature = "open-metrics")]
-use crate::networking::{
-    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
-};
+use crate::networking::metrics::service::run_metrics_server;
+#[cfg(feature = "open-metrics")]
+use crate::networking::metrics::NetworkMetricsRecorder;
+use crate::networking::record_store::NodeRecordStore;
+use crate::networking::record_store::NodeRecordStoreConfig;
+use crate::networking::relay_manager::RelayManager;
+use crate::networking::replication_fetcher::ReplicationFetcher;
+use crate::networking::transport;
+#[cfg(feature = "open-metrics")]
+use crate::networking::MetricsRegistries;
+use crate::networking::NetworkEvent;
+use crate::networking::CLOSE_GROUP_SIZE;
 use ant_bootstrap::BootstrapCacheStore;
-use ant_protocol::{
-    messages::{Request, Response},
-    version::{get_network_id_str, IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR},
-    NetworkAddress, PrettyPrintKBucketKey,
-};
+use ant_protocol::constants::KAD_STREAM_PROTOCOL_ID;
+use ant_protocol::constants::MAX_PACKET_SIZE;
+use ant_protocol::constants::REPLICATION_FACTOR;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::version::get_network_id_str;
+use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use ant_protocol::version::REQ_RESPONSE_VERSION_STR;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintKBucketKey;
 use futures::future::Either;
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::identity::Keypair;
+use libp2p::kad;
+use libp2p::multiaddr::Protocol;
+use libp2p::relay;
+use libp2p::request_response::cbor::codec::Codec as CborCodec;
+use libp2p::request_response::Config as RequestResponseConfig;
+use libp2p::request_response::ProtocolSupport;
+use libp2p::request_response::{self};
+use libp2p::swarm::StreamProtocol;
+use libp2p::swarm::Swarm;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use libp2p::Transport as _;
-use libp2p::{core::muxing::StreamMuxerBox, relay};
-use libp2p::{
-    identity::Keypair,
-    kad,
-    multiaddr::Protocol,
-    request_response::{
-        self, cbor::codec::Codec as CborCodec, Config as RequestResponseConfig, ProtocolSupport,
-    },
-    swarm::{StreamProtocol, Swarm},
-    Multiaddr, PeerId,
-};
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::info::Info;
+use std::convert::TryInto;
+use std::fmt::Debug;
+use std::fs;
+use std::io::Read;
+use std::io::Write;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::time::Duration;
 use std::time::Instant;
-use std::{
-    convert::TryInto,
-    fmt::Debug,
-    fs,
-    io::{Read, Write},
-    net::SocketAddr,
-    path::PathBuf,
-    time::Duration,
-};
 use tokio::sync::mpsc;
 
 // Timeout for requests sent/received through the request_response behaviour.
@@ -487,7 +498,8 @@ fn check_and_wipe_storage_dir_if_necessary(
 #[cfg(test)]
 mod tests {
     use super::check_and_wipe_storage_dir_if_necessary;
-    use std::{fs, io::Read};
+    use std::fs;
+    use std::io::Read;
 
     #[tokio::test]
     async fn version_file_update() {

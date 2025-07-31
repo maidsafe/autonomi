@@ -7,33 +7,40 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::add_services::config::PortRange;
-use crate::helpers::{
-    check_port_availability, get_bin_version, get_start_port_if_applicable, increment_port_option,
-};
+use crate::helpers::check_port_availability;
+use crate::helpers::get_bin_version;
+use crate::helpers::get_start_port_if_applicable;
+use crate::helpers::increment_port_option;
 
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::LogFormat;
+use ant_service_management::control::ServiceControl;
 use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::rpc::RpcActions;
+use ant_service_management::rpc::RpcClient;
 use ant_service_management::NodeRegistryManager;
-use ant_service_management::{
-    control::ServiceControl,
-    rpc::{RpcActions, RpcClient},
-    NodeServiceData, ServiceStatus,
-};
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
+use color_eyre::eyre::eyre;
 use color_eyre::eyre::OptionExt;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::Result;
 use colored::Colorize;
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 #[cfg(test)]
 use mockall::automock;
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    process::{Command, Stdio},
-    str::FromStr,
-};
-use sysinfo::{Pid, System};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::str::FromStr;
+use sysinfo::Pid;
+use sysinfo::System;
 
 #[cfg_attr(test, automock)]
 pub trait Launcher {
@@ -515,10 +522,11 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
 mod tests {
     use super::*;
     use ant_evm::utils::dummy_address;
-    use ant_service_management::{
-        error::Result as RpcResult,
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
-    };
+    use ant_service_management::error::Result as RpcResult;
+    use ant_service_management::rpc::NetworkInfo;
+    use ant_service_management::rpc::NodeInfo;
+    use ant_service_management::rpc::RecordAddress;
+    use ant_service_management::rpc::RpcActions;
     use async_trait::async_trait;
     use evmlib::CustomNetwork;
     use libp2p_identity::PeerId;

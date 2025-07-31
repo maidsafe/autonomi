@@ -6,11 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
-use std::{
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use crate::error::Error;
+use crate::error::Result;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
 
 /// The duration since last)seen before removing the address of a Peer.
 const ADDR_EXPIRY_DURATION: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours

@@ -6,52 +6,64 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{
-    error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker, NodeEvent,
-};
+use super::error::Result;
+use super::event::NodeEventsChannel;
+use super::quote::quotes_verification;
+use super::Marker;
+use super::NodeEvent;
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
+use crate::networking::Addresses;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::networking::{Addresses, Network, NetworkConfig, NetworkError, NetworkEvent, NodeIssue};
-use crate::{PutValidationError, RunningNode};
+use crate::networking::Network;
+use crate::networking::NetworkConfig;
+use crate::networking::NetworkError;
+use crate::networking::NetworkEvent;
+use crate::networking::NodeIssue;
+use crate::PutValidationError;
+use crate::RunningNode;
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
-use ant_protocol::{
-    error::Error as ProtocolError,
-    messages::{ChunkProof, CmdResponse, Nonce, Query, QueryResponse, Request, Response},
-    storage::ValidationType,
-    NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
-};
+use ant_protocol::error::Error as ProtocolError;
+use ant_protocol::messages::ChunkProof;
+use ant_protocol::messages::CmdResponse;
+use ant_protocol::messages::Nonce;
+use ant_protocol::messages::Query;
+use ant_protocol::messages::QueryResponse;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
+use ant_protocol::CLOSE_GROUP_SIZE;
 use bytes::Bytes;
 use itertools::Itertools;
-use libp2p::{
-    identity::Keypair,
-    kad::{Record, U256},
-    request_response::OutboundFailure,
-    Multiaddr, PeerId,
-};
+use libp2p::identity::Keypair;
+use libp2p::kad::Record;
+use libp2p::kad::U256;
+use libp2p::request_response::OutboundFailure;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use num_traits::cast::ToPrimitive;
-use rand::{
-    rngs::{OsRng, StdRng},
-    thread_rng, Rng, SeedableRng,
-};
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    path::PathBuf,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::{Duration, Instant},
-};
+use rand::rngs::OsRng;
+use rand::rngs::StdRng;
+use rand::thread_rng;
+use rand::Rng;
+use rand::SeedableRng;
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::watch;
-use tokio::{
-    sync::mpsc::Receiver,
-    task::{spawn, JoinSet},
-};
+use tokio::task::spawn;
+use tokio::task::JoinSet;
 
 /// Interval to trigger replication of all records to all peers.
 /// This is the max time it should take. Minimum interval at any node will be half this

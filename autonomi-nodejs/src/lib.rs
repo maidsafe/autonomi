@@ -1,6 +1,11 @@
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
+use std::str::FromStr;
 
-use autonomi::{AttoTokens, Bytes, Chunk, Multiaddr, Signature};
+use autonomi::AttoTokens;
+use autonomi::Bytes;
+use autonomi::Chunk;
+use autonomi::Multiaddr;
+use autonomi::Signature;
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;

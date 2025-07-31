@@ -9,10 +9,10 @@
 use crate::networking::OneShotTaskResult;
 use ant_evm::PaymentQuote;
 use ant_protocol::NetworkAddress;
-use libp2p::{
-    kad::{PeerInfo, Quorum, Record},
-    PeerId,
-};
+use libp2p::kad::PeerInfo;
+use libp2p::kad::Quorum;
+use libp2p::kad::Record;
+use libp2p::PeerId;
 use std::num::NonZeroUsize;
 
 /// Task for the underlying network driver

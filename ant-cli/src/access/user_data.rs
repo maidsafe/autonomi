@@ -8,21 +8,20 @@
 
 use std::collections::HashMap;
 
-use autonomi::{
-    client::{
-        files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
-        register::RegisterAddress,
-        vault::UserData,
-    },
-    data::DataAddress,
-    PointerAddress, ScratchpadAddress,
-};
+use autonomi::client::files::archive_private::PrivateArchiveDataMap;
+use autonomi::client::files::archive_public::ArchiveAddress;
+use autonomi::client::register::RegisterAddress;
+use autonomi::client::vault::UserData;
+use autonomi::data::DataAddress;
+use autonomi::PointerAddress;
+use autonomi::ScratchpadAddress;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 
 use super::data_dir::get_client_data_dir_path;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Serialize, Deserialize)]
 struct PrivateFileArchive {

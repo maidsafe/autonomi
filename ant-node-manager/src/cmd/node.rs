@@ -8,33 +8,49 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use super::{download_and_get_upgrade_bin_path, print_upgrade_summary};
-use crate::{
-    add_services::{
-        add_node,
-        config::{AddNodeServiceOptions, PortRange},
-    },
-    config::{self, is_running_as_root},
-    helpers::{download_and_extract_release, get_bin_version},
-    print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
-};
+use super::download_and_get_upgrade_bin_path;
+use super::print_upgrade_summary;
+use crate::add_services::add_node;
+use crate::add_services::config::AddNodeServiceOptions;
+use crate::add_services::config::PortRange;
+use crate::config::is_running_as_root;
+use crate::config::{self};
+use crate::helpers::download_and_extract_release;
+use crate::helpers::get_bin_version;
+use crate::print_banner;
+use crate::refresh_node_registry;
+use crate::status_report;
+use crate::ServiceManager;
+use crate::VerbosityLevel;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::LogFormat;
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
-use ant_service_management::{
-    control::{ServiceControl, ServiceController},
-    rpc::RpcClient,
-    NodeRegistryManager, NodeService, NodeServiceData, ServiceStateActions, ServiceStatus,
-    UpgradeOptions, UpgradeResult,
-};
-use color_eyre::{eyre::eyre, Help, Result};
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::control::ServiceController;
+use ant_service_management::rpc::RpcClient;
+use ant_service_management::NodeRegistryManager;
+use ant_service_management::NodeService;
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStateActions;
+use ant_service_management::ServiceStatus;
+use ant_service_management::UpgradeOptions;
+use ant_service_management::UpgradeResult;
+use color_eyre::eyre::eyre;
+use color_eyre::Help;
+use color_eyre::Result;
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
-use std::{
-    cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc, time::Duration,
-};
+use std::cmp::Ordering;
+use std::io::Write;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tracing::debug;
 

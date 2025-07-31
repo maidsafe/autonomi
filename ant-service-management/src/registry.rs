@@ -6,14 +6,18 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
-use crate::{DaemonServiceData, NatDetectionStatus, NodeServiceData};
-use serde::{Deserialize, Serialize};
+use crate::error::Error;
+use crate::error::Result;
+use crate::DaemonServiceData;
+use crate::NatDetectionStatus;
+use crate::NodeServiceData;
+use serde::Deserialize;
+use serde::Serialize;
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::{
-    io::{Read, Write},
-    path::{Path, PathBuf},
-};
 use tokio::sync::RwLock;
 
 /// Used to manage the NodeRegistry data and allows us to share the data across multiple threads.

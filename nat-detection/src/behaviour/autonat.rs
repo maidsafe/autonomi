@@ -1,5 +1,7 @@
 use libp2p::autonat;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
 use crate::App;
 

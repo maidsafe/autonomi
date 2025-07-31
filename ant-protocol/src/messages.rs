@@ -14,18 +14,19 @@ mod node_id;
 mod query;
 mod response;
 
-pub use self::{
-    chunk_proof::{ChunkProof, Nonce},
-    cmd::Cmd,
-    connection_info::ConnectionInfo,
-    node_id::NodeId,
-    query::Query,
-    response::{CmdResponse, QueryResponse},
-};
+pub use self::chunk_proof::ChunkProof;
+pub use self::chunk_proof::Nonce;
+pub use self::cmd::Cmd;
+pub use self::connection_info::ConnectionInfo;
+pub use self::node_id::NodeId;
+pub use self::query::Query;
+pub use self::response::CmdResponse;
+pub use self::response::QueryResponse;
 
 use super::NetworkAddress;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A request to peers in the network
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

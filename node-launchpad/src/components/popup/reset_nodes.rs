@@ -6,16 +6,26 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::super::{utils::centered_rect_fixed, Component};
-use crate::{
-    action::{Action, OptionsActions},
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-};
+use super::super::utils::centered_rect_fixed;
+use super::super::Component;
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::INDIGO;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
 use color_eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
+use tui_input::backend::crossterm::EventHandler;
+use tui_input::Input;
 
 const INPUT_SIZE: u16 = 5;
 const INPUT_AREA: u16 = INPUT_SIZE + 2; // +2 for the left and right padding

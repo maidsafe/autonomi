@@ -9,15 +9,18 @@
 use crate::Error;
 
 use atomic_write_file::AtomicWriteFile;
-use libp2p::{Multiaddr, PeerId};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::VecDeque,
-    fs::{self, OpenOptions},
-    io::{Read, Write},
-    path::{Path, PathBuf},
-    time::SystemTime,
-};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::VecDeque;
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheData {

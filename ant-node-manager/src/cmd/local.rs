@@ -9,25 +9,32 @@
 #![allow(clippy::too_many_arguments)]
 
 use super::get_bin_path;
-use crate::{
-    add_services::config::PortRange,
-    local::{kill_network, run_network, LocalNetworkOptions},
-    print_banner, status_report, VerbosityLevel,
-};
+use crate::add_services::config::PortRange;
+use crate::local::kill_network;
+use crate::local::run_network;
+use crate::local::LocalNetworkOptions;
+use crate::print_banner;
+use crate::status_report;
+use crate::VerbosityLevel;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::LogFormat;
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
-use ant_service_management::{
-    control::ServiceController, get_local_node_registry_path, NodeRegistryManager,
-};
-use color_eyre::{eyre::eyre, Help, Report, Result};
-use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
+use ant_service_management::control::ServiceController;
+use ant_service_management::get_local_node_registry_path;
+use ant_service_management::NodeRegistryManager;
+use color_eyre::eyre::eyre;
+use color_eyre::Help;
+use color_eyre::Report;
+use color_eyre::Result;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
 use sysinfo::System;
-use tokio::time::{sleep, Duration};
+use tokio::time::sleep;
+use tokio::time::Duration;
 
 pub async fn join(
     build: bool,

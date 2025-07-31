@@ -7,13 +7,17 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 //
 
-use ant_logging::{Level, LogBuilder};
+use ant_logging::Level;
+use ant_logging::LogBuilder;
 use ant_node::NodeEvent;
-use ant_protocol::antnode_proto::{ant_node_client::AntNodeClient, NodeEventsRequest};
-use ant_service_management::rpc::{RpcActions, RpcClient};
+use ant_protocol::antnode_proto::ant_node_client::AntNodeClient;
+use ant_protocol::antnode_proto::NodeEventsRequest;
+use ant_service_management::rpc::RpcActions;
+use ant_service_management::rpc::RpcClient;
 use clap::Parser;
 use color_eyre::eyre::Result;
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
+use std::time::Duration;
 use tokio_stream::StreamExt;
 use tonic::Request;
 

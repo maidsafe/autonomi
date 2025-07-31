@@ -73,13 +73,16 @@ pub use client::register;
 pub use client::vault;
 
 // Re-exports of the evm types
-pub use ant_evm::utils::{get_evm_network, Error as EvmUtilError};
+pub use ant_evm::utils::get_evm_network;
+pub use ant_evm::utils::Error as EvmUtilError;
+pub use ant_evm::Amount;
+pub use ant_evm::AttoTokens;
 pub use ant_evm::EvmNetwork as Network;
 pub use ant_evm::EvmWallet as Wallet;
+pub use ant_evm::MaxFeePerGas;
 pub use ant_evm::QuoteHash;
 pub use ant_evm::RewardsAddress;
-pub use ant_evm::{Amount, AttoTokens};
-pub use ant_evm::{MaxFeePerGas, TransactionConfig};
+pub use ant_evm::TransactionConfig;
 
 // Re-exports of address related types
 pub use ant_protocol::storage::AddressParseError;
@@ -89,7 +92,9 @@ pub use xor_name::XorName;
 pub use ant_protocol::version;
 
 // Re-exports of the bls types
-pub use bls::{PublicKey, SecretKey, Signature};
+pub use bls::PublicKey;
+pub use bls::SecretKey;
+pub use bls::Signature;
 
 #[doc(no_inline)] // Place this under 'Re-exports' in the docs.
 pub use bytes::Bytes;

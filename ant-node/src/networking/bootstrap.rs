@@ -6,17 +6,19 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
-use libp2p::{
-    core::ConnectedPoint,
-    swarm::{
-        dial_opts::{DialOpts, PeerCondition},
-        DialError,
-    },
-    Multiaddr, PeerId, Swarm,
-};
+use crate::networking::driver::NodeBehaviour;
+use crate::networking::multiaddr_get_p2p;
+use crate::networking::multiaddr_pop_p2p;
+use libp2p::core::ConnectedPoint;
+use libp2p::swarm::dial_opts::DialOpts;
+use libp2p::swarm::dial_opts::PeerCondition;
+use libp2p::swarm::DialError;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use libp2p::Swarm;
 use rand::seq::SliceRandom;
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use std::collections::VecDeque;
 
 /// Periodically check if the initial bootstrap process should be triggered.
 /// This happens only once after the conditions for triggering the initial bootstrap process are met.

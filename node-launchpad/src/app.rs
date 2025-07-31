@@ -6,34 +6,42 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::action::Action;
+use crate::components::help::Help;
+use crate::components::options::Options;
+use crate::components::popup::change_drive::ChangeDrivePopup;
+use crate::components::popup::connection_mode::ChangeConnectionModePopUp;
+use crate::components::popup::manage_nodes::ManageNodes;
+use crate::components::popup::port_range::PortRangePopUp;
+use crate::components::popup::remove_node::RemoveNodePopUp;
+use crate::components::popup::reset_nodes::ResetNodesPopup;
+use crate::components::popup::rewards_address::RewardsAddress;
 use crate::components::popup::upgrade_launchpad::UpgradeLaunchpadPopup;
-use crate::upnp::{get_upnp_support, UpnpSupport};
-use crate::{
-    action::Action,
-    components::{
-        help::Help,
-        options::Options,
-        popup::{
-            change_drive::ChangeDrivePopup, connection_mode::ChangeConnectionModePopUp,
-            manage_nodes::ManageNodes, port_range::PortRangePopUp, remove_node::RemoveNodePopUp,
-            reset_nodes::ResetNodesPopup, rewards_address::RewardsAddress,
-            upgrade_nodes::UpgradeNodesPopUp,
-        },
-        status::{Status, StatusConfig},
-        Component,
-    },
-    config::{get_launchpad_nodes_data_dir_path, AppData, Config},
-    connection_mode::ConnectionMode,
-    mode::{InputMode, Scene},
-    node_mgmt::{PORT_MAX, PORT_MIN},
-    style::SPACE_CADET,
-    system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
-    tui,
-};
+use crate::components::popup::upgrade_nodes::UpgradeNodesPopUp;
+use crate::components::status::Status;
+use crate::components::status::StatusConfig;
+use crate::components::Component;
+use crate::config::get_launchpad_nodes_data_dir_path;
+use crate::config::AppData;
+use crate::config::Config;
+use crate::connection_mode::ConnectionMode;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::node_mgmt::PORT_MAX;
+use crate::node_mgmt::PORT_MIN;
+use crate::style::SPACE_CADET;
+use crate::system::get_default_mount_point;
+use crate::system::get_primary_mount_point;
+use crate::system::get_primary_mount_point_name;
+use crate::tui;
+use crate::upnp::get_upnp_support;
+use crate::upnp::UpnpSupport;
 use ant_bootstrap::InitialPeersConfig;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
-use ratatui::{prelude::Rect, style::Style, widgets::Block};
+use ratatui::prelude::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 

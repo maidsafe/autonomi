@@ -6,16 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_service_management::{NodeServiceData, ServiceStatus};
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
 use color_eyre::Result;
 use futures::StreamExt;
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, time::Instant};
+use serde::Deserialize;
+use serde::Serialize;
+use std::path::PathBuf;
+use std::time::Instant;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::components::status::NODE_STAT_UPDATE_INTERVAL;
 
-use crate::action::{Action, StatusActions};
+use crate::action::Action;
+use crate::action::StatusActions;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndividualNodeStats {

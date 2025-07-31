@@ -24,13 +24,19 @@ use std::path::PathBuf;
 
 use async_trait::async_trait;
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use service_manager::ServiceInstallCtx;
 
-pub use daemon::{DaemonService, DaemonServiceData};
-pub use error::{Error, Result};
-pub use node::{NodeService, NodeServiceData};
-pub use registry::{get_local_node_registry_path, NodeRegistryManager, StatusSummary};
+pub use daemon::DaemonService;
+pub use daemon::DaemonServiceData;
+pub use error::Error;
+pub use error::Result;
+pub use node::NodeService;
+pub use node::NodeServiceData;
+pub use registry::get_local_node_registry_path;
+pub use registry::NodeRegistryManager;
+pub use registry::StatusSummary;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ServiceStatus {

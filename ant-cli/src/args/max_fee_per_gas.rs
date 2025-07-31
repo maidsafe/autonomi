@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use autonomi::{MaxFeePerGas, Network};
+use autonomi::MaxFeePerGas;
+use autonomi::Network;
 use color_eyre::Help;
 
 const AVERAGE_GAS_FEE_ARBITRUM_ONE: u128 = 15_000_000;

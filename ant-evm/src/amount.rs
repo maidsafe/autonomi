@@ -6,14 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{EvmError, Result};
+use crate::EvmError;
+use crate::Result;
 
 pub use evmlib::common::Amount;
-use serde::{Deserialize, Serialize};
-use std::{
-    fmt::{self, Display, Formatter},
-    str::FromStr,
-};
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::{self};
+use std::str::FromStr;
 
 /// The conversion from AttoTokens to raw value
 const TOKEN_TO_RAW_POWER_OF_10_CONVERSION: u64 = 18;

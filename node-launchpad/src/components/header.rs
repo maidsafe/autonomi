@@ -6,8 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::style::{GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE};
-use ratatui::{prelude::*, widgets::*};
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 pub enum SelectedMenuItem {
     Status,

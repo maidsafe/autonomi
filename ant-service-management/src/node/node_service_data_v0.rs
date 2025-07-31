@@ -6,18 +6,22 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::node_service_data_v1::{NodeServiceDataV1, NODE_SERVICE_DATA_SCHEMA_V1};
+use super::node_service_data_v1::NodeServiceDataV1;
+use super::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1;
 use super::NodeServiceData;
 use crate::ServiceStatus;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
+use ant_evm::AttoTokens;
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::LogFormat;
-use libp2p::{Multiaddr, PeerId};
-use serde::{Deserialize, Serialize};
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    path::PathBuf,
-};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use serde::Deserialize;
+use serde::Serialize;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub(super) struct NodeServiceDataV0 {
@@ -109,13 +113,14 @@ mod tests {
     use super::super::node_service_data::NodeServiceData;
     use super::super::node_service_data_v1::NodeServiceDataV1;
     use super::*;
-    use crate::{node::NODE_SERVICE_DATA_SCHEMA_LATEST, ServiceStatus};
+    use crate::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+    use crate::ServiceStatus;
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;
-    use std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
-    };
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+    use std::path::PathBuf;
 
     #[test]
     fn test_v0_conversion_to_latest() {

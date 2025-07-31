@@ -6,9 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{NetworkAddress, PrettyPrintRecordKey};
+use crate::NetworkAddress;
+use crate::PrettyPrintRecordKey;
 use libp2p::kad::store;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use thiserror::Error;
 
 /// A specialised `Result` type for protocol crate.

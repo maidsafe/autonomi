@@ -6,21 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{
-    collections::{BTreeMap, HashMap},
-    fmt::Debug,
-};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::fmt::Debug;
 
-use ant_evm::{PaymentQuote, QuotingMetrics};
-use ant_protocol::{
-    storage::{DataTypes, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
-};
-use libp2p::{
-    core::Multiaddr,
-    kad::{KBucketDistance as Distance, Record, RecordKey},
-    PeerId,
-};
+use ant_evm::PaymentQuote;
+use ant_evm::QuotingMetrics;
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
+use libp2p::core::Multiaddr;
+use libp2p::kad::KBucketDistance as Distance;
+use libp2p::kad::Record;
+use libp2p::kad::RecordKey;
+use libp2p::PeerId;
 use tokio::sync::oneshot;
 
 use crate::networking::Addresses;

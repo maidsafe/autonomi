@@ -8,18 +8,29 @@
 
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
-use crate::{
-    action::{Action, OptionsActions},
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE},
-    widgets::hyperlink::Hyperlink,
-};
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::INDIGO;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::RED;
+use crate::style::VIVID_SKY_BLUE;
+use crate::widgets::hyperlink::Hyperlink;
 use arboard::Clipboard;
 use color_eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use ratatui::{prelude::*, widgets::*};
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 use regex::Regex;
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::backend::crossterm::EventHandler;
+use tui_input::Input;
 
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
 const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 for the padding

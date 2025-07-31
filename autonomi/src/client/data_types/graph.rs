@@ -9,25 +9,31 @@
 use crate::client::payment::PayError;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
+use crate::client::Client;
 use crate::client::ClientEvent;
+use crate::client::GetError;
 use crate::client::PutError;
 use crate::client::UploadSummary;
-use crate::client::{Client, GetError};
 
-use ant_evm::{Amount, AttoTokens, EvmWalletError};
+use ant_evm::Amount;
+use ant_evm::AttoTokens;
+use ant_evm::EvmWalletError;
 use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::try_serialize_record;
+use ant_protocol::storage::DataTypes;
 use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::NetworkAddress;
 use ant_protocol::PrettyPrintRecordKey;
-use ant_protocol::{
-    storage::{try_serialize_record, DataTypes, RecordKind},
-    NetworkAddress,
-};
 use bls::PublicKey;
 use libp2p::kad::Record;
 
-use crate::networking::{NetworkError, PeerInfo};
+use crate::networking::NetworkError;
+use crate::networking::PeerInfo;
 pub use crate::SecretKey;
-pub use ant_protocol::storage::{GraphContent, GraphEntry, GraphEntryAddress};
+pub use ant_protocol::storage::GraphContent;
+pub use ant_protocol::storage::GraphEntry;
+pub use ant_protocol::storage::GraphEntryAddress;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GraphError {

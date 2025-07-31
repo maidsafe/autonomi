@@ -9,15 +9,18 @@
 use super::SwarmDriver;
 use crate::networking::driver::event::MsgResponder;
 use crate::networking::interface::NetworkSwarmCmd;
+use crate::networking::log_markers::Marker;
 use crate::networking::network::connection_action_logging;
-use crate::networking::{log_markers::Marker, NetworkError, NetworkEvent};
+use crate::networking::NetworkError;
+use crate::networking::NetworkEvent;
+use ant_protocol::messages::CmdResponse;
 use ant_protocol::messages::ConnectionInfo;
-use ant_protocol::{
-    messages::{CmdResponse, Request, Response},
-    storage::ValidationType,
-    NetworkAddress,
-};
-use libp2p::request_response::{self, Message};
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use libp2p::request_response::Message;
+use libp2p::request_response::{self};
 
 impl SwarmDriver {
     /// Forwards `Request` to the upper layers using `Sender<NetworkEvent>`. Sends `Response` to the peers

@@ -6,21 +6,28 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::storage::{PointerTarget, ScratchpadAddress};
+use ant_protocol::storage::PointerTarget;
+use ant_protocol::storage::ScratchpadAddress;
 use self_encryption::DataMap;
 
-use crate::{
-    chunk::{Chunk, ChunkAddress, DataMapChunk},
-    files::{PrivateArchive, PublicArchive},
-    graph::{GraphEntry, GraphEntryAddress},
-    pointer::{Pointer, PointerAddress},
-    register::RegisterValue,
-    scratchpad::Scratchpad,
-    self_encryption::DataMapLevel,
-    Bytes, Client, PublicKey,
-};
+use crate::chunk::Chunk;
+use crate::chunk::ChunkAddress;
+use crate::chunk::DataMapChunk;
+use crate::files::PrivateArchive;
+use crate::files::PublicArchive;
+use crate::graph::GraphEntry;
+use crate::graph::GraphEntryAddress;
+use crate::pointer::Pointer;
+use crate::pointer::PointerAddress;
+use crate::register::RegisterValue;
+use crate::scratchpad::Scratchpad;
+use crate::self_encryption::DataMapLevel;
+use crate::Bytes;
+use crate::Client;
+use crate::PublicKey;
 
-use super::{register::RegisterAddress, GetError};
+use super::register::RegisterAddress;
+use super::GetError;
 const MAX_HEX_PRINT_LENGTH: usize = 4 * 1024;
 
 /// The result of analyzing an address
@@ -472,11 +479,15 @@ fn data_hex(data: &Bytes) -> String {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::chunk::{ChunkAddress, DataMapChunk};
+    use crate::chunk::ChunkAddress;
+    use crate::chunk::DataMapChunk;
     use crate::data::DataAddress;
-    use crate::files::{Metadata, PrivateArchive, PublicArchive};
+    use crate::files::Metadata;
+    use crate::files::PrivateArchive;
+    use crate::files::PublicArchive;
     use crate::Bytes;
-    use crate::{PublicKey, SecretKey};
+    use crate::PublicKey;
+    use crate::SecretKey;
     use eyre::Result;
     use serial_test::serial;
 

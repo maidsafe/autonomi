@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_evm::{get_evm_network, EvmNetwork};
+use ant_evm::get_evm_network;
+use ant_evm::EvmNetwork;
 use clap::Subcommand;
 use color_eyre::Result;
 

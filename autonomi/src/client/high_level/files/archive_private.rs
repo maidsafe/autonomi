@@ -7,23 +7,24 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_evm::AttoTokens;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use super::Metadata;
+use crate::client::data_types::chunk::DataMapChunk;
+use crate::client::high_level::files::RenameError;
+use crate::client::payment::PaymentOption;
+use crate::client::GetError;
+use crate::client::PutError;
 use crate::files::normalize_path;
-use crate::{
-    client::{
-        data_types::chunk::DataMapChunk, high_level::files::RenameError, payment::PaymentOption,
-        GetError, PutError,
-    },
-    Client,
-};
+use crate::Client;
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Private archive data map, allowing access to the [`PrivateArchive`] data.
 pub type PrivateArchiveDataMap = DataMapChunk;

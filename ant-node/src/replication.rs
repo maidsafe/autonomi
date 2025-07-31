@@ -6,18 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::error::Result;
 use crate::networking::Network;
-use crate::{error::Result, node::Node};
+use crate::node::Node;
 use ant_evm::ProofOfPayment;
-use ant_protocol::{
-    messages::{Query, QueryResponse, Request, Response},
-    storage::{DataTypes, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
-};
-use libp2p::{
-    kad::{Record, RecordKey},
-    PeerId,
-};
+use ant_protocol::messages::Query;
+use ant_protocol::messages::QueryResponse;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
+use libp2p::kad::Record;
+use libp2p::kad::RecordKey;
+use libp2p::PeerId;
 use tokio::task::spawn;
 
 impl Node {

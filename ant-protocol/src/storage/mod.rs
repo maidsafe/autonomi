@@ -13,15 +13,20 @@ mod header;
 mod pointer;
 mod scratchpad;
 
-pub use self::{
-    address::AddressParseError,
-    address::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress},
-    chunks::Chunk,
-    graph::{GraphContent, GraphEntry},
-    header::{
-        try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind,
-        ValidationType,
-    },
-    pointer::{Pointer, PointerTarget},
-    scratchpad::Scratchpad,
-};
+pub use self::address::AddressParseError;
+pub use self::address::ChunkAddress;
+pub use self::address::GraphEntryAddress;
+pub use self::address::PointerAddress;
+pub use self::address::ScratchpadAddress;
+pub use self::chunks::Chunk;
+pub use self::graph::GraphContent;
+pub use self::graph::GraphEntry;
+pub use self::header::try_deserialize_record;
+pub use self::header::try_serialize_record;
+pub use self::header::DataTypes;
+pub use self::header::RecordHeader;
+pub use self::header::RecordKind;
+pub use self::header::ValidationType;
+pub use self::pointer::Pointer;
+pub use self::pointer::PointerTarget;
+pub use self::scratchpad::Scratchpad;

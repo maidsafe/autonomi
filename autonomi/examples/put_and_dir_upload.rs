@@ -1,6 +1,10 @@
-use autonomi::{Bytes, Client};
+use autonomi::Bytes;
+use autonomi::Client;
 use test_utils::evm::get_funded_wallet;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

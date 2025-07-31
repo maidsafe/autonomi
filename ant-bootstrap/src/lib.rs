@@ -27,15 +27,20 @@ pub mod contacts;
 pub mod error;
 mod initial_peers;
 
-use ant_protocol::version::{get_network_id_str, get_truncate_version_str};
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use ant_protocol::version::get_network_id_str;
+use ant_protocol::version::get_truncate_version_str;
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use thiserror::Error;
 
 pub use cache_store::BootstrapCacheStore;
 pub use config::BootstrapCacheConfig;
 pub use contacts::ContactsFetcher;
-pub use error::{Error, Result};
-pub use initial_peers::{InitialPeersConfig, ANT_PEERS_ENV};
+pub use error::Error;
+pub use error::Result;
+pub use initial_peers::InitialPeersConfig;
+pub use initial_peers::ANT_PEERS_ENV;
 
 /// Craft a proper address to avoid any ill formed addresses
 ///

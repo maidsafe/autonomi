@@ -9,23 +9,32 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 
-use self::config::{AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
-use crate::{
-    config::{create_owned_dir, get_user_antnode_data_dir},
-    helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
-    VerbosityLevel, DAEMON_SERVICE_NAME,
-};
-use ant_service_management::{
-    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST, DaemonServiceData,
-    NatDetectionStatus, NodeRegistryManager, NodeServiceData, ServiceStatus,
-};
-use color_eyre::{eyre::eyre, Help, Result};
+use self::config::AddDaemonServiceOptions;
+use self::config::AddNodeServiceOptions;
+use self::config::InstallNodeServiceCtxBuilder;
+use crate::config::create_owned_dir;
+use crate::config::get_user_antnode_data_dir;
+use crate::helpers::check_port_availability;
+use crate::helpers::get_start_port_if_applicable;
+use crate::helpers::increment_port_option;
+use crate::VerbosityLevel;
+use crate::DAEMON_SERVICE_NAME;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::DaemonServiceData;
+use ant_service_management::NatDetectionStatus;
+use ant_service_management::NodeRegistryManager;
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
+use color_eyre::eyre::eyre;
+use color_eyre::Help;
+use color_eyre::Result;
 use colored::Colorize;
 use service_manager::ServiceInstallCtx;
-use std::{
-    ffi::OsString,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-};
+use std::ffi::OsString;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 
 /// Install antnode as a service.
 ///

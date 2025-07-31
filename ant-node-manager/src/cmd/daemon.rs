@@ -6,19 +6,25 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    add_services::{add_daemon, config::AddDaemonServiceOptions},
-    config::{self, is_running_as_root},
-    helpers::{download_and_extract_release, get_bin_version},
-    print_banner, ServiceManager, VerbosityLevel,
-};
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
-use ant_service_management::{
-    control::{ServiceControl, ServiceController},
-    DaemonService, NodeRegistryManager,
-};
-use color_eyre::{eyre::eyre, Result};
-use std::{net::Ipv4Addr, path::PathBuf};
+use crate::add_services::add_daemon;
+use crate::add_services::config::AddDaemonServiceOptions;
+use crate::config::is_running_as_root;
+use crate::config::{self};
+use crate::helpers::download_and_extract_release;
+use crate::helpers::get_bin_version;
+use crate::print_banner;
+use crate::ServiceManager;
+use crate::VerbosityLevel;
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::control::ServiceController;
+use ant_service_management::DaemonService;
+use ant_service_management::NodeRegistryManager;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
 
 pub async fn add(
     address: Ipv4Addr,

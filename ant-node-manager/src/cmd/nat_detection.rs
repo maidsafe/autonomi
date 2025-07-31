@@ -6,22 +6,27 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    config::get_node_registry_path, helpers::download_and_extract_release, VerbosityLevel,
-};
+use crate::config::get_node_registry_path;
+use crate::helpers::download_and_extract_release;
+use crate::VerbosityLevel;
 use ant_bootstrap::ContactsFetcher;
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
-use ant_service_management::{NatDetectionStatus, NodeRegistryManager};
-use color_eyre::eyre::{bail, Context, Result};
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
+use ant_service_management::NatDetectionStatus;
+use ant_service_management::NodeRegistryManager;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
 use libp2p::Multiaddr;
 use rand::seq::SliceRandom;
-use std::{
-    io::{BufRead, BufReader},
-    path::PathBuf,
-    process::{Command, Stdio},
-    time::Duration,
-};
-use tokio::{task, time::timeout};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::task;
+use tokio::time::timeout;
 pub const NAT_DETECTION_TIMEOUT_SECS: u64 = 180;
 
 const NAT_DETECTION_SERVERS_LIST_URL: &str =

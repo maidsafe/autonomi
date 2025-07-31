@@ -6,14 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::common::{Address, Calldata, TxHash, U256};
+use crate::common::Address;
+use crate::common::Calldata;
+use crate::common::TxHash;
+use crate::common::U256;
 use crate::contract::network_token::NetworkTokenContract::NetworkTokenContractInstance;
 use crate::retry;
-use crate::retry::{retry, send_transaction_with_retries};
+use crate::retry::retry;
+use crate::retry::send_transaction_with_retries;
 use crate::transaction_config::TransactionConfig;
-use alloy::providers::{Network, Provider};
+use alloy::providers::Network;
+use alloy::providers::Provider;
 use alloy::sol;
-use alloy::transports::{RpcError, TransportErrorKind};
+use alloy::transports::RpcError;
+use alloy::transports::TransportErrorKind;
 
 sol!(
     #[allow(clippy::too_many_arguments)]

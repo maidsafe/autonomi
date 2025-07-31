@@ -9,20 +9,23 @@
 #![allow(clippy::mutable_key_type)]
 mod common;
 
-use crate::common::{client::get_all_rpc_addresses, get_all_peer_ids, get_antnode_rpc_client};
+use crate::common::client::get_all_rpc_addresses;
+use crate::common::get_all_peer_ids;
+use crate::common::get_antnode_rpc_client;
 use ant_logging::LogBuilder;
 use ant_protocol::antnode_proto::KBucketsRequest;
 use color_eyre::Result;
-use libp2p::{
-    kad::{KBucketKey, K_VALUE},
-    PeerId,
-};
-use std::{
-    collections::{BTreeMap, HashSet},
-    time::Duration,
-};
+use libp2p::kad::KBucketKey;
+use libp2p::kad::K_VALUE;
+use libp2p::PeerId;
+use std::collections::BTreeMap;
+use std::collections::HashSet;
+use std::time::Duration;
 use tonic::Request;
-use tracing::{error, info, trace, warn};
+use tracing::error;
+use tracing::info;
+use tracing::trace;
+use tracing::warn;
 
 /// Sleep for sometime for the nodes to discover each other before verification
 /// Also can be set through the env variable of the same name.

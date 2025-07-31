@@ -9,7 +9,9 @@
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
 use rand::Rng;
-use ring::aead::{BoundKey, Nonce, NonceSequence};
+use ring::aead::BoundKey;
+use ring::aead::Nonce;
+use ring::aead::NonceSequence;
 use ring::error::Unspecified;
 use std::num::NonZeroU32;
 use std::sync::LazyLock;

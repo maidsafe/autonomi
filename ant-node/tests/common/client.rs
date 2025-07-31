@@ -8,19 +8,23 @@
 
 use crate::common::get_antnode_rpc_client;
 use ant_evm::Amount;
-use ant_protocol::antnode_proto::{NodeInfoRequest, RestartRequest};
-use ant_service_management::{get_local_node_registry_path, NodeRegistryManager};
+use ant_protocol::antnode_proto::NodeInfoRequest;
+use ant_protocol::antnode_proto::RestartRequest;
+use ant_service_management::get_local_node_registry_path;
+use ant_service_management::NodeRegistryManager;
 use autonomi::Client;
 use evmlib::wallet::Wallet;
 use eyre::Result;
+use std::net::SocketAddr;
+use std::path::Path;
 use std::str::FromStr;
-use std::{net::SocketAddr, path::Path};
 use test_utils::evm::get_funded_wallet;
 use test_utils::evm::get_new_wallet;
 use test_utils::testnet::DeploymentInventory;
 use tokio::sync::Mutex;
 use tonic::Request;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
 /// This is a limited hard coded value as Droplet version has to contact the faucet to get the funds.
 /// This is limited to 10 requests to the faucet, where each request yields 100 SNT

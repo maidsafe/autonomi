@@ -6,8 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{Quorum, RetryStrategy, Strategy};
-pub use ant_bootstrap::{error::Error as BootstrapError, InitialPeersConfig};
+use crate::networking::Quorum;
+use crate::networking::RetryStrategy;
+use crate::networking::Strategy;
+pub use ant_bootstrap::error::Error as BootstrapError;
+pub use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use std::num::NonZero;
 

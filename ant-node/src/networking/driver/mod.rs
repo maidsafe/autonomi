@@ -12,50 +12,63 @@ pub(crate) mod event;
 pub(crate) mod network_discovery;
 
 use event::NodeEvent;
-use network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL};
+use network_discovery::NetworkDiscovery;
+use network_discovery::NETWORK_DISCOVER_INTERVAL;
 
+use crate::networking::bootstrap::InitialBootstrap;
+use crate::networking::bootstrap::InitialBootstrapTrigger;
+use crate::networking::bootstrap::INITIAL_BOOTSTRAP_CHECK_INTERVAL;
+use crate::networking::circular_vec::CircularVec;
+use crate::networking::driver::kad::U256;
+use crate::networking::error::Result;
+use crate::networking::external_address::ExternalAddressManager;
+use crate::networking::log_markers::Marker;
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
-use crate::networking::{
-    bootstrap::{InitialBootstrap, InitialBootstrapTrigger, INITIAL_BOOTSTRAP_CHECK_INTERVAL},
-    circular_vec::CircularVec,
-    driver::kad::U256,
-    error::Result,
-    external_address::ExternalAddressManager,
-    log_markers::Marker,
-    relay_manager::RelayManager,
-    replication_fetcher::ReplicationFetcher,
-    Addresses, NodeIssue, NodeRecordStore, CLOSE_GROUP_SIZE,
-};
+use crate::networking::relay_manager::RelayManager;
+use crate::networking::replication_fetcher::ReplicationFetcher;
+use crate::networking::Addresses;
+use crate::networking::NodeIssue;
+use crate::networking::NodeRecordStore;
+use crate::networking::CLOSE_GROUP_SIZE;
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
 use ant_protocol::messages::ConnectionInfo;
-use ant_protocol::{
-    messages::{Request, Response},
-    NetworkAddress,
-};
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::NetworkAddress;
 use futures::StreamExt;
-use libp2p::{
-    kad::{self, KBucketDistance as Distance, QueryId, K_VALUE},
-    request_response::OutboundRequestId,
-    swarm::{
-        dial_opts::{DialOpts, PeerCondition},
-        ConnectionId, Swarm,
-    },
-    Multiaddr, PeerId,
-};
-use libp2p::{
-    request_response,
-    swarm::{behaviour::toggle::Toggle, NetworkBehaviour},
-};
+use libp2p::kad::KBucketDistance as Distance;
+use libp2p::kad::QueryId;
+use libp2p::kad::K_VALUE;
+use libp2p::kad::{self};
+use libp2p::request_response;
+use libp2p::request_response::OutboundRequestId;
+use libp2p::swarm::behaviour::toggle::Toggle;
+use libp2p::swarm::dial_opts::DialOpts;
+use libp2p::swarm::dial_opts::PeerCondition;
+use libp2p::swarm::ConnectionId;
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::swarm::Swarm;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use rand::Rng;
-use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::Instant;
-use tokio::sync::{mpsc, oneshot, watch};
-use tokio::time::{interval, Duration, Interval};
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::sync::watch;
+use tokio::time::interval;
+use tokio::time::Duration;
+use tokio::time::Interval;
 use tracing::warn;
 
-use super::interface::{LocalSwarmCmd, NetworkEvent, NetworkSwarmCmd};
+use super::interface::LocalSwarmCmd;
+use super::interface::NetworkEvent;
+use super::interface::NetworkSwarmCmd;
 
 /// 10 is the max number of issues per node we track to avoid mem leaks
 /// The boolean flag to indicate whether the node is considered as bad or not

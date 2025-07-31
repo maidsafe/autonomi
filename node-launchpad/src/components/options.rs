@@ -7,26 +7,40 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use color_eyre::eyre::Result;
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Cell, Row, Table},
-    Frame,
-};
-use std::{cmp::max, path::PathBuf};
+use ratatui::layout::Alignment;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Cell;
+use ratatui::widgets::Row;
+use ratatui::widgets::Table;
+use ratatui::Frame;
+use std::cmp::max;
+use std::path::PathBuf;
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::{header::SelectedMenuItem, utils::open_logs, Component};
-use crate::{
-    action::{Action, OptionsActions},
-    components::header::Header,
-    connection_mode::ConnectionMode,
-    mode::{InputMode, Scene},
-    style::{
-        COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE,
-    },
-};
+use super::header::SelectedMenuItem;
+use super::utils::open_logs;
+use super::Component;
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::components::header::Header;
+use crate::connection_mode::ConnectionMode;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::COOL_GREY;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VERY_LIGHT_AZURE;
+use crate::style::VIVID_SKY_BLUE;
 
 #[derive(Clone)]
 pub struct Options {

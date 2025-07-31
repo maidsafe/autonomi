@@ -1,4 +1,7 @@
-use crate::common::{Address, Amount, QuoteHash, U256};
+use crate::common::Address;
+use crate::common::Amount;
+use crate::common::QuoteHash;
+use crate::common::U256;
 use crate::quoting_metrics::QuotingMetrics;
 use alloy::primitives::FixedBytes;
 use alloy::sol;

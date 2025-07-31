@@ -6,14 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::connection_mode::ConnectionMode;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::node_stats::NodeStats;
 use crate::upnp::UpnpSupport;
-use crate::{
-    connection_mode::ConnectionMode,
-    mode::{InputMode, Scene},
-    node_stats::NodeStats,
-};
 use ant_service_management::NodeServiceData;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use strum::Display;
 

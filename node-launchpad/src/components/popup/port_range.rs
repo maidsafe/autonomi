@@ -8,21 +8,31 @@
 
 use std::rc::Rc;
 
-use super::super::super::node_mgmt::{PORT_MAX, PORT_MIN};
+use super::super::super::node_mgmt::PORT_MAX;
+use super::super::super::node_mgmt::PORT_MIN;
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
 use super::manage_nodes::MAX_NODE_COUNT;
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::connection_mode::ConnectionMode;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::INDIGO;
+use crate::style::LIGHT_PERIWINKLE;
 use crate::style::RED;
-use crate::{
-    action::{Action, OptionsActions},
-    connection_mode::ConnectionMode,
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-};
+use crate::style::VIVID_SKY_BLUE;
 use color_eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
+use tui_input::backend::crossterm::EventHandler;
+use tui_input::Input;
 
 pub const PORT_ALLOCATION: u32 = MAX_NODE_COUNT as u32 - 1; // We count the port_from as well
 const INPUT_SIZE: u32 = 5;

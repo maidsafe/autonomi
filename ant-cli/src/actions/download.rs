@@ -7,19 +7,21 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::get_progress_bar;
-use crate::exit_code::{self, ExitCodeError, INVALID_INPUT_EXIT_CODE, IO_ERROR};
-use autonomi::{
-    chunk::DataMapChunk,
-    client::{
-        analyze::Analysis,
-        files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
-        GetError,
-    },
-    data::DataAddress,
-    files::{PrivateArchive, PublicArchive},
-    Client,
-};
-use color_eyre::{eyre::eyre, Section};
+use crate::exit_code::ExitCodeError;
+use crate::exit_code::INVALID_INPUT_EXIT_CODE;
+use crate::exit_code::IO_ERROR;
+use crate::exit_code::{self};
+use autonomi::chunk::DataMapChunk;
+use autonomi::client::analyze::Analysis;
+use autonomi::client::files::archive_private::PrivateArchiveDataMap;
+use autonomi::client::files::archive_public::ArchiveAddress;
+use autonomi::client::GetError;
+use autonomi::data::DataAddress;
+use autonomi::files::PrivateArchive;
+use autonomi::files::PublicArchive;
+use autonomi::Client;
+use color_eyre::eyre::eyre;
+use color_eyre::Section;
 use std::path::PathBuf;
 
 pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<(), ExitCodeError> {

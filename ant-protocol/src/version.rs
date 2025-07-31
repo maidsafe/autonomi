@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::sync::{LazyLock, RwLock};
+use std::sync::LazyLock;
+use std::sync::RwLock;
 
 pub const MAINNET_ID: u8 = 1;
 pub const ALPHANET_ID: u8 = 2;

@@ -8,8 +8,9 @@
 
 use ant_logging::LogBuilder;
 use autonomi::get_evm_network;
+use autonomi::Amount;
+use autonomi::RewardsAddress;
 use autonomi::Wallet;
-use autonomi::{Amount, RewardsAddress};
 use const_hex::traits::FromHex;
 use test_utils::evm::get_funded_wallet;
 

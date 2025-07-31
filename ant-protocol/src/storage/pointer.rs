@@ -6,9 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress};
-use bls::{PublicKey, SecretKey, Signature};
-use serde::{Deserialize, Serialize};
+use crate::storage::ChunkAddress;
+use crate::storage::GraphEntryAddress;
+use crate::storage::PointerAddress;
+use crate::storage::ScratchpadAddress;
+use bls::PublicKey;
+use bls::SecretKey;
+use bls::Signature;
+use serde::Deserialize;
+use serde::Serialize;
 use xor_name::XorName;
 
 /// Pointer, a mutable address pointing to other data on the Network

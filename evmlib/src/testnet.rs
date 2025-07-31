@@ -11,15 +11,24 @@ use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::reqwest::Url;
-use crate::{CustomNetwork, Network};
+use crate::CustomNetwork;
+use crate::Network;
 use alloy::hex::ToHexExt;
-use alloy::network::{Ethereum, EthereumWallet};
-use alloy::node_bindings::{Anvil, AnvilInstance};
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager, WalletFiller,
-};
-use alloy::providers::{Identity, ProviderBuilder, RootProvider};
+use alloy::network::Ethereum;
+use alloy::network::EthereumWallet;
+use alloy::node_bindings::Anvil;
+use alloy::node_bindings::AnvilInstance;
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::SimpleNonceManager;
+use alloy::providers::fillers::WalletFiller;
+use alloy::providers::Identity;
+use alloy::providers::ProviderBuilder;
+use alloy::providers::RootProvider;
 use alloy::signers::local::PrivateKeySigner;
 
 const ANVIL_DEFAULT_PORT: u16 = 61611;

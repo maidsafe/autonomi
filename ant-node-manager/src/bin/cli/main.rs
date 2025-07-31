@@ -11,17 +11,21 @@ mod subcommands;
 use crate::subcommands::evm_network::EvmNetworkCommand;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::RewardsAddress;
-use ant_logging::{LogBuilder, LogFormat};
-use ant_node_manager::{
-    add_services::config::PortRange,
-    cmd::{self},
-    config, VerbosityLevel, DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
-};
+use ant_logging::LogBuilder;
+use ant_logging::LogFormat;
+use ant_node_manager::add_services::config::PortRange;
+use ant_node_manager::cmd::{self};
+use ant_node_manager::config;
+use ant_node_manager::VerbosityLevel;
+use ant_node_manager::DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S;
 use ant_service_management::NodeRegistryManager;
-use clap::{Parser, Subcommand};
-use color_eyre::{eyre::eyre, Result};
+use clap::Parser;
+use clap::Subcommand;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use libp2p::Multiaddr;
-use std::{net::Ipv4Addr, path::PathBuf};
+use std::net::Ipv4Addr;
+use std::path::PathBuf;
 use tracing::Level;
 
 const DEFAULT_NODE_COUNT: u16 = 25;

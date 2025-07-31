@@ -6,35 +6,51 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{default::Default, path::PathBuf, rc::Rc};
+use std::default::Default;
+use std::path::PathBuf;
+use std::rc::Rc;
 
 use super::super::utils::centered_rect_fixed;
 
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{
-        Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Wrap,
-    },
-};
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::layout::Alignment;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::HighlightSpacing;
+use ratatui::widgets::List;
+use ratatui::widgets::ListItem;
+use ratatui::widgets::ListState;
+use ratatui::widgets::Padding;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
 
-use crate::{
-    action::{Action, OptionsActions},
-    components::{
-        popup::manage_nodes::{GB, GB_PER_NODE},
-        Component,
-    },
-    config::get_launchpad_nodes_data_dir_path,
-    mode::{InputMode, Scene},
-    style::{
-        clear_area, COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
-        VIVID_SKY_BLUE,
-    },
-    system,
-};
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::components::popup::manage_nodes::GB;
+use crate::components::popup::manage_nodes::GB_PER_NODE;
+use crate::components::Component;
+use crate::config::get_launchpad_nodes_data_dir_path;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::COOL_GREY;
+use crate::style::DARK_GUNMETAL;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::INDIGO;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
+use crate::system;
 
 #[derive(Default)]
 enum ChangeDriveState {

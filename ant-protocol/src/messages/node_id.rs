@@ -7,8 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use libp2p::PeerId;
-use serde::{Deserialize, Serialize};
-use std::fmt::{self, Display};
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt::Display;
+use std::fmt::{self};
 
 /// A unique identifier for a node in the network,
 /// by which we can know their location in the xor space.

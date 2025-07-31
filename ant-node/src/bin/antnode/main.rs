@@ -13,34 +13,46 @@ mod log;
 mod rpc_service;
 mod subcommands;
 
-use crate::log::{reset_critical_failure, set_critical_failure};
+use crate::log::reset_critical_failure;
+use crate::log::set_critical_failure;
 use crate::subcommands::EvmNetworkCommand;
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
-use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
+use ant_bootstrap::BootstrapCacheConfig;
+use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::InitialPeersConfig;
+use ant_evm::get_evm_network;
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::metrics::init_metrics;
-use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
-use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
-use ant_protocol::{
-    node_rpc::{NodeCtrl, StopResult},
-    version,
-};
-use clap::{command, Parser};
-use color_eyre::{eyre::eyre, Result};
+use ant_logging::Level;
+use ant_logging::LogFormat;
+use ant_logging::LogOutputDest;
+use ant_logging::ReloadHandle;
+use ant_node::utils::get_antnode_root_dir;
+use ant_node::utils::get_root_dir_and_keypair;
+use ant_node::Marker;
+use ant_node::NodeBuilder;
+use ant_node::NodeEvent;
+use ant_node::NodeEventsReceiver;
+use ant_protocol::node_rpc::NodeCtrl;
+use ant_protocol::node_rpc::StopResult;
+use ant_protocol::version;
+use clap::command;
+use clap::Parser;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
-use std::{
-    env,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    process::Command,
-    time::Duration,
-};
-use tokio::{
-    runtime::Runtime,
-    sync::{broadcast::error::RecvError, mpsc},
-    time::sleep,
-};
+use std::env;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::process::Command;
+use std::time::Duration;
+use tokio::runtime::Runtime;
+use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc;
+use tokio::time::sleep;
 use tracing_appender::non_blocking::WorkerGuard;
 
 #[derive(Debug, Clone)]

@@ -8,17 +8,26 @@
 
 use crate::access::cached_payments;
 use crate::actions::NetworkContext;
-use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
-use crate::exit_code::{upload_exit_code, ExitCodeError, FEES_ERROR, IO_ERROR};
+use crate::args::max_fee_per_gas::get_max_fee_per_gas_from_opt_param;
+use crate::args::max_fee_per_gas::MaxFeePerGasParam;
+use crate::exit_code::upload_exit_code;
+use crate::exit_code::ExitCodeError;
+use crate::exit_code::FEES_ERROR;
+use crate::exit_code::IO_ERROR;
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::analyze::Analysis;
 use autonomi::client::payment::PaymentOption;
 use autonomi::client::PutError;
 use autonomi::files::UploadError;
-use autonomi::networking::{Quorum, RetryStrategy};
-use autonomi::{Client, ClientOperatingStrategy, TransactionConfig};
-use color_eyre::eyre::{eyre, Context, Result};
+use autonomi::networking::Quorum;
+use autonomi::networking::RetryStrategy;
+use autonomi::Client;
+use autonomi::ClientOperatingStrategy;
+use autonomi::TransactionConfig;
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
 use color_eyre::Section;
 use std::path::PathBuf;
 

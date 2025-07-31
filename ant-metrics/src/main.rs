@@ -6,16 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use clap::{command, Arg, ArgAction};
-use color_eyre::{eyre::eyre, Result};
+use clap::command;
+use clap::Arg;
+use clap::ArgAction;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use regex::Regex;
-use std::{
-    collections::BTreeMap,
-    fs::{self, File},
-    io::{BufRead, BufReader},
-    path::{Path, PathBuf},
-    process::Command,
-};
+use std::collections::BTreeMap;
+use std::fs::File;
+use std::fs::{self};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
 use walkdir::WalkDir;
 
 const LOG_FILENAME_PREFIX: &str = "antnode.log";

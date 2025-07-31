@@ -8,9 +8,12 @@
 
 use crate::spawn::node_spawner::NodeSpawner;
 use crate::RunningNode;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use libp2p::Multiaddr;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]

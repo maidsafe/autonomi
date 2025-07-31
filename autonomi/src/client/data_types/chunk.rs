@@ -6,32 +6,39 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::client::payment::PaymentOption;
+use crate::client::payment::Receipt;
+use crate::client::quote::CostError;
+use crate::client::utils::process_tasks_with_max_concurrency;
+use crate::client::ChunkBatchUploadState;
+use crate::client::GetError;
+use crate::client::PutError;
 use crate::networking::PeerInfo;
-use crate::{
-    client::{
-        payment::{PaymentOption, Receipt},
-        quote::CostError,
-        utils::process_tasks_with_max_concurrency,
-        ChunkBatchUploadState, GetError, PutError,
-    },
-    self_encryption::DataMapLevel,
-    Client,
-};
-use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
-pub use ant_protocol::storage::{Chunk, ChunkAddress};
-use ant_protocol::{
-    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
-    NetworkAddress,
-};
+use crate::self_encryption::DataMapLevel;
+use crate::Client;
+use ant_evm::Amount;
+use ant_evm::AttoTokens;
+use ant_evm::ClientProofOfPayment;
+use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::try_serialize_record;
+pub use ant_protocol::storage::Chunk;
+pub use ant_protocol::storage::ChunkAddress;
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::NetworkAddress;
 use bytes::Bytes;
 use libp2p::kad::Record;
-use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    sync::LazyLock,
-};
+use self_encryption::decrypt_full_set;
+use self_encryption::DataMap;
+use self_encryption::EncryptedChunk;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::HashMap;
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::sync::LazyLock;
 
 /// Number of chunks to upload in parallel.
 ///

@@ -6,12 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::archive_private::{PrivateArchive, PrivateArchiveDataMap};
-use super::{DownloadError, UploadError};
+use super::archive_private::PrivateArchive;
+use super::archive_private::PrivateArchiveDataMap;
+use super::DownloadError;
+use super::UploadError;
 
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::payment::PaymentOption;
-use crate::{AttoTokens, Client};
+use crate::AttoTokens;
+use crate::Client;
 use bytes::Bytes;
 use std::path::PathBuf;
 

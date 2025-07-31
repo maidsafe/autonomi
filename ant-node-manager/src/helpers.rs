@@ -6,23 +6,28 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_releases::{get_running_platform, AntReleaseRepoActions, ArchiveType, ReleaseType};
+use ant_releases::get_running_platform;
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ArchiveType;
+use ant_releases::ReleaseType;
 use ant_service_management::NodeServiceData;
-use color_eyre::{
-    eyre::{bail, eyre},
-    Result,
-};
-use indicatif::{ProgressBar, ProgressStyle};
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use semver::Version;
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    sync::Arc,
-};
+use std::io::Read;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::{add_services::config::PortRange, config, VerbosityLevel};
+use crate::add_services::config::PortRange;
+use crate::config;
+use crate::VerbosityLevel;
 
 const MAX_DOWNLOAD_RETRIES: u8 = 3;
 

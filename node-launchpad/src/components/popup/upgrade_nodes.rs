@@ -8,15 +8,21 @@
 
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
-use crate::{
-    action::{Action, OptionsActions},
-    mode::{InputMode, Scene},
-    node_mgmt,
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-};
+use crate::action::Action;
+use crate::action::OptionsActions;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::node_mgmt;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 pub struct UpgradeNodesPopUp {
     /// Whether the component is active right now, capturing keystrokes + draw things.

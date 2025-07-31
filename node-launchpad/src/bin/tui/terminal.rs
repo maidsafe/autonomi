@@ -9,8 +9,10 @@
 #[cfg(target_os = "windows")]
 use ant_node_manager::config::is_running_as_root;
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
-use std::{path::PathBuf, process::Command};
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Result;
+use std::path::PathBuf;
+use std::process::Command;
 use which::which;
 
 #[derive(Debug)]

@@ -6,21 +6,29 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::payment::{PayError, PaymentOption};
-use crate::{client::quote::CostError, Client};
-use crate::{Amount, AttoTokens};
-use ant_protocol::storage::{try_serialize_record, RecordKind};
-use ant_protocol::{
-    storage::{try_deserialize_record, DataTypes},
-    NetworkAddress,
-};
+use crate::client::payment::PayError;
+use crate::client::payment::PaymentOption;
+use crate::client::quote::CostError;
+use crate::Amount;
+use crate::AttoTokens;
+use crate::Client;
+use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::try_serialize_record;
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::NetworkAddress;
 use libp2p::kad::Record;
 
-use crate::client::{GetError, PutError};
-use crate::networking::{NetworkError, PeerInfo};
+use crate::client::GetError;
+use crate::client::PutError;
+use crate::networking::NetworkError;
+use crate::networking::PeerInfo;
 pub use crate::Bytes;
-pub use ant_protocol::storage::{Scratchpad, ScratchpadAddress};
-pub use bls::{PublicKey, SecretKey, Signature};
+pub use ant_protocol::storage::Scratchpad;
+pub use ant_protocol::storage::ScratchpadAddress;
+pub use bls::PublicKey;
+pub use bls::SecretKey;
+pub use bls::Signature;
 
 const SCRATCHPAD_MAX_SIZE: usize = Scratchpad::MAX_SIZE;
 

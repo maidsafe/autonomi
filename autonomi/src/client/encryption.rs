@@ -6,8 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
-use crate::files::{get_relative_file_path_from_abs_file_and_folder_path, Metadata};
+use crate::client::data_types::chunk::DataMapChunk;
+use crate::client::utils::process_tasks_with_max_concurrency;
+use crate::files::get_relative_file_path_from_abs_file_and_folder_path;
+use crate::files::Metadata;
 use crate::self_encryption::encrypt;
 use crate::Client;
 use ant_protocol::storage::Chunk;

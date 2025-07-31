@@ -7,9 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use clap::Parser;
-use evmlib::common::{Address, Amount};
+use evmlib::common::Address;
+use evmlib::common::Amount;
 use evmlib::testnet::Testnet;
-use evmlib::wallet::{balance_of_gas_tokens, balance_of_tokens, Wallet};
+use evmlib::wallet::balance_of_gas_tokens;
+use evmlib::wallet::balance_of_tokens;
+use evmlib::wallet::Wallet;
 use std::str::FromStr;
 
 /// A tool to start a local Ethereum node.

@@ -7,20 +7,22 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::SwarmDriver;
-use crate::networking::{
-    error::{dial_error_to_str, listen_error_to_str},
-    interface::TerminateNodeReason,
-    NetworkEvent, NodeIssue, Result,
-};
+use crate::networking::error::dial_error_to_str;
+use crate::networking::error::listen_error_to_str;
+use crate::networking::interface::TerminateNodeReason;
+use crate::networking::NetworkEvent;
+use crate::networking::NodeIssue;
+use crate::networking::Result;
 use itertools::Itertools;
+use libp2p::core::ConnectedPoint;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
-use libp2p::{
-    core::ConnectedPoint,
-    multiaddr::Protocol,
-    swarm::{ConnectionId, DialError, SwarmEvent},
-    Multiaddr, TransportError,
-};
+use libp2p::multiaddr::Protocol;
+use libp2p::swarm::ConnectionId;
+use libp2p::swarm::DialError;
+use libp2p::swarm::SwarmEvent;
+use libp2p::Multiaddr;
+use libp2p::TransportError;
 use std::time::Instant;
 use tokio::time::Duration;
 

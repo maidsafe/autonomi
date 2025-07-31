@@ -8,14 +8,20 @@
 
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
-use crate::{
-    action::{Action, StatusActions},
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-};
+use crate::action::Action;
+use crate::action::StatusActions;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 #[derive(Default)]
 pub struct RemoveNodePopUp {

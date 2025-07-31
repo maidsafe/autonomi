@@ -7,13 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::{
-    client::{
-        graph::{GraphEntry, GraphError},
-        payment::PaymentOption,
-    },
-    Client,
-};
+use autonomi::client::graph::GraphEntry;
+use autonomi::client::graph::GraphError;
+use autonomi::client::payment::PaymentOption;
+use autonomi::Client;
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;

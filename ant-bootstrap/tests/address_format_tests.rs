@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{craft_valid_multiaddr, craft_valid_multiaddr_from_str, multiaddr_get_peer_id};
+use ant_bootstrap::craft_valid_multiaddr;
+use ant_bootstrap::craft_valid_multiaddr_from_str;
+use ant_bootstrap::multiaddr_get_peer_id;
 use ant_logging::LogBuilder;
 use color_eyre::Result;
 use libp2p::Multiaddr;

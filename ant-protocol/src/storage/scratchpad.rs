@@ -7,11 +7,16 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::ScratchpadAddress;
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 use crate::Bytes;
 use crate::NetworkAddress;
-use bls::{Ciphertext, PublicKey, SecretKey, Signature};
-use serde::{Deserialize, Serialize};
+use bls::Ciphertext;
+use bls::PublicKey;
+use bls::SecretKey;
+use bls::Signature;
+use serde::Deserialize;
+use serde::Serialize;
 
 use xor_name::XorName;
 

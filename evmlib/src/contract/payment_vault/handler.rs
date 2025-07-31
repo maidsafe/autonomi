@@ -1,8 +1,12 @@
-use crate::common::{Address, Amount, Calldata, TxHash};
+use crate::common::Address;
+use crate::common::Amount;
+use crate::common::Calldata;
+use crate::common::TxHash;
 use crate::contract::payment_vault::error::Error;
 use crate::contract::payment_vault::interface::IPaymentVault;
 use crate::contract::payment_vault::interface::IPaymentVault::IPaymentVaultInstance;
-use crate::retry::{retry, send_transaction_with_retries};
+use crate::retry::retry;
+use crate::retry::send_transaction_with_retries;
 use crate::transaction_config::TransactionConfig;
 use alloy::network::Network;
 use alloy::providers::Provider;

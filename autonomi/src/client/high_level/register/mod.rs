@@ -6,20 +6,30 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::data_types::graph::{GraphContent, GraphEntry, GraphEntryAddress, GraphError};
-use crate::client::data_types::pointer::{PointerAddress, PointerError, PointerTarget};
-use crate::client::key_derivation::{DerivationIndex, MainPubkey, MainSecretKey};
+use crate::client::data_types::graph::GraphContent;
+use crate::client::data_types::graph::GraphEntry;
+use crate::client::data_types::graph::GraphEntryAddress;
+use crate::client::data_types::graph::GraphError;
+use crate::client::data_types::pointer::PointerAddress;
+use crate::client::data_types::pointer::PointerError;
+use crate::client::data_types::pointer::PointerTarget;
+use crate::client::key_derivation::DerivationIndex;
+use crate::client::key_derivation::MainPubkey;
+use crate::client::key_derivation::MainSecretKey;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::{Client, GetError};
+use crate::client::Client;
+use crate::client::GetError;
 use crate::AttoTokens;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use thiserror::Error;
 use xor_name::XorName;
 
 mod history;
 
-pub use crate::{PublicKey, SecretKey};
+pub use crate::PublicKey;
+pub use crate::SecretKey;
 pub use history::RegisterHistory;
 
 /// A Register is addressed at a [`RegisterAddress`] which is in fact the owner's [`PublicKey`].

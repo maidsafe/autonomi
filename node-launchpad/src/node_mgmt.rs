@@ -6,18 +6,25 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::action::{Action, StatusActions};
+use crate::action::Action;
+use crate::action::StatusActions;
 use crate::connection_mode::ConnectionMode;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
-use ant_node_manager::{add_services::config::PortRange, VerbosityLevel};
-use ant_releases::{self, AntReleaseRepoActions, ReleaseType};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
+use ant_node_manager::add_services::config::PortRange;
+use ant_node_manager::VerbosityLevel;
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
+use ant_releases::{self};
 use ant_service_management::NodeRegistryManager;
 use color_eyre::eyre::eyre;
 use color_eyre::Result;
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
+use std::str::FromStr;
 use tokio::runtime::Builder;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{self};
 use tokio::task::LocalSet;
 
 pub const PORT_MAX: u32 = 65535;

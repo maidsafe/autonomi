@@ -8,15 +8,20 @@
 
 use ant_logging::LogBuilder;
 use autonomi::chunk::DataMapChunk;
+use autonomi::client::chunk::Chunk;
 use autonomi::client::payment::PaymentOption;
 use autonomi::data::DataAddress;
 use autonomi::pointer::PointerTarget;
 use autonomi::register::RegisterAddress;
-use autonomi::{client::chunk::Chunk, Bytes, Client};
-use autonomi::{
-    ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
-    ScratchpadAddress,
-};
+use autonomi::Bytes;
+use autonomi::ChunkAddress;
+use autonomi::Client;
+use autonomi::GraphEntry;
+use autonomi::GraphEntryAddress;
+use autonomi::Pointer;
+use autonomi::PointerAddress;
+use autonomi::Scratchpad;
+use autonomi::ScratchpadAddress;
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;

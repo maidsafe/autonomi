@@ -34,8 +34,8 @@ cargo test --release --package ant-logging
 # Run E2E tests (requires local network setup)
 cargo test --package autonomi --tests
 
-# Check code formatting
-cargo fmt --all -- --check
+# Check code formatting (requires nightly for import formatting)
+cargo +nightly fmt --all -- --check
 
 # Run clippy linter
 cargo clippy --all-targets --all-features -- -Dwarnings
