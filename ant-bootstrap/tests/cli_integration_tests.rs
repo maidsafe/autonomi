@@ -72,9 +72,6 @@ async fn test_cli_arguments_precedence() -> Result<()> {
     let _guard = LogBuilder::init_single_threaded_tokio_test();
     let temp_dir = TempDir::new()?;
 
-    // Create config
-    let config = BootstrapCacheConfig::empty().with_cache_dir(temp_dir.path());
-
     let env_addr =
         "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
     // Set environment variable
@@ -90,7 +87,7 @@ async fn test_cli_arguments_precedence() -> Result<()> {
     };
 
     // Get bootstrap addresses
-    let addrs = args.get_bootstrap_addr(Some(config), None).await?;
+    let addrs = args.get_bootstrap_addr(None).await?;
 
     // Environment variables should take precedence
     assert_eq!(addrs.len(), 1, "Should only use one address source");

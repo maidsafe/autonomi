@@ -13,7 +13,7 @@ use ant_node::spawn::node_spawner::NodeSpawner;
 async fn main() {
     let args = InitialPeersConfig::default();
     let bootstrap_addrs = args
-        .get_bootstrap_addr(None, Some(5))
+        .get_bootstrap_addr(Some(5))
         .await
         .expect("Failed to get bootstrap addrs");
 

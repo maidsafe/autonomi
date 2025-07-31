@@ -74,11 +74,7 @@ pub struct InitialPeersConfig {
 
 impl InitialPeersConfig {
     /// Get bootstrap peers
-    pub async fn get_bootstrap_addr(
-        &self,
-        config: Option<BootstrapCacheConfig>,
-        count: Option<usize>,
-    ) -> Result<Vec<Multiaddr>> {
+    pub async fn get_bootstrap_addr(&self, count: Option<usize>) -> Result<Vec<Multiaddr>> {
         // If this is the first node, return an empty list
         if self.first {
             info!("First node in network, no initial bootstrap peers");
@@ -121,15 +117,12 @@ impl InitialPeersConfig {
 
         // load from cache if present
         if !self.ignore_cache {
-            let cfg = if let Some(config) = config {
-                Some(config)
-            } else {
-                BootstrapCacheConfig::new(self.local)
-                    .inspect_err(|err| {
-                        error!("Failed to create cache config: {err}",);
-                    })
-                    .ok()
-            };
+            let cfg = BootstrapCacheConfig::try_from(self)
+                .inspect_err(|err| {
+                    error!("Failed to create bootstrap cache config: {err}");
+                })
+                .ok();
+
             if let Some(cfg) = cfg {
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
                     bootstrap_addresses.extend(data.get_all_addrs().cloned());
@@ -145,6 +138,8 @@ impl InitialPeersConfig {
                         }
                     }
                 }
+            } else {
+                info!("Bootstrap cache config could not be created, skipping cache loading");
             }
         } else {
             info!("Ignoring cache, not loading bootstrap addresses from cache");

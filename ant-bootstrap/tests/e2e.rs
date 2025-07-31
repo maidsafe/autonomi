@@ -52,7 +52,7 @@ async fn test_full_bootstrap_flow() -> Result<()> {
         .with_max_peers(10);
 
     // Get bootstrap addresses (should be empty)
-    let addrs = args.get_bootstrap_addr(Some(config.clone()), None).await?;
+    let addrs = args.get_bootstrap_addr(None).await?;
     assert!(
         addrs.is_empty(),
         "First node should have no bootstrap addresses"
@@ -79,9 +79,7 @@ async fn test_full_bootstrap_flow() -> Result<()> {
         bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
     };
 
-    let cache_addrs = cache_args
-        .get_bootstrap_addr(Some(config.clone()), None)
-        .await?;
+    let cache_addrs = cache_args.get_bootstrap_addr(None).await?;
     assert_eq!(cache_addrs.len(), 2, "Should get addresses from cache");
 
     // 4. Try to get addresses from network contacts
@@ -94,9 +92,7 @@ async fn test_full_bootstrap_flow() -> Result<()> {
         bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
     };
 
-    let network_addrs = network_args
-        .get_bootstrap_addr(Some(config.clone()), None)
-        .await?;
+    let network_addrs = network_args.get_bootstrap_addr(None).await?;
     assert_eq!(
         network_addrs.len(),
         2,
@@ -113,7 +109,7 @@ async fn test_full_bootstrap_flow() -> Result<()> {
         bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
     };
 
-    let combined_addrs = combined_args.get_bootstrap_addr(Some(config), None).await?;
+    let combined_addrs = combined_args.get_bootstrap_addr(None).await?;
     assert!(
         combined_addrs.len() >= 3,
         "Should combine addresses from multiple sources"
@@ -161,7 +157,7 @@ async fn test_multiple_network_contacts() -> Result<()> {
     };
 
     // Should fetch from both endpoints
-    let addrs = args.get_bootstrap_addr(None, None).await?;
+    let addrs = args.get_bootstrap_addr(None).await?;
 
     assert_eq!(addrs.len(), 2, "Should fetch from both endpoints");
 

@@ -307,7 +307,7 @@ async fn test_first_flag_behavior() -> Result<()> {
     };
 
     // Get bootstrap addresses
-    let addrs = args.get_bootstrap_addr(None, None).await?;
+    let addrs = args.get_bootstrap_addr(None).await?;
 
     // First flag should override all other options and return empty list
     assert!(

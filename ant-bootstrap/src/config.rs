@@ -6,7 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    InitialPeersConfig,
+};
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -21,8 +24,8 @@ const MAX_PEERS: usize = 1500;
 /// Maximum number of addresses to store for a Peer
 const MAX_ADDRS_PER_PEER: usize = 3;
 
-// Min time until we save the bootstrap cache to disk. 5 mins
-const MIN_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(5 * 60);
+// Min time until we save the bootstrap cache to disk. 30 seconds
+const MIN_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(30);
 
 // Max time until we save the bootstrap cache to disk. 3 hours
 const MAX_BOOTSTRAP_CACHE_SAVE_INTERVAL: Duration = Duration::from_secs(3 * 60 * 60);
@@ -51,6 +54,21 @@ pub struct BootstrapCacheConfig {
     pub max_addrs_per_peer: usize,
     /// The min time duration until we save the bootstrap cache to disk.
     pub min_cache_save_duration: Duration,
+}
+
+impl TryFrom<&InitialPeersConfig> for BootstrapCacheConfig {
+    type Error = Error;
+    fn try_from(config: &InitialPeersConfig) -> Result<Self> {
+        let mut bootstrap_config = BootstrapCacheConfig::empty();
+        bootstrap_config.local = config.local;
+        let cache_dir = if let Some(cache_dir) = &config.bootstrap_cache_dir {
+            cache_dir.clone()
+        } else {
+            default_cache_dir()?
+        };
+        bootstrap_config.cache_dir = cache_dir;
+        Ok(bootstrap_config)
+    }
 }
 
 impl BootstrapCacheConfig {
@@ -125,11 +143,16 @@ impl BootstrapCacheConfig {
 /// Returns the default dir that should contain the bootstrap cache file
 fn default_cache_dir() -> Result<PathBuf> {
     let dir = dirs_next::data_dir()
-        .ok_or_else(|| Error::CouldNotObtainDataDir)?
+        .ok_or_else(|| Error::CouldNotObtainDataDir)
+        .inspect_err(|err| {
+            error!("Failed to obtain data directory: {err}");
+        })?
         .join("autonomi")
         .join("bootstrap_cache");
 
-    std::fs::create_dir_all(&dir)?;
+    std::fs::create_dir_all(&dir).inspect_err(|err| {
+        error!("Failed to create bootstrap cache directory at {dir:?}: {err}");
+    })?;
 
     Ok(dir)
 }
