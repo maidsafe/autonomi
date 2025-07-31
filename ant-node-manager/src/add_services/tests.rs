@@ -6,34 +6,41 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    add_services::{
-        add_daemon, add_node,
-        config::{
-            AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder, PortRange,
-        },
-    },
-    VerbosityLevel,
-};
+use crate::add_services::add_daemon;
+use crate::add_services::add_node;
+use crate::add_services::config::AddDaemonServiceOptions;
+use crate::add_services::config::AddNodeServiceOptions;
+use crate::add_services::config::InstallNodeServiceCtxBuilder;
+use crate::add_services::config::PortRange;
+use crate::VerbosityLevel;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
-use ant_service_management::{control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
-use ant_service_management::{error::Result as ServiceControlResult, NatDetectionStatus};
-use ant_service_management::{
-    DaemonServiceData, NodeRegistryManager, NodeServiceData, ServiceStatus,
-};
+use ant_evm::AttoTokens;
+use ant_evm::CustomNetwork;
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::error::Result as ServiceControlResult;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::DaemonServiceData;
+use ant_service_management::NatDetectionStatus;
+use ant_service_management::NodeRegistryManager;
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
 use color_eyre::Result;
-use mockall::{mock, predicate::*, Sequence};
+use mockall::mock;
+use mockall::predicate::*;
+use mockall::Sequence;
 use predicates::prelude::*;
 use service_manager::ServiceInstallCtx;
-use std::{
-    ffi::OsString,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::ffi::OsString;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::Path;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 #[cfg(not(target_os = "windows"))]
 const ANTNODE_FILE_NAME: &str = "antnode";

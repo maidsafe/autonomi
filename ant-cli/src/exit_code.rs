@@ -8,11 +8,14 @@
 
 #![allow(dead_code)]
 
-use autonomi::{
-    client::{analyze::AnalysisError, payment::PayError, ConnectError, GetError, PutError},
-    files::{DownloadError, UploadError},
-    BootstrapError,
-};
+use autonomi::client::analyze::AnalysisError;
+use autonomi::client::payment::PayError;
+use autonomi::client::ConnectError;
+use autonomi::client::GetError;
+use autonomi::client::PutError;
+use autonomi::files::DownloadError;
+use autonomi::files::UploadError;
+use autonomi::BootstrapError;
 use color_eyre::eyre::Report;
 
 pub(crate) const INVALID_INPUT_EXIT_CODE: i32 = 6;

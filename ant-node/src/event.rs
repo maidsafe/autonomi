@@ -6,11 +6,14 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
 
 use ant_evm::AttoTokens;
-use ant_protocol::{storage::ChunkAddress, NetworkAddress};
-use serde::{Deserialize, Serialize};
+use ant_protocol::storage::ChunkAddress;
+use ant_protocol::NetworkAddress;
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::broadcast;
 
 const NODE_EVENT_CHANNEL_SIZE: usize = 500;

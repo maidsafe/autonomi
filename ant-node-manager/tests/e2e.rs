@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_service_management::{ServiceStatus, StatusSummary};
+use ant_service_management::ServiceStatus;
+use ant_service_management::StatusSummary;
 use assert_cmd::Command;
 use libp2p_identity::PeerId;
 use std::path::PathBuf;

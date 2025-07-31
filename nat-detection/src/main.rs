@@ -10,19 +10,25 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use futures::StreamExt;
 use libp2p::autonat::NatStatus;
-use libp2p::core::{multiaddr::Protocol, Multiaddr};
+use libp2p::core::multiaddr::Protocol;
+use libp2p::core::Multiaddr;
+use libp2p::noise;
 use libp2p::swarm::SwarmEvent;
-use libp2p::{noise, tcp, yamux};
+use libp2p::tcp;
+use libp2p::yamux;
 use std::collections::HashSet;
 use std::net::Ipv4Addr;
 use std::time::Duration;
-use tracing::{debug, info, warn};
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 use tracing_log::AsTrace;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-use behaviour::{Behaviour, BehaviourEvent};
+use behaviour::Behaviour;
+use behaviour::BehaviourEvent;
 
 mod behaviour;
 

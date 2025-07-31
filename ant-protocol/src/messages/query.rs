@@ -6,9 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{messages::Nonce, NetworkAddress};
+use crate::messages::Nonce;
+use crate::NetworkAddress;
 use libp2p::kad::U256;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Data queries - retrieving data and inspecting their structure.
 ///

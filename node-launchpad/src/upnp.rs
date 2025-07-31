@@ -9,7 +9,8 @@
 extern crate igd_next as igd;
 
 use local_ip_address::local_ip;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::net::SocketAddr;
 use strum::Display;
 

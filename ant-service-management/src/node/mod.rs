@@ -12,15 +12,24 @@ mod node_service_data_v1;
 mod node_service_data_v2;
 
 // Re-export types
-pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
+pub use node_service_data::NodeServiceData;
+pub use node_service_data::NODE_SERVICE_DATA_SCHEMA_LATEST;
 
-use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::error::Result;
+use crate::rpc::RpcActions;
+use crate::ServiceStateActions;
+use crate::ServiceStatus;
+use crate::UpgradeOptions;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::multiaddr::Protocol;
-use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
+use service_manager::ServiceInstallCtx;
+use service_manager::ServiceLabel;
+use std::ffi::OsString;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tonic::async_trait;
 

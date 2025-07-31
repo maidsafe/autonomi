@@ -6,51 +6,72 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::footer::Footer;
 use super::footer::NodesToStart;
+use super::header::Header;
 use super::header::SelectedMenuItem;
 use super::popup::manage_nodes::GB;
+use super::popup::manage_nodes::GB_PER_NODE;
 use super::utils::centered_rect_fixed;
-use super::{footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE, Component, Frame};
+use super::Component;
+use super::Frame;
+use crate::action::Action;
 use crate::action::OptionsActions;
+use crate::action::StatusActions;
 use crate::components::popup::manage_nodes::MAX_NODE_COUNT;
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::components::utils::open_logs;
 use crate::config::get_launchpad_nodes_data_dir_path;
-use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
+use crate::config::Config;
+use crate::connection_mode::ConnectionMode;
+use crate::connection_mode::NodeConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::{
-    MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs, FIXED_INTERVAL,
-    NODES_ALL,
-};
-use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{clear_area, COOL_GREY, INDIGO, SIZZLING_RED};
-use crate::system::{get_available_space_b, get_drive_name};
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::node_mgmt::MaintainNodesArgs;
+use crate::node_mgmt::NodeManagement;
+use crate::node_mgmt::NodeManagementTask;
+use crate::node_mgmt::UpgradeNodesArgs;
+use crate::node_mgmt::FIXED_INTERVAL;
+use crate::node_mgmt::NODES_ALL;
+use crate::node_mgmt::PORT_MAX;
+use crate::node_mgmt::PORT_MIN;
+use crate::node_stats::NodeStats;
+use crate::style::clear_area;
+use crate::style::COOL_GREY;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::INDIGO;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::SIZZLING_RED;
+use crate::style::VERY_LIGHT_AZURE;
+use crate::style::VIVID_SKY_BLUE;
+use crate::system::get_available_space_b;
+use crate::system::get_drive_name;
 use crate::tui::Event;
 use crate::upnp::UpnpSupport;
-use crate::{
-    action::{Action, StatusActions},
-    config::Config,
-    mode::{InputMode, Scene},
-    node_stats::NodeStats,
-    style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE},
-};
 use ant_bootstrap::InitialPeersConfig;
 use ant_node_manager::add_services::config::PortRange;
 use ant_node_manager::config::get_node_registry_path;
-use ant_service_management::{
-    control::ServiceController, NodeRegistryManager, NodeServiceData, ServiceStatus,
-};
-use color_eyre::eyre::{Ok, OptionExt, Result};
+use ant_service_management::control::ServiceController;
+use ant_service_management::NodeRegistryManager;
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
+use color_eyre::eyre::Ok;
+use color_eyre::eyre::OptionExt;
+use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
 use ratatui::text::Span;
-use ratatui::{prelude::*, widgets::*};
+use ratatui::widgets::*;
 use std::fmt;
-use std::{
-    path::PathBuf,
-    time::{Duration, Instant},
-    vec,
-};
-use throbber_widgets_tui::{self, Throbber, ThrobberState};
+use std::path::PathBuf;
+use std::time::Duration;
+use std::time::Instant;
+use std::vec;
+use throbber_widgets_tui::Throbber;
+use throbber_widgets_tui::ThrobberState;
+use throbber_widgets_tui::{self};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);

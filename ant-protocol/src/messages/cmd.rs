@@ -8,9 +8,11 @@
 #![allow(clippy::mutable_key_type)] // for Bytes in NetworkAddress
 
 use crate::storage::DataTypes;
-use crate::{storage::ValidationType, NetworkAddress};
+use crate::storage::ValidationType;
+use crate::NetworkAddress;
 use ant_evm::ProofOfPayment;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Ant protocol cmds
 ///

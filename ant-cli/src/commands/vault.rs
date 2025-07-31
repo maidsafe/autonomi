@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
-use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
+use crate::args::max_fee_per_gas::get_max_fee_per_gas_from_opt_param;
+use crate::args::max_fee_per_gas::MaxFeePerGasParam;
 use crate::wallet::load_wallet;
 use autonomi::vault::UserData;
 use autonomi::TransactionConfig;

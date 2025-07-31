@@ -1,5 +1,6 @@
 use bls::PublicKey;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use xor_name::XorName;
 
 use super::AddressParseError;

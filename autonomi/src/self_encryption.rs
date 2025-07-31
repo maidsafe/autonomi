@@ -7,10 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_protocol::storage::Chunk;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use rayon::prelude::*;
-use self_encryption::{DataMap, MAX_CHUNK_SIZE};
-use serde::{Deserialize, Serialize};
+use self_encryption::DataMap;
+use self_encryption::MAX_CHUNK_SIZE;
+use serde::Deserialize;
+use serde::Serialize;
 use tracing::debug;
 
 #[derive(Debug, thiserror::Error)]

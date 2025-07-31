@@ -1,22 +1,34 @@
 mod common;
 
 use crate::common::quote::random_quote_payment;
-use alloy::network::{Ethereum, EthereumWallet};
+use alloy::network::Ethereum;
+use alloy::network::EthereumWallet;
 use alloy::node_bindings::AnvilInstance;
 use alloy::primitives::utils::parse_ether;
 use alloy::providers::ext::AnvilApi;
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager, WalletFiller,
-};
-use alloy::providers::{Identity, ProviderBuilder, RootProvider, WalletProvider};
-use alloy::signers::local::{LocalSigner, PrivateKeySigner};
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::SimpleNonceManager;
+use alloy::providers::fillers::WalletFiller;
+use alloy::providers::Identity;
+use alloy::providers::ProviderBuilder;
+use alloy::providers::RootProvider;
+use alloy::providers::WalletProvider;
+use alloy::signers::local::LocalSigner;
+use alloy::signers::local::PrivateKeySigner;
 use evmlib::common::U256;
 use evmlib::contract::network_token::NetworkToken;
 use evmlib::contract::payment_vault::handler::PaymentVaultHandler;
-use evmlib::contract::payment_vault::{interface, MAX_TRANSFERS_PER_TRANSACTION};
+use evmlib::contract::payment_vault::interface;
+use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use evmlib::quoting_metrics::QuotingMetrics;
-use evmlib::testnet::{deploy_data_payments_contract, deploy_network_token_contract, start_node};
+use evmlib::testnet::deploy_data_payments_contract;
+use evmlib::testnet::deploy_network_token_contract;
+use evmlib::testnet::start_node;
 use evmlib::transaction_config::TransactionConfig;
 use evmlib::utils::http_provider;
 use evmlib::wallet::wallet_address;

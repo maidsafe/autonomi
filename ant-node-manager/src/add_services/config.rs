@@ -7,17 +7,19 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::EvmNetwork;
+use ant_evm::RewardsAddress;
 use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
-use color_eyre::{eyre::eyre, Result};
-use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{
-    ffi::OsString,
-    net::{Ipv4Addr, SocketAddr},
-    path::PathBuf,
-    str::FromStr,
-};
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
+use service_manager::ServiceInstallCtx;
+use service_manager::ServiceLabel;
+use std::ffi::OsString;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 #[derive(Clone, Debug)]
 pub enum PortRange {
@@ -224,8 +226,10 @@ pub struct AddDaemonServiceOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ant_evm::{CustomNetwork, RewardsAddress};
-    use std::net::{IpAddr, Ipv4Addr};
+    use ant_evm::CustomNetwork;
+    use ant_evm::RewardsAddress;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
 
     fn create_default_builder() -> InstallNodeServiceCtxBuilder {
         InstallNodeServiceCtxBuilder {

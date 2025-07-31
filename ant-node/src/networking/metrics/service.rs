@@ -6,15 +6,23 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{NetworkError, Result};
+use crate::networking::NetworkError;
+use crate::networking::Result;
 use futures::Future;
-use hyper::{service::Service, Body, Method, Request, Response, Server, StatusCode};
-use prometheus_client::{encoding::text::encode, registry::Registry};
-use std::{
-    pin::Pin,
-    sync::{Arc, Mutex},
-    task::{Context, Poll},
-};
+use hyper::service::Service;
+use hyper::Body;
+use hyper::Method;
+use hyper::Request;
+use hyper::Response;
+use hyper::Server;
+use hyper::StatusCode;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::registry::Registry;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::task::Context;
+use std::task::Poll;
 
 /// The types of metrics that are exposed via the various endpoints.
 #[derive(Default, Debug)]

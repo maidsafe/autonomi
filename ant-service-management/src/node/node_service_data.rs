@@ -9,7 +9,10 @@
 use crate::error::Result;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::PeerId;
-use serde::{de::Error as DeError, Deserialize, Deserializer, Serializer};
+use serde::de::Error as DeError;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serializer;
 use std::str::FromStr;
 
 /// Type alias for the latest version of the node service data structure.
@@ -173,19 +176,21 @@ impl NodeServiceData {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        net::{Ipv4Addr, SocketAddr},
-        path::PathBuf,
-    };
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+    use std::path::PathBuf;
 
     use ant_bootstrap::InitialPeersConfig;
-    use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
+    use ant_evm::AttoTokens;
+    use ant_evm::EvmNetwork;
+    use ant_evm::RewardsAddress;
     use ant_logging::LogFormat;
     use libp2p::Multiaddr;
     use serde::Serialize;
 
     use super::*;
-    use crate::{node::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1, ServiceStatus};
+    use crate::node::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1;
+    use crate::ServiceStatus;
 
     /// Test to confirm that fields can be removed from the schema without breaking deserialization.
     /// This test checks that the `disable_mainnet_contacts` field can be removed without requiring

@@ -10,36 +10,43 @@
 mod swarm_events;
 mod task_handler;
 
-use std::{num::NonZeroUsize, time::Duration};
+use std::num::NonZeroUsize;
+use std::time::Duration;
 
 use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
+use ant_protocol::messages::Query;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use ant_protocol::version::REQ_RESPONSE_VERSION_STR;
 use ant_protocol::NetworkAddress;
-use ant_protocol::{
-    messages::{Query, Request, Response},
-    version::REQ_RESPONSE_VERSION_STR,
-};
 use futures::future::Either;
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::futures::StreamExt;
+use libp2p::identity::Keypair;
+use libp2p::kad::store::MemoryStore;
 use libp2p::kad::store::MemoryStoreConfig;
 use libp2p::kad::NoKnownPeers;
-use libp2p::{
-    core::muxing::StreamMuxerBox,
-    futures::StreamExt,
-    identity::Keypair,
-    kad::{self, store::MemoryStore},
-    multiaddr::Protocol,
-    quic::tokio::Transport as QuicTransport,
-    request_response::{self, cbor::codec::Codec as CborCodec, ProtocolSupport},
-    swarm::NetworkBehaviour,
-    Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
-};
+use libp2p::kad::{self};
+use libp2p::multiaddr::Protocol;
+use libp2p::quic::tokio::Transport as QuicTransport;
+use libp2p::request_response::cbor::codec::Codec as CborCodec;
+use libp2p::request_response::ProtocolSupport;
+use libp2p::request_response::{self};
+use libp2p::swarm::NetworkBehaviour;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use libp2p::StreamProtocol;
+use libp2p::Swarm;
+use libp2p::Transport;
 use task_handler::TaskHandler;
 use tokio::sync::mpsc;
 
-use ant_protocol::constants::{
-    KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, MAX_RECORD_SIZE, REPLICATION_FACTOR,
-};
+use ant_protocol::constants::KAD_STREAM_PROTOCOL_ID;
+use ant_protocol::constants::MAX_PACKET_SIZE;
+use ant_protocol::constants::MAX_RECORD_SIZE;
+use ant_protocol::constants::REPLICATION_FACTOR;
 
 /// Libp2p defaults to 10s which is quite fast, we are more patient
 pub const REQ_TIMEOUT: Duration = Duration::from_secs(30);

@@ -6,18 +6,22 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{
-    cache_store::{cache_data_v0, cache_data_v1},
-    ContactsFetcher, InitialPeersConfig, ANT_PEERS_ENV,
-};
+use ant_bootstrap::cache_store::cache_data_v0;
+use ant_bootstrap::cache_store::cache_data_v1;
+use ant_bootstrap::ContactsFetcher;
+use ant_bootstrap::InitialPeersConfig;
+use ant_bootstrap::ANT_PEERS_ENV;
 use ant_logging::LogBuilder;
 use color_eyre::Result;
-use libp2p::{Multiaddr, PeerId};
-use std::{sync::atomic::Ordering, time::SystemTime};
-use wiremock::{
-    matchers::{method, path},
-    Mock, MockServer, ResponseTemplate,
-};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[tokio::test]
 async fn test_network_contacts_formats() -> Result<()> {

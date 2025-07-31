@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use blst::min_pk::SecretKey as BlstSecretKey;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 
 /// Secret key to decrypt vault content
 pub type VaultSecretKey = bls::SecretKey;

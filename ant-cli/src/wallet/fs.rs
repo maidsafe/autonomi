@@ -6,14 +6,23 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::wallet::encryption::{decrypt_private_key, encrypt_private_key};
-use crate::wallet::input::{get_password_input, get_wallet_selection_input};
+use crate::wallet::encryption::decrypt_private_key;
+use crate::wallet::encryption::encrypt_private_key;
+use crate::wallet::input::get_password_input;
+use crate::wallet::input::get_wallet_selection_input;
 use crate::wallet::DUMMY_NETWORK;
-use autonomi::{Network, RewardsAddress, Wallet};
-use color_eyre::eyre::{bail, eyre, Context};
-use color_eyre::{Result, Section};
+use autonomi::Network;
+use autonomi::RewardsAddress;
+use autonomi::Wallet;
+use color_eyre::eyre::bail;
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::Result;
+use color_eyre::Section;
 use const_hex::traits::FromHex;
-use prettytable::{Cell, Row, Table};
+use prettytable::Cell;
+use prettytable::Row;
+use prettytable::Table;
 use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;

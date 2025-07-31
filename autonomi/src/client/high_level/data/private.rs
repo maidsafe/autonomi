@@ -10,7 +10,8 @@ use std::time::Instant;
 
 use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
-use crate::client::{GetError, PutError};
+use crate::client::GetError;
+use crate::client::PutError;
 use crate::AttoTokens;
 use crate::Client;
 

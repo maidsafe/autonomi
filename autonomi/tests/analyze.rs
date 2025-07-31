@@ -7,11 +7,16 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::client::analyze::Analysis;
+use autonomi::client::chunk::Chunk;
 use autonomi::client::payment::PaymentOption;
 use autonomi::pointer::PointerTarget;
+use autonomi::Bytes;
+use autonomi::Client;
+use autonomi::GraphEntry;
 use autonomi::GraphEntryAddress;
-use autonomi::{client::analyze::Analysis, GraphEntry, Pointer, Scratchpad};
-use autonomi::{client::chunk::Chunk, Bytes, Client};
+use autonomi::Pointer;
+use autonomi::Scratchpad;
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;

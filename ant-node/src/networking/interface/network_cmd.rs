@@ -8,12 +8,16 @@
 
 use std::fmt::Debug;
 
-use ant_protocol::messages::{ConnectionInfo, Request, Response};
+use ant_protocol::messages::ConnectionInfo;
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
 use libp2p::PeerId;
 use tokio::sync::oneshot;
 
+use crate::networking::driver::event::MsgResponder;
 use crate::networking::error::Result;
-use crate::networking::{driver::event::MsgResponder, Addresses, NetworkAddress};
+use crate::networking::Addresses;
+use crate::networking::NetworkAddress;
 
 /// Commands to send to the Swarm
 pub(crate) enum NetworkSwarmCmd {

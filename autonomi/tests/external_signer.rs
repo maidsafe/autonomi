@@ -2,17 +2,22 @@
 
 use alloy::network::TransactionBuilder;
 use alloy::providers::Provider;
-use ant_evm::{QuoteHash, TxHash};
+use ant_evm::QuoteHash;
+use ant_evm::TxHash;
 use ant_logging::LogBuilder;
 use ant_protocol::storage::DataTypes;
 use autonomi::client::external_signer::encrypt_data;
-use autonomi::client::files::{archive_private::PrivateArchive, Metadata};
-use autonomi::client::payment::{receipt_from_store_quotes, Receipt};
+use autonomi::client::files::archive_private::PrivateArchive;
+use autonomi::client::files::Metadata;
+use autonomi::client::payment::receipt_from_store_quotes;
+use autonomi::client::payment::Receipt;
 use autonomi::client::quote::StoreQuote;
 use autonomi::client::vault::user_data::USER_DATA_VAULT_CONTENT_IDENTIFIER;
 use autonomi::client::vault::VaultSecretKey;
 use autonomi::vault::UserData;
-use autonomi::{Client, Scratchpad, Wallet};
+use autonomi::Client;
+use autonomi::Scratchpad;
+use autonomi::Wallet;
 use bytes::Bytes;
 use std::collections::BTreeMap;
 use std::time::Duration;

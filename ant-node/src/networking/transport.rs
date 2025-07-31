@@ -8,11 +8,11 @@
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use libp2p::{
-    core::{muxing::StreamMuxerBox, transport},
-    identity::Keypair,
-    PeerId, Transport as _,
-};
+use libp2p::core::muxing::StreamMuxerBox;
+use libp2p::core::transport;
+use libp2p::identity::Keypair;
+use libp2p::PeerId;
+use libp2p::Transport as _;
 
 const MAX_STREAM_DATA_ENV_STR: &str = "ANT_MAX_STREAM_DATA";
 

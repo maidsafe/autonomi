@@ -6,12 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::data_types::graph::{GraphEntryAddress, GraphError};
-use crate::client::high_level::register::{
-    PublicKey, RegisterAddress, RegisterError, RegisterValue,
-};
+use crate::client::data_types::graph::GraphEntryAddress;
+use crate::client::data_types::graph::GraphError;
+use crate::client::high_level::register::PublicKey;
+use crate::client::high_level::register::RegisterAddress;
+use crate::client::high_level::register::RegisterError;
+use crate::client::high_level::register::RegisterValue;
 use crate::client::key_derivation::MainPubkey;
-use crate::client::{Client, GetError};
+use crate::client::Client;
+use crate::client::GetError;
 
 /// A handle to the register history
 #[derive(Clone)]

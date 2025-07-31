@@ -9,18 +9,27 @@
 use std::collections::BTreeSet;
 
 use crate::error::PutValidationError;
-use crate::{node::Node, Marker, Result};
+use crate::node::Node;
+use crate::Marker;
+use crate::Result;
 use ant_evm::payment_vault::verify_data_payment;
 use ant_evm::ProofOfPayment;
+use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::try_serialize_record;
+use ant_protocol::storage::Chunk;
+use ant_protocol::storage::DataTypes;
 use ant_protocol::storage::GraphEntry;
-use ant_protocol::{
-    storage::{
-        try_deserialize_record, try_serialize_record, Chunk, DataTypes, GraphEntryAddress, Pointer,
-        PointerAddress, RecordHeader, RecordKind, Scratchpad, ValidationType,
-    },
-    NetworkAddress, PrettyPrintRecordKey,
-};
-use libp2p::kad::{Record, RecordKey};
+use ant_protocol::storage::GraphEntryAddress;
+use ant_protocol::storage::Pointer;
+use ant_protocol::storage::PointerAddress;
+use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::storage::Scratchpad;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
+use libp2p::kad::Record;
+use libp2p::kad::RecordKey;
 use xor_name::XorName;
 
 // We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync

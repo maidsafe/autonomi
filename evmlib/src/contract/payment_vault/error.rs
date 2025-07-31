@@ -1,5 +1,6 @@
 use crate::retry;
-use alloy::transports::{RpcError, TransportErrorKind};
+use alloy::transports::RpcError;
+use alloy::transports::TransportErrorKind;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

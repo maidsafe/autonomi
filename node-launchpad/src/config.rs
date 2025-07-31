@@ -6,15 +6,24 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::action::Action;
 use crate::connection_mode::ConnectionMode;
+use crate::mode::Scene;
 use crate::system::get_primary_mount_point;
-use crate::{action::Action, mode::Scene};
 use ant_node_manager::config::is_running_as_root;
-use color_eyre::eyre::{eyre, Result};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use derive_deref::{Deref, DerefMut};
-use ratatui::style::{Color, Modifier, Style};
-use serde::{de::Deserializer, Deserialize, Serialize};
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Result;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use derive_deref::Deref;
+use derive_deref::DerefMut;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use ratatui::style::Style;
+use serde::de::Deserializer;
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 

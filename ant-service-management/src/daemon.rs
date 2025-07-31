@@ -6,15 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    control::ServiceControl,
-    error::{Error, Result},
-    ServiceStateActions, ServiceStatus, UpgradeOptions,
-};
+use crate::control::ServiceControl;
+use crate::error::Error;
+use crate::error::Result;
+use crate::ServiceStateActions;
+use crate::ServiceStatus;
+use crate::UpgradeOptions;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use service_manager::ServiceInstallCtx;
-use std::{ffi::OsString, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::ffi::OsString;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

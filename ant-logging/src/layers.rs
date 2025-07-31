@@ -6,27 +6,30 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    appender,
-    error::{Error, Result},
-    LogFormat, LogOutputDest,
-};
+use crate::appender;
+use crate::error::Error;
+use crate::error::Result;
+use crate::LogFormat;
+use crate::LogOutputDest;
 use std::collections::BTreeMap;
 use tracing_appender::non_blocking::WorkerGuard;
-use tracing_core::{Event, Level, Subscriber};
-use tracing_subscriber::{
-    filter::Targets,
-    fmt::{
-        self as tracing_fmt,
-        format::Writer,
-        time::{FormatTime, SystemTime},
-        FmtContext, FormatEvent, FormatFields,
-    },
-    layer::Filter,
-    registry::LookupSpan,
-    reload::{self, Handle},
-    Layer, Registry,
-};
+use tracing_core::Event;
+use tracing_core::Level;
+use tracing_core::Subscriber;
+use tracing_subscriber::filter::Targets;
+use tracing_subscriber::fmt::format::Writer;
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::fmt::time::SystemTime;
+use tracing_subscriber::fmt::FmtContext;
+use tracing_subscriber::fmt::FormatEvent;
+use tracing_subscriber::fmt::FormatFields;
+use tracing_subscriber::fmt::{self as tracing_fmt};
+use tracing_subscriber::layer::Filter;
+use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::reload::Handle;
+use tracing_subscriber::reload::{self};
+use tracing_subscriber::Layer;
+use tracing_subscriber::Registry;
 
 const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
 const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
@@ -189,13 +192,15 @@ impl TracingLayers {
         &mut self,
         default_logging_targets: Vec<(String, Level)>,
     ) -> Result<()> {
-        use opentelemetry::{
-            sdk::{trace, Resource},
-            KeyValue,
-        };
+        use opentelemetry::sdk::trace;
+        use opentelemetry::sdk::Resource;
+        use opentelemetry::KeyValue;
         use opentelemetry_otlp::WithExportConfig;
-        use opentelemetry_semantic_conventions::resource::{SERVICE_INSTANCE_ID, SERVICE_NAME};
-        use rand::{distributions::Alphanumeric, thread_rng, Rng};
+        use opentelemetry_semantic_conventions::resource::SERVICE_INSTANCE_ID;
+        use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
+        use rand::distributions::Alphanumeric;
+        use rand::thread_rng;
+        use rand::Rng;
 
         let service_name = std::env::var("OTLP_SERVICE_NAME").unwrap_or_else(|_| {
             let random_node_name: String = thread_rng()

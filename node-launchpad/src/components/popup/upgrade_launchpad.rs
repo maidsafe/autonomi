@@ -8,16 +8,23 @@
 
 use super::super::utils::centered_rect_fixed;
 use super::super::Component;
-use crate::{
-    action::{Action, UpgradeLaunchpadActions},
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-    widgets::hyperlink::Hyperlink,
-};
-use ant_releases::{AntReleaseRepoActions, ReleaseType};
+use crate::action::Action;
+use crate::action::UpgradeLaunchpadActions;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
+use crate::widgets::hyperlink::Hyperlink;
+use ant_releases::AntReleaseRepoActions;
+use ant_releases::ReleaseType;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 use semver::Version;
 use std::time::Duration;
 

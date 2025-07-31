@@ -9,24 +9,32 @@
 pub mod key;
 pub mod user_data;
 
-pub use key::{derive_vault_key, VaultSecretKey};
+pub use key::derive_vault_key;
+pub use key::VaultSecretKey;
 pub use user_data::UserData;
 
 use crate::client::data_types::scratchpad::ScratchpadError;
 use crate::client::high_level::files::FILE_UPLOAD_BATCH_SIZE;
-use crate::client::key_derivation::{DerivationIndex, MainSecretKey};
+use crate::client::key_derivation::DerivationIndex;
+use crate::client::key_derivation::MainSecretKey;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::utils::process_tasks_with_max_concurrency;
-use crate::client::{Client, GetError};
+use crate::client::Client;
+use crate::client::GetError;
 use crate::graph::GraphError;
-use ant_evm::{AttoTokens, U256};
-use ant_protocol::storage::{
-    GraphContent, GraphEntry, GraphEntryAddress, Scratchpad, ScratchpadAddress,
-};
+use ant_evm::AttoTokens;
+use ant_evm::U256;
+use ant_protocol::storage::GraphContent;
+use ant_protocol::storage::GraphEntry;
+use ant_protocol::storage::GraphEntryAddress;
+use ant_protocol::storage::Scratchpad;
+use ant_protocol::storage::ScratchpadAddress;
 use ant_protocol::Bytes;
 use bls::PublicKey;
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use tracing::info;
 
 /// The content type of the vault data

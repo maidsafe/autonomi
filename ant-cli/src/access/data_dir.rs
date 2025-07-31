@@ -6,10 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::{
-    eyre::{eyre, Context, Result},
-    Section,
-};
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
+use color_eyre::Section;
 use std::path::PathBuf;
 
 pub fn get_client_data_dir_path() -> Result<PathBuf> {

@@ -16,12 +16,13 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_node_manager::config::is_running_as_root;
 use clap::Parser;
 use color_eyre::eyre::Result;
-use node_launchpad::{
-    app::App,
-    config::configure_winsw,
-    utils::{initialize_logging, initialize_panic_handler},
-};
-use std::{env, path::PathBuf, time::Duration};
+use node_launchpad::app::App;
+use node_launchpad::config::configure_winsw;
+use node_launchpad::utils::initialize_logging;
+use node_launchpad::utils::initialize_panic_handler;
+use std::env;
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Parser, Debug)]
 #[command(disable_version_flag = true)]

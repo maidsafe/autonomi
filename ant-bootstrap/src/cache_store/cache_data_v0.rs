@@ -6,16 +6,19 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{
-    fs::{self, OpenOptions},
-    io::{Read, Write},
-    path::{Path, PathBuf},
-    time::SystemTime,
-};
+use std::fs::OpenOptions;
+use std::fs::{self};
+use std::io::Read;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 use atomic_write_file::AtomicWriteFile;
-use libp2p::{Multiaddr, PeerId};
-use serde::{Deserialize, Serialize};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::Error;
 

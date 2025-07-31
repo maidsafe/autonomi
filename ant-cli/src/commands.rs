@@ -16,9 +16,13 @@ mod wallet;
 
 use crate::actions::NetworkContext;
 use crate::args::max_fee_per_gas::MaxFeePerGasParam;
-use crate::opt::{NetworkId, Opt};
+use crate::opt::NetworkId;
+use crate::opt::Opt;
 use autonomi::networking::Quorum;
-use clap::{error::ErrorKind, Args, CommandFactory as _, Subcommand};
+use clap::error::ErrorKind;
+use clap::Args;
+use clap::CommandFactory as _;
+use clap::Subcommand;
 use color_eyre::Result;
 use pointer::parse_target_data_type;
 use pointer::TargetDataType;

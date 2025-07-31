@@ -1,40 +1,57 @@
-use std::{
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
 
+use crate::client::chunk::DataMapChunk;
 use crate::client::data::DataAddress;
 use crate::client::files::archive_private::PrivateArchiveDataMap;
 use crate::client::files::archive_public::ArchiveAddress;
+use crate::client::payment::PaymentOption;
+use crate::client::payment::Receipt;
 use crate::client::pointer::PointerTarget;
-use crate::{
-    client::{
-        chunk::DataMapChunk,
-        payment::{PaymentOption, Receipt},
-        quote::StoreQuote,
-        vault::{UserData, VaultSecretKey},
-        ClientEvent, UploadSummary,
-    },
-    files::{Metadata, PrivateArchive, PublicArchive},
-    register::{RegisterAddress, RegisterHistory},
-    Client, ClientConfig,
-};
-use crate::{Bytes, Network as EVMNetwork, Wallet};
-use crate::{
-    Chunk, ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
-    ScratchpadAddress,
-};
+use crate::client::quote::StoreQuote;
+use crate::client::vault::UserData;
+use crate::client::vault::VaultSecretKey;
+use crate::client::ClientEvent;
+use crate::client::UploadSummary;
+use crate::files::Metadata;
+use crate::files::PrivateArchive;
+use crate::files::PublicArchive;
+use crate::register::RegisterAddress;
+use crate::register::RegisterHistory;
+use crate::Bytes;
+use crate::Chunk;
+use crate::ChunkAddress;
+use crate::Client;
+use crate::ClientConfig;
+use crate::GraphEntry;
+use crate::GraphEntryAddress;
+use crate::Network as EVMNetwork;
+use crate::Pointer;
+use crate::PointerAddress;
+use crate::Scratchpad;
+use crate::ScratchpadAddress;
+use crate::Wallet;
 
-use ant_evm::{MaxFeePerGas, PaymentQuote, QuotingMetrics, RewardsAddress, TransactionConfig};
+use ant_evm::MaxFeePerGas;
+use ant_evm::PaymentQuote;
+use ant_evm::QuotingMetrics;
+use ant_evm::RewardsAddress;
+use ant_evm::TransactionConfig;
 use ant_protocol::storage::DataTypes;
-use bls::{PublicKey, SecretKey};
-use libp2p::{Multiaddr, PeerId};
-use pyo3::exceptions::{PyConnectionError, PyRuntimeError, PyValueError};
+use bls::PublicKey;
+use bls::SecretKey;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use pyo3::exceptions::PyConnectionError;
+use pyo3::exceptions::PyRuntimeError;
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3_async_runtimes::tokio::future_into_py;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::mpsc;
 use xor_name::XorName;
 

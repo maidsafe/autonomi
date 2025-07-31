@@ -7,9 +7,13 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_service_management::NodeServiceData;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter, Result};
-use strum::{Display, EnumIter};
+use serde::Deserialize;
+use serde::Serialize;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
+use strum::Display;
+use strum::EnumIter;
 
 #[derive(Clone, Copy, Debug, Default, EnumIter, Eq, Hash, PartialEq)]
 pub enum ConnectionMode {

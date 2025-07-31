@@ -6,10 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use libp2p::{autonat, identify, multiaddr::Protocol, Multiaddr};
-use tracing::{debug, info, warn};
+use libp2p::autonat;
+use libp2p::identify;
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use tracing::debug;
+use tracing::info;
+use tracing::warn;
 
-use crate::{behaviour::PROTOCOL_VERSION, App};
+use crate::behaviour::PROTOCOL_VERSION;
+use crate::App;
 
 /// Verifies if `Multiaddr` contains IPv4 address that is not global.
 /// This is used to filter out unroutable addresses from the Kademlia routing table.

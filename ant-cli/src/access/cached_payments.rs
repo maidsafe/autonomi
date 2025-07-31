@@ -6,13 +6,19 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use autonomi::client::{payment::Receipt, ChunkBatchUploadState};
-use color_eyre::eyre::{Context, Result};
+use autonomi::client::payment::Receipt;
+use autonomi::client::ChunkBatchUploadState;
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
 use std::collections::HashMap;
-use std::fs::{DirEntry, File};
-use std::io::{BufReader, BufWriter};
+use std::fs::DirEntry;
+use std::fs::File;
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 // Cleanup old cached payments after 30 days
 const PAYMENT_EXPIRATION_SECS: u64 = 3600 * 24 * 30;

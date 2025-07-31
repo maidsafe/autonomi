@@ -6,17 +6,22 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use rand::{thread_rng, Rng};
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use std::{
-    collections::HashSet,
-    fs::File,
-    io::Write,
-    path::{Path, PathBuf},
-    process::{exit, Command},
-    time::Duration,
-};
+use criterion::criterion_group;
+use criterion::criterion_main;
+use criterion::Criterion;
+use criterion::Throughput;
+use rand::thread_rng;
+use rand::Rng;
+use rayon::prelude::IntoParallelIterator;
+use rayon::prelude::ParallelIterator;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::exit;
+use std::process::Command;
+use std::time::Duration;
 use tempfile::tempdir;
 
 const SAMPLE_SIZE: usize = 20;

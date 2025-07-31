@@ -1,5 +1,6 @@
 use libp2p::upnp;
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 use tracing_log::log::error;
 
 use crate::App;

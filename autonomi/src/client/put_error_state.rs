@@ -11,7 +11,8 @@ use crate::client::data_types::chunk::ChunkAddress;
 use crate::client::payment::Receipt;
 use crate::client::NetworkAddress;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 use std::fmt::Display;
 

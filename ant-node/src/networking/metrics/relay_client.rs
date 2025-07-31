@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::EncodeLabelValue;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct RelayClientEventLabels {

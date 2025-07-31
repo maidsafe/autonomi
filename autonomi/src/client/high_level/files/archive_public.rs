@@ -6,25 +6,26 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{client::payment::PaymentOption, AttoTokens};
+use crate::client::payment::PaymentOption;
+use crate::AttoTokens;
 use bytes::Bytes;
-use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use super::Metadata;
+use crate::client::high_level::data::DataAddress;
+use crate::client::high_level::files::RenameError;
+use crate::client::quote::CostError;
+use crate::client::GetError;
+use crate::client::PutError;
 use crate::files::normalize_path;
-use crate::{
-    client::{
-        high_level::{data::DataAddress, files::RenameError},
-        quote::CostError,
-        GetError, PutError,
-    },
-    Client,
-};
+use crate::Client;
 
 /// The address of a public archive on the network. Points to an [`PublicArchive`].
 pub type ArchiveAddress = DataAddress;

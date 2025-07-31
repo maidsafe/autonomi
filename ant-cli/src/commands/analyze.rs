@@ -7,7 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
-use autonomi::{client::analyze::AnalysisError, Multiaddr, RewardsAddress, SecretKey, Wallet};
+use autonomi::client::analyze::AnalysisError;
+use autonomi::Multiaddr;
+use autonomi::RewardsAddress;
+use autonomi::SecretKey;
+use autonomi::Wallet;
 use color_eyre::eyre::Result;
 use std::str::FromStr;
 

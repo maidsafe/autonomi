@@ -11,20 +11,21 @@ mod kad;
 mod request_response;
 mod swarm;
 
+use crate::networking::driver::SwarmDriver;
+use crate::networking::error::Result;
+use crate::networking::relay_manager::is_a_relayed_peer;
+use crate::networking::Addresses;
 use crate::networking::NetworkEvent;
-use crate::networking::{
-    driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
-};
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
-use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
+use libp2p::request_response::ResponseChannel as PeerResponseChannel;
+use libp2p::PeerId;
 
+use ant_protocol::messages::Request;
+use ant_protocol::messages::Response;
+use ant_protocol::NetworkAddress;
 use ant_protocol::CLOSE_GROUP_SIZE;
-use ant_protocol::{
-    messages::{Request, Response},
-    NetworkAddress,
-};
 #[cfg(feature = "open-metrics")]
 use std::collections::HashSet;
 use tokio::sync::oneshot;

@@ -6,14 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{error::Result, NetworkAddress};
+use crate::error::Result;
+use crate::NetworkAddress;
 
 use super::ChunkProof;
 use ant_evm::PaymentQuote;
 use bytes::Bytes;
 use core::fmt;
 use libp2p::Multiaddr;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Debug;
 
 /// The response to a query, containing the query result.

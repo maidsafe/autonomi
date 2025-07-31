@@ -7,12 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::config::get_launchpad_data_dir_path;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::eyre::Context;
+use color_eyre::eyre::Result;
 use tracing::error;
 use tracing_error::ErrorLayer;
-use tracing_subscriber::{
-    self, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt, Layer,
-};
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::Layer;
+use tracing_subscriber::{self};
 
 pub fn initialize_panic_handler() -> Result<()> {
     let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
@@ -34,7 +36,9 @@ pub fn initialize_panic_handler() -> Result<()> {
 
         #[cfg(not(debug_assertions))]
         {
-            use human_panic::{handle_dump, print_msg, Metadata};
+            use human_panic::handle_dump;
+            use human_panic::print_msg;
+            use human_panic::Metadata;
             let meta = Metadata {
                 version: env!("CARGO_PKG_VERSION").into(),
                 name: env!("CARGO_PKG_NAME").into(),

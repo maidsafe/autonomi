@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ratatui::{
-    layout::Rect,
-    style::{Color, Style},
-    widgets::{Block, Clear},
-    Frame,
-};
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Clear;
+use ratatui::Frame;
 
 pub const GHOST_WHITE: Color = Color::Indexed(15);
 pub const COOL_GREY: Color = Color::Indexed(246);

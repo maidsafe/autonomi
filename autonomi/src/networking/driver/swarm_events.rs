@@ -6,10 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::messages::{QueryResponse, Response};
+use ant_protocol::messages::QueryResponse;
+use ant_protocol::messages::Response;
 use libp2p::autonat::OutboundFailure;
-use libp2p::kad::{Event as KadEvent, ProgressStep, QueryId, QueryResult, QueryStats};
-use libp2p::request_response::{Event as ReqEvent, Message, OutboundRequestId};
+use libp2p::kad::Event as KadEvent;
+use libp2p::kad::ProgressStep;
+use libp2p::kad::QueryId;
+use libp2p::kad::QueryResult;
+use libp2p::kad::QueryStats;
+use libp2p::request_response::Event as ReqEvent;
+use libp2p::request_response::Message;
+use libp2p::request_response::OutboundRequestId;
 use libp2p::swarm::SwarmEvent;
 use libp2p::PeerId;
 use thiserror::Error;
@@ -21,7 +28,8 @@ pub enum NetworkDriverError {
 }
 
 use super::task_handler::TaskHandlerError;
-use super::{AutonomiClientBehaviourEvent, NetworkDriver};
+use super::AutonomiClientBehaviourEvent;
+use super::NetworkDriver;
 
 impl NetworkDriver {
     /// Process a swarm event, ultimately handing over the event to the correct handler in [`crate::driver::task_handler::TaskHandler`]

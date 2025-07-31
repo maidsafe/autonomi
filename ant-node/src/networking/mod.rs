@@ -25,24 +25,25 @@ mod replication_fetcher;
 mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
+pub(crate) use self::error::NetworkError;
+pub(crate) use self::interface::NetworkEvent;
+pub(crate) use self::interface::NodeIssue;
 pub use self::interface::SwarmLocalState;
-pub(crate) use self::{
-    error::NetworkError,
-    interface::{NetworkEvent, NodeIssue},
-    network::{Network, NetworkConfig},
-    record_store::NodeRecordStore,
-};
+pub(crate) use self::network::Network;
+pub(crate) use self::network::NetworkConfig;
+pub(crate) use self::record_store::NodeRecordStore;
 
 #[cfg(feature = "open-metrics")]
 pub(crate) use metrics::service::MetricsRegistries;
 
 use self::error::Result;
-use ant_protocol::{NetworkAddress, CLOSE_GROUP_SIZE};
-use libp2p::{
-    kad::{KBucketDistance, KBucketKey},
-    multiaddr::Protocol,
-    Multiaddr, PeerId,
-};
+use ant_protocol::NetworkAddress;
+use ant_protocol::CLOSE_GROUP_SIZE;
+use libp2p::kad::KBucketDistance;
+use libp2p::kad::KBucketKey;
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
 use std::net::IpAddr;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.

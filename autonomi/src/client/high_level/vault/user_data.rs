@@ -16,10 +16,14 @@ use crate::client::GetError;
 use crate::register::RegisterAddress;
 use ant_evm::AttoTokens;
 use ant_protocol::Bytes;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::sync::LazyLock;
 
-use super::{app_name_to_vault_content_type, VaultContentType, VaultError, VaultSecretKey};
+use super::app_name_to_vault_content_type;
+use super::VaultContentType;
+use super::VaultError;
+use super::VaultSecretKey;
 
 /// Vault content type for UserDataVault
 pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =

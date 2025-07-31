@@ -6,18 +6,28 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    components::utils::centered_rect_fixed,
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, RED},
-    tui::Frame,
-};
-use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
-    widgets::{Block, Borders, Padding, Paragraph, Wrap},
-};
+use crate::components::utils::centered_rect_fixed;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::RED;
+use crate::tui::Frame;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::layout::Alignment;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::style::Stylize;
+use ratatui::text::Line;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Padding;
+use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
 
 /// Error popup is a popup that is used to display error messages to the user.
 ///

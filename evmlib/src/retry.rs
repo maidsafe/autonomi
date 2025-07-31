@@ -1,8 +1,13 @@
-use crate::common::{Address, Calldata, TxHash};
-use crate::transaction_config::{MaxFeePerGas, TransactionConfig};
+use crate::common::Address;
+use crate::common::Calldata;
+use crate::common::TxHash;
+use crate::transaction_config::MaxFeePerGas;
+use crate::transaction_config::TransactionConfig;
 use crate::TX_TIMEOUT;
-use alloy::network::{Network, TransactionBuilder};
-use alloy::providers::{PendingTransactionBuilder, Provider};
+use alloy::network::Network;
+use alloy::network::TransactionBuilder;
+use alloy::providers::PendingTransactionBuilder;
+use alloy::providers::Provider;
 use std::time::Duration;
 
 pub(crate) const MAX_RETRIES: u8 = 3;

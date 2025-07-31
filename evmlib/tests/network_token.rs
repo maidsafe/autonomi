@@ -1,16 +1,25 @@
 mod common;
 
-use alloy::network::{Ethereum, EthereumWallet, NetworkWallet};
+use alloy::network::Ethereum;
+use alloy::network::EthereumWallet;
+use alloy::network::NetworkWallet;
 use alloy::node_bindings::AnvilInstance;
 use alloy::primitives::U256;
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager, WalletFiller,
-};
-use alloy::providers::{Identity, RootProvider, WalletProvider};
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::SimpleNonceManager;
+use alloy::providers::fillers::WalletFiller;
+use alloy::providers::Identity;
+use alloy::providers::RootProvider;
+use alloy::providers::WalletProvider;
 use alloy::signers::local::PrivateKeySigner;
 use evmlib::contract::network_token::NetworkToken;
-use evmlib::testnet::{deploy_network_token_contract, start_node};
+use evmlib::testnet::deploy_network_token_contract;
+use evmlib::testnet::start_node;
 use evmlib::transaction_config::TransactionConfig;
 use evmlib::wallet::wallet_address;
 use std::str::FromStr;

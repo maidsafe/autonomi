@@ -8,7 +8,10 @@
 
 use crate::common::Hash;
 use alloy::primitives::keccak256;
-use alloy::signers::k256::ecdsa::{signature, RecoveryId, Signature, SigningKey};
+use alloy::signers::k256::ecdsa::signature;
+use alloy::signers::k256::ecdsa::RecoveryId;
+use alloy::signers::k256::ecdsa::Signature;
+use alloy::signers::k256::ecdsa::SigningKey;
 use alloy::signers::local::PrivateKeySigner;
 
 /// Hash data using Keccak256.

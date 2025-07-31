@@ -10,7 +10,8 @@ use eyre::eyre;
 use libp2p::identity::Keypair;
 use libp2p::PeerId;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// The keypair is located inside the root directory. At the same time, when no dir is specified,
 /// the dir name is derived from the keypair used in the application: the peer ID is used as the directory name.

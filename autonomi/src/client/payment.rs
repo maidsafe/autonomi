@@ -6,15 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::quote::{DataTypes, StoreQuote};
+use crate::client::quote::DataTypes;
+use crate::client::quote::StoreQuote;
 use crate::Client;
-use ant_evm::{ClientProofOfPayment, EncodedPeerId, EvmWallet, EvmWalletError};
+use ant_evm::ClientProofOfPayment;
+use ant_evm::EncodedPeerId;
+use ant_evm::EvmWallet;
+use ant_evm::EvmWalletError;
 use std::collections::HashMap;
 use xor_name::XorName;
 
 use super::quote::CostError;
 
-pub use crate::{Amount, AttoTokens};
+pub use crate::Amount;
+pub use crate::AttoTokens;
 
 /// Contains the proof of payments for each XOR address and the amount paid
 pub type Receipt = HashMap<XorName, (ClientProofOfPayment, AttoTokens)>;

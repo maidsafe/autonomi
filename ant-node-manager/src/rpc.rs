@@ -6,20 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, ServiceManager,
-    VerbosityLevel,
-};
-use ant_service_management::{
-    control::{ServiceControl, ServiceController},
-    node::NODE_SERVICE_DATA_SCHEMA_LATEST,
-    rpc::RpcClient,
-    NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus,
-};
-use color_eyre::{
-    eyre::{eyre, OptionExt},
-    Result,
-};
+use crate::add_services::config::InstallNodeServiceCtxBuilder;
+use crate::config::create_owned_dir;
+use crate::ServiceManager;
+use crate::VerbosityLevel;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::control::ServiceController;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::rpc::RpcClient;
+use ant_service_management::NodeRegistryManager;
+use ant_service_management::NodeService;
+use ant_service_management::NodeServiceData;
+use ant_service_management::ServiceStatus;
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::OptionExt;
+use color_eyre::Result;
 use libp2p::PeerId;
 
 pub async fn restart_node_service(

@@ -6,21 +6,29 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::driver::{BadNodes, NodeBehaviour};
+use crate::networking::driver::BadNodes;
+use crate::networking::driver::NodeBehaviour;
 use itertools::Itertools;
+use libp2p::core::transport::ListenerId;
+use libp2p::multiaddr::Protocol;
 use libp2p::swarm::ConnectionId;
-use libp2p::{
-    core::transport::ListenerId, multiaddr::Protocol, Multiaddr, PeerId, StreamProtocol, Swarm,
-};
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use libp2p::StreamProtocol;
+use libp2p::Swarm;
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
 use rand::Rng;
-use std::collections::{BTreeMap, HashMap, VecDeque};
+#[cfg(feature = "open-metrics")]
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::VecDeque;
 #[cfg(feature = "open-metrics")]
 use std::sync::atomic::AtomicU64;
 use std::time::Instant;
 #[cfg(feature = "open-metrics")]
-use std::{collections::btree_map::Entry, time::SystemTime};
+use std::time::SystemTime;
 
 const MAX_CONCURRENT_RELAY_CONNECTIONS: usize = 2;
 const MAX_POTENTIAL_CANDIDATES: usize = 1000;

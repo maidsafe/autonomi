@@ -6,10 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{
-    cache_store::CACHE_DATA_VERSION_LATEST, craft_valid_multiaddr_from_str, Error, Result,
-};
-use futures::stream::{self, StreamExt};
+use crate::cache_store::CACHE_DATA_VERSION_LATEST;
+use crate::craft_valid_multiaddr_from_str;
+use crate::Error;
+use crate::Result;
+use futures::stream::StreamExt;
+use futures::stream::{self};
 use libp2p::Multiaddr;
 use reqwest::Client;
 use std::time::Duration;
@@ -306,10 +308,11 @@ impl ContactsFetcher {
 mod tests {
     use super::*;
     use libp2p::Multiaddr;
-    use wiremock::{
-        matchers::{method, path},
-        Mock, MockServer, ResponseTemplate,
-    };
+    use wiremock::matchers::method;
+    use wiremock::matchers::path;
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
 
     #[tokio::test]
     async fn test_fetch_addrs() {

@@ -8,11 +8,14 @@
 
 use crate::error::Error;
 use crate::PrettyPrintRecordKey;
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::BufMut;
+use bytes::Bytes;
+use bytes::BytesMut;
 use libp2p::kad::Record;
 use prometheus_client::encoding::EncodeLabelValue;
 use rmp_serde::Serializer;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt::Display;
 use xor_name::XorName;
 

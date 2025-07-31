@@ -6,15 +6,18 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
-use service_manager::{
-    ServiceInstallCtx, ServiceLabel, ServiceLevel, ServiceManager, ServiceStartCtx, ServiceStopCtx,
-    ServiceUninstallCtx,
-};
-use std::{
-    net::{SocketAddr, TcpListener},
-    path::Path,
-};
+use crate::error::Error;
+use crate::error::Result;
+use service_manager::ServiceInstallCtx;
+use service_manager::ServiceLabel;
+use service_manager::ServiceLevel;
+use service_manager::ServiceManager;
+use service_manager::ServiceStartCtx;
+use service_manager::ServiceStopCtx;
+use service_manager::ServiceUninstallCtx;
+use std::net::SocketAddr;
+use std::net::TcpListener;
+use std::path::Path;
 use sysinfo::System;
 
 /// A thin wrapper around the `service_manager::ServiceManager`, which makes our own testing

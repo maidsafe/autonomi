@@ -6,17 +6,24 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
-use ant_protocol::{
-    antnode_proto::{
-        ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest,
-        RecordAddressesRequest, RestartRequest, StopRequest, UpdateLogLevelRequest, UpdateRequest,
-    },
-    CLOSE_GROUP_SIZE,
-};
+use crate::error::Error;
+use crate::error::Result;
+use ant_protocol::antnode_proto::ant_node_client::AntNodeClient;
+use ant_protocol::antnode_proto::NetworkInfoRequest;
+use ant_protocol::antnode_proto::NodeInfoRequest;
+use ant_protocol::antnode_proto::RecordAddressesRequest;
+use ant_protocol::antnode_proto::RestartRequest;
+use ant_protocol::antnode_proto::StopRequest;
+use ant_protocol::antnode_proto::UpdateLogLevelRequest;
+use ant_protocol::antnode_proto::UpdateRequest;
+use ant_protocol::CLOSE_GROUP_SIZE;
 use async_trait::async_trait;
-use libp2p::{kad::RecordKey, Multiaddr, PeerId};
-use std::{net::SocketAddr, path::PathBuf, str::FromStr};
+use libp2p::kad::RecordKey;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 use tokio::time::Duration;
 use tonic::Request;
 use tracing::error;

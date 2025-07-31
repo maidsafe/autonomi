@@ -7,12 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::EvmError;
-use evmlib::{
-    common::{Address as RewardsAddress, QuoteHash},
-    quoting_metrics::QuotingMetrics,
-};
-use libp2p::{identity::PublicKey, Multiaddr, PeerId};
-use serde::{Deserialize, Serialize};
+use evmlib::common::Address as RewardsAddress;
+use evmlib::common::QuoteHash;
+use evmlib::quoting_metrics::QuotingMetrics;
+use libp2p::identity::PublicKey;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use serde::Deserialize;
+use serde::Serialize;
 pub use std::time::SystemTime;
 use xor_name::XorName;
 
@@ -339,7 +341,8 @@ mod tests {
     use super::*;
 
     use libp2p::identity::Keypair;
-    use std::{thread::sleep, time::Duration};
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_encode_decode_peer_id() {

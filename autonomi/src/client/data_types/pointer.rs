@@ -8,22 +8,34 @@
 
 use std::collections::HashMap;
 
-use crate::client::{
-    payment::{PayError, PaymentOption},
-    quote::CostError,
-    Client, GetError, PutError,
-};
-use crate::networking::{PeerId, PeerInfo, Record};
-use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_protocol::{
-    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
-    NetworkAddress,
-};
-pub use bls::{PublicKey, SecretKey};
-use tracing::{debug, error, trace};
+use crate::client::payment::PayError;
+use crate::client::payment::PaymentOption;
+use crate::client::quote::CostError;
+use crate::client::Client;
+use crate::client::GetError;
+use crate::client::PutError;
+use crate::networking::PeerId;
+use crate::networking::PeerInfo;
+use crate::networking::Record;
+use ant_evm::Amount;
+use ant_evm::AttoTokens;
+use ant_evm::EvmWalletError;
+use ant_protocol::storage::try_deserialize_record;
+use ant_protocol::storage::try_serialize_record;
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::NetworkAddress;
+pub use bls::PublicKey;
+pub use bls::SecretKey;
+use tracing::debug;
+use tracing::error;
+use tracing::trace;
 
 use crate::networking::NetworkError;
-pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
+pub use ant_protocol::storage::Pointer;
+pub use ant_protocol::storage::PointerAddress;
+pub use ant_protocol::storage::PointerTarget;
 
 /// Errors that can occur when dealing with Pointers
 #[derive(Debug, thiserror::Error)]

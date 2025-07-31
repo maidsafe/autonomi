@@ -6,16 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_protocol::messages::Response;
 use ant_protocol::storage::GraphEntryAddress;
-use ant_protocol::{messages::Response, storage::RecordKind, NetworkAddress};
+use ant_protocol::storage::RecordKind;
+use ant_protocol::NetworkAddress;
+use libp2p::kad::QueryId;
+use libp2p::kad::{self};
+use libp2p::request_response::OutboundFailure;
+use libp2p::request_response::OutboundRequestId;
+use libp2p::swarm::DialError;
 use libp2p::swarm::ListenError;
-use libp2p::{
-    kad::{self, QueryId},
-    request_response::{OutboundFailure, OutboundRequestId},
-    swarm::DialError,
-    TransportError,
-};
-use std::{collections::HashMap, fmt::Debug, io, path::PathBuf};
+use libp2p::TransportError;
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::io;
+use std::path::PathBuf;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::Level;
@@ -217,9 +222,10 @@ fn transport_err_to_str(err: &TransportError<std::io::Error>) -> (String, Level)
 
 #[cfg(test)]
 mod tests {
-    use ant_protocol::{
-        storage::ChunkAddress, NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey,
-    };
+    use ant_protocol::storage::ChunkAddress;
+    use ant_protocol::NetworkAddress;
+    use ant_protocol::PrettyPrintKBucketKey;
+    use ant_protocol::PrettyPrintRecordKey;
     use xor_name::XorName;
 
     #[test]

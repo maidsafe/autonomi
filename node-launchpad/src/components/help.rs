@@ -8,23 +8,28 @@
 
 use super::header::SelectedMenuItem;
 use color_eyre::eyre::Result;
-use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
-    style::{Style, Stylize},
-    text::Span,
-    widgets::{Block, Borders, Padding},
-    Frame,
-};
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::style::Stylize;
+use ratatui::text::Span;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Padding;
+use ratatui::Frame;
 use tokio::sync::mpsc::UnboundedSender;
 
 use super::Component;
-use crate::{
-    action::Action,
-    components::header::Header,
-    mode::{InputMode, Scene},
-    style::{COOL_GREY, GHOST_WHITE, VIVID_SKY_BLUE},
-    widgets::hyperlink::Hyperlink,
-};
+use crate::action::Action;
+use crate::components::header::Header;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::COOL_GREY;
+use crate::style::GHOST_WHITE;
+use crate::style::VIVID_SKY_BLUE;
+use crate::widgets::hyperlink::Hyperlink;
 
 #[derive(Clone)]
 pub struct Help {

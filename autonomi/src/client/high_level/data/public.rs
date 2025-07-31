@@ -10,12 +10,16 @@ use ant_protocol::storage::DataTypes;
 use bytes::Bytes;
 use std::time::Instant;
 
+use crate::chunk::ChunkAddress;
 use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::{GetError, PutError};
-use crate::{chunk::ChunkAddress, self_encryption::encrypt, Client};
-use ant_evm::{Amount, AttoTokens};
+use crate::client::GetError;
+use crate::client::PutError;
+use crate::self_encryption::encrypt;
+use crate::Client;
+use ant_evm::Amount;
+use ant_evm::AttoTokens;
 use xor_name::XorName;
 
 use super::DataAddress;

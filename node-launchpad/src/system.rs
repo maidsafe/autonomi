@@ -9,7 +9,8 @@
 use color_eyre::eyre::eyre;
 use color_eyre::eyre::ContextCompat;
 use color_eyre::Result;
-use faccess::{AccessMode, PathExt};
+use faccess::AccessMode;
+use faccess::PathExt;
 
 use std::env;
 

@@ -6,15 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use libp2p::PeerId;
-use serde::{de, Deserialize, Deserializer};
-use std::{
-    collections::BTreeMap,
-    net::{IpAddr, SocketAddr},
-    path::PathBuf,
-    str::FromStr,
-};
+use serde::de;
+use serde::Deserialize;
+use serde::Deserializer;
+use std::collections::BTreeMap;
+use std::net::IpAddr;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 fn deserialize_peer_socket_map<'de, D>(
     deserializer: D,

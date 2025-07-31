@@ -6,15 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::archive_public::{ArchiveAddress, PublicArchive};
-use super::{DownloadError, FileCostError, Metadata, UploadError};
+use super::archive_public::ArchiveAddress;
+use super::archive_public::PublicArchive;
+use super::DownloadError;
+use super::FileCostError;
+use super::Metadata;
+use super::UploadError;
 use crate::client::high_level::data::DataAddress;
 use crate::client::payment::PaymentOption;
 use crate::client::Client;
 use crate::AttoTokens;
 use bytes::Bytes;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
+use std::time::SystemTime;
 
 impl Client {
     /// Download file from network to local file system

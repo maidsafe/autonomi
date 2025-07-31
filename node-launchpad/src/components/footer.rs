@@ -6,8 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE};
-use ratatui::{prelude::*, widgets::*};
+use crate::style::COOL_GREY;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
 
 pub enum NodesToStart {
     Running,

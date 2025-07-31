@@ -8,14 +8,14 @@
 
 use ant_protocol::CLOSE_GROUP_SIZE;
 use libp2p::PeerId;
-use prometheus_client::{
-    encoding::{EncodeLabelSet, EncodeLabelValue},
-    metrics::{family::Family, gauge::Gauge},
-};
-use std::{
-    collections::{HashSet, VecDeque},
-    time::{Duration, Instant},
-};
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::EncodeLabelValue;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use std::collections::HashSet;
+use std::collections::VecDeque;
+use std::time::Duration;
+use std::time::Instant;
 use strum::IntoEnumIterator;
 use tokio::time::interval;
 

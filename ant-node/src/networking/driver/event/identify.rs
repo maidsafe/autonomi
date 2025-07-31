@@ -6,20 +6,22 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    multiaddr_get_port,
-    network::connection_action_logging,
-    relay_manager::{is_a_relayed_peer, RelayManager},
-    Addresses, NetworkEvent,
-};
+use crate::networking::multiaddr_get_port;
+use crate::networking::network::connection_action_logging;
+use crate::networking::relay_manager::is_a_relayed_peer;
+use crate::networking::relay_manager::RelayManager;
+use crate::networking::Addresses;
+use crate::networking::NetworkEvent;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use itertools::Itertools;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
 use libp2p::Multiaddr;
-use std::collections::{hash_map, HashSet};
-use std::time::{Duration, Instant};
+use std::collections::hash_map;
+use std::collections::HashSet;
+use std::time::Duration;
+use std::time::Instant;
 
 /// The delay before we dial back a peer after receiving an identify event.
 /// 180s will most likely remove the UDP tuple from the remote's NAT table.

@@ -7,18 +7,24 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::SwarmDriver;
-use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent};
+use crate::networking::driver::PendingGetClosestType;
+use crate::networking::Addresses;
+use crate::networking::NetworkEvent;
 
 use ant_protocol::NetworkAddress;
-use libp2p::{
-    kad::{KBucketKey, K_VALUE},
-    PeerId,
-};
-use rand::{rngs::OsRng, Rng};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::{btree_map::Entry, BTreeMap};
+use libp2p::kad::KBucketKey;
+use libp2p::kad::K_VALUE;
+use libp2p::PeerId;
+use rand::rngs::OsRng;
+use rand::Rng;
+use rayon::iter::IntoParallelIterator;
+use rayon::iter::ParallelIterator;
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::time::Instant;
-use tokio::time::{interval, Duration, Interval};
+use tokio::time::interval;
+use tokio::time::Duration;
+use tokio::time::Interval;
 
 // The number of PeerId to generate when starting an instance of NetworkDiscoveryCandidate.
 const INITIAL_GENERATION_ATTEMPTS: usize = 10_000;

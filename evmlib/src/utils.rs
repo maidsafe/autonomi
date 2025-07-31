@@ -8,14 +8,21 @@
 
 #![allow(dead_code)]
 
-use crate::common::{Address, Hash};
-use crate::{CustomNetwork, Network};
+use crate::common::Address;
+use crate::common::Hash;
+use crate::CustomNetwork;
+use crate::Network;
 use alloy::network::Ethereum;
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager,
-};
-use alloy::providers::{Identity, ProviderBuilder, RootProvider};
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::SimpleNonceManager;
+use alloy::providers::Identity;
+use alloy::providers::ProviderBuilder;
+use alloy::providers::RootProvider;
 use alloy::transports::http::reqwest;
 use rand::Rng;
 use std::env;

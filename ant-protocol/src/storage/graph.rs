@@ -8,10 +8,12 @@
 
 use super::address::GraphEntryAddress;
 use bls::SecretKey;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 // re-exports
-pub use bls::{PublicKey, Signature};
+pub use bls::PublicKey;
+pub use bls::Signature;
 
 /// Content of a graph, limited to 32 bytes
 pub type GraphContent = [u8; 32];

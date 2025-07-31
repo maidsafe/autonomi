@@ -9,7 +9,10 @@
 use super::ChunkAddress;
 use crate::NetworkAddress;
 use bytes::Bytes;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 
 use xor_name::XorName;
 

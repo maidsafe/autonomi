@@ -7,45 +7,54 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 #![allow(clippy::mutable_key_type)] // for the Bytes in NetworkAddress
 
-use crate::networking::interface::{LocalSwarmCmd, NetworkEvent};
+use crate::networking::interface::LocalSwarmCmd;
+use crate::networking::interface::NetworkEvent;
 use crate::networking::log_markers::Marker;
 use crate::networking::network::send_local_swarm_cmd;
-use aes_gcm_siv::{
-    aead::{Aead, KeyInit},
-    Aes256GcmSiv, Key as AesKey, Nonce,
-};
+use aes_gcm_siv::aead::Aead;
+use aes_gcm_siv::aead::KeyInit;
+use aes_gcm_siv::Aes256GcmSiv;
+use aes_gcm_siv::Key as AesKey;
+use aes_gcm_siv::Nonce;
 use ant_evm::QuotingMetrics;
 use ant_protocol::constants::MAX_PACKET_SIZE;
-use ant_protocol::{
-    storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
-};
+use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::RecordKind;
+use ant_protocol::storage::ValidationType;
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
 use hkdf::Hkdf;
 use itertools::Itertools;
-use libp2p::{
-    identity::PeerId,
-    kad::{
-        store::{Error, RecordStore, Result},
-        KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
-    },
-};
+use libp2p::identity::PeerId;
+use libp2p::kad::store::Error;
+use libp2p::kad::store::RecordStore;
+use libp2p::kad::store::Result;
+use libp2p::kad::KBucketDistance as Distance;
+use libp2p::kad::ProviderRecord;
+use libp2p::kad::Record;
+use libp2p::kad::RecordKey as Key;
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
+use serde::Deserialize;
+use serde::Serialize;
 use sha2::Sha256;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
 use std::time::Instant;
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    fs,
-    path::{Path, PathBuf},
-    time::SystemTime,
-    vec,
-};
+use std::time::SystemTime;
+use std::vec;
 use tokio::spawn;
-use tokio::{sync::mpsc, time::Duration};
-use walkdir::{DirEntry, WalkDir};
+use tokio::sync::mpsc;
+use tokio::time::Duration;
+use walkdir::DirEntry;
+use walkdir::WalkDir;
 use xor_name::XorName;
 
 // A GraphEntry record is at the size of 4KB roughly.
@@ -1001,19 +1010,23 @@ mod tests {
     use bls::SecretKey;
     use xor_name::XorName;
 
-    use ant_protocol::storage::{
-        try_deserialize_record, try_serialize_record, Chunk, ChunkAddress, DataTypes, Scratchpad,
-    };
-    use assert_fs::{
-        fixture::{PathChild, PathCreateDir},
-        TempDir,
-    };
+    use ant_protocol::storage::try_deserialize_record;
+    use ant_protocol::storage::try_serialize_record;
+    use ant_protocol::storage::Chunk;
+    use ant_protocol::storage::ChunkAddress;
+    use ant_protocol::storage::DataTypes;
+    use ant_protocol::storage::Scratchpad;
+    use assert_fs::fixture::PathChild;
+    use assert_fs::fixture::PathCreateDir;
+    use assert_fs::TempDir;
     use bytes::Bytes;
     use eyre::ContextCompat;
-    use libp2p::{core::multihash::Multihash, kad::RecordKey};
+    use libp2p::core::multihash::Multihash;
+    use libp2p::kad::RecordKey;
     use quickcheck::*;
     use tokio::runtime::Runtime;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::sleep;
+    use tokio::time::Duration;
 
     const MULITHASH_CODE: u64 = 0x12;
 

@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use itertools::Itertools;
-use ratatui::{prelude::*, widgets::WidgetRef};
+use ratatui::prelude::*;
+use ratatui::widgets::WidgetRef;
 
 /// A hyperlink widget that renders a hyperlink in the terminal using [OSC 8].
 ///

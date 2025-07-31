@@ -7,25 +7,29 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use color_eyre::eyre::Result;
-use crossterm::{
-    cursor,
-    event::{
-        DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event as CrosstermEvent, KeyEvent, KeyEventKind, MouseEvent,
-    },
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen},
-};
-use futures::{FutureExt, StreamExt};
+use crossterm::cursor;
+use crossterm::event::DisableBracketedPaste;
+use crossterm::event::DisableMouseCapture;
+use crossterm::event::EnableBracketedPaste;
+use crossterm::event::EnableMouseCapture;
+use crossterm::event::Event as CrosstermEvent;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::MouseEvent;
+use crossterm::terminal::EnterAlternateScreen;
+use crossterm::terminal::LeaveAlternateScreen;
+use futures::FutureExt;
+use futures::StreamExt;
 use ratatui::backend::CrosstermBackend as Backend;
-use serde::{Deserialize, Serialize};
-use std::{
-    ops::{Deref, DerefMut},
-    time::Duration,
-};
-use tokio::{
-    sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
-};
+use serde::Deserialize;
+use serde::Serialize;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::time::Duration;
+use tokio::sync::mpsc::UnboundedReceiver;
+use tokio::sync::mpsc::UnboundedSender;
+use tokio::sync::mpsc::{self};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 pub type IO = std::io::Stdout;

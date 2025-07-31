@@ -1,7 +1,8 @@
 use ant_service_management::antctl_proto::ant_ctl_client::AntCtlClient;
 use ant_service_management::antctl_proto::NodeServiceRestartRequest;
 use color_eyre::eyre::bail;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::eyre::eyre;
+use color_eyre::Result;
 use libp2p_identity::PeerId;
 use std::net::SocketAddr;
 use std::str::FromStr;

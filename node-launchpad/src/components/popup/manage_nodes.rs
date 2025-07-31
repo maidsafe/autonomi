@@ -11,17 +11,25 @@ use std::path::PathBuf;
 use crate::action::OptionsActions;
 use crate::system::get_available_space_b;
 use color_eyre::Result;
-use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use crossterm::event::Event;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use ratatui::prelude::*;
+use ratatui::widgets::*;
+use tui_input::backend::crossterm::EventHandler;
+use tui_input::Input;
 
-use crate::{
-    action::Action,
-    mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
-};
+use crate::action::Action;
+use crate::mode::InputMode;
+use crate::mode::Scene;
+use crate::style::clear_area;
+use crate::style::EUCALYPTUS;
+use crate::style::GHOST_WHITE;
+use crate::style::LIGHT_PERIWINKLE;
+use crate::style::VIVID_SKY_BLUE;
 
-use super::super::{utils::centered_rect_fixed, Component};
+use super::super::utils::centered_rect_fixed;
+use super::super::Component;
 
 pub const GB_PER_NODE: usize = 35;
 pub const MB: usize = 1000 * 1000;

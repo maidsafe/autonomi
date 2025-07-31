@@ -6,15 +6,18 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    driver::NodeBehaviour, multiaddr_get_ip, multiaddr_get_port, multiaddr_is_global,
-};
+use crate::networking::driver::NodeBehaviour;
+use crate::networking::multiaddr_get_ip;
+use crate::networking::multiaddr_get_port;
+use crate::networking::multiaddr_is_global;
 use itertools::Itertools;
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, Swarm};
-use std::{
-    collections::{HashMap, HashSet},
-    net::IpAddr,
-};
+use libp2p::multiaddr::Protocol;
+use libp2p::Multiaddr;
+use libp2p::PeerId;
+use libp2p::Swarm;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::net::IpAddr;
 
 /// The maximum number of reports before an candidate address is confirmed
 const MAX_REPORTS_BEFORE_CONFIRMATION: u8 = 3;

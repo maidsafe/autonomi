@@ -7,7 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use color_eyre::eyre::Result;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use std::time::Duration;
 
 pub fn get_progress_bar(_length: u64) -> Result<ProgressBar> {

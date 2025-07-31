@@ -10,20 +10,29 @@
 extern crate tracing;
 
 use ant_logging::LogBuilder;
-use ant_node_manager::{config::get_node_registry_path, rpc, DAEMON_DEFAULT_PORT};
-use ant_service_management::{
-    antctl_proto::{
-        ant_ctl_server::{AntCtl, AntCtlServer},
-        get_status_response::Node,
-        GetStatusRequest, GetStatusResponse, NodeServiceRestartRequest, NodeServiceRestartResponse,
-    },
-    NodeRegistryManager,
-};
+use ant_node_manager::config::get_node_registry_path;
+use ant_node_manager::rpc;
+use ant_node_manager::DAEMON_DEFAULT_PORT;
+use ant_service_management::antctl_proto::ant_ctl_server::AntCtl;
+use ant_service_management::antctl_proto::ant_ctl_server::AntCtlServer;
+use ant_service_management::antctl_proto::get_status_response::Node;
+use ant_service_management::antctl_proto::GetStatusRequest;
+use ant_service_management::antctl_proto::GetStatusResponse;
+use ant_service_management::antctl_proto::NodeServiceRestartRequest;
+use ant_service_management::antctl_proto::NodeServiceRestartResponse;
+use ant_service_management::NodeRegistryManager;
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::eyre;
+use color_eyre::eyre::Result;
 use libp2p_identity::PeerId;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use tonic::{transport::Server, Code, Request, Response, Status};
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::SocketAddr;
+use tonic::transport::Server;
+use tonic::Code;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
 use tracing::Level;
 
 #[derive(Parser, Debug)]

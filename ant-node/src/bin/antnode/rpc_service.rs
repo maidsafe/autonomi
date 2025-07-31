@@ -8,26 +8,47 @@
 
 use ant_logging::ReloadHandle;
 use ant_node::RunningNode;
-use ant_protocol::antnode_proto::{
-    ant_node_server::{AntNode, AntNodeServer},
-    k_buckets_response, KBucketsRequest, KBucketsResponse, NetworkInfoRequest, NetworkInfoResponse,
-    NodeEvent, NodeEventsRequest, NodeInfoRequest, NodeInfoResponse, RecordAddressesRequest,
-    RecordAddressesResponse, RestartRequest, RestartResponse, StopRequest, StopResponse,
-    UpdateLogLevelRequest, UpdateLogLevelResponse, UpdateRequest, UpdateResponse,
-};
-use ant_protocol::node_rpc::{NodeCtrl, StopResult};
-use eyre::{ErrReport, Result};
-use std::{
-    collections::HashMap,
-    env,
-    net::SocketAddr,
-    process,
-    time::{Duration, Instant},
-};
-use tokio::sync::mpsc::{self, Sender};
+use ant_protocol::antnode_proto::ant_node_server::AntNode;
+use ant_protocol::antnode_proto::ant_node_server::AntNodeServer;
+use ant_protocol::antnode_proto::k_buckets_response;
+use ant_protocol::antnode_proto::KBucketsRequest;
+use ant_protocol::antnode_proto::KBucketsResponse;
+use ant_protocol::antnode_proto::NetworkInfoRequest;
+use ant_protocol::antnode_proto::NetworkInfoResponse;
+use ant_protocol::antnode_proto::NodeEvent;
+use ant_protocol::antnode_proto::NodeEventsRequest;
+use ant_protocol::antnode_proto::NodeInfoRequest;
+use ant_protocol::antnode_proto::NodeInfoResponse;
+use ant_protocol::antnode_proto::RecordAddressesRequest;
+use ant_protocol::antnode_proto::RecordAddressesResponse;
+use ant_protocol::antnode_proto::RestartRequest;
+use ant_protocol::antnode_proto::RestartResponse;
+use ant_protocol::antnode_proto::StopRequest;
+use ant_protocol::antnode_proto::StopResponse;
+use ant_protocol::antnode_proto::UpdateLogLevelRequest;
+use ant_protocol::antnode_proto::UpdateLogLevelResponse;
+use ant_protocol::antnode_proto::UpdateRequest;
+use ant_protocol::antnode_proto::UpdateResponse;
+use ant_protocol::node_rpc::NodeCtrl;
+use ant_protocol::node_rpc::StopResult;
+use eyre::ErrReport;
+use eyre::Result;
+use std::collections::HashMap;
+use std::env;
+use std::net::SocketAddr;
+use std::process;
+use std::time::Duration;
+use std::time::Instant;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{self};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Code, Request, Response, Status};
-use tracing::{debug, info};
+use tonic::transport::Server;
+use tonic::Code;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
+use tracing::debug;
+use tracing::info;
 
 // Defining a struct to hold information used by our gRPC service backend
 struct SafeNodeRpcService {

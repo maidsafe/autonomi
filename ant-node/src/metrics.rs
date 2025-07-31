@@ -10,16 +10,14 @@
 use crate::networking::MetricsRegistries;
 use crate::Marker;
 use ant_protocol::storage::DataTypes;
-use prometheus_client::{
-    encoding::{EncodeLabelSet, EncodeLabelValue},
-    metrics::{
-        counter::Counter,
-        family::Family,
-        gauge::Gauge,
-        histogram::{exponential_buckets, Histogram},
-        info::Info,
-    },
-};
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::EncodeLabelValue;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::exponential_buckets;
+use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::metrics::info::Info;
 use std::time::Instant;
 
 #[derive(Clone)]

@@ -6,19 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_bootstrap::{
-    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher, InitialPeersConfig,
-};
+use ant_bootstrap::BootstrapCacheConfig;
+use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::ContactsFetcher;
+use ant_bootstrap::InitialPeersConfig;
 use ant_logging::LogBuilder;
 use color_eyre::Result;
 use libp2p::Multiaddr;
 use std::time::Duration;
 use tempfile::TempDir;
 use url::Url;
-use wiremock::{
-    matchers::{method, path},
-    Mock, MockServer, ResponseTemplate,
-};
+use wiremock::matchers::method;
+use wiremock::matchers::path;
+use wiremock::Mock;
+use wiremock::MockServer;
+use wiremock::ResponseTemplate;
 
 #[tokio::test]
 async fn test_empty_cache() -> Result<()> {

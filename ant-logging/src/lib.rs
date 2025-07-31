@@ -14,11 +14,13 @@ pub mod metrics;
 
 use crate::error::Result;
 use layers::TracingLayers;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use tracing::info;
 use tracing_core::dispatcher::DefaultGuard;
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::prelude::__tracing_subscriber_SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 pub use error::Error;
 pub use layers::ReloadHandle;
@@ -325,17 +327,20 @@ impl LogBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{layers::LogFormatter, ReloadHandle};
+    use crate::layers::LogFormatter;
+    use crate::ReloadHandle;
     use color_eyre::Result;
-    use tracing::{trace, warn, Level};
-    use tracing_subscriber::{
-        filter::Targets,
-        fmt as tracing_fmt,
-        layer::{Filter, SubscriberExt},
-        reload,
-        util::SubscriberInitExt,
-        Layer, Registry,
-    };
+    use tracing::trace;
+    use tracing::warn;
+    use tracing::Level;
+    use tracing_subscriber::filter::Targets;
+    use tracing_subscriber::fmt as tracing_fmt;
+    use tracing_subscriber::layer::Filter;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::reload;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::Layer;
+    use tracing_subscriber::Registry;
     use tracing_test::internal::global_buf;
 
     #[test]

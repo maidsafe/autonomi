@@ -7,15 +7,15 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use color_eyre::eyre::Result;
-use crossterm::event::{KeyEvent, MouseEvent};
+use crossterm::event::KeyEvent;
+use crossterm::event::MouseEvent;
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{
-    action::Action,
-    config::Config,
-    tui::{Event, Frame},
-};
+use crate::action::Action;
+use crate::config::Config;
+use crate::tui::Event;
+use crate::tui::Frame;
 
 pub mod footer;
 pub mod header;

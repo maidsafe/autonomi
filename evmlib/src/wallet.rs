@@ -6,25 +6,44 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::common::{Address, Amount, QuoteHash, QuotePayment, TxHash, U256};
+use crate::common::Address;
+use crate::common::Amount;
+use crate::common::QuoteHash;
+use crate::common::QuotePayment;
+use crate::common::TxHash;
+use crate::common::U256;
+use crate::contract::network_token;
 use crate::contract::network_token::NetworkToken;
+use crate::contract::payment_vault;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
-use crate::contract::{network_token, payment_vault};
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
-use crate::{Network, TX_TIMEOUT};
+use crate::Network;
+use crate::TX_TIMEOUT;
 use alloy::hex::ToHexExt;
-use alloy::network::{Ethereum, EthereumWallet, NetworkWallet, TransactionBuilder};
-use alloy::providers::fillers::{
-    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
-    SimpleNonceManager, WalletFiller,
-};
-use alloy::providers::{Identity, Provider, ProviderBuilder, RootProvider};
+use alloy::network::Ethereum;
+use alloy::network::EthereumWallet;
+use alloy::network::NetworkWallet;
+use alloy::network::TransactionBuilder;
+use alloy::providers::fillers::BlobGasFiller;
+use alloy::providers::fillers::ChainIdFiller;
+use alloy::providers::fillers::FillProvider;
+use alloy::providers::fillers::GasFiller;
+use alloy::providers::fillers::JoinFill;
+use alloy::providers::fillers::NonceFiller;
+use alloy::providers::fillers::SimpleNonceManager;
+use alloy::providers::fillers::WalletFiller;
+use alloy::providers::Identity;
+use alloy::providers::Provider;
+use alloy::providers::ProviderBuilder;
+use alloy::providers::RootProvider;
 use alloy::rpc::types::TransactionRequest;
-use alloy::signers::local::{LocalSigner, PrivateKeySigner};
+use alloy::signers::local::LocalSigner;
+use alloy::signers::local::PrivateKeySigner;
 use alloy::transports::http::reqwest;
-use alloy::transports::{RpcError, TransportErrorKind};
+use alloy::transports::RpcError;
+use alloy::transports::TransportErrorKind;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -411,8 +430,11 @@ pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
 mod tests {
     use crate::common::Amount;
     use crate::testnet::Testnet;
-    use crate::wallet::{from_private_key, Wallet};
-    use alloy::network::{Ethereum, EthereumWallet, NetworkWallet};
+    use crate::wallet::from_private_key;
+    use crate::wallet::Wallet;
+    use alloy::network::Ethereum;
+    use alloy::network::EthereumWallet;
+    use alloy::network::NetworkWallet;
     use alloy::primitives::address;
 
     #[tokio::test]

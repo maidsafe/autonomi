@@ -7,13 +7,15 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::client::chunk::Chunk;
 use autonomi::client::payment::PaymentOption;
 use autonomi::self_encryption::encrypt;
-use autonomi::{client::chunk::Chunk, Client};
+use autonomi::Client;
 use eyre::Result;
 use self_encryption::test_helpers::random_bytes;
 use serial_test::serial;
-use test_utils::{evm::get_funded_wallet, gen_random_data};
+use test_utils::evm::get_funded_wallet;
+use test_utils::gen_random_data;
 
 async fn chunk_put_with_size(size: usize) -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();

@@ -38,13 +38,18 @@ impl From<u8> for VerbosityLevel {
     }
 }
 
-use crate::error::{Error, Result};
+use crate::error::Error;
+use crate::error::Result;
+use ant_service_management::control::ServiceControl;
+use ant_service_management::error::Error as ServiceError;
 use ant_service_management::rpc::RpcActions;
+use ant_service_management::rpc::RpcClient;
 use ant_service_management::NodeRegistryManager;
-use ant_service_management::{
-    control::ServiceControl, error::Error as ServiceError, rpc::RpcClient, NodeService,
-    ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
-};
+use ant_service_management::NodeService;
+use ant_service_management::ServiceStateActions;
+use ant_service_management::ServiceStatus;
+use ant_service_management::UpgradeOptions;
+use ant_service_management::UpgradeResult;
 use colored::Colorize;
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
@@ -652,30 +657,40 @@ fn format_status_without_colour(status: &ServiceStatus) -> String {
 mod tests {
     use super::*;
     use ant_bootstrap::InitialPeersConfig;
-    use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
+    use ant_evm::AttoTokens;
+    use ant_evm::CustomNetwork;
+    use ant_evm::EvmNetwork;
+    use ant_evm::RewardsAddress;
     use ant_logging::LogFormat;
-    use ant_service_management::{
-        error::{Error as ServiceControlError, Result as ServiceControlResult},
-        node::{NodeService, NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST},
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
-        UpgradeOptions, UpgradeResult,
-    };
+    use ant_service_management::error::Error as ServiceControlError;
+    use ant_service_management::error::Result as ServiceControlResult;
+    use ant_service_management::node::NodeService;
+    use ant_service_management::node::NodeServiceData;
+    use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+    use ant_service_management::rpc::NetworkInfo;
+    use ant_service_management::rpc::NodeInfo;
+    use ant_service_management::rpc::RecordAddress;
+    use ant_service_management::rpc::RpcActions;
+    use ant_service_management::UpgradeOptions;
+    use ant_service_management::UpgradeResult;
     use assert_fs::prelude::*;
     use assert_matches::assert_matches;
     use async_trait::async_trait;
     use color_eyre::eyre::Result;
     use libp2p_identity::PeerId;
-    use mockall::{mock, predicate::*};
+    use mockall::mock;
+    use mockall::predicate::*;
     use predicates::prelude::*;
     use service_manager::ServiceInstallCtx;
-    use std::{
-        ffi::OsString,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::{Path, PathBuf},
-        str::FromStr,
-        sync::Arc,
-        time::Duration,
-    };
+    use std::ffi::OsString;
+    use std::net::IpAddr;
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddr;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use std::time::Duration;
     use tokio::sync::RwLock;
 
     mock! {

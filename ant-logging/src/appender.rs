@@ -6,20 +6,20 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use file_rotate::{
-    compression::Compression,
-    suffix::{AppendTimestamp, FileLimit},
-    ContentLimit, FileRotate,
-};
-use std::{
-    env,
-    ffi::OsStr,
-    fmt::Debug,
-    io,
-    io::Write,
-    path::{Path, PathBuf},
-};
-use tracing_appender::non_blocking::{NonBlocking, WorkerGuard};
+use file_rotate::compression::Compression;
+use file_rotate::suffix::AppendTimestamp;
+use file_rotate::suffix::FileLimit;
+use file_rotate::ContentLimit;
+use file_rotate::FileRotate;
+use std::env;
+use std::ffi::OsStr;
+use std::fmt::Debug;
+use std::io;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use tracing_appender::non_blocking::NonBlocking;
+use tracing_appender::non_blocking::WorkerGuard;
 
 /// max_bytes:
 /// - the maximum size a log can grow to until it is rotated.

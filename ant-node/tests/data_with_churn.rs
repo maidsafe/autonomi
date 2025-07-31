@@ -8,33 +8,47 @@
 
 mod common;
 
-use crate::common::{
-    client::{get_client_and_funded_wallet, get_node_count},
-    NodeRestart,
-};
+use crate::common::client::get_client_and_funded_wallet;
+use crate::common::client::get_node_count;
+use crate::common::NodeRestart;
 use ant_logging::LogBuilder;
-use ant_protocol::{
-    storage::{ChunkAddress, GraphEntry, GraphEntryAddress, PointerTarget, ScratchpadAddress},
-    NetworkAddress,
-};
-use autonomi::{data::DataAddress, Client, Wallet};
-use bls::{PublicKey, SecretKey};
+use ant_protocol::storage::ChunkAddress;
+use ant_protocol::storage::GraphEntry;
+use ant_protocol::storage::GraphEntryAddress;
+use ant_protocol::storage::PointerTarget;
+use ant_protocol::storage::ScratchpadAddress;
+use ant_protocol::NetworkAddress;
+use autonomi::data::DataAddress;
+use autonomi::Client;
+use autonomi::Wallet;
+use bls::PublicKey;
+use bls::SecretKey;
 use bytes::Bytes;
 use common::client::transfer_to_new_wallet;
-use eyre::{bail, ErrReport, Result};
+use eyre::bail;
+use eyre::ErrReport;
+use eyre::Result;
 use rand::Rng;
 use self_encryption::MAX_CHUNK_SIZE;
-use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
-    fmt,
-    fs::create_dir_all,
-    sync::{Arc, LazyLock},
-    time::{Duration, Instant},
-};
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::fmt;
+use std::fs::create_dir_all;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
+use std::time::Instant;
 use tempfile::tempdir;
 use test_utils::gen_random_data;
-use tokio::{sync::RwLock, task::JoinHandle, time::sleep};
-use tracing::{debug, error, info, trace, warn};
+use tokio::sync::RwLock;
+use tokio::task::JoinHandle;
+use tokio::time::sleep;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
+use tracing::trace;
+use tracing::warn;
 use xor_name::XorName;
 
 const TOKENS_TO_TRANSFER: usize = 10000000;

@@ -7,10 +7,15 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_evm::PaymentQuote;
-use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
+use ant_protocol::NetworkAddress;
+use ant_protocol::PrettyPrintRecordKey;
 
-use super::{Network, RetryStrategy};
-use super::{NetworkError, PeerInfo, Record, Strategy};
+use super::Network;
+use super::NetworkError;
+use super::PeerInfo;
+use super::Record;
+use super::RetryStrategy;
+use super::Strategy;
 use tokio::time::sleep;
 
 impl Network {

@@ -6,7 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 
 /// The nonce provided by the verifier
@@ -35,7 +36,8 @@ impl ChunkProof {
 }
 
 fn sha3_256(input: &[u8]) -> [u8; 32] {
-    use tiny_keccak::{Hasher, Sha3};
+    use tiny_keccak::Hasher;
+    use tiny_keccak::Sha3;
 
     let mut sha3 = Sha3::v256();
     let mut output = [0; 32];
