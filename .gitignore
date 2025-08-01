@@ -48,3 +48,6 @@ node_modules/
 # MkDocs
 site/
 /evmlib/tests/private.rs
+
+# Claude
+.claude/

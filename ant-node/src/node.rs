@@ -91,7 +91,6 @@ pub struct NodeBuilder {
     /// Set to Some to enable the metrics server
     metrics_server_port: Option<u16>,
     no_upnp: bool,
-    relay_client: bool,
     root_dir: PathBuf,
 }
 
@@ -117,7 +116,6 @@ impl NodeBuilder {
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
             no_upnp: false,
-            relay_client: false,
             root_dir,
         }
     }
@@ -136,11 +134,6 @@ impl NodeBuilder {
     /// Set the initialized bootstrap cache.
     pub fn bootstrap_cache(&mut self, cache: BootstrapCacheStore) {
         self.bootstrap_cache = Some(cache);
-    }
-
-    /// Set the flag to make the node act as a relay client
-    pub fn relay_client(&mut self, relay_client: bool) {
-        self.relay_client = relay_client;
     }
 
     /// Set the flag to disable UPnP for the node
@@ -186,7 +179,6 @@ impl NodeBuilder {
             shutdown_rx: shutdown_rx.clone(),
             bootstrap_cache: self.bootstrap_cache,
             no_upnp: self.no_upnp,
-            relay_client: self.relay_client,
             custom_request_timeout: None,
             #[cfg(feature = "open-metrics")]
             metrics_registries,

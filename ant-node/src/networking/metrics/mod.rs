@@ -39,23 +39,30 @@ pub(crate) struct VersionLabels {
 }
 
 /// The shared recorders that are used to record metrics.
+#[allow(dead_code)] // TODO: Remove this once we have removed all the deprecated metrics related to relay.
 pub(crate) struct NetworkMetricsRecorder {
     // Records libp2p related metrics
     // Must directly call self.libp2p_metrics.record(libp2p_event) with Recorder trait in scope. But since we have
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)
     libp2p_metrics: Libp2pMetrics,
     upnp_events: Family<upnp::UpnpEventLabels, Counter>,
+    // DEPRECATED: This is no longer used.
     relay_client_events: Family<relay_client::RelayClientEventLabels, Counter>,
 
     // metrics from ant-networking
     pub(crate) connected_peers: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) connected_relay_clients: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) estimated_network_size: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_peers_percentage: Gauge<f64, AtomicU64>,
     pub(crate) open_connections: Gauge,
     pub(crate) peers_in_routing_table: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_peers_in_routing_table: Gauge,
     pub(crate) records_stored: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_reservation_health: Gauge<f64, AtomicU64>,
     pub(crate) node_versions: Family<VersionLabels, Gauge>,
 
@@ -400,12 +407,6 @@ impl NetworkMetricsRecorder {
 /// Impl the Recorder traits again for our struct.
 impl Recorder<libp2p::kad::Event> for NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::kad::Event) {
-        self.libp2p_metrics.record(event)
-    }
-}
-
-impl Recorder<libp2p::relay::Event> for NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::relay::Event) {
         self.libp2p_metrics.record(event)
     }
 }
