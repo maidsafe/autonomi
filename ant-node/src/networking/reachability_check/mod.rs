@@ -602,14 +602,16 @@ impl ReachabilityCheckSwarmDriver {
                                     ));
                             }
 
-                            // 2. prioritize 10.x.x.x address
+                            // 2. prioritize private network ranges ( include 10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12).
                             if let Some(another_listener_ip) =
                                 listener_ip_addrs.iter().find(|&addr| {
                                     let IpAddr::V4(addr) = addr else { return false };
                                     matches!(addr.octets(), [10, ..])
+                                        || matches!(addr.octets(), [192, 168, ..])
+                                        || matches!(addr.octets(), [172, 16, ..])
                                 })
                             {
-                                info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is private (10.0.0.0)");
+                                info!("Found another local address {another_listener_ip:?} from the listener {listener_id:?} that is in the private network range. (10.0.0.0/8, 192.168.0.0/16, 172.16.0.0/12)");
                                 let _ = external_to_local_addr_map
                                     .entry(reachable_addr)
                                     .or_default()
@@ -632,6 +634,8 @@ impl ReachabilityCheckSwarmDriver {
                                         *another_listener_ip,
                                         local_adapter_addr.port(),
                                     ));
+                            } else {
+                                warn!("No other local adapter address found in the listener {listener_id:?} that is not unspecified.");
                             }
 
                             break;
@@ -767,7 +771,7 @@ impl ReachabilityCheckSwarmDriver {
         }
 
         if ports.len() != 1 {
-            error!("Multiple ports observed. This should not happen as symmetric NATs should not get a response back. Terminating the node.");
+            error!("Multiple ports observed, we are unreachable. Terminating the node.");
             result.terminate = true;
             return Ok(result);
         }
