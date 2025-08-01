@@ -125,6 +125,8 @@ impl ReachabilityCheckSwarmDriver {
     }
     /// Runs the reachability check workflow.
     pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
+        info!("Starting reachability check workflow.");
+        println!("Reachability check workflow started. Current workflow attempt: 1 of {MAX_WORKFLOW_ATTEMPTS}");
         let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
         let _ = dial_check_interval.tick().await; // first tick is immediate
         loop {
@@ -332,7 +334,7 @@ impl ReachabilityCheckSwarmDriver {
                             self.dial_manager.on_successful_dial_back_identify(&peer_id);
                         }
                         if self.dial_manager.has_dialing_completed() {
-                            info!("Dialing completed. We have received enough observed addresses. Checking reachability status.");
+                            info!("Dialing completed. Checking the reachability status now.");
                             return self.get_reachability_status();
                         }
                     }
@@ -371,7 +373,7 @@ impl ReachabilityCheckSwarmDriver {
         self.trigger_dial()?;
 
         if self.dial_manager.has_dialing_completed() {
-            info!("Dialing completed. We have received enough observed addresses.");
+            info!("Dialing completed. Checking the reachability status now.");
             match self.get_reachability_status() {
                 Ok(Some(status)) => {
                     info!("Reachability status has been found to be: {status:?}");
@@ -486,6 +488,7 @@ impl ReachabilityCheckSwarmDriver {
 
         if external_addr_result.retry {
             if self.do_we_have_retries_left() {
+                println!("Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}", self.dial_manager.current_workflow_attempt + 1);
                 info!("Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}", self.dial_manager.current_workflow_attempt + 1);
                 self.dial_manager.reattempt_workflow();
                 self.trigger_dial()?;
