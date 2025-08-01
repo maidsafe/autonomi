@@ -11,6 +11,7 @@ use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
 use libp2p::{multiaddr::Protocol, swarm::ConnectionId, Multiaddr, PeerId};
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
+    fmt,
     net::SocketAddr,
     time::{Duration, Instant},
 };
@@ -60,7 +61,7 @@ pub(crate) enum DialResult {
     SuccessfulDialBack,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 /// The state of a dial attempt that we initiated with a remote peer.
 ///
 /// The state can only be transitioned to Connected or DialBackReceived.
@@ -72,6 +73,28 @@ pub(super) enum DialState {
     Connected { at: Instant },
     /// We have received a response from the remote peer after the DIAL_BACK_DELAY.
     DialBackReceived { at: Instant },
+}
+
+impl fmt::Debug for DialState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DialState::Initiated { at } => write!(
+                f,
+                "DialState::Initiated at {at:?} elapsed {:?}",
+                at.elapsed()
+            ),
+            DialState::Connected { at } => write!(
+                f,
+                "DialState::Connected at {at:?} elapsed {:?}",
+                at.elapsed()
+            ),
+            DialState::DialBackReceived { at } => write!(
+                f,
+                "DialState::DialBackReceived at {at:?} elapsed {:?}",
+                at.elapsed()
+            ),
+        }
+    }
 }
 
 impl DialState {
