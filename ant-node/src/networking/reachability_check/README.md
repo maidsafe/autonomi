@@ -218,13 +218,14 @@ fn determine_reachability_via_external_addr(&self) -> Result<ExternalAddrResult,
 #### Step 2: Port Consistency Check
 ```rust
 if ports.len() != 1 {
-    error!("Multiple ports observed. This should not happen as symmetric NATs should not get a response back. Terminating the node.");
+    error!("Multiple ports observed, we are unreachable. Terminating the node.");
     result.terminate = true;
     return Ok(result);
 }
 ```
 
-**Rationale**: Multiple observed ports typically indicate symmetric NAT, which prevents reliable connectivity.
+**Rationale**: Multiple observed ports indicates unreachable nodes.
+
 
 #### Step 3: IP Address Analysis
 The algorithm categorizes observed IP addresses:
@@ -245,9 +246,9 @@ let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> = H
 ```
 
 Maps external observed addresses to local network adapters:
-- Handles unspecified addresses (0.0.0.0)
-- Prioritizes matching IP addresses
-- Falls back to private network ranges (10.x.x.x)
+- Prioritize local adapter address that is the same as external address
+- Prioritize local adapter address that is the private network range
+- Falls back to an non-unspecified local adapter address if found
 
 ## Timeout and Retry Strategy
 
