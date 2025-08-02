@@ -53,7 +53,7 @@ pub static FILE_ENCRYPT_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
     batch_size
 });
 
-/// Metadata for a file in an archive. Time values are UNIX timestamps.
+/// Metadata for a file in an archive. Time values are UNIX timestamps (UTC).
 ///
 /// The recommended way to create a new [`Metadata`] is to use [`Metadata::new_with_size`].
 ///
@@ -62,9 +62,9 @@ pub static FILE_ENCRYPT_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 /// The [`Metadata::empty`] method creates a new [`Metadata`] filled with 0s. Use this if you don't want to reveal any metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Metadata {
-    /// File creation time on local file system. See [`std::fs::Metadata::created`] for details per OS.
+    /// File creation time on local file system as UTC. See [`std::fs::Metadata::created`] for details per OS.
     pub created: u64,
-    /// Last file modification time taken from local file system. See [`std::fs::Metadata::modified`] for details per OS.
+    /// Last file modification time taken from local file system as UTC. See [`std::fs::Metadata::modified`] for details per OS.
     pub modified: u64,
     /// File size in bytes
     pub size: u64,
