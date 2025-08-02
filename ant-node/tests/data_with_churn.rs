@@ -888,8 +888,12 @@ async fn query_content(client: &Client, net_addr: &NetworkAddress) -> Result<()>
             Ok(())
         }
         NetworkAddress::ScratchpadAddress(addr) => {
-            let _ = client.scratchpad_get(addr).await?;
-            Ok(())
+            match client.scratchpad_get(addr).await {
+                Ok(_scratchpad) => Ok(()),
+                // forks can happen in churn, so we can ignore them
+                Err(autonomi::scratchpad::ScratchpadError::Fork(_)) => Ok(()),
+                Err(err) => Err(err.into()),
+            }
         }
         // Drain the enum to ensure all native supported data_types are covered
         NetworkAddress::PeerId(_) | NetworkAddress::RecordKey(_) => Ok(()),

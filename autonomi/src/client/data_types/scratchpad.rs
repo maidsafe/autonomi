@@ -308,13 +308,35 @@ impl Client {
             }
         };
 
-        let scratchpad = if let Some(p) = current {
-            let version = p.counter() + 1;
-            Scratchpad::new(owner, content_type, data, version)
+        if let Some(p) = current {
+            let _new = self
+                .scratchpad_update_from(&p, owner, content_type, data)
+                .await?;
+            Ok(())
         } else {
             warn!("Scratchpad at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created");
-            return Err(ScratchpadError::CannotUpdateNewScratchpad);
-        };
+            Err(ScratchpadError::CannotUpdateNewScratchpad)
+        }
+    }
+
+    /// Update an existing scratchpad from a specific scratchpad
+    ///
+    /// This will increment the counter of the scratchpad and update the content
+    /// This function is used internally by [`Client::scratchpad_update`] after the scratchpad has been retrieved from the network.
+    /// To skip the retrieval step if you already have the scratchpad, use this function directly
+    /// This function will return the new scratchpad after it has been updated
+    pub async fn scratchpad_update_from(
+        &self,
+        current: &Scratchpad,
+        owner: &SecretKey,
+        content_type: u64,
+        data: &Bytes,
+    ) -> Result<Scratchpad, ScratchpadError> {
+        // prepare the new scratchpad to be stored
+        let address = ScratchpadAddress::new(owner.public_key());
+        let new_counter = current.counter() + 1;
+        info!("Updating scratchpad at address {address:?} to version {new_counter}");
+        let scratchpad = Scratchpad::new(owner, content_type, data, new_counter);
 
         // make sure the scratchpad is valid
         Self::scratchpad_verify(&scratchpad)?;
@@ -359,7 +381,7 @@ impl Client {
                 })
             })?;
 
-        Ok(())
+        Ok(scratchpad)
     }
 
     /// Get the cost of creating a new Scratchpad

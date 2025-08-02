@@ -308,7 +308,11 @@ pub enum ScratchpadCmd {
     },
 
     /// List owned scratchpads
-    List,
+    List {
+        /// Verbose output. Detailed description of the scratchpads.
+        #[arg(short, long)]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -375,7 +379,11 @@ pub enum PointerCmd {
     },
 
     /// List owned pointers
-    List,
+    List {
+        /// Verbose output. Detailed description of the pointers.
+        #[arg(short, long)]
+        verbose: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -571,7 +579,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 secret_key,
                 data,
             } => scratchpad::edit(network_context, name, secret_key, data).await,
-            ScratchpadCmd::List => scratchpad::list(),
+            ScratchpadCmd::List { verbose } => scratchpad::list(verbose),
         },
         Some(SubCmd::Pointer { command }) => match command {
             PointerCmd::GenerateKey { overwrite } => pointer::generate_key(overwrite),
@@ -601,7 +609,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 target_data_type,
                 secret_key,
             } => pointer::edit(network_context, name, secret_key, target, target_data_type).await,
-            PointerCmd::List => pointer::list(),
+            PointerCmd::List { verbose } => pointer::list(verbose),
         },
         Some(SubCmd::Wallet { command }) => match command {
             WalletCmd::Create {

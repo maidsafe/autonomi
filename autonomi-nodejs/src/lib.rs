@@ -279,6 +279,28 @@ impl Client {
             .map_err(map_error)
     }
 
+    /// Update an existing pointer from a specific pointer to point to a new target on the network.
+    ///
+    /// This will increment the counter of the pointer and update the target.
+    /// This function is used internally by `pointer_update` after the pointer has been retrieved from the network.
+    /// To skip the retrieval step if you already have the pointer, use this function directly.
+    /// This function will return the new pointer after it has been updated.
+    #[napi]
+    pub async fn pointer_update_from(
+        &self,
+        current: &Pointer,
+        owner: &SecretKey,
+        target: &PointerTarget,
+    ) -> Result<Pointer> {
+        let new_pointer = self
+            .0
+            .pointer_update_from(&current.0, &owner.0, target.0.clone())
+            .await
+            .map_err(map_error)?;
+
+        Ok(Pointer(new_pointer))
+    }
+
     /// Calculate the cost of storing a pointer
     #[napi]
     pub async fn pointer_cost(&self, key: &PublicKey) -> Result</* AttoTokens */ String> {
@@ -390,6 +412,36 @@ impl Client {
             .scratchpad_update(&owner.0, content_type, &Bytes::copy_from_slice(&data))
             .await
             .map_err(map_error)
+    }
+
+    /// Update an existing scratchpad from a specific scratchpad to the network.
+    ///
+    /// This will increment the counter of the scratchpad and update the content.
+    /// This function is used internally by `scratchpad_update` after the scratchpad has been retrieved from the network.
+    /// To skip the retrieval step if you already have the scratchpad, use this function directly.
+    /// This function will return the new scratchpad after it has been updated.
+    #[napi]
+    pub async fn scratchpad_update_from(
+        &self,
+        current: &Scratchpad,
+        owner: &SecretKey,
+        content_type: BigInt, // `u64`
+        data: Buffer,
+    ) -> Result<Scratchpad> {
+        let content_type = big_int_to_u64(content_type, "content_type")?;
+
+        let new_scratchpad = self
+            .0
+            .scratchpad_update_from(
+                &current.0,
+                &owner.0,
+                content_type,
+                &Bytes::copy_from_slice(&data),
+            )
+            .await
+            .map_err(map_error)?;
+
+        Ok(Scratchpad(new_scratchpad))
     }
 
     /// Get the cost of creating a new Scratchpad

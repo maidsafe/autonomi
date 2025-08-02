@@ -498,6 +498,41 @@ impl PyClient {
         })
     }
 
+    /// Update an existing scratchpad from a specific scratchpad to the network.
+    ///
+    /// This will increment the counter of the scratchpad and update the content.
+    /// This function is used internally by `scratchpad_update` after the scratchpad has been retrieved from the network.
+    /// To skip the retrieval step if you already have the scratchpad, use this function directly.
+    /// This function will return the new scratchpad after it has been updated.
+    fn scratchpad_update_from<'a>(
+        &self,
+        py: Python<'a>,
+        current: PyScratchpad,
+        owner: PySecretKey,
+        content_type: u64,
+        data: Vec<u8>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            let new_scratchpad = client
+                .scratchpad_update_from(
+                    &current.inner,
+                    &owner.inner,
+                    content_type,
+                    &Bytes::from(data),
+                )
+                .await
+                .map_err(|e| {
+                    PyRuntimeError::new_err(format!("Failed to update scratchpad: {e}"))
+                })?;
+
+            Ok(PyScratchpad {
+                inner: new_scratchpad,
+            })
+        })
+    }
+
     /// Get the cost of creating a new Scratchpad
     fn scratchpad_cost<'a>(
         &self,
@@ -1250,6 +1285,31 @@ impl PyClient {
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to update pointer: {e}")))?;
 
             Ok(())
+        })
+    }
+
+    /// Update an existing pointer from a specific pointer to point to a new target on the network.
+    ///
+    /// This will increment the counter of the pointer and update the target.
+    /// This function is used internally by `pointer_update` after the pointer has been retrieved from the network.
+    /// To skip the retrieval step if you already have the pointer, use this function directly.
+    /// This function will return the new pointer after it has been updated.
+    fn pointer_update_from<'a>(
+        &self,
+        py: Python<'a>,
+        current: PyPointer,
+        owner: PySecretKey,
+        target: PyPointerTarget,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            let new_pointer = client
+                .pointer_update_from(&current.inner, &owner.inner, target.inner)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to update pointer: {e}")))?;
+
+            Ok(PyPointer { inner: new_pointer })
         })
     }
 
