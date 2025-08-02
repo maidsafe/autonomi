@@ -10,11 +10,13 @@ use crate::networking::{NetworkError, Result};
 use futures::Future;
 use hyper::{service::Service, Body, Method, Request, Response, Server, StatusCode};
 use prometheus_client::{encoding::text::encode, registry::Registry};
+use std::time::Duration;
 use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
 };
+use tokio::{sync::watch, time::sleep};
 
 /// The types of metrics that are exposed via the various endpoints.
 #[derive(Default, Debug)]
@@ -26,23 +28,62 @@ pub(crate) struct MetricsRegistries {
 
 const METRICS_CONTENT_TYPE: &str = "application/openmetrics-text;charset=utf-8;version=1.0.0";
 
-pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) {
+/// Runs the metrics server on the specified port.
+/// Returns a `watch::Sender<bool>` that can be used to signal the server to shut down.
+pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) -> watch::Sender<bool> {
     // todo: containers don't work with localhost.
     let addr = ([127, 0, 0, 1], port).into();
+    let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
 
     #[allow(clippy::let_underscore_future)]
     let _ = tokio::spawn(async move {
-        let server = Server::bind(&addr).serve(MakeMetricService::new(registries));
+        let server = {
+            let mut retries = 0;
+            loop {
+                match Server::try_bind(&addr) {
+                    Ok(server) => {
+                        info!(
+                            "Successfully bound metrics server to {} after {} retries",
+                            addr, retries
+                        );
+                        break server.serve(MakeMetricService::new(registries));
+                    }
+                    Err(e) => {
+                        retries += 1;
+                        if retries >= 5 {
+                            error!(
+                                "Failed to bind metrics server to {} after 5 retries: {}",
+                                addr, e
+                            );
+                            return;
+                        }
+                        warn!("Failed to bind metrics server to {}: {}. Retrying in 1 second... (attempt {}/5)", addr, e, retries);
+                        sleep(Duration::from_secs(1)).await;
+                    }
+                }
+            }
+        };
         // keep these for programs that might be grepping this info
         info!("Metrics server on http://{}/metrics", server.local_addr());
         println!("Metrics server on http://{}/metrics", server.local_addr());
 
         info!("Metrics server on http://{} Available endpoints: /metrics, /metrics_extended, /metadata", server.local_addr());
-        // run the server forever
-        if let Err(e) = server.await {
-            error!("server error: {}", e);
+
+        // run the server with graceful shutdown
+        let graceful = server.with_graceful_shutdown(async {
+            if shutdown_rx.changed().await.is_ok() && *shutdown_rx.borrow() {
+                info!("Received shutdown signal, shutting down metrics server...");
+            };
+        });
+
+        if let Err(err) = graceful.await {
+            error!("Metrics server error on {addr}: {err:?}");
+        } else {
+            info!("Metrics server on {addr} shut down gracefully");
         }
     });
+
+    shutdown_tx
 }
 
 type SharedRegistry = Arc<Mutex<Registry>>;
@@ -242,5 +283,66 @@ impl<T> Service<T> for MakeMetricService {
             })
         };
         Box::pin(fut)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    #[tokio::test]
+    async fn test_metrics_server_graceful_restart() {
+        let port = 8081; // Use a specific test port
+        let registries = MetricsRegistries::default();
+
+        let shutdown_tx_1 = run_metrics_server(registries, port);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        assert!(
+            reqwest::get(&format!("http://127.0.0.1:{port}/metrics"))
+                .await
+                .is_ok(),
+            "Metrics server should be running on port {port}"
+        );
+
+        let _ = shutdown_tx_1.send(true);
+
+        let registries2 = MetricsRegistries::default();
+        let shutdown_tx_2 = run_metrics_server(registries2, port);
+
+        let result = timeout(Duration::from_secs(10), async {
+            loop {
+                match reqwest::get(&format!("http://127.0.0.1:{port}/metrics")).await {
+                    Ok(response) => {
+                        println!(
+                            "Second server responded successfully with status: {}",
+                            response.status()
+                        );
+                        break; // Server is working, break out of loop
+                    }
+                    Err(err) => {
+                        println!("Server not responding, retrying... Error: {err}");
+                        // Server not responding, wait a bit and check if the spawn task finished
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        // If we reach here multiple times, it indicates the server failed to start
+                        // due to port binding issues
+                    }
+                }
+            }
+        })
+        .await;
+
+        // Clean up
+        let _ = shutdown_tx_2.send(true);
+
+        // The test verifies that the server can restart successfully after graceful shutdown
+        // With tokio::sync::watch, the server shuts down gracefully allowing for proper restart
+        assert!(
+            result.is_ok(),
+            "Server should restart successfully after graceful shutdown"
+        );
     }
 }
