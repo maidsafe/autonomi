@@ -120,6 +120,7 @@ package-all-bins:
   just package-bin "antctl"
   just package-bin "antctld"
   just package-bin "antnode_rpc_client"
+  just package-bin "evm-testnet"
 
 package-bin bin version="":
   #!/usr/bin/env bash
@@ -213,6 +214,7 @@ upload-all-packaged-bins-to-s3:
     antctl
     antnode_rpc_client
     antctld
+    evm-testnet
   )
   for binary in "${binaries[@]}"; do
     just upload-packaged-bin-to-s3 "$binary"
