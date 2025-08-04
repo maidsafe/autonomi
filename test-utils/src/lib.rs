@@ -11,6 +11,7 @@
 #![allow(clippy::panic)]
 
 pub mod evm;
+pub mod local_network_spawner;
 pub mod testnet;
 
 use bytes::Bytes;
