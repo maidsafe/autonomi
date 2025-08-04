@@ -34,11 +34,11 @@ def main():
         print(f"Content type: {retrieved_type}")
         
         # Store user data
-        cost = client.put_user_data_to_vault(vault_key, payment, user_data)
+        cost = client.vault_put_user_data(vault_key, payment, user_data)
         print(f"Stored user data, cost: {cost}")
         
         # Get user data
-        retrieved_user_data = client.get_user_data_from_vault(vault_key)
+        retrieved_user_data = client.vault_get_user_data(vault_key)
         print("File archives:", retrieved_user_data.file_archives())
         print("Private file archives:", retrieved_user_data.private_file_archives())
         
