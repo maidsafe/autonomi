@@ -76,6 +76,7 @@ impl NetworkDriver {
                     connection_id,
                     (peer_id, endpoint.get_remote_address().clone()),
                 );
+                self.connections_made += 1;
                 Ok(())
             }
             SwarmEvent::ConnectionClosed {

@@ -79,6 +79,8 @@ pub(crate) struct NetworkDriver {
     /// pending tasks currently awaiting swarm events to progress
     /// this is an opaque struct that can only be mutated by the module were [`crate::driver::task_handler::TaskHandler`] is defined
     pending_tasks: TaskHandler,
+    /// Count of connections established to peers. Can be used to determine if we are a 'connected' client.
+    connections_made: usize,
 }
 
 #[derive(NetworkBehaviour)]
@@ -200,6 +202,7 @@ impl NetworkDriver {
             swarm,
             task_receiver,
             pending_tasks: task_handler,
+            connections_made: 0,
         }
     }
 
@@ -354,6 +357,12 @@ impl NetworkDriver {
                         resp,
                     },
                 );
+            }
+            NetworkTask::ConnectionsMade { resp } => {
+                // Send the current count of connections made
+                if let Err(e) = resp.send(Ok(self.connections_made)) {
+                    error!("Error sending connections made response: {e:?}");
+                }
             }
         }
     }
