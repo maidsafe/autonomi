@@ -192,16 +192,49 @@ pub async fn edit(
             .wrap_err("The scratchpad key is required to perform this action")?
     };
 
+    let bytes = Bytes::from(data);
+
+    // get network current scratchpad
+    println!("Retrieving scratchpad from network...");
+    let address = ScratchpadAddress::new(scratchpad_key.public_key());
+    let net_scratchpad = client
+        .scratchpad_get(&address)
+        .await
+        .wrap_err("Failed to retrieve scratchpad from network")?;
+    println!(
+        "Got current scratchpad at address {address:?} with counter: {}",
+        net_scratchpad.counter()
+    );
+
+    // get latest between local cached scratchpad and network scratchpad
+    let maybe_local_scratchpad = crate::user_data::get_local_scratchpad_value(&name);
+    let current_scratchpad = match maybe_local_scratchpad {
+        Ok(local_scratchpad) if local_scratchpad.counter() > net_scratchpad.counter() => {
+            println!(
+                "Using cached scratchpad value as it is more recent: {} > {}",
+                local_scratchpad.counter(),
+                net_scratchpad.counter()
+            );
+            local_scratchpad
+        }
+        _ => net_scratchpad,
+    };
+
     println!("Updating scratchpad data...");
     info!("Updating scratchpad data");
 
-    let bytes = Bytes::from(data);
-    client
-        .scratchpad_update(&scratchpad_key, Default::default(), &bytes)
+    let new_scratchpad = client
+        .scratchpad_update_from(
+            &current_scratchpad,
+            &scratchpad_key,
+            Default::default(),
+            &bytes,
+        )
         .await
         .wrap_err("Failed to update scratchpad")?;
 
     println!("✅ Scratchpad updated");
+    println!("New counter: {}", new_scratchpad.counter());
     if secret_key {
         println!("With secret key: {}", scratchpad_key.to_hex());
     } else {
@@ -214,6 +247,11 @@ pub async fn edit(
         crate::user_data::write_local_scratchpad(addr, &name)
             .wrap_err("Failed to save scratchpad to local user data")
             .with_suggestion(|| "Local user data saves the scratchpad address above to disk (for the scratchpad list command), without it you need remember the name yourself")?;
+        crate::user_data::write_local_scratchpad_value(&name, &new_scratchpad)
+            .wrap_err("Failed to save scratchpad value to local user data")
+            .with_suggestion(|| {
+                "Local user data caches the scratchpad data to disk for use in future updates"
+            })?;
         info!("Saved scratchpad to local user data");
     }
 
@@ -221,12 +259,27 @@ pub async fn edit(
 }
 
 /// Lists all previous scratchpads
-pub fn list() -> Result<()> {
+pub fn list(verbose: bool) -> Result<()> {
     println!("Retrieving local scratchpad data...");
     let scratchpads = crate::user_data::get_local_scratchpads()?;
     println!("✅ You have {} scratchpad(s):", scratchpads.len());
     for (name, address) in scratchpads {
         println!("{name} - {address}");
+        if verbose {
+            let maybe_scratchpad = crate::user_data::get_local_scratchpad_value(&name);
+            if let Ok(scratchpad) = maybe_scratchpad {
+                println!("  Counter: {}", scratchpad.counter());
+                println!(
+                    "  Data: {} bytes of encrypted data",
+                    scratchpad.encrypted_data().len()
+                );
+                println!();
+            } else {
+                println!("  Counter: <missing from cache>");
+                println!("  Data: <missing from cache>");
+                println!();
+            }
+        }
     }
     Ok(())
 }

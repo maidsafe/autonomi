@@ -49,5 +49,9 @@ node_modules/
 site/
 /evmlib/tests/private.rs
 
+# Claude
+.claude/
+
 # Some test run artifacts
 autonomi/tests/file/test_dir_fetched*
+

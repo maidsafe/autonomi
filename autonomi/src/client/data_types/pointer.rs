@@ -249,14 +249,32 @@ impl Client {
             }
         };
 
-        let pointer = if let Some(p) = current {
-            let version = p.counter() + 1;
-            info!("Updating pointer at address {address:?} to version {version}");
-            Pointer::new(owner, version, target)
+        if let Some(p) = current {
+            let _new = self.pointer_update_from(&p, owner, target).await?;
+            Ok(())
         } else {
             warn!("Pointer at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created");
-            return Err(PointerError::CannotUpdateNewPointer);
-        };
+            Err(PointerError::CannotUpdateNewPointer)
+        }
+    }
+
+    /// Update an existing pointer from a specific pointer
+    ///
+    /// This will increment the counter of the pointer and update the target
+    /// This function is used internally by [`Client::pointer_update`] after the pointer has been retrieved from the network.
+    /// To skip the retrieval step if you already have the pointer, use this function directly
+    /// This function will return the new pointer after it has been updated
+    pub async fn pointer_update_from(
+        &self,
+        current: &Pointer,
+        owner: &SecretKey,
+        new_target: PointerTarget,
+    ) -> Result<Pointer, PointerError> {
+        // prepare the new pointer to be stored
+        let address = PointerAddress::new(owner.public_key());
+        let new_counter = current.counter() + 1;
+        info!("Updating pointer at address {address:?} to version {new_counter}");
+        let pointer = Pointer::new(owner, new_counter, new_target);
 
         // prepare the record to be stored
         let net_addr = NetworkAddress::from(address);
@@ -295,7 +313,7 @@ impl Client {
                 })
             })?;
 
-        Ok(())
+        Ok(pointer)
     }
 
     /// Calculate the cost of storing a pointer

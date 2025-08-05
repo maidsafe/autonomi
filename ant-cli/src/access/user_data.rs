@@ -15,7 +15,7 @@ use autonomi::{
         vault::UserData,
     },
     data::DataAddress,
-    PointerAddress, ScratchpadAddress,
+    Pointer, PointerAddress, Scratchpad, ScratchpadAddress,
 };
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
@@ -277,4 +277,102 @@ pub fn get_local_pointers() -> Result<HashMap<String, String>> {
         pointers.insert(file_name.to_string(), pointer_address);
     }
     Ok(pointers)
+}
+
+/// Write a pointer value to local user data for caching
+pub fn write_local_pointer_value(name: &str, pointer: &Pointer) -> Result<()> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let pointer_values_path = user_data_path.join("pointer_values");
+    std::fs::create_dir_all(&pointer_values_path)?;
+
+    let filename = format!("{name}.json");
+    let serialized = serde_json::to_string(pointer)?;
+    std::fs::write(pointer_values_path.join(filename), serialized)?;
+    Ok(())
+}
+
+/// Get cached pointer value from local storage
+pub fn get_local_pointer_value(name: &str) -> Result<Pointer> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let pointer_values_path = user_data_path.join("pointer_values");
+    std::fs::create_dir_all(&pointer_values_path)?;
+
+    let filename = format!("{name}.json");
+    let file_content = std::fs::read_to_string(pointer_values_path.join(filename))?;
+    let pointer: Pointer = serde_json::from_str(&file_content)?;
+    Ok(pointer)
+}
+
+/// Get cached pointer values from local storage
+pub fn get_local_pointer_values() -> Result<std::collections::HashMap<String, Pointer>> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let pointer_values_path = user_data_path.join("pointer_values");
+    std::fs::create_dir_all(&pointer_values_path)?;
+
+    let mut pointer_values = std::collections::HashMap::new();
+    for entry in walkdir::WalkDir::new(pointer_values_path)
+        .min_depth(1)
+        .max_depth(1)
+    {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy();
+        let name = file_name.strip_suffix(".json").unwrap_or(&file_name);
+        let file_content = std::fs::read_to_string(entry.path())?;
+        if let Ok(pointer) = serde_json::from_str::<Pointer>(&file_content) {
+            pointer_values.insert(name.to_string(), pointer);
+        }
+    }
+    Ok(pointer_values)
+}
+
+/// Write a scratchpad value to local user data for caching
+pub fn write_local_scratchpad_value(name: &str, scratchpad: &Scratchpad) -> Result<()> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpad_values_path = user_data_path.join("scratchpad_values");
+    std::fs::create_dir_all(&scratchpad_values_path)?;
+
+    let filename = format!("{name}.json");
+    let serialized = serde_json::to_string(scratchpad)?;
+    std::fs::write(scratchpad_values_path.join(filename), serialized)?;
+    Ok(())
+}
+
+/// Get cached scratchpad value from local storage
+pub fn get_local_scratchpad_value(name: &str) -> Result<Scratchpad> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpad_values_path = user_data_path.join("scratchpad_values");
+    std::fs::create_dir_all(&scratchpad_values_path)?;
+
+    let filename = format!("{name}.json");
+    let file_content = std::fs::read_to_string(scratchpad_values_path.join(filename))?;
+    let scratchpad: Scratchpad = serde_json::from_str(&file_content)?;
+    Ok(scratchpad)
+}
+
+/// Get cached scratchpad values from local storage
+pub fn get_local_scratchpad_values() -> Result<std::collections::HashMap<String, Scratchpad>> {
+    let data_dir = get_client_data_dir_path()?;
+    let user_data_path = data_dir.join("user_data");
+    let scratchpad_values_path = user_data_path.join("scratchpad_values");
+    std::fs::create_dir_all(&scratchpad_values_path)?;
+
+    let mut scratchpad_values = std::collections::HashMap::new();
+    for entry in walkdir::WalkDir::new(scratchpad_values_path)
+        .min_depth(1)
+        .max_depth(1)
+    {
+        let entry = entry?;
+        let file_name = entry.file_name().to_string_lossy();
+        let name = file_name.strip_suffix(".json").unwrap_or(&file_name);
+        let file_content = std::fs::read_to_string(entry.path())?;
+        if let Ok(scratchpad) = serde_json::from_str::<Scratchpad>(&file_content) {
+            scratchpad_values.insert(name.to_string(), scratchpad);
+        }
+    }
+    Ok(scratchpad_values)
 }

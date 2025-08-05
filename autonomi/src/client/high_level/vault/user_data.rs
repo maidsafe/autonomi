@@ -141,11 +141,21 @@ impl UserData {
             true => "1",
             false => "0",
         };
+        let scratchpad_key = match self.scratchpad_key.is_some() {
+            true => "1",
+            false => "0",
+        };
+        let pointer_key = match self.pointer_key.is_some() {
+            true => "1",
+            false => "0",
+        };
 
         println!("{file_archives_len} public file archive(s)");
         println!("{private_file_archives_len} private file archive(s)");
         println!("{registers_len} register(s)");
         println!("{register_key} register key");
+        println!("{scratchpad_key} scratchpad key");
+        println!("{pointer_key} pointer key");
     }
 }
 

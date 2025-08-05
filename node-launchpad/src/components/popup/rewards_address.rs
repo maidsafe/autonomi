@@ -344,9 +344,7 @@ impl Component for RewardsAddress {
                 .split(layer_one[1]);
 
                 let text = Paragraph::new(vec![
-                    Line::from(Span::styled("Add your wallet to store your node earnings, and we'll pay you rewards to the same wallet after the Network's Token Generation Event.",Style::default())),
-                    Line::from(Span::styled("\n\n",Style::default())),
-                    Line::from(Span::styled("By continuing you agree to the Terms and Conditions found here:",Style::default())),
+                    Line::from(Span::styled("Add a wallet to receive your node earnings. By doing so, you agree to the Terms and Conditions found here:",Style::default())),
                     Line::from(Span::styled("\n\n",Style::default())),
                     ]
                 )
@@ -357,10 +355,10 @@ impl Component for RewardsAddress {
 
                 let link = Hyperlink::new(
                     Span::styled(
-                        "  https://autonomi.com/beta/terms",
+                        "  https://autonomi.com/node/terms",
                         Style::default().fg(VIVID_SKY_BLUE),
                     ),
-                    "https://autonomi.com/beta/terms",
+                    "https://autonomi.com/node/terms",
                 );
 
                 f.render_widget_ref(link, layer_two[1]);

@@ -257,15 +257,42 @@ pub async fn edit(
 
     let target = pointer_target_from_hex(&target, target_data_type, &client).await?;
 
+    // get network current pointer
+    println!("Retrieving pointer from network...");
+    let address = PointerAddress::new(pointer_key.public_key());
+    let net_pointer = client
+        .pointer_get(&address)
+        .await
+        .wrap_err("Failed to retrieve pointer from network")?;
+    println!(
+        "Got current pointer at address {address:?} with counter: {}",
+        net_pointer.counter()
+    );
+
+    // get latest between local cached pointer and network pointer
+    let maybe_local_pointer = crate::user_data::get_local_pointer_value(&name);
+    let current_pointer = match maybe_local_pointer {
+        Ok(local_pointer) if local_pointer.counter() > net_pointer.counter() => {
+            println!(
+                "Using cached pointer value as it is more recent: {} > {}",
+                local_pointer.counter(),
+                net_pointer.counter()
+            );
+            local_pointer
+        }
+        _ => net_pointer,
+    };
+
     println!("Updating pointer target...");
     info!("Updating pointer target");
 
-    client
-        .pointer_update(&pointer_key, target)
+    let new_pointer = client
+        .pointer_update_from(&current_pointer, &pointer_key, target)
         .await
         .wrap_err("Failed to update pointer")?;
 
     println!("✅ Pointer updated");
+    println!("New counter: {}", new_pointer.counter());
     if secret_key {
         println!("With secret key: {}", pointer_key.to_hex());
     } else {
@@ -278,6 +305,11 @@ pub async fn edit(
         crate::user_data::write_local_pointer(addr, &name)
             .wrap_err("Failed to save pointer to local user data")
             .with_suggestion(|| "Local user data saves the pointer address above to disk (for the pointer list command), without it you need remember the name yourself")?;
+        crate::user_data::write_local_pointer_value(&name, &new_pointer)
+            .wrap_err("Failed to save pointer value to local user data")
+            .with_suggestion(|| {
+                "Local user data caches the pointer data to disk for use in future updates"
+            })?;
         info!("Saved pointer to local user data");
     }
 
@@ -285,12 +317,24 @@ pub async fn edit(
 }
 
 /// Lists all previous pointers
-pub fn list() -> Result<()> {
+pub fn list(verbose: bool) -> Result<()> {
     println!("Retrieving local pointer data...");
     let pointers = crate::user_data::get_local_pointers()?;
     println!("✅ You have {} pointer(s):", pointers.len());
     for (name, address) in pointers {
         println!("{name} - {address}");
+        if verbose {
+            let maybe_pointer = crate::user_data::get_local_pointer_value(&name);
+            if let Ok(pointer) = maybe_pointer {
+                println!("  Counter: {}", pointer.counter());
+                println!("  Target: {}", pointer.target().to_hex());
+                println!();
+            } else {
+                println!("  Counter: <missing from cache>");
+                println!("  Target: <missing from cache>");
+                println!();
+            }
+        }
     }
     Ok(())
 }

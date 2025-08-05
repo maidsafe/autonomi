@@ -246,7 +246,10 @@ impl Network {
         quorum: Quorum,
     ) -> Result<(), NetworkError> {
         let key = PrettyPrintRecordKey::from(&record.key);
-        let total = NonZeroUsize::new(to.len()).ok_or(NetworkError::PutRecordMissingTargets)?;
+        // For data_type like ScratchPad, it is observed the holders will be 7
+        // which result in the expected_holders to be 4, and could result in false alert.
+        let candidates = std::cmp::min(CLOSE_GROUP_SIZE, to.len());
+        let total = NonZeroUsize::new(candidates).ok_or(NetworkError::PutRecordMissingTargets)?;
         let expected_holders = expected_holders(quorum, total);
 
         trace!(

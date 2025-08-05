@@ -464,7 +464,7 @@ impl ReplicationFetcher {
         if let Some(ref distance_range) = self.distance_range {
             new_incoming_keys.retain(|(addr, _record_type)| {
                 let distance = &self_address.distance(addr);
-                trace!(
+                debug!(
                     "Distance to target {addr:?} is {distance:?}, against range {distance_range:?}"
                 );
                 let mut is_in_range = distance <= distance_range;
@@ -472,9 +472,10 @@ impl ReplicationFetcher {
                 // but still supposed to be held by the closest group to us.
                 if !is_in_range && distance.0 - distance_range.0 < distance_range.0 {
                     closest_k_peers.sort_by_key(|key| key.distance(addr));
-                    let closest_group: HashSet<_> = closest_k_peers.iter().take(CLOSE_GROUP_SIZE).collect();
+                    let closest_group: HashSet<_> = closest_k_peers.iter().take(CLOSE_GROUP_SIZE + 2).collect();
                     if closest_group.contains(&self_address) {
-                        debug!("Record {addr:?} has a far distance but still among {CLOSE_GROUP_SIZE} closest within {} neighbourd.", closest_k_peers.len());
+                        debug!("Record {addr:?} has a far distance but still among {} closest within {} neighbourd.",
+                            CLOSE_GROUP_SIZE + 2, closest_k_peers.len());
                         is_in_range = true;
                     }
                 }
@@ -713,7 +714,7 @@ mod tests {
                 closest_k_peers_include_self.sort_by_key(|addr| key.distance(addr));
                 let closest_group: HashSet<_> = closest_k_peers_include_self
                     .iter()
-                    .take(CLOSE_GROUP_SIZE)
+                    .take(CLOSE_GROUP_SIZE + 2)
                     .collect();
                 if closest_group.contains(&self_address) {
                     in_range_keys += 1;

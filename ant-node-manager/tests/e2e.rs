@@ -46,10 +46,14 @@ fn cross_platform_service_install_and_control() {
         .arg("3")
         .arg("--path")
         .arg(antnode_path.to_string_lossy().to_string())
+        .arg("--rewards-address")
+        .arg("0x06C4E523ebf30bc76DE246f10FBcECb4cc39D11a")
+        .arg("evm-arbitrum-sepolia-test")
         .assert()
         .success();
 
     let registry = get_status();
+
     assert_eq!(registry.nodes[0].service_name, "antnode1");
     assert_eq!(registry.nodes[0].peer_id, None);
     assert_eq!(registry.nodes[0].status, ServiceStatus::Added);
@@ -190,6 +194,14 @@ fn cross_platform_service_install_and_control() {
             .filter(|n| n.status != ServiceStatus::Removed)
             .count()
     );
+
+    // Cleanup last node.
+    let mut cmd = Command::cargo_bin("antctl").unwrap();
+    cmd.arg("remove")
+        .arg("--service-name")
+        .arg(registry.nodes[2].service_name.clone())
+        .assert()
+        .success();
 }
 
 fn get_status() -> StatusSummary {
