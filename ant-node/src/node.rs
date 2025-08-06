@@ -204,7 +204,7 @@ impl NodeBuilder {
             metrics_server_port: self.metrics_server_port,
         };
 
-        let swarm_driver = init_reachability_check_swarm(network_config)?;
+        let swarm_driver = init_reachability_check_swarm(network_config).await?;
         let status = swarm_driver.detect().await?;
 
         Ok(status)

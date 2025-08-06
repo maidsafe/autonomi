@@ -65,6 +65,9 @@ pub enum NetworkError {
     #[error("Reachability check error: {0}")]
     ReachabilityCheckError(#[from] ReachabilityCheckError),
 
+    #[error("No listen addresses found")]
+    NoListenAddressesFound,
+
     // ---------- Record Errors
     #[error("Record not stored by nodes, it could be invalid, else you should retry: {0:?}")]
     RecordNotStoredByNodes(NetworkAddress),
