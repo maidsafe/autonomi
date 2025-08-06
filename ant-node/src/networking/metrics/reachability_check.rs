@@ -30,7 +30,6 @@ pub(super) enum ReachabilityStatusLabelValue {
     NotPerformed,
     Ongoing,
     Reachable,
-    Relay,
     NotRoutable,
     UPnPSupported,
 }
@@ -43,7 +42,6 @@ pub(super) fn get_reachability_status_metric(
     let mut not_performed = false;
     let mut ongoing = false;
     let mut reachable = false;
-    let mut relay = false;
     let mut not_routable = false;
     let mut upnp_supported = false;
 
@@ -54,7 +52,6 @@ pub(super) fn get_reachability_status_metric(
         }
         ReachabilityStatusMetric::Status(status) => {
             reachable = status.is_reachable();
-            relay = status.is_relay();
             not_routable = status.is_not_routable();
             upnp_supported = status.upnp_supported();
         }
@@ -77,11 +74,6 @@ pub(super) fn get_reachability_status_metric(
             status: ReachabilityStatusLabelValue::Reachable,
         })
         .set(bool_to_int(reachable));
-    let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::Relay,
-        })
-        .set(bool_to_int(relay));
     let _ = family
         .get_or_create(&ReachabilityStatusLabelSet {
             status: ReachabilityStatusLabelValue::NotRoutable,
@@ -107,7 +99,6 @@ mod tests {
         ongoing: bool,
         not_performed: bool,
         reachable: bool,
-        relay: bool,
         not_routable: bool,
         upnp_supported: bool,
     ) {
@@ -146,16 +137,6 @@ mod tests {
         assert_eq!(
             family
                 .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::Relay,
-                })
-                .get(),
-            bool_to_int(relay),
-            "Relay metric mismatch"
-        );
-
-        assert_eq!(
-            family
-                .get_or_create(&ReachabilityStatusLabelSet {
                     status: ReachabilityStatusLabelValue::NotRoutable,
                 })
                 .get(),
@@ -179,7 +160,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::NotPerformed);
 
         // Only NotPerformed should be 1, all others 0
-        verify_metric(&family, false, true, false, false, false, false);
+        verify_metric(&family, false, true, false, false, false);
     }
 
     #[test]
@@ -187,7 +168,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Ongoing);
 
         // Only Ongoing should be 1, all others 0
-        verify_metric(&family, true, false, false, false, false, false);
+        verify_metric(&family, true, false, false, false, false);
     }
 
     #[test]
@@ -197,7 +178,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Only Reachable should be 1, UpnP should be 0
-        verify_metric(&family, false, false, true, false, false, false);
+        verify_metric(&family, false, false, true, false, false);
     }
 
     #[test]
@@ -207,25 +188,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Both Reachable and UpnPSupported should be 1
-        verify_metric(&family, false, false, true, false, false, true);
-    }
-
-    #[test]
-    fn test_reachability_status_relay_without_upnp() {
-        let status = ReachabilityStatus::Relay { upnp: false };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
-
-        // Only Relay should be 1, UpnP should be 0
-        verify_metric(&family, false, false, false, true, false, false);
-    }
-
-    #[test]
-    fn test_reachability_status_relay_with_upnp() {
-        let status = ReachabilityStatus::Relay { upnp: true };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
-
-        // Both Relay and UpnPSupported should be 1
-        verify_metric(&family, false, false, false, true, false, true);
+        verify_metric(&family, false, false, true, false, true);
     }
 
     #[test]
@@ -234,7 +197,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Only NotRoutable should be 1, UpnP should be 0
-        verify_metric(&family, false, false, false, false, true, false);
+        verify_metric(&family, false, false, false, true, false);
     }
 
     #[test]
@@ -243,7 +206,7 @@ mod tests {
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Both NotRoutable and UpnPSupported should be 1
-        verify_metric(&family, false, false, false, false, true, true);
+        verify_metric(&family, false, false, false, true, true);
     }
 
     #[test]
@@ -253,21 +216,16 @@ mod tests {
         let family2 = get_reachability_status_metric(ReachabilityStatusMetric::NotPerformed);
 
         // Verify family1 has ongoing=1, all others=0
-        verify_metric(&family1, true, false, false, false, false, false);
+        verify_metric(&family1, true, false, false, false, false);
 
         // Verify family2 has not_performed=1, all others=0
-        verify_metric(&family2, false, true, false, false, false, false);
+        verify_metric(&family2, false, true, false, false, false);
     }
 
     #[test]
     fn test_upnp_combinations() {
         // Test all combinations of status with UPnP enabled/disabled
         let test_cases = vec![
-            (ReachabilityStatus::Relay { upnp: true }, "Relay with UPnP"),
-            (
-                ReachabilityStatus::Relay { upnp: false },
-                "Relay without UPnP",
-            ),
             (
                 ReachabilityStatus::NotRoutable { upnp: true },
                 "NotRoutable with UPnP",
@@ -297,7 +255,6 @@ mod tests {
                 get_reachability_status_metric(ReachabilityStatusMetric::Status(status.clone()));
 
             let expected_upnp = status.upnp_supported();
-            let expected_relay = status.is_relay();
             let expected_reachable = status.is_reachable();
             let expected_not_routable = status.is_not_routable();
 
@@ -306,7 +263,6 @@ mod tests {
                 false, // ongoing
                 false, // not_performed
                 expected_reachable,
-                expected_relay,
                 expected_not_routable,
                 expected_upnp,
             );

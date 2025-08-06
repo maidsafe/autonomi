@@ -223,7 +223,6 @@ impl NodeBuilder {
     ///
     /// Returns an error if there is a problem initializing the `Network`.
     pub async fn build_and_run(self) -> Result<RunningNode> {
-        let mut relay_client = false;
         let mut no_upnp = false;
         let mut address = self.addr;
         let mut reachability_status = None;
@@ -236,27 +235,15 @@ impl NodeBuilder {
                 reachability_status = Some(s.clone());
             }
             match status {
-                Ok(ReachabilityStatus::Relay { upnp }) => {
-                    info!(
-                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
-                );
-                    println!(
-                    "Reachability check: Relay. Starting node with relay flag and UPnP: {upnp:?}"
-                );
-                    relay_client = true;
-                    no_upnp = !upnp;
-                    reachability_status = Some(ReachabilityStatus::Relay { upnp });
-                }
                 Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
                     info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
                     println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
                     address = addr;
-                    relay_client = false;
                     no_upnp = !upnp;
                 }
                 Ok(ReachabilityStatus::NotRoutable { .. }) => {
-                    info!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
-                    println!("Reachability check: NotRoutable. The node will be unreachable even with Relay mode. Terminating node.");
+                    info!("Reachability check: NotRoutable. Terminating node as we are not externally reachable.");
+                    println!("Reachability check: NotRoutable. Terminating node as we are not externally reachable.");
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {
@@ -291,7 +278,7 @@ impl NodeBuilder {
             shutdown_rx: shutdown_rx.clone(),
             bootstrap_cache: self.bootstrap_cache,
             no_upnp,
-            relay_client,
+            relay_client: false,
             custom_request_timeout: None,
             #[cfg(feature = "open-metrics")]
             metrics_registries,
