@@ -7,16 +7,16 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    error::Error, error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker,
-    NodeEvent,
+    Marker, NodeEvent, error::Error, error::Result, event::NodeEventsChannel,
+    quote::quotes_verification,
 };
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
 use crate::networking::{
-    init_reachability_check_swarm, Addresses, Network, NetworkConfig, NetworkError, NetworkEvent,
-    NodeIssue,
+    Addresses, Network, NetworkConfig, NetworkError, NetworkEvent, NodeIssue,
+    init_reachability_check_swarm,
 };
 use crate::{
     ReachabilityStatus, {PutValidationError, RunningNode},
@@ -236,14 +236,24 @@ impl NodeBuilder {
             }
             match status {
                 Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
-                    info!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}", addr.ip());
-                    println!("Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.", addr.ip());
+                    info!(
+                        "Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}",
+                        addr.ip()
+                    );
+                    println!(
+                        "Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.",
+                        addr.ip()
+                    );
                     address = addr;
                     no_upnp = !upnp;
                 }
                 Ok(ReachabilityStatus::NotRoutable { .. }) => {
-                    info!("Reachability check: NotRoutable. Terminating node as we are not externally reachable.");
-                    println!("Reachability check: NotRoutable. Terminating node as we are not externally reachable.");
+                    info!(
+                        "Reachability check: NotRoutable. Terminating node as we are not externally reachable."
+                    );
+                    println!(
+                        "Reachability check: NotRoutable. Terminating node as we are not externally reachable."
+                    );
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {

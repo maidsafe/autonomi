@@ -12,16 +12,16 @@ mod listener;
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
 use futures::StreamExt;
-use libp2p::core::transport::ListenerId;
 use libp2p::core::ConnectedPoint;
+use libp2p::core::transport::ListenerId;
 use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionId, DialError};
-use libp2p::{identify, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, identify};
 use libp2p::{
-    swarm::{NetworkBehaviour, SwarmEvent},
     Swarm,
+    swarm::{NetworkBehaviour, SwarmEvent},
 };
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
@@ -33,9 +33,7 @@ use crate::networking::error::ReachabilityCheckError;
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::network::endpoint_str;
 use crate::networking::reachability_check::listener::get_all_listeners;
-use crate::networking::{
-    multiaddr_get_socket_addr, multiaddr_pop_p2p, NetworkError
-};
+use crate::networking::{NetworkError, multiaddr_get_socket_addr, multiaddr_pop_p2p};
 
 pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
 const MAX_WORKFLOW_ATTEMPTS: usize = 3;
@@ -64,7 +62,6 @@ impl ReachabilityStatus {
             ReachabilityStatus::NotRoutable { upnp } => *upnp,
         }
     }
-
 
     pub(crate) fn is_reachable(&self) -> bool {
         matches!(self, ReachabilityStatus::Reachable { .. })
@@ -135,12 +132,13 @@ impl ReachabilityCheckSwarmDriver {
         } else if observed_listeners.len() == 1 {
             if let Some(listen_socket_addr) = observed_listeners.iter().next() {
                 if listen_socket_addr.ip().is_unspecified() {
-                    error!("The only listen address found is unspecified. Cannot start reachability check.");
+                    error!(
+                        "The only listen address found is unspecified. Cannot start reachability check."
+                    );
                     return Err(NetworkError::NoListenAddressesFound);
                 }
             }
         }
-
 
         let mut listeners: HashMap<ListenerId, HashSet<IpAddr>> = HashMap::new();
         for listen_addr in observed_listeners {
@@ -153,13 +151,10 @@ impl ReachabilityCheckSwarmDriver {
                 .listen_on(addr_quic.clone())
                 .expect("Multiaddr should be supported by our configured transports");
 
-        info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
-        
+            info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
+
             let ip_addr = listen_addr.ip();
-            let _ = listeners
-                .entry(listen_id)
-                .or_default()
-                .insert(ip_addr);
+            let _ = listeners.entry(listen_id).or_default().insert(ip_addr);
         }
 
         Ok(Self {
@@ -173,7 +168,9 @@ impl ReachabilityCheckSwarmDriver {
     /// Runs the reachability check workflow.
     pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
         info!("Starting reachability check workflow.");
-        println!("Reachability check workflow started. Current workflow attempt: 1 of {MAX_WORKFLOW_ATTEMPTS}");
+        println!(
+            "Reachability check workflow started. Current workflow attempt: 1 of {MAX_WORKFLOW_ATTEMPTS}"
+        );
         let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
         let _ = dial_check_interval.tick().await; // first tick is immediate
         loop {
@@ -222,7 +219,9 @@ impl ReachabilityCheckSwarmDriver {
                     address.push(Protocol::P2p(local_peer_id));
                 }
 
-                info!("Local node is listening {listener_id:?} on {address:?}. Adding it as an external address.");
+                info!(
+                    "Local node is listening {listener_id:?} on {address:?}. Adding it as an external address."
+                );
                 self.swarm.add_external_address(address.clone());
             }
             SwarmEvent::Behaviour(ReachabilityCheckEvent::Upnp(upnp_event)) => {
@@ -236,7 +235,9 @@ impl ReachabilityCheckSwarmDriver {
                         upnp_result_obtained = true;
                     }
                     libp2p::upnp::Event::NewExternalAddr(addr) => {
-                        info!("UPnP: New external address: {addr:?}. Trying to dial peers to confirm reachability.");
+                        info!(
+                            "UPnP: New external address: {addr:?}. Trying to dial peers to confirm reachability."
+                        );
                         self.upnp_supported = true;
                         upnp_result_obtained = false;
                     }
@@ -260,7 +261,9 @@ impl ReachabilityCheckSwarmDriver {
                 send_back_addr,
             } => {
                 event_string = "incoming";
-                debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+                debug!(
+                    "IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}"
+                );
 
                 let socket_addr = multiaddr_get_socket_addr(&local_addr);
 
@@ -360,7 +363,9 @@ impl ReachabilityCheckSwarmDriver {
                             .incoming_connection_ids
                             .contains(&connection_id)
                         {
-                            debug!("Received identify info from incoming connection {connection_id:?}. Adding observed address to our list.");
+                            debug!(
+                                "Received identify info from incoming connection {connection_id:?}. Adding observed address to our list."
+                            );
                             self.insert_observed_address(
                                 peer_id,
                                 info.observed_addr,
@@ -438,7 +443,9 @@ impl ReachabilityCheckSwarmDriver {
     fn trigger_dial(&mut self) -> Result<(), ReachabilityCheckError> {
         while self.dial_manager.can_we_perform_new_dial() {
             let Some(mut addr) = self.dial_manager.get_next_contact() else {
-                info!("Dialer has no more contacts to dial. The get_reachability_status method will now calculate the reachability status.");
+                info!(
+                    "Dialer has no more contacts to dial. The get_reachability_status method will now calculate the reachability status."
+                );
                 return Ok(());
             };
 
@@ -460,25 +467,39 @@ impl ReachabilityCheckSwarmDriver {
                 }
                 Err(err) => match err {
                     DialError::LocalPeerId { .. } => {
-                        warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
+                        warn!(
+                            "Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer"
+                        );
                     }
                     DialError::NoAddresses => {
-                        error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
+                        error!(
+                            "Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer"
+                        );
                     }
                     DialError::DialPeerConditionFalse(_) => {
-                        warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
+                        warn!(
+                            "We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless."
+                        );
                     }
                     DialError::Aborted => {
-                        error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
+                        error!(
+                            " Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer."
+                        );
                     }
                     DialError::WrongPeerId { obtained, .. } => {
-                        error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
+                        error!(
+                            "The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer."
+                        );
                     }
                     DialError::Denied { cause } => {
-                        error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
+                        error!(
+                            "The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer."
+                        );
                     }
                     DialError::Transport(items) => {
-                        error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
+                        error!(
+                            "Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer."
+                        );
                         // only track error that occured due to io
                         self.dial_manager.on_error_during_dial_attempt(&peer_id);
                     }
@@ -530,8 +551,14 @@ impl ReachabilityCheckSwarmDriver {
 
         if external_addr_result.retry {
             if self.do_we_have_retries_left() {
-                println!("Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}", self.dial_manager.current_workflow_attempt + 1);
-                info!("Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}", self.dial_manager.current_workflow_attempt + 1);
+                println!(
+                    "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                    self.dial_manager.current_workflow_attempt + 1
+                );
+                info!(
+                    "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                    self.dial_manager.current_workflow_attempt + 1
+                );
                 self.dial_manager.reattempt_workflow();
                 self.trigger_dial()?;
                 return Ok(None);
@@ -547,7 +574,9 @@ impl ReachabilityCheckSwarmDriver {
         }
 
         if external_addr_result.reachable_addresses.is_empty() {
-            debug!("No reachable addresses found. This should not happen. Terminating the node as we are not routable.");
+            debug!(
+                "No reachable addresses found. This should not happen. Terminating the node as we are not routable."
+            );
             return Ok(Some(ReachabilityStatus::NotRoutable {
                 upnp: self.upnp_supported,
             }));
@@ -600,10 +629,14 @@ impl ReachabilityCheckSwarmDriver {
                     );
                     continue;
                 };
-                info!("Local adapter address for connection id {connection_id:?} is {local_adapter_addr:?}");
+                info!(
+                    "Local adapter address for connection id {connection_id:?} is {local_adapter_addr:?}"
+                );
 
                 let IpAddr::V4(local_adapter_ip) = local_adapter_addr.ip() else {
-                    warn!("Local adapter address {local_adapter_addr:?} is not an IPv4 address. Skipping.");
+                    warn!(
+                        "Local adapter address {local_adapter_addr:?} is not an IPv4 address. Skipping."
+                    );
                     continue;
                 };
 
@@ -611,9 +644,13 @@ impl ReachabilityCheckSwarmDriver {
                     || local_adapter_ip.is_documentation()
                     || local_adapter_ip.is_broadcast()
                 {
-                    warn!("Local adapter address {local_adapter_ip:?} is unspecified, documentation or broadcast. Skipping.");
+                    warn!(
+                        "Local adapter address {local_adapter_ip:?} is unspecified, documentation or broadcast. Skipping."
+                    );
                 } else {
-                    info!("Local adapter address {local_adapter_ip:?} is valid. Adding it to the external to local address map.");
+                    info!(
+                        "Local adapter address {local_adapter_ip:?} is valid. Adding it to the external to local address map."
+                    );
                     let _ = external_to_local_addr_map
                         .entry(reachable_addr)
                         .or_default()
@@ -623,7 +660,9 @@ impl ReachabilityCheckSwarmDriver {
         }
 
         if external_to_local_addr_map.is_empty() {
-            info!("No local adapter mapping found for the reachable addresses. Returning the first external address instead.");
+            info!(
+                "No local adapter mapping found for the reachable addresses. Returning the first external address instead."
+            );
             let addr = external_addr_result
                 .reachable_addresses
                 .first()
@@ -647,14 +686,18 @@ impl ReachabilityCheckSwarmDriver {
                         .any(|addr| addr.ip() == reachable_addr.ip())
                 })
         {
-            info!("Found a reachable address {reachable_addr:?} that is the same as the local adapter address.");
+            info!(
+                "Found a reachable address {reachable_addr:?} that is the same as the local adapter address."
+            );
             return Ok(Some(ReachabilityStatus::Reachable {
                 addr: *reachable_addr,
                 upnp: self.upnp_supported,
             }));
         }
 
-        info!("No reachable address found that is the same as the local adapter address. Picking the first external address & its first local adapter address.");
+        info!(
+            "No reachable address found that is the same as the local adapter address. Picking the first external address & its first local adapter address."
+        );
 
         let (reachable_addr, local_adapter_addrs) =
             external_to_local_addr_map
@@ -662,7 +705,9 @@ impl ReachabilityCheckSwarmDriver {
                 .next()
                 .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
 
-        info!("Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}. Returning the first local adapter address.");
+        info!(
+            "Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}. Returning the first local adapter address."
+        );
 
         Ok(Some(ReachabilityStatus::Reachable {
             addr: *local_adapter_addrs
@@ -698,10 +743,14 @@ impl ReachabilityCheckSwarmDriver {
         {
             info!("No observed addresses found. Check if we atleast made any successful dials.");
             if self.dial_manager.are_we_faulty() {
-                error!("We are faulty. We have not made any successful dials. Terminating the node immediately.");
+                error!(
+                    "We are faulty. We have not made any successful dials. Terminating the node immediately."
+                );
                 result.terminate = true;
             } else {
-                info!("We are not faulty, but we have not made any successful dials. Retrying again, else terminating.");
+                info!(
+                    "We are not faulty, but we have not made any successful dials. Retrying again, else terminating."
+                );
                 result.terminate = true;
                 result.retry = true;
             }
@@ -799,7 +848,9 @@ impl ReachabilityCheckSwarmDriver {
                 // try to pick localhost
                 if private_ip.iter().any(|ip| ip.is_loopback()) {
                     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-                    info!("We have multiple private IP addresses, picking localhost: {addr:?}. Reachability status is Reachable.");
+                    info!(
+                        "We have multiple private IP addresses, picking localhost: {addr:?}. Reachability status is Reachable."
+                    );
                     result.reachable_addresses.push(addr);
                     return Ok(result);
                 }
@@ -808,7 +859,9 @@ impl ReachabilityCheckSwarmDriver {
                     .iter()
                     .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
                     .collect::<Vec<_>>();
-                info!("We have multiple private IP addresses {addrs:?}. Reachability status is Reachable.");
+                info!(
+                    "We have multiple private IP addresses {addrs:?}. Reachability status is Reachable."
+                );
                 result.reachable_addresses.extend(addrs);
                 return Ok(result);
             }
@@ -818,12 +871,16 @@ impl ReachabilityCheckSwarmDriver {
                     .iter()
                     .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
                     .collect::<Vec<_>>();
-                info!("We have multiple public IP addresses {addrs:?}. Reachability status is Reachable.");
+                info!(
+                    "We have multiple public IP addresses {addrs:?}. Reachability status is Reachable."
+                );
                 result.reachable_addresses.extend(addrs);
                 return Ok(result);
             }
 
-            error!("We have multiple IP addresses, but none are private or public. Terminating the node.");
+            error!(
+                "We have multiple IP addresses, but none are private or public. Terminating the node."
+            );
             result.terminate = true;
             return Ok(result);
         } else {

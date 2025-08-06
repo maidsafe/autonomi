@@ -8,9 +8,9 @@
 
 use super::MAX_DIAL_ATTEMPTS;
 use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
-use libp2p::{multiaddr::Protocol, swarm::ConnectionId, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, multiaddr::Protocol, swarm::ConnectionId};
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     fmt,
     net::SocketAddr,
     time::{Duration, Instant},
@@ -112,7 +112,9 @@ impl DialState {
                 *self = DialState::Connected { at: Instant::now() };
             }
             _ => {
-                warn!("DialState for {peer_id:?} cannot be transitioned to Connected. Current state: {self:?}");
+                warn!(
+                    "DialState for {peer_id:?} cannot be transitioned to Connected. Current state: {self:?}"
+                );
             }
         }
     }
@@ -124,7 +126,9 @@ impl DialState {
                     info!("DialState for {peer_id:?} has been updated to DialBackReceived");
                     *self = DialState::DialBackReceived { at: Instant::now() };
                 } else {
-                    warn!("DialState for {peer_id:?} has not been updated to DialBackReceived. We got the response too early.");
+                    warn!(
+                        "DialState for {peer_id:?} has not been updated to DialBackReceived. We got the response too early."
+                    );
                 }
             }
             _ => {
@@ -151,7 +155,10 @@ impl InitialContactsManager {
                     .any(|protocol| matches!(protocol, Protocol::P2p(_)))
             })
             .collect();
-        info!("Initial contacts len after filtering out circuit addresses and ones without peer ids: {:?}. original len: {len:?}", initial_contacts.len());
+        info!(
+            "Initial contacts len after filtering out circuit addresses and ones without peer ids: {:?}. original len: {len:?}",
+            initial_contacts.len()
+        );
         Self {
             initial_contacts,
             attempted_indices: HashSet::new(),
@@ -279,7 +286,9 @@ impl DialManager {
     pub(crate) fn on_error_during_dial_attempt(&mut self, peer_id: &PeerId) {
         // Any successful/timeout result should be preferred over a dial error.
         if self.all_dial_attempts.contains_key(peer_id) {
-            debug!("Not tracking dial attempt error result for {peer_id:?} as we already have better results for it.");
+            debug!(
+                "Not tracking dial attempt error result for {peer_id:?} as we already have better results for it."
+            );
             return;
         }
 
@@ -298,7 +307,9 @@ impl DialManager {
                     info!("Connection established for {peer_id:?} that we had dialed. We'll wait for dial back now. Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
                 });
             if let Entry::Vacant(_) = entry {
-                info!("We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+                info!(
+                    "We have dialed {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it."
+                );
             }
         } else {
             warn!("Dialer address does not contain peer id: {address:?}");
@@ -315,7 +326,9 @@ impl DialManager {
             });
 
         if let Entry::Vacant(_) = entry {
-            info!("We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it.");
+            info!(
+                "We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it."
+            );
         }
     }
 
@@ -335,7 +348,9 @@ impl DialManager {
             match state {
                 DialState::Initiated { .. } => {
                     if state.elapsed().as_secs() > TIMEOUT_ON_INITIATED_STATE.as_secs() {
-                        info!("Dial attempt for {peer:?} with state {state:?} has timed out (timeout: {TIMEOUT_ON_INITIATED_STATE:?}). Cleaning up.");
+                        info!(
+                            "Dial attempt for {peer:?} with state {state:?} has timed out (timeout: {TIMEOUT_ON_INITIATED_STATE:?}). Cleaning up."
+                        );
                         to_remove_peers.push(*peer);
                         if tracked_peer.is_some() {
                             // only override dial errors (which are low priority, if we have established a connection on a different address)

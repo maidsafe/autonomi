@@ -31,7 +31,7 @@ pub use self::reachability_check::ReachabilityStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue},
-    network::{init_reachability_check_swarm, Network, NetworkConfig},
+    network::{Network, NetworkConfig, init_reachability_check_swarm},
     record_store::NodeRecordStore,
 };
 
