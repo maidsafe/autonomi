@@ -7,12 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 mod dialer;
+mod listener;
 
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
 use futures::StreamExt;
 use libp2p::core::transport::ListenerId;
 use libp2p::core::ConnectedPoint;
+use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionId, DialError};
@@ -30,8 +32,9 @@ use crate::networking::error::ReachabilityCheckError;
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::network::endpoint_str;
+use crate::networking::reachability_check::listener::get_all_listeners;
 use crate::networking::{
-    multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p, NetworkError,
+    multiaddr_get_ip, multiaddr_get_socket_addr, multiaddr_pop_p2p, NetworkError
 };
 
 pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
@@ -124,33 +127,59 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// We need atleast 5 working, non-circuit contacts, with PeerId on them to be able to determine
     /// the reachability status.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         swarm: Swarm<ReachabilityCheckBehaviour>,
+        keypair: &Keypair,
+        local: bool,
+        listen_addr: SocketAddr,
         initial_contacts: Vec<Multiaddr>,
-        listen_socket_addr: SocketAddr,
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
-    ) -> Self {
+    ) -> Result<Self, NetworkError> {
         let mut swarm = swarm;
 
-        // Listen on QUIC
-        let addr_quic = Multiaddr::from(listen_socket_addr.ip())
-            .with(Protocol::Udp(listen_socket_addr.port()))
-            .with(Protocol::QuicV1);
-        let listen_id = swarm
-            .listen_on(addr_quic.clone())
-            .expect("Multiaddr should be supported by our configured transports");
+        let observed_listeners = get_all_listeners(keypair, local, listen_addr).await?;
+
+        if observed_listeners.is_empty() {
+            error!("No listen addresses found. Cannot start reachability check.");
+            return Err(NetworkError::NoListenAddressesFound);
+        } else if observed_listeners.len() == 1 {
+            if let Some(listen_socket_addr) = observed_listeners.iter().next() {
+                if listen_socket_addr.ip().is_unspecified() {
+                    error!("The only listen address found is unspecified. Cannot start reachability check.");
+                    return Err(NetworkError::NoListenAddressesFound);
+                }
+            }
+        }
+
+
+        let mut listeners: HashMap<ListenerId, HashSet<IpAddr>> = HashMap::new();
+        for listen_addr in observed_listeners {
+            // Listen on QUIC
+            let addr_quic = Multiaddr::from(listen_addr.ip())
+                .with(Protocol::Udp(listen_addr.port()))
+                .with(Protocol::QuicV1);
+
+            let listen_id = swarm
+                .listen_on(addr_quic.clone())
+                .expect("Multiaddr should be supported by our configured transports");
 
         info!("Listening on {listen_id:?} with addr: {addr_quic:?}");
+        
+            let ip_addr = listen_addr.ip();
+            let _ = listeners
+                .entry(listen_id)
+                .or_default()
+                .insert(ip_addr);
+        }
 
-        let listeners = HashMap::from([(listen_id, HashSet::from([listen_socket_addr.ip()]))]);
-        Self {
+        Ok(Self {
             swarm,
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported: false,
             listeners,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
-        }
+        })
     }
     /// Runs the reachability check workflow.
     pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {

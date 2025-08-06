@@ -455,7 +455,7 @@ fn init_swarm_driver(
 }
 
 /// Creates a new `ReachabilityCheckSwarmDriver` instance to perform reachability checks.
-pub(crate) fn init_reachability_check_swarm(
+pub(crate) async fn init_reachability_check_swarm(
     config: NetworkConfig,
 ) -> Result<ReachabilityCheckSwarmDriver> {
     let identify_protocol_str = IDENTIFY_PROTOCOL_STR
@@ -542,13 +542,16 @@ pub(crate) fn init_reachability_check_swarm(
 
     let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
+
     let swarm_driver = ReachabilityCheckSwarmDriver::new(
         swarm,
-        config.initial_contacts,
+        &config.keypair,
+        config.local,
         config.listen_addr,
+        config.initial_contacts,
         #[cfg(feature = "open-metrics")]
         metrics_recorder,
-    );
+    ).await?;
 
     Ok(swarm_driver)
 }
