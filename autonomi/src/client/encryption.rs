@@ -195,8 +195,7 @@ impl EncryptionStream {
         )
     }
 
-    #[allow(clippy::unused_async)]
-    pub async fn new_stream_from_file(
+    pub fn new_stream_from_file(
         file_path: String,
         relative_path: PathBuf,
         metadata: Metadata,
@@ -307,7 +306,6 @@ impl Client {
                 // choose encryption method
                 if file_size > *IN_MEMORY_ENCRYPTION_MAX_SIZE {
                     encrypt_file_in_stream(file_path, is_public, metadata, relative_path, file_size)
-                        .await
                 } else {
                     encrypt_file_in_memory(file_path, is_public, metadata, relative_path).await
                 }
@@ -321,7 +319,7 @@ impl Client {
     }
 }
 
-async fn encrypt_file_in_stream(
+fn encrypt_file_in_stream(
     file_path: PathBuf,
     is_public: bool,
     metadata: Metadata,
@@ -336,7 +334,6 @@ async fn encrypt_file_in_stream(
         is_public,
         file_size,
     )
-    .await
 }
 
 async fn encrypt_file_in_memory(
@@ -430,7 +427,6 @@ mod tests {
             is_public,
             file_size,
         )
-        .await
         .unwrap();
 
         // Should start in StreamInProgress
