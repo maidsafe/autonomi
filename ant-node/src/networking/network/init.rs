@@ -199,6 +199,7 @@ pub(super) fn init_driver(
             .listen_on(addr_quic.clone())
             .expect("Failed to listen on QUIC address");
     }
+    info!("Listening on QUIC address: {addr_quic:?}");
     Ok((swarm_driver, events_receiver))
 }
 

@@ -18,14 +18,13 @@ use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionId, DialError};
-use libp2p::{Multiaddr, PeerId, identify};
+use libp2p::{Multiaddr, identify};
 use libp2p::{
     Swarm,
     swarm::{NetworkBehaviour, SwarmEvent},
 };
-use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, SocketAddr};
 use std::time::Instant;
 
 use crate::networking::error::ReachabilityCheckError;
@@ -35,7 +34,8 @@ use crate::networking::network::endpoint_str;
 use crate::networking::reachability_check::listener::get_all_listeners;
 use crate::networking::{NetworkError, multiaddr_get_socket_addr, multiaddr_pop_p2p};
 
-pub(crate) const MAX_DIAL_ATTEMPTS: usize = 5;
+/// The maximum number of peers to dial concurrently during the reachability check.
+pub(crate) const MAX_CONCURRENT_DIALS: usize = 7;
 const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 
 #[derive(Debug, Clone)]
@@ -124,6 +124,7 @@ impl ReachabilityCheckSwarmDriver {
     ) -> Result<Self, NetworkError> {
         let mut swarm = swarm;
 
+        println!("Obtaining valid listen addresses for reachability check");
         let observed_listeners = get_all_listeners(keypair, local, listen_addr).await?;
 
         if observed_listeners.is_empty() {
@@ -366,11 +367,7 @@ impl ReachabilityCheckSwarmDriver {
                             debug!(
                                 "Received identify info from incoming connection {connection_id:?}. Adding observed address to our list."
                             );
-                            self.insert_observed_address(
-                                peer_id,
-                                info.observed_addr,
-                                connection_id,
-                            );
+                            self.insert_observed_address(info.observed_addr, connection_id);
                             self.dial_manager.on_successful_dial_back_identify(&peer_id);
                         }
                         if self.dial_manager.has_dialing_completed() {
@@ -510,46 +507,37 @@ impl ReachabilityCheckSwarmDriver {
         Ok(())
     }
 
-    fn insert_observed_address(
-        &mut self,
-        src_peer: PeerId,
-        address: Multiaddr,
-        connection_id: ConnectionId,
-    ) {
+    fn insert_observed_address(&mut self, address: Multiaddr, connection_id: ConnectionId) {
         let Some(socket_addr) = multiaddr_get_socket_addr(&address) else {
             warn!("Unable to get socket address from: {address:?}");
             return;
         };
 
-        match self
+        if let Some(addr) = self
             .dial_manager
             .dialer
             .identify_observed_external_addr
-            .entry(src_peer)
+            .insert(connection_id, socket_addr)
         {
-            Entry::Occupied(mut entry) => {
-                let addresses = entry.get_mut();
-
-                info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
-                addresses.push((socket_addr, connection_id));
-            }
-            Entry::Vacant(entry) => {
-                info!("Observed Address: Peer {src_peer:?} has observed us at: {address:?}");
-                let _ = entry.insert(vec![(socket_addr, connection_id)]);
-            }
+            warn!(
+                "Overwriting existing observed external address {addr:?} for connection id {connection_id:?} with new address {socket_addr:?}. This should not happen."
+            );
         }
     }
 
-    /// First we try to determine if we are reachable or not.
+    /// Get the reachability status of the node if the retries are exhausted.
     ///
-    /// And then we map the external address to the local adapter address.
-    /// If the local adapter is unspecified, we can use any address from the same ListenerId.
+    /// If the node is not routable, it will return `ReachabilityStatus::NotRoutable`.
+    /// If the node is reachable, it will return `ReachabilityStatus::Reachable`
+    /// with the reachable local adapter address and whether UPnP is supported.
+    ///
+    /// If the node is not yet reachable, it will return `None` and the workflow will be retried.
     fn get_reachability_status(
         &mut self,
     ) -> Result<Option<ReachabilityStatus>, ReachabilityCheckError> {
-        let external_addr_result = self.determine_reachability_via_external_addr()?;
+        let reachability_result = self.obtain_reachable_local_adapter()?;
 
-        if external_addr_result.retry {
+        if reachability_result.retry {
             if self.do_we_have_retries_left() {
                 println!(
                     "Retrying reachability check workflow. Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
@@ -566,182 +554,67 @@ impl ReachabilityCheckSwarmDriver {
                 info!("Max reachability check workflow attempts reached. Not retrying.");
             }
         }
-        if external_addr_result.terminate {
+        if reachability_result.terminate {
             info!("Terminating the node as we are not routable.");
             return Ok(Some(ReachabilityStatus::NotRoutable {
                 upnp: self.upnp_supported,
             }));
         }
 
-        if external_addr_result.reachable_addresses.is_empty() {
-            debug!(
-                "No reachable addresses found. This should not happen. Terminating the node as we are not routable."
-            );
-            return Ok(Some(ReachabilityStatus::NotRoutable {
-                upnp: self.upnp_supported,
-            }));
-        }
+        Ok(Some(ReachabilityStatus::Reachable {
+            addr: reachability_result
+                .reachable_local_adapter_addrs
+                .ok_or(ReachabilityCheckError::LocalAdapterShouldNotBeEmpty)?,
+            upnp: self.upnp_supported,
+        }))
+    }
 
-        // find all connection ids for the reachable addresses
-        let mut reachable_connection_ids = HashMap::new();
-        for reachable_addr in &external_addr_result.reachable_addresses {
-            for addrs in self
-                .dial_manager
-                .dialer
-                .identify_observed_external_addr
-                .values()
-            {
-                for (addr, connection_id) in addrs {
-                    if addr == reachable_addr {
-                        reachable_connection_ids
-                            .entry(*reachable_addr)
-                            .or_insert(vec![])
-                            .push(*connection_id);
-                    }
-                }
-            }
-        }
+    /// We have received the external addresses via Identify protocol and also the list of local adapter addresses
+    /// from the incoming connections. We now need to determine if the node is reachable or not and return the
+    /// reachable local adapter address.
+    fn obtain_reachable_local_adapter(&self) -> Result<ReachabilityResult, ReachabilityCheckError> {
+        let mut result = ReachabilityResult {
+            retry: false,
+            terminate: false,
+            reachable_local_adapter_addrs: None,
+        };
 
-        info!(
-            "Reachable addresses: {:?}",
-            external_addr_result.reachable_addresses
+        debug!(
+            "External addresses observed: {:?}",
+            self.dial_manager.dialer.identify_observed_external_addr
         );
-        info!("Reachable connection ids: {reachable_connection_ids:?}");
-        info!(
+        debug!(
             "Incoming connection local adapter map: {:?}",
             self.dial_manager
                 .dialer
                 .incoming_connection_local_adapter_map
         );
 
-        let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> =
-            HashMap::new();
-        for (reachable_addr, connection_ids) in reachable_connection_ids {
-            for connection_id in connection_ids {
-                let Some(local_adapter_addr) = self
-                    .dial_manager
-                    .dialer
-                    .incoming_connection_local_adapter_map
-                    .get(&connection_id)
-                else {
-                    warn!(
-                        "Unable to get local adapter address for connection id {connection_id:?}"
-                    );
-                    continue;
-                };
+        let mut external_addr_local_adapter_map: Vec<(SocketAddr, SocketAddr)> = Vec::new();
+        for (connection_id, external_addr) in
+            &self.dial_manager.dialer.identify_observed_external_addr
+        {
+            if let Some(local_adapter_addr) = self
+                .dial_manager
+                .dialer
+                .incoming_connection_local_adapter_map
+                .get(connection_id)
+            {
                 info!(
-                    "Local adapter address for connection id {connection_id:?} is {local_adapter_addr:?}"
+                    "Local adapter address for external_addr {external_addr:?} with connection id {connection_id:?} is {local_adapter_addr:?}"
                 );
-
-                let IpAddr::V4(local_adapter_ip) = local_adapter_addr.ip() else {
-                    warn!(
-                        "Local adapter address {local_adapter_addr:?} is not an IPv4 address. Skipping."
-                    );
-                    continue;
-                };
-
-                if local_adapter_ip.is_unspecified() // 0.0.0.0
-                    || local_adapter_ip.is_documentation()
-                    || local_adapter_ip.is_broadcast()
-                {
-                    warn!(
-                        "Local adapter address {local_adapter_ip:?} is unspecified, documentation or broadcast. Skipping."
-                    );
-                } else {
-                    info!(
-                        "Local adapter address {local_adapter_ip:?} is valid. Adding it to the external to local address map."
-                    );
-                    let _ = external_to_local_addr_map
-                        .entry(reachable_addr)
-                        .or_default()
-                        .insert(*local_adapter_addr);
-                }
+                external_addr_local_adapter_map.push((*external_addr, *local_adapter_addr));
+            } else {
+                warn!(
+                    "Unable to get local adapter address for external_addr {external_addr:?} with connection id {connection_id:?}"
+                );
             }
         }
 
-        if external_to_local_addr_map.is_empty() {
-            info!(
-                "No local adapter mapping found for the reachable addresses. Returning the first external address instead."
-            );
-            let addr = external_addr_result
-                .reachable_addresses
-                .first()
-                .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
-            return Ok(Some(ReachabilityStatus::Reachable {
-                addr: *addr,
-                upnp: self.upnp_supported,
-            }));
-        }
+        info!("External address to local adapter map: {external_addr_local_adapter_map:?}");
 
-        info!("External address to local adapter map exists: {external_to_local_addr_map:?}");
-
-        // prioritize the case where reachable address is the same as local adapter address
-        // if not, pick the first one
-        if let Some((reachable_addr, _)) =
-            external_to_local_addr_map
-                .iter()
-                .find(|(reachable_addr, local_adapter_addrs)| {
-                    local_adapter_addrs
-                        .iter()
-                        .any(|addr| addr.ip() == reachable_addr.ip())
-                })
-        {
-            info!(
-                "Found a reachable address {reachable_addr:?} that is the same as the local adapter address."
-            );
-            return Ok(Some(ReachabilityStatus::Reachable {
-                addr: *reachable_addr,
-                upnp: self.upnp_supported,
-            }));
-        }
-
-        info!(
-            "No reachable address found that is the same as the local adapter address. Picking the first external address & its first local adapter address."
-        );
-
-        let (reachable_addr, local_adapter_addrs) =
-            external_to_local_addr_map
-                .into_iter()
-                .next()
-                .ok_or(ReachabilityCheckError::ExternalAddrsShouldNotBeEmpty)?;
-
-        info!(
-            "Reachable address: {reachable_addr:?} and corresponding local adapter: {local_adapter_addrs:?}. Returning the first local adapter address."
-        );
-
-        Ok(Some(ReachabilityStatus::Reachable {
-            addr: *local_adapter_addrs
-                .iter()
-                .next()
-                .ok_or(ReachabilityCheckError::LocalAdapterShouldNotBeEmpty)?,
-            upnp: self.upnp_supported,
-        }))
-    }
-
-    /// We received our observed addrs via identify. We would now determine if we're reachable/unreachable via the
-    /// identify external addr.
-    ///
-    /// Returns a vector of addresses that are reachable and a boolean to retry the entire process.
-    fn determine_reachability_via_external_addr(
-        &self,
-    ) -> Result<ExternalAddrResult, ReachabilityCheckError> {
-        let mut result = ExternalAddrResult {
-            retry: false,
-            terminate: false,
-            reachable_addresses: vec![],
-        };
-        info!(
-            "Determining reachability status based on observed addresses: {:?}",
-            self.dial_manager.dialer.identify_observed_external_addr
-        );
-
-        if self
-            .dial_manager
-            .dialer
-            .identify_observed_external_addr
-            .is_empty()
-        {
-            info!("No observed addresses found. Check if we atleast made any successful dials.");
+        if external_addr_local_adapter_map.is_empty() {
+            info!("No observed addresses found. Check if we made any successful dials.");
             if self.dial_manager.are_we_faulty() {
                 error!(
                     "We are faulty. We have not made any successful dials. Terminating the node immediately."
@@ -754,14 +627,11 @@ impl ReachabilityCheckSwarmDriver {
                 result.terminate = true;
                 result.retry = true;
             }
-        } else if self
-            .dial_manager
-            .dialer
-            .identify_observed_external_addr
-            .len()
-            < 3
-        {
-            info!("We have observed less than 3 addresses. Trying again or terminating.");
+        } else if external_addr_local_adapter_map.len() < get_majority(MAX_CONCURRENT_DIALS) {
+            info!(
+                "We have observed less than {} addresses. Trying again or terminating.",
+                get_majority(MAX_CONCURRENT_DIALS)
+            );
             result.terminate = true;
             result.retry = true;
         }
@@ -770,124 +640,56 @@ impl ReachabilityCheckSwarmDriver {
             return Ok(result);
         }
 
-        let mut ports = HashSet::new();
-        let mut ips = HashSet::new();
-        for addresses in self
-            .dial_manager
-            .dialer
-            .identify_observed_external_addr
-            .values()
-        {
-            for (addr, _id) in addresses {
-                let _ = ports.insert(addr.port());
-                if let IpAddr::V4(ip) = addr.ip() {
-                    let _ = ips.insert(ip);
-                }
-            }
+        let mut external_addrs = HashSet::new();
+        let mut local_adapter_addrs = HashSet::new();
+        for (external_addr, local_adapter_addr) in external_addr_local_adapter_map.iter() {
+            let _ = external_addrs.insert(*external_addr);
+            let _ = local_adapter_addrs.insert(*local_adapter_addr);
         }
-
-        if ports.len() != 1 {
-            error!("Multiple ports observed, we are unreachable. Terminating the node.");
+        if external_addrs.len() != 1 {
+            error!("Multiple external addresses observed. Terminating the node.");
+            result.terminate = true;
+            return Ok(result);
+        }
+        if local_adapter_addrs.len() != 1 {
+            error!("Multiple local adapter addresses observed. Terminating the node.");
             result.terminate = true;
             return Ok(result);
         }
 
-        let port = *ports
+        let external_addr = *external_addrs
             .iter()
             .next()
-            .ok_or(ReachabilityCheckError::EmptyPort)?;
-        if port == 0 {
-            error!("Observed port is 0. This should not happen. Terminating the node.");
+            .expect("This should not be empty, we checked it above");
+        let local_adapter_addr = *local_adapter_addrs
+            .iter()
+            .next()
+            .expect("This should not be empty, we checked it above");
+
+        if external_addr.ip().is_unspecified() {
+            error!("External address is unspecified. Terminating the node.");
             result.terminate = true;
             return Ok(result);
         }
 
-        #[allow(clippy::comparison_chain)]
-        #[allow(clippy::needless_return)]
-        if ips.len() == 1 {
-            let ip = ips
-                .iter()
-                .next()
-                .ok_or(ReachabilityCheckError::EmptyIpAddrs)?;
-            if ip.is_unspecified() || ip.is_documentation() || ip.is_broadcast() {
-                info!("Observed address {ip:?} is unspecified. Terminating the node.");
-                result.terminate = true;
-                return Ok(result);
-            } else if ip.is_private() {
-                let addr = SocketAddr::new(IpAddr::V4(*ip), port);
-                info!(
-                    "Observed IP address {addr:?} is non-global. Reachability status is Reachable."
-                );
-                result.reachable_addresses.push(addr);
-                return Ok(result);
-            } else {
-                let addr = SocketAddr::new(IpAddr::V4(*ip), port);
-                info!("Observed IP address {addr:?} is global. Reachability status is Reachable.");
-                result.reachable_addresses.push(addr);
-                return Ok(result);
-            }
-        } else if ips.len() > 1 {
-            // if mix of private and public IPs, pick the private one (i.e,. on a local testnet on a public machine)
-            // if all are private, prioritize localhost first
-            let public_ip = ips
-                .iter()
-                .filter(|ip| {
-                    !ip.is_private()
-                        && !ip.is_unspecified()
-                        && !ip.is_documentation()
-                        && !ip.is_loopback()
-                })
-                .collect::<Vec<_>>();
-
-            let private_ip = ips
-                .iter()
-                .filter(|ip| ip.is_private() || ip.is_loopback())
-                .collect::<Vec<_>>();
-
-            if !private_ip.is_empty() {
-                // try to pick localhost
-                if private_ip.iter().any(|ip| ip.is_loopback()) {
-                    let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port);
-                    info!(
-                        "We have multiple private IP addresses, picking localhost: {addr:?}. Reachability status is Reachable."
-                    );
-                    result.reachable_addresses.push(addr);
-                    return Ok(result);
-                }
-
-                let addrs = private_ip
-                    .iter()
-                    .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
-                    .collect::<Vec<_>>();
-                info!(
-                    "We have multiple private IP addresses {addrs:?}. Reachability status is Reachable."
-                );
-                result.reachable_addresses.extend(addrs);
-                return Ok(result);
-            }
-
-            if !public_ip.is_empty() {
-                let addrs = public_ip
-                    .iter()
-                    .map(|ip| SocketAddr::new(IpAddr::V4(**ip), port))
-                    .collect::<Vec<_>>();
-                info!(
-                    "We have multiple public IP addresses {addrs:?}. Reachability status is Reachable."
-                );
-                result.reachable_addresses.extend(addrs);
-                return Ok(result);
-            }
-
-            error!(
-                "We have multiple IP addresses, but none are private or public. Terminating the node."
-            );
-            result.terminate = true;
-            return Ok(result);
-        } else {
-            error!("We have no IP addresses. Terminating the node.");
+        if local_adapter_addr.ip().is_unspecified() {
+            error!("Local adapter address is unspecified. Terminating the node.");
             result.terminate = true;
             return Ok(result);
         }
+
+        if local_adapter_addr.port() == 0 {
+            error!("Local adapter address port is 0. Terminating the node.");
+            result.terminate = true;
+            return Ok(result);
+        }
+
+        info!(
+            "Found external address: {external_addr:?} and its local adapter: {local_adapter_addr:?}"
+        );
+
+        result.reachable_local_adapter_addrs = Some(local_adapter_addr);
+        Ok(result)
     }
 
     fn do_we_have_retries_left(&self) -> bool {
@@ -895,8 +697,12 @@ impl ReachabilityCheckSwarmDriver {
     }
 }
 
-struct ExternalAddrResult {
+fn get_majority(value: usize) -> usize {
+    if value == 0 { 0 } else { (value / 2) + 1 }
+}
+
+struct ReachabilityResult {
     retry: bool,
     terminate: bool,
-    reachable_addresses: Vec<SocketAddr>,
+    reachable_local_adapter_addrs: Option<SocketAddr>,
 }

@@ -237,12 +237,10 @@ impl NodeBuilder {
             match status {
                 Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
                     info!(
-                        "Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}",
-                        addr.ip()
+                        "Reachability check: Reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}",
                     );
                     println!(
-                        "Reachability check: Reachable. Starting node with socket addr: {} and UPnP: {upnp:?}.",
-                        addr.ip()
+                        "Reachability check: Reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}.",
                     );
                     address = addr;
                     no_upnp = !upnp;

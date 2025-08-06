@@ -137,5 +137,11 @@ pub(crate) async fn get_all_listeners(
         }
     }
 
+    info!(
+        "Collected {} listen addresses: {:?}",
+        addresses.len(),
+        addresses
+    );
+
     Ok(addresses)
 }

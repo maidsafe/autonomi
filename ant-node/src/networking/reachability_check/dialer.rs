@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::MAX_DIAL_ATTEMPTS;
+use super::MAX_CONCURRENT_DIALS;
 use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol, swarm::ConnectionId};
 use std::{
@@ -34,8 +34,10 @@ pub(crate) struct DialManager {
 pub(crate) struct Dialer {
     // Critical field, should only be managed by the DialManager. Don't try to access it directly.
     ongoing_dial_attempts: HashMap<PeerId, DialState>,
-    pub(super) identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
+    /// The addresses that a remote peer has observed us from.
+    pub(super) identify_observed_external_addr: HashMap<ConnectionId, SocketAddr>,
     pub(super) incoming_connection_ids: HashSet<ConnectionId>,
+    /// The local adapter that was used to establish the incoming connection.
     pub(super) incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
 }
 
@@ -209,7 +211,7 @@ impl DialManager {
 
     /// Check if we can perform a new dial attempt.
     pub(crate) fn can_we_perform_new_dial(&self) -> bool {
-        self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS
+        self.dialer.ongoing_dial_attempts.len() < MAX_CONCURRENT_DIALS
     }
 
     /// Dialing has completed if:
