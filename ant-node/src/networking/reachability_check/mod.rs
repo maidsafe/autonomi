@@ -43,11 +43,6 @@ const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 #[derive(Debug, Clone)]
 /// The reachability status of the node.
 pub enum ReachabilityStatus {
-    /// We are not reachable directly and need to use a relay.
-    Relay {
-        /// Whether UPnP is supported or not.
-        upnp: bool,
-    },
     /// We are reachable and have an external address.
     Reachable {
         /// The external address we are reachable at.
@@ -55,7 +50,7 @@ pub enum ReachabilityStatus {
         /// Whether UPnP is supported or not.
         upnp: bool,
     },
-    /// We are not routable, meaning we cannot be reached directly or via a relay.
+    /// We are not externally reachable.
     NotRoutable {
         /// Whether UPnP is supported or not.
         upnp: bool,
@@ -65,15 +60,11 @@ pub enum ReachabilityStatus {
 impl ReachabilityStatus {
     pub(crate) fn upnp_supported(&self) -> bool {
         match self {
-            ReachabilityStatus::Relay { upnp } => *upnp,
             ReachabilityStatus::Reachable { upnp, .. } => *upnp,
             ReachabilityStatus::NotRoutable { upnp } => *upnp,
         }
     }
 
-    pub(crate) fn is_relay(&self) -> bool {
-        matches!(self, ReachabilityStatus::Relay { .. })
-    }
 
     pub(crate) fn is_reachable(&self) -> bool {
         matches!(self, ReachabilityStatus::Reachable { .. })
@@ -555,16 +546,6 @@ impl ReachabilityCheckSwarmDriver {
             }));
         }
 
-        if external_addr_result.relay {
-            info!(
-                "We are not reachable. Setting reachability status to relay with UPnP: {}",
-                self.upnp_supported
-            );
-            return Ok(Some(ReachabilityStatus::Relay {
-                upnp: self.upnp_supported,
-            }));
-        }
-
         if external_addr_result.reachable_addresses.is_empty() {
             debug!("No reachable addresses found. This should not happen. Terminating the node as we are not routable.");
             return Ok(Some(ReachabilityStatus::NotRoutable {
@@ -657,7 +638,6 @@ impl ReachabilityCheckSwarmDriver {
 
         // prioritize the case where reachable address is the same as local adapter address
         // if not, pick the first one
-
         if let Some((reachable_addr, _)) =
             external_to_local_addr_map
                 .iter()
@@ -704,7 +684,6 @@ impl ReachabilityCheckSwarmDriver {
             retry: false,
             terminate: false,
             reachable_addresses: vec![],
-            relay: false,
         };
         info!(
             "Determining reachability status based on observed addresses: {:?}",
@@ -719,13 +698,13 @@ impl ReachabilityCheckSwarmDriver {
         {
             info!("No observed addresses found. Check if we atleast made any successful dials.");
             if self.dial_manager.are_we_faulty() {
-                error!("We are faulty. We have not made any successful dials.");
+                error!("We are faulty. We have not made any successful dials. Terminating the node immediately.");
                 result.terminate = true;
             } else {
-                info!("We are not faulty, but we have not made any successful dials. Hence we should use relay if the retries are exhausted.");
-                result.relay = true;
+                info!("We are not faulty, but we have not made any successful dials. Retrying again, else terminating.");
+                result.terminate = true;
+                result.retry = true;
             }
-            result.retry = true;
         } else if self
             .dial_manager
             .dialer
@@ -733,8 +712,8 @@ impl ReachabilityCheckSwarmDriver {
             .len()
             < 3
         {
-            info!("We have observed less than 3 addresses. We should use relay if the retries are exhausted.");
-            result.relay = true;
+            info!("We have observed less than 3 addresses. Trying again or terminating.");
+            result.terminate = true;
             result.retry = true;
         }
 
@@ -863,5 +842,4 @@ struct ExternalAddrResult {
     retry: bool,
     terminate: bool,
     reachable_addresses: Vec<SocketAddr>,
-    relay: bool,
 }
