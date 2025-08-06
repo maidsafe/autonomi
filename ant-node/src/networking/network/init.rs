@@ -8,24 +8,25 @@
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
-    metrics::service::run_metrics_server, metrics::MetadataRecorder,
-    metrics::NetworkMetricsRecorder, metrics::ReachabilityStatusMetric, MetricsRegistries,
+    MetricsRegistries, metrics::MetadataRecorder, metrics::NetworkMetricsRecorder,
+    metrics::ReachabilityStatusMetric, metrics::service::run_metrics_server,
 };
 
 use crate::{
+    ReachabilityStatus,
     networking::{
+        CLOSE_GROUP_SIZE, NetworkEvent,
         bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
         circular_vec::CircularVec,
-        driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
+        driver::{NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery},
         error::{NetworkError, Result},
         external_address::ExternalAddressManager,
         reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
         record_store::{NodeRecordStore, NodeRecordStoreConfig},
         relay_manager::RelayManager,
         replication_fetcher::ReplicationFetcher,
-        transport, NetworkEvent, CLOSE_GROUP_SIZE,
+        transport,
     },
-    ReachabilityStatus,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
@@ -328,8 +329,8 @@ fn init_swarm_driver(
 
     // Identify Behaviour
     info!(
-            "Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}"
-        );
+        "Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}"
+    );
     let identify = {
         let cfg = libp2p::identify::Config::new(identify_protocol_str, config.keypair.public())
             .with_agent_version(agent_version)
@@ -522,7 +523,9 @@ pub(crate) async fn init_reachability_check_swarm(
         .read()
         .expect("Failed to obtain read lock for IDENTIFY_REACHABILITY_CHECK_CLIENT_VERSION_STR")
         .clone();
-    info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
+    info!(
+        "Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}"
+    );
     let identify = {
         let cfg = libp2p::identify::Config::new(identify_protocol_str, config.keypair.public())
             .with_agent_version(agent_version)
@@ -542,7 +545,6 @@ pub(crate) async fn init_reachability_check_swarm(
 
     let swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
 
-
     let swarm_driver = ReachabilityCheckSwarmDriver::new(
         swarm,
         &config.keypair,
@@ -551,7 +553,8 @@ pub(crate) async fn init_reachability_check_swarm(
         config.initial_contacts,
         #[cfg(feature = "open-metrics")]
         metrics_recorder,
-    ).await?;
+    )
+    .await?;
 
     Ok(swarm_driver)
 }
