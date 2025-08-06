@@ -13,17 +13,17 @@ mod swarm;
 
 use crate::networking::NetworkEvent;
 use crate::networking::{
-    driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer, Addresses,
+    Addresses, driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer,
 };
 use ant_protocol::messages::ConnectionInfo;
 use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
-use libp2p::{request_response::ResponseChannel as PeerResponseChannel, PeerId};
+use libp2p::{PeerId, request_response::ResponseChannel as PeerResponseChannel};
 
 use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::{
-    messages::{Request, Response},
     NetworkAddress,
+    messages::{Request, Response},
 };
 #[cfg(feature = "open-metrics")]
 use std::collections::HashSet;
@@ -161,8 +161,11 @@ impl SwarmDriver {
         let distance =
             NetworkAddress::from(self.self_peer_id).distance(&NetworkAddress::from(added_peer));
         // ELK logging. Do not update without proper testing.
-        info!("Node {:?} added new peer into routing table: {added_peer:?}. It has a {:?} distance to us.",
-        self.self_peer_id, distance.ilog2());
+        info!(
+            "Node {:?} added new peer into routing table: {added_peer:?}. It has a {:?} distance to us.",
+            self.self_peer_id,
+            distance.ilog2()
+        );
 
         #[cfg(feature = "loud")]
         println!(
@@ -204,7 +207,8 @@ impl SwarmDriver {
         // ELK logging. Do not update without proper testing.
         info!(
             "Peer removed from routing table: {removed_peer:?}. We now have #{} connected peers. It has a {:?} distance to us.",
-            self.peers_in_rt, distance.ilog2()
+            self.peers_in_rt,
+            distance.ilog2()
         );
 
         self.send_event(NetworkEvent::PeerRemoved(removed_peer, self.peers_in_rt));

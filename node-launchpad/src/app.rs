@@ -7,10 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::components::popup::upgrade_launchpad::UpgradeLaunchpadPopup;
-use crate::upnp::{get_upnp_support, UpnpSupport};
+use crate::upnp::{UpnpSupport, get_upnp_support};
 use crate::{
     action::Action,
     components::{
+        Component,
         help::Help,
         options::Options,
         popup::{
@@ -20,9 +21,8 @@ use crate::{
             upgrade_nodes::UpgradeNodesPopUp,
         },
         status::{Status, StatusConfig},
-        Component,
     },
-    config::{get_launchpad_nodes_data_dir_path, AppData, Config},
+    config::{AppData, Config, get_launchpad_nodes_data_dir_path},
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
     node_mgmt::{PORT_MAX, PORT_MIN},

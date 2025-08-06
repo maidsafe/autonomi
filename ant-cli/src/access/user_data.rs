@@ -9,13 +9,13 @@
 use std::collections::HashMap;
 
 use autonomi::{
+    Pointer, PointerAddress, Scratchpad, ScratchpadAddress,
     client::{
         files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
         register::RegisterAddress,
         vault::UserData,
     },
     data::DataAddress,
-    Pointer, PointerAddress, Scratchpad, ScratchpadAddress,
 };
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;

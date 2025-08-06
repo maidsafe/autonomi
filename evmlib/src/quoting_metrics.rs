@@ -38,7 +38,17 @@ impl Debug for QuotingMetrics {
     fn fmt(&self, formatter: &mut Formatter) -> FmtResult {
         let density_u256 = self.network_density.map(U256::from_be_bytes);
 
-        write!(formatter, "QuotingMetrics {{ data_type: {}, data_size: {}, close_records_stored: {}, records_per_type {:?}, max_records: {}, received_payment_count: {}, live_time: {}, network_density: {density_u256:?}, network_size: {:?} }}",
-               self.data_type, self.data_size, self.close_records_stored, self.records_per_type, self.max_records, self.received_payment_count, self.live_time, self.network_size)
+        write!(
+            formatter,
+            "QuotingMetrics {{ data_type: {}, data_size: {}, close_records_stored: {}, records_per_type {:?}, max_records: {}, received_payment_count: {}, live_time: {}, network_density: {density_u256:?}, network_size: {:?} }}",
+            self.data_type,
+            self.data_size,
+            self.close_records_stored,
+            self.records_per_type,
+            self.max_records,
+            self.received_payment_count,
+            self.live_time,
+            self.network_size
+        )
     }
 }

@@ -48,7 +48,7 @@ mod utils;
 use payment::Receipt;
 pub use put_error_state::ChunkBatchUploadState;
 
-use ant_bootstrap::{contacts::ALPHANET_CONTACTS, InitialPeersConfig};
+use ant_bootstrap::{InitialPeersConfig, contacts::ALPHANET_CONTACTS};
 pub use ant_evm::Amount;
 use ant_evm::EvmNetwork;
 use config::ClientConfig;
@@ -64,9 +64,9 @@ const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
 // Amount of peers to confirm into our routing table before we consider the client ready.
 use crate::client::config::ClientOperatingStrategy;
-use crate::networking::{multiaddr_is_global, Multiaddr, Network, NetworkAddress, NetworkError};
-use ant_protocol::storage::RecordKind;
+use crate::networking::{Multiaddr, Network, NetworkAddress, NetworkError, multiaddr_is_global};
 pub use ant_protocol::CLOSE_GROUP_SIZE;
+use ant_protocol::storage::RecordKind;
 
 /// Represents a client for the Autonomi network.
 ///

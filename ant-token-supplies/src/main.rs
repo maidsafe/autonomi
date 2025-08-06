@@ -12,7 +12,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Read};
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 use warp::Filter;
 
 use dirs_next::home_dir;

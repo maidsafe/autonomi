@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_bootstrap::{
-    cache_store::{cache_data_v0, cache_data_v1},
     BootstrapCacheConfig, BootstrapCacheStore,
+    cache_store::{cache_data_v0, cache_data_v1},
 };
 use ant_logging::LogBuilder;
 use color_eyre::Result;

@@ -7,11 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::GraphEntryAddress;
 use autonomi::client::payment::PaymentOption;
 use autonomi::pointer::PointerTarget;
-use autonomi::GraphEntryAddress;
-use autonomi::{client::analyze::Analysis, GraphEntry, Pointer, Scratchpad};
-use autonomi::{client::chunk::Chunk, Bytes, Client};
+use autonomi::{Bytes, Client, client::chunk::Chunk};
+use autonomi::{GraphEntry, Pointer, Scratchpad, client::analyze::Analysis};
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;
@@ -128,7 +128,9 @@ async fn test_analyze_pointer() -> Result<()> {
     let wallet = get_funded_wallet();
     let payment_option = PaymentOption::from(&wallet);
 
-    let target_addr = GraphEntryAddress::from_hex("b6f6ca699551882e2306ad9045e35c8837a3b99810af55ed358efe7166b7f6b4213ded09b200465f25d5d013fc7c35f9")?;
+    let target_addr = GraphEntryAddress::from_hex(
+        "b6f6ca699551882e2306ad9045e35c8837a3b99810af55ed358efe7166b7f6b4213ded09b200465f25d5d013fc7c35f9",
+    )?;
     let key = bls::SecretKey::random();
     let pointer = Pointer::new(&key, 0, PointerTarget::GraphEntryAddress(target_addr));
     let (_cost, addr) = client.pointer_put(pointer.clone(), payment_option).await?;

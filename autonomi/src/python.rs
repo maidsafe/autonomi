@@ -18,7 +18,7 @@ use std::{
 use ant_bootstrap::BootstrapCacheConfig;
 use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
 use ant_protocol::storage::DataTypes;
-use bls::{PublicKey, SecretKey, PK_SIZE};
+use bls::{PK_SIZE, PublicKey, SecretKey};
 use bytes::Bytes;
 use exponential_backoff::Backoff;
 use libp2p::Multiaddr;
@@ -30,11 +30,15 @@ use pyo3::{
 use pyo3_async_runtimes::tokio::future_into_py;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
-use xor_name::{XorName, XOR_NAME_LEN};
+use xor_name::{XOR_NAME_LEN, XorName};
 
 // Internal imports
 use crate::{
+    Amount, AttoTokens, Chunk, ChunkAddress, Client, ClientConfig, ClientOperatingStrategy,
+    GraphEntry, GraphEntryAddress, InitialPeersConfig, MaxFeePerGas, Network as EVMNetwork,
+    Pointer, PointerAddress, Scratchpad, ScratchpadAddress, Signature, TransactionConfig, Wallet,
     client::{
+        ClientEvent, UploadSummary,
         chunk::DataMapChunk,
         data::DataAddress,
         files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
@@ -45,14 +49,10 @@ use crate::{
         pointer::PointerTarget,
         quote::{QuoteForAddress, StoreQuote},
         vault::{UserData, VaultSecretKey},
-        ClientEvent, UploadSummary,
     },
     files::{Metadata, PrivateArchive, PublicArchive},
     networking::{PeerId, Quorum, RetryStrategy, Strategy},
     register::{RegisterAddress, RegisterHistory},
-    Amount, AttoTokens, Chunk, ChunkAddress, Client, ClientConfig, ClientOperatingStrategy,
-    GraphEntry, GraphEntryAddress, InitialPeersConfig, MaxFeePerGas, Network as EVMNetwork,
-    Pointer, PointerAddress, Scratchpad, ScratchpadAddress, Signature, TransactionConfig, Wallet,
 };
 
 #[pyclass(name = "AttoTokens")]

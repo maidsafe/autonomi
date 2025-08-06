@@ -10,24 +10,25 @@
 
 use super::get_bin_path;
 use crate::{
+    VerbosityLevel,
     add_services::config::PortRange,
-    local::{kill_network, run_network, LocalNetworkOptions},
-    print_banner, status_report, VerbosityLevel,
+    local::{LocalNetworkOptions, kill_network, run_network},
+    print_banner, status_report,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
-    control::ServiceController, get_local_node_registry_path, NodeRegistryManager,
+    NodeRegistryManager, control::ServiceController, get_local_node_registry_path,
 };
-use color_eyre::{eyre::eyre, Help, Report, Result};
+use color_eyre::{Help, Report, Result, eyre::eyre};
 use std::{
     path::PathBuf,
     process::{Command, Stdio},
 };
 use sysinfo::System;
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 pub async fn join(
     build: bool,
@@ -54,8 +55,8 @@ pub async fn join(
     if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
     {
         return Err(eyre!(
-        "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
-    ));
+            "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
+        ));
     }
 
     let local_node_reg_path = &get_local_node_registry_path()?;
@@ -134,8 +135,8 @@ pub async fn run(
     if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
     {
         return Err(eyre!(
-        "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
-    ));
+            "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
+        ));
     }
 
     // In the clean case, the node registry must be loaded *after* the existing network has

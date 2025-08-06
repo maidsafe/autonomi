@@ -11,24 +11,24 @@ use crate::client::chunk_cache::{
 };
 use crate::networking::PeerInfo;
 use crate::{
+    Client,
     client::{
+        ChunkBatchUploadState, GetError, PutError,
         payment::{PaymentOption, Receipt},
         quote::CostError,
         utils::process_tasks_with_max_concurrency,
-        ChunkBatchUploadState, GetError, PutError,
     },
     self_encryption::DataMapLevel,
-    Client,
 };
 use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
 pub use ant_protocol::storage::{Chunk, ChunkAddress};
 use ant_protocol::{
-    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
+    storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
 };
 use bytes::Bytes;
 use libp2p::kad::Record;
-use self_encryption::{decrypt_full_set, DataMap, EncryptedChunk};
+use self_encryption::{DataMap, EncryptedChunk, decrypt_full_set};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -302,8 +302,47 @@ impl Client {
         Ok(total_cost)
     }
 
-    /// Upload chunks in batches
-    pub(crate) async fn chunk_batch_upload(
+    /// Upload chunks in batches to the network. This is useful for pre-calculated payment proofs,
+    /// in case of manual encryption or re-uploading certain chunks that were already paid for.
+    ///
+    /// This method requires a vector of chunks to be uploaded and the payment receipt. It returns a `PutError` for
+    /// failures and `Ok(())` for successful uploads.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use ant_protocol::storage::DataTypes;
+    /// # use autonomi::{Client, Wallet};
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::init_local().await?;
+    /// # let wallet = Wallet::new_from_private_key(
+    /// #     client.evm_network().clone(),
+    /// #     "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+    /// # )?;
+    ///
+    /// // Step 1: Encrypt your data using self-encryption
+    /// let (data_map, chunks) = autonomi::self_encryption::encrypt("Hello, World!".into())?;
+    ///
+    /// // Step 2: Collect all chunks (data map + content chunks)
+    /// let mut all_chunks = vec![&data_map];
+    /// all_chunks.extend(chunks.iter());
+    ///
+    /// // Step 3: Get storage quotes for all chunks
+    /// let quote = client.get_store_quotes(
+    ///     DataTypes::Chunk,
+    ///     all_chunks.iter().map(|chunk| (*chunk.address().xorname(), chunk.size())),
+    /// ).await?;
+    ///
+    /// // Step 4: Pay for all chunks at once and get receipt
+    /// wallet.pay_for_quotes(quote.payments()).await.map_err(|err| err.0)?;
+    /// let receipt = autonomi::client::payment::receipt_from_store_quotes(quote);
+    ///
+    /// // Step 5: Upload all chunks with the payment receipt
+    /// client.chunk_batch_upload(all_chunks, &receipt).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn chunk_batch_upload(
         &self,
         chunks: Vec<&Chunk>,
         receipt: &Receipt,

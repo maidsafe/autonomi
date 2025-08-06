@@ -7,25 +7,25 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
+    VerbosityLevel,
     add_services::{
         add_daemon, add_node,
         config::{
             AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder, PortRange,
         },
     },
-    VerbosityLevel,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
-use ant_service_management::{control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
-use ant_service_management::{error::Result as ServiceControlResult, NatDetectionStatus};
 use ant_service_management::{
     DaemonServiceData, NodeRegistryManager, NodeServiceData, ServiceStatus,
 };
+use ant_service_management::{NatDetectionStatus, error::Result as ServiceControlResult};
+use ant_service_management::{control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
 use color_eyre::Result;
-use mockall::{mock, predicate::*, Sequence};
+use mockall::{Sequence, mock, predicate::*};
 use predicates::prelude::*;
 use service_manager::ServiceInstallCtx;
 use std::{
@@ -2931,8 +2931,8 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
 }
 
 #[tokio::test]
-async fn add_node_should_return_an_error_if_multiple_services_are_specified_with_a_single_port(
-) -> Result<()> {
+async fn add_node_should_return_an_error_if_multiple_services_are_specified_with_a_single_port()
+-> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -3779,8 +3779,8 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
 }
 
 #[tokio::test]
-async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_range_is_used(
-) -> Result<()> {
+async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_range_is_used()
+-> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4260,8 +4260,8 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
 }
 
 #[tokio::test]
-async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_is_used(
-) -> Result<()> {
+async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_is_used()
+-> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4749,8 +4749,8 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
 }
 
 #[tokio::test]
-async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_set_nat_flags_is_enabled(
-) -> Result<()> {
+async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_set_nat_flags_is_enabled()
+-> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 

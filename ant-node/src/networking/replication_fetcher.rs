@@ -9,15 +9,15 @@
 
 use crate::networking::interface::NetworkEvent;
 use ant_protocol::{
+    NetworkAddress, PrettyPrintRecordKey,
     constants::CLOSE_GROUP_SIZE,
     storage::{DataTypes, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::{
-    kad::{KBucketDistance as Distance, RecordKey},
     PeerId,
+    kad::{KBucketDistance as Distance, RecordKey},
 };
-use std::collections::{hash_map::Entry, BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque, hash_map::Entry};
 use std::time::Instant;
 use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
@@ -213,8 +213,10 @@ impl ReplicationFetcher {
         debug!("Next to fetch....");
 
         if self.on_going_fetches.len() >= MAX_PARALLEL_FETCH {
-            warn!("Replication Fetcher doesn't have free fetch capacity. Currently has {} entries in queue.",
-                self.to_be_fetched.len());
+            warn!(
+                "Replication Fetcher doesn't have free fetch capacity. Currently has {} entries in queue.",
+                self.to_be_fetched.len()
+            );
             return vec![];
         }
 
@@ -487,8 +489,11 @@ impl ReplicationFetcher {
         }
 
         if !out_of_range_keys.is_empty() && !new_incoming_keys.is_empty() {
-            info!("Among {total_incoming_keys} incoming replications from {holder:?}, {} new records and {} out of range",
-                new_incoming_keys.len(), out_of_range_keys.len());
+            info!(
+                "Among {total_incoming_keys} incoming replications from {holder:?}, {} new records and {} out of range",
+                new_incoming_keys.len(),
+                out_of_range_keys.len()
+            );
         }
 
         new_incoming_keys
@@ -503,7 +508,9 @@ impl ReplicationFetcher {
             if scores.len() > 1 {
                 let is_healthy = scores.iter().filter(|is_health| **is_health).count() > 1;
                 if !is_healthy {
-                    info!("Peer {holder:?} is not a trustworthy replication source, as bearing scores of {scores:?}");
+                    info!(
+                        "Peer {holder:?} is not a trustworthy replication source, as bearing scores of {scores:?}"
+                    );
                 }
                 Some(is_healthy)
             } else {
@@ -598,10 +605,10 @@ impl ReplicationFetcher {
 
 #[cfg(test)]
 mod tests {
-    use super::{ReplicationFetcher, FETCH_TIMEOUT, MAX_PARALLEL_FETCH};
-    use ant_protocol::{constants::CLOSE_GROUP_SIZE, storage::ValidationType, NetworkAddress};
+    use super::{FETCH_TIMEOUT, MAX_PARALLEL_FETCH, ReplicationFetcher};
+    use ant_protocol::{NetworkAddress, constants::CLOSE_GROUP_SIZE, storage::ValidationType};
     use eyre::Result;
-    use libp2p::{kad::RecordKey, PeerId};
+    use libp2p::{PeerId, kad::RecordKey};
     use std::{
         collections::{HashMap, HashSet},
         time::Duration,

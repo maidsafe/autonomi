@@ -6,13 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::super::utils::centered_rect_fixed;
 use super::super::Component;
+use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, OptionsActions},
     mode::{InputMode, Scene},
     node_mgmt,
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};

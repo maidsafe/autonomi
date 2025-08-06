@@ -1,17 +1,17 @@
 use crate::{
+    NodeBuilder, RunningNode,
     spawn::{
         network_spawner::{NetworkSpawner, RunningNetwork},
         node_spawner::NodeSpawner,
     },
     utils::get_antnode_root_dir,
-    NodeBuilder, RunningNode,
 };
 use ant_evm::{EvmNetwork, RewardsAddress};
-use ant_protocol::{storage::ChunkAddress, NetworkAddress};
+use ant_protocol::{NetworkAddress, storage::ChunkAddress};
 use const_hex::FromHex;
 use libp2p::{
-    identity::{Keypair, PeerId},
     Multiaddr,
+    identity::{Keypair, PeerId},
 };
 use pyo3::{exceptions::PyRuntimeError, exceptions::PyValueError, prelude::*, types::PyModule};
 use pyo3_async_runtimes::tokio::future_into_py;

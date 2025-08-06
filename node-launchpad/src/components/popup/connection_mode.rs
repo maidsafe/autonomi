@@ -28,8 +28,8 @@ use crate::{
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
     style::{
-        clear_area, COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
-        VIVID_SKY_BLUE,
+        COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
+        VIVID_SKY_BLUE, clear_area,
     },
 };
 
@@ -369,8 +369,8 @@ impl Component for ChangeConnectionModePopUp {
                         != self.connection_mode_selection.connection_mode
                     {
                         debug!(
-                                        "Got Enter and there's a new selection, storing value and switching to Options"
-                                    );
+                            "Got Enter and there's a new selection, storing value and switching to Options"
+                        );
                         debug!("Connection Mode selected: {:?}", connection_mode);
                         self.connection_mode_initial_state = self.connection_mode_selection.clone();
                         self.assign_connection_mode_selection();

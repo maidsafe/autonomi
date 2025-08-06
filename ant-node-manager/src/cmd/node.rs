@@ -10,25 +10,26 @@
 
 use super::{download_and_get_upgrade_bin_path, print_upgrade_summary};
 use crate::{
+    ServiceManager, VerbosityLevel,
     add_services::{
         add_node,
         config::{AddNodeServiceOptions, PortRange},
     },
     config::{self, is_running_as_root},
     helpers::{download_and_extract_release, get_bin_version},
-    print_banner, refresh_node_registry, status_report, ServiceManager, VerbosityLevel,
+    print_banner, refresh_node_registry, status_report,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
-    control::{ServiceControl, ServiceController},
-    rpc::RpcClient,
     NodeRegistryManager, NodeService, NodeServiceData, ServiceStateActions, ServiceStatus,
     UpgradeOptions, UpgradeResult,
+    control::{ServiceControl, ServiceController},
+    rpc::RpcClient,
 };
-use color_eyre::{eyre::eyre, Help, Result};
+use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
@@ -207,7 +208,9 @@ pub async fn remove(
     if verbosity != VerbosityLevel::Minimal {
         print_banner("Remove Antnode Services");
     }
-    info!("Removing antnode services with keep_dirs=({keep_directories}) for: {peer_ids:?}, {service_names:?}");
+    info!(
+        "Removing antnode services with keep_dirs=({keep_directories}) for: {peer_ids:?}, {service_names:?}"
+    );
 
     refresh_node_registry(
         node_registry.clone(),
@@ -787,7 +790,9 @@ pub async fn maintain_n_running_nodes(
     }
 
     if final_running_count != target_count {
-        warn!("Failed to reach target node count. Expected {target_count}, but got {final_running_count}");
+        warn!(
+            "Failed to reach target node count. Expected {target_count}, but got {final_running_count}"
+        );
     }
 
     Ok(())

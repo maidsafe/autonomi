@@ -9,12 +9,12 @@
 use super::Client;
 use crate::client::data_types::chunk::CHUNK_UPLOAD_BATCH_SIZE;
 use crate::client::utils::process_tasks_with_max_concurrency;
-use crate::networking::common::Addresses;
 use crate::networking::Network;
+use crate::networking::common::Addresses;
 use ant_evm::payment_vault::get_market_price;
 use ant_evm::{Amount, PaymentQuote, QuotePayment, QuotingMetrics};
 pub use ant_protocol::storage::DataTypes;
-use ant_protocol::{storage::ChunkAddress, NetworkAddress, CLOSE_GROUP_SIZE};
+use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress, storage::ChunkAddress};
 use libp2p::PeerId;
 use std::collections::HashMap;
 use xor_name::XorName;
@@ -138,7 +138,9 @@ impl Client {
             );
 
             if raw_quotes.is_empty() {
-                debug!("content_addr: {content_addr} is already paid for. No need to fetch market price.");
+                debug!(
+                    "content_addr: {content_addr} is already paid for. No need to fetch market price."
+                );
                 continue;
             }
 
@@ -213,7 +215,10 @@ impl Client {
                     ]),
                 );
             } else {
-                error!("Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}", quotes.len());
+                error!(
+                    "Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}",
+                    quotes.len()
+                );
                 return Err(CostError::NotEnoughNodeQuotes {
                     content_addr,
                     got: quotes.len(),

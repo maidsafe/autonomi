@@ -6,15 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::Client;
 use crate::client::encryption::EncryptionStream;
+use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
 use crate::client::utils::format_upload_error;
 use crate::client::{ClientEvent, PutError, UploadSummary};
-use crate::Client;
 use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
+use evmlib::wallet::Error::InsufficientTokensForQuotes;
 use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -152,26 +154,39 @@ impl Client {
 
         // Process all chunks for this file in batches
         let mut current_batch = vec![];
-        while let Some(next_batch) = file.next_batch(*UPLOAD_FLOW_BATCH_SIZE - current_batch.len())
-        {
-            // prepare batch
-            let next_batch_len = next_batch.len();
-            let path = file.file_path.clone();
-            let aggr_batch: AggregatedChunks = next_batch
-                .into_iter()
-                .enumerate()
-                .map(|(i, chunk)| ((path.clone(), processed_chunks + i, est_total_todo), chunk))
-                .collect();
-            current_batch.extend(aggr_batch);
 
-            // process batch
-            processed_chunks += next_batch_len;
+        loop {
+            // Get next batch if current_batch has space and file has more chunks
+            if let Some(next_batch) = file.next_batch(*UPLOAD_FLOW_BATCH_SIZE - current_batch.len())
+            {
+                // prepare batch
+                let next_batch_len = next_batch.len();
+                let path = file.file_path.clone();
+                let aggr_batch: AggregatedChunks = next_batch
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, chunk)| ((path.clone(), processed_chunks + i, est_total_todo), chunk))
+                    .collect();
+                current_batch.extend(aggr_batch);
+
+                // process batch
+                processed_chunks += next_batch_len;
+            }
+
+            // If we have no chunks to process, break the loop
+            if current_batch.is_empty() {
+                break;
+            }
+
             attempted_uploads += current_batch.len();
+
             let (retry_chunks, receipt, free_chunks_count, put_error) = self
                 .process_chunk_batch(current_batch, payment_option.clone(), retry_on_failure)
                 .await;
+
             receipts.extend(receipt);
             total_free_chunks += free_chunks_count;
+
             if let Some(err) = put_error {
                 return Err(err);
             }
@@ -184,7 +199,7 @@ impl Client {
 
                 // there was upload failure happens, in that case, carry out a short sleep
                 // to allow the glitch calm down.
-                println!("⚠️  Encountered upload failure, take 1 minute pause before continue...");
+                println!("⚠️ Encountered upload failure, take 1 minute pause before continue...");
                 info!("Encountered upload failure, take 1 minute pause before continue...");
 
                 // Wait 1 minute before retry
@@ -192,6 +207,7 @@ impl Client {
                 println!("🔄 continue with upload...");
                 info!("🔄 continue with upload...");
             }
+
             current_batch = retry_chunks;
         }
 
@@ -243,14 +259,19 @@ impl Client {
             .await
         {
             Ok((receipt, free_chunks)) => (receipt, free_chunks),
+            Err(err) if matches!(err, EvmWalletError(InsufficientTokensForQuotes(_, _))) => {
+                error!("Insufficient tokens: {err:?}. Returning immediately.");
+                return (vec![], vec![], 0, Some(PutError::from(err)));
+            }
             Err(err) => {
-                if retry_on_failure {
-                    info!("Quoting or payment error encountered, retry scheduled {err:?}");
+                return if retry_on_failure {
+                    error!("Quoting or payment error encountered, retry scheduled {err:?}");
                     println!("Quoting or payment error encountered, retry scheduled.");
-                    return (batch, vec![], 0, None);
+                    (batch, vec![], 0, None)
                 } else {
-                    return (vec![], vec![], 0, Some(PutError::from(err)));
-                }
+                    error!("Quoting or payment error encountered, no retry scheduled {err:?}");
+                    (vec![], vec![], 0, Some(PutError::from(err)))
+                };
             }
         };
 

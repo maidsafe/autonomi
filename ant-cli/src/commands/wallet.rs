@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
+use crate::wallet::DUMMY_NETWORK;
 use crate::wallet::fs::{select_wallet_private_key, store_private_key};
 use crate::wallet::input::request_password;
-use crate::wallet::DUMMY_NETWORK;
-use autonomi::{get_evm_network, Wallet};
-use color_eyre::eyre::eyre;
+use autonomi::{Wallet, get_evm_network};
 use color_eyre::Result;
+use color_eyre::eyre::eyre;
 use prettytable::{Cell, Row, Table};
 
 const WALLET_PASSWORD_REQUIRED: bool = false;

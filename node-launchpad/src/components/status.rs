@@ -10,7 +10,7 @@ use super::footer::NodesToStart;
 use super::header::SelectedMenuItem;
 use super::popup::manage_nodes::GB;
 use super::utils::centered_rect_fixed;
-use super::{footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE, Component, Frame};
+use super::{Component, Frame, footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE};
 use crate::action::OptionsActions;
 use crate::components::popup::manage_nodes::MAX_NODE_COUNT;
 use crate::components::popup::port_range::PORT_ALLOCATION;
@@ -19,11 +19,11 @@ use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
 use crate::error::ErrorPopup;
 use crate::node_mgmt::{
-    MaintainNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs, FIXED_INTERVAL,
-    NODES_ALL,
+    FIXED_INTERVAL, MaintainNodesArgs, NODES_ALL, NodeManagement, NodeManagementTask,
+    UpgradeNodesArgs,
 };
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{clear_area, COOL_GREY, INDIGO, SIZZLING_RED};
+use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED, clear_area};
 use crate::system::{get_available_space_b, get_drive_name};
 use crate::tui::Event;
 use crate::upnp::UpnpSupport;
@@ -38,7 +38,7 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_node_manager::add_services::config::PortRange;
 use ant_node_manager::config::get_node_registry_path;
 use ant_service_management::{
-    control::ServiceController, NodeRegistryManager, NodeServiceData, ServiceStatus,
+    NodeRegistryManager, NodeServiceData, ServiceStatus, control::ServiceController,
 };
 use color_eyre::eyre::{Ok, OptionExt, Result};
 use crossterm::event::KeyEvent;
@@ -926,10 +926,14 @@ impl Component for Status<'_> {
                     // Validations - Available space
                     if GB_PER_NODE > self.available_disk_space_gb {
                         self.error_popup = Some(ErrorPopup::new(
-                        "Cannot Add Node".to_string(),
-                        format!("\nEach Node requires {GB_PER_NODE}GB of available space."),
-                        format!("{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.", get_drive_name(&self.storage_mountpoint)?, self.available_disk_space_gb),
-                    ));
+                            "Cannot Add Node".to_string(),
+                            format!("\nEach Node requires {GB_PER_NODE}GB of available space."),
+                            format!(
+                                "{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.",
+                                get_drive_name(&self.storage_mountpoint)?,
+                                self.available_disk_space_gb
+                            ),
+                        ));
                         if let Some(error_popup) = &mut self.error_popup {
                             error_popup.show();
                         }
@@ -1522,11 +1526,7 @@ impl<T> StatefulTable<T> {
         let i = match self.state.selected() {
             Some(i) => {
                 if !self.items.is_empty() {
-                    if i >= self.items.len() - 1 {
-                        0
-                    } else {
-                        i + 1
-                    }
+                    if i >= self.items.len() - 1 { 0 } else { i + 1 }
                 } else {
                     0
                 }
@@ -1541,11 +1541,7 @@ impl<T> StatefulTable<T> {
         let i = match self.state.selected() {
             Some(i) => {
                 if !self.items.is_empty() {
-                    if i == 0 {
-                        self.items.len() - 1
-                    } else {
-                        i - 1
-                    }
+                    if i == 0 { self.items.len() - 1 } else { i - 1 }
                 } else {
                     0
                 }

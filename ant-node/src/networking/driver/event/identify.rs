@@ -7,18 +7,17 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    multiaddr_get_port,
+    Addresses, NetworkEvent, multiaddr_get_port,
     network::connection_action_logging,
-    relay_manager::{is_a_relayed_peer, RelayManager},
-    Addresses, NetworkEvent,
+    relay_manager::{RelayManager, is_a_relayed_peer},
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use itertools::Itertools;
+use libp2p::Multiaddr;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
-use libp2p::Multiaddr;
-use std::collections::{hash_map, HashSet};
+use std::collections::{HashSet, hash_map};
 use std::time::{Duration, Instant};
 
 /// The delay before we dial back a peer after receiving an identify event.

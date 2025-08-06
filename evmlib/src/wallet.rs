@@ -8,8 +8,8 @@
 
 use crate::common::{Address, Amount, QuoteHash, QuotePayment, TxHash, U256};
 use crate::contract::network_token::NetworkToken;
-use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
+use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{network_token, payment_vault};
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
@@ -411,7 +411,7 @@ pub async fn pay_for_quotes<T: IntoIterator<Item = QuotePayment>>(
 mod tests {
     use crate::common::Amount;
     use crate::testnet::Testnet;
-    use crate::wallet::{from_private_key, Wallet};
+    use crate::wallet::{Wallet, from_private_key};
     use alloy::network::{Ethereum, EthereumWallet, NetworkWallet};
     use alloy::primitives::address;
 

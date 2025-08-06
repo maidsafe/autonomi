@@ -9,9 +9,9 @@
 #![allow(dead_code)]
 
 use autonomi::{
-    client::{analyze::AnalysisError, payment::PayError, ConnectError, GetError, PutError},
-    files::{DownloadError, UploadError},
     BootstrapError,
+    client::{ConnectError, GetError, PutError, analyze::AnalysisError, payment::PayError},
+    files::{DownloadError, UploadError},
 };
 use color_eyre::eyre::Report;
 

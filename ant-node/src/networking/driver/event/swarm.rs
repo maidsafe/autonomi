@@ -8,18 +8,18 @@
 
 use super::SwarmDriver;
 use crate::networking::{
+    NetworkEvent, NodeIssue, Result,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
-    NetworkEvent, NodeIssue, Result,
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
 use libp2p::metrics::Recorder;
 use libp2p::{
+    Multiaddr, TransportError,
     core::ConnectedPoint,
     multiaddr::Protocol,
     swarm::{ConnectionId, DialError, SwarmEvent},
-    Multiaddr, TransportError,
 };
 use std::time::Instant;
 use tokio::time::Duration;
@@ -88,7 +88,9 @@ impl SwarmDriver {
                 info!(?upnp_event, "UPnP event");
                 match upnp_event {
                     libp2p::upnp::Event::GatewayNotFound => {
-                        warn!("UPnP is not enabled/supported on the gateway. Please rerun with the `--no-upnp` flag");
+                        warn!(
+                            "UPnP is not enabled/supported on the gateway. Please rerun with the `--no-upnp` flag"
+                        );
                         self.send_event(NetworkEvent::TerminateNode {
                             reason: TerminateNodeReason::UpnpGatewayNotFound,
                         });
@@ -123,7 +125,10 @@ impl SwarmDriver {
                         renewed: _,
                     } => {
                         let _ = self.connected_relay_clients.insert(src_peer_id);
-                        info!("Relay reservation accepted from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
+                        info!(
+                            "Relay reservation accepted from {src_peer_id:?}. Relay client count: {}",
+                            self.connected_relay_clients.len()
+                        );
 
                         #[cfg(feature = "open-metrics")]
                         if let Some(metrics_recorder) = &self.metrics_recorder {
@@ -134,7 +139,10 @@ impl SwarmDriver {
                     }
                     libp2p::relay::Event::ReservationTimedOut { src_peer_id } => {
                         let _ = self.connected_relay_clients.remove(&src_peer_id);
-                        info!("Relay reservation timed out from {src_peer_id:?}. Relay client count: {}", self.connected_relay_clients.len());
+                        info!(
+                            "Relay reservation timed out from {src_peer_id:?}. Relay client count: {}",
+                            self.connected_relay_clients.len()
+                        );
 
                         #[cfg(feature = "open-metrics")]
                         if let Some(metrics_recorder) = &self.metrics_recorder {
@@ -195,7 +203,9 @@ impl SwarmDriver {
                             .on_new_listen_addr(address.clone(), &mut self.swarm);
                     } else {
                         // just for future reference.
-                        warn!("External address manager is not enabled for a public node. This should not happen.");
+                        warn!(
+                            "External address manager is not enabled for a public node. This should not happen."
+                        );
                     }
                 }
 
@@ -216,7 +226,9 @@ impl SwarmDriver {
                 reason,
             } => {
                 event_string = "listener closed";
-                info!("Listener {listener_id:?} with add {addresses:?} has been closed for {reason:?}");
+                info!(
+                    "Listener {listener_id:?} with add {addresses:?} has been closed for {reason:?}"
+                );
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
                     relay_manager.on_listener_closed(&listener_id, &mut self.swarm);
                 }
@@ -227,7 +239,9 @@ impl SwarmDriver {
                 send_back_addr,
             } => {
                 event_string = "incoming";
-                debug!("IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}");
+                debug!(
+                    "IncomingConnection ({connection_id:?}) with local_addr: {local_addr:?} send_back_addr: {send_back_addr:?}"
+                );
                 #[cfg(feature = "open-metrics")]
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
                     relay_manager.on_incoming_connection(
@@ -343,7 +357,9 @@ impl SwarmDriver {
                 connection_id,
             } => {
                 event_string = "OutgoingConnErr";
-                debug!("OutgoingConnectionError to {failed_peer_id:?} on {connection_id:?} - {error:?}");
+                debug!(
+                    "OutgoingConnectionError to {failed_peer_id:?} on {connection_id:?} - {error:?}"
+                );
 
                 // ELK logging. Do not update without proper testing.
                 for (error_str, level) in dial_error_to_str(&error) {
@@ -387,11 +403,17 @@ impl SwarmDriver {
                         for (_addr, err) in errors {
                             match err {
                                 TransportError::MultiaddrNotSupported(addr) => {
-                                    debug!("OutgoingConnectionError: Transport::MultiaddrNotSupported {addr:?}. This can be ignored if the peer has atleast one global address.");
+                                    debug!(
+                                        "OutgoingConnectionError: Transport::MultiaddrNotSupported {addr:?}. This can be ignored if the peer has atleast one global address."
+                                    );
                                     #[cfg(feature = "loud")]
                                     {
-                                        debug!("OutgoingConnectionError: Transport::MultiaddrNotSupported {addr:?}. This can be ignored if the peer has atleast one global address.");
-                                        println!("If this was your bootstrap peer, restart your node with a supported multiaddr");
+                                        debug!(
+                                            "OutgoingConnectionError: Transport::MultiaddrNotSupported {addr:?}. This can be ignored if the peer has atleast one global address."
+                                        );
+                                        println!(
+                                            "If this was your bootstrap peer, restart your node with a supported multiaddr"
+                                        );
                                     }
                                 }
                                 TransportError::Other(err) => {
@@ -407,7 +429,9 @@ impl SwarmDriver {
                                     if self.initial_bootstrap.is_bootstrap_peer(&failed_peer_id)
                                         && !self.initial_bootstrap.has_terminated()
                                     {
-                                        debug!("OutgoingConnectionError: On bootstrap peer {failed_peer_id:?}, while still in bootstrap mode, ignoring");
+                                        debug!(
+                                            "OutgoingConnectionError: On bootstrap peer {failed_peer_id:?}, while still in bootstrap mode, ignoring"
+                                        );
                                         there_is_a_serious_issue = false;
                                     } else {
                                         // It is really difficult to match this error, due to being eg:
@@ -426,7 +450,9 @@ impl SwarmDriver {
                             }
                         }
                         if all_multiaddr_not_supported {
-                            debug!("All multiaddrs had MultiaddrNotSupported error for {failed_peer_id:?}. Marking it as a serious issue.");
+                            debug!(
+                                "All multiaddrs had MultiaddrNotSupported error for {failed_peer_id:?}. Marking it as a serious issue."
+                            );
                             there_is_a_serious_issue = true;
                         }
                         there_is_a_serious_issue
@@ -455,7 +481,9 @@ impl SwarmDriver {
                     DialError::WrongPeerId { obtained, address } => {
                         // The peer id we attempted to dial was not the one we expected
                         // cleanup
-                        debug!("OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}");
+                        debug!(
+                            "OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}"
+                        );
                         true
                     }
                     DialError::Denied { cause } => {
@@ -467,7 +495,9 @@ impl SwarmDriver {
                 };
 
                 if is_critical_error {
-                    warn!("Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an issue. Error: {error:?}");
+                    warn!(
+                        "Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an issue. Error: {error:?}"
+                    );
                     self.record_node_issue(failed_peer_id, NodeIssue::ConnectionIssue);
                 }
             }
@@ -479,7 +509,9 @@ impl SwarmDriver {
                 peer_id,
             } => {
                 event_string = "Incoming ConnErr";
-                debug!("IncomingConnectionError from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}");
+                debug!(
+                    "IncomingConnectionError from local_addr {local_addr:?}, send_back_addr {send_back_addr:?} on {connection_id:?} with error {error:?}"
+                );
 
                 // ELK logging. Do not update without proper testing.
                 let (error_str, level) = listen_error_to_str(&error);

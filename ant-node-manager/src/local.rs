@@ -14,17 +14,17 @@ use crate::helpers::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
-use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::{
+    NodeServiceData, ServiceStatus,
     control::ServiceControl,
     rpc::{RpcActions, RpcClient},
-    NodeServiceData, ServiceStatus,
 };
 use color_eyre::eyre::OptionExt;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 #[cfg(test)]
 use mockall::automock;
 use std::{

@@ -9,8 +9,8 @@
 #![allow(clippy::expect_used)]
 
 use ant_logging::LogBuilder;
-use autonomi::client::payment::PaymentOption;
 use autonomi::Client;
+use autonomi::client::payment::PaymentOption;
 use eyre::Result;
 use serial_test::serial;
 use sha2::{Digest, Sha256};

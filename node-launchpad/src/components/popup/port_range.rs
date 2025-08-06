@@ -9,20 +9,20 @@
 use std::rc::Rc;
 
 use super::super::super::node_mgmt::{PORT_MAX, PORT_MIN};
-use super::super::utils::centered_rect_fixed;
 use super::super::Component;
+use super::super::utils::centered_rect_fixed;
 use super::manage_nodes::MAX_NODE_COUNT;
 use crate::style::RED;
 use crate::{
     action::{Action, OptionsActions},
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::{Input, backend::crossterm::EventHandler};
 
 pub const PORT_ALLOCATION: u32 = MAX_NODE_COUNT as u32 - 1; // We count the port_from as well
 const INPUT_SIZE: u32 = 5;

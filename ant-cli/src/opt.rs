@@ -8,9 +8,9 @@
 
 use crate::commands::SubCmd;
 use ant_logging::{LogFormat, LogOutputDest};
-use autonomi::get_evm_network;
 use autonomi::InitialPeersConfig;
 use autonomi::Network as EvmNetwork;
+use autonomi::get_evm_network;
 use clap::Parser;
 use color_eyre::Result;
 use std::time::Duration;

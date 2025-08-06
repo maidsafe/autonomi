@@ -9,7 +9,7 @@
 
 use ant_logging::{Level, LogBuilder};
 use ant_node::NodeEvent;
-use ant_protocol::antnode_proto::{ant_node_client::AntNodeClient, NodeEventsRequest};
+use ant_protocol::antnode_proto::{NodeEventsRequest, ant_node_client::AntNodeClient};
 use ant_service_management::rpc::{RpcActions, RpcClient};
 use clap::Parser;
 use color_eyre::eyre::Result;

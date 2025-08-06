@@ -77,11 +77,11 @@ pub use client::register;
 pub use client::vault;
 
 // Re-exports of the evm types
-pub use ant_evm::utils::{get_evm_network, Error as EvmUtilError};
 pub use ant_evm::EvmNetwork as Network;
 pub use ant_evm::EvmWallet as Wallet;
 pub use ant_evm::QuoteHash;
 pub use ant_evm::RewardsAddress;
+pub use ant_evm::utils::{Error as EvmUtilError, get_evm_network};
 pub use ant_evm::{Amount, AttoTokens};
 pub use ant_evm::{MaxFeePerGas, TransactionConfig};
 
@@ -102,6 +102,8 @@ pub use libp2p::Multiaddr;
 
 #[doc(inline)]
 pub use client::{
+    // Client
+    Client,
     // Client Configs
     config::BootstrapCacheConfig,
     config::BootstrapError,
@@ -118,9 +120,6 @@ pub use client::{
     data_types::pointer::PointerAddress,
     data_types::scratchpad::Scratchpad,
     data_types::scratchpad::ScratchpadAddress,
-
-    // Client
-    Client,
 };
 
 #[cfg(feature = "extension-module")]

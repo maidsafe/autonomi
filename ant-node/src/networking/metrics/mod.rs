@@ -12,12 +12,12 @@ mod relay_client;
 pub(super) mod service;
 mod upnp;
 
-use crate::networking::log_markers::Marker;
 use crate::networking::MetricsRegistries;
+use crate::networking::log_markers::Marker;
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
-    metrics::{Metrics as Libp2pMetrics, Recorder},
     PeerId,
+    metrics::{Metrics as Libp2pMetrics, Recorder},
 };
 use prometheus_client::{
     encoding::EncodeLabelSet,
@@ -26,8 +26,8 @@ use prometheus_client::{
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
-use tokio::time::sleep;
 use tokio::time::Duration;
+use tokio::time::sleep;
 
 const UPDATE_INTERVAL: Duration = Duration::from_secs(60);
 const TO_MB: u64 = 1_000_000;

@@ -12,7 +12,7 @@ use autonomi::client::payment::PaymentOption;
 use autonomi::data::DataAddress;
 use autonomi::pointer::PointerTarget;
 use autonomi::register::RegisterAddress;
-use autonomi::{client::chunk::Chunk, Bytes, Client};
+use autonomi::{Bytes, Client, client::chunk::Chunk};
 use autonomi::{
     ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
     ScratchpadAddress,

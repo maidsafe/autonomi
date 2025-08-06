@@ -8,7 +8,7 @@
 
 use crate::error::PutValidationError;
 use ant_protocol::PrettyPrintRecordKey;
-use libp2p::{kad::RecordKey, PeerId};
+use libp2p::{PeerId, kad::RecordKey};
 use strum::Display;
 
 /// Public Markers for generating log output,

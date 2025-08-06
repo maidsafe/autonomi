@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use autonomi::client::{payment::Receipt, ChunkBatchUploadState};
+use autonomi::client::{ChunkBatchUploadState, payment::Receipt};
 use color_eyre::eyre::{Context, Result};
 use std::collections::HashMap;
 use std::fs::{DirEntry, File};

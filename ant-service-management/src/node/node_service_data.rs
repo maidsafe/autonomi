@@ -9,7 +9,7 @@
 use crate::error::Result;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::PeerId;
-use serde::{de::Error as DeError, Deserialize, Deserializer, Serializer};
+use serde::{Deserialize, Deserializer, Serializer, de::Error as DeError};
 use std::str::FromStr;
 
 /// Type alias for the latest version of the node service data structure.
@@ -185,7 +185,7 @@ mod tests {
     use serde::Serialize;
 
     use super::*;
-    use crate::{node::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1, ServiceStatus};
+    use crate::{ServiceStatus, node::node_service_data_v1::NODE_SERVICE_DATA_SCHEMA_V1};
 
     /// Test to confirm that fields can be removed from the schema without breaking deserialization.
     /// This test checks that the `disable_mainnet_contacts` field can be removed without requiring

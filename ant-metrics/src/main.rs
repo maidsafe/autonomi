@@ -10,8 +10,8 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::unwrap_used)]
 
-use clap::{command, Arg, ArgAction};
-use color_eyre::{eyre::eyre, Result};
+use clap::{Arg, ArgAction, command};
+use color_eyre::{Result, eyre::eyre};
 use regex::Regex;
 use std::{
     collections::BTreeMap,
@@ -129,10 +129,14 @@ fn main() -> Result<()> {
             ));
         }
 
-        println!("Grafana dashboard is running at http://localhost:3001/d/node_metrics/node-metrics?orgId=1&refresh=5s");
+        println!(
+            "Grafana dashboard is running at http://localhost:3001/d/node_metrics/node-metrics?orgId=1&refresh=5s"
+        );
         println!("Connect with the following credentials\nusername:admin\npassword:pwd");
     } else {
-        println!("The Prometheus config file has been updated with the metrics server URLs. The containers are not yet started\nRead the docs to start/stop the containers.");
+        println!(
+            "The Prometheus config file has been updated with the metrics server URLs. The containers are not yet started\nRead the docs to start/stop the containers."
+        );
     }
 
     Ok(())

@@ -6,11 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::Network;
 use crate::common::{Address, Amount, Calldata, QuoteHash, QuotePayment, U256};
 use crate::contract::network_token::{self, NetworkToken};
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::utils::http_provider;
-use crate::Network;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

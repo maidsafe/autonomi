@@ -14,9 +14,9 @@ use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
 use ant_protocol::{NetworkAddress, PrettyPrintKBucketKey, PrettyPrintRecordKey};
 use futures::future::select_all;
-use libp2p::kad::{KBucketDistance, Record, RecordKey, K_VALUE};
+use libp2p::kad::{K_VALUE, KBucketDistance, Record, RecordKey};
 use libp2p::swarm::ConnectionId;
-use libp2p::{identity::Keypair, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, identity::Keypair};
 use tokio::sync::{mpsc, oneshot};
 
 use super::driver::event::MsgResponder;
@@ -483,5 +483,7 @@ pub(crate) fn connection_action_logging(
     action_string: &str,
 ) {
     // ELK logging. Do not update without proper testing.
-    info!("Action: {action_string}, performed on: {connection_id:?}, remote_peer_id: {remote_peer_id:?}, self_peer_id: {self_peer_id:?}");
+    info!(
+        "Action: {action_string}, performed on: {connection_id:?}, remote_peer_id: {remote_peer_id:?}, self_peer_id: {self_peer_id:?}"
+    );
 }

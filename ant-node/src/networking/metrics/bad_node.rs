@@ -208,7 +208,9 @@ impl ShunnedByCloseGroup {
         }
 
         if !new_members.is_empty() {
-            debug!("The close group has been updated. The new members are {new_members:?}. The evicted members are {evicted_members:?}");
+            debug!(
+                "The close group has been updated. The new members are {new_members:?}. The evicted members are {evicted_members:?}"
+            );
             self.close_group_peers = new_closest_peers;
 
             while self.old_close_group_peers.len() > MAX_EVICTED_CLOSE_GROUP_PEERS {
@@ -594,12 +596,16 @@ mod tests {
         // the metric from the member_1 should be removed
         assert_eq!(close_group_shunned.metric_current_group.get(), 0);
         assert_eq!(close_group_shunned.metric_old_group.get(), 1);
-        assert!(!close_group_shunned
-            .old_close_group_peers
-            .contains(&old_member_1));
-        assert!(close_group_shunned
-            .old_close_group_peers
-            .contains(&old_member_2));
+        assert!(
+            !close_group_shunned
+                .old_close_group_peers
+                .contains(&old_member_1)
+        );
+        assert!(
+            close_group_shunned
+                .old_close_group_peers
+                .contains(&old_member_2)
+        );
 
         // evict 1 more member
         close_group_shunned.update_close_group_peers(vec![
@@ -613,9 +619,11 @@ mod tests {
         // the metric from the member_2 should be removed
         assert_eq!(close_group_shunned.metric_current_group.get(), 0);
         assert_eq!(close_group_shunned.metric_old_group.get(), 0);
-        assert!(!close_group_shunned
-            .old_close_group_peers
-            .contains(&old_member_1));
+        assert!(
+            !close_group_shunned
+                .old_close_group_peers
+                .contains(&old_member_1)
+        );
 
         Ok(())
     }

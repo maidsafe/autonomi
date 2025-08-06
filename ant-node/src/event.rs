@@ -9,7 +9,7 @@
 use crate::error::{Error, Result};
 
 use ant_evm::AttoTokens;
-use ant_protocol::{storage::ChunkAddress, NetworkAddress};
+use ant_protocol::{NetworkAddress, storage::ChunkAddress};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 

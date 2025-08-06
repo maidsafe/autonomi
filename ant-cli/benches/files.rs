@@ -10,8 +10,8 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use rand::{thread_rng, Rng};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use rand::{Rng, thread_rng};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::{
     collections::HashSet,

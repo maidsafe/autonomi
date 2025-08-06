@@ -7,18 +7,18 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::SwarmDriver;
-use crate::networking::{driver::PendingGetClosestType, Addresses, NetworkEvent};
+use crate::networking::{Addresses, NetworkEvent, driver::PendingGetClosestType};
 
 use ant_protocol::NetworkAddress;
 use libp2p::{
-    kad::{KBucketKey, K_VALUE},
     PeerId,
+    kad::{K_VALUE, KBucketKey},
 };
-use rand::{rngs::OsRng, Rng};
+use rand::{Rng, rngs::OsRng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{BTreeMap, btree_map::Entry};
 use std::time::Instant;
-use tokio::time::{interval, Duration, Interval};
+use tokio::time::{Duration, Interval, interval};
 
 // The number of PeerId to generate when starting an instance of NetworkDiscoveryCandidate.
 const INITIAL_GENERATION_ATTEMPTS: usize = 10_000;
@@ -264,8 +264,8 @@ impl NetworkDiscovery {
             let no_peer_added_slowdown_interval_duration =
                 Duration::from_secs(no_peer_added_slowdown_interval);
             info!(
-                    "It has been {LAST_PEER_ADDED_TIME_LIMIT:?} since we last added a peer to RT. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {no_peer_added_slowdown_interval_duration:?}"
-                );
+                "It has been {LAST_PEER_ADDED_TIME_LIMIT:?} since we last added a peer to RT. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {no_peer_added_slowdown_interval_duration:?}"
+            );
 
             let mut new_interval = interval(no_peer_added_slowdown_interval_duration);
             let _ = new_interval.tick().await;
@@ -275,7 +275,9 @@ impl NetworkDiscovery {
 
         let duration_based_on_peers = Self::scaled_duration(peers_in_rt);
         let new_interval = if duration_based_on_peers > current_interval {
-            info!("More peers have been added to our RT!. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {duration_based_on_peers:?}");
+            info!(
+                "More peers have been added to our RT!. Slowing down the continuous network discovery process. Old interval: {current_interval:?}, New interval: {duration_based_on_peers:?}"
+            );
 
             let mut interval = interval(duration_based_on_peers);
             let _ = interval.tick().await;
@@ -329,7 +331,9 @@ impl NetworkDiscoveryCandidates {
             .iter()
             .map(|(ilog2, candidates)| (*ilog2, candidates.len()))
             .collect::<Vec<_>>();
-        info!("The generated network discovery candidates currently cover these ilog2 buckets: {buckets_covered:?}");
+        info!(
+            "The generated network discovery candidates currently cover these ilog2 buckets: {buckets_covered:?}"
+        );
 
         Self {
             self_key,

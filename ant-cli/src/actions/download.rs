@@ -9,13 +9,13 @@
 use super::get_progress_bar;
 use crate::exit_code::{self, ExitCodeError, INVALID_INPUT_EXIT_CODE, IO_ERROR};
 use autonomi::{
+    Client,
     chunk::DataMapChunk,
     client::{analyze::Analysis, files::archive_private::PrivateArchiveDataMap},
     data::DataAddress,
     files::{PrivateArchive, PublicArchive},
-    Client,
 };
-use color_eyre::{eyre::eyre, Section};
+use color_eyre::{Section, eyre::eyre};
 use std::path::PathBuf;
 
 pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<(), ExitCodeError> {
@@ -140,7 +140,9 @@ async fn download_public(
             download_pub_archive_to_disk(addr, archive, dest_path, client).await
         }
         Err(_) => {
-            info!("Failed to deserialize as Public Archive from address {addr}, treating as single file");
+            info!(
+                "Failed to deserialize as Public Archive from address {addr}, treating as single file"
+            );
             // Write the raw data as a file
             let path = PathBuf::from(dest_path);
             let here = PathBuf::from(".");

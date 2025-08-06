@@ -9,39 +9,40 @@
 use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATION_FACTOR};
 
 use crate::networking::{
+    CLOSE_GROUP_SIZE, NetworkEvent,
     bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
     circular_vec::CircularVec,
-    driver::{network_discovery::NetworkDiscovery, NodeBehaviour, SwarmDriver},
+    driver::{NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery},
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    transport, NetworkEvent, CLOSE_GROUP_SIZE,
+    transport,
 };
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
-    metrics::service::run_metrics_server, metrics::NetworkMetricsRecorder, MetricsRegistries,
+    MetricsRegistries, metrics::NetworkMetricsRecorder, metrics::service::run_metrics_server,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_protocol::{
-    messages::{Request, Response},
-    version::{get_network_id_str, IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR},
     NetworkAddress, PrettyPrintKBucketKey,
+    messages::{Request, Response},
+    version::{IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR, get_network_id_str},
 };
 use futures::future::Either;
 use libp2p::Transport as _;
-use libp2p::{core::muxing::StreamMuxerBox, relay};
 use libp2p::{
+    Multiaddr, PeerId,
     identity::Keypair,
     kad,
     multiaddr::Protocol,
     request_response::{
-        self, cbor::codec::Codec as CborCodec, Config as RequestResponseConfig, ProtocolSupport,
+        self, Config as RequestResponseConfig, ProtocolSupport, cbor::codec::Codec as CborCodec,
     },
     swarm::{StreamProtocol, Swarm},
-    Multiaddr, PeerId,
 };
+use libp2p::{core::muxing::StreamMuxerBox, relay};
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::info::Info;
 use std::time::Instant;
@@ -320,7 +321,9 @@ fn init_swarm_driver(
         ant_protocol::version::construct_node_user_agent(env!("CARGO_PKG_VERSION").to_string());
 
     // Identify Behaviour
-    info!("Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}");
+    info!(
+        "Building Identify with identify_protocol_str: {identify_protocol_str:?} and identify_protocol_str: {identify_protocol_str:?}"
+    );
     let identify = {
         let cfg = libp2p::identify::Config::new(identify_protocol_str, config.keypair.public())
             .with_agent_version(agent_version)
@@ -470,7 +473,9 @@ fn check_and_wipe_storage_dir_if_necessary(
     //   * the storage_dir shall be wiped out
     //   * the version file shall be updated
     if cur_version_str != prev_version_str {
-        warn!("Trying to wipe out storage dir {storage_dir_path:?}, as cur_version {cur_version_str:?} doesn't match prev_version {prev_version_str:?}");
+        warn!(
+            "Trying to wipe out storage dir {storage_dir_path:?}, as cur_version {cur_version_str:?} doesn't match prev_version {prev_version_str:?}"
+        );
         let _ = fs::remove_dir_all(storage_dir_path);
 
         let mut file = fs::OpenOptions::new()
@@ -500,12 +505,14 @@ mod tests {
         let storage_dir = root_dir.join("record_store");
 
         let cur_version = uuid::Uuid::new_v4().to_string();
-        assert!(check_and_wipe_storage_dir_if_necessary(
-            root_dir.clone(),
-            storage_dir.clone(),
-            cur_version.clone()
-        )
-        .is_ok());
+        assert!(
+            check_and_wipe_storage_dir_if_necessary(
+                root_dir.clone(),
+                storage_dir.clone(),
+                cur_version.clone()
+            )
+            .is_ok()
+        );
         {
             let mut content_str = String::new();
             let mut file = fs::OpenOptions::new()
@@ -524,12 +531,14 @@ mod tests {
         assert!(fs::metadata(storage_dir.clone()).is_ok());
 
         let cur_version = uuid::Uuid::new_v4().to_string();
-        assert!(check_and_wipe_storage_dir_if_necessary(
-            root_dir.clone(),
-            storage_dir.clone(),
-            cur_version.clone()
-        )
-        .is_ok());
+        assert!(
+            check_and_wipe_storage_dir_if_necessary(
+                root_dir.clone(),
+                storage_dir.clone(),
+                cur_version.clone()
+            )
+            .is_ok()
+        );
         {
             let mut content_str = String::new();
             let mut file = fs::OpenOptions::new()

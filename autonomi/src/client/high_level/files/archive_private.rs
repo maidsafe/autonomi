@@ -16,11 +16,11 @@ use std::{
 use super::Metadata;
 use crate::files::normalize_path;
 use crate::{
-    client::{
-        data_types::chunk::DataMapChunk, high_level::files::RenameError, payment::PaymentOption,
-        GetError, PutError,
-    },
     Client,
+    client::{
+        GetError, PutError, data_types::chunk::DataMapChunk, high_level::files::RenameError,
+        payment::PaymentOption,
+    },
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -71,7 +71,9 @@ impl PrivateArchive {
             .as_secs();
         meta.modified = now;
         self.map.insert(new_path.to_path_buf(), (data_addr, meta));
-        debug!("Renamed file successfully in the private archive, old path: {old_path:?} new_path: {new_path:?}");
+        debug!(
+            "Renamed file successfully in the private archive, old path: {old_path:?} new_path: {new_path:?}"
+        );
         Ok(())
     }
 

@@ -39,11 +39,11 @@ impl From<u8> for VerbosityLevel {
 }
 
 use crate::error::{Error, Result};
-use ant_service_management::rpc::RpcActions;
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::rpc::RpcActions;
 use ant_service_management::{
-    control::ServiceControl, error::Error as ServiceError, rpc::RpcClient, NodeService,
-    ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
+    NodeService, ServiceStateActions, ServiceStatus, UpgradeOptions, UpgradeResult,
+    control::ServiceControl, error::Error as ServiceError, rpc::RpcClient,
 };
 use colored::Colorize;
 use indicatif::ProgressBar;
@@ -126,7 +126,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                 info!("Service {service_name} has been started successfully");
             }
             Err(ant_service_management::error::Error::ServiceProcessNotFound(_)) => {
-                error!("The '{service_name}' service has failed to start because ServiceProcessNotFound when fetching PID");
+                error!(
+                    "The '{service_name}' service has failed to start because ServiceProcessNotFound when fetching PID"
+                );
                 return Err(Error::PidNotFoundAfterStarting);
             }
             Err(err) => {
@@ -233,8 +235,8 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                 // check why it may have failed before removing everything.
                 self.service.on_stop().await?;
                 error!(
-                "The service: {service_name} was marked as running but it had actually stopped. You may want to check the logs for errors before removing it. To remove the service, run the command again."
-            );
+                    "The service: {service_name} was marked as running but it had actually stopped. You may want to check the logs for errors before removing it. To remove the service, run the command again."
+                );
                 return Err(Error::ServiceStatusMismatch {
                     expected: ServiceStatus::Running,
                 });
@@ -250,7 +252,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
             }
             Err(err) => match err {
                 ServiceError::ServiceRemovedManually(name) => {
-                    warn!("The user appears to have removed the {name} service manually. Skipping the error.",);
+                    warn!(
+                        "The user appears to have removed the {name} service manually. Skipping the error.",
+                    );
                     // The user has deleted the service definition file, which the service manager
                     // crate treats as an error. We then return our own error type, which allows us
                     // to handle it here and just proceed with removing the service from the
@@ -260,7 +264,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                     }
                 }
                 ServiceError::ServiceDoesNotExists(name) => {
-                    warn!("The service {name} has most probably been removed already, it does not exists. Skipping the error.");
+                    warn!(
+                        "The service {name} has most probably been removed already, it does not exists. Skipping the error."
+                    );
                 }
                 _ => {
                     error!("Error uninstalling the service: {err}");
@@ -655,10 +661,10 @@ mod tests {
     use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
     use ant_logging::LogFormat;
     use ant_service_management::{
-        error::{Error as ServiceControlError, Result as ServiceControlResult},
-        node::{NodeService, NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST},
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
         UpgradeOptions, UpgradeResult,
+        error::{Error as ServiceControlError, Result as ServiceControlResult},
+        node::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeService, NodeServiceData},
+        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
     };
     use assert_fs::prelude::*;
     use assert_matches::assert_matches;
@@ -1568,8 +1574,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stop_should_return_ok_when_attempting_to_stop_service_that_was_already_stopped(
-    ) -> Result<()> {
+    async fn stop_should_return_ok_when_attempting_to_stop_service_that_was_already_stopped()
+    -> Result<()> {
         let service_data = NodeServiceData {
             alpha: false,
             auto_restart: false,
@@ -6403,8 +6409,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remove_should_return_an_error_for_a_node_that_was_marked_running_but_was_not_actually_running(
-    ) -> Result<()> {
+    async fn remove_should_return_an_error_for_a_node_that_was_marked_running_but_was_not_actually_running()
+    -> Result<()> {
         let temp_dir = assert_fs::TempDir::new()?;
         let log_dir = temp_dir.child("antnode1-logs");
         log_dir.create_dir_all()?;

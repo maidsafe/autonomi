@@ -6,13 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::AttoTokens;
 use crate::client::data_types::graph::{GraphContent, GraphEntry, GraphEntryAddress, GraphError};
 use crate::client::data_types::pointer::{PointerAddress, PointerError, PointerTarget};
 use crate::client::key_derivation::{DerivationIndex, MainPubkey, MainSecretKey};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::{Client, GetError};
-use crate::AttoTokens;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xor_name::XorName;
@@ -87,11 +87,15 @@ pub enum RegisterError {
     InvalidCost,
     #[error("Invalid head pointer, was expecting a GraphEntryAddress but got: {0:?}")]
     InvalidHeadPointer(PointerTarget),
-    #[error("Forked register, this can happen if the register has been updated concurrently, you can solve this by updating the register again with a new value. Concurrent entries: {0:?}")]
+    #[error(
+        "Forked register, this can happen if the register has been updated concurrently, you can solve this by updating the register again with a new value. Concurrent entries: {0:?}"
+    )]
     Fork(Vec<[u8; 32]>),
     #[error("Corrupt register: {0}")]
     Corrupt(String),
-    #[error("Register cannot be updated as it does not exist, please create it first or wait for it to be created")]
+    #[error(
+        "Register cannot be updated as it does not exist, please create it first or wait for it to be created"
+    )]
     CannotUpdateNewRegister,
     #[error(
         "Invalid register value length: {0}, expected something within {REGISTER_VALUE_SIZE} bytes"
@@ -182,7 +186,7 @@ impl Client {
         let pointer = match self.pointer_get(&pointer_addr).await {
             Ok(pointer) => pointer,
             Err(PointerError::GetError(GetError::RecordNotFound)) => {
-                return Err(RegisterError::CannotUpdateNewRegister)
+                return Err(RegisterError::CannotUpdateNewRegister);
             }
             Err(err) => return Err(err.into()),
         };
@@ -286,7 +290,9 @@ impl Client {
         let entry = match self.graph_entry_get(graph_entry_addr).await {
             Ok(e) => e,
             Err(GraphError::Fork(entries)) => {
-                warn!("Forked register, multiple entries found: {entries:?}, choosing the one with the smallest derivation index for the next entry");
+                warn!(
+                    "Forked register, multiple entries found: {entries:?}, choosing the one with the smallest derivation index for the next entry"
+                );
                 let (entry_by_smallest_derivation, _) = entries
                     .into_iter()
                     .filter_map(|e| {
@@ -332,11 +338,13 @@ fn get_derivation_from_graph_entry(entry: &GraphEntry) -> Result<DerivationIndex
     let graph_entry_addr = GraphEntryAddress::new(entry.owner);
     let d = match entry.descendants.as_slice() {
         [d] => d.1,
-        _ => return Err(RegisterError::Corrupt(format!(
-            "Underlying Register GraphEntry at {graph_entry_addr:?} is corrupted, expected one descendant but got {}: {:?}",
-            entry.descendants.len(),
-            entry.descendants
-        ))),
+        _ => {
+            return Err(RegisterError::Corrupt(format!(
+                "Underlying Register GraphEntry at {graph_entry_addr:?} is corrupted, expected one descendant but got {}: {:?}",
+                entry.descendants.len(),
+                entry.descendants
+            )));
+        }
     };
     Ok(DerivationIndex::from_bytes(d))
 }

@@ -1,6 +1,6 @@
+use crate::TX_TIMEOUT;
 use crate::common::{Address, Calldata, TxHash};
 use crate::transaction_config::{MaxFeePerGas, TransactionConfig};
-use crate::TX_TIMEOUT;
 use alloy::network::{Network, TransactionBuilder};
 use alloy::providers::{PendingTransactionBuilder, Provider};
 use std::time::Duration;
@@ -88,7 +88,9 @@ where
             Ok(tx_hash) => break Ok(tx_hash),
             Err(err) => {
                 if retries == MAX_RETRIES {
-                    error!("Transaction {tx_identifier} failed after {retries} retries. Giving up. Error: {err:?}");
+                    error!(
+                        "Transaction {tx_identifier} failed after {retries} retries. Giving up. Error: {err:?}"
+                    );
                     break Err(err);
                 }
 
@@ -171,7 +173,7 @@ where
         Err(_) => {
             return Err(TransactionError::TransactionFailedToSend(
                 "timeout".to_string(),
-            ))
+            ));
         }
     };
 

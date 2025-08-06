@@ -7,24 +7,24 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    driver::{event::MsgResponder, PendingGetClosestType, SwarmDriver},
+    Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
+    driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
     error::{NetworkError, Result},
     interface::{LocalSwarmCmd, NetworkSwarmCmd, TerminateNodeReason},
     log_markers::Marker,
-    Addresses, NetworkEvent, NodeIssue, SwarmLocalState, CLOSE_GROUP_SIZE,
 };
 use ant_evm::PaymentQuote;
 use ant_protocol::{
+    NetworkAddress, PrettyPrintRecordKey,
     messages::{Cmd, Request},
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::{
-    kad::{
-        store::{Error as StoreError, RecordStore},
-        KBucketDistance as Distance,
-    },
     Multiaddr, PeerId,
+    kad::{
+        KBucketDistance as Distance,
+        store::{Error as StoreError, RecordStore},
+    },
 };
 use std::time::Instant;
 use std::{collections::BTreeMap, time::Duration};
@@ -238,19 +238,19 @@ impl SwarmDriver {
                 let record_key = PrettyPrintRecordKey::from(&key);
 
                 let record_type = match RecordHeader::from_record(&record) {
-                    Ok(record_header) => {
-                        match record_header.kind {
-                            RecordKind::DataOnly(DataTypes::Chunk) => ValidationType::Chunk,
-                            RecordKind::DataOnly(_) => {
-                                let content_hash = XorName::from_content(&record.value);
-                                ValidationType::NonChunk(content_hash)
-                            }
-                            RecordKind::DataWithPayment(_) => {
-                                error!("Record {record_key:?} with payment shall not be stored locally.");
-                                return Err(NetworkError::InCorrectRecordHeader);
-                            }
+                    Ok(record_header) => match record_header.kind {
+                        RecordKind::DataOnly(DataTypes::Chunk) => ValidationType::Chunk,
+                        RecordKind::DataOnly(_) => {
+                            let content_hash = XorName::from_content(&record.value);
+                            ValidationType::NonChunk(content_hash)
                         }
-                    }
+                        RecordKind::DataWithPayment(_) => {
+                            error!(
+                                "Record {record_key:?} with payment shall not be stored locally."
+                            );
+                            return Err(NetworkError::InCorrectRecordHeader);
+                        }
+                    },
                     Err(err) => {
                         error!("For record {record_key:?}, failed to parse record_header {err:?}");
                         return Err(NetworkError::InCorrectRecordHeader);
@@ -565,7 +565,9 @@ impl SwarmDriver {
                     //     *is_bad = true;
                     // }
                     new_bad_behaviour = Some(issue.clone());
-                    info!("Peer {peer_id:?} accumulated {issue_counts} times of issue {issue:?}. Consider it as a bad node now.");
+                    info!(
+                        "Peer {peer_id:?} accumulated {issue_counts} times of issue {issue:?}. Consider it as a bad node now."
+                    );
                     // Once a bad behaviour detected, no point to continue
                     break;
                 }
@@ -598,7 +600,9 @@ impl SwarmDriver {
                 // inform the bad node about it and add to the blocklist after that (not for connection issues)
                 self.record_metrics(Marker::PeerConsideredAsBad { bad_peer: &peer_id });
 
-                warn!("Peer {peer_id:?} is considered as bad due to {bad_behaviour:?}. Informing the peer and adding to blocklist.");
+                warn!(
+                    "Peer {peer_id:?} is considered as bad due to {bad_behaviour:?}. Informing the peer and adding to blocklist."
+                );
                 // response handling
                 let (tx, rx) = oneshot::channel();
                 let local_swarm_cmd_sender = self.local_cmd_sender.clone();
@@ -606,7 +610,9 @@ impl SwarmDriver {
                 let _ = tokio::spawn(async move {
                     match rx.await {
                         Ok(result) => {
-                            debug!("Got response for Cmd::PeerConsideredAsBad from {peer_id:?} {result:?}");
+                            debug!(
+                                "Got response for Cmd::PeerConsideredAsBad from {peer_id:?} {result:?}"
+                            );
                             if let Err(err) = local_swarm_cmd_sender
                                 .send(LocalSwarmCmd::AddPeerToBlockList { peer_id })
                                 .await
@@ -615,7 +621,9 @@ impl SwarmDriver {
                             }
                         }
                         Err(err) => {
-                            error!("Failed to get response from one shot channel for Cmd::PeerConsideredAsBad : {err:?}");
+                            error!(
+                                "Failed to get response from one shot channel for Cmd::PeerConsideredAsBad : {err:?}"
+                            );
                         }
                     }
                 });
@@ -639,7 +647,9 @@ impl SwarmDriver {
     fn verify_peer_quote(&mut self, peer_id: PeerId, quote: PaymentQuote) {
         if let Some(history_quote) = self.quotes_history.get(&peer_id) {
             if !history_quote.historical_verify(&quote) {
-                info!("From {peer_id:?}, detected a bad quote {quote:?} against history_quote {history_quote:?}");
+                info!(
+                    "From {peer_id:?}, detected a bad quote {quote:?} against history_quote {history_quote:?}"
+                );
                 self.record_node_issue(peer_id, NodeIssue::BadQuoting);
                 return;
             }

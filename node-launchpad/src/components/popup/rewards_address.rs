@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::super::utils::centered_rect_fixed;
 use super::super::Component;
+use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, OptionsActions},
     mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
 };
 use arboard::Clipboard;
@@ -19,7 +19,7 @@ use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
 use regex::Regex;
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
 const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 for the padding
@@ -154,10 +154,14 @@ impl Component for RewardsAddress {
             RewardsAddressState::ShowTCs => match key.code {
                 KeyCode::Char('y') | KeyCode::Char('Y') => {
                     if !self.rewards_address_input_field.value().is_empty() {
-                        debug!("User accepted the TCs, but rewards address already set, moving to RewardsAddressAlreadySet");
+                        debug!(
+                            "User accepted the TCs, but rewards address already set, moving to RewardsAddressAlreadySet"
+                        );
                         self.state = RewardsAddressState::RewardsAddressAlreadySet;
                     } else {
-                        debug!("User accepted the TCs, but no rewards address set, moving to AcceptTCsAndEnterRewardsAddress");
+                        debug!(
+                            "User accepted the TCs, but no rewards address set, moving to AcceptTCsAndEnterRewardsAddress"
+                        );
                         self.state = RewardsAddressState::AcceptTCsAndEnterRewardsAddress;
                     }
                     vec![]
@@ -236,7 +240,7 @@ impl Component for RewardsAddress {
         match self.state {
             RewardsAddressState::RewardsAddressAlreadySet => {
                 self.validate(); // FIXME: maybe this should be somewhere else
-                                 // split into 4 parts, for the prompt, input, text, dash , and buttons
+                // split into 4 parts, for the prompt, input, text, dash , and buttons
                 let layer_two = Layout::new(
                     Direction::Vertical,
                     [

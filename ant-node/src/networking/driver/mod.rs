@@ -12,12 +12,13 @@ pub(crate) mod event;
 pub(crate) mod network_discovery;
 
 use event::NodeEvent;
-use network_discovery::{NetworkDiscovery, NETWORK_DISCOVER_INTERVAL};
+use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
-    bootstrap::{InitialBootstrap, InitialBootstrapTrigger, INITIAL_BOOTSTRAP_CHECK_INTERVAL},
+    Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore,
+    bootstrap::{INITIAL_BOOTSTRAP_CHECK_INTERVAL, InitialBootstrap, InitialBootstrapTrigger},
     circular_vec::CircularVec,
     driver::kad::U256,
     error::Result,
@@ -25,33 +26,32 @@ use crate::networking::{
     log_markers::Marker,
     relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
-    Addresses, NodeIssue, NodeRecordStore, CLOSE_GROUP_SIZE,
 };
 use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::PaymentQuote;
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
-    messages::{Request, Response},
     NetworkAddress,
+    messages::{Request, Response},
 };
 use futures::StreamExt;
 use libp2p::{
-    kad::{self, KBucketDistance as Distance, QueryId, K_VALUE},
+    Multiaddr, PeerId,
+    kad::{self, K_VALUE, KBucketDistance as Distance, QueryId},
     request_response::OutboundRequestId,
     swarm::{
-        dial_opts::{DialOpts, PeerCondition},
         ConnectionId, Swarm,
+        dial_opts::{DialOpts, PeerCondition},
     },
-    Multiaddr, PeerId,
 };
 use libp2p::{
     request_response,
-    swarm::{behaviour::toggle::Toggle, NetworkBehaviour},
+    swarm::{NetworkBehaviour, behaviour::toggle::Toggle},
 };
-use std::collections::{btree_map::Entry, BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet, btree_map::Entry};
 use std::time::Instant;
 use tokio::sync::{mpsc, oneshot, watch};
-use tokio::time::{interval, Duration, Interval};
+use tokio::time::{Duration, Interval, interval};
 use tracing::warn;
 
 use super::interface::{LocalSwarmCmd, NetworkEvent, NetworkSwarmCmd};

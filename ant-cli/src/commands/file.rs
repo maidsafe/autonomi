@@ -8,18 +8,18 @@
 
 use crate::access::cached_payments;
 use crate::actions::NetworkContext;
-use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
-use crate::exit_code::{upload_exit_code, ExitCodeError, FEES_ERROR, IO_ERROR};
+use crate::args::max_fee_per_gas::{MaxFeePerGasParam, get_max_fee_per_gas_from_opt_param};
+use crate::exit_code::{ExitCodeError, FEES_ERROR, IO_ERROR, upload_exit_code};
 use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
+use autonomi::client::PutError;
 use autonomi::client::analyze::Analysis;
 use autonomi::client::payment::PaymentOption;
-use autonomi::client::PutError;
 use autonomi::files::UploadError;
 use autonomi::networking::{Quorum, RetryStrategy};
 use autonomi::{Client, ClientOperatingStrategy, TransactionConfig};
-use color_eyre::eyre::{eyre, Context, Result};
 use color_eyre::Section;
+use color_eyre::eyre::{Context, Result, eyre};
 use std::path::PathBuf;
 
 const MAX_ADDRESSES_TO_PRINT: usize = 3;
@@ -58,7 +58,9 @@ pub async fn upload(
     // Configure client with retry_failed setting
     if retry_failed != 0 {
         client = client.with_retry_failed(retry_failed);
-        println!("🔄 Retry mode enabled - will retry failed chunks until successful or exceeds the limit.");
+        println!(
+            "🔄 Retry mode enabled - will retry failed chunks until successful or exceeds the limit."
+        );
     }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
@@ -324,6 +326,8 @@ pub async fn list(network_context: NetworkContext, verbose: bool) -> Result<(), 
     }
 
     println!();
-    println!("> Note that private data addresses are not network addresses, they are only used for referring to private data client side.");
+    println!(
+        "> Note that private data addresses are not network addresses, they are only used for referring to private data client side."
+    );
     Ok(())
 }

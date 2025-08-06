@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::client::payment::PaymentOption;
 use autonomi::AttoTokens;
+use autonomi::client::payment::PaymentOption;
 use autonomi::{
+    Client,
     chunk::ChunkAddress,
     client::pointer::{Pointer, PointerTarget},
-    Client,
 };
 use eyre::Result;
 use serial_test::serial;

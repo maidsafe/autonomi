@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    error::{Error, Result},
     InitialPeersConfig,
+    error::{Error, Result},
 };
 use std::{
     path::{Path, PathBuf},

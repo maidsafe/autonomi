@@ -9,16 +9,16 @@
 use std::collections::BTreeSet;
 
 use crate::error::PutValidationError;
-use crate::{node::Node, Marker, Result};
-use ant_evm::payment_vault::verify_data_payment;
+use crate::{Marker, Result, node::Node};
 use ant_evm::ProofOfPayment;
+use ant_evm::payment_vault::verify_data_payment;
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
-    storage::{
-        try_deserialize_record, try_serialize_record, Chunk, DataTypes, GraphEntryAddress, Pointer,
-        PointerAddress, RecordHeader, RecordKind, Scratchpad, ValidationType,
-    },
     NetworkAddress, PrettyPrintRecordKey,
+    storage::{
+        Chunk, DataTypes, GraphEntryAddress, Pointer, PointerAddress, RecordHeader, RecordKind,
+        Scratchpad, ValidationType, try_deserialize_record, try_serialize_record,
+    },
 };
 use libp2p::kad::{Record, RecordKey};
 use xor_name::XorName;
@@ -247,9 +247,13 @@ impl Node {
                     .await
                 {
                     if already_exists {
-                        debug!("Payment of the incoming existing GraphEntry {pretty_key:?} having error {err:?}");
+                        debug!(
+                            "Payment of the incoming existing GraphEntry {pretty_key:?} having error {err:?}"
+                        );
                     } else {
-                        error!("Payment of the incoming new GraphEntry {pretty_key:?} having error {err:?}");
+                        error!(
+                            "Payment of the incoming new GraphEntry {pretty_key:?} having error {err:?}"
+                        );
                         return Err(err);
                     }
                 }
@@ -293,7 +297,11 @@ impl Node {
                     .await?;
 
                 if !already_exists {
-                    warn!("Pointer at address: {:?}, key: {:?} does not exist locally, rejecting PUT without payment", pointer.address(), pretty_key);
+                    warn!(
+                        "Pointer at address: {:?}, key: {:?} does not exist locally, rejecting PUT without payment",
+                        pointer.address(),
+                        pretty_key
+                    );
                     return Err(PutValidationError::NoPayment(
                         PrettyPrintRecordKey::from(&record.key).into_owned(),
                     ));
@@ -339,9 +347,13 @@ impl Node {
                     .await
                 {
                     if already_exists {
-                        debug!("Payment of the incoming exists pointer {pretty_key:?} having error {err:?}");
+                        debug!(
+                            "Payment of the incoming exists pointer {pretty_key:?} having error {err:?}"
+                        );
                     } else {
-                        error!("Payment of the incoming non-exist pointer {pretty_key:?} having error {err:?}");
+                        error!(
+                            "Payment of the incoming non-exist pointer {pretty_key:?} having error {err:?}"
+                        );
                         return Err(err);
                     }
                 }
@@ -567,7 +579,9 @@ impl Node {
                 return Ok(());
             }
             if local_pad.counter() >= scratchpad.counter() {
-                warn!("Rejecting Scratchpad PUT with counter less than or equal to the current counter");
+                warn!(
+                    "Rejecting Scratchpad PUT with counter less than or equal to the current counter"
+                );
                 return Err(PutValidationError::OutdatedRecordCounter {
                     counter: scratchpad.counter(),
                     expected: local_pad.counter(),
@@ -773,7 +787,9 @@ impl Node {
                 });
 
                 if !payees.is_empty() {
-                    warn!("Payment quote has out-of-range payees for record {pretty_key}. Payees: {payees:?}");
+                    warn!(
+                        "Payment quote has out-of-range payees for record {pretty_key}. Payees: {payees:?}"
+                    );
                     return Err(PutValidationError::PaymentQuoteOutOfRange {
                         record_key: pretty_key.clone(),
                         payees: payees.clone(),

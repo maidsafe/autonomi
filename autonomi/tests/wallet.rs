@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
-use autonomi::get_evm_network;
 use autonomi::Wallet;
+use autonomi::get_evm_network;
 use autonomi::{Amount, RewardsAddress};
 use const_hex::traits::FromHex;
 use test_utils::evm::get_funded_wallet;

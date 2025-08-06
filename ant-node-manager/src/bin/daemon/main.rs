@@ -10,20 +10,20 @@
 extern crate tracing;
 
 use ant_logging::LogBuilder;
-use ant_node_manager::{config::get_node_registry_path, rpc, DAEMON_DEFAULT_PORT};
+use ant_node_manager::{DAEMON_DEFAULT_PORT, config::get_node_registry_path, rpc};
 use ant_service_management::{
+    NodeRegistryManager,
     antctl_proto::{
+        GetStatusRequest, GetStatusResponse, NodeServiceRestartRequest, NodeServiceRestartResponse,
         ant_ctl_server::{AntCtl, AntCtlServer},
         get_status_response::Node,
-        GetStatusRequest, GetStatusResponse, NodeServiceRestartRequest, NodeServiceRestartResponse,
     },
-    NodeRegistryManager,
 };
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{Result, eyre};
 use libp2p_identity::PeerId;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use tonic::{transport::Server, Code, Request, Response, Status};
+use tonic::{Code, Request, Response, Status, transport::Server};
 use tracing::Level;
 
 #[derive(Parser, Debug)]

@@ -8,7 +8,7 @@
 #![allow(clippy::mutable_key_type)] // for Bytes in NetworkAddress
 
 use crate::storage::DataTypes;
-use crate::{storage::ValidationType, NetworkAddress};
+use crate::{NetworkAddress, storage::ValidationType};
 use ant_evm::ProofOfPayment;
 use serde::{Deserialize, Serialize};
 
@@ -121,7 +121,8 @@ impl std::fmt::Display for Cmd {
             } => {
                 write!(
                     f,
-                    "Cmd::PeerConsideredAsBad({detected_by:?} consider peer {bad_peer:?} as bad, due to {bad_behaviour:?})")
+                    "Cmd::PeerConsideredAsBad({detected_by:?} consider peer {bad_peer:?} as bad, due to {bad_behaviour:?})"
+                )
             }
         }
     }

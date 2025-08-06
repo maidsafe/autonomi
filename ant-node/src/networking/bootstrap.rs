@@ -8,12 +8,12 @@
 
 use crate::networking::{driver::NodeBehaviour, multiaddr_get_p2p, multiaddr_pop_p2p};
 use libp2p::{
+    Multiaddr, PeerId, Swarm,
     core::ConnectedPoint,
     swarm::{
-        dial_opts::{DialOpts, PeerCondition},
         DialError,
+        dial_opts::{DialOpts, PeerCondition},
     },
-    Multiaddr, PeerId, Swarm,
 };
 use rand::seq::SliceRandom;
 use std::collections::{HashSet, VecDeque};
@@ -74,7 +74,9 @@ pub(crate) struct InitialBootstrap {
 impl InitialBootstrap {
     pub(crate) fn new(mut initial_addrs: Vec<Multiaddr>) -> Self {
         let bootstrap_completed = if initial_addrs.is_empty() {
-            info!("No initial addresses provided for bootstrap. Initial bootstrap process will not be triggered.");
+            info!(
+                "No initial addresses provided for bootstrap. Initial bootstrap process will not be triggered."
+            );
             true
         } else {
             let mut rng = rand::thread_rng();
@@ -141,30 +143,47 @@ impl InitialBootstrap {
 
             match swarm.dial(opts) {
                 Ok(()) => {
-                    info!("Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}", self.ongoing_dials.len()+1);
+                    info!(
+                        "Dial attempt initiated for peer with address: {addr_clone}. Ongoing dial attempts: {}",
+                        self.ongoing_dials.len() + 1
+                    );
                     let _ = self.ongoing_dials.insert(addr_clone);
                 }
                 Err(err) => match err {
                     DialError::LocalPeerId { .. } => {
-                        warn!("Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer");
+                        warn!(
+                            "Failed to dial peer with address: {addr_clone}. This is our own peer ID. Dialing the next peer"
+                        );
                     }
                     DialError::NoAddresses => {
-                        error!("Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer");
+                        error!(
+                            "Failed to dial peer with address: {addr_clone}. No addresses found. Dialing the next peer"
+                        );
                     }
                     DialError::DialPeerConditionFalse(_) => {
-                        warn!("We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless.");
+                        warn!(
+                            "We are already dialing the peer with address: {addr_clone}. Dialing the next peer. This error is harmless."
+                        );
                     }
                     DialError::Aborted => {
-                        error!(" Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer.");
+                        error!(
+                            " Pending connection attempt has been aborted for {addr_clone}. Dialing the next peer."
+                        );
                     }
                     DialError::WrongPeerId { obtained, .. } => {
-                        error!("The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer.");
+                        error!(
+                            "The peer identity obtained on the connection did not match the one that was expected. Expected: {peer_id:?}, obtained: {obtained}. Dialing the next peer."
+                        );
                     }
                     DialError::Denied { cause } => {
-                        error!("The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer.");
+                        error!(
+                            "The dialing attempt was denied by the remote peer. Cause: {cause}. Dialing the next peer."
+                        );
                     }
                     DialError::Transport(items) => {
-                        error!("Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer.");
+                        error!(
+                            "Failed to dial peer with address: {addr_clone}. Transport error: {items:?}. Dialing the next peer."
+                        );
                     }
                 },
             }
@@ -190,9 +209,13 @@ impl InitialBootstrap {
             self.ongoing_dials.clear();
 
             if verbose {
-                info!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+                info!(
+                    "Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table."
+                );
             } else {
-                trace!("Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table.");
+                trace!(
+                    "Initial bootstrap process completed successfully. We have {peers_in_rt} peers in the routing table."
+                );
             }
             return false;
         }
@@ -214,9 +237,13 @@ impl InitialBootstrap {
 
         if peers_in_rt < MAX_PEERS_BEFORE_TERMINATION && self.initial_addrs.is_empty() {
             if verbose {
-                info!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+                info!(
+                    "We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap."
+                );
             } else {
-                debug!("We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap.");
+                debug!(
+                    "We have {peers_in_rt} peers in RT, but no more addresses to dial. Stopping initial bootstrap."
+                );
             }
             return false;
         }

@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    config::get_node_registry_path, helpers::download_and_extract_release, VerbosityLevel,
+    VerbosityLevel, config::get_node_registry_path, helpers::download_and_extract_release,
 };
 use ant_bootstrap::ContactsFetcher;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{NatDetectionStatus, NodeRegistryManager};
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use libp2p::Multiaddr;
 use rand::seq::SliceRandom;
 use std::{

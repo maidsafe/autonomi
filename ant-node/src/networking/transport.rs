@@ -9,9 +9,9 @@
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
 use libp2p::{
+    PeerId, Transport as _,
     core::{muxing::StreamMuxerBox, transport},
     identity::Keypair,
-    PeerId, Transport as _,
 };
 
 const MAX_STREAM_DATA_ENV_STR: &str = "ANT_MAX_STREAM_DATA";
@@ -40,7 +40,9 @@ fn generate_quic_transport(
                 tracing::info!("Overriding QUIC connection receive window value to {val}");
             }
             Err(e) => {
-                tracing::warn!("QUIC connection receive window value override failed. Could not parse `{MAX_STREAM_DATA_ENV_STR}={val}` as integer: {e}")
+                tracing::warn!(
+                    "QUIC connection receive window value override failed. Could not parse `{MAX_STREAM_DATA_ENV_STR}={val}` as integer: {e}"
+                )
             }
         }
     }

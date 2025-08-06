@@ -9,8 +9,8 @@
 pub mod cache_data_v0;
 pub mod cache_data_v1;
 
-use crate::{craft_valid_multiaddr, BootstrapCacheConfig, Error, Result};
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use crate::{BootstrapCacheConfig, Error, Result, craft_valid_multiaddr};
+use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 use rand::Rng;
 use std::{fs, sync::Arc, time::Duration};
 use tokio::sync::RwLock;

@@ -265,7 +265,9 @@ impl ServiceControl for ServiceController {
             Ok(()) => Ok(()),
             Err(err) => {
                 if std::io::ErrorKind::NotFound == err.kind() {
-                    error!("Error while uninstall service, service file might have been removed manually: {service_name}");
+                    error!(
+                        "Error while uninstall service, service file might have been removed manually: {service_name}"
+                    );
                     // In this case the user has removed the service definition file manually,
                     // which the service manager crate treats as an error. We can propagate the
                     // it to the caller and they can decide how to handle it.

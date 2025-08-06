@@ -64,7 +64,9 @@ impl CacheData {
 
         let new_len = self.peers.len();
 
-        info!("Synced {other_len} peers to our current {old_len:?} peers to have a final count of {new_len:?} peers");
+        info!(
+            "Synced {other_len} peers to our current {old_len:?} peers to have a final count of {new_len:?} peers"
+        );
 
         self.last_updated = SystemTime::now();
     }

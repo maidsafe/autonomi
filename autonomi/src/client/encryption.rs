@@ -6,10 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
-use crate::files::{get_relative_file_path_from_abs_file_and_folder_path, Metadata};
-use crate::self_encryption::encrypt;
 use crate::Client;
+use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
+use crate::files::{Metadata, get_relative_file_path_from_abs_file_and_folder_path};
+use crate::self_encryption::encrypt;
 use ant_protocol::storage::Chunk;
 use bytes::Bytes;
 use std::path::PathBuf;
@@ -144,7 +144,7 @@ impl Client {
         &self,
         dir_path: PathBuf,
         is_public: bool,
-    ) -> Result<Vec<Result<(EncryptionStream, DataMapChunk), String>>, walkdir::Error> {
+    ) -> Result<Vec<Result<EncryptionStream, String>>, walkdir::Error> {
         let mut encryption_tasks = vec![];
 
         for entry in walkdir::WalkDir::new(&dir_path) {
@@ -180,7 +180,7 @@ impl Client {
                     get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
 
                 let start = Instant::now();
-                let file_chunk_iterator = EncryptionStream::new_in_memory_with(
+                let (file_chunk_iterator, _data_map) = EncryptionStream::new_in_memory_with(
                     file_path.to_string_lossy().to_string(),
                     relative_path,
                     metadata,

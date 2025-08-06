@@ -8,8 +8,8 @@
 
 use super::NodeServiceData;
 use crate::{
-    node::node_service_data_v2::{NodeServiceDataV2, NODE_SERVICE_DATA_SCHEMA_V2},
     ServiceStatus,
+    node::node_service_data_v2::{NODE_SERVICE_DATA_SCHEMA_V2, NodeServiceDataV2},
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
@@ -122,8 +122,8 @@ mod tests {
     use super::super::node_service_data::NodeServiceData;
     use super::super::node_service_data_v2::NodeServiceDataV2;
     use super::*;
-    use crate::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
     use crate::ServiceStatus;
+    use crate::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;
     use std::{

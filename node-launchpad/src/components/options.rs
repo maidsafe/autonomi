@@ -8,16 +8,16 @@
 
 use color_eyre::eyre::Result;
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Row, Table},
-    Frame,
 };
 use std::{cmp::max, path::PathBuf};
 use tokio::sync::mpsc::UnboundedSender;
 
-use super::{header::SelectedMenuItem, utils::open_logs, Component};
+use super::{Component, header::SelectedMenuItem, utils::open_logs};
 use crate::{
     action::{Action, OptionsActions},
     components::header::Header,
@@ -424,7 +424,7 @@ impl Component for Options {
                     return Ok(Some(Action::SwitchScene(Scene::UpgradeNodesPopUp)));
                 }
                 OptionsActions::TriggerResetNodes => {
-                    return Ok(Some(Action::SwitchScene(Scene::ResetNodesPopUp)))
+                    return Ok(Some(Action::SwitchScene(Scene::ResetNodesPopUp)));
                 }
                 _ => {}
             },

@@ -8,10 +8,10 @@
 
 use super::archive_public::{ArchiveAddress, PublicArchive};
 use super::{DownloadError, FileCostError, Metadata, UploadError};
+use crate::AttoTokens;
+use crate::client::Client;
 use crate::client::high_level::data::DataAddress;
 use crate::client::payment::PaymentOption;
-use crate::client::Client;
-use crate::AttoTokens;
 use bytes::Bytes;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -72,7 +72,7 @@ impl Client {
         let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
             match encryption_result {
-                Ok((file_chunk_iterator, _)) => {
+                Ok(file_chunk_iterator) => {
                     let file_path = file_chunk_iterator.file_path.clone();
                     info!("Successfully encrypted file: {file_path:?}");
                     #[cfg(feature = "loud")]

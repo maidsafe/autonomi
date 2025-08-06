@@ -7,21 +7,21 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
-use crate::args::max_fee_per_gas::get_max_fee_per_gas_from_opt_param;
 use crate::args::max_fee_per_gas::MaxFeePerGasParam;
+use crate::args::max_fee_per_gas::get_max_fee_per_gas_from_opt_param;
 use crate::wallet::load_wallet;
-use autonomi::client::pointer::PointerTarget;
-use autonomi::client::pointer::SecretKey as PointerSecretKey;
 use autonomi::ChunkAddress;
 use autonomi::Client;
 use autonomi::GraphEntryAddress;
 use autonomi::PointerAddress;
 use autonomi::ScratchpadAddress;
 use autonomi::TransactionConfig;
-use color_eyre::eyre::eyre;
+use autonomi::client::pointer::PointerTarget;
+use autonomi::client::pointer::SecretKey as PointerSecretKey;
+use color_eyre::Section;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
-use color_eyre::Section;
+use color_eyre::eyre::eyre;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TargetDataType {
@@ -192,7 +192,9 @@ pub fn share(name: String) -> Result<()> {
     let hex = pointer_key.to_hex();
     println!("Share this secret key with the recipient: {hex}");
     println!("The recipient can use this key to read and write to the pointer");
-    println!("The recipient can use the following command to get the pointer: `ant pointer get --secret-key {hex}`");
+    println!(
+        "The recipient can use the following command to get the pointer: `ant pointer get --secret-key {hex}`"
+    );
     Ok(())
 }
 
@@ -307,9 +309,9 @@ pub async fn edit(
             .with_suggestion(|| "Local user data saves the pointer address above to disk (for the pointer list command), without it you need remember the name yourself")?;
         crate::user_data::write_local_pointer_value(&name, &new_pointer)
             .wrap_err("Failed to save pointer value to local user data")
-            .with_suggestion(|| {
-                "Local user data caches the pointer data to disk for use in future updates"
-            })?;
+            .with_suggestion(
+                || "Local user data caches the pointer data to disk for use in future updates",
+            )?;
         info!("Saved pointer to local user data");
     }
 

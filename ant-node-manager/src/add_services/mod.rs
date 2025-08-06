@@ -11,15 +11,15 @@ mod tests;
 
 use self::config::{AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
 use crate::{
+    DAEMON_SERVICE_NAME, VerbosityLevel,
     config::{create_owned_dir, get_user_antnode_data_dir},
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
-    VerbosityLevel, DAEMON_SERVICE_NAME,
 };
 use ant_service_management::{
-    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST, DaemonServiceData,
-    NatDetectionStatus, NodeRegistryManager, NodeServiceData, ServiceStatus,
+    DaemonServiceData, NatDetectionStatus, NodeRegistryManager, NodeServiceData, ServiceStatus,
+    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
 };
-use color_eyre::{eyre::eyre, Help, Result};
+use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
 use service_manager::ServiceInstallCtx;
 use std::{

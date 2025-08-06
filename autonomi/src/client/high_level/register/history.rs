@@ -41,7 +41,7 @@ impl RegisterHistory {
         {
             Ok(res) => res,
             Err(RegisterError::GraphError(GraphError::GetError(GetError::RecordNotFound))) => {
-                return Ok(None)
+                return Ok(None);
             }
             Err(e) => return Err(e),
         };

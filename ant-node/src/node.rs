@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    error::Result, event::NodeEventsChannel, quote::quotes_verification, Marker, NodeEvent,
+    Marker, NodeEvent, error::Result, event::NodeEventsChannel, quote::quotes_verification,
 };
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
@@ -19,38 +19,39 @@ use ant_bootstrap::BootstrapCacheStore;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
 use ant_protocol::{
+    CLOSE_GROUP_SIZE, NetworkAddress, PrettyPrintRecordKey,
     error::Error as ProtocolError,
     messages::{ChunkProof, CmdResponse, Nonce, Query, QueryResponse, Request, Response},
     storage::ValidationType,
-    NetworkAddress, PrettyPrintRecordKey, CLOSE_GROUP_SIZE,
 };
 use bytes::Bytes;
 use itertools::Itertools;
 use libp2p::{
+    Multiaddr, PeerId,
     identity::Keypair,
     kad::{Record, U256},
     request_response::OutboundFailure,
-    Multiaddr, PeerId,
 };
 use num_traits::cast::ToPrimitive;
 use rand::{
+    Rng, SeedableRng,
     rngs::{OsRng, StdRng},
-    thread_rng, Rng, SeedableRng,
+    thread_rng,
 };
 use std::{
     collections::HashMap,
     net::SocketAddr,
     path::PathBuf,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
 use tokio::{
     sync::mpsc::Receiver,
-    task::{spawn, JoinSet},
+    task::{JoinSet, spawn},
 };
 
 /// Interval to trigger replication of all records to all peers.
@@ -451,7 +452,10 @@ impl Node {
                 let self_id = self.network().peer_id();
                 let distance =
                     NetworkAddress::from(self_id).distance(&NetworkAddress::from(peer_id));
-                info!("Node {self_id:?} removed peer from routing table: {peer_id:?}. It has a {:?} distance to us.", distance.ilog2());
+                info!(
+                    "Node {self_id:?} removed peer from routing table: {peer_id:?}. It has a {:?} distance to us.",
+                    distance.ilog2()
+                );
 
                 let network = self.network().clone();
                 self.record_metrics(Marker::IntervalReplicationTriggered);
@@ -531,7 +535,9 @@ impl Node {
                 // Note: this log will be checked in CI, and expecting `not appear`.
                 //       any change to the keyword `failed to fetch` shall incur
                 //       correspondent CI script change as well.
-                debug!("Received notification from replication_fetcher, notifying {pretty_log:?} failed to fetch replication copies from.");
+                debug!(
+                    "Received notification from replication_fetcher, notifying {pretty_log:?} failed to fetch replication copies from."
+                );
                 let _handle = spawn(async move {
                     for (peer_id, record_key) in bad_nodes {
                         // Obsoleted fetch request (due to flooded in fresh replicates) could result
@@ -582,7 +588,9 @@ impl Node {
                 warn!("Mishandled replicate response, should be handled earlier");
             }
             Response::Query(QueryResponse::GetReplicatedRecord(resp)) => {
-                error!("Response to replication shall be handled by called not by common handler, {resp:?}");
+                error!(
+                    "Response to replication shall be handled by called not by common handler, {resp:?}"
+                );
             }
             Response::Cmd(CmdResponse::FreshReplicate(Ok(()))) => {
                 // No need to handle
@@ -876,7 +884,8 @@ impl Node {
 
             info!(
                 "Respond with {} answers to the StorageChallenge targeting {key:?} with {difficulty} difficulty, in {:?}",
-                results.len(), start.elapsed()
+                results.len(),
+                start.elapsed()
             );
         }
 
@@ -982,7 +991,9 @@ impl Node {
                 Ok((peer_id, score)) => {
                     let is_healthy = score > MIN_ACCEPTABLE_HEALTHY_SCORE;
                     if !is_healthy {
-                        info!("Peer {peer_id:?} failed storage challenge with low score {score}/{MIN_ACCEPTABLE_HEALTHY_SCORE}.");
+                        info!(
+                            "Peer {peer_id:?} failed storage challenge with low score {score}/{MIN_ACCEPTABLE_HEALTHY_SCORE}."
+                        );
                         // TODO: shall the challenge failure immediately triggers the node to be removed?
                         network.record_node_issues(peer_id, NodeIssue::FailedChunkProofCheck);
                     }

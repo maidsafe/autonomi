@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::Marker;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use crate::Marker;
 use ant_protocol::storage::DataTypes;
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
@@ -16,7 +16,7 @@ use prometheus_client::{
         counter::Counter,
         family::Family,
         gauge::Gauge,
-        histogram::{exponential_buckets, Histogram},
+        histogram::{Histogram, exponential_buckets},
         info::Info,
     },
 };
@@ -52,11 +52,17 @@ impl NodeMetricsRecorder {
         let node_metadata_sub_registry = registries.metadata.sub_registry_with_prefix("ant_node");
         node_metadata_sub_registry.register(
             "antnode_version",
-            "The version of the safe node",
+            "The version of the ant node",
             Info::new(vec![(
                 "antnode_version".to_string(),
                 env!("CARGO_PKG_VERSION").to_string(),
             )]),
+        );
+        let branch = ant_build_info::git_branch();
+        node_metadata_sub_registry.register(
+            "antnode_branch",
+            "The branch of the ant node",
+            Info::new(vec![("antnode_branch".to_string(), branch.to_string())]),
         );
 
         let sub_registry = registries

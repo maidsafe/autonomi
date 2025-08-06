@@ -64,7 +64,7 @@ impl Client {
         let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
             match encryption_result {
-                Ok((file_chunk_iterator, _)) => {
+                Ok(file_chunk_iterator) => {
                     let file_path = file_chunk_iterator.file_path.clone();
                     info!("Successfully encrypted file: {file_path:?}");
                     #[cfg(feature = "loud")]

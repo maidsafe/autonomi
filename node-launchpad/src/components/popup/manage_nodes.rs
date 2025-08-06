@@ -13,15 +13,15 @@ use crate::system::get_available_space_b;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{
     action::Action,
     mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 
-use super::super::{utils::centered_rect_fixed, Component};
+use super::super::{Component, utils::centered_rect_fixed};
 
 pub const GB_PER_NODE: usize = 35;
 pub const MB: usize = 1000 * 1000;
@@ -82,8 +82,8 @@ impl Component for ManageNodes {
                     .with_value(nodes_to_start.to_string());
 
                 debug!(
-                        "Got Enter, value found to be {nodes_to_start} derived from input: {nodes_to_start_str:?} and switching scene",
-                    );
+                    "Got Enter, value found to be {nodes_to_start} derived from input: {nodes_to_start_str:?} and switching scene",
+                );
                 vec![
                     Action::StoreNodesToStart(nodes_to_start),
                     Action::SwitchScene(Scene::Status),
@@ -141,11 +141,7 @@ impl Component for ManageNodes {
                         }
                     } else {
                         // Key::Down
-                        if current_val == 0 {
-                            0
-                        } else {
-                            current_val - 1
-                        }
+                        if current_val == 0 { 0 } else { current_val - 1 }
                     }
                 };
                 // set the new value

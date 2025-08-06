@@ -11,19 +11,19 @@
 mod common;
 
 use crate::common::{
-    client::{get_client_and_funded_wallet, get_node_count},
     NodeRestart,
+    client::{get_client_and_funded_wallet, get_node_count},
 };
 use ant_logging::LogBuilder;
 use ant_protocol::{
-    storage::{ChunkAddress, GraphEntry, GraphEntryAddress, PointerTarget, ScratchpadAddress},
     NetworkAddress,
+    storage::{ChunkAddress, GraphEntry, GraphEntryAddress, PointerTarget, ScratchpadAddress},
 };
-use autonomi::{data::DataAddress, Client, Wallet};
+use autonomi::{Client, Wallet, data::DataAddress};
 use bls::{PublicKey, SecretKey};
 use bytes::Bytes;
 use common::client::transfer_to_new_wallet;
-use eyre::{bail, ErrReport, Result};
+use eyre::{ErrReport, Result, bail};
 use rand::Rng;
 use self_encryption::MAX_CHUNK_SIZE;
 use std::{
@@ -221,21 +221,29 @@ async fn data_availability_during_churn() -> Result<()> {
     let start_time = Instant::now();
     while start_time.elapsed() < test_duration {
         if store_chunks_handle.is_finished() {
-            bail!("Store chunks task has finished before the test duration. Probably due to an error.");
+            bail!(
+                "Store chunks task has finished before the test duration. Probably due to an error."
+            );
         }
         if let Some(handle) = &create_pointer_handle {
             if handle.is_finished() {
-                bail!("Create Pointers task has finished before the test duration. Probably due to an error.");
+                bail!(
+                    "Create Pointers task has finished before the test duration. Probably due to an error."
+                );
             }
         }
         if let Some(handle) = &create_graph_entry_handle {
             if handle.is_finished() {
-                bail!("Create GraphEntry task has finished before the test duration. Probably due to an error.");
+                bail!(
+                    "Create GraphEntry task has finished before the test duration. Probably due to an error."
+                );
             }
         }
         if let Some(handle) = &create_scratchpad_handle {
             if handle.is_finished() {
-                bail!("Create ScratchPad task has finished before the test duration. Probably due to an error.");
+                bail!(
+                    "Create ScratchPad task has finished before the test duration. Probably due to an error."
+                );
             }
         }
 
@@ -381,7 +389,9 @@ fn create_scratchpad_task(
                         .await
                     {
                         Ok((cost, addr)) => {
-                            println!("Created new ScratchPad at {addr:?} with cost of {cost:?} after a delay of: {delay:?}");
+                            println!(
+                                "Created new ScratchPad at {addr:?} with cost of {cost:?} after a delay of: {delay:?}"
+                            );
                             let net_addr = NetworkAddress::ScratchpadAddress(addr);
                             content.write().await.push_back(net_addr);
                             let _ = owners.insert(addr, owner);
@@ -524,7 +534,9 @@ fn create_graph_entry_task(
                     .await
                 {
                     Ok((cost, addr)) => {
-                        println!("Uploaded graph_entry to {addr:?} with cost of {cost:?} after a delay of: {delay:?}");
+                        println!(
+                            "Uploaded graph_entry to {addr:?} with cost of {cost:?} after a delay of: {delay:?}"
+                        );
                         let net_addr = NetworkAddress::GraphEntryAddress(addr);
                         content_list.write().await.push_back(net_addr);
                         break;
@@ -586,7 +598,9 @@ fn create_pointers_task(
                 loop {
                     match client.pointer_update(owner, new_target.clone()).await {
                         Ok(_) => {
-                            println!("Updated Pointer at {addr:?} with {old_target:?} to new target {new_target:?} after a delay of: {delay:?}");
+                            println!(
+                                "Updated Pointer at {addr:?} with {old_target:?} to new target {new_target:?} after a delay of: {delay:?}"
+                            );
                             pointer_addr = Some((addr.clone(), None, new_target));
                             break;
                         }
@@ -598,9 +612,15 @@ fn create_pointers_task(
                                 "Failed to update pointer at {addr:?} with {old_target:?}: {err:?}. Retrying ..."
                             );
                             if retries >= 3 {
-                                println!("Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}");
-                                error!("Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}");
-                                bail!("Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}");
+                                println!(
+                                    "Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}"
+                                );
+                                error!(
+                                    "Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}"
+                                );
+                                bail!(
+                                    "Failed to update pointer at {addr:?} with {old_target:?} after 3 retries: {err}"
+                                );
                             }
                             retries += 1;
                         }
@@ -616,7 +636,9 @@ fn create_pointers_task(
                         .await
                     {
                         Ok((cost, addr)) => {
-                            println!("Created new Pointer ({pointer_target:?}) at {addr:?} with cost of {cost:?} after a delay of: {delay:?}");
+                            println!(
+                                "Created new Pointer ({pointer_target:?}) at {addr:?} with cost of {cost:?} after a delay of: {delay:?}"
+                            );
                             let net_addr = NetworkAddress::PointerAddress(addr);
                             pointer_addr = Some((net_addr.clone(), Some(owner), pointer_target));
                             content.write().await.push_back(net_addr);
@@ -630,9 +652,15 @@ fn create_pointers_task(
                                 "Failed to create pointer {pointer_target:?}: {err:?}. Retrying ..."
                             );
                             if retries >= 3 {
-                                println!("Failed to create pointer {pointer_target:?} after 3 retries: {err}");
-                                error!("Failed to create pointer {pointer_target:?} after 3 retries: {err}");
-                                bail!("Failed to create pointer {pointer_target:?} after 3 retries: {err}");
+                                println!(
+                                    "Failed to create pointer {pointer_target:?} after 3 retries: {err}"
+                                );
+                                error!(
+                                    "Failed to create pointer {pointer_target:?} after 3 retries: {err}"
+                                );
+                                bail!(
+                                    "Failed to create pointer {pointer_target:?} after 3 retries: {err}"
+                                );
                             }
                             retries += 1;
                         }
@@ -820,8 +848,12 @@ fn retry_query_content_task(
                 println!("Querying erred content at {net_addr}, attempt: #{attempts} ...");
                 info!("Querying erred content at {net_addr}, attempt: #{attempts} ...");
                 if let Err(last_err) = query_content(&client, &net_addr).await {
-                    println!("Erred content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}");
-                    warn!("Erred content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}");
+                    println!(
+                        "Erred content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}"
+                    );
+                    warn!(
+                        "Erred content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}"
+                    );
                     // We only keep it to retry 'MAX_NUM_OF_QUERY_ATTEMPTS' times,
                     // otherwise report it effectivelly as failure.
                     content_error.attempts = attempts;
@@ -855,9 +887,15 @@ async fn final_retry_query_content(
         debug!("Final querying content at {net_addr}, attempt: #{attempts} ...");
         if let Err(last_err) = query_content(client, &net_addr).await {
             if attempts == MAX_NUM_OF_QUERY_ATTEMPTS {
-                println!("Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}");
-                error!("Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}");
-                bail!("Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}");
+                println!(
+                    "Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}"
+                );
+                error!(
+                    "Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}"
+                );
+                bail!(
+                    "Final check: Content is still not retrievable at {net_addr} after {attempts} attempts: {last_err:?}"
+                );
             } else {
                 attempts += 1;
                 let delay = 2 * churn_period;

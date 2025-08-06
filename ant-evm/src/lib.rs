@@ -15,6 +15,8 @@
 #[macro_use]
 extern crate tracing;
 
+pub use evmlib::CustomNetwork;
+pub use evmlib::Network as EvmNetwork;
 pub use evmlib::common::Address as RewardsAddress;
 pub use evmlib::common::Address as EvmAddress;
 pub use evmlib::common::QuotePayment;
@@ -30,8 +32,6 @@ pub use evmlib::utils::get_evm_network;
 pub use evmlib::utils::{DATA_PAYMENTS_ADDRESS, PAYMENT_TOKEN_ADDRESS, RPC_URL};
 pub use evmlib::wallet::Error as EvmWalletError;
 pub use evmlib::wallet::Wallet as EvmWallet;
-pub use evmlib::CustomNetwork;
-pub use evmlib::Network as EvmNetwork;
 
 mod amount;
 mod data_payments;

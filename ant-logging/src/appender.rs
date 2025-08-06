@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use file_rotate::{
+    ContentLimit, FileRotate,
     compression::Compression,
     suffix::{AppendTimestamp, FileLimit},
-    ContentLimit, FileRotate,
 };
 use std::{
     env,

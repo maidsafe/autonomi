@@ -10,6 +10,7 @@ use ant_protocol::storage::{PointerTarget, ScratchpadAddress};
 use self_encryption::DataMap;
 
 use crate::{
+    Bytes, Client, PublicKey,
     chunk::{Chunk, ChunkAddress, DataMapChunk},
     files::{PrivateArchive, PublicArchive},
     graph::{GraphEntry, GraphEntryAddress},
@@ -17,10 +18,9 @@ use crate::{
     register::RegisterValue,
     scratchpad::Scratchpad,
     self_encryption::DataMapLevel,
-    Bytes, Client, PublicKey,
 };
 
-use super::{register::RegisterAddress, GetError};
+use super::{GetError, register::RegisterAddress};
 const MAX_HEX_PRINT_LENGTH: usize = 4 * 1024;
 
 /// The result of analyzing an address
@@ -323,7 +323,9 @@ async fn analyze_datamap(
         rmp_serde::from_slice(datamap.0.value()).map_err(|_| AnalysisError::UnrecognizedInput)?;
     let (map, points_to_a_data_map) = match data_map_level {
         DataMapLevel::Additional(map) => {
-            println_if_verbose!("Identified a DataMap whose contents is another DataMap, the content might be pretty big...");
+            println_if_verbose!(
+                "Identified a DataMap whose contents is another DataMap, the content might be pretty big..."
+            );
             (map, true)
         }
         DataMapLevel::First(map) => {
@@ -472,10 +474,10 @@ fn data_hex(data: &Bytes) -> String {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::Bytes;
     use crate::chunk::{ChunkAddress, DataMapChunk};
     use crate::data::DataAddress;
     use crate::files::{Metadata, PrivateArchive, PublicArchive};
-    use crate::Bytes;
     use crate::{PublicKey, SecretKey};
     use eyre::Result;
     use serial_test::serial;

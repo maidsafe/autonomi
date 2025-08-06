@@ -12,12 +12,13 @@ pub mod nat_detection;
 pub mod node;
 
 use crate::{
+    VerbosityLevel,
     helpers::{download_and_extract_release, get_bin_version},
-    print_banner, VerbosityLevel,
+    print_banner,
 };
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::UpgradeResult;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use semver::Version;
 use std::{

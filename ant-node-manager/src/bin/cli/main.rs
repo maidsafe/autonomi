@@ -13,13 +13,14 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::RewardsAddress;
 use ant_logging::{LogBuilder, LogFormat};
 use ant_node_manager::{
+    DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, VerbosityLevel,
     add_services::config::PortRange,
     cmd::{self},
-    config, VerbosityLevel, DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S,
+    config,
 };
 use ant_service_management::NodeRegistryManager;
 use clap::{Parser, Subcommand};
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use libp2p::Multiaddr;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tracing::Level;
@@ -1120,7 +1121,8 @@ async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
         ant_node_manager::helpers::configure_winsw(
             &get_node_manager_path()?.join("winsw.exe"),
             verbosity,
-        ).await?;
+        )
+        .await?;
     }
     Ok(())
 }

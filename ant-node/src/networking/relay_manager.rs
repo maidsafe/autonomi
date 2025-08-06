@@ -10,7 +10,7 @@ use crate::networking::driver::{BadNodes, NodeBehaviour};
 use itertools::Itertools;
 use libp2p::swarm::ConnectionId;
 use libp2p::{
-    core::transport::ListenerId, multiaddr::Protocol, Multiaddr, PeerId, StreamProtocol, Swarm,
+    Multiaddr, PeerId, StreamProtocol, Swarm, core::transport::ListenerId, multiaddr::Protocol,
 };
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::gauge::Gauge;
@@ -223,7 +223,9 @@ impl RelayManager {
                         n_reservations += 1;
                     }
                     Err(err) => {
-                        error!("Error while trying to listen on the relay addr: {err:?} on {relay_addr:?}");
+                        error!(
+                            "Error while trying to listen on the relay addr: {err:?} on {relay_addr:?}"
+                        );
                     }
                 }
             } else {
@@ -242,7 +244,9 @@ impl RelayManager {
     ) {
         match self.waiting_for_reservation.remove(peer_id) {
             Some(addr) => {
-                info!("Successfully made reservation with {peer_id:?} on {addr:?}. Adding the addr to external address.");
+                info!(
+                    "Successfully made reservation with {peer_id:?} on {addr:?}. Adding the addr to external address."
+                );
                 swarm.add_external_address(addr.clone());
                 let _ = self.connected_relay_servers.insert(*peer_id, addr);
             }
@@ -252,7 +256,9 @@ impl RelayManager {
         }
 
         if self.connected_relay_servers.len() == MAX_CONCURRENT_RELAY_CONNECTIONS {
-            debug!("We have reached the maximum number of relay connections. Push new identify info to all connected peers");
+            debug!(
+                "We have reached the maximum number of relay connections. Push new identify info to all connected peers"
+            );
             // send identify to all connected peers.
 
             swarm.behaviour_mut().identify.push(
@@ -289,7 +295,9 @@ impl RelayManager {
             swarm.remove_external_address(&addr_with_self_peer_id);
         }
         if let Some(addr) = self.waiting_for_reservation.remove(&peer_id) {
-            info!("Removed peer form waiting_for_reservation as the listener has been closed {peer_id:?}: {addr:?}");
+            info!(
+                "Removed peer form waiting_for_reservation as the listener has been closed {peer_id:?}: {addr:?}"
+            );
             debug!(
                 "waiting_for_reservation len: {:?}",
                 self.waiting_for_reservation.len()
@@ -393,14 +401,18 @@ impl RelayReservationHealth {
                 .iter()
                 .any(|protocol| matches!(protocol, Protocol::P2pCircuit))
             {
-                debug!("Incoming connection is not routed through a relay server. Not tracking its health.");
+                debug!(
+                    "Incoming connection is not routed through a relay server. Not tracking its health."
+                );
                 return;
             };
 
             match local_addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
                 Some(Protocol::P2p(id)) => id,
                 _ => {
-                    debug!("Incoming connection does not have a valid 'relay server id'. Not tracking its health.");
+                    debug!(
+                        "Incoming connection does not have a valid 'relay server id'. Not tracking its health."
+                    );
                     return;
                 }
             }
@@ -413,7 +425,9 @@ impl RelayReservationHealth {
             {
                 Some(Protocol::P2p(id)) => id,
                 _ => {
-                    debug!("Incoming connection does not have a valid 'from peer id'. Not tracking its health.");
+                    debug!(
+                        "Incoming connection does not have a valid 'from peer id'. Not tracking its health."
+                    );
                     return;
                 }
             }
@@ -464,7 +478,9 @@ impl RelayReservationHealth {
             {
                 Some(Protocol::P2p(id)) => id,
                 _ => {
-                    debug!("Incoming connection does not have a valid 'from peer id'. Not tracking its health.");
+                    debug!(
+                        "Incoming connection does not have a valid 'from peer id'. Not tracking its health."
+                    );
                     return;
                 }
             }
@@ -510,7 +526,9 @@ impl RelayReservationHealth {
                 .filter(|(_, _, _, result)| result.is_some_and(|succeeded| succeeded))
             {
                 connection_success = true;
-                debug!("Connection {connection_id:?} from {from_peer:?} through {relay_server:?} has been successful. Increasing the success count");
+                debug!(
+                    "Connection {connection_id:?} from {from_peer:?} through {relay_server:?} has been successful. Increasing the success count"
+                );
                 match self.reservation_score.entry(*relay_server) {
                     Entry::Occupied(mut entry) => {
                         let stat = entry.get_mut();
@@ -528,10 +546,14 @@ impl RelayReservationHealth {
                 // if none of the connections have been established, we can update the stats.
                 for (relay_server, connection_id, _, result) in connections.iter() {
                     if result.is_none() {
-                        debug!("Connection {connection_id:?} from {from_peer:?} through {relay_server:?} is still pending after {elapsed:?}. This is thrown away.");
+                        debug!(
+                            "Connection {connection_id:?} from {from_peer:?} through {relay_server:?} is still pending after {elapsed:?}. This is thrown away."
+                        );
                         continue;
                     };
-                    debug!("Connection {connection_id:?} from {from_peer:?} through {relay_server:?} is a failure. Increasing the error count");
+                    debug!(
+                        "Connection {connection_id:?} from {from_peer:?} through {relay_server:?} is a failure. Increasing the error count"
+                    );
                     match self.reservation_score.entry(*relay_server) {
                         Entry::Occupied(mut entry) => {
                             let stat = entry.get_mut();

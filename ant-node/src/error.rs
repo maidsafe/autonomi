@@ -55,9 +55,7 @@ pub enum PutValidationError {
         payees: Vec<PeerId>,
     },
 
-    #[error(
-        "Failed to verify payment with EVM network for record: {record_key:?}. Error: {error}"
-    )]
+    #[error("Failed to verify payment with EVM network for record: {record_key:?}. Error: {error}")]
     PaymentVerificationFailed {
         record_key: PrettyPrintRecordKey<'static>,
         error: ant_evm::payment_vault::error::Error,

@@ -14,7 +14,7 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::client::{quote::CostError, GetError, PutError};
+use crate::client::{GetError, PutError, quote::CostError};
 
 pub mod archive_private;
 pub mod archive_public;

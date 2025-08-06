@@ -24,14 +24,14 @@ use ratatui::{
 use crate::{
     action::{Action, OptionsActions},
     components::{
-        popup::manage_nodes::{GB, GB_PER_NODE},
         Component,
+        popup::manage_nodes::{GB, GB_PER_NODE},
     },
     config::get_launchpad_nodes_data_dir_path,
     mode::{InputMode, Scene},
     style::{
-        clear_area, COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
-        VIVID_SKY_BLUE,
+        COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
+        VIVID_SKY_BLUE, clear_area,
     },
     system,
 };

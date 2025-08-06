@@ -6,12 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::super::utils::centered_rect_fixed;
 use super::super::Component;
+use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, UpgradeLaunchpadActions},
     mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
 };
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
@@ -65,7 +65,9 @@ impl Component for UpgradeLaunchpadPopup {
                         current_version,
                         latest_version,
                     } => {
-                        info!("Received UpdateAvailable action with current version: {current_version} and latest version: {latest_version}. Switching to UpgradeLaunchpadPopUp scene.");
+                        info!(
+                            "Received UpdateAvailable action with current version: {current_version} and latest version: {latest_version}. Switching to UpgradeLaunchpadPopUp scene."
+                        );
                         self.current_version = Some(current_version);
                         self.latest_version = Some(latest_version);
                         Some(Action::SwitchScene(Scene::UpgradeLaunchpadPopUp))
@@ -93,8 +95,8 @@ impl Component for UpgradeLaunchpadPopup {
                             },
                         )) {
                             error!(
-                            "Error sending UpgradeLaunchpadActions::UpdateAvailable action: {err}"
-                        );
+                                "Error sending UpgradeLaunchpadActions::UpdateAvailable action: {err}"
+                            );
                         }
                     }
                     _ => {
@@ -115,11 +117,15 @@ impl Component for UpgradeLaunchpadPopup {
         }
 
         let Some(current_version) = self.current_version.as_ref() else {
-            error!("Current version is not set, even though the upgrade popup is active. This is unexpected.");
+            error!(
+                "Current version is not set, even though the upgrade popup is active. This is unexpected."
+            );
             return Ok(());
         };
         let Some(latest_version) = self.latest_version.as_ref() else {
-            error!("Latest version is not set, even though the upgrade popup is active. This is unexpected.");
+            error!(
+                "Latest version is not set, even though the upgrade popup is active. This is unexpected."
+            );
             return Ok(());
         };
 

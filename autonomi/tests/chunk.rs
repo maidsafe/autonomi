@@ -9,7 +9,7 @@
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::self_encryption::encrypt;
-use autonomi::{client::chunk::Chunk, Client};
+use autonomi::{Client, client::chunk::Chunk};
 use eyre::Result;
 use self_encryption::test_helpers::random_bytes;
 use serial_test::serial;

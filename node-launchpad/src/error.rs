@@ -8,7 +8,7 @@
 
 use crate::{
     components::utils::centered_rect_fixed,
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, RED},
+    style::{EUCALYPTUS, GHOST_WHITE, RED, clear_area},
     tui::Frame,
 };
 use crossterm::event::{KeyCode, KeyEvent};

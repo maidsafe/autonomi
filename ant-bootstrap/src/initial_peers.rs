@@ -7,11 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    craft_valid_multiaddr, craft_valid_multiaddr_from_str,
+    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher, craft_valid_multiaddr,
+    craft_valid_multiaddr_from_str,
     error::{Error, Result},
-    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
 };
-use ant_protocol::version::{get_network_id, ALPHANET_ID, MAINNET_ID};
+use ant_protocol::version::{ALPHANET_ID, MAINNET_ID, get_network_id};
 use clap::Args;
 use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};

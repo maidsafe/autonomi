@@ -14,7 +14,7 @@ use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::{GetError, PutError};
-use crate::{chunk::ChunkAddress, self_encryption::encrypt, Client};
+use crate::{Client, chunk::ChunkAddress, self_encryption::encrypt};
 use ant_evm::{Amount, AttoTokens};
 use xor_name::XorName;
 
