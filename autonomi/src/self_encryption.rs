@@ -9,7 +9,8 @@
 use ant_protocol::storage::Chunk;
 use bytes::{BufMut, Bytes, BytesMut};
 use rayon::prelude::*;
-use self_encryption::{DataMap, MAX_CHUNK_SIZE};
+use self_encryption::DataMap;
+pub use self_encryption::MAX_CHUNK_SIZE;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
@@ -56,15 +57,15 @@ fn pack_data_map(data_map: DataMap) -> Result<(Chunk, Vec<Chunk>), Error> {
     let mut chunk_content = wrap_data_map(&DataMapLevel::First(data_map))?;
 
     let (data_map_chunk, additional_chunks) = loop {
-        debug!("Max chunk size: {}", *MAX_CHUNK_SIZE);
+        debug!("Max chunk size: {MAX_CHUNK_SIZE}");
         let chunk = Chunk::new(chunk_content);
         // If datamap chunk is less than `MAX_CHUNK_SIZE` return it so it can be directly sent to the network.
-        if *MAX_CHUNK_SIZE >= chunk.size() {
+        if MAX_CHUNK_SIZE >= chunk.size() {
             chunks.reverse();
             // Returns the last datamap, and all the chunks produced.
             break (chunk, chunks);
         } else {
-            let mut bytes = BytesMut::with_capacity(*MAX_CHUNK_SIZE).writer();
+            let mut bytes = BytesMut::with_capacity(MAX_CHUNK_SIZE).writer();
             let mut serialiser = rmp_serde::Serializer::new(&mut bytes);
             chunk.serialize(&mut serialiser)?;
             let serialized_chunk = bytes.into_inner().freeze();

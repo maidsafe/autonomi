@@ -978,7 +978,6 @@ dependencies = [
  "rayon",
  "reqwest 0.12.22",
  "rmp-serde",
- "self_encryption",
  "serde",
  "serde_json",
  "sha2",
@@ -8478,9 +8477,9 @@ dependencies = [
 
 [[package]]
 name = "self_encryption"
-version = "0.30.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f9439a0cb3efb35e080a1576e3e00a804caab04010adc802aed88cf539b103ed"
+checksum = "f865256fc2075a28be19d56944f68b552076088c5ccc072db0c8626599ca35b6"
 dependencies = [
  "aes",
  "bincode",
@@ -8488,16 +8487,12 @@ dependencies = [
  "bytes",
  "cbc",
  "hex",
- "itertools 0.10.5",
- "lazy_static",
- "num_cpus",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "rayon",
  "serde",
  "tempfile",
  "thiserror 1.0.69",
- "tiny-keccak",
  "tokio",
  "xor_name",
 ]

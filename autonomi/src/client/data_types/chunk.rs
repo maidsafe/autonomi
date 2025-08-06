@@ -28,7 +28,7 @@ use ant_protocol::{
 };
 use bytes::Bytes;
 use libp2p::kad::Record;
-use self_encryption::{DataMap, EncryptedChunk, decrypt_full_set};
+use self_encryption::{DataMap, EncryptedChunk, decrypt};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -527,7 +527,6 @@ impl Client {
                         println!("Fetching chunk {idx}/{total_chunks} [DONE]");
                         info!("Successfully fetched chunk {idx}/{total_chunks}({chunk_addr:?})");
                         Ok(EncryptedChunk {
-                            index: info.index,
                             content: chunk.value,
                         })
                     }
@@ -551,7 +550,7 @@ impl Client {
         println!("Successfully fetched all {total_chunks} encrypted chunks");
         debug!("Successfully fetched all {total_chunks} encrypted chunks");
 
-        let data = decrypt_full_set(data_map, &encrypted_chunks).map_err(|e| {
+        let data = decrypt(data_map, &encrypted_chunks).map_err(|e| {
             error!("Error decrypting encrypted_chunks: {e:?}");
             GetError::Decryption(crate::self_encryption::Error::SelfEncryption(e))
         })?;

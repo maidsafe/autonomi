@@ -12,12 +12,11 @@ use crate::files::{Metadata, get_relative_file_path_from_abs_file_and_folder_pat
 use crate::self_encryption::encrypt;
 use ant_protocol::storage::Chunk;
 use bytes::Bytes;
-use self_encryption::{DataMap, MAX_CHUNK_SIZE};
+use self_encryption::MAX_CHUNK_SIZE;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 use std::time::Instant;
 use tokio::sync::oneshot;
-use xor_name::XorName;
 
 use super::data::DataAddress;
 use super::files::FILE_ENCRYPT_BATCH_SIZE;
@@ -212,7 +211,7 @@ impl EncryptionStream {
         tokio::spawn(async move {
             // encrypt the file and send chunks in a chunk channel
             let path = PathBuf::from(&file_path_clone);
-            let result = streaming_encrypt_from_file(&path, |_xorname, bytes| {
+            let result = self_encryption::streaming_encrypt_from_file(&path, |_xorname, bytes| {
                 let chunk = Chunk::new(bytes);
                 chunk_sender.send(chunk).map_err(|err| {
                     error!("Error sending chunk: {err:?}");
@@ -256,7 +255,7 @@ impl EncryptionStream {
                 chunk_receiver,
                 datamap_receiver,
                 chunk_count: 0,
-                total_estimated_chunks: std::cmp::max(3, file_size / *MAX_CHUNK_SIZE),
+                total_estimated_chunks: std::cmp::max(3, file_size / MAX_CHUNK_SIZE),
             }),
         };
 
@@ -366,37 +365,6 @@ async fn encrypt_file_in_memory(
     debug!("Encryption of {file_path:?} took: {:.2?}", start.elapsed());
 
     Ok(file_chunk_iterator)
-}
-
-/// TODO use self_encryption::streaming_encrypt_from_file, this is a placeholder for now
-/// Reads a file in chunks, encrypts them, and stores them using a provided functor.
-/// Returns a DataMap.
-pub fn streaming_encrypt_from_file<F>(
-    file_path: &std::path::Path,
-    mut chunk_store: F,
-) -> self_encryption::Result<DataMap>
-where
-    F: FnMut(xor_name::XorName, Bytes) -> self_encryption::Result<()>,
-{
-    let data = std::fs::read(file_path).map_err(|e| {
-        self_encryption::Error::Io(std::io::Error::other(format!(
-            "Failed to read file {file_path:?}: {e}"
-        )))
-    })?;
-    let data = Bytes::from(data);
-
-    // Use self_encryption::encrypt to create the DataMap and chunks
-    let (data_map, encrypted_chunks) = self_encryption::encrypt(data)?;
-
-    // Store each encrypted chunk with a random XorName
-    for encrypted_chunk in encrypted_chunks {
-        let xorname = XorName::from_content(&encrypted_chunk.content);
-
-        // Store the chunk using the provided functor
-        chunk_store(xorname, encrypted_chunk.content)?;
-    }
-
-    Ok(data_map)
 }
 
 #[cfg(test)]
