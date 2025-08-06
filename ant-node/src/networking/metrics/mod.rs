@@ -13,19 +13,19 @@ mod relay_client;
 pub(super) mod service;
 mod upnp;
 
-pub(crate) use metadata::MetadataRecorder;
-pub(crate) use reachability_check::ReachabilityStatusMetric;
-use crate::networking::log_markers::Marker;
 use crate::networking::MetricsRegistries;
+use crate::networking::log_markers::Marker;
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     PeerId,
     metrics::{Metrics as Libp2pMetrics, Recorder},
 };
+pub(crate) use metadata::MetadataRecorder;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{counter::Counter, family::Family, gauge::Gauge},
 };
+pub(crate) use reachability_check::ReachabilityStatusMetric;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
