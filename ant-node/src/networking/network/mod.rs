@@ -27,7 +27,7 @@ use super::{Addresses, NodeIssue, SwarmLocalState};
 
 mod init;
 
-pub(crate) use init::{init_reachability_check_swarm, NetworkConfig};
+pub(crate) use init::{NetworkConfig, init_reachability_check_swarm};
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm
