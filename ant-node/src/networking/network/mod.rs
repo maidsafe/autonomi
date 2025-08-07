@@ -6,9 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::{BTreeMap, HashMap};
-use std::sync::Arc;
-
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::messages::{ConnectionInfo, Request, Response};
 use ant_protocol::storage::ValidationType;
@@ -17,16 +14,20 @@ use futures::future::select_all;
 use libp2p::kad::{K_VALUE, KBucketDistance, Record, RecordKey};
 use libp2p::swarm::ConnectionId;
 use libp2p::{Multiaddr, PeerId, identity::Keypair};
-use tokio::sync::{mpsc, oneshot};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot, watch};
+
+use crate::networking::NetworkEvent;
 
 use super::driver::event::MsgResponder;
 use super::error::{NetworkError, Result};
 use super::interface::{LocalSwarmCmd, NetworkSwarmCmd};
-use super::{Addresses, NetworkEvent, NodeIssue, SwarmLocalState};
+use super::{Addresses, NodeIssue, SwarmLocalState};
 
 mod init;
 
-pub(crate) use init::NetworkConfig;
+pub(crate) use init::{NetworkConfig, init_reachability_check_swarm};
 
 #[derive(Clone, Debug)]
 /// API to interact with the underlying Swarm
@@ -48,13 +49,20 @@ impl Network {
     /// Initialize the network
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub(crate) fn init(config: NetworkConfig) -> Result<(Self, mpsc::Receiver<NetworkEvent>)> {
+    pub(crate) fn init(
+        config: NetworkConfig,
+    ) -> Result<(
+        Self,
+        mpsc::Receiver<NetworkEvent>,
+        Option<watch::Sender<bool>>,
+    )> {
         let peer_id = PeerId::from(config.keypair.public());
         let keypair = config.keypair.clone();
         let shutdown_rx = config.shutdown_rx.clone();
 
         // setup the swarm driver
-        let (swarm_driver, network_event_receiver) = init::init_driver(config)?;
+        let (swarm_driver, network_event_receiver, metrics_shutdown_tx) =
+            init::init_driver(config)?;
 
         // create a new network instance
         let network = Network {
@@ -69,7 +77,7 @@ impl Network {
         // Run the swarm driver as a background task
         let _swarm_driver_task = tokio::spawn(swarm_driver.run(shutdown_rx));
 
-        Ok((network, network_event_receiver))
+        Ok((network, network_event_receiver, metrics_shutdown_tx))
     }
 
     /// Returns the `PeerId` of the instance.
@@ -486,4 +494,16 @@ pub(crate) fn connection_action_logging(
     info!(
         "Action: {action_string}, performed on: {connection_id:?}, remote_peer_id: {remote_peer_id:?}, self_peer_id: {self_peer_id:?}"
     );
+}
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
 }

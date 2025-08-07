@@ -11,6 +11,7 @@ use crate::networking::{
     NetworkEvent, NodeIssue, Result,
     error::{dial_error_to_str, listen_error_to_str},
     interface::TerminateNodeReason,
+    network::endpoint_str,
 };
 use itertools::Itertools;
 #[cfg(feature = "open-metrics")]
@@ -692,18 +693,6 @@ impl SwarmDriver {
             };
 
             let _ = self.latest_established_connection_ids.remove(&oldest_key);
-        }
-    }
-}
-
-/// Helper function to print formatted connection role info.
-fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
-    match endpoint {
-        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
-            format!("outgoing ({address})")
-        }
-        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
-            format!("incoming ({send_back_addr})")
         }
     }
 }

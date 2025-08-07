@@ -48,6 +48,7 @@ pub use self::{
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
+    networking::ReachabilityStatus,
     networking::sort_peers_by_key,
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
@@ -70,6 +71,9 @@ use tokio::sync::watch;
 #[derive(Clone)]
 pub struct RunningNode {
     shutdown_sender: watch::Sender<bool>,
+    #[allow(dead_code)]
+    /// This has to be kept for the lifetime of the node, so that the metrics server can be kept running.
+    metrics_server_shutdown_sender: Option<watch::Sender<bool>>,
     network: Network,
     node_events_channel: NodeEventsChannel,
     root_dir_path: PathBuf,

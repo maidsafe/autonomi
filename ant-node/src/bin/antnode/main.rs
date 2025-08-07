@@ -189,6 +189,12 @@ struct Opt {
     #[clap(long, default_value_t = 0)]
     port: u16,
 
+    /// Enabling this will run an optional reachability check before starting the node.
+    ///
+    /// Enabling this will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
+    #[clap(long, default_value_t = false)]
+    reachability_check: bool,
+
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
@@ -224,8 +230,23 @@ struct Opt {
     write_older_cache_files: bool,
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(err) = run() {
+        error!("Node failed with error: {err}");
+        eprintln!("Node failed with error: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     color_eyre::install()?;
+
+    // Install panic hook to print panics before exit
+    // We only use eprintln! here to avoid potential issues with logging infrastructure during shutdown
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Node panicked: {panic_info}",);
+    }));
+
     let opt = Opt::parse();
 
     let network_id = if let Some(network_id) = opt.network_id {
@@ -332,6 +353,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_reachability_check(opt.reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -383,8 +405,7 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
-    let running_node = node_builder.build_and_run()?;
-
+    let running_node = node_builder.build_and_run().await?;
     println!(
         "
 Node started

@@ -22,6 +22,7 @@ use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use semver::Version;
 use std::{
+    collections::HashMap,
     path::PathBuf,
     process::{Command, Stdio},
 };
@@ -97,7 +98,7 @@ pub async fn download_and_get_upgrade_bin_path(
     }
 }
 
-pub fn print_upgrade_summary(upgrade_summary: Vec<(String, UpgradeResult)>) {
+pub fn print_upgrade_summary(upgrade_summary: HashMap<String, UpgradeResult>) {
     println!("Upgrade summary:");
     for (service_name, upgrade_result) in upgrade_summary {
         match upgrade_result {
