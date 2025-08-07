@@ -1,337 +1,128 @@
-# Reachability Check Feature
+# Reachability Check Module
 
 ## Overview
 
-The **reachability check** is a network connectivity assessment feature that determines whether a node in the Autonomi Network can be reached directly from the internet or needs to use relay connections. This feature is critical for ensuring optimal network performance and connectivity in diverse network environments.
+The reachability check determines whether a node in the Autonomi Network can be reached directly from the internet. This automated process ensures only nodes with reliable connectivity join the network, maintaining overall network health and performance.
 
-### What is Reachability?
+### Why This Matters
 
-In peer-to-peer networks, nodes need to be able to connect to each other to exchange data and maintain the network. However, many nodes run behind firewalls, routers with Network Address Translation (NAT), or in other network configurations that prevent direct connections from the internet. The reachability check automatically detects these situations and configures the node accordingly.
+In peer-to-peer networks, nodes behind NAT/firewalls often cannot receive direct connections. This module automatically detects such situations and determines if a node has the necessary connectivity to participate in the network.
 
-### Why is This Important?
-
-- **Automatic Configuration**: Eliminates the need for manual network configuration
-- **Optimal Performance**: Ensures nodes use the most efficient connection method available
-- **Network Stability**: Prevents nodes from joining the network if they cannot maintain stable connections
-- **User Experience**: Provides clear feedback about connectivity status and configuration
+**Key Benefits:**
+- Automatic network configuration without manual intervention
+- Ensures optimal performance by validating connectivity
+- Maintains network stability by preventing unreachable nodes from joining
+- Provides clear feedback about connectivity status
 
 ## How It Works
 
-The reachability check follows a systematic approach to determine connectivity:
+The reachability check determines connectivity by having peers dial back to this node after a 180-second delay, then correlating the external addresses they observe with local network adapters. The key insight is that consistent external address observation across multiple peers indicates reliable direct connectivity.
 
-1. **Network Setup**: Creates a specialized network swarm with minimal behaviors (UPnP and Identify)
-2. **Peer Discovery**: Attempts to connect to multiple bootstrap peers from the network
-3. **Connection Testing**: Establishes connections and waits for peers to identify the node
-4. **Observation Collection**: Gathers information about how other peers see this node's network address
-5. **Analysis**: Analyzes the collected data to determine the node's reachability status
-6. **Decision**: Returns a reachability status that determines how the node should configure its networking
+## Reachability Status
 
-## Reachability Status Types
+The module returns one of two statuses:
 
-The check returns one of three possible statuses:
+| Status | Description | Result |
+|--------|-------------|---------|
+| **Reachable** | Node can receive direct connections from the internet | Returns the local adapter address that is externally reachable. Node can fully participate in the network. |
+| **NotRoutable** | Node cannot receive direct connections | Indicates NAT/firewall issues. Node should terminate as it cannot properly participate. |
 
-### 1. **Reachable** 
-- The node can be reached directly from the internet
-- No relay is needed
-- Returns the external address where the node is reachable
-- Includes UPnP support information
+Both statuses include UPnP support information for diagnostics.
 
-### 2. **Relay**
-- The node is behind NAT/firewall and cannot be reached directly
-- Must use relay connections for other nodes to reach it
-- Can still make outbound connections normally
-- Includes UPnP support information
+## Key Technical Components
 
-### 3. **NotRoutable**
-- The node cannot be reached at all, even with relay assistance
-- Usually indicates severe networking issues
-- The node should not join the network in this state
+The module uses a sophisticated state machine tracking 7 concurrent dial attempts with 3-stage progression (Initiated → Connected → DialBackReceived), requiring a majority (4/7) of successful observations for validation.
 
-## Technical Implementation
+### Critical Design: 180-Second Dial-Back Delay
 
-The reachability check module is designed to determine a node's network connectivity status by testing its ability to establish and receive connections from other peers in the network. The module implements a sophisticated state machine that manages peer connections, collects network observations, and analyzes the data to make reachability determinations.
-
-### 1. ReachabilityCheckSwarmDriver (`mod.rs`)
-
-The main orchestrator that manages the entire reachability detection process.
+The most crucial aspect is the 180-second delay before accepting identify responses:
 
 ```rust
-pub(crate) struct ReachabilityCheckSwarmDriver {
-    pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
-    pub(crate) upnp_supported: bool,
-    pub(crate) dial_manager: DialManager,
-    pub(crate) listeners: HashMap<ListenerId, HashSet<IpAddr>>,
-}
-```
-
-**Responsibilities:**
-- Manages the libp2p swarm with specialized behaviors
-- Coordinates the detection workflow
-- Processes network events and maintains state
-- Makes final reachability determinations
-
-### 2. DialManager (`dialer.rs`)
-
-A sophisticated connection management system that handles peer discovery and connection tracking.
-
-```rust
-pub(crate) struct DialManager {
-    pub(crate) current_workflow_attempt: usize,
-    pub(crate) dialer: Dialer,
-    pub(crate) all_dial_attempts: HashMap<PeerId, DialResult>,
-    pub(crate) initial_contacts_manager: InitialContactsManager,
-}
-```
-
-**Key Features:**
-- **Workflow Retry Management**: Tracks retry attempts across entire detection cycles
-- **Dial State Tracking**: Maintains connection states for all dial attempts
-- **Bootstrap Contact Management**: Efficiently manages and selects bootstrap peers
-- **Result Aggregation**: Collects and analyzes dial attempt outcomes
-
-### 3. Dialer (`dialer.rs`)
-
-The core connection tracking component that maintains real-time state of all network operations.
-
-```rust
-pub(crate) struct Dialer {
-    ongoing_dial_attempts: HashMap<PeerId, DialState>,
-    pub(super) identify_observed_external_addr: HashMap<PeerId, Vec<(SocketAddr, ConnectionId)>>,
-    pub(super) incoming_connection_ids: HashSet<ConnectionId>,
-    pub(super) incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
-}
-```
-
-**Data Structures:**
-- **ongoing_dial_attempts**: Real-time tracking of active connection attempts
-- **identify_observed_external_addr**: Collection of observed addresses from peers
-- **incoming_connection_ids**: Set of connections initiated by remote peers
-- **incoming_connection_local_adapter_map**: Maps connection IDs to local network adapters
-
-## State Machine Design
-
-### Dial State Transitions
-
-The module implements a three-state machine for tracking individual peer connections:
-
-```rust
-pub(super) enum DialState {
-    Initiated { at: Instant },
-    Connected { at: Instant },
-    DialBackReceived { at: Instant },
-}
-```
-
-**State Transitions:**
-1. **Initiated**: Initial dial attempt sent to peer
-2. **Connected**: Successful connection established, waiting for identify response
-3. **DialBackReceived**: Peer has sent identify information back
-
-**Transition Logic:**
-- `Initiated → Connected`: When connection is successfully established
-- `Connected → DialBackReceived`: When identify response is received after `DIAL_BACK_DELAY`
-- States can timeout and be cleaned up if they exceed their respective timeouts
-
-### Dial Result Tracking
-
-Final outcomes of dial attempts are tracked separately to ensure comprehensive analysis:
-
-```rust
-pub(crate) enum DialResult {
-    TimedOutOnInitiated,
-    TimedOutAfterConnecting,
-    ErrorDuringDial,
-    SuccessfulDialBack,
-}
-```
-
-## Network Behavior Configuration
-
-### ReachabilityCheckBehaviour
-
-The module uses a minimal set of libp2p behaviors to reduce complexity and focus on connectivity testing:
-
-```rust
-#[derive(NetworkBehaviour)]
-#[behaviour(to_swarm = "ReachabilityCheckEvent")]
-pub(crate) struct ReachabilityCheckBehaviour {
-    pub(super) upnp: libp2p::upnp::tokio::Behaviour,
-    pub(super) identify: libp2p::identify::Behaviour,
-}
-```
-
-**Behavior Selection Rationale:**
-- **UPnP**: Detects and configures NAT traversal capabilities
-- **Identify**: Collects observed address information from peers
-- **Minimal Set**: Reduces potential interference and simplifies event handling
-
-## Algorithm Details
-
-### 1. Bootstrap Peer Selection
-
-The `InitialContactsManager` implements intelligent peer selection:
-
-```rust
-pub(crate) fn get_next_contact(&mut self) -> Option<Multiaddr> {
-    // Filters out circuit addresses and ensures PeerID presence
-    // Uses random selection to avoid bias
-    // Tracks attempted indices to prevent duplicates
-}
-```
-
-**Selection Criteria:**
-- Excludes P2P circuit addresses (relay addresses)
-- Requires valid PeerID in the multiaddress
-- Uses random selection to distribute load
-- Maintains attempt tracking to avoid retries
-
-### 2. Connection Concurrency Management
-
-The system limits concurrent dial attempts to prevent resource exhaustion:
-
-```rust
-pub(crate) fn can_we_perform_new_dial(&self) -> bool {
-    self.dialer.ongoing_dial_attempts.len() < MAX_DIAL_ATTEMPTS
-}
-```
-
-**Concurrency Strategy:**
-- Maximum 5 concurrent dial attempts (`MAX_DIAL_ATTEMPTS`)
-- Attempts are cleaned up on timeout or completion
-- New attempts are triggered as slots become available
-
-### 3. Reachability Analysis Algorithm
-
-The core reachability determination logic in `determine_reachability_via_external_addr()`:
-
-```rust
-fn determine_reachability_via_external_addr(&self) -> Result<ExternalAddrResult, ReachabilityCheckError>
-```
-
-**Analysis Steps:**
-
-#### Step 1: Data Validation
-- Ensures minimum 3 observed addresses for reliable analysis
-- Validates that at least some connections were successful
-- Determines if retry is needed based on data quality
-
-#### Step 2: Port Consistency Check
-```rust
-if ports.len() != 1 {
-    error!("Multiple ports observed, we are unreachable. Terminating the node.");
-    result.terminate = true;
-    return Ok(result);
-}
-```
-
-**Rationale**: Multiple observed ports indicates unreachable nodes.
-
-
-#### Step 3: IP Address Analysis
-The algorithm categorizes observed IP addresses:
-
-- **Single IP Address**: 
-  - Private IP → `Reachable` (local network scenario)
-  - Public IP → `Reachable` (direct internet connectivity)
-  - Invalid IP → `NotRoutable`
-
-- **Multiple IP Addresses**:
-  - Mixed private/public → Prefer private (local testnet scenario)
-  - Multiple private → Prefer localhost, then others
-  - Multiple public → Return all as reachable
-
-#### Step 4: Local Adapter Mapping
-```rust
-let mut external_to_local_addr_map: HashMap<SocketAddr, HashSet<SocketAddr>> = HashMap::new();
-```
-
-Maps external observed addresses to local network adapters:
-- Prioritize local adapter address that is the same as external address
-- Prioritize local adapter address that is the private network range
-- Falls back to an non-unspecified local adapter address if found
-
-## Timeout and Retry Strategy
-
-### Timeout Configuration
-
-```rust
-const TIMEOUT_ON_INITIATED_STATE: Duration = Duration::from_secs(30);
-const TIMEOUT_ON_CONNECTED_STATE: Duration = Duration::from_secs(20 + DIAL_BACK_DELAY.as_secs());
-const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
-```
-
-**Timeout Rationale:**
-- **INITIATED**: 30 seconds allows for network latency and connection establishment
-- **CONNECTED**: 200 seconds total (20 + 180) accounts for dial-back delay plus processing time
-- **DIAL_BACK_DELAY**: 180 seconds gives peers time to process and respond with identify
-
-### Retry Mechanism
-
-The module implements a three-tier retry strategy:
-
-1. **Individual Dial Retries**: Automatic cleanup and retry of failed connections
-2. **Workflow Retries**: Complete restart of the detection process (max 3 attempts)
-3. **Graceful Degradation**: Falls back to relay mode if direct connectivity fails
-
-## Event Processing Pipeline
-
-### Main Event Loop
-
-```rust
-pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
-    loop {
-        tokio::select! {
-            swarm_event = self.swarm.select_next_some() => {
-                // Handle network events
-            }
-            _ = dial_check_interval.tick() => {
-                // Periodic dial management and cleanup
+fn transition_to_dial_back_received(&mut self, peer_id: &PeerId) {
+    match self {
+        DialState::Connected { at } => {
+            if at.elapsed() > DIAL_BACK_DELAY {  // Must wait 180s
+                *self = DialState::DialBackReceived { at: Instant::now() };
             }
         }
     }
 }
 ```
 
-### Event Handler Dispatch
+This delay ensures peers have sufficient time to process our connection and respond with accurate external address observations, preventing false positives from immediate responses.
 
-The `handle_swarm_events()` method processes different event types:
+## Core Algorithms
 
-1. **NewListenAddr**: Updates local address tracking
-2. **IncomingConnection**: Maps connection IDs to local adapters
-3. **ConnectionEstablished**: Transitions dial states
-4. **OutgoingConnectionError**: Handles connection failures
-5. **Identify Events**: Processes observed address information
-6. **UPnP Events**: Determines NAT traversal capabilities
+### Bootstrap Peer Filtering
 
-## Data Collection and Analysis
-
-### Observed Address Collection
+The module filters out circuit (relay) addresses since direct connectivity testing requires direct connections:
 
 ```rust
-fn insert_observed_address(&mut self, src_peer: PeerId, address: Multiaddr, connection_id: ConnectionId)
+let initial_contacts: Vec<Multiaddr> = initial_contacts
+    .into_iter()
+    .filter(|addr| {
+        !addr.iter().any(|protocol| matches!(protocol, Protocol::P2pCircuit))
+    })
+    .filter(|addr| {
+        addr.iter().any(|protocol| matches!(protocol, Protocol::P2p(_)))
+    })
+    .collect();
 ```
 
-**Collection Strategy:**
-- Associates each observed address with the reporting peer
-- Tracks connection IDs for local adapter mapping
-- Validates address format and reachability
+### Address Consistency Validation
 
-### Completion Detection
+The core reachability logic enforces strict consistency - all peers must observe the same external address:
 
 ```rust
-pub(crate) fn has_dialing_completed(&self) -> bool {
-    // Checks if all dial attempts have reached final states
-    // Accounts for ongoing timeouts and expected responses
+fn get_majority(value: usize) -> usize {
+    if value == 0 { 0 } else { (value / 2) + 1 }  // Requires 4 out of 7
+}
+
+// Require consistent single external address across all observations
+if external_addrs.len() != 1 {
+    error!("Multiple external addresses observed. Terminating the node.");
+    result.terminate = true;
 }
 ```
 
-**Completion Criteria:**
-- No active dial attempts in `Initiated` state
-- All `Connected` states have either received responses or timed out
-- Sufficient data collected for analysis
+**Why This Strictness Matters:**
+- **Predictable NAT behavior**: Multiple addresses indicate problematic NAT configurations
+- **Network stability**: Inconsistent connectivity patterns would cause DHT routing issues  
+- **Simplified implementation**: Single address eliminates complex address selection logic
 
-## Conclusion
+## Design Decisions
 
-The reachability check feature provides essential network connectivity assessment for the Autonomi Network. It automatically determines the optimal networking configuration for each node, improving both performance and reliability. By understanding how it works and how to integrate it properly, developers can ensure their nodes join the network with optimal connectivity settings.
+### Why Terminate Instead of Relay?
 
-For additional support or questions about the reachability check feature, refer to the main project documentation or reach out to the development team.
+The implementation terminates unreachable nodes rather than using relay connections:
+
+- **Network Health**: Only fully capable nodes participate, ensuring robust DHT performance
+- **Performance**: Avoids relay overhead that would impact all network operations  
+- **Simplicity**: Eliminates complex relay management and failure scenarios
+
+### Fault Detection Strategy
+
+The module distinguishes between network issues vs. node problems:
+
+```rust
+pub(crate) fn are_we_faulty(&self) -> bool {
+    // Check if at least one dial attempt was successful
+    let mut faulty = true;
+    for dial_result in self.all_dial_attempts.values() {
+        match dial_result {
+            DialResult::TimedOutAfterConnecting => faulty = false,  // Connected but no dial-back
+            DialResult::SuccessfulDialBack => faulty = false,       // Full success
+            _ => {}
+        }
+    }
+    faulty
+}
+```
+
+If the node successfully connects to peers but they don't dial back, it indicates network connectivity issues rather than node faults. This distinction helps with retry vs. termination decisions.
+
+## Summary
+
+The reachability check provides essential connectivity assessment for the Autonomi Network. Through systematic testing and strict validation, it ensures only nodes with reliable, direct connectivity join the network. The module's design prioritizes network health and stability over accommodating problematic connectivity scenarios.
+
+For additional support or questions, refer to the main project documentation or reach out to the development team.
