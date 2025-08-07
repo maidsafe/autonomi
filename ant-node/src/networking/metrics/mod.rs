@@ -20,6 +20,7 @@ use libp2p::{
     PeerId,
     metrics::{Metrics as Libp2pMetrics, Recorder},
 };
+pub(crate) use metadata::MetadataExtendedRecorder;
 pub(crate) use metadata::MetadataRecorder;
 use prometheus_client::{
     encoding::EncodeLabelSet,
