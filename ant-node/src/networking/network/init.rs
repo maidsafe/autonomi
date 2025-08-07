@@ -8,8 +8,8 @@
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::{
-    MetricsRegistries, metrics::MetadataRecorder, metrics::NetworkMetricsRecorder,
-    metrics::service::run_metrics_server,
+    MetricsRegistries, metrics::MetadataExtendedRecorder, metrics::MetadataRecorder,
+    metrics::NetworkMetricsRecorder, metrics::service::run_metrics_server,
 };
 
 use crate::{
@@ -263,6 +263,12 @@ fn init_swarm_driver(
         let mut metadata_recorder = MetadataRecorder::new(&mut metrics_registries);
         metadata_recorder.register_peer_id(&peer_id);
         metadata_recorder.register_identify_protocol_string(identify_protocol_str.clone());
+        let mut metadata_extended_recorder = MetadataExtendedRecorder::new(&mut metrics_registries);
+        metadata_extended_recorder.register_peer_id(&peer_id);
+        metadata_extended_recorder.register_pid();
+        metadata_extended_recorder.register_bin_version();
+        metadata_extended_recorder.register_root_dir(&config.root_dir);
+        metadata_extended_recorder.register_log_dir(&config.root_dir.join("logs"));
 
         let shutdown_tx = run_metrics_server(metrics_registries, port);
         (Some(metrics_recorder), Some(shutdown_tx))
