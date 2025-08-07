@@ -230,8 +230,23 @@ struct Opt {
     write_older_cache_files: bool,
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(err) = run() {
+        error!("Node failed with error: {err}");
+        eprintln!("Node failed with error: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     color_eyre::install()?;
+
+    // Install panic hook to print panics before exit
+    // We only use eprintln! here to avoid potential issues with logging infrastructure during shutdown
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Node panicked: {panic_info}",);
+    }));
+
     let opt = Opt::parse();
 
     let network_id = if let Some(network_id) = opt.network_id {
