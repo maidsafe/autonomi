@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1754600889775,
+  "lastUpdate": 1754600964357,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -720,6 +720,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 87,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a662a8d5a7ddea04824dabb0806e2ac3edb4610d",
+          "message": "Merge pull request #3153 from maqi/benchmark_charts_correct_download_throughput_calculation\n\nfix(benchmark): correct benchmark chart download throughput calculation",
+          "timestamp": "2025-08-07T22:00:12+01:00",
+          "tree_id": "647a6966063af8f351dcd5cb1d6f433311cfc105",
+          "url": "https://github.com/maidsafe/autonomi/commit/a662a8d5a7ddea04824dabb0806e2ac3edb4610d"
+        },
+        "date": 1754600963528,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 90,
             "unit": "MB"
           }
         ]
