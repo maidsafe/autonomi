@@ -42,6 +42,7 @@ dirs-next = "~2.0.0"
 eyre = "0.6.8"
 file-rotate = "0.7.3"
 futures = "~0.3.13"
+futures-timer = "3.0.3"
 hex = "~0.4.3"
 hkdf = "0.12"
 hyper = { version = "0.14", features = [
@@ -49,6 +50,7 @@ hyper = { version = "0.14", features = [
     "tcp",
     "http1",
 ], optional = true }
+igd-next = "0.16.2"
 itertools = "~0.12.1"
 libp2p = { version = "0.56.0", features = [
     "tokio",
