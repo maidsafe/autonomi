@@ -97,16 +97,20 @@ impl SwarmDriver {
                             reason: TerminateNodeReason::UpnpGatewayNotFound,
                         });
                     }
-                    upnp::behaviour::Event::NewExternalAddr(addr) => {
-                        info!("UPnP: New external address: {addr:?}");
+                    upnp::behaviour::Event::NewExternalAddr { addr, local_addr } => {
+                        info!(
+                            "UPnP: New external address found: {addr:?}, local address: {local_addr:?}"
+                        );
                         self.initial_bootstrap_trigger.upnp_gateway_result_obtained = true;
                     }
                     upnp::behaviour::Event::NonRoutableGateway => {
                         warn!("UPnP gateway is not routable");
                         self.initial_bootstrap_trigger.upnp_gateway_result_obtained = true;
                     }
-                    upnp::behaviour::Event::ExpiredExternalAddr(addr) => {
-                        info!("UPnP: External address expired: {addr:?}");
+                    upnp::behaviour::Event::ExpiredExternalAddr { addr, local_addr } => {
+                        info!(
+                            "UPnP External address expired: {addr:?}, local address: {local_addr:?}"
+                        );
                     }
                 }
             }
