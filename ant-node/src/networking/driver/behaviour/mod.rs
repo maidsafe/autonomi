@@ -7,3 +7,4 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 pub(crate) mod do_not_disturb;
+pub(crate) mod upnp;
