@@ -14,6 +14,7 @@ mod swarm;
 pub(crate) use identify::DIAL_BACK_DELAY;
 
 use crate::networking::NetworkEvent;
+use crate::networking::driver::behaviour::upnp;
 use crate::networking::{
     Addresses, driver::SwarmDriver, error::Result, relay_manager::is_a_relayed_peer,
 };
@@ -62,7 +63,7 @@ impl KBucketStatus {
 /// NodeEvent enum
 #[derive(CustomDebug)]
 pub(crate) enum NodeEvent {
-    Upnp(libp2p::upnp::Event),
+    Upnp(upnp::behaviour::Event),
     MsgReceived(libp2p::request_response::Event<Request, Response>),
     Kademlia(libp2p::kad::Event),
     Identify(Box<libp2p::identify::Event>),
@@ -72,8 +73,8 @@ pub(crate) enum NodeEvent {
     Void(void::Void),
 }
 
-impl From<libp2p::upnp::Event> for NodeEvent {
-    fn from(event: libp2p::upnp::Event) -> Self {
+impl From<upnp::behaviour::Event> for NodeEvent {
+    fn from(event: upnp::behaviour::Event) -> Self {
         NodeEvent::Upnp(event)
     }
 }
