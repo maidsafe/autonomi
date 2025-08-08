@@ -43,7 +43,7 @@ async fn vault_expand() -> Result<()> {
     let original_content = gen_random_data(1024);
 
     let cost = client
-        .write_bytes_to_vault(
+        .vault_put(
             original_content.clone(),
             wallet.clone().into(),
             &main_key,
@@ -52,7 +52,7 @@ async fn vault_expand() -> Result<()> {
         .await?;
     println!("1KB Vault update cost: {cost}");
 
-    let (fetched_content, fetched_content_type) = client.fetch_and_decrypt_vault(&main_key).await?;
+    let (fetched_content, fetched_content_type) = client.vault_get(&main_key).await?;
     println!("1KB Vault fetched");
     assert_eq!(fetched_content_type, content_type);
     assert_eq!(fetched_content, original_content);
@@ -60,7 +60,7 @@ async fn vault_expand() -> Result<()> {
     // Update content to 2KB. Shall not incur any cost.
     let update_content_2_kb = gen_random_data(2 * 1024);
     let cost = client
-        .write_bytes_to_vault(
+        .vault_put(
             update_content_2_kb.clone(),
             wallet.clone().into(),
             &main_key,
@@ -70,7 +70,7 @@ async fn vault_expand() -> Result<()> {
     assert_eq!(cost, AttoTokens::zero());
     println!("2KB Vault update cost: {cost}");
 
-    let (fetched_content, fetched_content_type) = client.fetch_and_decrypt_vault(&main_key).await?;
+    let (fetched_content, fetched_content_type) = client.vault_get(&main_key).await?;
     println!("2KB Vault fetched");
     assert_eq!(fetched_content_type, content_type);
     assert_eq!(fetched_content, update_content_2_kb);
@@ -78,7 +78,7 @@ async fn vault_expand() -> Result<()> {
     // Update content to 10MB. Shall only incur cost paying two extra Scratchpad.
     let update_content_10_mb = gen_random_data(10 * 1024 * 1024);
     let cost = client
-        .write_bytes_to_vault(
+        .vault_put(
             update_content_10_mb.clone(),
             wallet.into(),
             &main_key,
@@ -91,7 +91,7 @@ async fn vault_expand() -> Result<()> {
     // Short break is required to avoid client choked by the last query round
     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
-    let (fetched_content, fetched_content_type) = client.fetch_and_decrypt_vault(&main_key).await?;
+    let (fetched_content, fetched_content_type) = client.vault_get(&main_key).await?;
     println!("10MB Vault fetched");
     assert_eq!(fetched_content_type, content_type);
     assert_eq!(fetched_content, update_content_10_mb);

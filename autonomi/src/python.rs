@@ -986,7 +986,7 @@ impl PyClient {
     /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
     ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
-    fn write_bytes_to_vault<'a>(
+    fn vault_put<'a>(
         &self,
         py: Python<'a>,
         data: Vec<u8>,
@@ -1000,7 +1000,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             match client
-                .write_bytes_to_vault(bytes::Bytes::from(data), payment, &key, content_type)
+                .vault_put(bytes::Bytes::from(data), payment, &key, content_type)
                 .await
             {
                 Ok(cost) => Ok(cost.to_string()),
@@ -1129,7 +1129,7 @@ impl PyClient {
         let key = key.inner.clone();
 
         future_into_py(py, async move {
-            match client.fetch_and_decrypt_vault(&key).await {
+            match client.vault_get(&key).await {
                 Ok((data, content_type)) => Ok((data.to_vec(), content_type)),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to fetch vault: {e}"
@@ -1139,7 +1139,7 @@ impl PyClient {
     }
 
     /// Get the user data from the vault
-    fn get_user_data_from_vault<'a>(
+    fn vault_get_user_data<'a>(
         &self,
         py: Python<'a>,
         key: &PyVaultSecretKey,
@@ -1148,7 +1148,7 @@ impl PyClient {
         let key = key.inner.clone();
 
         future_into_py(py, async move {
-            match client.get_user_data_from_vault(&key).await {
+            match client.vault_get_user_data(&key).await {
                 Ok(user_data) => Ok(PyUserData { inner: user_data }),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to get user data from vault: {e}"
@@ -1160,7 +1160,7 @@ impl PyClient {
     /// Put the user data to the vault.
     ///
     /// Returns the total cost of the put operation.
-    fn put_user_data_to_vault<'a>(
+    fn vault_put_user_data<'a>(
         &self,
         py: Python<'a>,
         key: &PyVaultSecretKey,
@@ -1174,7 +1174,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             match client
-                .put_user_data_to_vault(&key, payment, user_data)
+                .vault_put_user_data(&key, payment, user_data)
                 .await
             {
                 Ok(cost) => Ok(cost.to_string()),
@@ -1183,6 +1183,38 @@ impl PyClient {
                 ))),
             }
         })
+    }
+
+    /// @deprecated Use `vault_put` instead. This function will be removed in a future version.
+    fn write_bytes_to_vault<'a>(
+        &self,
+        py: Python<'a>,
+        data: Vec<u8>,
+        payment: &PyPaymentOption,
+        key: &PyVaultSecretKey,
+        content_type: u64,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_put(py, data, payment, key, content_type)
+    }
+
+    /// @deprecated Use `vault_get_user_data` instead. This function will be removed in a future version.
+    fn get_user_data_from_vault<'a>(
+        &self,
+        py: Python<'a>,
+        key: &PyVaultSecretKey,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_get_user_data(py, key)
+    }
+
+    /// @deprecated Use `vault_put_user_data` instead. This function will be removed in a future version.
+    fn put_user_data_to_vault<'a>(
+        &self,
+        py: Python<'a>,
+        key: &PyVaultSecretKey,
+        payment: &PyPaymentOption,
+        user_data: &PyUserData,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_put_user_data(py, key, payment, user_data)
     }
 
     /// Get a pointer from the network
