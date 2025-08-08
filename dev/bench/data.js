@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1754661998100,
+  "lastUpdate": 1754661999530,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1193,6 +1193,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Average memory usage w/ upload",
             "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b32ac621dd170ef681d4c68d7bf521931613ee67",
+          "message": "Merge pull request #3154 from grumbach/uploads_using_streaming\n\nfeat(client): implement streaming downloads for file_download and fil…",
+          "timestamp": "2025-08-08T13:26:23Z",
+          "tree_id": "21fb6225af9aad10bff49c54883f3317b5379f84",
+          "url": "https://github.com/maidsafe/autonomi/commit/b32ac621dd170ef681d4c68d7bf521931613ee67"
+        },
+        "date": 1754661999173,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 19,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
             "unit": "MB"
           }
         ]
