@@ -343,7 +343,7 @@ fn init_swarm_driver(
 
     let upnp = if !config.local && !config.no_upnp && !config.relay_client {
         debug!("Enabling UPnP port opening behavior");
-        Some(libp2p::upnp::tokio::Behaviour::default())
+        Some(crate::networking::driver::behaviour::upnp::behaviour::Behaviour::default())
     } else {
         None
     }
