@@ -274,11 +274,10 @@ impl NetworkBehaviour for Behaviour {
                     return;
                 };
 
-                if let Some((mapping, _state)) = self
-                    .mappings
-                    .iter()
-                    .find(|(mapping, _state)| mapping.internal_addr.port() == addr.port())
-                {
+                if let Some((mapping, _state)) = self.mappings.iter().find(|(mapping, state)| {
+                    matches!(state, MappingState::Active(_))
+                        && mapping.internal_addr.port() == addr.port()
+                }) {
                     debug!(
                         "Port {} from multiaddress {:?} has already been mapped. Skipping listen_addr {multiaddr:?}",
                         addr.port(),
