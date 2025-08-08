@@ -55,6 +55,58 @@ use crate::{
     register::{RegisterAddress, RegisterHistory},
 };
 
+/// Helper function to convert ScratchpadError to appropriate Python exception
+fn scratchpad_error_to_py_err(
+    error: crate::client::data_types::scratchpad::ScratchpadError,
+) -> PyErr {
+    use crate::client::data_types::scratchpad::ScratchpadError;
+
+    match error {
+        ScratchpadError::Fork(conflicting_scratchpads) => {
+            let py_scratchpads: Vec<PyScratchpad> = conflicting_scratchpads
+                .into_iter()
+                .map(|s| PyScratchpad { inner: s })
+                .collect();
+
+            let message = format!(
+                "Got multiple conflicting scratchpads with the latest version, the fork can be resolved by putting a new scratchpad with a higher counter. Found {} conflicting scratchpads.",
+                py_scratchpads.len()
+            );
+
+            // For now, create a detailed error message that includes the fork information
+            let details: Vec<String> = py_scratchpads
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    format!(
+                        "  Scratchpad {}: Address={}, Counter={}, DataEncoding={}",
+                        i + 1,
+                        s.inner.address().to_hex(),
+                        s.inner.counter(),
+                        s.inner.data_encoding()
+                    )
+                })
+                .collect();
+
+            let max_counter = py_scratchpads
+                .iter()
+                .map(|s| s.inner.counter())
+                .max()
+                .unwrap_or(0);
+
+            let detailed_message = format!(
+                "{}\nConflicting scratchpads:\n{}\nSuggested next counter: {}",
+                message,
+                details.join("\n"),
+                max_counter + 1
+            );
+
+            PyRuntimeError::new_err(detailed_message)
+        }
+        _ => PyRuntimeError::new_err(format!("Scratchpad error: {error}")),
+    }
+}
+
 #[pyclass(name = "AttoTokens")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct PyAttoTokens {
@@ -376,7 +428,7 @@ impl PyClient {
             let scratchpad = client
                 .scratchpad_get_from_public_key(&public_key.inner)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(PyScratchpad { inner: scratchpad })
         })
@@ -394,7 +446,7 @@ impl PyClient {
             let scratchpad = client
                 .scratchpad_get(&addr.inner)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(PyScratchpad { inner: scratchpad })
         })
@@ -412,7 +464,7 @@ impl PyClient {
             let exists = client
                 .scratchpad_check_existence(&addr.inner)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to get scratchpad: {e}")))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(exists)
         })
@@ -432,7 +484,7 @@ impl PyClient {
             let (cost, addr) = client
                 .scratchpad_put(scratchpad.inner, payment)
                 .await
-                .map_err(|e| PyRuntimeError::new_err(format!("Failed to put scratchpad: {e}")))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
@@ -465,9 +517,7 @@ impl PyClient {
                     payment,
                 )
                 .await
-                .map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to create scratchpad: {e}"))
-                })?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
@@ -490,9 +540,7 @@ impl PyClient {
             client
                 .scratchpad_update(&owner.inner, content_type, &Bytes::from(data))
                 .await
-                .map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to update scratchpad: {e}"))
-                })?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(())
         })
@@ -523,9 +571,7 @@ impl PyClient {
                     &Bytes::from(data),
                 )
                 .await
-                .map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to update scratchpad: {e}"))
-                })?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(PyScratchpad {
                 inner: new_scratchpad,
@@ -556,8 +602,7 @@ impl PyClient {
     /// Verify a scratchpad
     #[staticmethod]
     fn scratchpad_verify(scratchpad: &PyScratchpad) -> PyResult<()> {
-        Client::scratchpad_verify(&scratchpad.inner)
-            .map_err(|e| PyRuntimeError::new_err(format!("Failed to verify scratchpad: {e}")))
+        Client::scratchpad_verify(&scratchpad.inner).map_err(scratchpad_error_to_py_err)
     }
 
     /// Get the cost of storing an archive on the network
@@ -4214,6 +4259,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRetryStrategy>()?;
     m.add_class::<PyScratchpad>()?;
     m.add_class::<PyScratchpadAddress>()?;
+
     m.add_class::<PySecretKey>()?;
     m.add_class::<PySignature>()?;
     m.add_class::<PyStoreQuote>()?;
