@@ -55,7 +55,6 @@ itertools = "~0.12.1"
 libp2p = { version = "0.56.0", features = [
     "tokio",
     "dns",
-    "upnp",
     "kad",
     "macros",
     "request-response",
