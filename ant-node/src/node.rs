@@ -237,21 +237,17 @@ impl NodeBuilder {
             match status {
                 Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
                     info!(
-                        "Reachability check: Reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}",
+                        "We are reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}",
                     );
                     println!(
-                        "Reachability check: Reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}.",
+                        "We are reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}.",
                     );
                     address = addr;
                     no_upnp = !upnp;
                 }
-                Ok(ReachabilityStatus::NotRoutable { .. }) => {
-                    info!(
-                        "Reachability check: NotRoutable. Terminating node as we are not externally reachable."
-                    );
-                    println!(
-                        "Reachability check: NotRoutable. Terminating node as we are not externally reachable."
-                    );
+                Ok(ReachabilityStatus::NotRoutable { upnp: _, reason }) => {
+                    info!("We are not routable, reason: {reason}. Terminating the node.");
+                    println!("We are not routable, reason: {reason}. Terminating the node.");
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {
