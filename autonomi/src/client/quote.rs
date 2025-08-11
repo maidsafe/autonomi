@@ -245,7 +245,11 @@ impl Client {
                 for (content_addr, mut quotes) in quotes_per_addr {
                     if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
                         // Find the highest price among all quotes
-                        let highest_price = quotes.iter().map(|(_, _, _, price)| *price).max().unwrap();
+                        let highest_price = quotes
+                            .iter()
+                            .map(|(_, _, _, price)| *price)
+                            .max()
+                            .expect("quotes should not be empty as we checked len >= MINIMUM_QUOTES_TO_PAY");
                         
                         // Collect all nodes with the highest price
                         let highest_price_nodes: Vec<_> = quotes

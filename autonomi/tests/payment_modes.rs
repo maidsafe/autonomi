@@ -127,8 +127,8 @@ async fn test_payment_modes_file_upload() -> Result<()> {
     );
 
     println!("✅ Both payment modes work correctly - files uploaded and downloaded successfully");
-    println!("   Standard mode cost: {}", cost_standard);
-    println!("   SingleNode mode cost: {}", cost_single);
+    println!("   Standard mode cost: {cost_standard}");
+    println!("   SingleNode mode cost: {cost_single}");
     println!("   Standard file size: {} bytes", standard_content.len());
     println!("   SingleNode file size: {} bytes", single_content.len());
 
@@ -205,7 +205,7 @@ async fn test_single_node_payment_verification() -> Result<()> {
     );
 
     println!("✅ SingleNode payment mode upload and download succeeded");
-    println!("   Upload cost: {}", cost);
+    println!("   Upload cost: {cost}");
     println!("   Data address: {}", addr.to_hex());
     println!("   File size: {} bytes", test_content.len());
     println!("✅ Payment verification test completed successfully for SingleNode mode");
@@ -280,7 +280,7 @@ async fn test_standard_payment_verification() -> Result<()> {
     );
 
     println!("✅ Standard payment mode upload and download succeeded");
-    println!("   Upload cost: {}", cost);
+    println!("   Upload cost: {cost}");
     println!("   Data address: {}", addr.to_hex());
     println!("   File size: {} bytes", test_content.len());
     println!("✅ Payment verification test completed successfully for Standard mode");
@@ -333,50 +333,32 @@ async fn test_payment_modes_cost_estimation() -> Result<()> {
     println!("Testing cost estimation for small file with Standard mode");
     let client_standard = client.clone();
     let small_cost_estimate_standard = client_standard.file_cost(&small_file).await?;
-    println!(
-        "Standard mode - Small file cost estimate: {}",
-        small_cost_estimate_standard
-    );
+    println!("Standard mode - Small file cost estimate: {small_cost_estimate_standard}");
 
     // Test 2: Estimate cost for small file with SingleNode mode
     println!("Testing cost estimation for small file with SingleNode mode");
     let client_single = client.clone().with_payment_mode(PaymentMode::SingleNode);
     let small_cost_estimate_single = client_single.file_cost(&small_file).await?;
-    println!(
-        "SingleNode mode - Small file cost estimate: {}",
-        small_cost_estimate_single
-    );
+    println!("SingleNode mode - Small file cost estimate: {small_cost_estimate_single}");
 
     // Test 3: Estimate cost for medium file with both modes
     let medium_cost_estimate_standard = client_standard.file_cost(&medium_file).await?;
     let medium_cost_estimate_single = client_single.file_cost(&medium_file).await?;
-    println!(
-        "Standard mode - Medium file cost estimate: {}",
-        medium_cost_estimate_standard
-    );
-    println!(
-        "SingleNode mode - Medium file cost estimate: {}",
-        medium_cost_estimate_single
-    );
+    println!("Standard mode - Medium file cost estimate: {medium_cost_estimate_standard}");
+    println!("SingleNode mode - Medium file cost estimate: {medium_cost_estimate_single}");
 
     // Test 4: Verify actual upload costs match estimates (with some tolerance)
     // Upload small file with Standard mode and compare with estimate
     let (actual_cost_standard, _) = client_standard
         .file_content_upload_public(small_file.clone(), payment_option.clone())
         .await?;
-    println!(
-        "Standard mode - Small file actual cost: {}",
-        actual_cost_standard
-    );
+    println!("Standard mode - Small file actual cost: {actual_cost_standard}");
 
     // Upload medium file with SingleNode mode and compare with estimate
     let (actual_cost_single, _) = client_single
         .file_content_upload_public(medium_file.clone(), payment_option.clone())
         .await?;
-    println!(
-        "SingleNode mode - Medium file actual cost: {}",
-        actual_cost_single
-    );
+    println!("SingleNode mode - Medium file actual cost: {actual_cost_single}");
 
     // Test 5: Test directory cost estimation
     let test_dir = temp_dir.path().join("test_dir");
@@ -384,7 +366,7 @@ async fn test_payment_modes_cost_estimation() -> Result<()> {
 
     // Create multiple files in the directory
     for i in 0..3 {
-        let file_path = test_dir.join(format!("file_{}.txt", i));
+        let file_path = test_dir.join(format!("file_{i}.txt"));
         let content = format!(
             "File {} - timestamp:{} - random_id:{} - payload:{}",
             i,
@@ -399,14 +381,8 @@ async fn test_payment_modes_cost_estimation() -> Result<()> {
     let dir_cost_estimate_standard = client_standard.file_cost(&test_dir).await?;
     let dir_cost_estimate_single = client_single.file_cost(&test_dir).await?;
 
-    println!(
-        "Standard mode - Directory cost estimate: {}",
-        dir_cost_estimate_standard
-    );
-    println!(
-        "SingleNode mode - Directory cost estimate: {}",
-        dir_cost_estimate_single
-    );
+    println!("Standard mode - Directory cost estimate: {dir_cost_estimate_standard}");
+    println!("SingleNode mode - Directory cost estimate: {dir_cost_estimate_single}");
 
     // Verify cost relationships
     // Medium files should cost more than small files
