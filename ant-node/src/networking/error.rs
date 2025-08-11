@@ -68,6 +68,9 @@ pub enum NetworkError {
     #[error("No listen addresses found")]
     NoListenAddressesFound,
 
+    #[error("Failed to listen on address: {0}")]
+    ListenFailed(libp2p::core::multiaddr::Multiaddr),
+
     // ---------- Record Errors
     #[error("Record not stored by nodes, it could be invalid, else you should retry: {0:?}")]
     RecordNotStoredByNodes(NetworkAddress),

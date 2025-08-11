@@ -11,6 +11,7 @@ use crate::networking::MetricsRegistries;
 use crate::networking::NetworkError;
 use crate::networking::driver::behaviour::upnp;
 use crate::networking::multiaddr_get_socket_addr;
+use crate::networking::network::listen_on_with_retry;
 #[cfg(feature = "open-metrics")]
 use crate::networking::transport;
 use futures::StreamExt;
@@ -56,31 +57,8 @@ pub(crate) async fn get_all_listeners(
     let addr_quic = Multiaddr::from(listen_addr.ip())
         .with(Protocol::Udp(listen_addr.port()))
         .with(Protocol::QuicV1);
-    if listen_addr.port() != 0 {
-        let start_time = std::time::Instant::now();
-        let timeout = Duration::from_secs(300); // 5 minutes
-        loop {
-            match swarm.listen_on(addr_quic.clone()) {
-                Ok(listener_id) => {
-                    let _ = listener_ids.insert(listener_id);
-                    break;
-                }
-                Err(err) => {
-                    error!("Failed to listen on QUIC address {addr_quic:?}: {err}");
-
-                    if start_time.elapsed() > timeout {
-                        panic!("Failed to listen on QUIC address {addr_quic:?} after 5 minutes");
-                    }
-                    std::thread::sleep(Duration::from_secs(1));
-                }
-            }
-        }
-    } else {
-        let listener_id = swarm
-            .listen_on(addr_quic.clone())
-            .expect("Failed to listen on QUIC address");
-        let _ = listener_ids.insert(listener_id);
-    }
+    let listener_id = listen_on_with_retry(&mut swarm, addr_quic.clone())?;
+    let _ = listener_ids.insert(listener_id);
 
     info!("Starting listener swarm to collect all listen addresses.");
 
