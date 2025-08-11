@@ -80,7 +80,7 @@ pub enum FileCmd {
         /// The file to estimate cost for.
         file: String,
         /// Use single node payment mode for cost estimation.
-        #[arg(long)]
+        #[arg(long, short = 's')]
         single_node_payment: bool,
     },
 
@@ -105,7 +105,7 @@ pub enum FileCmd {
         /// Use single node payment mode. Pay only the highest priced node with 10x that amount instead of paying 3 nodes.
         /// Data is still stored on 5 nodes.
         /// This saves on gas fees but increases upload token cost.
-        #[arg(long)]
+        #[arg(long, short = 's')]
         single_node_payment: bool,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
