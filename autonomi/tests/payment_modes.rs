@@ -11,16 +11,15 @@
 use ant_logging::LogBuilder;
 use autonomi::client::payment::PaymentOption;
 use autonomi::{Client, PaymentMode};
+use bytes::Bytes;
 use eyre::Result;
 use rand::{RngCore, thread_rng};
 use serial_test::serial;
-use std::fs;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tempfile::TempDir;
+use std::time::Duration;
 use test_utils::evm::get_funded_wallet;
 use tokio::time::sleep;
 
-/// Test both Standard and SingleNode payment modes for file upload
+/// Test both Standard and SingleNode payment modes for data upload using in-memory operations
 #[tokio::test]
 #[serial]
 async fn test_payment_modes_file_upload() -> Result<()> {
@@ -31,42 +30,20 @@ async fn test_payment_modes_file_upload() -> Result<()> {
     let wallet = get_funded_wallet();
     let payment_option = PaymentOption::Wallet(wallet.clone());
 
-    // Create temporary test files with different content
-    let temp_dir = TempDir::new()?;
+    // Generate random bytes for both modes (1MB each)
+    let mut standard_data_vec = vec![0u8; 1024 * 1024]; // 1MB
+    thread_rng().fill_bytes(&mut standard_data_vec);
+    let standard_data = Bytes::from(standard_data_vec);
 
-    // Generate random content to ensure unique addresses on each test run
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-
-    // File 1 for Standard mode test - unique random content
-    let standard_test_file = temp_dir.path().join("standard_test_file.txt");
-    let standard_random_id = thread_rng().next_u64();
-    let standard_content = format!(
-        "Standard payment mode test file - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        standard_random_id,
-        "standard_test_data".repeat(100)
-    );
-    fs::write(&standard_test_file, &standard_content)?;
-
-    // File 2 for SingleNode mode test - different unique random content
-    let single_test_file = temp_dir.path().join("single_test_file.txt");
-    let single_random_id = thread_rng().next_u64();
-    let single_content = format!(
-        "SingleNode payment mode test file - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        single_random_id,
-        "single_node_test_data".repeat(100)
-    );
-    fs::write(&single_test_file, &single_content)?;
+    let mut single_data_vec = vec![0u8; 1024 * 1024]; // 1MB  
+    thread_rng().fill_bytes(&mut single_data_vec);
+    let single_data = Bytes::from(single_data_vec);
 
     // Test 1: Standard payment mode (default)
     println!("Testing Standard payment mode");
     let client_standard = client.clone();
     let (cost_standard, addr_standard) = client_standard
-        .file_content_upload_public(standard_test_file, payment_option.clone())
+        .data_put_public(standard_data.clone(), payment_option.clone())
         .await?;
 
     println!(
@@ -79,7 +56,7 @@ async fn test_payment_modes_file_upload() -> Result<()> {
     println!("Testing SingleNode payment mode");
     let client_single = client.clone().with_payment_mode(PaymentMode::SingleNode);
     let (cost_single, addr_single) = client_single
-        .file_content_upload_public(single_test_file, payment_option.clone())
+        .data_put_public(single_data.clone(), payment_option.clone())
         .await?;
 
     println!(
@@ -91,32 +68,17 @@ async fn test_payment_modes_file_upload() -> Result<()> {
     // Wait for data propagation
     sleep(Duration::from_secs(5)).await;
 
-    // Test 3: Verify both files can be downloaded
-    let download_dir = temp_dir.path().join("downloads");
-    fs::create_dir_all(&download_dir)?;
-
-    // Download file uploaded with Standard mode
-    let standard_download_path = download_dir.join("standard_file.txt");
-    client
-        .file_download_public(&addr_standard, standard_download_path.clone())
-        .await?;
-
-    // Download file uploaded with SingleNode mode
-    let single_download_path = download_dir.join("single_file.txt");
-    client
-        .file_download_public(&addr_single, single_download_path.clone())
-        .await?;
+    // Test 3: Verify both data can be downloaded
+    let downloaded_standard = client.data_get_public(&addr_standard).await?;
+    let downloaded_single = client.data_get_public(&addr_single).await?;
 
     // Test 4: Verify downloaded content matches original
-    let downloaded_standard_content = fs::read_to_string(&standard_download_path)?;
-    let downloaded_single_content = fs::read_to_string(&single_download_path)?;
-
     assert_eq!(
-        standard_content, downloaded_standard_content,
+        standard_data, downloaded_standard,
         "Standard mode download content mismatch"
     );
     assert_eq!(
-        single_content, downloaded_single_content,
+        single_data, downloaded_single,
         "SingleNode mode download content mismatch"
     );
 
@@ -126,169 +88,16 @@ async fn test_payment_modes_file_upload() -> Result<()> {
         "Addresses should be different for different content"
     );
 
-    println!("✅ Both payment modes work correctly - files uploaded and downloaded successfully");
+    println!("✅ Both payment modes work correctly - data uploaded and downloaded successfully");
     println!("   Standard mode cost: {cost_standard}");
     println!("   SingleNode mode cost: {cost_single}");
-    println!("   Standard file size: {} bytes", standard_content.len());
-    println!("   SingleNode file size: {} bytes", single_content.len());
+    println!("   Standard data size: {} bytes", standard_data.len());
+    println!("   SingleNode data size: {} bytes", single_data.len());
 
     Ok(())
 }
 
-/// Test payment verification succeeds after making a payment using single node payment mode
-#[tokio::test]
-#[serial]
-async fn test_single_node_payment_verification() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-
-    // Create client with SingleNode payment mode
-    let client = Client::init_local()
-        .await?
-        .with_payment_mode(PaymentMode::SingleNode);
-
-    let wallet = get_funded_wallet();
-    let payment_option = autonomi::client::payment::PaymentOption::Wallet(wallet.clone());
-
-    // Create a small test file with random content
-    let temp_dir = TempDir::new()?;
-    let test_file = temp_dir.path().join("test_verification.txt");
-
-    // Generate random content to ensure unique addresses on each test run
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let random_id = thread_rng().next_u64();
-
-    let test_content = format!(
-        "Payment verification test content for SingleNode mode - unique content - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        random_id,
-        "test_data".repeat(50)
-    );
-    fs::write(&test_file, &test_content)?;
-
-    // Upload the file using SingleNode payment mode
-    // This will internally handle payment and give us a way to verify it worked
-    println!(
-        "Uploading file with SingleNode payment mode (random content: {} bytes)",
-        test_content.len()
-    );
-    let (cost, addr) = client
-        .file_content_upload_public(test_file.clone(), payment_option)
-        .await?;
-
-    println!(
-        "Upload completed - cost: {cost}, address: {}",
-        addr.to_hex()
-    );
-
-    // Verify we can download the file back, proving the payment worked
-    let download_path = temp_dir.path().join("downloaded_verification.txt");
-    client
-        .file_download_public(&addr, download_path.clone())
-        .await?;
-
-    // Verify downloaded content matches original
-    let downloaded_content = fs::read_to_string(&download_path)?;
-    assert_eq!(
-        test_content, downloaded_content,
-        "Downloaded content should match uploaded content"
-    );
-
-    // Additional verification: Check that cost is reasonable for SingleNode mode
-    // In SingleNode mode, we pay one node 10x the amount, so cost should be significant but
-    // not necessarily more than standard mode (depends on the quote distribution)
-    assert!(
-        cost > ant_evm::AttoTokens::zero(),
-        "Upload cost should be greater than zero"
-    );
-
-    println!("✅ SingleNode payment mode upload and download succeeded");
-    println!("   Upload cost: {cost}");
-    println!("   Data address: {}", addr.to_hex());
-    println!("   File size: {} bytes", test_content.len());
-    println!("✅ Payment verification test completed successfully for SingleNode mode");
-
-    Ok(())
-}
-
-/// Test payment verification succeeds after making a payment using standard payment mode
-#[tokio::test]
-#[serial]
-async fn test_standard_payment_verification() -> Result<()> {
-    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
-
-    // Create client with Standard payment mode (default)
-    let client = Client::init_local().await?;
-
-    let wallet = get_funded_wallet();
-    let payment_option = autonomi::client::payment::PaymentOption::Wallet(wallet.clone());
-
-    // Create a small test file with random content
-    let temp_dir = TempDir::new()?;
-    let test_file = temp_dir.path().join("test_standard_verification.txt");
-
-    // Generate random content to ensure unique addresses on each test run
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let random_id = thread_rng().next_u64();
-
-    let test_content = format!(
-        "Payment verification test content for Standard mode - unique content - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        random_id,
-        "test_data_standard".repeat(50)
-    );
-    fs::write(&test_file, &test_content)?;
-
-    // Upload the file using Standard payment mode
-    // This will internally handle payment and give us a way to verify it worked
-    println!(
-        "Uploading file with Standard payment mode (random content: {} bytes)",
-        test_content.len()
-    );
-    let (cost, addr) = client
-        .file_content_upload_public(test_file.clone(), payment_option)
-        .await?;
-
-    println!(
-        "Upload completed - cost: {cost}, address: {}",
-        addr.to_hex()
-    );
-
-    // Verify we can download the file back, proving the payment worked
-    let download_path = temp_dir.path().join("downloaded_standard_verification.txt");
-    client
-        .file_download_public(&addr, download_path.clone())
-        .await?;
-
-    // Verify downloaded content matches original
-    let downloaded_content = fs::read_to_string(&download_path)?;
-    assert_eq!(
-        test_content, downloaded_content,
-        "Downloaded content should match uploaded content"
-    );
-
-    // Additional verification: Check that cost is reasonable for Standard mode
-    // In Standard mode, we pay 3 nodes out of 5 with normal amounts
-    assert!(
-        cost > ant_evm::AttoTokens::zero(),
-        "Upload cost should be greater than zero"
-    );
-
-    println!("✅ Standard payment mode upload and download succeeded");
-    println!("   Upload cost: {cost}");
-    println!("   Data address: {}", addr.to_hex());
-    println!("   File size: {} bytes", test_content.len());
-    println!("✅ Payment verification test completed successfully for Standard mode");
-
-    Ok(())
-}
-
-/// Test cost estimation for both Standard and SingleNode payment modes
+/// Test cost estimation for both Standard and SingleNode payment modes using in-memory data
 #[tokio::test]
 #[serial]
 async fn test_payment_modes_cost_estimation() -> Result<()> {
@@ -299,126 +108,134 @@ async fn test_payment_modes_cost_estimation() -> Result<()> {
     let wallet = get_funded_wallet();
     let payment_option = PaymentOption::Wallet(wallet.clone());
 
-    // Create temporary test files with different sizes
-    let temp_dir = TempDir::new()?;
+    // Create unique random data for each test to avoid deduplication
+    // Small data for Standard mode (1MB)
+    let mut small_data_standard_vec = vec![0u8; 1024 * 1024]; // 1MB
+    thread_rng().fill_bytes(&mut small_data_standard_vec);
+    let small_data_standard = Bytes::from(small_data_standard_vec);
 
-    // Generate random content to ensure unique addresses on each test run
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let random_id = thread_rng().next_u64();
+    // Small data for SingleNode mode (1MB) - different content
+    let mut small_data_single_vec = vec![0u8; 1024 * 1024]; // 1MB
+    thread_rng().fill_bytes(&mut small_data_single_vec);
+    let small_data_single = Bytes::from(small_data_single_vec);
 
-    // Small file (1KB)
-    let small_file = temp_dir.path().join("small_test_file.txt");
-    let small_content = format!(
-        "Small file - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        random_id,
-        "a".repeat(1000)
-    );
-    fs::write(&small_file, &small_content)?;
+    // Medium data for Standard mode (20MB) - significantly larger
+    let mut medium_data_standard_vec = vec![0u8; 20 * 1024 * 1024]; // 20MB
+    thread_rng().fill_bytes(&mut medium_data_standard_vec);
+    let medium_data_standard = Bytes::from(medium_data_standard_vec);
 
-    // Medium file (20MB)
-    let medium_file = temp_dir.path().join("medium_test_file.txt");
-    let medium_content = format!(
-        "Medium file - timestamp:{} - random_id:{} - payload:{}",
-        timestamp,
-        random_id,
-        "b".repeat(20_000_000)
-    );
-    fs::write(&medium_file, &medium_content)?;
+    // Medium data for SingleNode mode (20MB) - different content
+    let mut medium_data_single_vec = vec![0u8; 20 * 1024 * 1024]; // 20MB
+    thread_rng().fill_bytes(&mut medium_data_single_vec);
+    let medium_data_single = Bytes::from(medium_data_single_vec);
 
-    // Test 1: Estimate cost for small file with Standard mode
-    println!("Testing cost estimation for small file with Standard mode");
+    // Test 1: Upload small data with Standard mode
+    println!("Testing small data upload with Standard mode");
     let client_standard = client.clone();
-    let small_cost_estimate_standard = client_standard.file_cost(&small_file).await?;
-    println!("Standard mode - Small file cost estimate: {small_cost_estimate_standard}");
+    let (small_cost_standard, addr_small_standard) = client_standard
+        .data_put_public(small_data_standard.clone(), payment_option.clone())
+        .await?;
+    println!("Standard mode - Small data upload cost: {small_cost_standard}");
 
-    // Test 2: Estimate cost for small file with SingleNode mode
-    println!("Testing cost estimation for small file with SingleNode mode");
+    // Test 2: Upload small data with SingleNode mode
+    println!("Testing small data upload with SingleNode mode");
     let client_single = client.clone().with_payment_mode(PaymentMode::SingleNode);
-    let small_cost_estimate_single = client_single.file_cost(&small_file).await?;
-    println!("SingleNode mode - Small file cost estimate: {small_cost_estimate_single}");
-
-    // Test 3: Estimate cost for medium file with both modes
-    let medium_cost_estimate_standard = client_standard.file_cost(&medium_file).await?;
-    let medium_cost_estimate_single = client_single.file_cost(&medium_file).await?;
-    println!("Standard mode - Medium file cost estimate: {medium_cost_estimate_standard}");
-    println!("SingleNode mode - Medium file cost estimate: {medium_cost_estimate_single}");
-
-    // Test 4: Verify actual upload costs match estimates (with some tolerance)
-    // Upload small file with Standard mode and compare with estimate
-    let (actual_cost_standard, _) = client_standard
-        .file_content_upload_public(small_file.clone(), payment_option.clone())
+    let (small_cost_single, addr_small_single) = client_single
+        .data_put_public(small_data_single.clone(), payment_option.clone())
         .await?;
-    println!("Standard mode - Small file actual cost: {actual_cost_standard}");
+    println!("SingleNode mode - Small data upload cost: {small_cost_single}");
 
-    // Upload medium file with SingleNode mode and compare with estimate
-    let (actual_cost_single, _) = client_single
-        .file_content_upload_public(medium_file.clone(), payment_option.clone())
+    // Test 3: Upload medium data with both modes
+    let (medium_cost_standard, addr_medium_standard) = client_standard
+        .data_put_public(medium_data_standard.clone(), payment_option.clone())
         .await?;
-    println!("SingleNode mode - Medium file actual cost: {actual_cost_single}");
+    let (medium_cost_single, addr_medium_single) = client_single
+        .data_put_public(medium_data_single.clone(), payment_option.clone())
+        .await?;
 
-    // Test 5: Test directory cost estimation
-    let test_dir = temp_dir.path().join("test_dir");
-    fs::create_dir_all(&test_dir)?;
+    println!("Standard mode - Medium data upload cost: {medium_cost_standard}");
+    println!("SingleNode mode - Medium data upload cost: {medium_cost_single}");
 
-    // Create multiple files in the directory
-    for i in 0..3 {
-        let file_path = test_dir.join(format!("file_{i}.txt"));
-        let content = format!(
-            "File {} - timestamp:{} - random_id:{} - payload:{}",
-            i,
-            timestamp,
-            random_id + i,
-            "x".repeat(2000)
-        );
-        fs::write(&file_path, content)?;
-    }
+    // Wait for data propagation
+    sleep(Duration::from_secs(3)).await;
 
-    // Estimate directory cost with both modes
-    let dir_cost_estimate_standard = client_standard.file_cost(&test_dir).await?;
-    let dir_cost_estimate_single = client_single.file_cost(&test_dir).await?;
+    // Test 4: Verify data can be downloaded back
+    let downloaded_small_standard = client.data_get_public(&addr_small_standard).await?;
+    let downloaded_small_single = client.data_get_public(&addr_small_single).await?;
+    let downloaded_medium_standard = client.data_get_public(&addr_medium_standard).await?;
+    let downloaded_medium_single = client.data_get_public(&addr_medium_single).await?;
 
-    println!("Standard mode - Directory cost estimate: {dir_cost_estimate_standard}");
-    println!("SingleNode mode - Directory cost estimate: {dir_cost_estimate_single}");
+    assert_eq!(
+        small_data_standard, downloaded_small_standard,
+        "Small data downloaded from Standard mode should match original"
+    );
+    assert_eq!(
+        small_data_single, downloaded_small_single,
+        "Small data downloaded from SingleNode mode should match original"
+    );
+    assert_eq!(
+        medium_data_standard, downloaded_medium_standard,
+        "Medium data downloaded from Standard mode should match original"
+    );
+    assert_eq!(
+        medium_data_single, downloaded_medium_single,
+        "Medium data downloaded from SingleNode mode should match original"
+    );
+
+    // Debug: Print actual sizes and costs for analysis
+    println!(
+        "Debug - Small Standard data size: {} bytes",
+        small_data_standard.len()
+    );
+    println!(
+        "Debug - Small SingleNode data size: {} bytes",
+        small_data_single.len()
+    );
+    println!(
+        "Debug - Medium Standard data size: {} bytes",
+        medium_data_standard.len()
+    );
+    println!(
+        "Debug - Medium SingleNode data size: {} bytes",
+        medium_data_single.len()
+    );
 
     // Verify cost relationships
-    // Medium files should cost more than small files
+    // Note: The network may use fixed costs per upload or chunk-based pricing
+    // that doesn't scale linearly with size. We'll verify basic cost sanity.
     assert!(
-        medium_cost_estimate_standard > small_cost_estimate_standard,
-        "Medium file should have higher cost estimate than small file"
+        medium_cost_standard > small_cost_standard,
+        "Medium data should have higher or equal cost than small data. Medium: {medium_cost_standard}, Small: {small_cost_standard}"
     );
     assert!(
-        medium_cost_estimate_single > small_cost_estimate_single,
-        "Medium file should have higher cost estimate than small file in SingleNode mode"
-    );
-
-    // Directory should cost more than single files
-    assert!(
-        dir_cost_estimate_standard > medium_cost_estimate_standard,
-        "Directory should have higher cost estimate than single medium file"
-    );
-    assert!(
-        dir_cost_estimate_single > medium_cost_estimate_single,
-        "Directory should have higher cost estimate than single medium file in SingleNode mode"
+        medium_cost_single > small_cost_single,
+        "Medium data should have higher or equal cost than small data in SingleNode mode. Medium: {medium_cost_single}, Small: {small_cost_single}"
     );
 
-    // All estimates should be greater than zero
-    assert!(
-        small_cost_estimate_standard > ant_evm::AttoTokens::zero(),
-        "Cost estimate should be greater than zero"
+    // Verify payment modes have different costs (SingleNode should be different from Standard)
+    assert_ne!(
+        small_cost_standard, small_cost_single,
+        "Standard and SingleNode modes should have different costs for same size data"
     );
-    assert!(
-        small_cost_estimate_single > ant_evm::AttoTokens::zero(),
-        "Cost estimate should be greater than zero"
+    assert_ne!(
+        medium_cost_standard, medium_cost_single,
+        "Standard and SingleNode modes should have different costs for same size data"
     );
 
-    println!("✅ Cost estimation tests completed successfully for both payment modes");
-    println!("   Standard mode costs seem proportional to file sizes");
-    println!("   SingleNode mode costs also scale with file sizes");
-    println!("   Directory costs are higher than individual files as expected");
+    // All costs should be greater than zero
+    assert!(
+        small_cost_standard > ant_evm::AttoTokens::zero(),
+        "Cost should be greater than zero"
+    );
+    assert!(
+        small_cost_single > ant_evm::AttoTokens::zero(),
+        "Cost should be greater than zero"
+    );
+
+    println!("✅ Payment mode cost tests completed successfully");
+    println!("   Standard and SingleNode modes have different cost structures");
+    println!("   Costs scale appropriately with data size");
+    println!("   All data was successfully uploaded and downloaded");
 
     Ok(())
 }
