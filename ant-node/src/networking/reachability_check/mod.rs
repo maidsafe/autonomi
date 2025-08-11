@@ -15,6 +15,7 @@ use futures::StreamExt;
 use libp2p::core::ConnectedPoint;
 use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
+use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionId, DialError};
 use libp2p::{Multiaddr, identify};
@@ -78,7 +79,7 @@ impl ReachabilityStatus {
 #[derive(NetworkBehaviour)]
 #[behaviour(to_swarm = "ReachabilityCheckEvent")]
 pub(crate) struct ReachabilityCheckBehaviour {
-    pub(super) upnp: upnp::behaviour::Behaviour,
+    pub(super) upnp: Toggle<upnp::behaviour::Behaviour>,
     pub(super) identify: libp2p::identify::Behaviour,
 }
 
@@ -120,12 +121,13 @@ impl ReachabilityCheckSwarmDriver {
         local: bool,
         listen_addr: SocketAddr,
         initial_contacts: Vec<Multiaddr>,
+        no_upnp: bool,
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Result<Self, NetworkError> {
         let mut swarm = swarm;
 
         println!("Obtaining valid listen addresses for reachability check");
-        let observed_listeners = get_all_listeners(keypair, local, listen_addr).await?;
+        let observed_listeners = get_all_listeners(keypair, local, listen_addr, no_upnp).await?;
 
         if observed_listeners.is_empty() {
             error!("No listen addresses found. Cannot start reachability check.");

@@ -18,6 +18,7 @@ use futures::StreamExt;
 use libp2p::Transport;
 use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
+use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::{Multiaddr, PeerId};
 use libp2p::{Swarm, swarm::SwarmEvent};
 use std::collections::HashSet;
@@ -32,6 +33,7 @@ pub(crate) async fn get_all_listeners(
     keypair: &Keypair,
     local: bool,
     listen_addr: SocketAddr,
+    no_upnp: bool,
 ) -> Result<HashSet<SocketAddr>, NetworkError> {
     let peer_id = PeerId::from(keypair.public());
 
@@ -48,9 +50,13 @@ pub(crate) async fn get_all_listeners(
         transport
     };
 
-    let upnp_behaviour = upnp::behaviour::Behaviour::default();
+    let behaviour: Toggle<upnp::behaviour::Behaviour> = if !no_upnp {
+        Some(upnp::behaviour::Behaviour::default()).into()
+    } else {
+        None.into()
+    };
     let swarm_config = libp2p::swarm::Config::with_tokio_executor();
-    let mut swarm = Swarm::new(transport, upnp_behaviour, peer_id, swarm_config);
+    let mut swarm = Swarm::new(transport, behaviour, peer_id, swarm_config);
     let mut listener_ids = HashSet::new();
 
     // Listen on QUIC
