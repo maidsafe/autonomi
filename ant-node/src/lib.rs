@@ -48,8 +48,8 @@ pub use self::{
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
-    networking::ReachabilityStatus,
     networking::sort_peers_by_key,
+    networking::{ReachabilityIssue, ReachabilityStatus},
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
 

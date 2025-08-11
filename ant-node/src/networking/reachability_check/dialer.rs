@@ -210,7 +210,7 @@ impl DialManager {
     }
 
     /// Check if we can perform a new dial attempt.
-    pub(crate) fn can_we_perform_new_dial(&self) -> bool {
+    pub(crate) fn can_dial_new_peer(&self) -> bool {
         self.dialer.ongoing_dial_attempts.len() < MAX_CONCURRENT_DIALS
     }
 
@@ -242,7 +242,7 @@ impl DialManager {
     }
 
     /// Check if we are faulty.
-    pub(crate) fn are_we_faulty(&self) -> bool {
+    pub(crate) fn is_faulty(&self) -> bool {
         if !self.has_dialing_completed() {
             warn!("Dialing has not completed yet. We are not faulty.");
             return false;

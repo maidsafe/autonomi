@@ -90,6 +90,8 @@ pub(super) fn get_reachability_status_metric(
 
 #[cfg(test)]
 mod tests {
+    use crate::networking::ReachabilityIssue;
+
     use super::*;
     use std::net::SocketAddr;
 
@@ -193,7 +195,10 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_routable_without_upnp() {
-        let status = ReachabilityStatus::NotRoutable { upnp: false };
+        let status = ReachabilityStatus::NotRoutable {
+            upnp: false,
+            reason: ReachabilityIssue::NoDialBacks,
+        };
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Only NotRoutable should be 1, UpnP should be 0
@@ -202,7 +207,10 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_routable_with_upnp() {
-        let status = ReachabilityStatus::NotRoutable { upnp: true };
+        let status = ReachabilityStatus::NotRoutable {
+            upnp: true,
+            reason: ReachabilityIssue::NoDialBacks,
+        };
         let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
 
         // Both NotRoutable and UpnPSupported should be 1
@@ -227,11 +235,17 @@ mod tests {
         // Test all combinations of status with UPnP enabled/disabled
         let test_cases = vec![
             (
-                ReachabilityStatus::NotRoutable { upnp: true },
+                ReachabilityStatus::NotRoutable {
+                    upnp: true,
+                    reason: ReachabilityIssue::NoDialBacks,
+                },
                 "NotRoutable with UPnP",
             ),
             (
-                ReachabilityStatus::NotRoutable { upnp: false },
+                ReachabilityStatus::NotRoutable {
+                    upnp: false,
+                    reason: ReachabilityIssue::NoDialBacks,
+                },
                 "NotRoutable without UPnP",
             ),
             (
