@@ -19,6 +19,16 @@ use libp2p::PeerId;
 use std::collections::HashMap;
 use xor_name::XorName;
 
+/// Payment strategy for uploads
+#[derive(Debug, Clone, Copy, Default)]
+pub enum PaymentMode {
+    /// Default mode: Pay 3 nodes out of 5 (2 get free copies)
+    #[default]
+    Standard,
+    /// Alternative mode: Pay only the highest priced node with 10x that amount
+    SingleNode,
+}
+
 // todo: limit depends per RPC endpoint. We should make this configurable
 // todo: test the limit for the Arbitrum One public RPC endpoint
 // Working limit of the Arbitrum Sepolia public RPC endpoint
@@ -195,35 +205,100 @@ impl Client {
 
         let mut quotes_to_pay_per_addr = HashMap::new();
 
-        const MINIMUM_QUOTES_TO_PAY: usize = 5;
+        match self.payment_mode {
+            PaymentMode::Standard => {
+                const MINIMUM_QUOTES_TO_PAY: usize = 5;
 
-        for (content_addr, quotes) in quotes_per_addr {
-            if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
-                let (p1, q1, a1, _) = &quotes[0];
-                let (p2, q2, a2, _) = &quotes[1];
+                for (content_addr, quotes) in quotes_per_addr {
+                    if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
+                        let (p1, q1, a1, _) = &quotes[0];
+                        let (p2, q2, a2, _) = &quotes[1];
 
-                let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
-                trace!("Peers to pay for {content_addr}: {peer_ids:?}");
-                quotes_to_pay_per_addr.insert(
-                    content_addr,
-                    QuoteForAddress(vec![
-                        (*p1, q1.clone(), a1.clone(), Amount::ZERO),
-                        (*p2, q2.clone(), a2.clone(), Amount::ZERO),
-                        quotes[2].clone(),
-                        quotes[3].clone(),
-                        quotes[4].clone(),
-                    ]),
-                );
-            } else {
-                error!(
-                    "Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}",
-                    quotes.len()
-                );
-                return Err(CostError::NotEnoughNodeQuotes {
-                    content_addr,
-                    got: quotes.len(),
-                    required: MINIMUM_QUOTES_TO_PAY,
-                });
+                        let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
+                        trace!("Peers to pay for {content_addr}: {peer_ids:?}");
+                        quotes_to_pay_per_addr.insert(
+                            content_addr,
+                            QuoteForAddress(vec![
+                                (*p1, q1.clone(), a1.clone(), Amount::ZERO),
+                                (*p2, q2.clone(), a2.clone(), Amount::ZERO),
+                                quotes[2].clone(),
+                                quotes[3].clone(),
+                                quotes[4].clone(),
+                            ]),
+                        );
+                    } else {
+                        error!(
+                            "Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}",
+                            quotes.len()
+                        );
+                        return Err(CostError::NotEnoughNodeQuotes {
+                            content_addr,
+                            got: quotes.len(),
+                            required: MINIMUM_QUOTES_TO_PAY,
+                        });
+                    }
+                }
+            }
+            PaymentMode::SingleNode => {
+                const MINIMUM_QUOTES_TO_PAY: usize = 5;
+
+                for (content_addr, mut quotes) in quotes_per_addr {
+                    if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
+                        // Find the highest price among all quotes
+                        let highest_price = quotes.iter().map(|(_, _, _, price)| *price).max().unwrap();
+                        
+                        // Collect all nodes with the highest price
+                        let highest_price_nodes: Vec<_> = quotes
+                            .iter()
+                            .filter(|(_, _, _, price)| *price == highest_price)
+                            .cloned()
+                            .collect();
+                        
+                        // Pick the first one (deterministic) to pay
+                        // In case of ties, we'll pay the one that appears first in the sorted list
+                        let node_to_pay = highest_price_nodes[0].0;
+                        let enhanced_price = highest_price * Amount::from(10u64);
+                        
+                        // Sort by distance to maintain the closest 5 nodes
+                        quotes.sort_by_key(|(peer_id, _, _, _)| {
+                            NetworkAddress::from(*peer_id).distance(&NetworkAddress::from(ChunkAddress::new(content_addr)))
+                        });
+                        
+                        // Build the payment list with only one highest priced node getting paid
+                        let mut payment_list = Vec::new();
+                        let mut paid_node = false;
+                        
+                        for (i, (peer_id, addrs, quote, original_price)) in quotes.iter().take(5).enumerate() {
+                            if *peer_id == node_to_pay && !paid_node {
+                                // This is the selected highest priced node - pay it 10x
+                                payment_list.push((*peer_id, addrs.clone(), quote.clone(), enhanced_price));
+                                trace!("Single peer to pay for {content_addr}: {peer_id:?} (position {}) with price {enhanced_price} (10x of {highest_price})", i + 1);
+                                paid_node = true;
+                            } else {
+                                // Other nodes store but don't get paid
+                                payment_list.push((*peer_id, addrs.clone(), quote.clone(), Amount::ZERO));
+                                if *original_price == highest_price && *peer_id != node_to_pay {
+                                    trace!("Node {peer_id:?} also has highest price {highest_price} but won't be paid");
+                                }
+                            }
+                        }
+
+                        quotes_to_pay_per_addr.insert(
+                            content_addr,
+                            QuoteForAddress(payment_list),
+                        );
+                    } else {
+                        error!(
+                            "Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}",
+                            quotes.len()
+                        );
+                        return Err(CostError::NotEnoughNodeQuotes {
+                            content_addr,
+                            got: quotes.len(),
+                            required: MINIMUM_QUOTES_TO_PAY,
+                        });
+                    }
+                }
             }
         }
 
