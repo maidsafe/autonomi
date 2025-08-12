@@ -18,9 +18,7 @@ use crate::{
         CLOSE_GROUP_SIZE, NetworkEvent,
         bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
         circular_vec::CircularVec,
-        driver::{
-            NodeBehaviour, SwarmDriver, behaviour::upnp, network_discovery::NetworkDiscovery,
-        },
+        driver::{NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery},
         error::{NetworkError, Result},
         external_address::ExternalAddressManager,
         reachability_check::{ReachabilityCheckBehaviour, ReachabilityCheckSwarmDriver},
@@ -47,7 +45,7 @@ use libp2p::{
     request_response::{
         self, Config as RequestResponseConfig, ProtocolSupport, cbor::codec::Codec as CborCodec,
     },
-    swarm::{StreamProtocol, Swarm, behaviour::toggle::Toggle},
+    swarm::{StreamProtocol, Swarm},
 };
 use libp2p::{Transport as _, core::transport::ListenerId};
 use libp2p::{core::muxing::StreamMuxerBox, relay};
@@ -541,12 +539,7 @@ pub(crate) async fn init_reachability_check_swarm(
         libp2p::identify::Behaviour::new(cfg)
     };
 
-    let upnp: Toggle<upnp::behaviour::Behaviour> = if !config.no_upnp {
-        Some(upnp::behaviour::Behaviour::default()).into()
-    } else {
-        None.into()
-    };
-    let behaviour = ReachabilityCheckBehaviour { upnp, identify };
+    let behaviour = ReachabilityCheckBehaviour { identify };
 
     let swarm_config = libp2p::swarm::Config::with_tokio_executor()
         .with_idle_connection_timeout(CONNECTION_KEEP_ALIVE_TIMEOUT);
