@@ -29,7 +29,10 @@ use tracing::{debug, error, info};
 /// Timeout for collecting listen addresses. The timer resets each time a new address is discovered.
 const COLLECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Run a dummy swarm to collect all listen addresses.
+/// Run the swarm to collect all listen addresses.
+/// If UPnP is supported, we just return that single address. This also creates/renews the mapping for that address and
+/// hence we would not need to support the upnp behaviour inside the actual ReachabilityCheckBehaviour.
+///
 /// This is used to determine the addresses the node is listening on, which is useful for
 /// reachability checks and other network operations.
 pub(crate) async fn get_all_listeners(
@@ -37,7 +40,7 @@ pub(crate) async fn get_all_listeners(
     local: bool,
     listen_addr: SocketAddr,
     no_upnp: bool,
-) -> Result<HashSet<SocketAddr>, NetworkError> {
+) -> Result<(HashSet<SocketAddr>, bool), NetworkError> {
     let peer_id = PeerId::from(keypair.public());
 
     #[cfg(feature = "open-metrics")]
@@ -106,7 +109,7 @@ pub(crate) async fn get_all_listeners(
                             "UPnP mapped external address: {addr} for local address {local_addr}. Returning the local address as the only listen address."
                         );
                         if let Some(socket_addr) = multiaddr_get_socket_addr(&local_addr) {
-                            return Ok(HashSet::from([socket_addr]));
+                            return Ok((HashSet::from([socket_addr]), true));
                         } else {
                             error!("Failed to parse socket address from UPnP address {addr:?}");
                         }
@@ -163,5 +166,5 @@ pub(crate) async fn get_all_listeners(
         addresses
     );
 
-    Ok(addresses)
+    Ok((addresses, false))
 }
