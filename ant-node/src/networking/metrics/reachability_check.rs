@@ -6,82 +6,69 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::ReachabilityStatus;
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
     metrics::{family::Family, gauge::Gauge},
 };
 
-use crate::ReachabilityStatus;
-
-/// Public input for the reachability check metric.
-pub(crate) enum ReachabilityStatusMetric {
-    Ongoing,
-    Status(ReachabilityStatus),
-    NotPerformed,
-}
-
 #[derive(EncodeLabelSet, Hash, Clone, Eq, PartialEq, Debug)]
-pub(super) struct ReachabilityStatusLabelSet {
-    status: ReachabilityStatusLabelValue,
+pub(super) struct ReachabilityAdapterLabelSet {
+    mode: ReachabilityAdapterLabelValue,
 }
 
 #[derive(EncodeLabelValue, Hash, Clone, Eq, PartialEq, Debug)]
-pub(super) enum ReachabilityStatusLabelValue {
-    NotPerformed,
-    Ongoing,
-    Reachable,
-    NotRoutable,
-    UPnPSupported,
+pub(super) enum ReachabilityAdapterLabelValue {
+    /// The external address is same as the local adapter address.
+    Public,
+    /// The external address is different from the local adapter address.
+    Private,
+    /// UPnP is supported.
+    UPnP,
 }
 
-pub(super) fn get_reachability_status_metric(
-    metric: ReachabilityStatusMetric,
-) -> Family<ReachabilityStatusLabelSet, Gauge> {
-    let family: Family<ReachabilityStatusLabelSet, Gauge> = Family::default();
+/// Used to denote the Reachable / NotReachable status of the node.
+/// The modes denote if the external address is the same as the local adapter address and if UPnP is supported.
+///
+/// If all three are 0, then we are unreachable or reachability is not performed / in progress
+/// If any of the three is 1, then we are reachable.
+///
+/// The progress of the reachability check is tracked via a different metric value.
+pub(super) fn get_reachability_adapter_metric(
+    metric: &Option<ReachabilityStatus>,
+) -> Family<ReachabilityAdapterLabelSet, Gauge> {
+    let family: Family<ReachabilityAdapterLabelSet, Gauge> = Family::default();
 
-    let mut not_performed = false;
-    let mut ongoing = false;
-    let mut reachable = false;
-    let mut not_routable = false;
+    let mut public = false;
+    let mut private = false;
     let mut upnp_supported = false;
 
-    match metric {
-        ReachabilityStatusMetric::NotPerformed => not_performed = true,
-        ReachabilityStatusMetric::Ongoing => {
-            ongoing = true;
-        }
-        ReachabilityStatusMetric::Status(status) => {
-            reachable = status.is_reachable();
-            not_routable = status.is_not_reachable();
-            upnp_supported = status.upnp_supported();
-        }
+    if let Some(ReachabilityStatus::Reachable {
+        local_addr,
+        external_addr,
+        upnp,
+    }) = metric
+    {
+        public = local_addr == external_addr;
+        private = local_addr != external_addr;
+        upnp_supported = *upnp;
     }
 
     let bool_to_int = |b: bool| if b { 1 } else { 0 };
 
     let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::NotPerformed,
+        .get_or_create(&ReachabilityAdapterLabelSet {
+            mode: ReachabilityAdapterLabelValue::Public,
         })
-        .set(bool_to_int(not_performed));
+        .set(bool_to_int(public));
     let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::Ongoing,
+        .get_or_create(&ReachabilityAdapterLabelSet {
+            mode: ReachabilityAdapterLabelValue::Private,
         })
-        .set(bool_to_int(ongoing));
+        .set(bool_to_int(private));
     let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::Reachable,
-        })
-        .set(bool_to_int(reachable));
-    let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::NotRoutable,
-        })
-        .set(bool_to_int(not_routable));
-    let _ = family
-        .get_or_create(&ReachabilityStatusLabelSet {
-            status: ReachabilityStatusLabelValue::UPnPSupported,
+        .get_or_create(&ReachabilityAdapterLabelSet {
+            mode: ReachabilityAdapterLabelValue::UPnP,
         })
         .set(bool_to_int(upnp_supported));
 
@@ -97,189 +84,218 @@ mod tests {
 
     /// Helper function to verify metric values in the family
     fn verify_metric(
-        family: &Family<ReachabilityStatusLabelSet, Gauge>,
-        ongoing: bool,
-        not_performed: bool,
-        reachable: bool,
-        not_routable: bool,
-        upnp_supported: bool,
+        family: &Family<ReachabilityAdapterLabelSet, Gauge>,
+        public: bool,
+        private: bool,
+        upnp: bool,
     ) {
         let bool_to_int = |b: bool| if b { 1 } else { 0 };
 
         assert_eq!(
             family
-                .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::Ongoing,
+                .get_or_create(&ReachabilityAdapterLabelSet {
+                    mode: ReachabilityAdapterLabelValue::Public,
                 })
                 .get(),
-            bool_to_int(ongoing),
-            "Ongoing metric mismatch"
+            bool_to_int(public),
+            "Public metric mismatch"
         );
 
         assert_eq!(
             family
-                .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::NotPerformed,
+                .get_or_create(&ReachabilityAdapterLabelSet {
+                    mode: ReachabilityAdapterLabelValue::Private,
                 })
                 .get(),
-            bool_to_int(not_performed),
-            "NotPerformed metric mismatch"
+            bool_to_int(private),
+            "Private metric mismatch"
         );
 
         assert_eq!(
             family
-                .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::Reachable,
+                .get_or_create(&ReachabilityAdapterLabelSet {
+                    mode: ReachabilityAdapterLabelValue::UPnP,
                 })
                 .get(),
-            bool_to_int(reachable),
-            "Reachable metric mismatch"
-        );
-
-        assert_eq!(
-            family
-                .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::NotRoutable,
-                })
-                .get(),
-            bool_to_int(not_routable),
-            "NotRoutable metric mismatch"
-        );
-
-        assert_eq!(
-            family
-                .get_or_create(&ReachabilityStatusLabelSet {
-                    status: ReachabilityStatusLabelValue::UPnPSupported,
-                })
-                .get(),
-            bool_to_int(upnp_supported),
-            "UpnPSupported metric mismatch"
+            bool_to_int(upnp),
+            "UPnP metric mismatch"
         );
     }
 
     #[test]
-    fn test_reachability_status_not_performed() {
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::NotPerformed);
+    fn test_reachability_status_none() {
+        let family = get_reachability_adapter_metric(&None);
 
-        // Only NotPerformed should be 1, all others 0
-        verify_metric(&family, false, true, false, false, false);
+        // All metrics should be 0 when no status is provided
+        verify_metric(&family, false, false, false);
     }
 
     #[test]
-    fn test_reachability_status_ongoing() {
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Ongoing);
+    fn test_reachability_status_public_without_upnp() {
+        let local_addr: SocketAddr = "192.168.1.100:8080".parse().unwrap();
+        let external_addr = local_addr; // Same address means public
+        let status = ReachabilityStatus::Reachable {
+            local_addr,
+            external_addr,
+            upnp: false,
+        };
+        let family = get_reachability_adapter_metric(&Some(status));
 
-        // Only Ongoing should be 1, all others 0
-        verify_metric(&family, true, false, false, false, false);
+        // Public should be 1, private 0, upnp 0
+        verify_metric(&family, true, false, false);
     }
 
     #[test]
-    fn test_reachability_status_reachable_without_upnp() {
-        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        let status = ReachabilityStatus::Reachable { addr, upnp: false };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
+    fn test_reachability_status_private_without_upnp() {
+        let local_addr: SocketAddr = "192.168.1.100:8080".parse().unwrap();
+        let external_addr: SocketAddr = "203.0.113.1:8080".parse().unwrap(); // Different address means private
+        let status = ReachabilityStatus::Reachable {
+            local_addr,
+            external_addr,
+            upnp: false,
+        };
+        let family = get_reachability_adapter_metric(&Some(status));
 
-        // Only Reachable should be 1, UpnP should be 0
-        verify_metric(&family, false, false, true, false, false);
+        // Private should be 1, public 0, upnp 0
+        verify_metric(&family, false, true, false);
     }
 
     #[test]
-    fn test_reachability_status_reachable_with_upnp() {
-        let addr: SocketAddr = "192.168.1.100:9090".parse().unwrap();
-        let status = ReachabilityStatus::Reachable { addr, upnp: true };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
+    fn test_reachability_status_private_with_upnp() {
+        let local_addr: SocketAddr = "192.168.1.100:9090".parse().unwrap();
+        let external_addr: SocketAddr = "203.0.113.1:9090".parse().unwrap();
+        let status = ReachabilityStatus::Reachable {
+            local_addr,
+            external_addr,
+            upnp: true,
+        };
+        let family = get_reachability_adapter_metric(&Some(status));
 
-        // Both Reachable and UpnPSupported should be 1
-        verify_metric(&family, false, false, true, false, true);
+        // Private and UPnP should be 1, public 0
+        verify_metric(&family, false, true, true);
     }
 
     #[test]
-    fn test_reachability_status_not_routable_without_upnp() {
+    fn test_reachability_status_not_reachable_without_upnp() {
         let status = ReachabilityStatus::NotReachable {
             upnp: false,
             reason: ReachabilityIssue::NoDialBacks,
         };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
+        let family = get_reachability_adapter_metric(&Some(status));
 
-        // Only NotRoutable should be 1, UpnP should be 0
-        verify_metric(&family, false, false, false, true, false);
+        // All should be 0 when not reachable
+        verify_metric(&family, false, false, false);
     }
 
     #[test]
-    fn test_reachability_status_not_routable_with_upnp() {
+    fn test_reachability_status_not_reachable_with_upnp() {
         let status = ReachabilityStatus::NotReachable {
             upnp: true,
             reason: ReachabilityIssue::NoDialBacks,
         };
-        let family = get_reachability_status_metric(ReachabilityStatusMetric::Status(status));
+        let family = get_reachability_adapter_metric(&Some(status));
 
-        // Both NotRoutable and UpnPSupported should be 1
-        verify_metric(&family, false, false, false, true, true);
+        // All should be 0 when not reachable (upnp doesn't matter if not reachable)
+        verify_metric(&family, false, false, false);
     }
 
     #[test]
     fn test_multiple_family_instances_independence() {
         // Test that multiple family instances don't interfere with each other
-        let family1 = get_reachability_status_metric(ReachabilityStatusMetric::Ongoing);
-        let family2 = get_reachability_status_metric(ReachabilityStatusMetric::NotPerformed);
+        let local_addr: SocketAddr = "192.168.1.100:8080".parse().unwrap();
+        let external_addr = local_addr;
+        let status1 = ReachabilityStatus::Reachable {
+            local_addr,
+            external_addr,
+            upnp: false,
+        };
+        let family1 = get_reachability_adapter_metric(&Some(status1));
+        let family2 = get_reachability_adapter_metric(&None);
 
-        // Verify family1 has ongoing=1, all others=0
-        verify_metric(&family1, true, false, false, false, false);
+        // Verify family1 has public=1, others=0
+        verify_metric(&family1, true, false, false);
 
-        // Verify family2 has not_performed=1, all others=0
-        verify_metric(&family2, false, true, false, false, false);
+        // Verify family2 has all=0
+        verify_metric(&family2, false, false, false);
     }
 
     #[test]
     fn test_upnp_combinations() {
         // Test all combinations of status with UPnP enabled/disabled
+        let local_addr: SocketAddr = "192.168.1.100:1234".parse().unwrap();
+        let external_addr: SocketAddr = "203.0.113.1:1234".parse().unwrap();
+
         let test_cases = vec![
             (
                 ReachabilityStatus::NotReachable {
                     upnp: true,
                     reason: ReachabilityIssue::NoDialBacks,
                 },
-                "NotRoutable with UPnP",
+                "NotReachable with UPnP",
+                false, // public
+                false, // private
+                false, // upnp (not set when not reachable)
             ),
             (
                 ReachabilityStatus::NotReachable {
                     upnp: false,
                     reason: ReachabilityIssue::NoDialBacks,
                 },
-                "NotRoutable without UPnP",
+                "NotReachable without UPnP",
+                false, // public
+                false, // private
+                false, // upnp
             ),
             (
                 ReachabilityStatus::Reachable {
-                    addr: "10.0.0.1:1234".parse().unwrap(),
+                    local_addr,
+                    external_addr: local_addr, // Same address = public
                     upnp: true,
                 },
-                "Reachable with UPnP",
+                "Reachable public with UPnP",
+                true,  // public
+                false, // private
+                true,  // upnp
             ),
             (
                 ReachabilityStatus::Reachable {
-                    addr: "10.0.0.1:1234".parse().unwrap(),
+                    local_addr,
+                    external_addr: local_addr, // Same address = public
                     upnp: false,
                 },
-                "Reachable without UPnP",
+                "Reachable public without UPnP",
+                true,  // public
+                false, // private
+                false, // upnp
+            ),
+            (
+                ReachabilityStatus::Reachable {
+                    local_addr,
+                    external_addr, // Different address = private
+                    upnp: true,
+                },
+                "Reachable private with UPnP",
+                false, // public
+                true,  // private
+                true,  // upnp
+            ),
+            (
+                ReachabilityStatus::Reachable {
+                    local_addr,
+                    external_addr, // Different address = private
+                    upnp: false,
+                },
+                "Reachable private without UPnP",
+                false, // public
+                true,  // private
+                false, // upnp
             ),
         ];
 
-        for (status, description) in test_cases {
-            let family =
-                get_reachability_status_metric(ReachabilityStatusMetric::Status(status.clone()));
+        for (status, description, expected_public, expected_private, expected_upnp) in test_cases {
+            let family = get_reachability_adapter_metric(&Some(status.clone()));
 
-            let expected_upnp = status.upnp_supported();
-            let expected_reachable = status.is_reachable();
-            let expected_not_routable = status.is_not_reachable();
-
-            verify_metric(
-                &family,
-                false, // ongoing
-                false, // not_performed
-                expected_reachable,
-                expected_not_routable,
-                expected_upnp,
-            );
+            verify_metric(&family, expected_public, expected_private, expected_upnp);
 
             println!("✓ Verified: {description}");
         }

@@ -241,12 +241,16 @@ impl NodeBuilder {
                 reachability_status = Some(s.clone());
             }
             match status {
-                Ok(ReachabilityStatus::Reachable { addr, upnp }) => {
+                Ok(ReachabilityStatus::Reachable {
+                    local_addr,
+                    upnp,
+                    external_addr: _,
+                }) => {
                     info!(
-                        "We are reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}",
+                        "We are reachable. Starting node with socket addr: {local_addr} and UPnP: {upnp:?}",
                     );
-                    println!("Starting node with socket addr: {addr} and UPnP: {upnp:?}");
-                    address = addr;
+                    println!("Starting node with socket addr: {local_addr} and UPnP: {upnp:?}");
+                    address = local_addr;
                     no_upnp = !upnp;
                 }
                 Ok(ReachabilityStatus::NotReachable { upnp: _, reason }) => {
