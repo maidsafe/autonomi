@@ -1,6 +1,6 @@
 use libp2p::identity;
-use libp2p::swarm::behaviour::toggle::Toggle;
 use libp2p::swarm::NetworkBehaviour;
+use libp2p::swarm::behaviour::toggle::Toggle;
 use std::time::Duration;
 
 use crate::CONFIDENCE_MAX;

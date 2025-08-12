@@ -10,8 +10,8 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 
-use criterion::{criterion_group, criterion_main, Criterion, Throughput};
-use rand::{thread_rng, Rng};
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use rand::{Rng, thread_rng};
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::{
     collections::HashSet,
@@ -51,26 +51,51 @@ fn autonomi_file_upload(dir: &str) -> String {
     } else {
         let out = output.stdout;
         let out_string = String::from_utf8(out).expect("Failed to parse output string");
+        println!("upload output is :\n{out_string:?}");
+
+        // Debug: print all lines to see what we're working with
+        println!("All lines in output:");
+        for (i, line) in out_string.lines().enumerate() {
+            println!("Line {i}: {line:?}");
+            if line.contains("At address:") {
+                println!("Found line with 'At address:' at index {i}");
+            }
+        }
+
         let address = out_string
             .lines()
-            .find(|line| line.starts_with("At address:"))
+            .find(|line| line.contains("At address:"))
             .expect("Failed to find the address of the uploaded file");
-        let address = address.trim_start_matches("At address: ");
-        address.to_string()
+
+        // Extract the address from the line
+        let address = address
+            .split("At address:")
+            .nth(1)
+            .expect("Failed to extract address from line")
+            .trim();
+
+        let address_str = address.to_string();
+        println!("Parsed address is: {address_str:?}");
+        address_str
     }
 }
 
 fn autonomi_file_download(uploaded_files: HashSet<String>) {
     let autonomi_cli_path = get_cli_path();
 
-    let temp_dir = tempdir().expect("Failed to create temp dir");
+    let temp_dir = tempdir().expect("Failed to create temp dest dir");
     for address in uploaded_files.iter() {
+        let dest_file = temp_dir.path().join(address);
+
+        println!("Trying to download {address:?} to as the dest_file of {dest_file:?}");
+
         let output = Command::new(autonomi_cli_path.clone())
             .arg("--local")
             .arg("file")
             .arg("download")
+            .arg("--disable-cache")
             .arg(address)
-            .arg(temp_dir.path())
+            .arg(dest_file)
             .output()
             .expect("Failed to execute command");
 
@@ -130,17 +155,22 @@ fn criterion_benchmark(c: &mut Criterion) {
     }
 
     let sizes: [u64; 2] = [1, 10]; // File sizes in MB. Add more sizes as needed
-    let mut uploaded_files = HashSet::new();
+    let mut total_uploaded_files = HashSet::new();
+    let mut total_size: u64 = 0;
 
     for size in sizes.iter() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let temp_dir_path = temp_dir.keep();
+        let mut uploaded_files = HashSet::new();
 
         // create 23 random files. This is to keep the benchmark results consistent with prior runs. The change to make
         // use of ChunkManager means that we don't upload the same file twice and the `uploaded_files` file is now read
         // as a set and we don't download the same file twice. Hence create 23 files as counted from the logs
         // pre ChunkManager change.
-        let file_paths: Vec<PathBuf> = (0..23)
+        //
+        // With the client performance improved, more random_files need to be generated to avoid
+        // upload same content that pollutes the tests.
+        let file_paths: Vec<PathBuf> = (0..50)
             .into_par_iter()
             .map(|idx| {
                 let path = temp_dir_path.join(format!("random_file_{size}_mb_{idx}"));
@@ -161,8 +191,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         group.warm_up_time(Duration::from_secs(5));
         group.sample_size(SAMPLE_SIZE);
 
-        // Create an iterator that cycles through the file paths
-        let mut file_path_iter = file_paths.iter().cycle();
+        // Create an iterator. Shall not use `cycle` to avoid upload duplicated content.
+        let mut file_path_iter = file_paths.iter();
 
         // Set the throughput to be reported in terms of bytes
         group.throughput(Throughput::Bytes(size * 1024 * 1024));
@@ -179,6 +209,16 @@ fn criterion_benchmark(c: &mut Criterion) {
             })
         });
         group.finish();
+        println!(
+            "Got total {} files uploaded after iteration of {size} data_size.",
+            uploaded_files.len()
+        );
+
+        // During `measurement_time` and `warm_up_time`, there will be one upload run for each.
+        // Which means two additional `uploaded_files` created and for downloading.
+        total_size += size * (uploaded_files.len() as u64 + 2);
+
+        total_uploaded_files.extend(uploaded_files);
     }
 
     let mut group = c.benchmark_group("Download Benchmark".to_string());
@@ -191,20 +231,13 @@ fn criterion_benchmark(c: &mut Criterion) {
     // there will then be around 1.1GB in total, and may take around 40s for each iteratioin.
     // Hence we have to reduce the number of iterations from the default 100 to 10,
     // To avoid the benchmark test taking over one hour to complete.
-    //
-    // During `measurement_time` and `warm_up_time`, there will be one upload run for each.
-    // Which means two additional `uploaded_files` created and for downloading.
-    let total_size: u64 = sizes
-        .iter()
-        .map(|size| (SAMPLE_SIZE as u64 + 2) * size)
-        .sum();
     group.sample_size(SAMPLE_SIZE / 2);
 
     // Set the throughput to be reported in terms of bytes
     group.throughput(Throughput::Bytes(total_size * 1024 * 1024));
     let bench_id = "ant files download".to_string();
     group.bench_function(bench_id, |b| {
-        b.iter(|| autonomi_file_download(uploaded_files.clone()))
+        b.iter(|| autonomi_file_download(total_uploaded_files.clone()))
     });
     group.finish();
 }

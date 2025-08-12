@@ -7,11 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    craft_valid_multiaddr, craft_valid_multiaddr_from_str,
+    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher, craft_valid_multiaddr,
+    craft_valid_multiaddr_from_str,
     error::{Error, Result},
-    BootstrapCacheConfig, BootstrapCacheStore, ContactsFetcher,
 };
-use ant_protocol::version::{get_network_id, ALPHANET_ID, MAINNET_ID};
+use ant_protocol::version::{ALPHANET_ID, MAINNET_ID, get_network_id};
 use clap::Args;
 use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
@@ -104,15 +104,15 @@ impl InitialPeersConfig {
             }
         }
 
-        if let Some(count) = count {
-            if bootstrap_addresses.len() >= count {
-                bootstrap_addresses.truncate(count);
-                info!(
-                    "Found {} bootstrap addresses. Returning early.",
-                    bootstrap_addresses.len()
-                );
-                return Ok(bootstrap_addresses);
-            }
+        if let Some(count) = count
+            && bootstrap_addresses.len() >= count
+        {
+            bootstrap_addresses.truncate(count);
+            info!(
+                "Found {} bootstrap addresses. Returning early.",
+                bootstrap_addresses.len()
+            );
+            return Ok(bootstrap_addresses);
         }
 
         // load from cache if present
@@ -127,15 +127,15 @@ impl InitialPeersConfig {
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
                     bootstrap_addresses.extend(data.get_all_addrs().cloned());
 
-                    if let Some(count) = count {
-                        if bootstrap_addresses.len() >= count {
-                            bootstrap_addresses.truncate(count);
-                            info!(
-                                "Found {} bootstrap addresses. Returning early.",
-                                bootstrap_addresses.len()
-                            );
-                            return Ok(bootstrap_addresses);
-                        }
+                    if let Some(count) = count
+                        && bootstrap_addresses.len() >= count
+                    {
+                        bootstrap_addresses.truncate(count);
+                        info!(
+                            "Found {} bootstrap addresses. Returning early.",
+                            bootstrap_addresses.len()
+                        );
+                        return Ok(bootstrap_addresses);
                     }
                 }
             } else {
@@ -163,15 +163,15 @@ impl InitialPeersConfig {
             let addrs = contacts_fetcher.fetch_bootstrap_addresses().await?;
             bootstrap_addresses.extend(addrs);
 
-            if let Some(count) = count {
-                if bootstrap_addresses.len() >= count {
-                    bootstrap_addresses.truncate(count);
-                    info!(
-                        "Found {} bootstrap addresses. Returning early.",
-                        bootstrap_addresses.len()
-                    );
-                    return Ok(bootstrap_addresses);
-                }
+            if let Some(count) = count
+                && bootstrap_addresses.len() >= count
+            {
+                bootstrap_addresses.truncate(count);
+                info!(
+                    "Found {} bootstrap addresses. Returning early.",
+                    bootstrap_addresses.len()
+                );
+                return Ok(bootstrap_addresses);
             }
         }
 

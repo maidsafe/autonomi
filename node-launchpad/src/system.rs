@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::eyre::eyre;
-use color_eyre::eyre::ContextCompat;
 use color_eyre::Result;
+use color_eyre::eyre::ContextCompat;
+use color_eyre::eyre::eyre;
 use faccess::{AccessMode, PathExt};
 
 use std::env;
@@ -62,8 +62,8 @@ fn has_read_write_access(path: PathBuf) -> bool {
 ///
 /// An accessible drive is a drive that is readable and writable.
 ///
-pub fn get_list_of_available_drives_and_available_space(
-) -> Result<Vec<(String, PathBuf, u64, bool)>> {
+pub fn get_list_of_available_drives_and_available_space()
+-> Result<Vec<(String, PathBuf, u64, bool)>> {
     let disks = Disks::new_with_refreshed_list();
     let mut drives: Vec<(String, PathBuf, u64, bool)> = Vec::new();
 

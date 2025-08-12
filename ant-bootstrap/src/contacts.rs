@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    cache_store::CACHE_DATA_VERSION_LATEST, craft_valid_multiaddr_from_str, Error, Result,
+    Error, Result, cache_store::CACHE_DATA_VERSION_LATEST, craft_valid_multiaddr_from_str,
 };
 use futures::stream::{self, StreamExt};
 use libp2p::Multiaddr;
@@ -267,7 +267,8 @@ impl ContactsFetcher {
 
                 if cache_data.network_version != our_network_version {
                     warn!(
-                        "Network version mismatch. Expected: {our_network_version}, got: {}. Skipping.", cache_data.network_version
+                        "Network version mismatch. Expected: {our_network_version}, got: {}. Skipping.",
+                        cache_data.network_version
                     );
                     return Ok(vec![]);
                 }
@@ -309,8 +310,8 @@ mod tests {
     use super::*;
     use libp2p::Multiaddr;
     use wiremock::{
-        matchers::{method, path},
         Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
     };
 
     #[tokio::test]

@@ -37,11 +37,11 @@ pub(crate) use self::{
 pub(crate) use metrics::service::MetricsRegistries;
 
 use self::error::Result;
-use ant_protocol::{NetworkAddress, CLOSE_GROUP_SIZE};
+use ant_protocol::{CLOSE_GROUP_SIZE, NetworkAddress};
 use libp2p::{
+    Multiaddr, PeerId,
     kad::{KBucketDistance, KBucketKey},
     multiaddr::Protocol,
-    Multiaddr, PeerId,
 };
 use std::net::IpAddr;
 

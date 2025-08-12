@@ -6,16 +6,16 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::super::{utils::centered_rect_fixed, Component};
+use super::super::{Component, utils::centered_rect_fixed};
 use crate::{
     action::{Action, OptionsActions},
     mode::{InputMode, Scene},
-    style::{clear_area, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE},
+    style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
-use tui_input::{backend::crossterm::EventHandler, Input};
+use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE: u16 = 5;
 const INPUT_AREA: u16 = INPUT_SIZE + 2; // +2 for the left and right padding

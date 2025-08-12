@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_logging::LogBuilder;
+use autonomi::AttoTokens;
 use autonomi::client::payment::PaymentOption;
 use autonomi::scratchpad::ScratchpadError;
-use autonomi::AttoTokens;
 use autonomi::{
-    client::scratchpad::{Bytes, Scratchpad},
     Client,
+    client::scratchpad::{Bytes, Scratchpad},
 };
 use eyre::Result;
 use serial_test::serial;

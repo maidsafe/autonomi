@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::PutError;
+use crate::client::NetworkAddress;
 use crate::client::data_types::chunk::ChunkAddress;
 use crate::client::payment::Receipt;
-use crate::client::NetworkAddress;
 
 use serde::{Deserialize, Serialize};
 use std::fmt;

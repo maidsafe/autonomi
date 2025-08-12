@@ -131,6 +131,10 @@ jobs:
         timeout-minutes: 25
         run: cargo test --release --package autonomi --doc
 
+      - name: Run autonomi self_encryption backward_compatibility unit tests
+        timeout-minutes: 25
+        run: cargo test --release test_self_encryption_backward_compatibility
+
       - name: Run bootstrap tests
         timeout-minutes: 25
         run: cargo test --release --package ant-bootstrap
@@ -463,12 +467,27 @@ jobs:
 
           ./target/release/ant --log-output-dest data-dir --local file list 2>&1 > file_list.txt
 
-          NUM_OF_PUBLIC_FILES=`cat file_list.txt | grep "public" | grep -o '[0-9]\+'`
-          NUM_OF_PRIVATE_FILES=`cat file_list.txt | grep "private" | grep -o '[0-9]\+'`
+          # Extract and sum public file archive(s) and public file(s) counts
+          PUBLIC_ARCHIVES=`cat file_list.txt | grep "public file archive" | grep -o '[0-9]\+' | head -1`
+          PUBLIC_FILES=`cat file_list.txt | grep "public file(s)" | grep -o '[0-9]\+' | head -1`
+          NUM_OF_PUBLIC_FILES=$((${PUBLIC_ARCHIVES:-0} + ${PUBLIC_FILES:-0}))
+          
+          # Extract and sum private file archive(s) and private file(s) counts  
+          PRIVATE_ARCHIVES=`cat file_list.txt | grep "private file archive" | grep -o '[0-9]\+' | head -1`
+          PRIVATE_FILES=`cat file_list.txt | grep "private file(s)" | grep -o '[0-9]\+' | head -1`
+          NUM_OF_PRIVATE_FILES=$((${PRIVATE_ARCHIVES:-0} + ${PRIVATE_FILES:-0}))
+          
           ./target/release/ant --log-output-dest data-dir --local vault load 2>&1 > vault_data.txt
 
-          NUM_OF_PUBLIC_FILES_IN_VAULT=`cat vault_data.txt  | grep "public" | grep -o '[0-9]\+'`
-          NUM_OF_PRIVATE_FILES_IN_VAULT=`cat vault_data.txt| grep "private" | grep -o '[0-9]\+'`
+          # Extract and sum vault public file archive(s) and public file(s) counts
+          VAULT_PUBLIC_ARCHIVES=`cat vault_data.txt | grep "public file archive" | grep -o '[0-9]\+' | head -1`
+          VAULT_PUBLIC_FILES=`cat vault_data.txt | grep "public file(s)" | grep -o '[0-9]\+' | head -1`
+          NUM_OF_PUBLIC_FILES_IN_VAULT=$((${VAULT_PUBLIC_ARCHIVES:-0} + ${VAULT_PUBLIC_FILES:-0}))
+          
+          # Extract and sum vault private file archive(s) and private file(s) counts
+          VAULT_PRIVATE_ARCHIVES=`cat vault_data.txt | grep "private file archive" | grep -o '[0-9]\+' | head -1`
+          VAULT_PRIVATE_FILES=`cat vault_data.txt | grep "private file(s)" | grep -o '[0-9]\+' | head -1`
+          NUM_OF_PRIVATE_FILES_IN_VAULT=$((${VAULT_PRIVATE_ARCHIVES:-0} + ${VAULT_PRIVATE_FILES:-0}))
 
           echo "Total Num of local public files is $NUM_OF_PUBLIC_FILES and in vault is $NUM_OF_PUBLIC_FILES_IN_VAULT"
           echo "Total Num of local private files is $NUM_OF_PRIVATE_FILES and in vault is $NUM_OF_PRIVATE_FILES_IN_VAULT"
@@ -498,33 +517,49 @@ jobs:
         shell: python
         run: |
           import re
-          def find_number_before_word(file_name, search_word):
+          def find_number_before_phrase(file_name, search_phrase):
               """
-              Reads a file and finds the number immediately preceding a specified word in a line.
+              Reads a file and finds the number immediately preceding a specified phrase in a line.
 
               :param file_name: Name of the file to read.
-              :param search_word: Word to search for in the file.
-              :return: The number before the word as an integer, or None if not found.
+              :param search_phrase: Phrase to search for in the file.
+              :return: The number before the phrase as an integer, or 0 if not found.
               """
               try:
                   with open(file_name, 'r') as file:
                       for line in file:
-                          if search_word in line:
-                              match = re.search(r'(\d+)\s+' + re.escape(search_word), line)
+                          if search_phrase in line:
+                              match = re.search(r'(\d+)\s+' + re.escape(search_phrase), line)
                               if match:
                                   return int(match.group(1))  # Convert to integer
-                  return None  # Return None if no match is found
+                  return 0  # Return 0 if no match is found
               except FileNotFoundError:
                   print(f"Error: File '{file_name}' not found.")
-                  return None
-          NUM_OF_PUBLIC_FILES = find_number_before_word("file_list.txt", "public")
-          print("NUM_OF_PUBLIC_FILES:", NUM_OF_PUBLIC_FILES)
-          NUM_OF_PRIVATE_FILES = find_number_before_word("file_list.txt", "private")
-          print("NUM_OF_PRIVATE_FILES:", NUM_OF_PRIVATE_FILES)
-          NUM_OF_PUBLIC_FILES_IN_VAULT = find_number_before_word("vault_data.txt", "public")
-          print("NUM_OF_PUBLIC_FILES_IN_VAULT:", NUM_OF_PUBLIC_FILES_IN_VAULT)
-          NUM_OF_PRIVATE_FILES_IN_VAULT = find_number_before_word("vault_data.txt", "private")
-          print("NUM_OF_PRIVATE_FILES_IN_VAULT:", NUM_OF_PRIVATE_FILES_IN_VAULT)
+                  return 0
+
+          # Extract and sum public file archive(s) and public file(s) counts
+          public_archives = find_number_before_phrase("file_list.txt", "public file archive")
+          public_files = find_number_before_phrase("file_list.txt", "public file(s)")  
+          NUM_OF_PUBLIC_FILES = public_archives + public_files
+          print("NUM_OF_PUBLIC_FILES:", NUM_OF_PUBLIC_FILES, f"(archives: {public_archives}, files: {public_files})")
+          
+          # Extract and sum private file archive(s) and private file(s) counts
+          private_archives = find_number_before_phrase("file_list.txt", "private file archive")
+          private_files = find_number_before_phrase("file_list.txt", "private file(s)")
+          NUM_OF_PRIVATE_FILES = private_archives + private_files
+          print("NUM_OF_PRIVATE_FILES:", NUM_OF_PRIVATE_FILES, f"(archives: {private_archives}, files: {private_files})")
+          
+          # Extract and sum vault public file archive(s) and public file(s) counts  
+          vault_public_archives = find_number_before_phrase("vault_data.txt", "public file archive")
+          vault_public_files = find_number_before_phrase("vault_data.txt", "public file(s)")
+          NUM_OF_PUBLIC_FILES_IN_VAULT = vault_public_archives + vault_public_files
+          print("NUM_OF_PUBLIC_FILES_IN_VAULT:", NUM_OF_PUBLIC_FILES_IN_VAULT, f"(archives: {vault_public_archives}, files: {vault_public_files})")
+          
+          # Extract and sum vault private file archive(s) and private file(s) counts
+          vault_private_archives = find_number_before_phrase("vault_data.txt", "private file archive")
+          vault_private_files = find_number_before_phrase("vault_data.txt", "private file(s)")
+          NUM_OF_PRIVATE_FILES_IN_VAULT = vault_private_archives + vault_private_files
+          print("NUM_OF_PRIVATE_FILES_IN_VAULT:", NUM_OF_PRIVATE_FILES_IN_VAULT, f"(archives: {vault_private_archives}, files: {vault_private_files})")
 
           # Assertions
           assert NUM_OF_PUBLIC_FILES == NUM_OF_PUBLIC_FILES_IN_VAULT, f"Error: local data and vault in network dont match, Local public Files: {NUM_OF_PUBLIC_FILES} and vault public files: {NUM_OF_PUBLIC_FILES_IN_VAULT} are Not Equal"
@@ -1030,11 +1065,12 @@ jobs:
       - name: parse address
         run: |
           UPLOAD_ADDRESS=$(rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output)
+          echo "Parsed address is $UPLOAD_ADDRESS"
           echo "UPLOAD_ADDRESS=$UPLOAD_ADDRESS" >> $GITHUB_ENV
         shell: bash
 
       - name: File Download
-        run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} ./downloaded_resources/downloaded_file > ./download_output 2>&1
+        run: ./target/release/ant --log-output-dest data-dir --local file download --disable-cache ${{ env.UPLOAD_ADDRESS }} ./downloaded_resources/downloaded_file > ./download_output 2>&1
         env:
           ANT_LOG: "v"
         timeout-minutes: 5

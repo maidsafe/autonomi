@@ -135,10 +135,8 @@ impl NetworkDriver {
                 // The result here is not logged because it can produce megabytes of text.
                 trace!("GetRecord event occurred");
                 let finished = self.pending_tasks.update_get_record(id, res)?;
-                if finished {
-                    if let Some(mut query) = self.kad().query_mut(&id) {
-                        query.finish();
-                    }
+                if finished && let Some(mut query) = self.kad().query_mut(&id) {
+                    query.finish();
                 }
             }
             QueryResult::PutRecord(res) => {
@@ -215,7 +213,9 @@ impl NetworkDriver {
                 let Some((peer_id, addr_fom_connection)) =
                     self.live_connected_peers.get(connection_id)
                 else {
-                    warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
+                    warn!(
+                        "identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers"
+                    );
                     return Ok(());
                 };
                 if is_a_relayed_peer(info.listen_addrs.iter()) {
@@ -235,12 +235,10 @@ impl NetworkDriver {
                 addr.push(Protocol::P2p(*peer_id));
                 trace!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
 
-                if !banned {
-                    if let Some(bootstrap_cache) = &self.bootstrap_cache {
-                        let bootstrap_cache = bootstrap_cache.clone();
-                        #[allow(clippy::let_underscore_future)]
-                        let _ = tokio::spawn(async move { bootstrap_cache.add_addr(addr).await });
-                    }
+                if !banned && let Some(bootstrap_cache) = &self.bootstrap_cache {
+                    let bootstrap_cache = bootstrap_cache.clone();
+                    #[allow(clippy::let_underscore_future)]
+                    let _ = tokio::spawn(async move { bootstrap_cache.add_addr(addr).await });
                 }
             }
             _ => {
@@ -289,7 +287,10 @@ impl NetworkDriver {
             // Block the peer from any further communication.
             let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
             if let Some(_dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
-                error!("Blocking peer {peer_id:?} as it does not support mandatory protocols. Missing: {:?}", missing_protocols);
+                error!(
+                    "Blocking peer {peer_id:?} as it does not support mandatory protocols. Missing: {:?}",
+                    missing_protocols
+                );
             }
             return true;
         }

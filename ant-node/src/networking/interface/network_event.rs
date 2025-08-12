@@ -10,14 +10,14 @@ use std::collections::BTreeMap;
 
 use ant_evm::{PaymentQuote, ProofOfPayment};
 use ant_protocol::{
+    NetworkAddress, PrettyPrintRecordKey,
     messages::{Query, Response},
     storage::{DataTypes, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::kad::{Record, RecordKey};
 use libp2p::{Multiaddr, PeerId};
 
-use crate::networking::{driver::event::MsgResponder, Addresses};
+use crate::networking::{Addresses, driver::event::MsgResponder};
 
 /// Events forwarded by the underlying Network; to be used by the upper layers
 pub(crate) enum NetworkEvent {
@@ -99,7 +99,10 @@ impl std::fmt::Debug for NetworkEvent {
                 our_protocol,
                 their_protocol,
             } => {
-                write!(f, "NetworkEvent::PeerWithUnsupportedProtocol({our_protocol:?}, {their_protocol:?})")
+                write!(
+                    f,
+                    "NetworkEvent::PeerWithUnsupportedProtocol({our_protocol:?}, {their_protocol:?})"
+                )
             }
             NetworkEvent::KeysToFetchForReplication(list) => {
                 let keys_len = list.len();
@@ -159,7 +162,10 @@ impl std::fmt::Display for TerminateNodeReason {
                 write!(f, "HardDiskWriteError")
             }
             TerminateNodeReason::UpnpGatewayNotFound => {
-                write!(f, "UPnP gateway not found. Enable UPnP on your router to allow incoming connections or manually port forward.")
+                write!(
+                    f,
+                    "UPnP gateway not found. Enable UPnP on your router to allow incoming connections or manually port forward."
+                )
             }
         }
     }

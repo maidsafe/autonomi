@@ -20,7 +20,7 @@ mod subcommands;
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
-use ant_evm::{get_evm_network, EvmNetwork, RewardsAddress};
+use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
@@ -29,8 +29,8 @@ use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
 };
-use clap::{command, Parser};
-use color_eyre::{eyre::eyre, Result};
+use clap::{Parser, command};
+use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
 use std::{

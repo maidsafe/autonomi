@@ -184,13 +184,13 @@ impl ServiceControl for ServiceController {
         );
         let system = System::new_all();
         for (pid, process) in system.processes() {
-            if let Some(path) = process.exe() {
-                if bin_path == path {
-                    // There does not seem to be any easy way to get the process ID from the `Pid`
-                    // type. Probably something to do with representing it in a cross-platform way.
-                    trace!("Found process {bin_path:?} with PID: {pid}");
-                    return Ok(pid.to_string().parse::<u32>()?);
-                }
+            if let Some(path) = process.exe()
+                && bin_path == path
+            {
+                // There does not seem to be any easy way to get the process ID from the `Pid`
+                // type. Probably something to do with representing it in a cross-platform way.
+                trace!("Found process {bin_path:?} with PID: {pid}");
+                return Ok(pid.to_string().parse::<u32>()?);
             }
         }
         error!(
@@ -265,7 +265,9 @@ impl ServiceControl for ServiceController {
             Ok(()) => Ok(()),
             Err(err) => {
                 if std::io::ErrorKind::NotFound == err.kind() {
-                    error!("Error while uninstall service, service file might have been removed manually: {service_name}");
+                    error!(
+                        "Error while uninstall service, service file might have been removed manually: {service_name}"
+                    );
                     // In this case the user has removed the service definition file manually,
                     // which the service manager crate treats as an error. We can propagate the
                     // it to the caller and they can decide how to handle it.

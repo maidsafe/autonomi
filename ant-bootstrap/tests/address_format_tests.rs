@@ -19,17 +19,32 @@ async fn test_transport_protocol_variants() -> Result<()> {
     // Test different valid and invalid multiaddr variants
     let variants = vec![
         // QUIC format (valid)
-        ("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        (
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            true,
+        ),
         // WebSocket format (valid)
-        ("/ip4/127.0.0.1/tcp/8080/ws/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        (
+            "/ip4/127.0.0.1/tcp/8080/ws/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            true,
+        ),
         // TCP format (valid)
-        ("/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", true),
+        (
+            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            true,
+        ),
         // Missing peer ID (invalid)
         ("/ip4/127.0.0.1/tcp/8080", false),
         // No transport protocol (invalid)
-        ("/ip4/127.0.0.1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", false),
+        (
+            "/ip4/127.0.0.1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            false,
+        ),
         // Invalid protocol chain (invalid)
-        ("/ip4/127.0.0.1/wss/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE", false),
+        (
+            "/ip4/127.0.0.1/wss/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            false,
+        ),
     ];
 
     for (addr_str, should_be_valid) in variants {

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::actions::NetworkContext;
-use autonomi::{client::analyze::AnalysisError, Multiaddr, RewardsAddress, SecretKey, Wallet};
+use autonomi::{Multiaddr, RewardsAddress, SecretKey, Wallet, client::analyze::AnalysisError};
 use color_eyre::eyre::Result;
 use std::str::FromStr;
 
@@ -59,14 +59,18 @@ fn try_other_types(addr: &str, verbose: bool) {
     // local reference to private data
     let try_private_address = crate::user_data::get_local_private_archive_access(addr).ok();
     if let Some(data_map) = try_private_address {
-        println!("✅ Identified input as a: Local Private Archive's DataMap local address (only works on your own machine)");
+        println!(
+            "✅ Identified input as a: Local Private Archive's DataMap local address (only works on your own machine)"
+        );
         println_if_verbose!(
             "💡 This local address points to a DataMap which is stored on your local machine."
         );
         println_if_verbose!(
             "💡 Using this DataMap you can download your Private Archive from the Network."
         );
-        println_if_verbose!("💡 You can use the `file download` command to download the private data from the DataMap");
+        println_if_verbose!(
+            "💡 You can use the `file download` command to download the private data from the DataMap"
+        );
         println!("DataMap in hex: {}", data_map.to_hex());
         return;
     }
@@ -84,7 +88,9 @@ fn try_other_types(addr: &str, verbose: bool) {
     let maybe_eth_address = addr.parse::<RewardsAddress>().ok();
     if maybe_eth_address.is_some() {
         println!("✅ Identified input as an: Ethereum Address");
-        println_if_verbose!("💡 An Ethereum address is a cryptographic identifier for a blockchain account. It can be used to receive funds and rewards on the Network.");
+        println_if_verbose!(
+            "💡 An Ethereum address is a cryptographic identifier for a blockchain account. It can be used to receive funds and rewards on the Network."
+        );
         return;
     }
 

@@ -8,14 +8,14 @@
 
 use crate::error::{Error, Result};
 use ant_protocol::{
-    antnode_proto::{
-        ant_node_client::AntNodeClient, NetworkInfoRequest, NodeInfoRequest,
-        RecordAddressesRequest, RestartRequest, StopRequest, UpdateLogLevelRequest, UpdateRequest,
-    },
     CLOSE_GROUP_SIZE,
+    antnode_proto::{
+        NetworkInfoRequest, NodeInfoRequest, RecordAddressesRequest, RestartRequest, StopRequest,
+        UpdateLogLevelRequest, UpdateRequest, ant_node_client::AntNodeClient,
+    },
 };
 use async_trait::async_trait;
-use libp2p::{kad::RecordKey, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, kad::RecordKey};
 use std::{net::SocketAddr, path::PathBuf, str::FromStr};
 use tokio::time::Duration;
 use tonic::Request;
@@ -253,7 +253,9 @@ impl RpcActions for RpcClient {
                         );
                     }
                 } else {
-                    error!("Could not obtain NetworkInfo through RPC. Retrying {attempts}/{max_attempts}");
+                    error!(
+                        "Could not obtain NetworkInfo through RPC. Retrying {attempts}/{max_attempts}"
+                    );
                 }
             } else {
                 error!(

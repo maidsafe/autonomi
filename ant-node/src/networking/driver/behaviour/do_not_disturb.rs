@@ -11,21 +11,21 @@
 use futures::future::BoxFuture;
 use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use libp2p::{
+    Stream, StreamProtocol,
     core::{
+        Endpoint, Multiaddr,
         transport::PortUse,
         upgrade::{InboundUpgrade, OutboundUpgrade, UpgradeInfo},
-        Endpoint, Multiaddr,
     },
     identity::PeerId,
     swarm::{
+        ConnectionDenied, ConnectionHandler, ConnectionId, FromSwarm, NetworkBehaviour,
+        SubstreamProtocol, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
         handler::{
             ConnectionEvent, DialUpgradeError, FullyNegotiatedInbound, FullyNegotiatedOutbound,
             ListenUpgradeError,
         },
-        ConnectionDenied, ConnectionHandler, ConnectionId, FromSwarm, NetworkBehaviour,
-        SubstreamProtocol, THandler, THandlerInEvent, THandlerOutEvent, ToSwarm,
     },
-    Stream, StreamProtocol,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -500,7 +500,10 @@ impl ConnectionHandler for Handler {
     fn on_behaviour_event(&mut self, event: Self::FromBehaviour) {
         match event {
             HandlerInEvent::SendRequest { duration } => {
-                info!("Handler received request to send DND request with {}s duration, queuing outbound request", duration);
+                info!(
+                    "Handler received request to send DND request with {}s duration, queuing outbound request",
+                    duration
+                );
 
                 // Create the DND request message
                 let message = DoNotDisturbMessage::Request { duration };
@@ -550,7 +553,10 @@ impl ConnectionHandler for Handler {
                     }
                     DoNotDisturbMessage::Response { accepted } => {
                         // This shouldn't happen on inbound streams in our protocol
-                        warn!("Received unexpected response message on inbound stream: accepted={}, this violates protocol expectations", accepted);
+                        warn!(
+                            "Received unexpected response message on inbound stream: accepted={}, this violates protocol expectations",
+                            accepted
+                        );
                     }
                 }
             }
@@ -580,7 +586,10 @@ impl ConnectionHandler for Handler {
                     }
                     DoNotDisturbMessage::Request { duration } => {
                         // This shouldn't happen on outbound streams in our protocol
-                        warn!("Received unexpected request message on outbound stream: duration={}, this violates protocol expectations", duration);
+                        warn!(
+                            "Received unexpected request message on outbound stream: duration={}, this violates protocol expectations",
+                            duration
+                        );
                     }
                 }
             }
@@ -601,7 +610,10 @@ impl ConnectionHandler for Handler {
             }
             ConnectionEvent::ListenUpgradeError(ListenUpgradeError { info: _, error }) => {
                 // Handle inbound stream failure
-                warn!("Inbound DND stream processing failed: {}, cannot complete protocol negotiation", error);
+                warn!(
+                    "Inbound DND stream processing failed: {}, cannot complete protocol negotiation",
+                    error
+                );
             }
             _ => {
                 // Handle other events like close, etc.
@@ -771,8 +783,8 @@ mod tests {
     use super::*;
     use futures::StreamExt;
     use libp2p::swarm::{
-        dial_opts::{DialOpts, PeerCondition},
         DialError, Swarm, SwarmEvent,
+        dial_opts::{DialOpts, PeerCondition},
     };
     use libp2p_swarm_test::SwarmExt;
     use std::time::Duration;
@@ -1032,7 +1044,7 @@ mod tests {
         let result = behaviour.handle_pending_outbound_connection(
             ConnectionId::new_unchecked(1),
             None, // No specific peer
-            &[test_addr.clone()],
+            std::slice::from_ref(&test_addr),
             Endpoint::Dialer,
         );
 
@@ -1159,7 +1171,7 @@ mod tests {
     async fn test_swarm1_sends_dnd_to_swarm2_integration() {
         use futures::stream::StreamExt;
         use libp2p::swarm::{Swarm, SwarmEvent};
-        use tokio::time::{timeout, Duration as TokioDuration};
+        use tokio::time::{Duration as TokioDuration, timeout};
 
         // Create two swarms with DND behavior
         let mut swarm1 = Swarm::new_ephemeral_tokio(|_| Behaviour::default());
@@ -1183,11 +1195,10 @@ mod tests {
 
                 tokio::select! {
                     event1 = event1_fut => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1 {
-                            if peer_id == peer2_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1
+                            && peer_id == peer2_id {
                                 connection_established = true;
                                 break;
-                            }
                         }
                     }
                     _event2 = event2_fut => {
@@ -1303,7 +1314,7 @@ mod tests {
     async fn test_full_stream_processing_integration() {
         use futures::stream::StreamExt;
         use libp2p::swarm::{Swarm, SwarmEvent};
-        use tokio::time::{timeout, Duration as TokioDuration};
+        use tokio::time::{Duration as TokioDuration, timeout};
 
         // Create two swarms with DND behavior
         let mut swarm1 = Swarm::new_ephemeral_tokio(|_| Behaviour::default());
@@ -1327,11 +1338,10 @@ mod tests {
 
                 tokio::select! {
                     event1 = event1_fut => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1 {
-                            if peer_id == peer2_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1
+                            && peer_id == peer2_id {
                                 connection_established = true;
                                 break;
-                            }
                         }
                     }
                     _event2 = event2_fut => {
@@ -1453,7 +1463,7 @@ mod tests {
     async fn test_dnd_full_stream_integration_future() {
         use futures::stream::StreamExt;
         use libp2p::swarm::{Swarm, SwarmEvent};
-        use tokio::time::{timeout, Duration as TokioDuration};
+        use tokio::time::{Duration as TokioDuration, timeout};
 
         println!("🚀 Testing complete DND stream-based integration...");
 
@@ -1483,12 +1493,11 @@ mod tests {
 
                 tokio::select! {
                     event1 = event1_fut => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1 {
-                            if peer_id == peer2_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event1
+                            && peer_id == peer2_id {
                                 println!("🔗 Connection established: swarm1 → swarm2");
                                 connection_established = true;
                                 break;
-                            }
                         }
                     }
                     _event2 = event2_fut => {
@@ -1678,9 +1687,11 @@ mod tests {
     async fn test_exact_flow_peer_a_requests_peer_b_blocks() {
         use futures::stream::StreamExt;
         use libp2p::swarm::{Swarm, SwarmEvent};
-        use tokio::time::{timeout, Duration as TokioDuration};
+        use tokio::time::{Duration as TokioDuration, timeout};
 
-        println!("🎯 Testing exact flow: PeerA sends block request to PeerB → PeerB blocks outgoing connections to PeerA");
+        println!(
+            "🎯 Testing exact flow: PeerA sends block request to PeerB → PeerB blocks outgoing connections to PeerA"
+        );
 
         // Create PeerA and PeerB
         let mut peer_a = Swarm::new_ephemeral_tokio(|_| Behaviour::default());
@@ -1710,12 +1721,11 @@ mod tests {
 
                 tokio::select! {
                     event = event_a => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event {
-                            if peer_id == peer_b_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event
+                            && peer_id == peer_b_id {
                                 println!("🔗 PeerA connected to PeerB");
                                 connected = true;
                                 break;
-                            }
                         }
                     }
                     _event = event_b => {
@@ -1845,7 +1855,9 @@ mod tests {
         }
 
         println!("\n🎉 EXACT FLOW TEST PASSED!");
-        println!("✅ PeerA sends block request to PeerB → PeerB blocks outgoing connections to PeerA for x time");
+        println!(
+            "✅ PeerA sends block request to PeerB → PeerB blocks outgoing connections to PeerA for x time"
+        );
         println!("   ✓ PeerA sent DND request to PeerB ✅");
         println!("   ✓ PeerB received and processed the request ✅");
         println!("   ✓ PeerB blocked outgoing connections to PeerA ✅");
@@ -1954,25 +1966,23 @@ mod tests {
             loop {
                 tokio::select! {
                     event = dialer_swarm.select_next_some() => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event {
-                            if peer_id == unblocked_peer_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event
+                            && peer_id == unblocked_peer_id {
                                 println!("- ✅ Dialer swarm established connection with unblocked peer.");
                                 dialer_connected = true;
                                 if listener_connected {
                                     break;
-                                }
                             }
                         }
                     },
                     event = unblocked_listener.select_next_some() => {
-                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event {
-                            if peer_id == dialer_peer_id {
+                        if let SwarmEvent::ConnectionEstablished { peer_id, .. } = event
+                            && peer_id == dialer_peer_id {
                                 println!("- ✅ Unblocked listener established connection with dialer.");
                                 listener_connected = true;
                                 if dialer_connected {
                                     break;
                                 }
-                            }
                         }
                     },
                 }

@@ -18,10 +18,10 @@ use crate::actions::NetworkContext;
 use crate::args::max_fee_per_gas::MaxFeePerGasParam;
 use crate::opt::{NetworkId, Opt};
 use autonomi::networking::Quorum;
-use clap::{error::ErrorKind, Args, CommandFactory as _, Subcommand};
+use clap::{Args, CommandFactory as _, Subcommand, error::ErrorKind};
 use color_eyre::Result;
-use pointer::parse_target_data_type;
 use pointer::TargetDataType;
+use pointer::parse_target_data_type;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
@@ -488,7 +488,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     eprintln!("{err:?}");
                     if !disable_cache {
                         println!("Successfully downloaded chunks were cached.");
-                        println!("Please run the command again to obtain the chunks that were not retrieved and complete the download.");
+                        println!(
+                            "Please run the command again to obtain the chunks that were not retrieved and complete the download."
+                        );
                     }
                     std::process::exit(exit_code);
                 } else {

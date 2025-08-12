@@ -11,22 +11,22 @@ use crate::networking::interface::{LocalSwarmCmd, NetworkEvent};
 use crate::networking::log_markers::Marker;
 use crate::networking::network::send_local_swarm_cmd;
 use aes_gcm_siv::{
-    aead::{Aead, KeyInit},
     Aes256GcmSiv, Key as AesKey, Nonce,
+    aead::{Aead, KeyInit},
 };
 use ant_evm::QuotingMetrics;
 use ant_protocol::constants::MAX_PACKET_SIZE;
 use ant_protocol::{
-    storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
+    storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
 };
 use hkdf::Hkdf;
 use itertools::Itertools;
 use libp2p::{
     identity::PeerId,
     kad::{
-        store::{Error, RecordStore, Result},
         KBucketDistance as Distance, ProviderRecord, Record, RecordKey as Key,
+        store::{Error, RecordStore, Result},
     },
 };
 #[cfg(feature = "open-metrics")]
@@ -333,10 +333,10 @@ impl NodeRecordStore {
     fn restore_quoting_metrics(storage_dir: &Path) -> Option<HistoricQuotingMetrics> {
         let file_path = storage_dir.join(HISTORICAL_QUOTING_METRICS_FILENAME);
 
-        if let Ok(file) = fs::File::open(file_path) {
-            if let Ok(quoting_metrics) = rmp_serde::from_read(&file) {
-                return Some(quoting_metrics);
-            }
+        if let Ok(file) = fs::File::open(file_path)
+            && let Ok(quoting_metrics) = rmp_serde::from_read(&file)
+        {
+            return Some(quoting_metrics);
         }
 
         None
@@ -591,8 +591,10 @@ impl NodeRecordStore {
             self.remove(&key);
         }
 
-        info!("Cleaned up {} unrelevant records, among the original {accumulated_records} accumulated_records",
-        keys_to_remove_len);
+        info!(
+            "Cleaned up {} unrelevant records, among the original {accumulated_records} accumulated_records",
+            keys_to_remove_len
+        );
     }
 }
 
@@ -694,15 +696,15 @@ impl NodeRecordStore {
         // if cache already has the record :
         //   * if with same content, do nothing and return early
         //   * if with different content, remove the existing one
-        if let Some((existing_record, _timestamp)) = self.records_cache.remove(key) {
-            if existing_record.value == r.value {
-                // we actually just want to keep what we have, and can assume it's been stored properly.
+        if let Some((existing_record, _timestamp)) = self.records_cache.remove(key)
+            && existing_record.value == r.value
+        {
+            // we actually just want to keep what we have, and can assume it's been stored properly.
 
-                // so we put it back in the cache
-                self.records_cache.push_back(key.clone(), existing_record);
-                // and exit early.
-                return Ok(());
-            }
+            // so we put it back in the cache
+            self.records_cache.push_back(key.clone(), existing_record);
+            // and exit early.
+            return Ok(());
         }
 
         // Only cash the record that put by client. For a quick response to the ChunkProof check.
@@ -745,8 +747,8 @@ impl NodeRecordStore {
                     }
                     Err(err) => {
                         error!(
-                        "Error writing record {record_key2:?} filename: {filename}, error: {err:?}"
-                    );
+                            "Error writing record {record_key2:?} filename: {filename}, error: {err:?}"
+                        );
                         LocalSwarmCmd::RemoveFailedLocalRecord { key }
                     }
                 };
@@ -903,7 +905,9 @@ impl RecordStore for NodeRecordStore {
                             )) => {
                                 let content_hash = XorName::from_content(&record.value);
                                 if content_hash == *existing_content_hash {
-                                    debug!("A non-chunk record {record_key:?} with same content_hash {content_hash:?} already exists.");
+                                    debug!(
+                                        "A non-chunk record {record_key:?} with same content_hash {content_hash:?} already exists."
+                                    );
                                     return Ok(());
                                 }
                             }
@@ -947,10 +951,10 @@ impl RecordStore for NodeRecordStore {
             let _ = metric.set(self.records.len() as i64);
         }
 
-        if let Some((farthest_record, _)) = self.farthest_record.clone() {
-            if farthest_record == *k {
-                self.farthest_record = self.calculate_farthest();
-            }
+        if let Some((farthest_record, _)) = self.farthest_record.clone()
+            && farthest_record == *k
+        {
+            self.farthest_record = self.calculate_farthest();
         }
 
         let filename = Self::generate_filename(k);
@@ -1001,18 +1005,18 @@ mod tests {
     use xor_name::XorName;
 
     use ant_protocol::storage::{
-        try_deserialize_record, try_serialize_record, Chunk, ChunkAddress, DataTypes, Scratchpad,
+        Chunk, ChunkAddress, DataTypes, Scratchpad, try_deserialize_record, try_serialize_record,
     };
     use assert_fs::{
-        fixture::{PathChild, PathCreateDir},
         TempDir,
+        fixture::{PathChild, PathCreateDir},
     };
     use bytes::Bytes;
     use eyre::ContextCompat;
     use libp2p::{core::multihash::Multihash, kad::RecordKey};
     use quickcheck::*;
     use tokio::runtime::Runtime;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     const MULITHASH_CODE: u64 = 0x12;
 
@@ -1092,9 +1096,11 @@ mod tests {
 
         let returned_record_key = returned_record.key.clone();
 
-        assert!(store
-            .put_verified(returned_record, ValidationType::Chunk, true)
-            .is_ok());
+        assert!(
+            store
+                .put_verified(returned_record, ValidationType::Chunk, true)
+                .is_ok()
+        );
 
         // We must also mark the record as stored (which would be triggered after the async write in nodes
         // via NetworkEvent::CompletedWrite)
@@ -1170,9 +1176,11 @@ mod tests {
         };
 
         // Store the chunk using put_verified
-        assert!(store
-            .put_verified(record.clone(), ValidationType::Chunk, true)
-            .is_ok());
+        assert!(
+            store
+                .put_verified(record.clone(), ValidationType::Chunk, true)
+                .is_ok()
+        );
 
         // Wait for the async write operation to complete
         if let Some(cmd) = swarm_cmd_receiver.recv().await {
@@ -1281,9 +1289,11 @@ mod tests {
         };
 
         // Store the chunk using put_verified
-        assert!(store
-            .put_verified(record.clone(), ValidationType::Chunk, true)
-            .is_ok());
+        assert!(
+            store
+                .put_verified(record.clone(), ValidationType::Chunk, true)
+                .is_ok()
+        );
 
         // Mark as stored (simulating the CompletedWrite event)
         store.mark_as_stored(record.key.clone(), ValidationType::Chunk, DataTypes::Chunk);
@@ -1351,13 +1361,15 @@ mod tests {
         };
 
         // Store the scratchpad using put_verified
-        assert!(store
-            .put_verified(
-                record.clone(),
-                ValidationType::NonChunk(XorName::from_content(&record.value)),
-                true,
-            )
-            .is_ok());
+        assert!(
+            store
+                .put_verified(
+                    record.clone(),
+                    ValidationType::NonChunk(XorName::from_content(&record.value)),
+                    true,
+                )
+                .is_ok()
+        );
 
         // Mark as stored (simulating the CompletedWrite event)
         store.mark_as_stored(
@@ -1479,7 +1491,9 @@ mod tests {
                     iteration += 1;
                 }
                 if iteration == max_iterations {
-                    panic!("record_store prune test failed with stored record {record_key:?} can't be read back");
+                    panic!(
+                        "record_store prune test failed with stored record {record_key:?} can't be read back"
+                    );
                 }
             }
         }
@@ -1577,9 +1591,11 @@ mod tests {
                 publisher: None,
                 expires: None,
             };
-            assert!(store
-                .put_verified(record, ValidationType::Chunk, true)
-                .is_ok());
+            assert!(
+                store
+                    .put_verified(record, ValidationType::Chunk, true)
+                    .is_ok()
+            );
             // We must also mark the record as stored (which would be triggered after the async write in nodes
             // via NetworkEvent::CompletedWrite)
             store.mark_as_stored(record_key.clone(), ValidationType::Chunk, DataTypes::Chunk);

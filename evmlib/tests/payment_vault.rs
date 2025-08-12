@@ -13,16 +13,16 @@ use alloy::providers::fillers::{
 };
 use alloy::providers::{Identity, ProviderBuilder, RootProvider, WalletProvider};
 use alloy::signers::local::{LocalSigner, PrivateKeySigner};
+use evmlib::Network;
 use evmlib::common::U256;
 use evmlib::contract::network_token::NetworkToken;
 use evmlib::contract::payment_vault::handler::PaymentVaultHandler;
-use evmlib::contract::payment_vault::{interface, MAX_TRANSFERS_PER_TRANSACTION};
+use evmlib::contract::payment_vault::{MAX_TRANSFERS_PER_TRANSACTION, interface};
 use evmlib::quoting_metrics::QuotingMetrics;
 use evmlib::testnet::{deploy_data_payments_contract, deploy_network_token_contract, start_node};
 use evmlib::transaction_config::TransactionConfig;
 use evmlib::utils::http_provider;
 use evmlib::wallet::wallet_address;
-use evmlib::Network;
 
 async fn setup() -> (
     AnvilInstance,

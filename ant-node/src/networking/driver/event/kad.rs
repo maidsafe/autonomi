@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    driver::PendingGetClosestType, Addresses, NetworkError, Result, CLOSE_GROUP_SIZE,
+    Addresses, CLOSE_GROUP_SIZE, NetworkError, Result, driver::PendingGetClosestType,
 };
-use libp2p::kad::{self, GetClosestPeersError, InboundRequest, QueryResult, K_VALUE};
+use libp2p::kad::{self, GetClosestPeersError, InboundRequest, K_VALUE, QueryResult};
 use std::collections::hash_map::Entry;
 use std::time::Instant;
 
@@ -55,7 +55,9 @@ impl SwarmDriver {
                                 .handle_get_closest_query(current_closest),
                             PendingGetClosestType::FunctionCall(sender) => {
                                 if let Err(e) = sender.send(current_closest) {
-                                    warn!("Failed to send closest peers response - receiver dropped: {e:?}");
+                                    warn!(
+                                        "Failed to send closest peers response - receiver dropped: {e:?}"
+                                    );
                                 }
                             }
                         }
@@ -121,7 +123,9 @@ impl SwarmDriver {
                 event_string = "kad_event::OutboundQueryProgressed::Bootstrap";
                 // here BootstrapOk::num_remaining refers to the remaining random peer IDs to query, one per
                 // bucket that still needs refreshing.
-                debug!("Kademlia Bootstrap with {id:?} progressed with {bootstrap_result:?} and step {step:?}");
+                debug!(
+                    "Kademlia Bootstrap with {id:?} progressed with {bootstrap_result:?} and step {step:?}"
+                );
             }
             kad::Event::RoutingUpdated {
                 peer,
@@ -141,7 +145,10 @@ impl SwarmDriver {
                     }
                 }
 
-                info!("kad_event::RoutingUpdated {:?}: {peer:?}, is_new_peer: {is_new_peer:?} old_peer: {old_peer:?}", self.peers_in_rt);
+                info!(
+                    "kad_event::RoutingUpdated {:?}: {peer:?}, is_new_peer: {is_new_peer:?} old_peer: {old_peer:?}",
+                    self.peers_in_rt
+                );
                 if let Some(old_peer) = old_peer {
                     info!("Evicted old peer on new peer join: {old_peer:?}");
                     self.update_on_peer_removal(old_peer);
@@ -169,7 +176,9 @@ impl SwarmDriver {
             } => {
                 event_string = "kad_event::InboundRequest::GetRecord";
                 if !present_locally && num_closer_peers < CLOSE_GROUP_SIZE {
-                    debug!("InboundRequest::GetRecord doesn't have local record, with {num_closer_peers:?} closer_peers");
+                    debug!(
+                        "InboundRequest::GetRecord doesn't have local record, with {num_closer_peers:?} closer_peers"
+                    );
                 }
             }
             kad::Event::UnroutablePeer { peer } => {

@@ -169,10 +169,10 @@ async fn spawn_node(
 
     let listen_addrs: Vec<Multiaddr> = loop {
         // Wait till we have at least 1 listen addrs
-        if let Ok(listen_addrs) = running_node.get_listen_addrs().await {
-            if !listen_addrs.is_empty() {
-                break Ok(listen_addrs);
-            }
+        if let Ok(listen_addrs) = running_node.get_listen_addrs().await
+            && !listen_addrs.is_empty()
+        {
+            break Ok(listen_addrs);
         }
 
         if retries >= 3 {

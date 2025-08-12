@@ -10,11 +10,11 @@
 pub mod client;
 
 use self::client::LocalNetwork;
-use ant_protocol::antnode_proto::{ant_node_client::AntNodeClient, NodeInfoRequest};
+use ant_protocol::antnode_proto::{NodeInfoRequest, ant_node_client::AntNodeClient};
 use ant_service_management::{
-    antctl_proto::ant_ctl_client::AntCtlClient, get_local_node_registry_path, NodeRegistryManager,
+    NodeRegistryManager, antctl_proto::ant_ctl_client::AntCtlClient, get_local_node_registry_path,
 };
-use eyre::{bail, eyre, OptionExt, Result};
+use eyre::{OptionExt, Result, bail, eyre};
 use itertools::Either;
 use libp2p::PeerId;
 use std::{net::SocketAddr, time::Duration};
@@ -179,7 +179,9 @@ impl NodeRestart {
                         .ok_or_eyre("Failed to obtain antnode rpc endpoint from inventory file")?;
                     Some(*antnode_rpc_endpoint)
                 } else {
-                    warn!("We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now.");
+                    warn!(
+                        "We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now."
+                    );
                     None
                 }
             }
@@ -206,7 +208,9 @@ impl NodeRestart {
                         .await?;
                     Some(antnode_rpc_endpoint)
                 } else {
-                    warn!("We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now.");
+                    warn!(
+                        "We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now."
+                    );
                     None
                 }
             }

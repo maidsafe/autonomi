@@ -11,8 +11,8 @@ use autonomi::client::register::SecretKey as RegisterSecretKey;
 use autonomi::client::scratchpad::SecretKey as ScratchpadSecretKey;
 use autonomi::client::vault::VaultSecretKey;
 use autonomi::{Client, Network, Wallet};
-use color_eyre::eyre::{eyre, Context, Result};
 use color_eyre::Section;
+use color_eyre::eyre::{Context, Result, eyre};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -60,12 +60,12 @@ pub fn create_register_signing_key_file(key: RegisterSecretKey) -> Result<PathBu
 pub fn parse_register_signing_key(key_hex: &str) -> Result<RegisterSecretKey> {
     RegisterSecretKey::from_hex(key_hex)
         .wrap_err("Failed to parse register signing key")
-        .with_suggestion(|| {
-            "the register signing key should be a hex encoded string of a bls secret key"
-        })
-        .with_suggestion(|| {
-            "you can generate a new secret key with the `register generate-key` subcommand"
-        })
+        .with_suggestion(
+            || "the register signing key should be a hex encoded string of a bls secret key",
+        )
+        .with_suggestion(
+            || "you can generate a new secret key with the `register generate-key` subcommand",
+        )
 }
 
 pub fn get_register_signing_key() -> Result<RegisterSecretKey> {
@@ -144,12 +144,12 @@ pub fn get_scratchpad_signing_key(name: &str) -> Result<ScratchpadSecretKey> {
 pub fn parse_scratchpad_signing_key(key_hex: &str) -> Result<ScratchpadSecretKey> {
     ScratchpadSecretKey::from_hex(key_hex)
         .wrap_err("Failed to parse scratchpad signing key")
-        .with_suggestion(|| {
-            "the scratchpad signing key should be a hex encoded string of a bls secret key"
-        })
-        .with_suggestion(|| {
-            "you can generate a new secret key with the `scratchpad generate-key` subcommand"
-        })
+        .with_suggestion(
+            || "the scratchpad signing key should be a hex encoded string of a bls secret key",
+        )
+        .with_suggestion(
+            || "you can generate a new secret key with the `scratchpad generate-key` subcommand",
+        )
 }
 
 pub fn create_scratchpad_signing_key_file(key: ScratchpadSecretKey) -> Result<PathBuf> {
@@ -205,12 +205,12 @@ pub fn get_pointer_signing_key(name: &str) -> Result<ScratchpadSecretKey> {
 pub fn parse_pointer_signing_key(key_hex: &str) -> Result<ScratchpadSecretKey> {
     ScratchpadSecretKey::from_hex(key_hex)
         .wrap_err("Failed to parse pointer signing key")
-        .with_suggestion(|| {
-            "the pointer signing key should be a hex encoded string of a bls secret key"
-        })
-        .with_suggestion(|| {
-            "you can generate a new secret key with the `pointer generate-key` subcommand"
-        })
+        .with_suggestion(
+            || "the pointer signing key should be a hex encoded string of a bls secret key",
+        )
+        .with_suggestion(
+            || "you can generate a new secret key with the `pointer generate-key` subcommand",
+        )
 }
 
 pub fn create_pointer_signing_key_file(key: ScratchpadSecretKey) -> Result<PathBuf> {

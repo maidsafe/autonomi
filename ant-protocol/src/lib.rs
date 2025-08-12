@@ -45,9 +45,9 @@ use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadA
 pub use bytes::Bytes;
 
 use libp2p::{
+    Multiaddr, PeerId,
     kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey},
     multiaddr::Protocol,
-    Multiaddr, PeerId,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
@@ -109,10 +109,10 @@ impl NetworkAddress {
 
     /// Try to return the represented `PeerId`.
     pub fn as_peer_id(&self) -> Option<PeerId> {
-        if let NetworkAddress::PeerId(bytes) = self {
-            if let Ok(peer_id) = PeerId::from_bytes(bytes) {
-                return Some(peer_id);
-            }
+        if let NetworkAddress::PeerId(bytes) = self
+            && let Ok(peer_id) = PeerId::from_bytes(bytes)
+        {
+            return Some(peer_id);
         }
         None
     }
@@ -392,9 +392,9 @@ impl std::fmt::Debug for PrettyPrintRecordKey<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
+        NetworkAddress, PeerId,
         messages::{Nonce, Query},
         storage::GraphEntryAddress,
-        NetworkAddress, PeerId,
     };
     use serde::{Deserialize, Serialize};
 

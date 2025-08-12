@@ -8,7 +8,7 @@
 
 use ant_evm::AttoTokens;
 use ant_logging::LogBuilder;
-use autonomi::{vault::app_name_to_vault_content_type, Client};
+use autonomi::{Client, vault::app_name_to_vault_content_type};
 use eyre::Result;
 use serial_test::serial;
 use test_utils::{evm::get_funded_wallet, gen_random_data};

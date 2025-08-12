@@ -12,7 +12,7 @@
 use clap::Parser;
 use evmlib::common::{Address, Amount};
 use evmlib::testnet::Testnet;
-use evmlib::wallet::{balance_of_gas_tokens, balance_of_tokens, Wallet};
+use evmlib::wallet::{Wallet, balance_of_gas_tokens, balance_of_tokens};
 use std::str::FromStr;
 
 /// A tool to start a local Ethereum node.
@@ -126,7 +126,9 @@ impl TestnetData {
 
         println!();
         println!("--------------");
-        println!("Run the CLI or Node with the following env vars set to manually connect to this network:");
+        println!(
+            "Run the CLI or Node with the following env vars set to manually connect to this network:"
+        );
         println!(
             "{}=\"{}\" {}=\"{}\" {}=\"{}\"",
             ant_evm::RPC_URL,
@@ -137,7 +139,9 @@ impl TestnetData {
             self.data_payments_address
         );
         println!("--------------");
-        println!("For CLI operations that required a payment: use the deployer secret key by providing this env var:");
+        println!(
+            "For CLI operations that required a payment: use the deployer secret key by providing this env var:"
+        );
         println!("SECRET_KEY=\"{}\"", self.deployer_wallet_private_key);
         println!("--------------");
         println!();

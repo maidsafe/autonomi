@@ -22,10 +22,10 @@ where
     for task in tasks.into_iter() {
         futures.push(task);
 
-        if futures.len() >= batch_size {
-            if let Some(result) = futures.next().await {
-                results.push(result);
-            }
+        if futures.len() >= batch_size
+            && let Some(result) = futures.next().await
+        {
+            results.push(result);
         }
     }
 

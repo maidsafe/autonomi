@@ -9,9 +9,9 @@
 #![allow(dead_code)]
 
 use autonomi::{
-    client::{analyze::AnalysisError, payment::PayError, ConnectError, GetError, PutError},
-    files::{DownloadError, UploadError},
     BootstrapError,
+    client::{ConnectError, GetError, PutError, analyze::AnalysisError, payment::PayError},
+    files::{DownloadError, UploadError},
 };
 use color_eyre::eyre::Report;
 
@@ -59,6 +59,7 @@ pub(crate) fn get_error_exit_code(err: &GetError) -> i32 {
         GetError::RecordNotFound => 33,
         GetError::RecordKindMismatch(_) => 34,
         GetError::Configuration(_) => 35,
+        GetError::UnrecognizedDataMap(_) => 31,
     }
 }
 

@@ -1,8 +1,8 @@
+use crate::Network;
 use crate::common::{Address, Amount, QuoteHash};
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::quoting_metrics::QuotingMetrics;
 use crate::utils::http_provider;
-use crate::Network;
 
 pub mod error;
 pub mod handler;

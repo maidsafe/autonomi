@@ -8,14 +8,14 @@
 
 use std::time::Instant;
 
+use crate::AttoTokens;
+use crate::Client;
 use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::{GetError, PutError};
-use crate::AttoTokens;
-use crate::Client;
 
-pub use crate::client::data_types::chunk::DataMapChunk;
 pub use crate::Bytes;
+pub use crate::client::data_types::chunk::DataMapChunk;
 
 impl Client {
     /// Fetch a blob of (private) data from the network

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_releases::ReleaseType;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use std::path::PathBuf;
 
 #[cfg(unix)]
@@ -235,7 +235,7 @@ pub fn get_service_log_dir_path(
 #[cfg(unix)]
 pub fn create_owned_dir(path: PathBuf, owner: &str) -> Result<()> {
     debug!("Creating owned dir and setting permissions: {path:?} with owner: {owner}");
-    use nix::unistd::{chown, Gid, Uid};
+    use nix::unistd::{Gid, Uid, chown};
     use std::os::unix::fs::PermissionsExt;
     use users::get_user_by_name;
 

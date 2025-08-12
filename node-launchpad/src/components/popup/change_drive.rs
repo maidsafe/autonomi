@@ -24,14 +24,14 @@ use ratatui::{
 use crate::{
     action::{Action, OptionsActions},
     components::{
-        popup::manage_nodes::{GB, GB_PER_NODE},
         Component,
+        popup::manage_nodes::{GB, GB_PER_NODE},
     },
     config::get_launchpad_nodes_data_dir_path,
     mode::{InputMode, Scene},
     style::{
-        clear_area, COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
-        VIVID_SKY_BLUE,
+        COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
+        VIVID_SKY_BLUE, clear_area,
     },
     system,
 };
@@ -89,11 +89,11 @@ impl ChangeDrivePopup {
     ///
     fn assign_drive_selection(&mut self) {
         self.deselect_all();
-        if let Some(ref mut items) = self.items {
-            if let Some(i) = items.state.selected() {
-                items.items[i].status = DriveStatus::Selected;
-                self.drive_selection = items.items[i].clone();
-            }
+        if let Some(ref mut items) = self.items
+            && let Some(i) = items.state.selected()
+        {
+            items.items[i].status = DriveStatus::Selected;
+            self.drive_selection = items.items[i].clone();
         }
     }
     /// Highlights the drive that is currently selected in the list of items.
@@ -113,10 +113,10 @@ impl ChangeDrivePopup {
     /// Returns the highlighted drive in the list of items.
     ///
     fn return_selection(&mut self) -> DriveItem {
-        if let Some(ref mut items) = self.items {
-            if let Some(i) = items.state.selected() {
-                return items.items[i].clone();
-            }
+        if let Some(ref mut items) = self.items
+            && let Some(i) = items.state.selected()
+        {
+            return items.items[i].clone();
         }
         DriveItem::default()
     }
@@ -166,7 +166,7 @@ impl ChangeDrivePopup {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph {
+    ) -> Paragraph<'_> {
         let pop_up_border = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
@@ -261,7 +261,7 @@ impl ChangeDrivePopup {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph {
+    ) -> Paragraph<'_> {
         let pop_up_border = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
@@ -402,28 +402,26 @@ impl Component for ChangeDrivePopup {
                         vec![Action::SwitchScene(Scene::Options)]
                     }
                     KeyCode::Up => {
-                        if let Some(ref mut items) = self.items {
-                            if items.items.len() > 1 {
-                                items.previous();
-                                let drive = self.return_selection();
-                                self.can_select = drive.mountpoint
-                                    != self.drive_selection.mountpoint
-                                    && drive.status != DriveStatus::NotAvailable
-                                    && drive.status != DriveStatus::NotEnoughSpace;
-                            }
+                        if let Some(ref mut items) = self.items
+                            && items.items.len() > 1
+                        {
+                            items.previous();
+                            let drive = self.return_selection();
+                            self.can_select = drive.mountpoint != self.drive_selection.mountpoint
+                                && drive.status != DriveStatus::NotAvailable
+                                && drive.status != DriveStatus::NotEnoughSpace;
                         }
                         vec![]
                     }
                     KeyCode::Down => {
-                        if let Some(ref mut items) = self.items {
-                            if items.items.len() > 1 {
-                                items.next();
-                                let drive = self.return_selection();
-                                self.can_select = drive.mountpoint
-                                    != self.drive_selection.mountpoint
-                                    && drive.status != DriveStatus::NotAvailable
-                                    && drive.status != DriveStatus::NotEnoughSpace;
-                            }
+                        if let Some(ref mut items) = self.items
+                            && items.items.len() > 1
+                        {
+                            items.next();
+                            let drive = self.return_selection();
+                            self.can_select = drive.mountpoint != self.drive_selection.mountpoint
+                                && drive.status != DriveStatus::NotAvailable
+                                && drive.status != DriveStatus::NotEnoughSpace;
                         }
                         vec![]
                     }
@@ -617,7 +615,7 @@ pub struct DriveItem {
 }
 
 impl DriveItem {
-    fn to_list_item(&self, _index: usize, width: usize) -> ListItem {
+    fn to_list_item(&self, _index: usize, width: usize) -> ListItem<'_> {
         let spaces = width - self.name.len() - self.size.len() - "   ".len() - 4;
         let line = match self.status {
             DriveStatus::NotSelected => Line::from(vec![

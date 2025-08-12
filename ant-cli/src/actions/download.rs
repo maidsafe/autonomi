@@ -9,13 +9,13 @@
 use super::get_progress_bar;
 use crate::exit_code::{self, ExitCodeError, INVALID_INPUT_EXIT_CODE, IO_ERROR};
 use autonomi::{
+    Client,
     chunk::DataMapChunk,
     client::{analyze::Analysis, files::archive_private::PrivateArchiveDataMap},
     data::DataAddress,
     files::{PrivateArchive, PublicArchive},
-    Client,
 };
-use color_eyre::{eyre::eyre, Section};
+use color_eyre::{Section, eyre::eyre};
 use std::path::PathBuf;
 
 pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<(), ExitCodeError> {
@@ -24,9 +24,14 @@ pub async fn download(addr: &str, dest_path: &str, client: &Client) -> Result<()
         return download_public(addr, public_address, dest_path, client).await;
     }
 
-    let try_private_address = crate::user_data::get_local_private_archive_access(addr).ok();
-    if let Some(private_address) = try_private_address {
+    let try_local_private_archive = crate::user_data::get_local_private_archive_access(addr).ok();
+    if let Some(private_address) = try_local_private_archive {
         return download_private(addr, private_address, dest_path, client).await;
+    }
+
+    let try_local_private_file = crate::user_data::get_local_private_file_access(addr).ok();
+    if let Some(private_file_datamap) = try_local_private_file {
+        return download_from_datamap(addr, private_file_datamap, dest_path, client).await;
     }
 
     let try_datamap = DataMapChunk::from_hex(addr).ok();
@@ -140,7 +145,9 @@ async fn download_public(
             download_pub_archive_to_disk(addr, archive, dest_path, client).await
         }
         Err(_) => {
-            info!("Failed to deserialize as Public Archive from address {addr}, treating as single file");
+            info!(
+                "Failed to deserialize as Public Archive from address {addr}, treating as single file"
+            );
             // Write the raw data as a file
             let path = PathBuf::from(dest_path);
             let here = PathBuf::from(".");

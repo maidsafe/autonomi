@@ -28,8 +28,8 @@ use crate::{
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
     style::{
-        clear_area, COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
-        VIVID_SKY_BLUE,
+        COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
+        VIVID_SKY_BLUE, clear_area,
     },
 };
 
@@ -126,7 +126,7 @@ impl ChangeConnectionModePopUp {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph {
+    ) -> Paragraph<'_> {
         let pop_up_border: Paragraph = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
@@ -220,7 +220,7 @@ impl ChangeConnectionModePopUp {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph {
+    ) -> Paragraph<'_> {
         // layer zero
         let pop_up_border = Paragraph::new("").block(
             Block::default()
@@ -369,8 +369,8 @@ impl Component for ChangeConnectionModePopUp {
                         != self.connection_mode_selection.connection_mode
                     {
                         debug!(
-                                        "Got Enter and there's a new selection, storing value and switching to Options"
-                                    );
+                            "Got Enter and there's a new selection, storing value and switching to Options"
+                        );
                         debug!("Connection Mode selected: {:?}", connection_mode);
                         self.connection_mode_initial_state = self.connection_mode_selection.clone();
                         self.assign_connection_mode_selection();
@@ -519,7 +519,7 @@ pub struct ConnectionModeItem {
 }
 
 impl ConnectionModeItem {
-    fn to_list_item(&self, _index: usize, _width: usize) -> ListItem {
+    fn to_list_item(&self, _index: usize, _width: usize) -> ListItem<'_> {
         let line = match self.status {
             ConnectionModeStatus::NotSelected => Line::from(vec![
                 Span::raw("   "),

@@ -13,8 +13,8 @@ use color_eyre::Result;
 use libp2p::Multiaddr;
 use tempfile::TempDir;
 use wiremock::{
-    matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
+    matchers::{method, path},
 };
 
 #[tokio::test]

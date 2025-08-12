@@ -30,10 +30,8 @@ where
 
 fn _try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
     let (_signed, value, losless) = value.get_u64();
-    if losless {
-        if let Ok(value) = T::try_from(value) {
-            return Ok(value);
-        }
+    if losless && let Ok(value) = T::try_from(value) {
+        return Ok(value);
     }
 
     Err(napi::Error::new(

@@ -10,6 +10,6 @@ mod connect;
 mod download;
 mod progress_bar;
 
-pub use connect::{connect_to_network, connect_to_network_with_config, NetworkContext};
+pub use connect::{NetworkContext, connect_to_network, connect_to_network_with_config};
 pub use download::download;
 pub use progress_bar::get_progress_bar;

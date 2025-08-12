@@ -41,7 +41,7 @@ jobs:
         run: npm install
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: ./${{ inputs.app_name }}-nodejs/artifacts
           pattern: bindings-*-${{ inputs.app_name }}

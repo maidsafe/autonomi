@@ -9,11 +9,12 @@
 use ant_logging::ReloadHandle;
 use ant_node::RunningNode;
 use ant_protocol::antnode_proto::{
-    ant_node_server::{AntNode, AntNodeServer},
-    k_buckets_response, KBucketsRequest, KBucketsResponse, NetworkInfoRequest, NetworkInfoResponse,
-    NodeEvent, NodeEventsRequest, NodeInfoRequest, NodeInfoResponse, RecordAddressesRequest,
+    KBucketsRequest, KBucketsResponse, NetworkInfoRequest, NetworkInfoResponse, NodeEvent,
+    NodeEventsRequest, NodeInfoRequest, NodeInfoResponse, RecordAddressesRequest,
     RecordAddressesResponse, RestartRequest, RestartResponse, StopRequest, StopResponse,
     UpdateLogLevelRequest, UpdateLogLevelResponse, UpdateRequest, UpdateResponse,
+    ant_node_server::{AntNode, AntNodeServer},
+    k_buckets_response,
 };
 use ant_protocol::node_rpc::{NodeCtrl, StopResult};
 use eyre::{ErrReport, Result};
@@ -26,7 +27,7 @@ use std::{
 };
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
-use tonic::{transport::Server, Code, Request, Response, Status};
+use tonic::{Code, Request, Response, Status, transport::Server};
 use tracing::{debug, info};
 
 // Defining a struct to hold information used by our gRPC service backend
@@ -86,7 +87,7 @@ impl AntNode for SafeNodeRpcService {
             Err(err) => {
                 return Err(Status::invalid_argument(format!(
                     "Failed to get local swarm state: {err:?}"
-                )))
+                )));
             }
         };
         let connected_peers = state.connected_peers.iter().map(|p| p.to_bytes()).collect();
@@ -155,7 +156,7 @@ impl AntNode for SafeNodeRpcService {
             Err(err) => {
                 return Err(Status::invalid_argument(format!(
                     "Failed to get record addresses: {err:?}"
-                )))
+                )));
             }
         };
 
@@ -185,7 +186,7 @@ impl AntNode for SafeNodeRpcService {
                 Err(err) => {
                     return Err(Status::invalid_argument(format!(
                         "Failed to get k-buckets: {err:?}"
-                    )))
+                    )));
                 }
             };
 

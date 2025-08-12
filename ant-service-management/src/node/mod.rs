@@ -12,9 +12,9 @@ mod node_service_data_v1;
 mod node_service_data_v2;
 
 // Re-export types
-pub use node_service_data::{NodeServiceData, NODE_SERVICE_DATA_SCHEMA_LATEST};
+pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
-use crate::{error::Result, rpc::RpcActions, ServiceStateActions, ServiceStatus, UpgradeOptions};
+use crate::{ServiceStateActions, ServiceStatus, UpgradeOptions, error::Result, rpc::RpcActions};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;

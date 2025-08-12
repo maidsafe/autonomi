@@ -7,9 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_protocol::storage::{PointerTarget, ScratchpadAddress};
-use self_encryption::DataMap;
+use self_encryption::{ChunkInfo, DataMap};
 
 use crate::{
+    Bytes, Client, PublicKey,
     chunk::{Chunk, ChunkAddress, DataMapChunk},
     files::{PrivateArchive, PublicArchive},
     graph::{GraphEntry, GraphEntryAddress},
@@ -17,10 +18,9 @@ use crate::{
     register::RegisterValue,
     scratchpad::Scratchpad,
     self_encryption::DataMapLevel,
-    Bytes, Client, PublicKey,
 };
 
-use super::{register::RegisterAddress, GetError};
+use super::{GetError, register::RegisterAddress};
 const MAX_HEX_PRINT_LENGTH: usize = 4 * 1024;
 
 /// The result of analyzing an address
@@ -189,11 +189,17 @@ impl Client {
         // datamaps
         if let Ok(hex_chunk) = DataMapChunk::from_hex(hex_addr) {
             println_if_verbose!("Detected hex encoded data, might be a DataMap...");
+            let maybe_data_map: Option<DataMap> = rmp_serde::from_slice(hex_chunk.0.value()).ok();
+            if let Some(_data_map) = maybe_data_map {
+                println_if_verbose!("Identified as a new DataMap...");
+                return analyze_datamap(None, &hex_chunk, self, verbose).await;
+            }
+
             let maybe_data_map: Option<DataMapLevel> =
                 rmp_serde::from_slice(hex_chunk.0.value()).ok();
             if let Some(_data_map) = maybe_data_map {
-                println_if_verbose!("Identified as a DataMap...");
-                return analyze_datamap(None, &hex_chunk, self, verbose).await;
+                println_if_verbose!("Identified as an old DataMap...");
+                return analyze_datamap_old(None, &hex_chunk, self, verbose).await;
             }
         }
 
@@ -297,8 +303,14 @@ async fn analyze_chunk(
     println_if_verbose!("Got chunk of {} bytes...", chunk.value().len());
 
     // check if it's a data map
-    if let Ok(_data_map) = rmp_serde::from_slice::<DataMapLevel>(chunk.value()) {
+    if let Ok(_data_map) = rmp_serde::from_slice::<DataMap>(chunk.value()) {
         println_if_verbose!("Identified chunk content as a DataMap...");
+        return analyze_datamap(Some(*chunk_addr), &chunk.into(), client, verbose).await;
+    }
+
+    // check if it's an old data map
+    if let Ok(_data_map) = rmp_serde::from_slice::<DataMapLevel>(chunk.value()) {
+        println_if_verbose!("Identified chunk content as an old DataMap...");
         return analyze_datamap(Some(*chunk_addr), &chunk.into(), client, verbose).await;
     }
 
@@ -319,18 +331,9 @@ async fn analyze_datamap(
         };
     }
 
-    let data_map_level: DataMapLevel =
+    let map: DataMap =
         rmp_serde::from_slice(datamap.0.value()).map_err(|_| AnalysisError::UnrecognizedInput)?;
-    let (map, points_to_a_data_map) = match data_map_level {
-        DataMapLevel::Additional(map) => {
-            println_if_verbose!("Identified a DataMap whose contents is another DataMap, the content might be pretty big...");
-            (map, true)
-        }
-        DataMapLevel::First(map) => {
-            println_if_verbose!("Identified a DataMap which directly contains data...");
-            (map, false)
-        }
-    };
+    let points_to_a_data_map = map.child.is_some();
 
     println_if_verbose!("Fetching data from the Network...");
     let data = client.data_get(datamap).await?;
@@ -379,6 +382,106 @@ async fn analyze_datamap(
         },
         None => Analysis::RawDataMap {
             chunks: chunk_list_from_datamap(map),
+            data,
+            points_to_a_data_map,
+        },
+    };
+
+    Ok(analysis)
+}
+
+async fn analyze_datamap_old(
+    stored_at: Option<ChunkAddress>,
+    datamap: &DataMapChunk,
+    client: &Client,
+    verbose: bool,
+) -> Result<Analysis, AnalysisError> {
+    macro_rules! println_if_verbose {
+        ($($arg:tt)*) => {
+            if verbose {
+                println!($($arg)*);
+            }
+        };
+    }
+
+    let data_map_level: DataMapLevel =
+        rmp_serde::from_slice(datamap.0.value()).map_err(|_| AnalysisError::UnrecognizedInput)?;
+    let (map, points_to_a_data_map) = match data_map_level {
+        DataMapLevel::Additional(map) => {
+            println_if_verbose!(
+                "Identified a DataMap whose contents is another DataMap, the content might be pretty big..."
+            );
+            (map, true)
+        }
+        DataMapLevel::First(map) => {
+            println_if_verbose!("Identified a DataMap which directly contains data...");
+            (map, false)
+        }
+    };
+
+    println_if_verbose!("Fetching data from the Network...");
+    let data = client.data_get(datamap).await?;
+    println_if_verbose!("Data fetched from the Network...");
+
+    if let Ok(private_archive) = PrivateArchive::from_bytes(data.clone()) {
+        // public archives and private archives can be confused into each other
+        // to identify them we check if all the addresses are in fact xornames
+        // cf test_archives_serialize_deserialize for more details
+        let xorname_hex_len = xor_name::XOR_NAME_LEN * 2;
+        let all_addrs_are_xornames = private_archive
+            .map()
+            .iter()
+            .all(|(_, (data_addr, _))| data_addr.to_hex().len() == xorname_hex_len);
+        if all_addrs_are_xornames {
+            println_if_verbose!("All addresses are xornames, so it's a public archive");
+            if let Ok(public_archive) = PublicArchive::from_bytes(data.clone()) {
+                println_if_verbose!(
+                    "Identified the data pointed to by the DataMap as a PublicArchive..."
+                );
+                return Ok(Analysis::PublicArchive {
+                    address: stored_at,
+                    archive: public_archive,
+                });
+            }
+        }
+
+        println_if_verbose!("Identified the data pointed to by the DataMap as a PrivateArchive...");
+        return Ok(Analysis::PrivateArchive(private_archive));
+    }
+
+    if let Ok(public_archive) = PublicArchive::from_bytes(data.clone()) {
+        println_if_verbose!("Identified the data pointed to by the DataMap as a PublicArchive...");
+        return Ok(Analysis::PublicArchive {
+            address: stored_at,
+            archive: public_archive,
+        });
+    }
+
+    // Convert old format of DataMap into new
+    let chunk_identifiers: Vec<ChunkInfo> = map
+        .infos()
+        .iter()
+        .map(|ck_info| ChunkInfo {
+            index: ck_info.index,
+            dst_hash: ck_info.dst_hash,
+            src_hash: ck_info.src_hash,
+            src_size: ck_info.src_size,
+        })
+        .collect();
+    let data_map = DataMap {
+        chunk_identifiers,
+        child: None,
+    };
+
+    let analysis = match stored_at {
+        Some(addr) => Analysis::DataMap {
+            address: addr,
+            chunks: chunk_list_from_datamap(data_map),
+            data,
+            points_to_a_data_map,
+        },
+        None => Analysis::RawDataMap {
+            chunks: chunk_list_from_datamap(data_map),
             data,
             points_to_a_data_map,
         },
@@ -472,10 +575,10 @@ fn data_hex(data: &Bytes) -> String {
 mod tests {
     use std::path::PathBuf;
 
+    use crate::Bytes;
     use crate::chunk::{ChunkAddress, DataMapChunk};
     use crate::data::DataAddress;
     use crate::files::{Metadata, PrivateArchive, PublicArchive};
-    use crate::Bytes;
     use crate::{PublicKey, SecretKey};
     use eyre::Result;
     use serial_test::serial;

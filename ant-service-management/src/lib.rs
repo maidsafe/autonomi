@@ -35,7 +35,7 @@ use service_manager::ServiceInstallCtx;
 pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
 pub use node::{NodeService, NodeServiceData};
-pub use registry::{get_local_node_registry_path, NodeRegistryManager, StatusSummary};
+pub use registry::{NodeRegistryManager, StatusSummary, get_local_node_registry_path};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ServiceStatus {

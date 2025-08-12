@@ -14,7 +14,11 @@ use std::{
 };
 use thiserror::Error;
 
-use crate::client::{quote::CostError, GetError, PutError};
+use crate::Client;
+use crate::client::data_types::chunk::ChunkAddress;
+use crate::client::utils::process_tasks_with_max_concurrency;
+use crate::client::{GetError, PutError, quote::CostError};
+use bytes::Bytes;
 
 pub mod archive_private;
 pub mod archive_public;
@@ -159,6 +163,81 @@ pub(crate) fn normalize_path(path: PathBuf) -> PathBuf {
         .join("/");
 
     PathBuf::from(normalized)
+}
+
+impl Client {
+    /// Deserialize data map from bytes, handling both old and new formats
+    pub(super) fn deserialize_data_map(
+        &self,
+        data_map_bytes: &Bytes,
+    ) -> Result<self_encryption::DataMap, DownloadError> {
+        // Try new format first
+        if let Ok(data_map) = rmp_serde::from_slice::<self_encryption::DataMap>(data_map_bytes) {
+            return Ok(data_map);
+        }
+
+        // Fall back to old format and convert
+        let data_map_level =
+            rmp_serde::from_slice::<crate::self_encryption::DataMapLevel>(data_map_bytes)
+                .map_err(|e| DownloadError::GetError(GetError::InvalidDataMap(e)))?;
+
+        let old_data_map = match &data_map_level {
+            crate::self_encryption::DataMapLevel::First(map) => map,
+            crate::self_encryption::DataMapLevel::Additional(map) => map,
+        };
+
+        // Convert to new format
+        let chunk_identifiers: Vec<self_encryption::ChunkInfo> = old_data_map
+            .infos()
+            .iter()
+            .map(|ck_info| self_encryption::ChunkInfo {
+                index: ck_info.index,
+                dst_hash: ck_info.dst_hash,
+                src_hash: ck_info.src_hash,
+                src_size: ck_info.src_size,
+            })
+            .collect();
+
+        Ok(self_encryption::DataMap {
+            chunk_identifiers,
+            child: None,
+        })
+    }
+
+    /// Fetch multiple chunks in parallel from the network
+    pub(super) async fn fetch_chunks_parallel(
+        &self,
+        chunk_addresses: &[ChunkAddress],
+    ) -> Result<Vec<Bytes>, self_encryption::Error> {
+        let mut download_tasks = vec![];
+
+        for chunk_addr in chunk_addresses {
+            let client_clone = self.clone();
+            let addr_clone = *chunk_addr;
+
+            download_tasks.push(async move {
+                client_clone
+                    .chunk_get(&addr_clone)
+                    .await
+                    .map(|chunk| chunk.value)
+                    .map_err(|e| {
+                        self_encryption::Error::Generic(format!(
+                            "Failed to fetch chunk {addr_clone:?}: {e:?}"
+                        ))
+                    })
+            });
+        }
+
+        let chunks = process_tasks_with_max_concurrency(
+            download_tasks,
+            *crate::client::data_types::chunk::CHUNK_DOWNLOAD_BATCH_SIZE,
+        )
+        .await
+        .into_iter()
+        .collect::<Result<Vec<Bytes>, self_encryption::Error>>()?;
+
+        Ok(chunks)
+    }
 }
 
 pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(

@@ -13,7 +13,7 @@ use libp2p::PeerId;
 use tokio::sync::oneshot;
 
 use crate::networking::error::Result;
-use crate::networking::{driver::event::MsgResponder, Addresses, NetworkAddress};
+use crate::networking::{Addresses, NetworkAddress, driver::event::MsgResponder};
 
 /// Commands to send to the Swarm
 pub(crate) enum NetworkSwarmCmd {

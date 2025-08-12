@@ -7,10 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Color, Style},
     widgets::{Block, Clear},
-    Frame,
 };
 
 pub const GHOST_WHITE: Color = Color::Indexed(15);

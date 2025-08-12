@@ -1,8 +1,8 @@
 #![allow(clippy::expect_used)]
 
 use alloy::providers::Provider;
-use evmlib::utils::http_provider;
 use evmlib::Network;
+use evmlib::utils::http_provider;
 
 #[tokio::test]
 async fn test_gas_fee_limit() {

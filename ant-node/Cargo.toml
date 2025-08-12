@@ -78,7 +78,6 @@ rand = { version = "~0.8.5", features = ["small_rng"] }
 rmp-serde = "1.1.1"
 rayon = "1.8.0"
 sha2 = "0.10"
-self_encryption = "~0.30.0"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 strum = { version = "0.26.2", features = ["derive"] }
 sysinfo = { version = "0.30.8", default-features = false, optional = true }

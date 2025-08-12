@@ -6,15 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::interface::NetworkTask;
-use crate::networking::utils::get_quorum_amount;
 use crate::networking::NetworkError;
 use crate::networking::OneShotTaskResult;
+use crate::networking::interface::NetworkTask;
+use crate::networking::utils::get_quorum_amount;
 use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
+use libp2p::PeerId;
 use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
 use libp2p::request_response::OutboundRequestId;
-use libp2p::PeerId;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -355,7 +355,9 @@ impl TaskHandler {
                 Ok(())
             }
             Ok(None) => {
-                trace!("OutboundRequestId({id}): no quote needed as record already exists at peer {peer_address:?}");
+                trace!(
+                    "OutboundRequestId({id}): no quote needed as record already exists at peer {peer_address:?}"
+                );
                 // Send can fail here if we already accumulated enough quotes.
                 resp.send(Ok(None))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
@@ -379,7 +381,9 @@ impl TaskHandler {
     ) -> Result<(), TaskHandlerError> {
         // Get quote case
         if let Some((resp, _data_type, original_peer)) = self.get_cost.remove(&id) {
-            trace!("OutboundRequestId({id}): get quote initially sent to peer {original_peer:?} got fatal error from peer {peer:?}: {error:?}");
+            trace!(
+                "OutboundRequestId({id}): get quote initially sent to peer {original_peer:?} got fatal error from peer {peer:?}: {error:?}"
+            );
             resp.send(Err(NetworkError::GetQuoteError(error.to_string())))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         // Put record case
@@ -392,7 +396,9 @@ impl TaskHandler {
             // "Io(Custom { kind: UnexpectedEof, error: Eof { name: \"enum\", expect: Small(1) } })"
             // which is due to the mismatched request_response codec max_request_set configuration
             if error.to_string().contains("Small(1)") {
-                trace!("OutboundRequestId({id}): put record got incompatible network protocol error from peer {peer:?}");
+                trace!(
+                    "OutboundRequestId({id}): put record got incompatible network protocol error from peer {peer:?}"
+                );
                 responder
                     .send(Err(NetworkError::IncompatibleNetworkProtocol))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
@@ -402,7 +408,9 @@ impl TaskHandler {
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
         } else {
-            trace!("OutboundRequestId({id}): trying to terminate unknown query, maybe it was already removed");
+            trace!(
+                "OutboundRequestId({id}): trying to terminate unknown query, maybe it was already removed"
+            );
         }
         Ok(())
     }

@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::ScratchpadAddress;
-use crate::error::{Error, Result};
 use crate::Bytes;
 use crate::NetworkAddress;
+use crate::error::{Error, Result};
 use bls::{Ciphertext, PublicKey, SecretKey, Signature};
 use serde::{Deserialize, Serialize};
 
@@ -134,7 +134,10 @@ impl Scratchpad {
             self.counter,
         );
         self.signature = sk.sign(&bytes_to_sign);
-        debug_assert!(self.verify_signature(), "Must be valid after being signed. This is a bug, please report it by opening an issue on our github");
+        debug_assert!(
+            self.verify_signature(),
+            "Must be valid after being signed. This is a bug, please report it by opening an issue on our github"
+        );
     }
 
     /// Verifies that the Scratchpad signature is valid

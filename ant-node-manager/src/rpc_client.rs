@@ -1,13 +1,13 @@
-use ant_service_management::antctl_proto::ant_ctl_client::AntCtlClient;
 use ant_service_management::antctl_proto::NodeServiceRestartRequest;
+use ant_service_management::antctl_proto::ant_ctl_client::AntCtlClient;
 use color_eyre::eyre::bail;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use libp2p_identity::PeerId;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::time::Duration;
-use tonic::transport::Channel;
 use tonic::Request;
+use tonic::transport::Channel;
 
 struct DaemonRpcClient {
     addr: SocketAddr,

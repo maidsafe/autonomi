@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
+    ServiceStateActions, ServiceStatus, UpgradeOptions,
     control::ServiceControl,
     error::{Error, Result},
-    ServiceStateActions, ServiceStatus, UpgradeOptions,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};

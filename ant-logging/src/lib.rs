@@ -299,7 +299,7 @@ impl LogBuilder {
 
         println!("Setting ANT_LOG to: {log_pattern}");
 
-        // SAFETY: This is called during test initialization before any other threads 
+        // SAFETY: This is called during test initialization before any other threads
         // are spawned, so there's no risk of data races. Setting ANT_LOG is necessary
         // to configure logging levels for test execution.
         #[allow(unsafe_code)]

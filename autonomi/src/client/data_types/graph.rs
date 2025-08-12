@@ -6,27 +6,27 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::payment::PayError;
-use crate::client::payment::PaymentOption;
-use crate::client::quote::CostError;
 use crate::client::ClientEvent;
 use crate::client::PutError;
 use crate::client::UploadSummary;
+use crate::client::payment::PayError;
+use crate::client::payment::PaymentOption;
+use crate::client::quote::CostError;
 use crate::client::{Client, GetError};
 
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
-use ant_protocol::storage::try_deserialize_record;
-use ant_protocol::storage::RecordHeader;
 use ant_protocol::PrettyPrintRecordKey;
+use ant_protocol::storage::RecordHeader;
+use ant_protocol::storage::try_deserialize_record;
 use ant_protocol::{
-    storage::{try_serialize_record, DataTypes, RecordKind},
     NetworkAddress,
+    storage::{DataTypes, RecordKind, try_serialize_record},
 };
 use bls::PublicKey;
 use libp2p::kad::Record;
 
-use crate::networking::{NetworkError, PeerInfo};
 pub use crate::SecretKey;
+use crate::networking::{NetworkError, PeerInfo};
 pub use ant_protocol::storage::{GraphContent, GraphEntry, GraphEntryAddress};
 
 #[derive(Debug, thiserror::Error)]
@@ -45,7 +45,9 @@ pub enum GraphError {
     Pay(#[from] PayError),
     #[error("Failed to retrieve wallet payment")]
     Wallet(#[from] EvmWalletError),
-    #[error("Received invalid quote from node, this node is possibly malfunctioning, try another node by trying another transaction name")]
+    #[error(
+        "Received invalid quote from node, this node is possibly malfunctioning, try another node by trying another transaction name"
+    )]
     InvalidQuote,
     #[error("Entry already exists at this address: {0:?}")]
     AlreadyExists(GraphEntryAddress),

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::NodeServiceData;
-use crate::{error::Result, ServiceStatus};
+use crate::{ServiceStatus, error::Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -168,11 +168,11 @@ impl NodeServiceDataV2 {
 mod tests {
     use super::super::node_service_data::NodeServiceData;
     use crate::{
-        node::{
-            node_service_data_v2::{NodeServiceDataV2, NODE_SERVICE_DATA_SCHEMA_V2},
-            NODE_SERVICE_DATA_SCHEMA_LATEST,
-        },
         ServiceStatus,
+        node::{
+            NODE_SERVICE_DATA_SCHEMA_LATEST,
+            node_service_data_v2::{NODE_SERVICE_DATA_SCHEMA_V2, NodeServiceDataV2},
+        },
     };
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;

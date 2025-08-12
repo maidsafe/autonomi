@@ -10,7 +10,7 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{
     ffi::OsString,

@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::quote::{DataTypes, StoreQuote};
 use crate::Client;
+use crate::client::quote::{DataTypes, StoreQuote};
 use ant_evm::{ClientProofOfPayment, EncodedPeerId, EvmWallet, EvmWalletError};
 use std::collections::HashMap;
 use xor_name::XorName;

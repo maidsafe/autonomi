@@ -13,13 +13,13 @@ use std::{
 
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::{
-    storage::{DataTypes, ValidationType},
     NetworkAddress, PrettyPrintRecordKey,
+    storage::{DataTypes, ValidationType},
 };
 use libp2p::{
+    PeerId,
     core::Multiaddr,
     kad::{KBucketDistance as Distance, Record, RecordKey},
-    PeerId,
 };
 use tokio::sync::oneshot;
 

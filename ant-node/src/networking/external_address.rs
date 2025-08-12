@@ -10,7 +10,7 @@ use crate::networking::{
     driver::NodeBehaviour, multiaddr_get_ip, multiaddr_get_port, multiaddr_is_global,
 };
 use itertools::Itertools;
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId, Swarm};
+use libp2p::{Multiaddr, PeerId, Swarm, multiaddr::Protocol};
 use std::{
     collections::{HashMap, HashSet},
     net::IpAddr,
@@ -138,7 +138,9 @@ impl ExternalAddressManager {
                 }
             } else {
                 if state.num_reports() < 10 {
-                    debug!("External address: {address:?} is already confirmed or a listener. Do nothing");
+                    debug!(
+                        "External address: {address:?} is already confirmed or a listener. Do nothing"
+                    );
                 }
 
                 return;
@@ -155,12 +157,10 @@ impl ExternalAddressManager {
                     num_reports,
                     ..
                 } = state
+                    && current_ip_address != *ip_address
+                    && *num_reports >= MAX_REPORTS_BEFORE_SWITCHING_IP
                 {
-                    if current_ip_address != *ip_address
-                        && *num_reports >= MAX_REPORTS_BEFORE_SWITCHING_IP
-                    {
-                        *new_ip_map.entry(ip_address).or_insert(0) += 1;
-                    }
+                    *new_ip_map.entry(ip_address).or_insert(0) += 1;
                 }
             }
 
@@ -168,12 +168,13 @@ impl ExternalAddressManager {
                 .iter()
                 .sorted_by_key(|(_, count)| *count)
                 .next_back()
+                && *count >= MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP
             {
-                if *count >= MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP {
-                    info!("New IP map as count>= {MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP}: {new_ip_map:?}");
-                    self.switch_to_new_ip(new_ip, swarm);
-                    return;
-                }
+                info!(
+                    "New IP map as count>= {MAX_CONFIRMED_ADDRESSES_BEFORE_SWITCHING_IP}: {new_ip_map:?}"
+                );
+                self.switch_to_new_ip(new_ip, swarm);
+                return;
             }
         }
 
@@ -234,16 +235,16 @@ impl ExternalAddressManager {
         }
 
         // Switch to new IP early.
-        if let Some(current_ip_address) = self.current_ip_address {
-            if current_ip_address != ip_address {
-                self.address_states.push(ExternalAddressState::Listener {
-                    address: address.clone(),
-                    ip_address,
-                });
-                // this will add it as external addr
-                self.switch_to_new_ip(ip_address, swarm);
-                return;
-            }
+        if let Some(current_ip_address) = self.current_ip_address
+            && current_ip_address != ip_address
+        {
+            self.address_states.push(ExternalAddressState::Listener {
+                address: address.clone(),
+                ip_address,
+            });
+            // this will add it as external addr
+            self.switch_to_new_ip(ip_address, swarm);
+            return;
         }
 
         if let Some(state) = self
@@ -253,7 +254,9 @@ impl ExternalAddressManager {
         {
             match state {
                 ExternalAddressState::Candidate { ip_address, .. } => {
-                    info!("Listen Addr was found as a candidate. Adding it as external to the swarm {address:?}");
+                    info!(
+                        "Listen Addr was found as a candidate. Adding it as external to the swarm {address:?}"
+                    );
 
                     swarm.add_external_address(address.clone());
                     *state = ExternalAddressState::Listener {
@@ -265,7 +268,9 @@ impl ExternalAddressManager {
                     return;
                 }
                 ExternalAddressState::Confirmed { ip_address, .. } => {
-                    debug!("Listen address was found as confirmed. Changing it to Listener {address:?}.");
+                    debug!(
+                        "Listen address was found as confirmed. Changing it to Listener {address:?}."
+                    );
                     *state = ExternalAddressState::Listener {
                         address: address.clone(),
                         ip_address: *ip_address,
@@ -280,7 +285,9 @@ impl ExternalAddressManager {
         }
 
         // if it is a new one, add it as a Listener
-        info!("Listen Addr was not found in the manager. Adding it as external to the swarm {address:?}");
+        info!(
+            "Listen Addr was not found in the manager. Adding it as external to the swarm {address:?}"
+        );
         self.address_states.push(ExternalAddressState::Listener {
             address: address.clone(),
             ip_address,
@@ -377,7 +384,9 @@ impl ExternalAddressManager {
                     }
 
                     ExternalAddressState::Listener { address, .. } => {
-                        info!("Switching to new IP, adding listen address as external address {address:?}");
+                        info!(
+                            "Switching to new IP, adding listen address as external address {address:?}"
+                        );
                         swarm.add_external_address(address.clone());
                     }
                     _ => {}

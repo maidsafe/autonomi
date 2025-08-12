@@ -19,8 +19,8 @@ pub use self::{
     chunks::Chunk,
     graph::{GraphContent, GraphEntry},
     header::{
-        try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind,
-        ValidationType,
+        DataTypes, RecordHeader, RecordKind, ValidationType, try_deserialize_record,
+        try_serialize_record,
     },
     pointer::{Pointer, PointerTarget},
     scratchpad::Scratchpad,

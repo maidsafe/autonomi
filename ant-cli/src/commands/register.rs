@@ -9,15 +9,15 @@
 #![allow(deprecated)]
 
 use crate::actions::NetworkContext;
-use crate::args::max_fee_per_gas::{get_max_fee_per_gas_from_opt_param, MaxFeePerGasParam};
+use crate::args::max_fee_per_gas::{MaxFeePerGasParam, get_max_fee_per_gas_from_opt_param};
 use crate::wallet::load_wallet;
 use autonomi::client::register::RegisterAddress;
 use autonomi::client::register::SecretKey as RegisterSecretKey;
 use autonomi::{Client, TransactionConfig};
-use color_eyre::eyre::eyre;
+use color_eyre::Section;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
-use color_eyre::Section;
+use color_eyre::eyre::eyre;
 
 pub fn generate_key(overwrite: bool) -> Result<()> {
     // check if the key already exists

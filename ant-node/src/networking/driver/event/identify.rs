@@ -7,18 +7,17 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    multiaddr_get_port,
+    Addresses, NetworkEvent, multiaddr_get_port,
     network::connection_action_logging,
-    relay_manager::{is_a_relayed_peer, RelayManager},
-    Addresses, NetworkEvent,
+    relay_manager::{RelayManager, is_a_relayed_peer},
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use itertools::Itertools;
+use libp2p::Multiaddr;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
 use libp2p::multiaddr::Protocol;
-use libp2p::Multiaddr;
-use std::collections::{hash_map, HashSet};
+use std::collections::{HashSet, hash_map};
 use std::time::{Duration, Instant};
 
 /// The delay before we dial back a peer after receiving an identify event.
@@ -208,11 +207,12 @@ impl SwarmDriver {
         }
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
-        if !is_relayed_peer && !self.initial_bootstrap.is_bootstrap_peer(&peer_id) {
-            if let Some(relay_manager) = self.relay_manager.as_mut() {
-                debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
-                relay_manager.add_potential_candidates(&peer_id, &addrs, &info.protocols);
-            }
+        if !is_relayed_peer
+            && !self.initial_bootstrap.is_bootstrap_peer(&peer_id)
+            && let Some(relay_manager) = self.relay_manager.as_mut()
+        {
+            debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
+            relay_manager.add_potential_candidates(&peer_id, &addrs, &info.protocols);
         }
 
         let (kbucket_full, already_present_in_rt, ilog2) =

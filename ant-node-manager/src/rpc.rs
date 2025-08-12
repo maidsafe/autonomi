@@ -7,18 +7,18 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    add_services::config::InstallNodeServiceCtxBuilder, config::create_owned_dir, ServiceManager,
-    VerbosityLevel,
+    ServiceManager, VerbosityLevel, add_services::config::InstallNodeServiceCtxBuilder,
+    config::create_owned_dir,
 };
 use ant_service_management::{
+    NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus,
     control::{ServiceControl, ServiceController},
     node::NODE_SERVICE_DATA_SCHEMA_LATEST,
     rpc::RpcClient,
-    NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus,
 };
 use color_eyre::{
-    eyre::{eyre, OptionExt},
     Result,
+    eyre::{OptionExt, eyre},
 };
 use libp2p::PeerId;
 use std::sync::Arc;

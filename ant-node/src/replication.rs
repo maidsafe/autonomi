@@ -10,13 +10,13 @@ use crate::networking::Network;
 use crate::{error::Result, node::Node};
 use ant_evm::ProofOfPayment;
 use ant_protocol::{
+    NetworkAddress, PrettyPrintRecordKey,
     messages::{Query, QueryResponse, Request, Response},
     storage::{DataTypes, ValidationType},
-    NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::{
-    kad::{Record, RecordKey},
     PeerId,
+    kad::{Record, RecordKey},
 };
 use tokio::task::spawn;
 
@@ -63,24 +63,34 @@ impl Node {
                             Record::new(key, record_content.to_vec())
                         }
                         Err(err) => {
-                            info!("Failed fetch record {pretty_key:?} from holder {holder:?}, with error {err:?}");
+                            info!(
+                                "Failed fetch record {pretty_key:?} from holder {holder:?}, with error {err:?}"
+                            );
                             return;
                         }
                     },
                     Ok(other) => {
-                        info!("Cannot fetch record {pretty_key:?} from holder {holder:?}, with response {other:?}");
+                        info!(
+                            "Cannot fetch record {pretty_key:?} from holder {holder:?}, with response {other:?}"
+                        );
                         return;
                     }
                     Err(err) => {
-                        info!("Failed to send request to fetch record {pretty_key:?} from holder {holder:?}, with error {err:?}");
+                        info!(
+                            "Failed to send request to fetch record {pretty_key:?} from holder {holder:?}, with error {err:?}"
+                        );
                         return;
                     }
                 };
 
                 if let Err(err) = node.store_replicated_in_record(record).await {
-                    error!("During store replication fetched {pretty_key:?} from holder {holder:?}, got error {err:?}");
+                    error!(
+                        "During store replication fetched {pretty_key:?} from holder {holder:?}, got error {err:?}"
+                    );
                 } else {
-                    debug!("Completed storing Replication Record {pretty_key:?} from holder {holder:?}.");
+                    debug!(
+                        "Completed storing Replication Record {pretty_key:?} from holder {holder:?}."
+                    );
                 }
             });
         }
@@ -214,7 +224,9 @@ impl Node {
                             continue;
                         }
                         Err(err) => {
-                            info!("Failed to verify the local existence of {addr:?} with error {err:?}");
+                            info!(
+                                "Failed to verify the local existence of {addr:?} with error {err:?}"
+                            );
                             continue;
                         }
                     }

@@ -11,7 +11,7 @@
 use crate::common::get_antnode_rpc_client;
 use ant_evm::Amount;
 use ant_protocol::antnode_proto::{NodeInfoRequest, RestartRequest};
-use ant_service_management::{get_local_node_registry_path, NodeRegistryManager};
+use ant_service_management::{NodeRegistryManager, get_local_node_registry_path};
 use autonomi::Client;
 use evmlib::wallet::Wallet;
 use eyre::Result;

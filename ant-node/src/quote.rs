@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::Network;
-use crate::{node::Node, Error, Result};
+use crate::{Error, Result, node::Node};
 use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
-use ant_protocol::{error::Error as ProtocolError, storage::ChunkAddress, NetworkAddress};
+use ant_protocol::{NetworkAddress, error::Error as ProtocolError, storage::ChunkAddress};
 use libp2p::PeerId;
 use std::time::Duration;
 use xor_name::XorName;

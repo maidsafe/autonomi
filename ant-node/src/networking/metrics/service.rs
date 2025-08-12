@@ -8,7 +8,7 @@
 
 use crate::networking::{NetworkError, Result};
 use futures::Future;
-use hyper::{service::Service, Body, Method, Request, Response, Server, StatusCode};
+use hyper::{Body, Method, Request, Response, Server, StatusCode, service::Service};
 use prometheus_client::{encoding::text::encode, registry::Registry};
 use std::{
     pin::Pin,
@@ -37,7 +37,10 @@ pub(crate) fn run_metrics_server(registries: MetricsRegistries, port: u16) {
         info!("Metrics server on http://{}/metrics", server.local_addr());
         println!("Metrics server on http://{}/metrics", server.local_addr());
 
-        info!("Metrics server on http://{} Available endpoints: /metrics, /metrics_extended, /metadata", server.local_addr());
+        info!(
+            "Metrics server on http://{} Available endpoints: /metrics, /metrics_extended, /metadata",
+            server.local_addr()
+        );
         // run the server forever
         if let Err(e) = server.await {
             error!("server error: {}", e);

@@ -9,11 +9,11 @@
 use super::header::SelectedMenuItem;
 use color_eyre::eyre::Result;
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Style, Stylize},
     text::Span,
     widgets::{Block, Borders, Padding},
-    Frame,
 };
 use tokio::sync::mpsc::UnboundedSender;
 

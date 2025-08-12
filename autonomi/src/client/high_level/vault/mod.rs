@@ -9,7 +9,7 @@
 pub mod key;
 pub mod user_data;
 
-pub use key::{derive_vault_key, VaultSecretKey};
+pub use key::{VaultSecretKey, derive_vault_key};
 pub use user_data::UserData;
 
 use crate::client::data_types::scratchpad::ScratchpadError;
@@ -21,10 +21,10 @@ use crate::client::utils::process_tasks_with_max_concurrency;
 use crate::client::{Client, GetError};
 use crate::graph::GraphError;
 use ant_evm::{AttoTokens, U256};
+use ant_protocol::Bytes;
 use ant_protocol::storage::{
     GraphContent, GraphEntry, GraphEntryAddress, Scratchpad, ScratchpadAddress,
 };
-use ant_protocol::Bytes;
 use bls::PublicKey;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use tracing::info;
@@ -351,8 +351,10 @@ impl Client {
                     //   * the first descendant pointing to next GraphEntry.
                     //   * other descendants pointing to Scratchpads for content.
                     if entry.descendants.len() <= NUM_OF_SCRATCHPADS_PER_GRAPHENTRY {
-                        let msg = format!("Vault's GraphEntry at {cur_graph_entry_addr:?} only has {} descendants.",
-                            entry.descendants.len());
+                        let msg = format!(
+                            "Vault's GraphEntry at {cur_graph_entry_addr:?} only has {} descendants.",
+                            entry.descendants.len()
+                        );
                         return Err(VaultError::VaultNotEnoughGraphDescendants(msg));
                     }
                     cur_free_graphentry_derivation =

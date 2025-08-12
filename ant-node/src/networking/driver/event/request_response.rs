@@ -10,12 +10,12 @@ use super::SwarmDriver;
 use crate::networking::driver::event::MsgResponder;
 use crate::networking::interface::NetworkSwarmCmd;
 use crate::networking::network::connection_action_logging;
-use crate::networking::{log_markers::Marker, NetworkError, NetworkEvent};
+use crate::networking::{NetworkError, NetworkEvent, log_markers::Marker};
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
+    NetworkAddress,
     messages::{CmdResponse, Request, Response},
     storage::ValidationType,
-    NetworkAddress,
 };
 use libp2p::request_response::{self, Message};
 
@@ -130,17 +130,23 @@ impl SwarmDriver {
                             let (Some(detected_by), Some(bad_peer)) =
                                 (detected_by.as_peer_id(), bad_peer.as_peer_id())
                             else {
-                                error!("Could not get PeerId from detected_by or bad_peer NetworkAddress {detected_by:?}, {bad_peer:?}");
+                                error!(
+                                    "Could not get PeerId from detected_by or bad_peer NetworkAddress {detected_by:?}, {bad_peer:?}"
+                                );
                                 return Ok(());
                             };
 
                             if bad_peer == self.self_peer_id {
-                                warn!("Peer {detected_by:?} consider us as BAD, due to {bad_behaviour:?}.");
+                                warn!(
+                                    "Peer {detected_by:?} consider us as BAD, due to {bad_behaviour:?}."
+                                );
                                 self.record_metrics(Marker::FlaggedAsBadNode {
                                     flagged_by: &detected_by,
                                 });
                             } else {
-                                error!("Received a bad_peer notification from {detected_by:?}, targeting {bad_peer:?}, which is not us.");
+                                error!(
+                                    "Received a bad_peer notification from {detected_by:?}, targeting {bad_peer:?}, which is not us."
+                                );
                             }
                         }
                         Request::Query(query) => {
@@ -265,12 +271,16 @@ impl SwarmDriver {
                                 .map_err(|_| NetworkError::InternalMsgChannelDropped)?;
                         }
                         None => {
-                            warn!("RequestResponse: OutboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}");
+                            warn!(
+                                "RequestResponse: OutboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}"
+                            );
                             return Err(NetworkError::ReceivedResponseDropped(request_id));
                         }
                     }
                 } else {
-                    warn!("RequestResponse: OutboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}");
+                    warn!(
+                        "RequestResponse: OutboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}"
+                    );
                     return Err(NetworkError::ReceivedResponseDropped(request_id));
                 }
             }
@@ -287,7 +297,9 @@ impl SwarmDriver {
                     &connection_id,
                     "RequestResponse::InboundFailure",
                 );
-                warn!("RequestResponse: InboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}");
+                warn!(
+                    "RequestResponse: InboundFailure for request_id: {request_id:?} and peer: {peer:?}, with error: {error:?}"
+                );
             }
             request_response::Event::ResponseSent {
                 peer,

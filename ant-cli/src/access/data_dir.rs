@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use color_eyre::{
-    eyre::{eyre, Context, Result},
     Section,
+    eyre::{Context, Result, eyre},
 };
 use std::path::PathBuf;
 

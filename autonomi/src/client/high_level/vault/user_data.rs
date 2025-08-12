@@ -8,18 +8,19 @@
 
 use std::collections::HashMap;
 
+use super::{VaultContentType, VaultError, VaultSecretKey, app_name_to_vault_content_type};
+use crate::chunk::DataMapChunk;
+use crate::client::Client;
+use crate::client::GetError;
 use crate::client::high_level::files::archive_private::PrivateArchiveDataMap;
 use crate::client::high_level::files::archive_public::ArchiveAddress;
 use crate::client::payment::PaymentOption;
-use crate::client::Client;
-use crate::client::GetError;
+use crate::data::DataAddress;
 use crate::register::RegisterAddress;
 use ant_evm::AttoTokens;
 use ant_protocol::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
-
-use super::{app_name_to_vault_content_type, VaultContentType, VaultError, VaultSecretKey};
 
 /// Vault content type for UserDataVault
 pub static USER_DATA_VAULT_CONTENT_IDENTIFIER: LazyLock<VaultContentType> =
@@ -53,6 +54,14 @@ pub struct UserData {
     #[serde(default)]
     // This makes the field optional to support old versions without that field
     pub pointer_key: Option<PointerSecretKeyHex>,
+    /// Individual public files (non-archive), along with their names
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub public_files: HashMap<DataAddress, String>,
+    /// Individual private files (non-archive), along with their names
+    #[serde(default)]
+    // This makes the field optional to support old versions without that field
+    pub private_files: HashMap<DataMapChunk, String>,
 }
 
 /// Errors that can occur during the get operation.
@@ -136,6 +145,8 @@ impl UserData {
     pub fn display_stats(&self) {
         let file_archives_len = self.file_archives.len();
         let private_file_archives_len = self.private_file_archives.len();
+        let public_files_len = self.public_files.len();
+        let private_files_len = self.private_files.len();
         let registers_len = self.register_addresses.len();
         let register_key = match self.register_key.is_some() {
             true => "1",
@@ -152,6 +163,8 @@ impl UserData {
 
         println!("{file_archives_len} public file archive(s)");
         println!("{private_file_archives_len} private file archive(s)");
+        println!("{public_files_len} public file(s)");
+        println!("{private_files_len} private file(s)");
         println!("{registers_len} register(s)");
         println!("{register_key} register key");
         println!("{scratchpad_key} scratchpad key");
@@ -245,6 +258,10 @@ mod tests {
         );
         assert_eq!(deserialized.register_addresses, v1_data.register_addresses);
         assert_eq!(deserialized.register_key, None);
+        assert_eq!(deserialized.scratchpad_key, None);
+        assert_eq!(deserialized.pointer_key, None);
+        assert_eq!(deserialized.public_files, HashMap::new());
+        assert_eq!(deserialized.private_files, HashMap::new());
 
         // Test current version serialization/deserialization
         let current_data = UserData {
@@ -254,6 +271,8 @@ mod tests {
             register_key: Some("test_key".to_string()),
             scratchpad_key: Some("test_scratchpad_key".to_string()),
             pointer_key: Some("test_pointer_key".to_string()),
+            public_files: HashMap::new(),
+            private_files: HashMap::new(),
         };
 
         let serialized = rmp_serde::to_vec(&current_data).unwrap();

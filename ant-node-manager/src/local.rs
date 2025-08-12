@@ -14,17 +14,17 @@ use crate::helpers::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
-use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::{
+    NodeServiceData, ServiceStatus,
     control::ServiceControl,
     rpc::{RpcActions, RpcClient},
-    NodeServiceData, ServiceStatus,
 };
 use color_eyre::eyre::OptionExt;
-use color_eyre::{eyre::eyre, Result};
+use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
-use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 #[cfg(test)]
 use mockall::automock;
 use std::{
@@ -383,6 +383,14 @@ pub async fn run_node(
     launcher: &dyn Launcher,
     rpc_client: &dyn RpcActions,
 ) -> Result<NodeServiceData> {
+    // For local network, after the first node got launched,
+    // it takes little bit time to setup the contact_service.
+    // Hence need an extra wait before launching the second node.
+    if run_options.number == 2 {
+        // in milliseconds
+        launcher.wait(5000);
+    }
+
     info!("Launching node {}...", run_options.number);
     println!("Launching node {}...", run_options.number);
     launcher.launch_node(

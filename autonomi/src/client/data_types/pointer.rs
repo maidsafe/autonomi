@@ -9,15 +9,15 @@
 use std::collections::HashMap;
 
 use crate::client::{
+    Client, GetError, PutError,
     payment::{PayError, PaymentOption},
     quote::CostError,
-    Client, GetError, PutError,
 };
 use crate::networking::{PeerId, PeerInfo, Record};
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_protocol::{
-    storage::{try_deserialize_record, try_serialize_record, DataTypes, RecordHeader, RecordKind},
     NetworkAddress,
+    storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
 };
 pub use bls::{PublicKey, SecretKey};
 use tracing::{debug, error, trace};
@@ -42,11 +42,15 @@ pub enum PointerError {
     Pay(#[from] PayError),
     #[error("Failed to retrieve wallet payment")]
     Wallet(#[from] EvmWalletError),
-    #[error("Received invalid quote from node, this node is possibly malfunctioning, try another node by trying another pointer name")]
+    #[error(
+        "Received invalid quote from node, this node is possibly malfunctioning, try another node by trying another pointer name"
+    )]
     InvalidQuote,
     #[error("Pointer already exists at this address: {0:?}")]
     PointerAlreadyExists(PointerAddress),
-    #[error("Pointer cannot be updated as it does not exist, please create it first or wait for it to be created")]
+    #[error(
+        "Pointer cannot be updated as it does not exist, please create it first or wait for it to be created"
+    )]
     CannotUpdateNewPointer,
 }
 
@@ -253,7 +257,9 @@ impl Client {
             let _new = self.pointer_update_from(&p, owner, target).await?;
             Ok(())
         } else {
-            warn!("Pointer at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created");
+            warn!(
+                "Pointer at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created"
+            );
             Err(PointerError::CannotUpdateNewPointer)
         }
     }

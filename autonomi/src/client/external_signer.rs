@@ -1,7 +1,7 @@
-use crate::client::quote::DataTypes;
-use crate::client::PutError;
-use crate::self_encryption::encrypt;
 use crate::Client;
+use crate::client::PutError;
+use crate::client::quote::DataTypes;
+use crate::self_encryption::encrypt;
 use ant_evm::QuotePayment;
 use ant_protocol::storage::Chunk;
 use bytes::Bytes;

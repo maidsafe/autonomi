@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    config::get_node_registry_path, helpers::download_and_extract_release, VerbosityLevel,
+    VerbosityLevel, config::get_node_registry_path, helpers::download_and_extract_release,
 };
 use ant_bootstrap::ContactsFetcher;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{NatDetectionStatus, NodeRegistryManager};
-use color_eyre::eyre::{bail, Context, Result};
+use color_eyre::eyre::{Context, Result, bail};
 use libp2p::Multiaddr;
 use rand::seq::SliceRandom;
 use std::{
@@ -52,14 +52,12 @@ pub async fn run_nat_detection(
 
     let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
 
-    if !force_run {
-        if let Some(status) = node_registry.nat_status.read().await.as_ref() {
-            if verbosity != VerbosityLevel::Minimal {
-                println!("NAT status has already been set as: {status:?}");
-            }
-            debug!("NAT status already set as: {status:?}, skipping.");
-            return Ok(());
+    if !force_run && let Some(status) = node_registry.nat_status.read().await.as_ref() {
+        if verbosity != VerbosityLevel::Minimal {
+            println!("NAT status has already been set as: {status:?}");
         }
+        debug!("NAT status already set as: {status:?}, skipping.");
+        return Ok(());
     }
 
     let nat_detection_path = if let Some(path) = path {
@@ -112,14 +110,12 @@ pub async fn run_nat_detection(
                 .spawn()
                 .wrap_err("Failed to spawn NAT detection process")?;
 
-            if trace_enabled {
-                if let Some(ref mut stdout) = child.stdout {
-                    let reader = BufReader::new(stdout);
-                    for line in reader.lines() {
-                        let line = line?;
-                        let clean_line = strip_ansi_escapes(&line);
-                        trace!("{clean_line}");
-                    }
+            if trace_enabled && let Some(ref mut stdout) = child.stdout {
+                let reader = BufReader::new(stdout);
+                for line in reader.lines() {
+                    let line = line?;
+                    let clean_line = strip_ansi_escapes(&line);
+                    trace!("{clean_line}");
                 }
             }
 

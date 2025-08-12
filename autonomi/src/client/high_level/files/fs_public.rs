@@ -8,13 +8,16 @@
 
 use super::archive_public::{ArchiveAddress, PublicArchive};
 use super::{DownloadError, FileCostError, Metadata, UploadError};
+use crate::AttoTokens;
+use crate::client::Client;
+use crate::client::data_types::chunk::ChunkAddress;
 use crate::client::high_level::data::DataAddress;
 use crate::client::payment::PaymentOption;
-use crate::client::Client;
-use crate::AttoTokens;
 use bytes::Bytes;
+use self_encryption::streaming_decrypt_from_storage;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use xor_name::XorName;
 
 impl Client {
     /// Download file from network to local file system
@@ -23,12 +26,46 @@ impl Client {
         data_addr: &DataAddress,
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
-        let data = self.data_get_public(data_addr).await?;
+        info!("Downloading public file to {to_dest:?} from {data_addr:?}");
+
+        // Create parent directories if needed
         if let Some(parent) = to_dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
             debug!("Created parent directories {parent:?} for {to_dest:?}");
         }
-        tokio::fs::write(to_dest.clone(), data).await?;
+
+        // Get the data map chunk from the public address
+        let data_map_chunk = self
+            .chunk_get(&ChunkAddress::new(*data_addr.xorname()))
+            .await?;
+        let data_map = self.deserialize_data_map(data_map_chunk.value())?;
+
+        // Create parallel chunk fetcher for streaming decryption
+        let client_clone = self.clone();
+        let parallel_chunk_fetcher =
+            move |chunk_names: &[XorName]| -> Result<Vec<Bytes>, self_encryption::Error> {
+                let chunk_addresses: Vec<ChunkAddress> = chunk_names
+                    .iter()
+                    .map(|name| ChunkAddress::new(*name))
+                    .collect();
+
+                // Use tokio::task::block_in_place to handle async in sync context
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(async {
+                        client_clone.fetch_chunks_parallel(&chunk_addresses).await
+                    })
+                })
+            };
+
+        // Stream decrypt directly to file
+        streaming_decrypt_from_storage(&data_map, &to_dest, parallel_chunk_fetcher).map_err(
+            |e| {
+                DownloadError::GetError(crate::client::GetError::Decryption(
+                    crate::self_encryption::Error::SelfEncryption(e),
+                ))
+            },
+        )?;
+
         debug!("Downloaded file to {to_dest:?} from the network address {data_addr:?}");
         Ok(())
     }
@@ -72,7 +109,7 @@ impl Client {
         let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
             match encryption_result {
-                Ok((file_chunk_iterator, _)) => {
+                Ok(file_chunk_iterator) => {
                     let file_path = file_chunk_iterator.file_path.clone();
                     info!("Successfully encrypted file: {file_path:?}");
                     #[cfg(feature = "loud")]

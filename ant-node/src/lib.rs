@@ -57,7 +57,7 @@ use crate::error::Result;
 use crate::networking::Network;
 pub use crate::networking::SwarmLocalState;
 use ant_evm::RewardsAddress;
-use ant_protocol::{get_port_from_multiaddr, NetworkAddress};
+use ant_protocol::{NetworkAddress, get_port_from_multiaddr};
 use libp2p::{Multiaddr, PeerId};
 use std::{
     collections::{BTreeMap, HashSet},

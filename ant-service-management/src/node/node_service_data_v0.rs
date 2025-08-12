@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::node_service_data_v1::{NodeServiceDataV1, NODE_SERVICE_DATA_SCHEMA_V1};
 use super::NodeServiceData;
+use super::node_service_data_v1::{NODE_SERVICE_DATA_SCHEMA_V1, NodeServiceDataV1};
 use crate::ServiceStatus;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
@@ -109,7 +109,7 @@ mod tests {
     use super::super::node_service_data::NodeServiceData;
     use super::super::node_service_data_v1::NodeServiceDataV1;
     use super::*;
-    use crate::{node::NODE_SERVICE_DATA_SCHEMA_LATEST, ServiceStatus};
+    use crate::{ServiceStatus, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;
     use std::{

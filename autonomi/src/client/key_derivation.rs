@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use bls::{serde_impl::SerdeSecret, PublicKey, SecretKey, PK_SIZE};
+use bls::{PK_SIZE, PublicKey, SecretKey, serde_impl::SerdeSecret};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fmt;

@@ -11,7 +11,7 @@ use evmlib::{
     common::{Address as RewardsAddress, QuoteHash},
     quoting_metrics::QuotingMetrics,
 };
-use libp2p::{identity::PublicKey, Multiaddr, PeerId};
+use libp2p::{Multiaddr, PeerId, identity::PublicKey};
 use serde::{Deserialize, Serialize};
 pub use std::time::SystemTime;
 use xor_name::XorName;
@@ -96,10 +96,10 @@ impl ProofOfPayment {
         self.peer_quotes
             .iter()
             .filter_map(|(_id, quote)| {
-                if let Ok(quote_peer_id) = quote.peer_id() {
-                    if *peer_id == quote_peer_id {
-                        return Some(quote);
-                    }
+                if let Ok(quote_peer_id) = quote.peer_id()
+                    && *peer_id == quote_peer_id
+                {
+                    return Some(quote);
                 }
                 None
             })
