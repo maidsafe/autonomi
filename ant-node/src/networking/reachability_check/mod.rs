@@ -41,8 +41,10 @@ const MAX_WORKFLOW_ATTEMPTS: usize = 3;
 pub enum ReachabilityStatus {
     /// We are reachable and have an external address.
     Reachable {
+        /// The local adapter address we are reachable at.
+        local_addr: SocketAddr,
         /// The external address we are reachable at.
-        addr: SocketAddr,
+        external_addr: SocketAddr,
         /// Whether UPnP is supported or not.
         upnp: bool,
     },
@@ -53,23 +55,6 @@ pub enum ReachabilityStatus {
         /// The reason for not being reachable.
         reason: ReachabilityIssue,
     },
-}
-
-impl ReachabilityStatus {
-    pub(crate) fn upnp_supported(&self) -> bool {
-        match self {
-            ReachabilityStatus::Reachable { upnp, .. } => *upnp,
-            ReachabilityStatus::NotReachable { upnp, .. } => *upnp,
-        }
-    }
-
-    pub(crate) fn is_reachable(&self) -> bool {
-        matches!(self, ReachabilityStatus::Reachable { .. })
-    }
-
-    pub(crate) fn is_not_reachable(&self) -> bool {
-        matches!(self, ReachabilityStatus::NotReachable { .. })
-    }
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -516,17 +501,23 @@ impl ReachabilityCheckSwarmDriver {
     ///
     /// If the node is not yet reachable, it will return `None` and the workflow will be retried.
     fn get_reachability_status(&mut self) -> Option<ReachabilityStatus> {
-        let reachable_local_adapter = self.obtain_reachable_local_adapter();
+        let reachable_addrs = self.obtain_reachable_addrs();
+        if let Some(recorder) = &self.metrics_recorder {
+            let _ = recorder
+                .reachability_check_progress
+                .set(self.workflow_progress());
+        }
 
-        match reachable_local_adapter {
-            Ok(local_adapter) => {
+        match reachable_addrs {
+            Ok((external_addr, local_adapter)) => {
                 info!("Node is reachable via local adapter: {local_adapter}");
                 println!(
                     "Reachability status: Reachable with UPnP status: {}\n",
                     self.upnp_supported
                 );
                 Some(ReachabilityStatus::Reachable {
-                    addr: local_adapter,
+                    local_addr: local_adapter,
+                    external_addr,
                     upnp: self.upnp_supported,
                 })
             }
@@ -568,8 +559,9 @@ impl ReachabilityCheckSwarmDriver {
     /// from the incoming connections. We now need to determine if the node is reachable or not and return the
     /// reachable local adapter address.
     ///
+    /// Returns (external, local_adapter) addrs
     /// Undesirable states are returned as an error.
-    fn obtain_reachable_local_adapter(&self) -> Result<SocketAddr, ReachabilityIssue> {
+    fn obtain_reachable_addrs(&self) -> Result<(SocketAddr, SocketAddr), ReachabilityIssue> {
         debug!(
             "External addresses observed: {:?}",
             self.dial_manager.dialer.identify_observed_external_addr
@@ -677,11 +669,17 @@ impl ReachabilityCheckSwarmDriver {
             "Found external address: {external_addr:?} and its local adapter: {local_adapter_addr:?}"
         );
 
-        Ok(local_adapter_addr)
+        Ok((external_addr, local_adapter_addr))
     }
 
     fn has_retries_remaining(&self) -> bool {
         self.dial_manager.current_workflow_attempt < MAX_WORKFLOW_ATTEMPTS
+    }
+
+    fn workflow_progress(&self) -> f64 {
+        let value =
+            self.dial_manager.current_workflow_attempt as f64 / MAX_WORKFLOW_ATTEMPTS as f64;
+        value.clamp(0.0, 1.0)
     }
 }
 
