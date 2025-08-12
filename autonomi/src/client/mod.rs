@@ -366,27 +366,16 @@ mod tests {
     async fn test_init_fails() {
         let _guard = LogBuilder::init_single_threaded_tokio_test();
 
-        let local = true;
-        let addrs = vec![
+        let initial_peers = vec![
             "/ip4/127.0.0.1/udp/1/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
                 .parse()
                 .unwrap(),
         ];
+        let network = Network::new(initial_peers, None).unwrap();
 
-        let res = Client::init_with_config(ClientConfig {
-            init_peers_config: InitialPeersConfig {
-                local,
-                addrs,
-                ignore_cache: true,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-        .await;
-
-        match res {
+        match network.wait_for_connectivity().await {
             Err(ConnectError::TimedOut) => {} // This is the expected outcome
-            Ok(_) => panic!("Expected `ConnectError::TimedOut`, but got `Ok`"),
+            Ok(()) => panic!("Expected `ConnectError::TimedOut`, but got `Ok`"),
             Err(err) => {
                 panic!("Expected `ConnectError::TimedOut`, but got `{err:?}`")
             }
