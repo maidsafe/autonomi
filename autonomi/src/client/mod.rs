@@ -384,9 +384,12 @@ mod tests {
         })
         .await;
 
-        assert!(
-            matches!(res, Err(ConnectError::TimedOut)),
-            "Expected timeout after connecting to non-existing peer: {res:?}"
-        );
+        match res {
+            Err(ConnectError::TimedOut) => {} // This is the expected outcome
+            Ok(_) => panic!("Expected `ConnectError::TimedOut`, but got `Ok`"),
+            Err(err) => {
+                panic!("Expected `ConnectError::TimedOut`, but got `{err:?}`")
+            }
+        }
     }
 }

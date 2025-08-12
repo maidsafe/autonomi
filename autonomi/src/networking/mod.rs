@@ -221,7 +221,11 @@ impl Network {
                             return Ok(());
                         }
                     }
-                    Err(_err) => {}
+                    Err(err) => {
+                        tracing::warn!(
+                            "Failed to get connections made: {err}, retrying..."
+                        );
+                    }
                 }
                 sleep(check_interval).await;
             }
@@ -548,6 +552,7 @@ impl Network {
             .send(task)
             .await
             .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        tracing::trace!("Waiting for connections made response");
         rx.await?
     }
 }
