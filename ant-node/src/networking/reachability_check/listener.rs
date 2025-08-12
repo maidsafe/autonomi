@@ -26,6 +26,9 @@ use std::net::SocketAddr;
 use std::time::{Duration, Instant};
 use tracing::{debug, error, info};
 
+/// Timeout for collecting listen addresses. The timer resets each time a new address is discovered.
+const COLLECTION_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// Run a dummy swarm to collect all listen addresses.
 /// This is used to determine the addresses the node is listening on, which is useful for
 /// reachability checks and other network operations.
@@ -68,17 +71,12 @@ pub(crate) async fn get_all_listeners(
 
     info!("Starting listener swarm to collect all listen addresses.");
 
-    // Collect addresses with timeout
     let mut addresses = HashSet::new();
-    let collection_timeout = Duration::from_secs(10);
-    let start_time = Instant::now();
-    let mut last_address_time = start_time;
+    let mut last_address_time = Instant::now();
+    let mut upnp_result_found = false; // Either GatewayNotFound or NonRoutableGateway or NewExternalAddr (which we return anyway)
 
-    while start_time.elapsed() < collection_timeout {
-        // Wait for events with a timeout based on time since last address
-        let remaining_timeout = collection_timeout.saturating_sub(last_address_time.elapsed());
-
-        match tokio::time::timeout(remaining_timeout, swarm.select_next_some()).await {
+    while last_address_time.elapsed() < COLLECTION_TIMEOUT || !upnp_result_found {
+        match tokio::time::timeout(COLLECTION_TIMEOUT, swarm.select_next_some()).await {
             Ok(swarm_event) => {
                 match swarm_event {
                     SwarmEvent::NewListenAddr {
@@ -113,6 +111,8 @@ pub(crate) async fn get_all_listeners(
                             error!("Failed to parse socket address from UPnP address {addr:?}");
                         }
 
+                        // just in case we failed to parse socket addr
+                        upnp_result_found = true;
                         last_address_time = Instant::now();
                     }
                     SwarmEvent::Behaviour(upnp::behaviour::Event::ExpiredExternalAddr {
@@ -122,12 +122,15 @@ pub(crate) async fn get_all_listeners(
                         info!(
                             "UPnP external address expired: {addr} for local address {local_addr}"
                         );
+                        upnp_result_found = true;
                     }
                     SwarmEvent::Behaviour(upnp::behaviour::Event::GatewayNotFound) => {
-                        error!("No UPnP gateway found")
+                        error!("No UPnP gateway found.");
+                        upnp_result_found = true;
                     }
                     SwarmEvent::Behaviour(upnp::behaviour::Event::NonRoutableGateway) => {
-                        error!("UPnP gateway is not routable");
+                        error!("UPnP gateway is not routable.");
+                        upnp_result_found = true;
                     }
                     _ => {
                         // Other events are not relevant for collecting listen addresses
@@ -137,8 +140,8 @@ pub(crate) async fn get_all_listeners(
             }
             Err(_) => {
                 info!(
-                    "Collection timeout reached after {} seconds, collected {} addresses",
-                    collection_timeout.as_secs(),
+                    "Collection timeout reached after {} seconds since last address, collected {} addresses",
+                    COLLECTION_TIMEOUT.as_secs(),
                     addresses.len()
                 );
                 break;
