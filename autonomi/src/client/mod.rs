@@ -359,21 +359,33 @@ pub struct UploadSummary {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use ant_logging::LogBuilder;
 
     #[tokio::test]
     async fn test_init_fails() {
         let _guard = LogBuilder::init_single_threaded_tokio_test();
 
-        let res = super::Client::init_with_peers(vec![
+        let local = true;
+        let addrs = vec![
             "/ip4/127.0.0.1/udp/1/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
                 .parse()
                 .unwrap(),
-        ])
+        ];
+
+        let res = Client::init_with_config(ClientConfig {
+            init_peers_config: InitialPeersConfig {
+                local,
+                addrs,
+                ignore_cache: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
         .await;
 
         assert!(
-            matches!(res, Err(super::ConnectError::TimedOut)),
+            matches!(res, Err(ConnectError::TimedOut)),
             "Expected timeout after connecting to non-existing peer: {res:?}"
         );
     }
