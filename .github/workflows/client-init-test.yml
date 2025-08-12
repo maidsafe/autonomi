@@ -1,0 +1,29 @@
+name: Client Timeout Test
+
+on:
+  # tests must run for a PR to be valid and pass merge queue muster
+  # on main, we want to know that all commits are passing at a glance, any deviation should help bisecting errors
+  # the merge run checks should show on master and enable this clear test/passing history
+  merge_group:
+    branches: [main, alpha*, beta*, rc*]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  memory-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check we're on the right commit
+        run: git log -1 --oneline
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        continue-on-error: true
+
+      - run: cargo test --release --package=autonomi -- --ignored test_init_fails
+        timeout-minutes: 1
