@@ -26,4 +26,4 @@ jobs:
         continue-on-error: true
 
       - run: cargo test --release --package=autonomi -- --ignored test_init_fails
-        timeout-minutes: 1
+        timeout-minutes: 10
