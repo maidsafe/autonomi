@@ -87,6 +87,10 @@ pub(crate) async fn get_all_listeners(
                     } => {
                         info!("New listen address: {address:?} on listener {listener_id:?}");
                         if let Some(socket_addr) = multiaddr_get_socket_addr(&address) {
+                            if socket_addr.ip().is_unspecified() {
+                                error!("Unspecified IP address found for listener {listener_id:?}");
+                                continue;
+                            }
                             let _ = addresses.insert(socket_addr);
                         } else {
                             error!("Failed to parse socket address from {address:?}");

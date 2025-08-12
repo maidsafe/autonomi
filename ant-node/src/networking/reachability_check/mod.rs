@@ -158,31 +158,24 @@ impl ReachabilityCheckSwarmDriver {
     ) -> Result<Self, NetworkError> {
         let mut swarm = swarm;
 
-        println!("Obtaining valid listen addresses for reachability check");
+        println!("Obtaining valid listen addresses for the reachability check..");
         let observed_listeners = get_all_listeners(keypair, local, listen_addr, no_upnp).await?;
 
         if observed_listeners.is_empty() {
             error!("No listen addresses found. Cannot start reachability check.");
             return Err(NetworkError::NoListenAddressesFound);
-        } else if observed_listeners.len() == 1 {
-            if let Some(listen_socket_addr) = observed_listeners.iter().next() {
-                if listen_socket_addr.ip().is_unspecified() {
-                    error!(
-                        "The only listen address found is unspecified. Cannot start reachability check."
-                    );
-                    return Err(NetworkError::NoListenAddressesFound);
-                }
-            }
         }
 
         for listen_addr in observed_listeners {
-            // Listen on QUIC
             let addr_quic = Multiaddr::from(listen_addr.ip())
                 .with(Protocol::Udp(listen_addr.port()))
                 .with(Protocol::QuicV1);
 
             let listener_id = listen_on_with_retry(&mut swarm, addr_quic.clone())?;
             info!("Listening on {listener_id:?} with addr: {addr_quic:?}");
+            println!(
+                "Successfully started listening on {addr_quic:?} with listener ID: {listener_id:?}"
+            );
         }
 
         Ok(Self {
