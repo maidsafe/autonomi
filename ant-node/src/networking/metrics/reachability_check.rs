@@ -52,7 +52,7 @@ pub(super) fn get_reachability_status_metric(
         }
         ReachabilityStatusMetric::Status(status) => {
             reachable = status.is_reachable();
-            not_routable = status.is_not_routable();
+            not_routable = status.is_not_reachable();
             upnp_supported = status.upnp_supported();
         }
     }
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_routable_without_upnp() {
-        let status = ReachabilityStatus::NotRoutable {
+        let status = ReachabilityStatus::NotReachable {
             upnp: false,
             reason: ReachabilityIssue::NoDialBacks,
         };
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_routable_with_upnp() {
-        let status = ReachabilityStatus::NotRoutable {
+        let status = ReachabilityStatus::NotReachable {
             upnp: true,
             reason: ReachabilityIssue::NoDialBacks,
         };
@@ -235,14 +235,14 @@ mod tests {
         // Test all combinations of status with UPnP enabled/disabled
         let test_cases = vec![
             (
-                ReachabilityStatus::NotRoutable {
+                ReachabilityStatus::NotReachable {
                     upnp: true,
                     reason: ReachabilityIssue::NoDialBacks,
                 },
                 "NotRoutable with UPnP",
             ),
             (
-                ReachabilityStatus::NotRoutable {
+                ReachabilityStatus::NotReachable {
                     upnp: false,
                     reason: ReachabilityIssue::NoDialBacks,
                 },
@@ -270,7 +270,7 @@ mod tests {
 
             let expected_upnp = status.upnp_supported();
             let expected_reachable = status.is_reachable();
-            let expected_not_routable = status.is_not_routable();
+            let expected_not_routable = status.is_not_reachable();
 
             verify_metric(
                 &family,

@@ -245,20 +245,18 @@ impl NodeBuilder {
                     info!(
                         "We are reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}",
                     );
-                    println!(
-                        "We are reachable. Starting node with socket addr: {addr} and UPnP: {upnp:?}.",
-                    );
+                    println!("Starting node with socket addr: {addr} and UPnP: {upnp:?}");
                     address = addr;
                     no_upnp = !upnp;
                 }
-                Ok(ReachabilityStatus::NotRoutable { upnp: _, reason }) => {
-                    info!("We are not routable, reason: {reason}. Terminating the node.");
-                    println!("We are not routable, reason: {reason}. Terminating the node.");
+                Ok(ReachabilityStatus::NotReachable { upnp: _, reason }) => {
+                    info!("We are not routable, reason: {reason:?}. Terminating the node.");
+                    println!("Terminating the node: {reason:?}");
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {
-                    info!("Reachability check error: {err}. Terminating the node.");
-                    println!("Reachability check error: {err}. Terminating the node.");
+                    info!("Reachability check error: {err:?}. Terminating the node.");
+                    println!("Terminating the node: {err:?}");
                     return Err(err);
                 }
             }
