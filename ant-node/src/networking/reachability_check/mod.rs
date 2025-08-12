@@ -49,10 +49,10 @@ pub enum ReachabilityStatus {
         upnp: bool,
     },
     /// We are not externally reachable.
-    NotRoutable {
+    NotReachable {
         /// Whether UPnP is supported or not.
         upnp: bool,
-        /// The reason for not being routable.
+        /// The reason for not being reachable.
         reason: ReachabilityIssue,
     },
 }
@@ -61,7 +61,7 @@ impl ReachabilityStatus {
     pub(crate) fn upnp_supported(&self) -> bool {
         match self {
             ReachabilityStatus::Reachable { upnp, .. } => *upnp,
-            ReachabilityStatus::NotRoutable { upnp, .. } => *upnp,
+            ReachabilityStatus::NotReachable { upnp, .. } => *upnp,
         }
     }
 
@@ -69,28 +69,32 @@ impl ReachabilityStatus {
         matches!(self, ReachabilityStatus::Reachable { .. })
     }
 
-    pub(crate) fn is_not_routable(&self) -> bool {
-        matches!(self, ReachabilityStatus::NotRoutable { .. })
+    pub(crate) fn is_not_reachable(&self) -> bool {
+        matches!(self, ReachabilityStatus::NotReachable { .. })
     }
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum ReachabilityIssue {
-    #[error("We were not able to make any outbound connections")]
+    #[error("We were not able to make any outbound connections. Exiting.")]
     NoOutboundConnection,
-    #[error("We were not able to get any dial backs")]
+    #[error("We were not able to get any dial backs from other peers. Retrying if possible.")]
     NoDialBacks,
-    #[error("Not enough dial backs received. Required: {required}, Found: {found}")]
+    #[error(
+        "We did not get enough dial backs. We need at least {required} but found {found}. Retrying if possible."
+    )]
     NotEnoughDialBacks { required: usize, found: usize },
-    #[error("Multiple valid external addresses found. Make sure that only one is configured")]
+    #[error("We found multiple valid external addresses. Make sure that only one is configured.")]
     MultipleExternalAddresses,
-    #[error("Multiple valid local adapter addresses found. Make sure that only one is configured")]
+    #[error(
+        "We found multiple valid local adapter addresses. Make sure that only one is configured."
+    )]
     MultipleLocalAdapterAddresses,
-    #[error("Unspecified external address")]
+    #[error("We found an unspecified external address. Exiting.")]
     UnspecifiedExternalAddress,
-    #[error("Unspecified local adapter address")]
+    #[error("We found an unspecified local adapter address. Exiting.")]
     UnspecifiedLocalAdapterAddress,
-    #[error("Local adapter port is zero")]
+    #[error("We found a local adapter port that is zero. Exiting.")]
     LocalAdapterPortZero,
 }
 
@@ -158,11 +162,12 @@ impl ReachabilityCheckSwarmDriver {
     ) -> Result<Self, NetworkError> {
         let mut swarm = swarm;
 
-        println!("Obtaining valid listen addresses for the reachability check..");
+        println!("Obtaining valid listeners for the reachability check workflow..");
         let observed_listeners = get_all_listeners(keypair, local, listen_addr, no_upnp).await?;
 
         if observed_listeners.is_empty() {
             error!("No listen addresses found. Cannot start reachability check.");
+            println!("No valid listeners found. Exiting.");
             return Err(NetworkError::NoListenAddressesFound);
         }
 
@@ -171,11 +176,16 @@ impl ReachabilityCheckSwarmDriver {
                 .with(Protocol::Udp(listen_addr.port()))
                 .with(Protocol::QuicV1);
 
-            let listener_id = listen_on_with_retry(&mut swarm, addr_quic.clone())?;
-            info!("Listening on {listener_id:?} with addr: {addr_quic:?}");
-            println!(
-                "Successfully started listening on {addr_quic:?} with listener ID: {listener_id:?}"
-            );
+            let listener_id = match listen_on_with_retry(&mut swarm, addr_quic.clone()) {
+                Ok(id) => id,
+                Err(err) => {
+                    error!("Failed to listen on {addr_quic:?}: {err}");
+                    println!("Failed to listen on {addr_quic:?}: {err}");
+                    return Err(err);
+                }
+            };
+            info!("Listening on {addr_quic:?} with {listener_id:?}");
+            println!("Listening on {addr_quic:?} with {listener_id:?}");
         }
 
         Ok(Self {
@@ -188,9 +198,14 @@ impl ReachabilityCheckSwarmDriver {
     }
     /// Runs the reachability check workflow.
     pub(crate) async fn detect(mut self) -> Result<ReachabilityStatus, NetworkError> {
-        info!("Starting reachability check workflow.");
+        println!("Starting reachability check workflow. This could take 3 to 10 minutes..");
+        info!(
+            "Starting reachability check workflow. Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
+            self.dial_manager.current_workflow_attempt
+        );
         println!(
-            "Reachability check workflow started. Current workflow attempt: 1 of {MAX_WORKFLOW_ATTEMPTS}"
+            "\nReachability Workflow Summary - Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
+            self.dial_manager.current_workflow_attempt
         );
         let mut dial_check_interval = tokio::time::interval(std::time::Duration::from_secs(5));
         let _ = dial_check_interval.tick().await; // first tick is immediate
@@ -533,7 +548,7 @@ impl ReachabilityCheckSwarmDriver {
 
     /// Get the reachability status of the node if the retries are exhausted.
     ///
-    /// If the node is not routable, it will return `ReachabilityStatus::NotRoutable`.
+    /// If the node is not reachable, it will return `ReachabilityStatus::NotReachable`.
     /// If the node is reachable, it will return `ReachabilityStatus::Reachable`
     /// with the reachable local adapter address and whether UPnP is supported.
     ///
@@ -542,19 +557,27 @@ impl ReachabilityCheckSwarmDriver {
         let reachable_local_adapter = self.obtain_reachable_local_adapter();
 
         match reachable_local_adapter {
-            Ok(local_adapter) => Some(ReachabilityStatus::Reachable {
-                addr: local_adapter,
-                upnp: self.upnp_supported,
-            }),
+            Ok(local_adapter) => {
+                info!("Node is reachable via local adapter: {local_adapter}");
+                println!(
+                    "Reachability status: Reachable with UPnP status: {}\n",
+                    self.upnp_supported
+                );
+                Some(ReachabilityStatus::Reachable {
+                    addr: local_adapter,
+                    upnp: self.upnp_supported,
+                })
+            }
             Err(reason) => {
+                println!("{reason}");
                 if reason.retryable() {
                     if self.has_retries_remaining() {
-                        println!(
-                            "Retrying reachability check workflow (failed due to: {reason}). Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                        info!(
+                            "Retrying reachability check workflow (failed due to: {reason:?}). Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
                             self.dial_manager.current_workflow_attempt + 1
                         );
-                        info!(
-                            "Retrying reachability check workflow (failed due to: {reason}). Current workflow attempt: {} of {MAX_WORKFLOW_ATTEMPTS}",
+                        println!(
+                            "\nReachability Workflow Summary - Attempt {} of {MAX_WORKFLOW_ATTEMPTS}",
                             self.dial_manager.current_workflow_attempt + 1
                         );
                         self.dial_manager.reattempt_workflow();
@@ -566,9 +589,12 @@ impl ReachabilityCheckSwarmDriver {
                         );
                     }
                 }
-
-                error!("We are not routable. Terminating the reachability check workflow.");
-                Some(ReachabilityStatus::NotRoutable {
+                println!("We are not reachable. Terminating the reachability check workflow.\n");
+                error!(
+                    "Reachability status: NotReachable with UPnP status: {} due to {reason:?}",
+                    self.upnp_supported,
+                );
+                Some(ReachabilityStatus::NotReachable {
                     upnp: self.upnp_supported,
                     reason,
                 })
@@ -604,12 +630,18 @@ impl ReachabilityCheckSwarmDriver {
                 .get(connection_id)
             {
                 info!(
-                    "Local adapter address for external_addr {external_addr:?} with connection id {connection_id:?} is {local_adapter_addr:?}"
+                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?}"
+                );
+                println!(
+                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?}"
                 );
                 external_addr_local_adapter_map.push((*external_addr, *local_adapter_addr));
             } else {
                 warn!(
-                    "Unable to get local adapter address for external_addr {external_addr:?} with connection id {connection_id:?}"
+                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?}"
+                );
+                println!(
+                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?}"
                 );
             }
         }
@@ -620,12 +652,12 @@ impl ReachabilityCheckSwarmDriver {
             info!("No observed addresses found. Check if we made any successful dials.");
             if self.dial_manager.is_faulty() {
                 error!(
-                    "We are faulty. We have not made any successful dials. Terminating the node immediately."
+                    "We have not made any outbound connections. Terminating the node immediately."
                 );
                 return Err(ReachabilityIssue::NoOutboundConnection);
             } else {
                 info!(
-                    "We are not faulty but did not receive any inbounds. Retrying again, else terminating."
+                    "We made outbound connections, but did not receive any inbounds. Retrying again, else terminating."
                 );
                 return Err(ReachabilityIssue::NoDialBacks);
             }
