@@ -1149,7 +1149,7 @@ dependencies = [
  "notify",
  "prometheus-parse",
  "prost 0.9.0",
- "reqwest 0.12.22",
+ "reqwest 0.12.23",
  "semver 1.0.26",
  "serde",
  "serde_json",
