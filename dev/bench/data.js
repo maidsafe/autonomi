@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755090578599,
+  "lastUpdate": 1755100273061,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -506,6 +506,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 26.14437425690899,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c193cbf170efee037b7ff5b8865fd7d56269d1e9",
+          "message": "Merge pull request #3161 from RolandSherwin/clippy\n\nchore: fix new clippy lints",
+          "timestamp": "2025-08-13T14:55:59Z",
+          "tree_id": "5a53ddf272e4dbc7ed786aba43c012899ff66251",
+          "url": "https://github.com/maidsafe/autonomi/commit/c193cbf170efee037b7ff5b8865fd7d56269d1e9"
+        },
+        "date": 1755100265721,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.6386537941077703,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.046783479330228,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 27.281740661990046,
             "unit": "MiB/s"
           }
         ]
