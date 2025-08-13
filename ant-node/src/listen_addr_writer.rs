@@ -10,7 +10,8 @@ use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
-    fs,
+    fs::{self, File, OpenOptions},
+    io::{Read, Write},
     path::{Path, PathBuf},
 };
 
@@ -77,7 +78,11 @@ impl ListenAddrWriter {
     fn load_from_file(root_dir: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let path = root_dir.join(LISTENER_FILE_NAME);
         let data = if path.exists() {
-            let content = fs::read_to_string(&path)?;
+            let mut file = File::open(&path)?;
+            file.lock()?;
+
+            let mut content = String::new();
+            let _ = file.read_to_string(&mut content)?;
             let data: Vec<String> = serde_json::from_str(&content)?;
             data
         } else {
@@ -96,8 +101,15 @@ impl ListenAddrWriter {
         }
         let path = root_dir.join(LISTENER_FILE_NAME);
 
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&path)?;
+        file.lock()?;
+
         let json = serde_json::to_string_pretty(&listeners)?;
-        fs::write(&path, json)?;
+        file.write_all(json.as_bytes())?;
         debug!("Saved listeners to file: {path:?}",);
         Ok(())
     }
