@@ -77,7 +77,7 @@ pub async fn upload(
     // Configure payment mode
     if single_node_payment {
         client = client.with_payment_mode(PaymentMode::SingleNode);
-        println!("🎯 Using single node payment mode - paying one node 10x the normal amount");
+        println!("🎯 Using single node payment mode - saving gas fees");
     }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
