@@ -10,8 +10,8 @@ use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
-    fs::{self, File, OpenOptions},
-    io::{Read, Write},
+    fs::{self, OpenOptions},
+    io::{Read, Seek, Write},
     path::{Path, PathBuf},
 };
 
@@ -22,47 +22,39 @@ const LISTENER_FILE_NAME: &str = "listen_addrs.json";
 pub(crate) struct ListenAddrWriter;
 
 impl ListenAddrWriter {
-    pub(crate) fn write(root_dir: PathBuf, address: Multiaddr) {
+    /// Add a listener address to the file
+    pub(crate) fn add_listeners(root_dir: PathBuf, address: Multiaddr) {
         #[allow(clippy::let_underscore_future)]
         let _ = tokio::spawn(async move {
-            let mut listeners = match Self::load_from_file(&root_dir) {
-                Ok(listeners) => listeners,
-                Err(err) => {
-                    error!("Error loading listeners during add: {err:?}");
-                    return;
+            let address_str = address.to_string();
+            if let Err(err) = Self::modify_listeners_file(&root_dir, |listeners| {
+                if !listeners.contains(&address_str) {
+                    listeners.push(address_str);
                 }
-            };
-
-            if !listeners.contains(&address.to_string()) {
-                listeners.push(address.to_string());
-                if let Err(err) = Self::save_to_file(&listeners, &root_dir) {
-                    error!("Error saving listeners during add: {err:?}");
-                }
+            }) {
+                error!("Error adding listener: {err:?}");
             }
         });
     }
 
+    /// Remove listener addresses from the file
     pub(crate) fn remove_listener(root_dir: PathBuf, addresses: Vec<Multiaddr>) {
         #[allow(clippy::let_underscore_future)]
         let _ = tokio::spawn(async move {
-            let mut listeners = match Self::load_from_file(&root_dir) {
-                Ok(listeners) => listeners,
-                Err(err) => {
-                    error!("Error loading listeners during remove: {err:?}");
-                    return;
-                }
-            };
-            let addresses = addresses
+            let addresses_to_remove = addresses
                 .into_iter()
                 .map(|addr| addr.to_string())
                 .collect::<HashSet<_>>();
-            listeners.retain(|addr| !addresses.contains(addr));
-            if let Err(err) = Self::save_to_file(&listeners, &root_dir) {
-                error!("Error saving listeners during remove: {err:?}");
+
+            if let Err(err) = Self::modify_listeners_file(&root_dir, |listeners| {
+                listeners.retain(|addr| !addresses_to_remove.contains(addr));
+            }) {
+                error!("Error removing listeners: {err:?}");
             }
         });
     }
 
+    /// Reset/delete the listeners file
     pub(crate) fn reset(root_dir: PathBuf) {
         #[allow(clippy::let_underscore_future)]
         let _ = tokio::spawn(async move {
@@ -75,42 +67,50 @@ impl ListenAddrWriter {
         });
     }
 
-    fn load_from_file(root_dir: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        let path = root_dir.join(LISTENER_FILE_NAME);
-        let data = if path.exists() {
-            let mut file = File::open(&path)?;
-            file.lock()?;
-
-            let mut content = String::new();
-            let _ = file.read_to_string(&mut content)?;
-            let data: Vec<String> = serde_json::from_str(&content)?;
-            data
-        } else {
-            Vec::new()
-        };
-        debug!("Loaded {} listeners from file: {path:?}", data.len());
-        Ok(data)
-    }
-
-    fn save_to_file(
-        listeners: &Vec<String>,
+    /// Performs an atomic read-modify-write operation on the listeners file with exclusive locking
+    fn modify_listeners_file<F>(
         root_dir: &Path,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+        modifier: F,
+    ) -> Result<(), Box<dyn std::error::Error>>
+    where
+        F: FnOnce(&mut Vec<String>),
+    {
+        // Ensure directory exists
         if !root_dir.exists() {
             fs::create_dir_all(root_dir)?;
         }
         let path = root_dir.join(LISTENER_FILE_NAME);
 
+        // Open file with read/write permissions, create if it doesn't exist
         let mut file = OpenOptions::new()
+            .read(true)
             .write(true)
             .create(true)
-            .truncate(true)
             .open(&path)?;
+
+        // Acquire exclusive lock for the entire read-modify-write operation
         file.lock()?;
 
+        // Read existing data
+        let mut content = String::new();
+        let _ = file.read_to_string(&mut content)?;
+
+        let mut listeners = if content.trim().is_empty() {
+            Vec::new()
+        } else {
+            serde_json::from_str(&content).unwrap_or_else(|_| Vec::new())
+        };
+
+        // Apply the modification
+        modifier(&mut listeners);
+
+        // Write back the modified data
+        let _ = file.seek(std::io::SeekFrom::Start(0))?;
+        file.set_len(0)?; // Truncate the file
         let json = serde_json::to_string_pretty(&listeners)?;
         file.write_all(json.as_bytes())?;
-        debug!("Saved listeners to file: {path:?}",);
+
+        debug!("Modified listeners file: {path:?}");
         Ok(())
     }
 }

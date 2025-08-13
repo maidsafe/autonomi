@@ -584,7 +584,7 @@ impl Node {
                 event_header = "PeerWithUnsupportedProtocol";
             }
             NetworkEvent::NewListenAddr(addr) => {
-                ListenAddrWriter::write(self.root_dir().clone(), addr);
+                ListenAddrWriter::add_listeners(self.root_dir().clone(), addr);
                 event_header = "NewListenAddr";
             }
             NetworkEvent::ExpiredListenAddresses(addresses) => {
