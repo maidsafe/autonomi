@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755100354157,
+  "lastUpdate": 1755100356140,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1935,6 +1935,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 27272,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c193cbf170efee037b7ff5b8865fd7d56269d1e9",
+          "message": "Merge pull request #3161 from RolandSherwin/clippy\n\nchore: fix new clippy lints",
+          "timestamp": "2025-08-13T14:55:59Z",
+          "tree_id": "5a53ddf272e4dbc7ed786aba43c012899ff66251",
+          "url": "https://github.com/maidsafe/autonomi/commit/c193cbf170efee037b7ff5b8865fd7d56269d1e9"
+        },
+        "date": 1755100355489,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11477,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23776,
             "unit": "ms"
           },
           {
