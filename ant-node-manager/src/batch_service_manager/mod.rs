@@ -63,13 +63,14 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 
         for service in &self.services {
             let service_name = service.name().await.clone();
-            if service.status().await == ServiceStatus::Running {
-                if let Some(interval) = interval {
-                    debug!(
-                        "Sleeping for {interval} milliseconds before stopping service {service_name}"
-                    );
-                    std::thread::sleep(std::time::Duration::from_millis(interval));
-                }
+
+            if let Some(interval) = interval
+                && service.status().await == ServiceStatus::Running
+            {
+                debug!(
+                    "Sleeping for {interval} milliseconds before stopping service {service_name}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(interval));
             }
 
             match Self::stop(service, self.service_control.as_ref(), self.verbosity).await {
