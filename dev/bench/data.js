@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755100352188,
+  "lastUpdate": 1755100354157,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1387,6 +1387,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/32fbe22ea472891bd91235c4b36f285fcb8d4383"
         },
         "date": 1755090575431,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 19,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c193cbf170efee037b7ff5b8865fd7d56269d1e9",
+          "message": "Merge pull request #3161 from RolandSherwin/clippy\n\nchore: fix new clippy lints",
+          "timestamp": "2025-08-13T14:55:59Z",
+          "tree_id": "5a53ddf272e4dbc7ed786aba43c012899ff66251",
+          "url": "https://github.com/maidsafe/autonomi/commit/c193cbf170efee037b7ff5b8865fd7d56269d1e9"
+        },
+        "date": 1755100353426,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
