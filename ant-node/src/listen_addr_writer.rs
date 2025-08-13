@@ -89,6 +89,7 @@ impl ListenAddrWriter {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&path)?;
 
         // Acquire exclusive lock for the entire read-modify-write operation
