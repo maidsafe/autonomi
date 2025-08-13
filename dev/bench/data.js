@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755090576280,
+  "lastUpdate": 1755090578599,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1794,6 +1794,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23592,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "32fbe22ea472891bd91235c4b36f285fcb8d4383",
+          "message": "Merge pull request #3156 from maqi/self_encryption_tryout\n\nchore(client): using streaming_decrypt_from_storage corrected self_encryption",
+          "timestamp": "2025-08-13T13:52:41+01:00",
+          "tree_id": "c3062824504f1cd3f93c385b297ceaecb4996c65",
+          "url": "https://github.com/maidsafe/autonomi/commit/32fbe22ea472891bd91235c4b36f285fcb8d4383"
+        },
+        "date": 1755090577726,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 12801,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 27272,
             "unit": "ms"
           },
           {
