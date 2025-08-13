@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755090490381,
+  "lastUpdate": 1755090574112,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -851,6 +851,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b32ac621dd170ef681d4c68d7bf521931613ee67"
         },
         "date": 1754661997734,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 91,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "32fbe22ea472891bd91235c4b36f285fcb8d4383",
+          "message": "Merge pull request #3156 from maqi/self_encryption_tryout\n\nchore(client): using streaming_decrypt_from_storage corrected self_encryption",
+          "timestamp": "2025-08-13T13:52:41+01:00",
+          "tree_id": "c3062824504f1cd3f93c385b297ceaecb4996c65",
+          "url": "https://github.com/maidsafe/autonomi/commit/32fbe22ea472891bd91235c4b36f285fcb8d4383"
+        },
+        "date": 1755090573296,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
