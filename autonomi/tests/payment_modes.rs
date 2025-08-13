@@ -14,14 +14,12 @@ use autonomi::{Client, PaymentMode};
 use bytes::Bytes;
 use eyre::Result;
 use rand::{RngCore, thread_rng};
-use serial_test::serial;
 use std::time::Duration;
 use test_utils::evm::get_funded_wallet;
 use tokio::time::sleep;
 
 /// Test both Standard and SingleNode payment modes for data upload using in-memory operations
-#[tokio::test]
-#[serial]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_payment_modes_file_upload() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
@@ -98,8 +96,7 @@ async fn test_payment_modes_file_upload() -> Result<()> {
 }
 
 /// Test cost estimation for both Standard and SingleNode payment modes using in-memory data
-#[tokio::test]
-#[serial]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_payment_modes_cost_estimation() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 
@@ -157,7 +154,7 @@ async fn test_payment_modes_cost_estimation() -> Result<()> {
     println!("SingleNode mode - Medium data upload cost: {medium_cost_single}");
 
     // Wait for data propagation
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(5)).await;
 
     // Test 4: Verify data can be downloaded back
     let downloaded_small_standard = client.data_get_public(&addr_small_standard).await?;
