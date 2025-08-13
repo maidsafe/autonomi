@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755104765002,
+  "lastUpdate": 1755104845610,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -992,6 +992,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "999ff4ad5a68a561f3dad814350a26d6db9b0931",
+          "message": "Merge pull request #3157 from maqi/support_recursive_datamap_properly\n\nfix(client): support recursive data_map properly",
+          "timestamp": "2025-08-13T16:10:25Z",
+          "tree_id": "c31e5d155a56b0b453b060004192da382ae4e48c",
+          "url": "https://github.com/maidsafe/autonomi/commit/999ff4ad5a68a561f3dad814350a26d6db9b0931"
+        },
+        "date": 1755104845308,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 90,
             "unit": "MB"
           }
         ]
