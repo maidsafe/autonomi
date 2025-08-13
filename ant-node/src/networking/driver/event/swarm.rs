@@ -227,6 +227,8 @@ impl SwarmDriver {
                 if let Some(relay_manager) = self.relay_manager.as_mut() {
                     relay_manager.on_listener_closed(&listener_id, &mut self.swarm);
                 }
+
+                self.send_event(NetworkEvent::ExpiredListenAddresses(addresses));
             }
             SwarmEvent::IncomingConnection {
                 connection_id,

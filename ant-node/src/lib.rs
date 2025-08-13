@@ -29,6 +29,7 @@ extern crate tracing;
 
 mod error;
 mod event;
+mod listen_addr_writer;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;

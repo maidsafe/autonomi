@@ -10,6 +10,7 @@ use super::{
     Marker, NodeEvent, error::Error, error::Result, event::NodeEventsChannel,
     quote::quotes_verification,
 };
+use crate::listen_addr_writer::ListenAddrWriter;
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
 #[cfg(feature = "open-metrics")]
@@ -302,6 +303,7 @@ impl NodeBuilder {
             metrics_server_port: self.metrics_server_port,
             reachability_status,
         };
+        ListenAddrWriter::reset(self.root_dir.to_path_buf());
         let (network, network_event_receiver, metrics_shutdown_tx) = Network::init(network_config)?;
 
         // init node
@@ -312,6 +314,7 @@ impl NodeBuilder {
             reward_address: self.evm_address,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
+            root_dir: self.root_dir.clone(),
             evm_network: self.evm_network,
         };
         let node = Node {
@@ -349,6 +352,7 @@ struct NodeInner {
     #[cfg(feature = "open-metrics")]
     metrics_recorder: Option<NodeMetricsRecorder>,
     reward_address: RewardsAddress,
+    root_dir: PathBuf,
     evm_network: EvmNetwork,
 }
 
@@ -377,6 +381,10 @@ impl Node {
 
     pub(crate) fn evm_network(&self) -> &EvmNetwork {
         &self.inner.evm_network
+    }
+
+    pub(crate) fn root_dir(&self) -> &PathBuf {
+        &self.inner.root_dir
     }
 
     /// Spawns a task to process for `NetworkEvents`.
@@ -575,8 +583,13 @@ impl Node {
             NetworkEvent::PeerWithUnsupportedProtocol { .. } => {
                 event_header = "PeerWithUnsupportedProtocol";
             }
-            NetworkEvent::NewListenAddr(_) => {
+            NetworkEvent::NewListenAddr(addr) => {
+                ListenAddrWriter::add_listeners(self.root_dir().clone(), addr);
                 event_header = "NewListenAddr";
+            }
+            NetworkEvent::ExpiredListenAddresses(addresses) => {
+                ListenAddrWriter::remove_listener(self.root_dir().clone(), addresses);
+                event_header = "ExpiredListenAddresses";
             }
             NetworkEvent::ResponseReceived { res } => {
                 event_header = "ResponseReceived";
