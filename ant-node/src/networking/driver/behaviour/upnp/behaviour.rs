@@ -375,20 +375,20 @@ impl NetworkBehaviour for Behaviour {
                 info!(
                     "Expired listen address: {listener_id}. Trying to remove it from the gateway."
                 );
-                if let GatewayState::Available(gateway) = &mut self.state {
-                    if let Some((mapping, _state)) = self.mappings.remove_entry(&listener_id) {
-                        if let Err(err) = gateway
-                            .sender
-                            .try_send(GatewayRequest::RemoveMapping(mapping.clone()))
-                        {
-                            debug!(
-                                multiaddress=%mapping.multiaddr,
-                                "could not request port removal for multiaddress on the gateway: {}",
-                                err
-                            );
-                        }
-                        let _ = self.mappings.insert(mapping, MappingState::Pending);
+                if let GatewayState::Available(gateway) = &mut self.state
+                    && let Some((mapping, _state)) = self.mappings.remove_entry(&listener_id)
+                {
+                    if let Err(err) = gateway
+                        .sender
+                        .try_send(GatewayRequest::RemoveMapping(mapping.clone()))
+                    {
+                        debug!(
+                            multiaddress=%mapping.multiaddr,
+                            "could not request port removal for multiaddress on the gateway: {}",
+                            err
+                        );
                     }
+                    let _ = self.mappings.insert(mapping, MappingState::Pending);
                 }
             }
             _ => {}
