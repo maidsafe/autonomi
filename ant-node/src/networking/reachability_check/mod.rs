@@ -67,10 +67,12 @@ pub enum ReachabilityIssue {
         "We did not get enough dial backs. We need at least {required} but found {found}. Retrying if possible."
     )]
     NotEnoughDialBacks { required: usize, found: usize },
-    #[error("We found multiple valid external addresses. Make sure that only one is configured.")]
+    #[error(
+        "We found multiple valid external addresses. Make sure that you call run the node again with a single address via the '--ip <ip_address>' flag."
+    )]
     MultipleExternalAddresses,
     #[error(
-        "We found multiple valid local adapter addresses. Make sure that only one is configured."
+        "We found multiple valid local adapter addresses. Make sure that you call run the node again with a single address via the '--ip <ip_address>' flag."
     )]
     MultipleLocalAdapterAddresses,
     #[error("We found an unspecified external address. Exiting.")]
