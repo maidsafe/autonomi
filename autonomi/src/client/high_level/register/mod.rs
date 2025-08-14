@@ -7,10 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::AttoTokens;
-use crate::client::data_types::graph::{GraphContent, GraphEntry, GraphEntryAddress, GraphError};
-use crate::client::data_types::pointer::{PointerAddress, PointerError, PointerTarget};
+use crate::client::graph::{GraphContent, GraphEntry, GraphEntryAddress, GraphError};
 use crate::client::key_derivation::{DerivationIndex, MainPubkey, MainSecretKey};
 use crate::client::payment::PaymentOption;
+use crate::client::pointer::{PointerAddress, PointerError, PointerTarget};
 use crate::client::quote::CostError;
 use crate::client::{Client, GetError};
 use serde::{Deserialize, Serialize};

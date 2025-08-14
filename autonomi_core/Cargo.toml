@@ -1,0 +1,68 @@
+[package]
+authors = ["MaidSafe Developers <dev@maidsafe.net>"]
+description = "Core Autonomi client API"
+name = "autonomi_core"
+license = "GPL-3.0"
+version = "0.1.0"
+edition = "2024"
+homepage = "https://maidsafe.net"
+readme = "README.md"
+repository = "https://github.com/maidsafe/autonomi"
+
+[lib]
+name = "autonomi_core"
+crate-type = ["rlib"]
+
+[features]
+default = []
+external-signer = ["ant-evm/external-signer"]
+loud = []
+
+[dependencies]
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.6" }
+ant-evm = { path = "../ant-evm", version = "0.1.16" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.7" }
+bls = { package = "blsttc", version = "8.0.1" }
+bytes = { version = "1.0.1", features = ["serde"] }
+custom_debug = "~0.6.1"
+dirs-next = "2.0.0"
+evmlib = { path = "../evmlib", version = "0.4.2" }
+exponential-backoff = "2.0.0"
+hex = "0.4.3"
+eyre = "0.6.5"
+futures = "0.3.30"
+libp2p = { version = "0.56.0", features = [
+    "autonat",
+    "tokio",
+    "dns",
+    "upnp",
+    "kad",
+    "macros",
+    "request-response",
+    "cbor",
+    "identify",
+    "quic",
+    "relay",
+    "noise",
+    "tcp",
+    "yamux",
+    "websocket",
+] }
+rand = "0.8.5"
+rayon = "1.8.0"
+rmp-serde = "1.1.1"
+self_encryption = { version = "0.33.0" }
+serde = { version = "1.0.133", features = ["derive", "rc"] }
+sha2 = "0.10.6"
+thiserror = "1.0.23"
+tokio = { version = "1.43.1", features = ["sync", "fs"] }
+tracing = { version = "~0.1.26" }
+xor_name = "5.0.0"
+
+[dev-dependencies]
+tempfile = "3.12.0"
+test-utils = { path = "../test-utils" }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints]
+workspace = true

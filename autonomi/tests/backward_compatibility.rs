@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use autonomi::PaymentOption;
 use autonomi::self_encryption::DataMapLevel;
 use bytes::{BufMut, Bytes, BytesMut};
 use self_encryption::{ChunkInfo, DataMap, EncryptedChunk, MAX_CHUNK_SIZE, decrypt};
@@ -71,7 +72,6 @@ fn test_old_encrypt_new_decrypt() -> Result<(), Box<dyn std::error::Error>> {
 #[serial_test::serial]
 async fn test_backward_compatibility_e2e_network() -> Result<(), Box<dyn std::error::Error>> {
     use ant_logging::LogBuilder;
-    use autonomi::client::payment::PaymentOption;
     use autonomi::{Chunk, Client, chunk::DataMapChunk};
     use test_utils::evm::get_funded_wallet;
 

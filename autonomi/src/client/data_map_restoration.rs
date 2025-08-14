@@ -6,9 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::Client;
 use crate::ChunkAddress;
-use crate::client::data_types::chunk::DataMapChunk;
-use crate::client::{Client, GetError};
+use crate::client::GetError;
+use crate::client::chunk::DataMapChunk;
 use crate::self_encryption::DataMapLevel;
 use bytes::Bytes;
 use eyre::Result;
@@ -102,7 +103,7 @@ impl Client {
         let result_data_map =
             get_root_data_map(data_map.clone(), &mut chunk_fetcher).map_err(|e| {
                 error!("Error processing data_map: {e:?}");
-                GetError::Decryption(crate::self_encryption::Error::SelfEncryption(e))
+                GetError::Decryption(e)
             })?;
 
         #[cfg(feature = "loud")]

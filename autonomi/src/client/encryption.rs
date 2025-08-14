@@ -7,272 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
-use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
-use crate::files::{Metadata, get_relative_file_path_from_abs_file_and_folder_path};
-use crate::self_encryption::encrypt;
-use ant_protocol::storage::Chunk;
 use bytes::Bytes;
-use self_encryption::MAX_CHUNK_SIZE;
 use std::path::PathBuf;
-use std::sync::LazyLock;
 use std::time::Instant;
-use tokio::sync::oneshot;
 
-use super::data::DataAddress;
-use super::files::FILE_ENCRYPT_BATCH_SIZE;
-
-/// Maximum size of a file to be encrypted in memory.
-///
-/// Can be overridden by the [`IN_MEMORY_ENCRYPTION_MAX_SIZE`] environment variable.
-/// The default is 100MB.
-pub static IN_MEMORY_ENCRYPTION_MAX_SIZE: LazyLock<usize> = LazyLock::new(|| {
-    let max_size = std::env::var("IN_MEMORY_ENCRYPTION_MAX_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(50_000_000);
-    info!(
-        "IN_MEMORY_ENCRYPTION_MAX_SIZE (from that threshold, the file will be encrypted in a stream): {}",
-        max_size
-    );
-    max_size
-});
-
-const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 100;
-
-enum EncryptionState {
-    InMemory(Vec<Chunk>, DataMapChunk),
-    StreamInProgress(StreamProgressState),
-    /// StreamDone(DataMapChunk, total_chunk_count)
-    StreamDone((DataMapChunk, usize)),
-}
-
-pub(crate) struct EncryptionStream {
-    pub file_path: String,
-    pub relative_path: PathBuf,
-    pub metadata: Metadata,
-    pub is_public: bool,
-    state: EncryptionState,
-}
-
-struct StreamProgressState {
-    /// Receiver for chunks
-    chunk_receiver: std::sync::mpsc::Receiver<Chunk>,
-    /// Receiver for the datamap once the stream is done
-    datamap_receiver: oneshot::Receiver<DataMapChunk>,
-    /// Number of chunks received so far
-    chunk_count: usize,
-    /// Total number of chunks estimated to be received
-    total_estimated_chunks: usize,
-}
-
-impl EncryptionStream {
-    pub fn total_chunks(&self) -> usize {
-        match &self.state {
-            EncryptionState::InMemory(chunks, _) => chunks.len(),
-            EncryptionState::StreamInProgress(state) => state.total_estimated_chunks,
-            EncryptionState::StreamDone((_, total_chunk_count)) => *total_chunk_count,
-        }
-    }
-
-    pub fn next_batch(&mut self, batch_size: usize) -> Option<Vec<Chunk>> {
-        if batch_size == 0 {
-            return Some(vec![]);
-        }
-
-        let mut state_change: Option<EncryptionState> = None;
-
-        let result = match &mut self.state {
-            EncryptionState::InMemory(chunks, _) => {
-                let batch: Vec<Chunk> = chunks
-                    .drain(0..std::cmp::min(batch_size, chunks.len()))
-                    .collect();
-                if batch.is_empty() {
-                    return None;
-                }
-                Some(batch)
-            }
-            EncryptionState::StreamInProgress(progress) => {
-                let chunk_receiver = &mut progress.chunk_receiver;
-                let datamap_receiver = &mut progress.datamap_receiver;
-                let mut batch = Vec::with_capacity(batch_size);
-
-                // Try to receive chunks up to batch_size
-                for _ in 0..batch_size {
-                    match chunk_receiver.recv() {
-                        Ok(chunk) => batch.push(chunk),
-                        Err(_) => {
-                            // Chunk stream is done, check if we have the datamap
-                            match datamap_receiver.try_recv() {
-                                Ok(datamap_chunk) => {
-                                    // The datamap_chunk shall be uploaded if as public
-                                    if self.is_public {
-                                        batch.push(datamap_chunk.0.clone());
-                                        progress.chunk_count += 1;
-                                    }
-
-                                    // Transition to StreamDone state
-                                    state_change = Some(EncryptionState::StreamDone((
-                                        datamap_chunk,
-                                        progress.chunk_count,
-                                    )));
-                                }
-                                Err(oneshot::error::TryRecvError::Empty) => {
-                                    error!("DataMap not available when chunk receiver was closed");
-                                }
-                                Err(oneshot::error::TryRecvError::Closed) => {
-                                    error!("DataMap sender was dropped without sending data");
-                                }
-                            }
-                            break;
-                        }
-                    }
-                }
-
-                progress.chunk_count += batch.len();
-                if batch.is_empty() { None } else { Some(batch) }
-            }
-            EncryptionState::StreamDone(_) => None,
-        };
-
-        // Apply the state change if any
-        if let Some(next_state) = state_change {
-            self.state = next_state;
-        }
-
-        result
-    }
-
-    pub fn data_map_chunk(&self) -> Option<DataMapChunk> {
-        match &self.state {
-            EncryptionState::InMemory(_, data_map_chunk) => Some(data_map_chunk.clone()),
-            EncryptionState::StreamInProgress(_) => None,
-            EncryptionState::StreamDone((data_map_chunk, _)) => Some(data_map_chunk.clone()),
-        }
-    }
-
-    /// Returns the data address of the file if the file is public and the stream is done.
-    pub fn data_address(&self) -> Option<DataAddress> {
-        let data_map_chunk = self.data_map_chunk()?;
-        if self.is_public {
-            let data_address = DataAddress::new(*data_map_chunk.0.address().xorname());
-            Some(data_address)
-        } else {
-            None
-        }
-    }
-
-    pub fn new_in_memory_with(
-        file_path: String,
-        relative_path: PathBuf,
-        metadata: Metadata,
-        is_public: bool,
-        bytes: Bytes,
-    ) -> Result<(Self, DataMapChunk), crate::self_encryption::Error> {
-        let start = Instant::now();
-        let (data_map_chunk, mut chunks) = encrypt(bytes)?;
-
-        if is_public {
-            chunks.push(data_map_chunk.clone());
-        }
-
-        let stream = EncryptionStream {
-            file_path,
-            relative_path,
-            metadata,
-            is_public,
-            state: EncryptionState::InMemory(chunks, data_map_chunk.clone().into()),
-        };
-
-        debug!("Encryption took: {:.2?}", start.elapsed());
-        Ok((stream, DataMapChunk(data_map_chunk)))
-    }
-
-    pub fn new_in_memory(
-        bytes: Bytes,
-        is_public: bool,
-    ) -> Result<(Self, DataMapChunk), crate::self_encryption::Error> {
-        Self::new_in_memory_with(
-            "".to_string(),
-            Default::default(),
-            Metadata::default(),
-            is_public,
-            bytes,
-        )
-    }
-
-    pub fn new_stream_from_file(
-        file_path: String,
-        relative_path: PathBuf,
-        metadata: Metadata,
-        is_public: bool,
-        file_size: usize,
-    ) -> Result<Self, String> {
-        let start = Instant::now();
-        let (chunk_sender, chunk_receiver) =
-            std::sync::mpsc::sync_channel(STREAM_CHUNK_CHANNEL_CAPACITY);
-        let (datamap_sender, datamap_receiver) = oneshot::channel();
-        let file_path_clone = file_path.clone();
-
-        // Spawn a task to handle streaming encryption
-        tokio::spawn(async move {
-            // encrypt the file and send chunks in a chunk channel
-            let path = PathBuf::from(&file_path_clone);
-            let result = self_encryption::streaming_encrypt_from_file(&path, |_xorname, bytes| {
-                let chunk = Chunk::new(bytes);
-                chunk_sender.send(chunk).map_err(|err| {
-                    error!("Error sending chunk: {err:?}");
-                    self_encryption::Error::Io(std::io::Error::other(format!(
-                        "Channel send error in encryption stream for {file_path_clone:?}: {err}"
-                    )))
-                })?;
-                Ok(())
-            });
-
-            // once we're done, send the datamap to the datamap channel
-            match result {
-                Ok(datamap) => {
-                    // Send the DataMap result
-                    // Convert DataMap to bytes and create a chunk
-                    let datamap_bytes = rmp_serde::to_vec(&datamap)
-                        .map_err(|e| error!("Streaming encryption error serializing datamap for {file_path_clone}: {e}"))
-                        .unwrap_or_else(|_| vec![]);
-                    let datamap_chunk = DataMapChunk(Chunk::new(Bytes::from(datamap_bytes)));
-                    if let Err(err) = datamap_sender.send(datamap_chunk) {
-                        error!(
-                            "Streaming encryption error sending datamap for {file_path_clone}: {err}"
-                        );
-                    };
-                }
-                Err(err) => {
-                    error!("Streaming encryption failed for {file_path_clone}: {err}");
-                }
-            }
-
-            // then close the chunk sender to signal completion and datamap availability
-            drop(chunk_sender);
-        });
-
-        let stream = EncryptionStream {
-            file_path,
-            relative_path,
-            metadata,
-            is_public,
-            state: EncryptionState::StreamInProgress(StreamProgressState {
-                chunk_receiver,
-                datamap_receiver,
-                chunk_count: 0,
-                total_estimated_chunks: std::cmp::max(3, file_size / MAX_CHUNK_SIZE),
-            }),
-        };
-
-        debug!(
-            "Started streaming encryption for file (size: {} bytes) in: {:.2?}",
-            file_size,
-            start.elapsed()
-        );
-        Ok(stream)
-    }
-}
+pub(crate) use autonomi_core::EncryptionStream;
+pub use autonomi_core::client::upload::IN_MEMORY_ENCRYPTION_MAX_SIZE;
 
 impl Client {
     /// Encrypts all files in a directory and returns the encryption results (common logic)
@@ -281,6 +21,8 @@ impl Client {
         dir_path: PathBuf,
         is_public: bool,
     ) -> Result<Vec<Result<EncryptionStream, String>>, walkdir::Error> {
+        use autonomi_core::process_tasks_with_max_concurrency;
+
         let mut encryption_tasks = vec![];
 
         for entry in walkdir::WalkDir::new(&dir_path) {
@@ -290,19 +32,12 @@ impl Client {
                 continue;
             }
 
-            let dir_path = dir_path.clone();
-
             encryption_tasks.push(async move {
                 let file_path = entry.path().to_path_buf();
                 info!("Encrypting file: {file_path:?}..");
                 #[cfg(feature = "loud")]
                 println!("Encrypting file: {file_path:?}..");
 
-                // gather metadata
-                let metadata =
-                    crate::client::high_level::files::fs_public::metadata_from_entry(&entry);
-                let relative_path =
-                    get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
                 let file_size = entry
                     .metadata()
                     .map_err(|err| format!("Error getting file size {file_path:?}: {err:?}"))?
@@ -310,15 +45,14 @@ impl Client {
 
                 // choose encryption method
                 if file_size > *IN_MEMORY_ENCRYPTION_MAX_SIZE {
-                    encrypt_file_in_stream(file_path, is_public, metadata, relative_path, file_size)
+                    encrypt_file_in_stream(file_path, is_public, file_size)
                 } else {
-                    encrypt_file_in_memory(file_path, is_public, metadata, relative_path).await
+                    encrypt_file_in_memory(file_path, is_public).await
                 }
             });
         }
 
-        let encryption_results =
-            process_tasks_with_max_concurrency(encryption_tasks, *FILE_ENCRYPT_BATCH_SIZE).await;
+        let encryption_results = process_tasks_with_max_concurrency(encryption_tasks, 10).await;
 
         Ok(encryption_results)
     }
@@ -327,25 +61,15 @@ impl Client {
 fn encrypt_file_in_stream(
     file_path: PathBuf,
     is_public: bool,
-    metadata: Metadata,
-    relative_path: PathBuf,
     file_size: usize,
 ) -> Result<EncryptionStream, String> {
     info!("Encrypting file in stream: {file_path:?}..");
-    EncryptionStream::new_stream_from_file(
-        file_path.to_string_lossy().to_string(),
-        relative_path,
-        metadata,
-        is_public,
-        file_size,
-    )
+    EncryptionStream::new_stream_from_file(file_path, is_public, file_size)
 }
 
 async fn encrypt_file_in_memory(
     file_path: PathBuf,
     is_public: bool,
-    metadata: Metadata,
-    relative_path: PathBuf,
 ) -> Result<EncryptionStream, String> {
     info!("Encrypting file in memory: {file_path:?}..");
     let data = tokio::fs::read(&file_path)
@@ -359,82 +83,10 @@ async fn encrypt_file_in_memory(
     }
 
     let start = Instant::now();
-    let (file_chunk_iterator, _data_map) = EncryptionStream::new_in_memory_with(
-        file_path.to_string_lossy().to_string(),
-        relative_path,
-        metadata,
-        is_public,
-        data,
-    )
-    .map_err(|err| format!("Error encrypting file {file_path:?}: {err:?}"))?;
+    let (file_chunk_iterator, _data_map) = EncryptionStream::new_in_memory(data, is_public)
+        .map_err(|err| format!("Error encrypting file {file_path:?}: {err:?}"))?;
 
     debug!("Encryption of {file_path:?} took: {:.2?}", start.elapsed());
 
     Ok(file_chunk_iterator)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
-    use tokio::time::{Duration, sleep};
-
-    #[tokio::test]
-    async fn test_streaming_state_transitions() {
-        // Create a temporary file
-        let mut temp_file = NamedTempFile::new().unwrap();
-        let test_data = b"Small test data";
-        temp_file.write_all(test_data).unwrap();
-        temp_file.flush().unwrap();
-
-        let file_path = temp_file.path().to_string_lossy().to_string();
-        let relative_path = PathBuf::from("small.txt");
-        let metadata = Metadata::default();
-        let is_public = false;
-        let file_size = test_data.len();
-
-        let mut stream = EncryptionStream::new_stream_from_file(
-            file_path,
-            relative_path,
-            metadata,
-            is_public,
-            file_size,
-        )
-        .unwrap();
-
-        // Should start in StreamInProgress
-        assert!(matches!(stream.state, EncryptionState::StreamInProgress(_)));
-
-        // Give some time for the background task to potentially complete
-        // (though it won't actually work due to the todo!() placeholder)
-        sleep(Duration::from_millis(10)).await;
-
-        // we should expect 3 chunks
-        let total_chunks = stream.total_chunks();
-        assert_eq!(total_chunks, 3);
-
-        // the datamap should not be available yet
-        assert!(stream.data_map_chunk().is_none());
-
-        // Try to get a batch - this should handle the streaming logic
-        let batch = stream.next_batch(5);
-
-        // We expect 3 chunks
-        match batch {
-            Some(chunks) => assert_eq!(chunks.len(), 3),
-            None => panic!("No chunks available when we expected 3"),
-        }
-
-        // we should have no more chunks
-        let next_batch = stream.next_batch(5);
-        assert_eq!(next_batch, None);
-
-        // State should be StreamDone
-        assert!(matches!(stream.state, EncryptionState::StreamDone(_)));
-
-        // we should have the datamap now
-        let data_map_chunk = stream.data_map_chunk();
-        assert!(data_map_chunk.is_some());
-    }
 }

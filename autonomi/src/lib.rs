@@ -12,7 +12,7 @@
 //!
 //! ```no_run
 //! use autonomi::{Bytes, Client, Wallet};
-//! use autonomi::client::payment::PaymentOption;
+//! use autonomi::PaymentOption;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -61,14 +61,13 @@
 extern crate tracing;
 
 pub mod client;
-pub mod networking;
 pub mod self_encryption;
 
-// The Network data types
-pub use client::data_types::chunk;
-pub use client::data_types::graph;
-pub use client::data_types::pointer;
-pub use client::data_types::scratchpad;
+// The Network data types - now from client modules that build on autonomi_core
+pub use client::chunk;
+pub use client::graph;
+pub use client::pointer;
+pub use client::scratchpad;
 
 // The high-level data types
 pub use client::data;
@@ -101,26 +100,32 @@ pub use bytes::Bytes;
 pub use libp2p::Multiaddr;
 
 #[doc(inline)]
-pub use client::{
-    // Client
-    Client,
-    // Client Configs
-    config::BootstrapCacheConfig,
-    config::BootstrapError,
-    config::ClientConfig,
-    config::ClientOperatingStrategy,
-    config::InitialPeersConfig,
+pub use client::Client;
 
-    // Native data types
-    data_types::chunk::Chunk,
-    data_types::chunk::ChunkAddress,
-    data_types::graph::GraphEntry,
-    data_types::graph::GraphEntryAddress,
-    data_types::pointer::Pointer,
-    data_types::pointer::PointerAddress,
-    data_types::scratchpad::Scratchpad,
-    data_types::scratchpad::ScratchpadAddress,
+#[doc(inline)]
+pub use ant_protocol::storage::{
+    Chunk, ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
+    ScratchpadAddress,
 };
+
+pub use ant_bootstrap::{InitialPeersConfig, config::BootstrapCacheConfig};
+pub use ant_protocol::storage::DataTypes;
+
+// Re-export core types for compatibility and as main API
+pub use autonomi_core::{
+    Addresses, ClientConfig, ClientEvent, ClientOperatingStrategy, CostError, DataContent,
+    DataMapChunk, GetError, NetworkError, PaymentOption, PaymentQuote, StoreQuote, UploadSummary,
+    client::{ClientInitSetup, config::BootstrapError, payment::Receipt},
+};
+
+// Re-export payment functions at root level for backward compatibility
+pub use autonomi_core::client::payment::receipt_from_store_quotes;
 
 #[cfg(feature = "extension-module")]
 mod python;
+
+// Re-export to maintain backward compatible naming space
+pub mod networking {
+    pub use autonomi_core::networking::{Quorum, RetryStrategy, Strategy};
+    pub use libp2p::PeerId;
+}

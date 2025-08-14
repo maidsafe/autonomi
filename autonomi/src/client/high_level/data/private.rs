@@ -10,12 +10,14 @@ use std::time::Instant;
 
 use crate::AttoTokens;
 use crate::Client;
-use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::{GetError, PutError};
 
 pub use crate::Bytes;
-pub use crate::client::data_types::chunk::DataMapChunk;
+pub use crate::client::chunk::DataMapChunk;
+
+use ant_protocol::storage::Chunk;
+use autonomi_core::EncryptionStream;
 
 impl Client {
     /// Fetch a blob of (private) data from the network
@@ -70,21 +72,25 @@ impl Client {
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
         let now = Instant::now();
 
-        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, false)?;
+        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(data, false)?;
         debug!("Encryption took: {:.2?}", now.elapsed());
+
+        let datamap_bytes =
+            rmp_serde::to_vec(&datamap).map_err(|_e| PutError::Serialization("_e".to_string()))?;
+        let datamap_chunk = DataMapChunk(Chunk::new(Bytes::from(datamap_bytes)));
 
         // Note within the `pay_and_upload`, UploadSummary will be sent to client via event_channel.
         let mut chunk_streams = vec![chunk_stream];
         self.pay_and_upload(payment_option, &mut chunk_streams)
             .await
-            .map(|total_cost| (total_cost, data_map_chunk))
+            .map(|total_cost| (total_cost, datamap_chunk))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::data_types::chunk::Chunk;
+    use crate::client::chunk::Chunk;
 
     #[test]
     fn test_hex() {

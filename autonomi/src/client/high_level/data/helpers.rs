@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
-use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
@@ -15,6 +14,7 @@ use crate::client::utils::format_upload_error;
 use crate::client::{ClientEvent, PutError, UploadSummary};
 use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
+use autonomi_core::EncryptionStream;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use evmlib::wallet::Error::InsufficientTokensForQuotes;
 use std::sync::LazyLock;
@@ -51,7 +51,7 @@ impl Client {
             .sum();
 
         // Send completion event if channel exists
-        if let Some(sender) = &self.client_event_sender {
+        if let Some(sender) = &self.core_client.client_event_sender() {
             let summary = UploadSummary {
                 records_paid: total_chunks.saturating_sub(total_free_chunks),
                 records_already_paid: total_free_chunks,
@@ -149,8 +149,11 @@ impl Client {
         // Allow up to `retry_failed` * est_total_chunks total uploads to be attempted
         let mut retry_on_failure = true;
         let mut attempted_uploads = 0;
-        let allowed_attempts =
-            est_total_todo + std::cmp::max(20, est_total_todo * self.retry_failed as usize);
+        let allowed_attempts = est_total_todo
+            + std::cmp::max(
+                20,
+                est_total_todo * self.core_client.retry_failed() as usize,
+            );
 
         // Process all chunks for this file in batches
         let mut current_batch = vec![];
@@ -255,6 +258,7 @@ impl Client {
 
         // Process payment for this batch
         let (receipt, free_chunks) = match self
+            .core_client
             .pay_for_content_addrs(DataTypes::Chunk, payment_info.into_iter(), payment_option)
             .await
         {
@@ -290,31 +294,33 @@ impl Client {
         // Upload all chunks in batch, schedule failed_chunks for retry (if retry_failed set)
         let mut retry_chunks = vec![];
         match self
-            .chunk_batch_upload(batch_chunks.iter().collect(), &receipt)
+            .core_client
+            .chunk_batch_upload(batch_chunks, PaymentOption::Receipt(receipt.clone()))
             .await
         {
             // No upload failure encountered
-            Ok(()) => {}
+            Ok((_cost, _addresses)) => {}
             Err(err) if retry_on_failure => {
                 // Format error message for user
-                let error_msg = format_upload_error(&err);
+                let error_msg = format_upload_error(&PutError::from_error(&err));
                 println!("⚠️  {error_msg}. Retrying scheduled");
                 info!("Upload error: {err}. Retrying scheduled");
+                let converted_put_error = PutError::from_error(&err);
 
-                if let PutError::Batch(ref upload_state) = err {
+                if let PutError::Batch(ref upload_state) = converted_put_error {
                     let failed_chunks: Vec<_> =
                         upload_state.failed.iter().map(|(addr, _)| *addr).collect();
-                    // Filter out failed entries
+                    // Filter out succeeded entries
                     batch.retain(|(_, chunk)| failed_chunks.contains(chunk.address()));
                     // Push back failed entries
                     retry_chunks.extend(batch);
                 } else {
                     // Encounterred Un-recoverable upload errors
                     // Return immediately to terminate the entire upload flow
-                    put_error = Some(err);
+                    put_error = Some(converted_put_error);
                 };
             }
-            Err(err) => put_error = Some(err),
+            Err(err) => put_error = Some(PutError::from_error(&err)),
         }
 
         (retry_chunks, vec![receipt], free_chunks, put_error)

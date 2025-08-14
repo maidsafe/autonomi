@@ -64,6 +64,9 @@ impl PointerTarget {
 }
 
 impl Pointer {
+    /// Max Pointer size
+    pub const MAX_SIZE: usize = 200;
+
     /// Create a new pointer, signing it with the provided secret key.
     /// This pointer would be stored on the network at the provided key's public key.
     /// There can only be one pointer at a time at the same address (one per key).

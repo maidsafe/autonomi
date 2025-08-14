@@ -7,15 +7,15 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::archive_public::{ArchiveAddress, PublicArchive};
-use super::{DownloadError, FileCostError, Metadata, UploadError};
+use super::{DownloadError, FileCostError, UploadError};
 use crate::AttoTokens;
 use crate::client::Client;
-use crate::client::data_types::chunk::{ChunkAddress, DataMapChunk};
+use crate::client::chunk::{ChunkAddress, DataMapChunk};
 use crate::client::high_level::data::DataAddress;
 use crate::client::payment::PaymentOption;
+use crate::files::{get_relative_file_path_from_abs_file_and_folder_path, metadata_from_entry};
 use bytes::Bytes;
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::path::{Path, PathBuf};
 
 impl Client {
     /// Download file from network to local file system
@@ -79,7 +79,7 @@ impl Client {
 
         // encrypt
         let encryption_results = self
-            .encrypt_directory_files_in_memory(dir_path, true)
+            .encrypt_directory_files_in_memory(dir_path.clone(), true)
             .await?;
         let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
@@ -108,9 +108,10 @@ impl Client {
         // create an archive
         let mut public_archive = PublicArchive::new();
         for file_chunk_iterator in chunk_iterators {
-            let file_path = file_chunk_iterator.file_path.clone();
-            let relative_path = file_chunk_iterator.relative_path.clone();
-            let file_metadata = file_chunk_iterator.metadata.clone();
+            let file_path = Path::new(&file_chunk_iterator.file_path);
+            let relative_path =
+                get_relative_file_path_from_abs_file_and_folder_path(file_path, &dir_path);
+            let file_metadata = metadata_from_entry(file_path);
             let data_address = match file_chunk_iterator.data_map_chunk() {
                 Some(datamap) => DataAddress::new(*datamap.0.name()),
                 None => {
@@ -193,7 +194,7 @@ impl Client {
 
             content_addrs.extend(addrs);
 
-            let metadata = metadata_from_entry(&entry);
+            let metadata = metadata_from_entry(&path);
 
             archive.add_file(path, DataAddress::new(map_xor_name), metadata);
         }
@@ -204,53 +205,5 @@ impl Client {
         let total_cost = self.get_cost_estimation(content_addrs).await?;
         debug!("Total cost for the directory: {total_cost:?}");
         Ok(total_cost)
-    }
-}
-
-// Get metadata from directory entry. Defaults to `0` for creation and modification times if
-// any error is encountered. Logs errors upon error.
-pub(crate) fn metadata_from_entry(entry: &walkdir::DirEntry) -> Metadata {
-    let fs_metadata = match entry.metadata() {
-        Ok(metadata) => metadata,
-        Err(err) => {
-            tracing::warn!(
-                "Failed to get metadata for `{}`: {err}",
-                entry.path().display()
-            );
-            return Metadata {
-                created: 0,
-                modified: 0,
-                size: 0,
-                extra: None,
-            };
-        }
-    };
-
-    let unix_time = |property: &'static str, time: std::io::Result<SystemTime>| {
-        time.inspect_err(|err| {
-            tracing::warn!(
-                "Failed to get '{property}' metadata for `{}`: {err}",
-                entry.path().display()
-            );
-        })
-        .unwrap_or(SystemTime::UNIX_EPOCH)
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .inspect_err(|err| {
-            tracing::warn!(
-                "'{property}' metadata of `{}` is before UNIX epoch: {err}",
-                entry.path().display()
-            );
-        })
-        .unwrap_or(Duration::from_secs(0))
-        .as_secs()
-    };
-    let created = unix_time("created", fs_metadata.created());
-    let modified = unix_time("modified", fs_metadata.modified());
-
-    Metadata {
-        created,
-        modified,
-        size: fs_metadata.len(),
-        extra: None,
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 MaidSafe.net limited.
+// Copyright 2025 MaidSafe.net limited.
 //
 // This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
 // Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
@@ -6,4 +6,5 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-pub use autonomi_core::{ClientConfig, ClientOperatingStrategy};
+pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
+pub use bls::{PublicKey, SecretKey};

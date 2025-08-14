@@ -16,11 +16,8 @@ use std::{
 use super::Metadata;
 use crate::files::normalize_path;
 use crate::{
-    Client,
-    client::{
-        GetError, PutError, data_types::chunk::DataMapChunk, high_level::files::RenameError,
-        payment::PaymentOption,
-    },
+    Client, DataMapChunk,
+    client::{GetError, PutError, high_level::files::RenameError, payment::PaymentOption},
 };
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};

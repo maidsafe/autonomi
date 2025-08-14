@@ -8,14 +8,13 @@
 
 use ant_logging::LogBuilder;
 use autonomi::chunk::DataMapChunk;
-use autonomi::client::payment::PaymentOption;
 use autonomi::data::DataAddress;
 use autonomi::pointer::PointerTarget;
 use autonomi::register::RegisterAddress;
 use autonomi::{Bytes, Client, client::chunk::Chunk};
 use autonomi::{
-    ChunkAddress, GraphEntry, GraphEntryAddress, Pointer, PointerAddress, Scratchpad,
-    ScratchpadAddress,
+    ChunkAddress, GraphEntry, GraphEntryAddress, PaymentOption, Pointer, PointerAddress,
+    Scratchpad, ScratchpadAddress,
 };
 use eyre::Result;
 use serial_test::serial;
