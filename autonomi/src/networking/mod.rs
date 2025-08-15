@@ -14,6 +14,7 @@ mod interface;
 mod retries;
 mod utils;
 
+use crate::client::CONNECT_TIMEOUT_SECS;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore};
 // export the utils
 pub(crate) use utils::multiaddr_is_global;
@@ -37,8 +38,10 @@ use libp2p::kad::NoKnownPeers;
 use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
+use std::time::Duration;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::{sleep, timeout};
 
 /// Result type for tasks responses sent by the [`crate::driver::NetworkDriver`] to the [`crate::Network`]
 pub(in crate::networking) type OneShotTaskResult<T> = oneshot::Sender<Result<T, NetworkError>>;
@@ -198,6 +201,40 @@ impl Network {
         };
 
         Ok(network)
+    }
+
+    /// Wait until we made [`CLOSE_GROUP_SIZE`] connections to the network.
+    pub async fn wait_for_connectivity(&self) -> Result<(), crate::client::ConnectError> {
+        let timeout_duration = Duration::from_secs(CONNECT_TIMEOUT_SECS); // Total timeout
+        let check_interval = Duration::from_millis(100); // How often to check
+
+        debug!(
+            "Waiting for connectivity with timeout of {}s, need {} peers",
+            CONNECT_TIMEOUT_SECS, CLOSE_GROUP_SIZE
+        );
+
+        match timeout(timeout_duration, async {
+            loop {
+                match self.get_connections_made().await {
+                    Ok(count) => {
+                        if count >= CLOSE_GROUP_SIZE {
+                            return Ok(());
+                        }
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            "Failed to get connections made: {err}, retrying..."
+                        );
+                    }
+                }
+                sleep(check_interval).await;
+            }
+        })
+        .await
+        {
+            Ok(result) => result,
+            Err(_) => Err(crate::client::ConnectError::TimedOut),
+        }
     }
 
     /// Get a record from the network
@@ -505,6 +542,18 @@ impl Network {
             errors_len,
             errors,
         })
+    }
+
+    /// Get information about the routing table
+    pub async fn get_connections_made(&self) -> Result<usize, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::ConnectionsMade { resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        tracing::trace!("Waiting for connections made response");
+        rx.await?
     }
 }
 
