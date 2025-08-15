@@ -45,10 +45,10 @@ def main():
     print(f"Vault creation cost: {vault_cost}")
 
     user_data = UserData()
-    cost = client.put_user_data_to_vault(vault_key, wallet, user_data)
+    cost = client.vault_put_user_data(vault_key, wallet, user_data)
     print(f"Stored user data, cost: {cost}")
 
-    retrieved_data = client.get_user_data_from_vault(vault_key)
+    retrieved_data = client.vault_get_user_data(vault_key)
     print(f"Retrieved user data: {retrieved_data}")
 
     # Private directory operations

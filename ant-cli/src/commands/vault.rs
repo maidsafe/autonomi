@@ -56,7 +56,7 @@ pub async fn create(
     let local_user_data = crate::user_data::get_local_user_data()?;
     println!("Pushing to network vault...");
     let total_cost = client
-        .put_user_data_to_vault(&vault_sk, wallet.into(), local_user_data.clone())
+        .vault_put_user_data(&vault_sk, wallet.into(), local_user_data.clone())
         .await?;
 
     if total_cost.is_zero() {
@@ -86,7 +86,7 @@ pub async fn sync(force: bool, network_context: NetworkContext) -> Result<()> {
     } else {
         println!("Fetching vault from network...");
         let net_user_data = client
-            .get_user_data_from_vault(&vault_sk)
+            .vault_get_user_data(&vault_sk)
             .await
             .wrap_err("Failed to fetch vault from network")
             .with_suggestion(|| "Make sure you have already created a vault on the network")?;
@@ -100,7 +100,7 @@ pub async fn sync(force: bool, network_context: NetworkContext) -> Result<()> {
     println!("Pushing local user data to network vault...");
     let local_user_data = crate::user_data::get_local_user_data()?;
     client
-        .put_user_data_to_vault(&vault_sk, wallet.into(), local_user_data.clone())
+        .vault_put_user_data(&vault_sk, wallet.into(), local_user_data.clone())
         .await
         .with_suggestion(
             || "Make sure you have already created a vault on the network or try again",
@@ -181,7 +181,7 @@ pub async fn load(network_context: NetworkContext) -> Result<()> {
     let vault_sk = crate::keys::get_vault_secret_key()?;
 
     println!("Retrieving vault from network...");
-    let user_data = client.get_user_data_from_vault(&vault_sk).await?;
+    let user_data = client.vault_get_user_data(&vault_sk).await?;
     println!("Writing user data to disk...");
     crate::user_data::write_local_user_data(&user_data)?;
 
