@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 /// The delay before we dial back a peer after receiving an identify event.
 /// 180s will most likely remove the UDP tuple from the remote's NAT table.
 /// This will make sure that the peer is reachable and that we can add it to the routing table.
-const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
+pub(crate) const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 /// The list of protocols that are mandatory for a peer to support.
 /// If a peer does not support these protocols, it will not be added to the routing table
@@ -377,6 +377,7 @@ impl SwarmDriver {
                 warn!("Peer {peer_id:?} is not part of the RT. Cannot update addresses.");
                 return;
             };
+
             let existing_addrs = entry
                 .node
                 .value

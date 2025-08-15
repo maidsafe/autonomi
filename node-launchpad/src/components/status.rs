@@ -9,7 +9,6 @@
 use super::footer::NodesToStart;
 use super::header::SelectedMenuItem;
 use super::popup::manage_nodes::GB;
-use super::utils::centered_rect_fixed;
 use super::{Component, Frame, footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE};
 use crate::action::OptionsActions;
 use crate::components::popup::manage_nodes::MAX_NODE_COUNT;
@@ -23,7 +22,7 @@ use crate::node_mgmt::{
     UpgradeNodesArgs,
 };
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED, clear_area};
+use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED};
 use crate::system::{get_available_space_b, get_drive_name};
 use crate::tui::Event;
 use crate::upnp::UpnpSupport;
@@ -54,8 +53,6 @@ use throbber_widgets_tui::{self, Throbber, ThrobberState};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
-/// If nat detection fails for more than 3 times, we don't want to waste time running during every node start.
-const MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION: usize = 3;
 
 // Table Widths
 const NODE_WIDTH: usize = 10;
@@ -77,16 +74,12 @@ pub struct Status<'a> {
     active: bool,
     action_sender: Option<UnboundedSender<Action>>,
     config: Config,
-    // NAT
-    is_nat_status_determined: bool,
-    error_while_running_nat_detection: usize,
-    // Track if NAT detection is currently running
-    nat_detection_in_progress: bool,
     // Device Stats Section
     node_stats: NodeStats,
     node_stats_last_update: Instant,
     // Nodes
     node_services: Vec<NodeServiceData>,
+    node_registry: NodeRegistryManager,
     items: Option<StatefulTable<NodeItem<'a>>>,
     /// To pass into node services.
     network_id: Option<u8>,
@@ -132,18 +125,17 @@ pub struct StatusConfig {
 impl Status<'_> {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
-        let mut status = Self {
+
+        let status = Self {
             init_peers_config: config.init_peers_config,
             action_sender: Default::default(),
             config: Default::default(),
             active: true,
-            is_nat_status_determined: false,
-            error_while_running_nat_detection: 0,
-            nat_detection_in_progress: false,
             network_id: config.network_id,
             node_stats: NodeStats::default(),
             node_stats_last_update: Instant::now(),
             node_services: Default::default(),
+            node_registry: node_registry.clone(),
             node_management: NodeManagement::new(node_registry.clone())?,
             items: None,
             nodes_to_start: config.allocated_disk_space,
@@ -158,25 +150,6 @@ impl Status<'_> {
             storage_mountpoint: config.storage_mountpoint.clone(),
             available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
         };
-
-        // Nodes registry
-        let now = Instant::now();
-        debug!("Refreshing node registry states on startup");
-
-        ant_node_manager::refresh_node_registry(
-            node_registry.clone(),
-            &ServiceController {},
-            false,
-            true,
-            ant_node_manager::VerbosityLevel::Minimal,
-        )
-        .await?;
-        node_registry.save().await?;
-        debug!("Node registry states refreshed in {:?}", now.elapsed());
-        status.update_node_state(
-            node_registry.get_node_service_data().await,
-            node_registry.nat_status.read().await.is_some(),
-        )?;
 
         Ok(status)
     }
@@ -355,13 +328,7 @@ impl Status<'_> {
             .ok_or_eyre("Action sender not registered")
     }
 
-    fn update_node_state(
-        &mut self,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    ) -> Result<()> {
-        self.is_nat_status_determined = is_nat_status_determined;
-
+    fn update_node_state(&mut self, all_nodes_data: Vec<NodeServiceData>) -> Result<()> {
         self.node_services = all_nodes_data
             .into_iter()
             .filter(|node| node.status != ServiceStatus::Removed)
@@ -373,13 +340,6 @@ impl Status<'_> {
         );
 
         Ok(())
-    }
-
-    /// Only run NAT detection if we haven't determined the status yet and we haven't failed more than 3 times.
-    fn should_we_run_nat_detection(&self) -> bool {
-        self.connection_mode == ConnectionMode::Automatic
-            && !self.is_nat_status_determined
-            && self.error_while_running_nat_detection < MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION
     }
 
     fn _nodes_starting(&self) -> bool {
@@ -424,10 +384,50 @@ impl Status<'_> {
 
 impl Component for Status<'_> {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+        let action_sender_clone = tx.clone();
         self.action_sender = Some(tx);
 
         // Update the stats to be shown as soon as the app is run
         self.try_update_node_stats(true)?;
+
+        let mut node_registry_watcher = self.node_registry.watch_registry_file()?;
+        let node_registry_clone = self.node_registry.clone();
+        tokio::spawn(async move {
+            while let Some(()) = node_registry_watcher.recv().await {
+                let services = node_registry_clone.get_node_service_data().await;
+                debug!(
+                    "Node registry file has been updated. Sending StatusActions::RegistryUpdated event."
+                );
+                if let Err(e) = action_sender_clone.send(Action::StatusActions(
+                    StatusActions::RegistryUpdated {
+                        all_nodes_data: services,
+                    },
+                )) {
+                    error!("Failed to send StatusActions::RegistryUpdated: {e}");
+                }
+            }
+        });
+
+        debug!("Refreshing node registry states on obtaining action handler");
+
+        let node_registry_clone = self.node_registry.clone();
+        tokio::spawn(async move {
+            if let Err(err) = ant_node_manager::refresh_node_registry(
+                node_registry_clone.clone(),
+                &ServiceController {},
+                false,
+                true,
+                ant_node_manager::VerbosityLevel::Minimal,
+            )
+            .await
+            {
+                error!("Failed to refresh node registry on obtaining action handler: {err}");
+            };
+            if let Err(err) = node_registry_clone.save().await {
+                error!("Failed to save node registry after refreshing: {err}");
+            }
+            debug!("Node registry states refreshed and saved after obtaining action handler");
+        });
 
         Ok(())
     }
@@ -527,14 +527,14 @@ impl Component for Status<'_> {
                 self.upnp_support = upnp_support.clone();
             }
             Action::StatusActions(status_action) => match status_action {
+                StatusActions::RegistryUpdated { all_nodes_data } => {
+                    debug!("Registry updated with {} nodes", all_nodes_data.len());
+                    self.update_node_state(all_nodes_data)?;
+                }
                 StatusActions::NodesStatsObtained(stats) => {
                     self.node_stats = stats;
                 }
-                StatusActions::StartNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::StartNodesCompleted { service_name } => {
                     if service_name == *NODES_ALL {
                         if let Some(items) = &self.items {
                             let items_clone = items.clone();
@@ -547,21 +547,12 @@ impl Component for Status<'_> {
                         self.unlock_service(service_name.as_str());
                         self.update_item(service_name, NodeStatus::Running)?;
                     }
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
                 }
-                StatusActions::StopNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::StopNodesCompleted { service_name } => {
                     self.unlock_service(service_name.as_str());
                     self.update_item(service_name, NodeStatus::Stopped)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
                 }
-                StatusActions::UpdateNodesCompleted {
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::UpdateNodesCompleted => {
                     if let Some(items) = &self.items {
                         let items_clone = items.clone();
                         for item in &items_clone.items {
@@ -569,23 +560,17 @@ impl Component for Status<'_> {
                         }
                     }
                     self.clear_node_items();
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
 
                     let _ = self.update_node_items(None);
                     debug!("Update nodes completed");
                 }
-                StatusActions::ResetNodesCompleted {
-                    trigger_start_node,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::ResetNodesCompleted { trigger_start_node } => {
                     if let Some(items) = &self.items {
                         let items_clone = items.clone();
                         for item in &items_clone.items {
                             self.unlock_service(item.name.as_str());
                         }
                     }
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
 
                     self.clear_node_items();
 
@@ -595,48 +580,18 @@ impl Component for Status<'_> {
                     }
                     debug!("Reset nodes completed");
                 }
-                StatusActions::AddNodesCompleted {
-                    service_name,
-
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::AddNodesCompleted { service_name } => {
                     self.unlock_service(service_name.as_str());
                     self.update_item(service_name.clone(), NodeStatus::Stopped)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
 
                     debug!("Adding {:?} completed", service_name.clone());
                 }
-                StatusActions::RemoveNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
+                StatusActions::RemoveNodesCompleted { service_name } => {
                     self.unlock_service(service_name.as_str());
                     self.update_item(service_name, NodeStatus::Removed)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
 
                     let _ = self.update_node_items(None);
                     debug!("Removing nodes completed");
-                }
-                StatusActions::SuccessfullyDetectedNatStatus => {
-                    debug!(
-                        "Successfully detected nat status, is_nat_status_determined set to true"
-                    );
-                    self.is_nat_status_determined = true;
-                    self.nat_detection_in_progress = false;
-                }
-                StatusActions::NatDetectionStarted => {
-                    debug!("NAT detection started");
-                    self.nat_detection_in_progress = true;
-                }
-                StatusActions::ErrorWhileRunningNatDetection => {
-                    self.error_while_running_nat_detection += 1;
-                    self.nat_detection_in_progress = false;
-                    debug!(
-                        "Error while running nat detection. Error count: {}",
-                        self.error_while_running_nat_detection
-                    );
                 }
                 StatusActions::ErrorLoadingNodeRegistry { raw_error }
                 | StatusActions::ErrorGettingNodeRegistryPath { raw_error } => {
@@ -892,13 +847,7 @@ impl Component for Status<'_> {
                         init_peers_config: self.init_peers_config.clone(),
                         port_range: Some(port_range),
                         rewards_address: self.rewards_address.clone(),
-                        run_nat_detection: self.should_we_run_nat_detection(),
                     };
-
-                    // Set NAT detection in progress flag if we're going to run detection
-                    if maintain_nodes_args.run_nat_detection {
-                        self.nat_detection_in_progress = true;
-                    }
 
                     debug!("Calling maintain_n_running_nodes");
 
@@ -995,13 +944,7 @@ impl Component for Status<'_> {
                         init_peers_config: self.init_peers_config.clone(),
                         port_range: Some(port_range),
                         rewards_address: self.rewards_address.clone(),
-                        run_nat_detection: self.should_we_run_nat_detection(),
                     };
-
-                    // Set NAT detection in progress flag if we're going to run detection
-                    if add_node_args.run_nat_detection {
-                        self.nat_detection_in_progress = true;
-                    }
 
                     self.node_management
                         .send_task(NodeManagementTask::AddNode {
@@ -1443,50 +1386,6 @@ impl Component for Status<'_> {
             error_popup.draw_error(f, area);
 
             return Ok(());
-        }
-
-        if self.nat_detection_in_progress {
-            let popup_text = vec![
-                Line::raw("NAT Detection Running..."),
-                Line::raw(""),
-                Line::raw(""),
-                Line::raw("Please wait, performing NAT detection"),
-                Line::raw("This may take a couple minutes."),
-            ];
-
-            let popup_area = centered_rect_fixed(50, 12, area);
-            clear_area(f, popup_area);
-
-            let popup_border = Paragraph::new("").block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" NAT Detection ")
-                    .bold()
-                    .title_style(Style::new().fg(VIVID_SKY_BLUE))
-                    .padding(Padding::uniform(2))
-                    .border_style(Style::new().fg(GHOST_WHITE)),
-            );
-
-            let centred_area = Layout::new(
-                Direction::Vertical,
-                vec![
-                    // border
-                    Constraint::Length(2),
-                    // our text goes here
-                    Constraint::Min(5),
-                    // border
-                    Constraint::Length(1),
-                ],
-            )
-            .split(popup_area);
-            let text = Paragraph::new(popup_text)
-                .block(Block::default().padding(Padding::horizontal(2)))
-                .wrap(Wrap { trim: false })
-                .alignment(Alignment::Center)
-                .fg(EUCALYPTUS);
-            f.render_widget(text, centred_area[1]);
-
-            f.render_widget(popup_border, popup_area);
         }
 
         Ok(())

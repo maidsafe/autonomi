@@ -10,44 +10,41 @@ mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
 mod node_service_data_v2;
+mod node_service_data_v3;
 
 // Re-export types
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
-use crate::{ServiceStateActions, ServiceStatus, UpgradeOptions, error::Result, rpc::RpcActions};
+use crate::{
+    ServiceStateActions, ServiceStatus, UpgradeOptions, control::ServiceControl, error::Result,
+    metric::MetricsAction, rpc::RpcActions,
+};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::multiaddr::Protocol;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
+use std::{ffi::OsString, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tonic::async_trait;
 
 pub struct NodeService {
     pub service_data: Arc<RwLock<NodeServiceData>>,
+    pub metrics_action: Box<dyn MetricsAction + Send>,
     pub rpc_actions: Box<dyn RpcActions + Send>,
-    /// Used to enable dynamic startup delay based on the time it takes for a node to connect to the network.
-    pub connection_timeout: Option<Duration>,
 }
 
 impl NodeService {
     pub fn new(
         service_data: Arc<RwLock<NodeServiceData>>,
         rpc_actions: Box<dyn RpcActions + Send>,
+        metrics_action: Box<dyn MetricsAction + Send>,
     ) -> NodeService {
         NodeService {
             rpc_actions,
+            metrics_action,
             service_data,
-            connection_timeout: None,
         }
-    }
-
-    /// Set the max time to wait for the node to connect to the network.
-    /// If not set, we do not perform a dynamic startup delay.
-    pub fn with_connection_timeout(mut self, connection_timeout: Duration) -> NodeService {
-        self.connection_timeout = Some(connection_timeout);
-        self
     }
 }
 
@@ -81,6 +78,9 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
+        if service_data.reachability_check {
+            args.push(OsString::from("--reachability-check"));
+        }
         if service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));
         }
@@ -101,10 +101,16 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from("--port"));
             args.push(OsString::from(node_port.to_string()));
         }
+
         if let Some(metrics_port) = service_data.metrics_port {
             args.push(OsString::from("--metrics-server-port"));
             args.push(OsString::from(metrics_port.to_string()));
+        } else {
+            error!(
+                "Metrics port not available during upgrade_install_context. Make sure to call ServiceStateActions::set_metrics_port_if_not_set before building context"
+            );
         }
+
         if let Some(max_archived_log_files) = service_data.max_archived_log_files {
             args.push(OsString::from("--max-archived-log-files"));
             args.push(OsString::from(max_archived_log_files.to_string()));
@@ -173,19 +179,8 @@ impl ServiceStateActions for NodeService {
     }
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
-        let mut service_data = self.service_data.write().await;
+        let service_name = self.service_data.read().await.service_name.clone();
         let (connected_peers, pid, peer_id) = if full_refresh {
-            debug!("Performing full refresh for {}", service_data.service_name);
-            if let Some(connection_timeout) = self.connection_timeout {
-                debug!(
-                    "Performing dynamic startup delay for {}",
-                    service_data.service_name
-                );
-                self.rpc_actions
-                    .is_node_connected_to_network(connection_timeout)
-                    .await?;
-            }
-
             let node_info = self
                 .rpc_actions
                 .node_info()
@@ -197,7 +192,7 @@ impl ServiceStateActions for NodeService {
                 .await
                 .inspect_err(|err| error!("Error obtaining network_info via RPC: {err:?}"))?;
 
-            service_data.listen_addr = Some(
+            self.service_data.write().await.listen_addr = Some(
                 network_info
                     .listeners
                     .iter()
@@ -207,42 +202,54 @@ impl ServiceStateActions for NodeService {
             );
             for addr in &network_info.listeners {
                 if let Some(port) = get_port_from_multiaddr(addr) {
-                    debug!(
-                        "Found antnode port for {}: {port}",
-                        service_data.service_name
-                    );
-                    service_data.node_port = Some(port);
+                    debug!("Found antnode port for {service_name}: {port}");
+                    self.service_data.write().await.node_port = Some(port);
                     break;
                 }
             }
 
-            if service_data.node_port.is_none() {
+            if self.service_data.read().await.node_port.is_none() {
                 error!("Could not find antnode port");
                 error!("This will cause the node to have a different port during upgrade");
             }
 
             (
                 Some(network_info.connected_peers),
-                pid,
+                Some(node_info.pid),
                 Some(node_info.peer_id),
             )
         } else {
-            debug!(
-                "Performing partial refresh for {}",
-                service_data.service_name
-            );
+            debug!("Performing partial refresh for {service_name}");
             debug!("Previously assigned data will be used");
             (
-                service_data.connected_peers.clone(),
+                self.service_data.read().await.connected_peers.clone(),
                 pid,
-                service_data.peer_id,
+                self.service_data.read().await.peer_id,
             )
         };
 
-        service_data.connected_peers = connected_peers;
-        service_data.peer_id = peer_id;
-        service_data.pid = pid;
-        service_data.status = ServiceStatus::Running;
+        self.service_data.write().await.connected_peers = connected_peers;
+        self.service_data.write().await.peer_id = peer_id;
+        self.service_data.write().await.pid = pid;
+        self.service_data.write().await.status = ServiceStatus::Running;
+        Ok(())
+    }
+
+    async fn wait_until_started(&self) -> Result<()> {
+        let service_name = self.service_data.read().await.service_name.clone();
+        info!("Waiting for {service_name} to complete reachability check");
+        self.metrics_action
+            .wait_until_reachability_check_completes(None)
+            .await?;
+
+        info!(
+            "Reachability check completed for {service_name}. Now waiting for the node to connect to the network"
+        );
+
+        self.rpc_actions
+            .wait_until_node_connects_to_network(None)
+            .await?;
+        info!("{service_name} is now connected to the network");
         Ok(())
     }
 
@@ -263,8 +270,28 @@ impl ServiceStateActions for NodeService {
         self.service_data.read().await.status.clone()
     }
 
+    async fn set_status(&self, status: ServiceStatus) {
+        self.service_data.write().await.status = status;
+    }
+
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
+    }
+
+    async fn set_metrics_port_if_not_set(
+        &self,
+        service_control: &dyn ServiceControl,
+    ) -> Result<()> {
+        if self.service_data.read().await.metrics_port.is_none() {
+            info!(
+                "Setting port for {} as it does not have any",
+                self.service_data.read().await.service_name
+            );
+            let port = service_control.get_available_port()?;
+            self.service_data.write().await.metrics_port = Some(port);
+        }
+
+        Ok(())
     }
 }
 

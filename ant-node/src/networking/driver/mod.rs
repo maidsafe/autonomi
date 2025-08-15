@@ -20,7 +20,7 @@ use crate::networking::{
     Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore,
     bootstrap::{INITIAL_BOOTSTRAP_CHECK_INTERVAL, InitialBootstrap, InitialBootstrapTrigger},
     circular_vec::CircularVec,
-    driver::kad::U256,
+    driver::{behaviour::upnp, kad::U256},
     error::Result,
     external_address::ExternalAddressManager,
     log_markers::Marker,
@@ -96,7 +96,7 @@ pub(super) struct NodeBehaviour {
         libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
     pub(super) do_not_disturb: behaviour::do_not_disturb::Behaviour,
     pub(super) identify: libp2p::identify::Behaviour,
-    pub(super) upnp: Toggle<libp2p::upnp::tokio::Behaviour>,
+    pub(super) upnp: Toggle<upnp::behaviour::Behaviour>,
     pub(super) relay_client: libp2p::relay::client::Behaviour,
     pub(super) relay_server: Toggle<libp2p::relay::Behaviour>,
     pub(super) kademlia: kad::Behaviour<NodeRecordStore>,
@@ -505,13 +505,6 @@ impl SwarmDriver {
         if let Some(metrics_recorder) = self.metrics_recorder.as_ref() {
             metrics_recorder.record_change_in_close_group(new_close_group);
         }
-    }
-
-    /// Listen on the provided address. Also records it within RelayManager
-    pub(crate) fn listen_on(&mut self, addr: Multiaddr) -> Result<()> {
-        let id = self.swarm.listen_on(addr.clone())?;
-        info!("Listening on {id:?} with addr: {addr:?}");
-        Ok(())
     }
 
     /// Sync and flush the bootstrap cache to disk.
