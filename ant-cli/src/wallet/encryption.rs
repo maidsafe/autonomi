@@ -167,4 +167,104 @@ mod tests {
             "Decryption should not succeed with a wrong password"
         );
     }
+    
+    #[test]
+    fn test_different_passwords_produce_different_results() -> Result<()> {
+        let key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        
+        let password1 = "password1";
+        let password2 = "password2";
+        
+        let encrypted_key1 = encrypt_private_key(key, password1)?;
+        let encrypted_key2 = encrypt_private_key(key, password2)?;
+        
+        assert_ne!(encrypted_key1, encrypted_key2, "Different passwords should produce different encryption results");
+        
+        Ok(())
+    }
+    
+    #[test]
+    fn test_same_key_password_different_results() -> Result<()> {
+        let key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let password = "same_password";
+        
+        let encrypted_key1 = encrypt_private_key(key, password)?;
+        let encrypted_key2 = encrypt_private_key(key, password)?;
+        
+        assert_ne!(encrypted_key1, encrypted_key2, "Same key and password should still produce different encryption results due to random salt and nonce");
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_various_key_lengths() -> Result<()> {
+        // Test with short key
+        let short_key = "12345";
+        let password = "password";
+        
+        let encrypted_short = encrypt_private_key(short_key, password)?;
+        let decrypted_short = decrypt_private_key(&encrypted_short, password)?;
+        assert_eq!(decrypted_short, short_key, "Short key decryption failed");
+        
+        // Test with a typical length key (32 bytes hex-encoded)
+        let typical_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let encrypted_typical = encrypt_private_key(typical_key, password)?;
+        let decrypted_typical = decrypt_private_key(&encrypted_typical, password)?;
+        assert_eq!(decrypted_typical, typical_key, "Typical key decryption failed");
+        
+        // Test with a long key
+        let long_key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let encrypted_long = encrypt_private_key(long_key, password)?;
+        let decrypted_long = decrypt_private_key(&encrypted_long, password)?;
+        assert_eq!(decrypted_long, long_key, "Long key decryption failed");
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_various_passwords() -> Result<()> {
+        let key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        
+        // Test with empty password (should still work)
+        let empty_password = "";
+        let encrypted_empty = encrypt_private_key(key, empty_password)?;
+        let decrypted_empty = decrypt_private_key(&encrypted_empty, empty_password)?;
+        assert_eq!(decrypted_empty, key, "Empty password encryption/decryption failed");
+        
+        // Test with short password
+        let short_password = "a";
+        let encrypted_short = encrypt_private_key(key, short_password)?;
+        let decrypted_short = decrypt_private_key(&encrypted_short, short_password)?;
+        assert_eq!(decrypted_short, key, "Short password encryption/decryption failed");
+        
+        // Test with long password
+        let long_password = "this_is_a_very_long_password_with_many_characters_and_should_still_work_correctly";
+        let encrypted_long = encrypt_private_key(key, long_password)?;
+        let decrypted_long = decrypt_private_key(&encrypted_long, long_password)?;
+        assert_eq!(decrypted_long, key, "Long password encryption/decryption failed");
+        
+        // Test with unicode password
+        let unicode_password = "пароль密码パスワード";
+        let encrypted_unicode = encrypt_private_key(key, unicode_password)?;
+        let decrypted_unicode = decrypt_private_key(&encrypted_unicode, unicode_password)?;
+        assert_eq!(decrypted_unicode, key, "Unicode password encryption/decryption failed");
+        
+        Ok(())
+    }
+
+    #[test]
+    fn test_encryption_includes_salt_and_nonce() -> Result<()> {
+        let key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let password = "password";
+        
+        let encrypted = encrypt_private_key(key, password)?;
+        
+        // Decode the hex
+        let binary_data = hex::decode(&encrypted)?;
+        
+        // Verify it's long enough to contain salt (8 bytes) and nonce (12 bytes)
+        assert!(binary_data.len() > 20, "Encrypted data should include salt and nonce");
+        
+        Ok(())
+    }
 }
