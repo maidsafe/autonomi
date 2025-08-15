@@ -18,7 +18,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -46,7 +46,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
         target: [x64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -74,7 +74,7 @@ jobs:
         target: [x86_64]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -112,7 +112,7 @@ jobs:
           - armv7-unknown-linux-musleabihf
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -141,7 +141,7 @@ jobs:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:

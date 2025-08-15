@@ -20,7 +20,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
@@ -32,7 +32,7 @@ jobs:
     name: Unused dependency check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly # Needs nightly to distinguish between deps of different versions
@@ -54,7 +54,7 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       # commitlint check removed - no longer enforcing conventional commits
@@ -64,7 +64,7 @@ jobs:
     name: various checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -110,7 +110,7 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check we're on the right commit
         run: git log -1 --oneline
@@ -196,7 +196,7 @@ jobs:
           - os: macos-latest
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -616,7 +616,7 @@ jobs:
   #     matrix:
   #       os: [ubuntu-latest, windows-latest, macos-latest]
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
 
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable
@@ -689,7 +689,7 @@ jobs:
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -851,7 +851,7 @@ jobs:
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -967,7 +967,7 @@ jobs:
     name: Large file upload
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1120,7 +1120,7 @@ jobs:
   #     CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
 
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
 
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable
