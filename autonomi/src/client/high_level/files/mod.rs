@@ -207,9 +207,6 @@ pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(
             .parent()
             .unwrap_or(Path::new(""))
             .to_path_buf();
-        println!(
-            "abs_folder_path is {abs_folder_path:?}, folder_prefix is {folder_prefix:?}, abs_file_pah is {abs_file_pah:?}"
-        );
         abs_file_pah
             .strip_prefix(folder_prefix)
             .expect("Could not strip prefix path")

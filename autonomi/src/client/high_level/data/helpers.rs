@@ -98,7 +98,7 @@ impl Client {
         for stream in encryption_streams.iter_mut() {
             if !stream.file_path.is_empty() {
                 info!("Uploading file: {}", stream.file_path);
-                // #[cfg(feature = "loud")]
+                #[cfg(feature = "loud")]
                 println!("Uploading file: {}", stream.file_path);
             }
             let (processed_chunks, free_chunks, receipt) = self

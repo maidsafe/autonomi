@@ -91,7 +91,7 @@ impl Client {
     ) -> Result<Vec<(XorName, usize)>, CostError> {
         let now = Instant::now();
         let (data_map_chunks, chunks) =
-            encrypt(data).map_err(|_e| CostError::Serialization("{_e:?}".to_string()))?;
+            encrypt(data).map_err(|e| CostError::Serialization(format!("{e:?}")))?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());
 

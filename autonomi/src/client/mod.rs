@@ -108,7 +108,7 @@ impl Client {
                 ..Default::default()
             },
             evm_network: ant_evm::EvmNetwork::new(true)
-                .map_err(|_e| ConnectError::EvmNetworkError("{_e:?}".to_string()))?,
+                .map_err(|e| ConnectError::EvmNetworkError(format!("{e:?}")))?,
             strategy: Default::default(),
             network_id: None,
             bootstrap_cache_config,

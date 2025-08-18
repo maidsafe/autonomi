@@ -216,13 +216,13 @@ impl PutError {
 
     fn from_put_error(put_error: &PutError) -> Self {
         match put_error {
-            PutError::SelfEncryption(_e) => {
-                PutError::Serialization("Self-encryption error {_e:?}".to_string())
+            PutError::SelfEncryption(e) => {
+                PutError::Serialization(format!("Self-encryption error {e:?}"))
             } // Use safe default since self_encryption::Error doesn't implement Clone
-            PutError::CostError(_e) => PutError::Serialization("Cost error {_e:?}".to_string()), // Use safe default since CostError doesn't implement Clone
-            PutError::PayError(_e) => PutError::Serialization("Payment error {_e:?}".to_string()), // Use safe default since PayError doesn't implement Clone
+            PutError::CostError(e) => PutError::Serialization(format!("Cost error {e:?}")), // Use safe default since CostError doesn't implement Clone
+            PutError::PayError(e) => PutError::Serialization(format!("Payment error {e:?}")), // Use safe default since PayError doesn't implement Clone
             PutError::Serialization(msg) => PutError::Serialization(msg.clone()),
-            PutError::Wallet(_e) => PutError::Serialization("Wallet error {_e:?}".to_string()), // Use safe default since ant_evm::EvmError doesn't implement Clone
+            PutError::Wallet(e) => PutError::Serialization(format!("Wallet error {e:?}")), // Use safe default since ant_evm::EvmError doesn't implement Clone
             PutError::PayeesMissing => PutError::PayeesMissing,
             PutError::Network {
                 address,
@@ -271,17 +271,15 @@ impl GetError {
 
     fn from_get_error(get_error: &GetError) -> Self {
         match get_error {
-            GetError::InvalidDataMap(_e) => {
-                GetError::Configuration("Invalid data map error {_e:?}".to_string())
+            GetError::InvalidDataMap(e) => {
+                GetError::Configuration(format!("Invalid data map error {e:?}"))
             } // Use safe default since rmp_serde::decode::Error doesn't implement Clone
-            GetError::Decryption(_e) => {
-                GetError::Configuration("Decryption error {_e:?}".to_string())
-            } // Use safe default since self_encryption::Error doesn't implement Clone
-            GetError::Deserialization(_e) => {
-                GetError::Configuration("Deserialization error {_e:?}".to_string())
+            GetError::Decryption(e) => GetError::Configuration(format!("Decryption error {e:?}")), // Use safe default since self_encryption::Error doesn't implement Clone
+            GetError::Deserialization(e) => {
+                GetError::Configuration(format!("Deserialization error {e:?}"))
             } // Use safe default since rmp_serde::decode::Error doesn't implement Clone
             GetError::Network(err) => GetError::Network(err.clone()),
-            GetError::Protocol(_e) => GetError::Configuration("Protocol error {_e:?}".to_string()), // Use safe default since ant_protocol::Error doesn't implement Clone
+            GetError::Protocol(e) => GetError::Configuration(format!("Protocol error {e:?}")), // Use safe default since ant_protocol::Error doesn't implement Clone
             GetError::RecordNotFound => GetError::RecordNotFound,
             GetError::RecordKindMismatch(kind) => GetError::RecordKindMismatch(*kind),
             GetError::Configuration(msg) => GetError::Configuration(msg.clone()),

@@ -110,22 +110,23 @@ impl Client {
         Ok(())
     }
 
-    /// Create and put a scratchpad to the network.
+    /// Manually store a scratchpad on the network
     pub async fn scratchpad_put(
         &self,
         scratchpad: Scratchpad,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+        // Only need to pay for the oracle scratchpad (scratchpad.counter() == 0)
+        let pass_down = if scratchpad.counter() == 0 {
+            Some(payment_option)
+        } else {
+            None
+        };
+
         let scratchpad_addr = *scratchpad.address();
-
-        if self.scratchpad_check_existence(&scratchpad_addr).await? {
-            return Err(ScratchpadError::ScratchpadAlreadyExists(scratchpad_addr));
-        }
-
         let data_content = DataContent::Scratchpad(scratchpad);
-
         self.core_client
-            .record_put(data_content, Some(payment_option))
+            .record_put(data_content, pass_down)
             .await
             .map(|(cost, _addr)| (cost, scratchpad_addr))
             .map_err(|e| PutError::from_error(&e).into())

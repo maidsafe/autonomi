@@ -94,9 +94,7 @@ impl Client {
         // create an archive
         let mut private_archive = PrivateArchive::new();
         for file in chunk_iterators {
-            println!("string file_path is {:?}", file.file_path);
             let file_path = Path::new(&file.file_path);
-            println!("constructed path is {file_path:?}");
             let relative_path =
                 get_relative_file_path_from_abs_file_and_folder_path(file_path, &dir_path);
             let file_metadata = metadata_from_entry(file_path);

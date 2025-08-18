@@ -74,7 +74,7 @@ impl Client {
                 tokio::runtime::Handle::current().block_on(async {
                     self.fetch_chunks_parallel(&chunk_addrs, total_chunks, disable_cache)
                         .await
-                        .map_err(|_e| self_encryption::Error::Decryption("{_e:?}".to_string()))
+                        .map_err(|e| self_encryption::Error::Decryption(format!("{e:?}")))
                 })
             })
         };
@@ -217,7 +217,7 @@ impl Client {
 
         // When hit any error for one entry, return with error
         if !errors.is_empty() {
-            Err(self_encryption::Error::Generic("{errors:?}".to_string()))
+            Err(self_encryption::Error::Generic(format!("{errors:?}")))
         } else {
             #[cfg(feature = "loud")]
             println!("Successfully fetched all {total_chunks} encrypted chunks");

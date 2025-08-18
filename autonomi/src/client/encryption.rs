@@ -35,7 +35,7 @@ impl Client {
             encryption_tasks.push(async move {
                 let file_path = entry.path().to_path_buf();
                 info!("Encrypting file: {file_path:?}..");
-                // #[cfg(feature = "loud")]
+                #[cfg(feature = "loud")]
                 println!("Encrypting file: {file_path:?}..");
 
                 let file_size = entry

@@ -292,19 +292,13 @@ impl Client {
         content: DataContent,
         payment_option: Option<PaymentOption>,
     ) -> Result<(crate::AttoTokens, NetworkAddress), Error> {
+        let (_, _, addr) = content.get_content_info();
         // Use the helper function for batch upload with a single item
-        let (total_cost, addresses) = self
+        let (total_cost, _addresses) = self
             .upload_data_batch(vec![content], payment_option)
             .await?;
 
-        // Extract the single address from the result
-        let network_address = addresses.into_iter().next().ok_or_else(|| {
-            Error::PutError(PutError::Serialization(
-                "No address returned from upload".to_string(),
-            ))
-        })?;
-
-        Ok((total_cost, network_address))
+        Ok((total_cost, addr))
     }
 
     /// Upload multiple chunks in a batch. Returns the total cost and addresses of all uploaded chunks.
@@ -334,6 +328,18 @@ impl Client {
         if data_items.is_empty() {
             return Ok((crate::AttoTokens::zero(), vec![]));
         }
+
+        // Carry out a size check, return error on any over-sized entry
+        for data in data_items.iter() {
+            let (_, size, addr) = data.get_content_info();
+            if size > Chunk::MAX_SIZE {
+                return Err(Error::PutError(PutError::Serialization(format!(
+                    "Chunk is too large: {size} bytes, when max size is {}, {addr:?}",
+                    Chunk::MAX_SIZE
+                ))));
+            }
+        }
+
         let total_items = data_items.len();
 
         // Handle payment for all items at once if PaymentOption provided

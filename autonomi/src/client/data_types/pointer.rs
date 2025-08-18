@@ -95,16 +95,17 @@ impl Client {
         pointer: Pointer,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, PointerAddress), PointerError> {
+        // Only need to pay for the oracle pointer (pointer.counter() == 0)
+        let pass_down = if pointer.counter() == 0 {
+            Some(payment_option)
+        } else {
+            None
+        };
+
         let pointer_addr = pointer.address();
-
-        if self.pointer_check_existence(&pointer_addr).await? {
-            return Err(PointerError::PointerAlreadyExists(pointer_addr));
-        }
-
         let data_content = DataContent::Pointer(pointer);
-
         self.core_client
-            .record_put(data_content, Some(payment_option))
+            .record_put(data_content, pass_down)
             .await
             .map(|(cost, _addr)| (cost, pointer_addr))
             .map_err(|e| PutError::from_error(&e).into())
@@ -142,7 +143,7 @@ impl Client {
         let address = PointerAddress::new(owner.public_key());
         info!("Updating pointer at address {address:?} to {target:?}");
 
-        if self.pointer_check_existence(&address).await? {
+        if !self.pointer_check_existence(&address).await? {
             return Err(PointerError::CannotUpdateNewPointer);
         }
 
