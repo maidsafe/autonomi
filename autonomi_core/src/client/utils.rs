@@ -166,9 +166,9 @@ pub(crate) mod chunk_cache {
     /// Delete multiple chunks from the cache
     pub fn delete_chunks(
         cache_dir: PathBuf,
-        chunk_addrs: &[ChunkAddress],
+        chunk_addrs: &[(usize, ChunkAddress)],
     ) -> Result<(), ChunkCacheError> {
-        for chunk_addr in chunk_addrs {
+        for (_idx, chunk_addr) in chunk_addrs {
             let chunk_file_path = chunk_file_path(cache_dir.clone(), chunk_addr);
             if chunk_file_path.exists() {
                 if let Err(e) = fs::remove_file(&chunk_file_path) {

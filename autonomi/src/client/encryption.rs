@@ -35,7 +35,7 @@ impl Client {
             encryption_tasks.push(async move {
                 let file_path = entry.path().to_path_buf();
                 info!("Encrypting file: {file_path:?}..");
-                #[cfg(feature = "loud")]
+                // #[cfg(feature = "loud")]
                 println!("Encrypting file: {file_path:?}..");
 
                 let file_size = entry
@@ -83,8 +83,9 @@ async fn encrypt_file_in_memory(
     }
 
     let start = Instant::now();
-    let (file_chunk_iterator, _data_map) = EncryptionStream::new_in_memory(data, is_public)
-        .map_err(|err| format!("Error encrypting file {file_path:?}: {err:?}"))?;
+    let (file_chunk_iterator, _data_map) =
+        EncryptionStream::new_in_memory(Some(file_path.clone()), data, is_public)
+            .map_err(|err| format!("Error encrypting file {file_path:?}: {err:?}"))?;
 
     debug!("Encryption of {file_path:?} took: {:.2?}", start.elapsed());
 

@@ -72,7 +72,7 @@ impl Client {
     ) -> Result<(AttoTokens, DataMapChunk), PutError> {
         let now = Instant::now();
 
-        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(data, false)?;
+        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(None, data, false)?;
         debug!("Encryption took: {:.2?}", now.elapsed());
 
         let datamap_bytes =

@@ -64,7 +64,7 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), PutError> {
-        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(data, true)?;
+        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(None, data, true)?;
         let datamap_bytes = rmp_serde::to_vec(&datamap).map_err(|e| {
             self_encryption::Error::Generic(format!("Failed to serialize DataMap: {e}"))
         })?;

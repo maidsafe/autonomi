@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
-pub use ant_bootstrap::{error::Error as BootstrapError, BootstrapCacheConfig, InitialPeersConfig};
+pub use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig, error::Error as BootstrapError};
 use ant_evm::EvmNetwork;
 use std::num::NonZero;
 

@@ -9,10 +9,10 @@
 //! Data content types and operations for the Autonomi core client
 
 use ant_evm::ClientProofOfPayment;
-use ant_protocol::storage::{
-    try_serialize_record, Chunk, DataTypes, GraphEntry, Pointer, RecordKind, Scratchpad,
-};
 use ant_protocol::NetworkAddress;
+use ant_protocol::storage::{
+    Chunk, DataTypes, GraphEntry, Pointer, RecordKind, Scratchpad, try_serialize_record,
+};
 use libp2p::kad::Record;
 use xor_name::XorName;
 
@@ -187,8 +187,8 @@ impl DataContent {
 #[cfg(test)]
 mod tests {
     use super::DataContent;
-    use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, PointerTarget};
     use ant_protocol::Bytes;
+    use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, PointerTarget};
     use bls::SecretKey;
 
     #[test]

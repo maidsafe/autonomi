@@ -171,6 +171,7 @@ impl EncryptionStream {
     }
 
     pub fn new_in_memory(
+        file_path: Option<PathBuf>,
         bytes: Bytes,
         is_public: bool,
     ) -> Result<(Self, DataMap), self_encryption::Error> {
@@ -190,8 +191,13 @@ impl EncryptionStream {
             content_chunks.push(Chunk::new(Bytes::from(datamap_bytes)));
         }
 
+        let file_path = match file_path {
+            Some(path) => path.to_string_lossy().to_string(),
+            None => "".to_string(),
+        };
+
         let stream = EncryptionStream {
-            file_path: "".to_string(),
+            file_path,
             is_public,
             state: EncryptionState::InMemory(content_chunks, data_map.clone()),
         };
@@ -379,10 +385,14 @@ impl Client {
                 match proofs.get(&xor_name) {
                     Some((proof, price)) => (Some(proof.clone()), *price),
                     None => {
-                        info!(
-                            "({}/{}) Data at address {network_address:?} was already paid for so skipping",
-                            i + 1,
-                            total_items
+                        debug!(
+                            "({}/{total_items}) Data at address {network_address:?} was already paid for so skipping",
+                            i + 1
+                        );
+                        #[cfg(feature = "loud")]
+                        println!(
+                            "({}/{total_items}) data stored at: {network_address:?} (skipping, already exists)",
+                            i + 1
                         );
                         continue;
                     }
@@ -432,9 +442,28 @@ impl Client {
                 debug!("Storing {:?} at address {:?} to the network", data_type, network_address);
 
                 let strategy = self_clone.get_strategy(data_type);
-                if let Err(err) = self_clone.network
+
+                let res = self_clone.network
                     .put_record_with_retries(record, target_nodes, strategy)
-                    .await {
+                    .await;
+
+                #[cfg(feature = "loud")]
+                match &res {
+                    Ok(_) => {
+                        println!(
+                            "({}/{total_items}) data stored",
+                            i + 1,
+                        );
+                    }
+                    Err(err) => {
+                        println!(
+                            "({}/{total_items}) data failed to be stored at: {network_address:?} ({err})",
+                            i + 1,
+                        );
+                    }
+                }
+
+                if let Err(err) = res {
                         error!("Failed to put record - {data_type:?} {network_address:?} to the network: {err}");
                         error_result = "{err:?}".to_string(); 
                         return (network_address, price, error_result);
@@ -520,8 +549,9 @@ impl Client {
             let file_data = tokio::fs::read(&from_dest).await.map_err(|e| {
                 Error::PutError(PutError::Serialization(format!("Failed to read file: {e}")))
             })?;
-            let (stream, _) = EncryptionStream::new_in_memory(Bytes::from(file_data), is_public)
-                .map_err(|e| Error::PutError(PutError::SelfEncryption(e)))?;
+            let (stream, _) =
+                EncryptionStream::new_in_memory(Some(from_dest), Bytes::from(file_data), is_public)
+                    .map_err(|e| Error::PutError(PutError::SelfEncryption(e)))?;
             stream
         };
 

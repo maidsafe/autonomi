@@ -60,13 +60,11 @@ impl Client {
         );
 
         // Create parallel chunk fetcher for streaming decryption
-        let client_clone = self.clone();
-
         let parallel_chunk_fetcher = move |chunk_names: &[(usize, XorName)]| -> Result<
             Vec<(usize, Bytes)>,
             self_encryption::Error,
         > {
-            let chunk_addresses: Vec<(usize, ChunkAddress)> = chunk_names
+            let chunk_addrs: Vec<(usize, ChunkAddress)> = chunk_names
                 .iter()
                 .map(|(i, name)| (*i, ChunkAddress::new(*name)))
                 .collect();
@@ -74,32 +72,9 @@ impl Client {
             // Use tokio::task::block_in_place to handle async in sync context
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
-                    let mut chunk_futures = Vec::new();
-
-                    for (index, chunk_addr) in chunk_addresses {
-                        let client = client_clone.clone();
-                        chunk_futures.push(async move {
-                            match client
-                                .fetch_chunks_parallel(chunk_addr, disable_cache)
-                                .await
-                            {
-                                Ok(chunk_data) => Ok((index, chunk_data)),
-                                Err(err) => {
-                                    error!("Error fetching chunk {chunk_addr:?}: {err:?}");
-                                    Err(self_encryption::Error::Generic(format!(
-                                        "Network error: {err:?}"
-                                    )))
-                                }
-                            }
-                        });
-                    }
-
-                    let results = process_tasks_with_max_concurrency(
-                        chunk_futures,
-                        *CHUNK_DOWNLOAD_BATCH_SIZE,
-                    )
-                    .await;
-                    results.into_iter().collect::<Result<Vec<_>, _>>()
+                    self.fetch_chunks_parallel(&chunk_addrs, total_chunks, disable_cache)
+                        .await
+                        .map_err(|_e| self_encryption::Error::Decryption("{_e:?}".to_string()))
                 })
             })
         };
@@ -110,7 +85,16 @@ impl Client {
             Error::GetError(GetError::Decryption(e))
         })?;
 
-        info!("Successfully streamed {total_chunks} chunks to file");
+        #[cfg(feature = "loud")]
+        println!(
+            "Successfully streamed {total_chunks} to file {}",
+            to_dest.display()
+        );
+        info!(
+            "Successfully streamed {total_chunks} to file {}",
+            to_dest.display()
+        );
+
         Ok(())
     }
 
@@ -123,46 +107,20 @@ impl Client {
         let total_chunks = data_map.infos().len();
         debug!("Fetching {total_chunks} encrypted data chunks from datamap");
 
-        let mut download_tasks = vec![];
-        let chunk_addrs: Vec<ChunkAddress> = data_map
+        let chunk_addrs: Vec<(usize, ChunkAddress)> = data_map
             .infos()
             .iter()
-            .map(|info| ChunkAddress::new(info.dst_hash))
+            .map(|info| (info.index, ChunkAddress::new(info.dst_hash)))
             .collect();
 
-        for (i, info) in data_map.infos().into_iter().enumerate() {
-            let client = self.clone();
-            download_tasks.push(async move {
-                let idx = i + 1;
-                let chunk_addr = ChunkAddress::new(info.dst_hash);
-
-                info!("Fetching chunk {idx}/{total_chunks}({chunk_addr:?})");
-
-                match client
-                    .fetch_chunks_parallel(chunk_addr, disable_cache)
-                    .await
-                {
-                    Ok(chunk_data) => {
-                        info!("Successfully fetched chunk {idx}/{total_chunks}({chunk_addr:?})");
-                        Ok(EncryptedChunk {
-                            content: chunk_data,
-                        })
-                    }
-                    Err(err) => {
-                        error!(
-                            "Error fetching chunk {idx}/{total_chunks}({chunk_addr:?}): {err:?}"
-                        );
-                        Err(err)
-                    }
-                }
-            });
-        }
-
-        let encrypted_chunks =
-            process_tasks_with_max_concurrency(download_tasks, *CHUNK_DOWNLOAD_BATCH_SIZE)
-                .await
-                .into_iter()
-                .collect::<Result<Vec<EncryptedChunk>, Error>>()?;
+        let chunk_datas = self
+            .fetch_chunks_parallel(&chunk_addrs, total_chunks, disable_cache)
+            .await
+            .map_err(GetError::Decryption)?;
+        let encrypted_chunks: Vec<EncryptedChunk> = chunk_datas
+            .into_iter()
+            .map(|(_idx, content)| EncryptedChunk { content })
+            .collect();
 
         debug!("Successfully fetched all {total_chunks} encrypted chunks");
 
@@ -171,7 +129,9 @@ impl Client {
             Error::GetError(GetError::Decryption(e))
         })?;
 
-        debug!("Successfully decrypted all {total_chunks} chunks");
+        #[cfg(feature = "loud")]
+        println!("Successfully decrypted all {total_chunks} chunks");
+        info!("Successfully decrypted all {total_chunks} chunks");
 
         // Clean up cache if not disabled
         if !disable_cache {
@@ -181,45 +141,89 @@ impl Client {
         Ok(data)
     }
 
-    /// Fetch a single chunk with caching support
+    /// Fetch multiple chunks in parallel from the network, with caching support
+    ///
+    /// chunk_addresses shall holds the chunkinfo.index information.
     async fn fetch_chunks_parallel(
         &self,
-        chunk_addr: ChunkAddress,
+        chunk_addresses: &[(usize, ChunkAddress)],
+        total_chunks: usize,
         disable_cache: bool,
-    ) -> Result<Bytes, Error> {
-        // Try loading from cache first if caching is enabled
-        if !disable_cache
-            && self.config.chunk_cache_enabled
-            && let Ok(Some(chunk)) = self.try_load_chunk_from_cache(&chunk_addr)
-        {
-            debug!("Loaded chunk from cache: {chunk_addr:?}");
-            return Ok(chunk.value().clone());
+    ) -> Result<Vec<(usize, Bytes)>, self_encryption::Error> {
+        let mut download_tasks = vec![];
+
+        for (idx, chunk_addr) in chunk_addresses {
+            let client_clone = self.clone();
+            let addr_clone = *chunk_addr;
+
+            download_tasks.push(async move {
+                #[cfg(feature = "loud")]
+                println!("Fetching chunk {idx}/{total_chunks} ...");
+                info!("Fetching chunk {idx}/{total_chunks}({addr_clone:?})");
+
+                // Try loading from cache first if caching is enabled
+                let chunk = if !disable_cache
+                    && client_clone.config.chunk_cache_enabled
+                    && let Ok(Some(chunk)) = client_clone.try_load_chunk_from_cache(&addr_clone)
+                {
+                    // Try loading from cache first if caching is enabled
+                    debug!("Loaded chunk from cache: {addr_clone:?}");
+                    chunk
+                } else {
+                    // Fetch from network
+                    let key = NetworkAddress::from(addr_clone);
+                    debug!("Fetching chunk from network at: {key:?}");
+
+                    let record = self
+                        .network
+                        .get_record_with_retries(key, &client_clone.config.chunks)
+                        .await
+                        .map_err(Error::NetworkError)?
+                        .ok_or(Error::GetError(GetError::RecordNotFound))?;
+
+                    // Deserialize chunk from record
+                    crate::client::record_get::deserialize_chunk_from_record(&record)?
+                };
+
+                // Store in cache if enabled and not disabled
+                if !disable_cache
+                    && self.config.chunk_cache_enabled
+                    && let Err(e) = self.try_cache_chunk(&addr_clone, &chunk)
+                {
+                    warn!("Failed to cache chunk {}: {e}", addr_clone.to_hex());
+                }
+
+                #[cfg(feature = "loud")]
+                println!("Fetching chunk {idx}/{total_chunks} [DONE]");
+                info!("Fetching chunk {idx}/{total_chunks}({addr_clone:?}) [DONE]");
+                Ok((*idx, chunk.value().clone()))
+            });
         }
 
-        // Fetch from network
-        let key = NetworkAddress::from(chunk_addr);
-        debug!("Fetching chunk from network at: {key:?}");
+        let results: Vec<Result<(usize, Bytes), _>> =
+            process_tasks_with_max_concurrency(download_tasks, *CHUNK_DOWNLOAD_BATCH_SIZE).await;
 
-        let record = self
-            .network
-            .get_record_with_retries(key, &self.config.chunks)
-            .await
-            .map_err(Error::NetworkError)?
-            .ok_or(Error::GetError(GetError::RecordNotFound))?;
+        let mut chunks = vec![];
+        let errors: Vec<Error> = results
+            .into_iter()
+            .filter_map(|res| match res {
+                Ok(chunk) => {
+                    chunks.push(chunk);
+                    None
+                }
+                Err(e) => Some(e),
+            })
+            .collect();
 
-        // Deserialize chunk from record
-        let chunk = crate::client::record_get::deserialize_chunk_from_record(&record)?;
-        let chunk_data = chunk.value().clone();
-
-        // Store in cache if enabled and not disabled
-        if !disable_cache
-            && self.config.chunk_cache_enabled
-            && let Err(e) = self.try_cache_chunk(&chunk_addr, &chunk)
-        {
-            warn!("Failed to cache chunk {}: {}", chunk_addr.to_hex(), e);
+        // When hit any error for one entry, return with error
+        if !errors.is_empty() {
+            Err(self_encryption::Error::Generic("{errors:?}".to_string()))
+        } else {
+            #[cfg(feature = "loud")]
+            println!("Successfully fetched all {total_chunks} encrypted chunks");
+            info!("Successfully fetched all {total_chunks} encrypted chunks");
+            Ok(chunks)
         }
-
-        Ok(chunk_data)
     }
 
     /// Get chunk cache directory
@@ -262,7 +266,7 @@ impl Client {
     }
 
     /// Clean up cached chunks after successful download
-    fn cleanup_cached_chunks(&self, chunk_addrs: &[ChunkAddress]) {
+    fn cleanup_cached_chunks(&self, chunk_addrs: &[(usize, ChunkAddress)]) {
         if self.config.chunk_cache_enabled
             && let Ok(cache_dir) = self.get_chunk_cache_dir()
         {
