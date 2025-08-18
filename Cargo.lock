@@ -1595,7 +1595,7 @@ dependencies = [
  "ant-evm",
  "ant-logging",
  "ant-protocol",
- "autonomi_core",
+ "autonomi-core",
  "bip39",
  "blst",
  "blstrs 0.7.1",
@@ -1631,24 +1631,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "autonomi-nodejs"
-version = "0.1.1"
-dependencies = [
- "autonomi",
- "bytes",
- "eyre",
- "futures",
- "napi",
- "napi-build",
- "napi-derive",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "autonomi_core"
+name = "autonomi-core"
 version = "0.1.0"
 dependencies = [
  "ant-bootstrap",
@@ -1677,6 +1660,23 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "xor_name",
+]
+
+[[package]]
+name = "autonomi-nodejs"
+version = "0.1.1"
+dependencies = [
+ "autonomi",
+ "bytes",
+ "eyre",
+ "futures",
+ "napi",
+ "napi-build",
+ "napi-derive",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]

@@ -23,10 +23,10 @@ name = "put_and_dir_upload"
 default = []
 external-signer = ["ant-evm/external-signer"]
 extension-module = ["pyo3/extension-module", "pyo3-async-runtimes"]
-loud = ["autonomi_core/loud"]
+loud = ["autonomi-core/loud"]
 
 [dependencies]
-autonomi_core = { path = "../autonomi_core", version = "0.1.0" }
+autonomi-core = { path = "../autonomi-core", version = "0.1.0" }
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.6" }
 ant-evm = { path = "../ant-evm", version = "0.1.16" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.7" }

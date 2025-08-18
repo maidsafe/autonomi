@@ -13,7 +13,7 @@ members = [
     "ant-protocol",
     "ant-service-management",
     "ant-token-supplies",
-    "autonomi_core",
+    "autonomi-core",
     "autonomi",
     "evmlib",
     "evm-testnet",
