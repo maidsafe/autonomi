@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755609666549,
+  "lastUpdate": 1755609668439,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2358,6 +2358,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 25117,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "RolandSherwin@protonmail.com",
+            "name": "RolandSherwin",
+            "username": "RolandSherwin"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3a38745fb78945477140db25305809fc0cd67188",
+          "message": "Merge pull request #3164 from RolandSherwin/ci_race_fix\n\nfix(node): add and sync on the same thread",
+          "timestamp": "2025-08-19T12:18:28Z",
+          "tree_id": "be8a99ba7a83c9a524026960776abb59f806ca73",
+          "url": "https://github.com/maidsafe/autonomi/commit/3a38745fb78945477140db25305809fc0cd67188"
+        },
+        "date": 1755609667888,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11646,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 24422,
             "unit": "ms"
           },
           {
