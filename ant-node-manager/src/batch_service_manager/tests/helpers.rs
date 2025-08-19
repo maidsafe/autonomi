@@ -13,7 +13,7 @@ use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
     NodeRegistryManager, ServiceStatus,
     error::Result as ServiceControlResult,
-    metric::{MetricsAction, NodeMetrics},
+    metric::{MetricsAction, MetricsActionError, NodeMetrics},
     node::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeService, NodeServiceData},
     rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
 };
@@ -63,9 +63,11 @@ mock! {
     pub MetricsClient {}
     #[async_trait]
     impl MetricsAction for MetricsClient {
-        async fn get_node_metrics(&self) -> Result<NodeMetrics, ant_service_management::Error>;
-        async fn wait_until_reachability_check_completes(&self, timeout: Option<std::time::Duration>) -> Result<(), ant_service_management::Error>;
+        async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
+        async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, MetricsActionError>;
+        async fn wait_until_reachability_check_completes(&self, timeout: Option<std::time::Duration>) -> Result<(), MetricsActionError>;
     }
+
 }
 
 // Helper function to create a test NodeRegistryManager
