@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755609664777,
+  "lastUpdate": 1755609666549,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1698,6 +1698,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 23,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "RolandSherwin@protonmail.com",
+            "name": "RolandSherwin",
+            "username": "RolandSherwin"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "3a38745fb78945477140db25305809fc0cd67188",
+          "message": "Merge pull request #3164 from RolandSherwin/ci_race_fix\n\nfix(node): add and sync on the same thread",
+          "timestamp": "2025-08-19T12:18:28Z",
+          "tree_id": "be8a99ba7a83c9a524026960776abb59f806ca73",
+          "url": "https://github.com/maidsafe/autonomi/commit/3a38745fb78945477140db25305809fc0cd67188"
+        },
+        "date": 1755609665962,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 17,
             "unit": "MB"
           },
           {
