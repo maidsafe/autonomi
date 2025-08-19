@@ -41,7 +41,6 @@ pub mod external_signer;
 
 // private module with utility functions
 mod data_map_restoration;
-mod put_error_state;
 mod utils;
 
 use crate::client::config::{ClientConfig, ClientOperatingStrategy};
@@ -51,7 +50,7 @@ pub use ant_protocol::CLOSE_GROUP_SIZE;
 pub use autonomi_core::{
     ClientEvent, ClientInitSetup, ConnectError, GetError, PutError, UploadSummary,
 };
-pub use put_error_state::ChunkBatchUploadState;
+pub use autonomi_core::client::ChunkBatchUploadState;
 
 use ant_evm::EvmNetwork;
 use libp2p::Multiaddr;
