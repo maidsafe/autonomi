@@ -6,38 +6,76 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::Error;
+use libp2p::PeerId;
 use prometheus_parse::{Sample, Value};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
+use std::{path::PathBuf, str::FromStr, time::Duration};
+use thiserror::Error;
 use tonic::async_trait;
-
-const REACHABILITY_STATUS_METRIC: &str = "ant_networking_reachability_status";
 
 const REACHABILITY_CHECK_TIMEOUT_SEC: u64 = 14 * 60;
 
+#[derive(Debug, Error)]
+pub enum MetricsActionError {
+    #[error("Could not find PeerId while parsing the metrics")]
+    PeerIdNotFound,
+    #[error("Failed to parse PeerId from string")]
+    PeerIdParseError,
+    #[error("Connection error while attempting to fetch the url at {0}")]
+    ConnectionError(String),
+    #[error("Text read error while attempting to fetch the url at {0}")]
+    TextReadError(String),
+    #[error("Failed to parse Prometheus metrics at {0}")]
+    PrometheusParseError(String),
+    #[error("Reachability status check has timed out for port {metrics_port} after {timeout:?}")]
+    ReachabilityStatusCheckTimedOut {
+        metrics_port: u16,
+        timeout: Duration,
+    },
+    #[error("Failed to parse PID from string")]
+    PidParseError,
+    #[error("PID not found")]
+    PidNotFound,
+    #[error("Root directory not found")]
+    RootDirNotFound,
+    #[error("Log directory not found")]
+    LogDirNotFound,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReachabilityStatusValues {
-    pub not_performed: bool,
-    pub ongoing: bool,
-    pub reachable: bool,
-    pub relay: bool,
-    pub not_routable: bool,
+    /// Progress percentage indicator for reachability check. 0 = not started, between 0-99 = in progress, 100 = completed.
+    pub progress_percent: u64,
+    /// Whether UPnP is enabled.
     pub upnp: bool,
+    /// Whether the external address is same as the internal address.
+    pub public: bool,
+    /// Whether the external address is different from the internal address.
+    pub private: bool,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct NodeMetrics {
     pub reachability_status: ReachabilityStatusValues,
+    pub connected_peers: u32,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeMetadataExtended {
+    pub peer_id: PeerId,
+    pub pid: u32,
+    pub root_dir: PathBuf,
+    pub log_dir: PathBuf,
 }
 
 #[async_trait]
 pub trait MetricsAction: Sync + Send {
-    async fn get_node_metrics(&self) -> Result<NodeMetrics, Error>;
+    async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
+    async fn get_node_metadata_extended(&self) -> Result<NodeMetadataExtended, MetricsActionError>;
     async fn wait_until_reachability_check_completes(
         &self,
         timeout: Option<Duration>,
-    ) -> Result<(), Error>;
+    ) -> Result<(), MetricsActionError>;
 }
 
 #[derive(Debug, Clone)]
@@ -72,7 +110,7 @@ impl MetricsClient {
     async fn get_raw_metrics_with_retry(
         &self,
         endpoint: String,
-    ) -> Result<prometheus_parse::Scrape, Error> {
+    ) -> Result<prometheus_parse::Scrape, MetricsActionError> {
         let mut attempts = 0;
         let url = format!("http://localhost:{}/{endpoint}", self.port);
 
@@ -102,23 +140,26 @@ impl MetricsClient {
         }
     }
 
-    async fn get_raw_metrics(&self, url: &String) -> Result<prometheus_parse::Scrape, Error> {
+    async fn get_raw_metrics(
+        &self,
+        url: &String,
+    ) -> Result<prometheus_parse::Scrape, MetricsActionError> {
         let body = reqwest::get(url)
             .await
             .map_err(|err| {
                 error!("Failed to fetch metrics from {url}: {err}");
-                Error::MetricsConnectionError(format!("Connection error to {url}"))
+                MetricsActionError::ConnectionError(url.to_string())
             })?
             .text()
             .await
             .map_err(|err| {
                 error!("Failed to read response body from {url}: {err}");
-                Error::MetricsConnectionError(format!("Text read error from {url}"))
+                MetricsActionError::TextReadError(url.to_string())
             })?;
         let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
         let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter()).map_err(|err| {
             error!("Failed to parse metrics from {url}: {err}");
-            Error::MetricsParseError
+            MetricsActionError::PrometheusParseError(url.to_string())
         })?;
 
         Ok(all_metrics)
@@ -128,16 +169,45 @@ impl MetricsClient {
 #[async_trait]
 impl MetricsAction for MetricsClient {
     /// Fetches node metrics from the "/metrics" endpoint of the node.
-    async fn get_node_metrics(&self) -> Result<NodeMetrics, Error> {
+    async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError> {
         let all_metrics = self
             .get_raw_metrics_with_retry("metrics".to_string())
             .await?;
 
+        let connected_peers = all_metrics
+            .samples
+            .iter()
+            .find(|s| s.metric == "ant_networking_connected_peers")
+            .map(|s| s.value.clone())
+            .map(|v| {
+                if let Value::Gauge(value) = v {
+                    value as u32
+                } else {
+                    error!(
+                        "Expected Gauge value for 'ant_networking_connected_peers', found: {:?}",
+                        v
+                    );
+                    0
+                }
+            })
+            .unwrap_or(0);
+
         let node_metrics = NodeMetrics {
             reachability_status: ReachabilityStatusValues::from(&all_metrics.samples),
+            connected_peers,
         };
 
         Ok(node_metrics)
+    }
+
+    async fn get_node_metadata_extended(&self) -> Result<NodeMetadataExtended, MetricsActionError> {
+        let all_metrics = self
+            .get_raw_metrics_with_retry("metadata_extended".to_string())
+            .await?;
+
+        let node_metadata = NodeMetadataExtended::try_from(&all_metrics.samples)?;
+
+        Ok(node_metadata)
     }
 
     /// Waits until the reachability check completes or times out.
@@ -146,7 +216,7 @@ impl MetricsAction for MetricsClient {
     async fn wait_until_reachability_check_completes(
         &self,
         timeout: Option<Duration>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), MetricsActionError> {
         let timeout =
             timeout.unwrap_or_else(|| Duration::from_secs(REACHABILITY_CHECK_TIMEOUT_SEC));
         debug!("Waiting for node to complete reachability check with a timeout of {timeout:?}...");
@@ -166,24 +236,21 @@ impl MetricsAction for MetricsClient {
                 .await
                 .inspect_err(|err| error!("Error getting node metrics: {err}"))?;
 
-            if metrics.reachability_status.not_performed {
+            if metrics.reachability_status.progress_percent == 0 {
                 debug!(
-                    "Reachability check has not been enabled/performed. Considering reachability check completed."
+                    "Reachability check has not been enabled/performed (0). Considering reachability check completed."
                 );
                 return Ok(());
             }
 
-            if !metrics.reachability_status.ongoing {
-                debug!(
-                    "Reachability check is not ongoing. Considering reachability check completed."
-                );
+            if metrics.reachability_status.progress_percent == 100 {
+                debug!("Reachability check is complete (100).");
                 return Ok(());
             }
 
             attempts += 1;
             debug!(
-                "Reachability check is ongoing. Waiting for it to complete... {} / {max_attempts} attempts",
-                attempts
+                "Reachability check is ongoing. Waiting for it to complete... {attempts} / {max_attempts} attempts",
             );
 
             tokio::time::sleep(self.retry_delay).await;
@@ -191,7 +258,7 @@ impl MetricsAction for MetricsClient {
                 error!(
                     "Reachability check has not completed after {max_attempts} attempts. Timing out."
                 );
-                return Err(Error::ReachabilityStatusCheckTimedOut {
+                return Err(MetricsActionError::ReachabilityStatusCheckTimedOut {
                     metrics_port: self.port,
                     timeout,
                 });
@@ -200,68 +267,105 @@ impl MetricsAction for MetricsClient {
     }
 }
 
-impl From<&Vec<Sample>> for ReachabilityStatusValues {
-    fn from(samples: &Vec<Sample>) -> Self {
-        let mut not_performed = false;
-        let mut ongoing = false;
-        let mut reachable = false;
-        let mut relay = false;
-        let mut not_routable = false;
-        let mut upnp = false;
+impl TryFrom<&Vec<Sample>> for NodeMetadataExtended {
+    type Error = MetricsActionError;
+
+    fn try_from(samples: &Vec<Sample>) -> Result<Self, Self::Error> {
+        let mut peer_id = None;
+        let mut pid = None;
+        let mut root_dir = None;
+        let mut log_dir = None;
 
         for sample in samples {
-            if sample.metric == REACHABILITY_STATUS_METRIC {
-                if sample.labels.get("status") == Some("NotPerformed") {
-                    if let Value::Gauge(value) = sample.value {
-                        not_performed = value == 1.0;
-                    } else {
-                        error!(
-                            "Expected Gauge value for 'NotPerformed' status, found: {:?}",
-                            sample.value
-                        );
-                    }
-                } else if sample.labels.get("status") == Some("Ongoing") {
-                    if let Value::Gauge(value) = sample.value {
-                        ongoing = value == 1.0;
-                    } else {
-                        error!(
-                            "Expected Gauge value for 'Ongoing' status, found: {:?}",
-                            sample.value
-                        );
-                    }
-                } else if sample.labels.get("status") == Some("Reachable") {
-                    if let Value::Gauge(value) = sample.value {
-                        reachable = value == 1.0;
-                    } else {
-                        error!(
-                            "Expected Gauge value for 'Reachable' status, found: {:?}",
-                            sample.value
-                        );
-                    }
-                } else if sample.labels.get("status") == Some("Relay") {
-                    if let Value::Gauge(value) = sample.value {
-                        relay = value == 1.0;
-                    } else {
-                        error!(
-                            "Expected Gauge value for 'Relay' status, found: {:?}",
-                            sample.value
-                        );
-                    }
-                } else if sample.labels.get("status") == Some("NotRoutable") {
-                    if let Value::Gauge(value) = sample.value {
-                        not_routable = value == 1.0;
-                    } else {
-                        error!(
-                            "Expected Gauge value for 'NotRoutable' status, found: {:?}",
-                            sample.value
-                        );
-                    }
-                } else if sample.labels.get("status") == Some("UpnPSupported") {
+            if sample.metric == "ant_networking_peer_id_info"
+                && let Some(peer_id_str) = sample.labels.get("peer_id")
+            {
+                peer_id = Some(
+                    PeerId::from_str(peer_id_str).or(Err(MetricsActionError::PeerIdParseError))?,
+                );
+            }
+
+            if sample.metric == "ant_networking_pid_info"
+                && let Some(pid_str) = sample.labels.get("pid")
+            {
+                pid = Some(
+                    pid_str
+                        .parse::<u32>()
+                        .or(Err(MetricsActionError::PidParseError))?,
+                );
+            }
+
+            if sample.metric == "ant_networking_root_dir_info"
+                && let Some(root_dir_str) = sample.labels.get("root_dir")
+            {
+                root_dir = Some(PathBuf::from(root_dir_str));
+            }
+
+            if sample.metric == "ant_networking_log_dir_info"
+                && let Some(log_dir_str) = sample.labels.get("log_dir")
+            {
+                log_dir = Some(PathBuf::from(log_dir_str));
+            }
+        }
+
+        Ok(NodeMetadataExtended {
+            peer_id: peer_id.ok_or(MetricsActionError::PeerIdNotFound)?,
+            pid: pid.ok_or(MetricsActionError::PidNotFound)?,
+            root_dir: root_dir.ok_or(MetricsActionError::RootDirNotFound)?,
+            log_dir: log_dir.ok_or(MetricsActionError::LogDirNotFound)?,
+        })
+    }
+}
+
+impl From<&Vec<Sample>> for ReachabilityStatusValues {
+    fn from(samples: &Vec<Sample>) -> Self {
+        let mut progress_percent = 0;
+        let mut upnp = false;
+        let mut public = false;
+        let mut private = false;
+
+        for sample in samples {
+            if sample.metric == "ant_networking_reachability_check_progress" {
+                if let Value::Gauge(value) = sample.value {
+                    let percent = (value * 100.0) as u64;
+                    progress_percent = percent;
+                } else {
+                    error!(
+                        "Expected Gauge value for 'ant_networking_reachability_check_progress', found: {:?}",
+                        sample.value
+                    );
+                }
+            }
+
+            if sample.metric == "ant_networking_reachability_adapter" {
+                if sample.labels.get("mode") == Some("UPnP") {
                     if let Value::Gauge(value) = sample.value {
                         upnp = value == 1.0;
                     } else {
                         error!(
-                            "Expected Gauge value for 'UpnPSupported' status, found: {:?}",
+                            "Expected Gauge value for 'UPnP' mode, found: {:?}",
+                            sample.value
+                        );
+                    }
+                }
+
+                if sample.labels.get("mode") == Some("Private") {
+                    if let Value::Gauge(value) = sample.value {
+                        private = value == 1.0;
+                    } else {
+                        error!(
+                            "Expected Gauge value for 'Private' mode, found: {:?}",
+                            sample.value
+                        );
+                    }
+                }
+
+                if sample.labels.get("mode") == Some("Public") {
+                    if let Value::Gauge(value) = sample.value {
+                        public = value == 1.0;
+                    } else {
+                        error!(
+                            "Expected Gauge value for 'Public' mode, found: {:?}",
                             sample.value
                         );
                     }
@@ -269,12 +373,31 @@ impl From<&Vec<Sample>> for ReachabilityStatusValues {
             }
         }
         ReachabilityStatusValues {
-            not_performed,
-            ongoing,
-            reachable,
-            relay,
-            not_routable,
+            progress_percent,
             upnp,
+            public,
+            private,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ant_logging::LogBuilder;
+
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_get_raw_metrics() {
+        let _log_guard = LogBuilder::init_single_threaded_tokio_test();
+        let client = MetricsClient::new(49854);
+        let result = client
+            .get_raw_metrics_with_retry("metrics".to_string())
+            .await;
+        info!("{result:?}");
+
+        let result = client.get_node_metrics().await;
+        info!("{result:?}");
     }
 }
