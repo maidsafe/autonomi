@@ -23,10 +23,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
-    #[error("Could not connect to the metrics endpoint'{0}'")]
-    MetricsConnectionError(String),
-    #[error("Could not parse metrics")]
-    MetricsParseError,
+    #[error(transparent)]
+    MetricsError(#[from] crate::metric::MetricsActionError),
     #[error(transparent)]
     MultiAddrParseError(#[from] libp2p::multiaddr::Error),
     #[error(
@@ -36,23 +34,14 @@ pub enum Error {
         rpc_endpoint: String,
         timeout: std::time::Duration,
     },
-    #[error("The registry does not contain a service named '{0}'")]
-    NodeNotFound(String),
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error(transparent)]
     PeerIdParseError(#[from] libp2p_identity::ParseError),
-    #[error("Reachability status check has timed out for port {metrics_port} after {timeout:?}")]
-    ReachabilityStatusCheckTimedOut {
-        metrics_port: u16,
-        timeout: std::time::Duration,
-    },
     #[error("Could not connect to RPC endpoint '{0}'")]
     RpcConnectionError(String),
     #[error("Could not obtain node info through RPC: {0}")]
     RpcNodeInfoError(String),
-    #[error("Could not obtain network info through RPC: {0}")]
-    RpcNetworkInfoError(String),
     #[error("Could not restart node through RPC: {0}")]
     RpcNodeRestartError(String),
     #[error("Could not stop node through RPC: {0}")]
