@@ -266,7 +266,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -926,7 +926,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -2750,7 +2750,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -2868,7 +2868,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -3811,7 +3811,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -3930,7 +3930,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -4315,7 +4315,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,
@@ -4434,7 +4434,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
         .push_node(NodeServiceData {
             alpha: false,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             data_dir_path: PathBuf::from("/var/antctl/services/antnode1"),
             evm_network: EvmNetwork::Custom(CustomNetwork {
                 rpc_url_http: "http://localhost:8545".parse()?,

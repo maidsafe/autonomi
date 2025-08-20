@@ -31,8 +31,8 @@ pub struct NodeServiceDataV3 {
     pub antnode_path: PathBuf,
     #[serde(default)]
     pub auto_restart: bool,
-    #[serde(serialize_with = "NodeServiceData::serialize_connected_peers")]
-    pub connected_peers: Option<Vec<PeerId>>,
+    /// Updated the connected_peers field to be a count instead of a list.
+    pub connected_peers: u32,
     pub data_dir_path: PathBuf,
     #[serde(default)]
     pub evm_network: EvmNetwork,
@@ -85,8 +85,7 @@ impl NodeServiceDataV3 {
             antnode_path: PathBuf,
             #[serde(default)]
             auto_restart: bool,
-            #[serde(deserialize_with = "NodeServiceData::deserialize_connected_peers")]
-            connected_peers: Option<Vec<PeerId>>,
+            connected_peers: u32,
             data_dir_path: PathBuf,
             #[serde(default)]
             evm_network: EvmNetwork,
@@ -198,7 +197,7 @@ mod tests {
             relay: true,
             reachability_check: true,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: 10,
             evm_network: EvmNetwork::ArbitrumSepoliaTest,
             initial_peers_config: InitialPeersConfig {
                 first: false,
