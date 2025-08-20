@@ -218,7 +218,6 @@ pub async fn add_node(
                         skip_reachability_check: options.skip_reachability_check,
                         relay: options.relay,
                         rewards_address: options.rewards_address,
-                        reward_balance: None,
                         rpc_socket_addr,
                         peer_id: None,
                         pid: None,

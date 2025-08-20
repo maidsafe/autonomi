@@ -9,7 +9,7 @@
 use crate::VerbosityLevel;
 use crate::batch_service_manager::BatchServiceManager;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
+use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
     NodeRegistryManager, ServiceStatus,
     error::Result as ServiceControlResult,
@@ -130,7 +130,6 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         pid: None,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
-        reward_balance: Some(AttoTokens::zero()),
         rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080 + number),
         antnode_path: PathBuf::from(format!("/var/antctl/services/antnode{number}/antnode")),
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,

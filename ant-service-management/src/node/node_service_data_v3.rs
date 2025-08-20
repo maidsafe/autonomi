@@ -9,7 +9,7 @@
 use super::NodeServiceData;
 use crate::{ServiceStatus, error::Result};
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
+use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -57,7 +57,7 @@ pub struct NodeServiceDataV3 {
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
-    pub reward_balance: Option<AttoTokens>,
+    // Removed reward_balance field in V3
     pub rpc_socket_addr: SocketAddr,
     #[serde(default = "schema_v3_value")]
     pub schema_version: u32,
@@ -111,7 +111,6 @@ impl NodeServiceDataV3 {
             relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
-            reward_balance: Option<AttoTokens>,
             rpc_socket_addr: SocketAddr,
             #[serde(default = "schema_v3_value")]
             schema_version: u32,
@@ -148,7 +147,6 @@ impl NodeServiceDataV3 {
             pid: helper.pid,
             relay: helper.relay,
             rewards_address: helper.rewards_address,
-            reward_balance: helper.reward_balance,
             rpc_socket_addr: helper.rpc_socket_addr,
             service_name: helper.service_name,
             schema_version: helper.schema_version,
@@ -217,7 +215,6 @@ mod tests {
             peer_id: None,
             pid: None,
             rewards_address: Default::default(),
-            reward_balance: None,
             skip_reachability_check: true,
             user: None,
             write_older_cache_files: false,

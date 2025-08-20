@@ -107,11 +107,6 @@ pub async fn status_report(
             println!("Log path: {}", node.log_dir_path.to_string_lossy());
             println!("Bin path: {}", node.antnode_path.to_string_lossy());
             println!("Connected peers: {}", node.connected_peers);
-            println!(
-                "Reward balance: {}",
-                node.reward_balance
-                    .map_or("-".to_string(), |b| b.to_string())
-            );
             println!("Rewards address: {}", node.rewards_address);
             println!();
         }
@@ -200,11 +195,11 @@ pub async fn status_report(
 /// For a service-based network, at a minimum, the refresh determines if each service is running.
 /// It does that by trying to find a process whose binary path matches the path of the binary for
 /// the service. Since each service uses its own binary, the path is a unique identifer. So you can
-/// know if any *particular* service is running or not. A full refresh uses the RPC client to
-/// connect to the node's RPC service to determine things like the number of connected peers.
+/// know if any *particular* service is running or not. A full refresh uses the Metrics client to
+/// connect to the node's Metrics service to determine things like the number of connected peers.
 ///
 /// For a local network, the node paths are not unique, so we can't use that. We consider the node
-/// running if we can connect to its RPC service; otherwise it is considered stopped.
+/// running if we can connect to its metrics service; otherwise it is considered stopped.
 pub async fn refresh_node_registry(
     node_registry: NodeRegistryManager,
     service_control: &dyn ServiceControl,
@@ -236,11 +231,6 @@ pub async fn refresh_node_registry(
 
     // Main processing loop
     for node in node_registry.nodes.read().await.iter() {
-        // The `status` command can run before a node is started and therefore before its wallet
-        // exists.
-        // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-        node.write().await.reward_balance = None;
-
         let service_name = node.read().await.service_name.clone();
 
         let metrics_client = MetricsClient::new(

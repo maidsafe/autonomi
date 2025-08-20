@@ -101,7 +101,7 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             pid: v2.pid,
             relay: v2.relay,
             rewards_address: v2.rewards_address,
-            reward_balance: v2.reward_balance,
+            // Removed reward_balance field in V3
             rpc_socket_addr: v2.rpc_socket_addr,
             schema_version: NODE_SERVICE_DATA_SCHEMA_V3,
             service_name: v2.service_name,
