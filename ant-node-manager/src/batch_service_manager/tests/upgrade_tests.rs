@@ -16,7 +16,7 @@ use color_eyre::eyre::Result;
 use mockall::predicate::*;
 use semver::Version;
 use service_manager::ServiceInstallCtx;
-use std::{ffi::OsString, path::PathBuf, str::FromStr, sync::Arc};
+use std::{ffi::OsString, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 
 #[tokio::test]
@@ -135,10 +135,7 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
-                    peer_id: libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )
-                    .unwrap(),
+                    peer_id: get_test_peer_id((i - 1) as usize),
                     root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
@@ -340,10 +337,7 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
-                    peer_id: libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )
-                    .unwrap(),
+                    peer_id: get_test_peer_id((i - 1) as usize),
                     root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
@@ -687,10 +681,7 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
-                    peer_id: libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )
-                    .unwrap(),
+                    peer_id: get_test_peer_id((i - 1) as usize),
                     root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
@@ -884,10 +875,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 2000 + i as u32,
-                    peer_id: libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )
-                    .unwrap(),
+                    peer_id: get_test_peer_id((i - 1) as usize),
                     root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
