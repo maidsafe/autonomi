@@ -16,8 +16,6 @@ pub mod config;
 pub mod error;
 pub mod helpers;
 pub mod local;
-pub mod rpc;
-pub mod rpc_client;
 
 use std::sync::Arc;
 
@@ -45,9 +43,10 @@ impl From<u8> for VerbosityLevel {
 
 use crate::error::{Error, Result};
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::fs::FileSystemClient;
 use ant_service_management::metric::MetricsClient;
 use ant_service_management::{
-    NodeService, ServiceStateActions, ServiceStatus, control::ServiceControl, rpc::RpcClient,
+    NodeService, ServiceStateActions, ServiceStatus, control::ServiceControl,
 };
 use colored::Colorize;
 use indicatif::ProgressBar;
@@ -251,9 +250,6 @@ pub async fn refresh_node_registry(
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
         node.write().await.reward_balance = None;
 
-        let mut rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        rpc_client.set_max_attempts(1);
-
         let service_name = node.read().await.service_name.clone();
 
         let metrics_client = MetricsClient::new(
@@ -265,7 +261,7 @@ pub async fn refresh_node_registry(
 
         let service = NodeService::new(
             Arc::clone(node),
-            Box::new(rpc_client.clone()),
+            Box::new(FileSystemClient),
             Box::new(metrics_client),
         );
 

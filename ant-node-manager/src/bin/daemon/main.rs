@@ -10,7 +10,7 @@
 extern crate tracing;
 
 use ant_logging::LogBuilder;
-use ant_node_manager::{DAEMON_DEFAULT_PORT, config::get_node_registry_path, rpc};
+use ant_node_manager::{DAEMON_DEFAULT_PORT, config::get_node_registry_path};
 use ant_service_management::{
     NodeRegistryManager,
     antctl_proto::{
@@ -21,7 +21,6 @@ use ant_service_management::{
 };
 use clap::Parser;
 use color_eyre::eyre::{Result, eyre};
-use libp2p_identity::PeerId;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tonic::{Code, Request, Response, Status, transport::Server};
 use tracing::Level;
@@ -60,25 +59,8 @@ impl AntCtl for AntCtlDaemon {
     ) -> Result<Response<NodeServiceRestartResponse>, Status> {
         println!("RPC request received {:?}", request.get_ref());
         info!("RPC request received {:?}", request.get_ref());
-        let node_registry = Self::load_node_registry().await.map_err(|err| {
-            Status::new(
-                Code::Internal,
-                format!("Failed to load node registry: {err}"),
-            )
-        })?;
 
-        let peer_id = PeerId::from_bytes(&request.get_ref().peer_id).map_err(|err| {
-            error!("Failed to parse PeerId: {err}");
-            Status::new(Code::Internal, format!("Failed to parse PeerId: {err}"))
-        })?;
-
-        Self::restart_handler(node_registry, peer_id, request.get_ref().retain_peer_id)
-            .await
-            .map_err(|err| {
-                Status::new(Code::Internal, format!("Failed to restart the node: {err}"))
-            })?;
-
-        info!("Node service restarted for {peer_id:?}");
+        info!("no-op for rpc request");
         Ok(Response::new(NodeServiceRestartResponse {}))
     }
 
@@ -119,19 +101,6 @@ impl AntCtlDaemon {
             .await
             .map_err(|err| eyre!("Could not load node registry: {err:?}"))?;
         Ok(node_registry)
-    }
-
-    async fn restart_handler(
-        node_registry: NodeRegistryManager,
-        peer_id: PeerId,
-        retain_peer_id: bool,
-    ) -> Result<()> {
-        let res = rpc::restart_node_service(node_registry.clone(), peer_id, retain_peer_id).await;
-
-        // make sure to save the state even if the above fn fails.
-        node_registry.save().await?;
-
-        res
     }
 }
 
