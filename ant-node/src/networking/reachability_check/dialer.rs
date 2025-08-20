@@ -18,8 +18,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-const TIMEOUT_ON_INITIATED_STATE: Duration = Duration::from_secs(30);
-const TIMEOUT_ON_CONNECTED_STATE: Duration = Duration::from_secs(20 + DIAL_BACK_DELAY.as_secs());
+pub(super) const TIMEOUT_ON_INITIATED_STATE: Duration = Duration::from_secs(30);
+pub(super) const TIMEOUT_ON_CONNECTED_STATE: Duration =
+    Duration::from_secs(20 + DIAL_BACK_DELAY.as_secs());
 
 /// Higher level struct that manages everything that is related to dialing.
 #[derive(Debug)]
@@ -69,7 +70,7 @@ pub(crate) enum DialResult {
 /// The state of a dial attempt that we initiated with a remote peer.
 ///
 /// The state can only be transitioned to Connected or DialBackReceived.
-pub(super) enum DialState {
+pub(crate) enum DialState {
     /// We have initiated a dial attempt.
     Initiated { at: Instant },
     /// We got a successful response from the remote peer. We can now wait for them to contact us back after the
@@ -355,6 +356,11 @@ impl DialManager {
     }
 
     // cleanup dial attempts if we're stuck in Attempted state for too long
+    /// Get a reference to ongoing dial attempts for progress tracking.
+    pub(crate) fn get_ongoing_dial_attempts(&self) -> &HashMap<PeerId, DialState> {
+        &self.dialer.ongoing_dial_attempts
+    }
+
     pub(crate) fn cleanup_dial_attempts(&mut self) {
         let mut to_remove_peers = Vec::new();
         for (peer, state) in self.dialer.ongoing_dial_attempts.iter() {
