@@ -181,13 +181,13 @@ impl ServiceStateActions for NodeService {
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
         let (connected_peers, pid, peer_id) = if full_refresh {
-            let _node_metrics =
-                self.metrics_action
-                    .get_node_metrics()
-                    .await
-                    .inspect_err(|err| {
-                        error!("Error obtaining node_metrics via metrics actions: {err:?}")
-                    })?;
+            let node_metrics = self
+                .metrics_action
+                .get_node_metrics()
+                .await
+                .inspect_err(|err| {
+                    error!("Error obtaining node_metrics via metrics actions: {err:?}")
+                })?;
 
             let node_metadata_extended = self
                 .metrics_action
@@ -230,7 +230,7 @@ impl ServiceStateActions for NodeService {
             }
 
             (
-                Some(Vec::new()),
+                node_metrics.connected_peers,
                 Some(node_metadata_extended.pid),
                 Some(node_metadata_extended.peer_id),
             )
@@ -238,7 +238,7 @@ impl ServiceStateActions for NodeService {
             debug!("Performing partial refresh for {service_name}");
             debug!("Previously assigned data will be used");
             (
-                self.service_data.read().await.connected_peers.clone(),
+                self.service_data.read().await.connected_peers,
                 pid,
                 self.service_data.read().await.peer_id,
             )
@@ -267,7 +267,7 @@ impl ServiceStateActions for NodeService {
         debug!("Marking {} as stopped", service_data.service_name);
         service_data.pid = None;
         service_data.status = ServiceStatus::Stopped;
-        service_data.connected_peers = None;
+        service_data.connected_peers = 0;
         Ok(())
     }
 

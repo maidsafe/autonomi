@@ -101,7 +101,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
     NodeServiceData {
         alpha: false,
         auto_restart: false,
-        connected_peers: None,
+        connected_peers: 10,
         data_dir_path: PathBuf::from(format!("/var/antctl/services/antnode{number}")),
         evm_network: EvmNetwork::Custom(CustomNetwork {
             rpc_url_http: "http://localhost:8545".parse().unwrap(),
