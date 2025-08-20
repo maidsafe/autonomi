@@ -8,14 +8,11 @@
 
 use super::helpers::*;
 use ant_service_management::{
-    ServiceStateActions, ServiceStatus, UpgradeOptions,
-    node::NodeService,
-    rpc::{NetworkInfo, NodeInfo},
+    ServiceStateActions, ServiceStatus, UpgradeOptions, fs::NodeInfo, node::NodeService,
 };
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
 use color_eyre::eyre::Result;
-use libp2p::PeerId;
 use mockall::predicate::*;
 use semver::Version;
 use service_manager::ServiceInstallCtx;
@@ -103,40 +100,47 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
         service_data.pid = Some(1000 + i as u32);
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up RPC mock expectations for start process
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-        mock_rpc_client
+        mock_fs_client
             .expect_node_info()
             .times(1)
-            .returning(move || {
+            .returning(move |_root_dir| {
                 Ok(NodeInfo {
+                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metrics
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metadata_extended
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
                     peer_id: libp2p_identity::PeerId::from_str(
                         "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?,
-                    data_path: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                    log_path: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                    version: "0.98.1".to_string(),
-                    uptime: std::time::Duration::from_secs(1),
-                    wallet_balance: 0,
-                })
-            });
-        mock_rpc_client
-            .expect_network_info()
-            .times(1)
-            .returning(|| {
-                Ok(NetworkInfo {
-                    connected_peers: vec![libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?],
-                    listeners: Vec::new(),
+                    )
+                    .unwrap(),
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
 
@@ -149,7 +153,7 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -197,12 +201,12 @@ async fn upgrade_all_should_skip_if_target_version_lower() -> Result<()> {
         service_data.pid = Some(1000 + i as u32);
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_fs_client = MockFileSystemClient::new();
         let mock_metrics_client = MockMetricsClient::new();
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -301,40 +305,47 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         service_data.pid = Some(1000 + i as u32);
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up RPC mock expectations for start process
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-        mock_rpc_client
+        mock_fs_client
             .expect_node_info()
             .times(1)
-            .returning(move || {
+            .returning(move |_root_dir| {
                 Ok(NodeInfo {
+                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metrics
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metadata_extended
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
                     peer_id: libp2p_identity::PeerId::from_str(
                         "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?,
-                    data_path: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                    log_path: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                    version: "0.98.1".to_string(),
-                    uptime: std::time::Duration::from_secs(1),
-                    wallet_balance: 0,
-                })
-            });
-        mock_rpc_client
-            .expect_network_info()
-            .times(1)
-            .returning(|| {
-                Ok(NetworkInfo {
-                    connected_peers: vec![libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?],
-                    listeners: Vec::new(),
+                    )
+                    .unwrap(),
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
 
@@ -347,7 +358,7 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -420,12 +431,12 @@ async fn upgrade_all_should_upgrade_and_not_start_services() -> Result<()> {
         service_data.pid = Some(1000 + i as u32);
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mock_rpc_client = MockRpcClient::new();
+        let mock_fs_client = MockFileSystemClient::new();
         let mock_metrics_client = MockMetricsClient::new();
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -528,15 +539,8 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
         service_data.pid = Some(1000 + i as u32);
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
-
-        // Set up RPC mock expectations - these will be called during start but fail
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         // Set up metrics mock expectations - these will be called during start but fail
         mock_metrics_client
@@ -547,7 +551,7 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -648,40 +652,47 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         service_data.user_mode = true;
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up RPC mock expectations for start process
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-        mock_rpc_client
+        mock_fs_client
             .expect_node_info()
             .times(1)
-            .returning(move || {
+            .returning(move |_root_dir| {
                 Ok(NodeInfo {
+                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metrics
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metadata_extended
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i as u32,
                     peer_id: libp2p_identity::PeerId::from_str(
                         "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?,
-                    data_path: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                    log_path: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                    version: "0.98.1".to_string(),
-                    uptime: std::time::Duration::from_secs(1),
-                    wallet_balance: 0,
-                })
-            });
-        mock_rpc_client
-            .expect_network_info()
-            .times(1)
-            .returning(|| {
-                Ok(NetworkInfo {
-                    connected_peers: vec![libp2p_identity::PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?],
-                    listeners: Vec::new(),
+                    )
+                    .unwrap(),
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
 
@@ -694,7 +705,7 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -838,40 +849,47 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
             .returning(move |_| Ok(2000 + i as u32));
 
         let service_data = Arc::new(RwLock::new(service_data));
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up RPC mock expectations for start process
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-        mock_rpc_client
+        mock_fs_client
             .expect_node_info()
             .times(1)
-            .returning(move || {
+            .returning(move |_root_dir| {
                 Ok(NodeInfo {
-                    pid: 2000 + i as u32,
-                    peer_id: PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?,
-                    data_path: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                    log_path: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                    version: target_version.to_string(),
-                    uptime: std::time::Duration::from_secs(1),
-                    wallet_balance: 0,
+                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
                 })
             });
-        mock_rpc_client
-            .expect_network_info()
+
+        // Set up metrics mock expectations for get_node_metrics
+        mock_metrics_client
+            .expect_get_node_metrics()
             .times(1)
-            .returning(|| {
-                Ok(NetworkInfo {
-                    connected_peers: vec![PeerId::from_str(
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        // Set up metrics mock expectations for get_node_metadata_extended
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
+                    pid: 2000 + i as u32,
+                    peer_id: libp2p_identity::PeerId::from_str(
                         "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?],
-                    listeners: Vec::new(),
+                    )
+                    .unwrap(),
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
 
@@ -884,7 +902,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
 
         let service = NodeService::new(
             Arc::clone(&service_data),
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);

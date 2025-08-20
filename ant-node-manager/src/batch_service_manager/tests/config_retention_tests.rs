@@ -12,8 +12,8 @@ use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::{
     ServiceStatus,
+    fs::NodeInfo,
     node::{NodeService, NodeServiceData},
-    rpc::{NetworkInfo, NodeInfo},
 };
 use color_eyre::eyre::Result;
 use mockall::predicate::*;
@@ -34,45 +34,56 @@ fn create_test_service_with_config(
     let mut service_data = create_test_service_data(number);
     config_modifier(&mut service_data);
 
+    // Capture the expected port after config modification
+    let expected_port = service_data.node_port.unwrap_or(6000 + number);
+
     let service_data = Arc::new(RwLock::new(service_data));
-    let mut mock_rpc_client = MockRpcClient::new();
+    let mut mock_fs_client = MockFileSystemClient::new();
     let mut mock_metrics_client = MockMetricsClient::new();
 
-    // Set up RPC mock expectations for wait_until_node_connects_to_network
-    mock_rpc_client
-        .expect_wait_until_node_connects_to_network()
-        .with(eq(None))
-        .times(1) // Called once during service startup after upgrade
-        .returning(|_| Ok(()));
-
-    // Set up RPC mock expectations for node_info (called during on_start)
-    mock_rpc_client
+    // Set up filesystem mock expectations for node_info (called during on_start)
+    mock_fs_client
         .expect_node_info()
         .times(1) // Called once during service startup after upgrade
-        .returning(move || {
+        .returning(move |_root_dir| {
             Ok(NodeInfo {
-                pid: 1000 + number as u32,
-                peer_id: libp2p_identity::PeerId::from_str(
-                    "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                )?,
-                data_path: PathBuf::from(format!("/var/antctl/services/antnode{number}")),
-                log_path: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
-                version: "0.98.1".to_string(),
-                uptime: std::time::Duration::from_secs(1),
-                wallet_balance: 0,
+                listeners: vec![
+                    format!("/ip4/127.0.0.1/udp/{expected_port}")
+                        .parse()
+                        .unwrap(),
+                ],
             })
         });
 
-    // Set up RPC mock expectations for network_info (called during on_start)
-    mock_rpc_client
-        .expect_network_info()
+    // Set up metrics mock expectations for get_node_metrics
+    mock_metrics_client
+        .expect_get_node_metrics()
         .times(1)
-        .returning(|| {
-            Ok(NetworkInfo {
-                connected_peers: vec![libp2p_identity::PeerId::from_str(
+        .returning(move || {
+            Ok(ant_service_management::metric::NodeMetrics {
+                reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                    progress_percent: 100,
+                    upnp: false,
+                    public: true,
+                    private: false,
+                },
+                connected_peers: 10,
+            })
+        });
+
+    // Set up metrics mock expectations for get_node_metadata_extended
+    mock_metrics_client
+        .expect_get_node_metadata_extended()
+        .times(1)
+        .returning(move || {
+            Ok(ant_service_management::metric::NodeMetadataExtended {
+                pid: 1000 + number as u32,
+                peer_id: libp2p_identity::PeerId::from_str(
                     "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                )?],
-                listeners: Vec::new(),
+                )
+                .unwrap(),
+                root_dir: PathBuf::from(format!("/var/antctl/services/antnode{number}")),
+                log_dir: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
             })
         });
 
@@ -85,7 +96,7 @@ fn create_test_service_with_config(
 
     Ok(NodeService::new(
         service_data,
-        Box::new(mock_rpc_client),
+        Box::new(mock_fs_client),
         Box::new(mock_metrics_client),
     ))
 }
