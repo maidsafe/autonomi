@@ -81,7 +81,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             alpha: v2.alpha,
             antnode_path: v2.antnode_path,
             auto_restart: v2.auto_restart,
-            connected_peers: v2.connected_peers,
+            // convert the list to a count, as required by V3.
+            connected_peers: v2.connected_peers.map_or(0, |peers| peers.len() as u32),
             data_dir_path: v2.data_dir_path,
             evm_network: v2.evm_network,
             initial_peers_config: v2.initial_peers_config,
@@ -127,6 +128,7 @@ mod tests {
     };
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;
+    use libp2p::PeerId;
     use std::{
         net::{IpAddr, Ipv4Addr, SocketAddr},
         path::PathBuf,
@@ -149,7 +151,7 @@ mod tests {
             no_upnp: false,
             relay: true,
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: Some(vec![PeerId::random(), PeerId::random()]),
             evm_network: EvmNetwork::ArbitrumSepoliaTest,
             initial_peers_config: InitialPeersConfig {
                 first: false,
@@ -200,7 +202,7 @@ mod tests {
             user_mode: true,
             version: "0.1.0".to_string(),
             auto_restart: false,
-            connected_peers: None,
+            connected_peers: Some(vec![PeerId::random(), PeerId::random()]),
             evm_network: EvmNetwork::ArbitrumSepoliaTest,
             initial_peers_config: InitialPeersConfig {
                 first: false,
@@ -226,10 +228,18 @@ mod tests {
             write_older_cache_files: true,
         };
 
+        let v2_clone = v2_data.clone();
         let v3: NodeServiceDataV3 = v2_data.into();
 
         // Check field transformations
-        assert!(!v3.reachability_check); // V3 adds reachability_check field and sets it to false
+        assert_eq!(
+            v3.connected_peers,
+            v2_clone
+                .connected_peers
+                .as_ref()
+                .map(|peers| peers.len())
+                .unwrap_or(0) as u32
+        ); // V3 expects the count
         assert!(!v3.relay); // V2 field preserved
         assert!(v3.alpha); // V2 field preserved
         assert!(v3.no_upnp); // V2 field preserved

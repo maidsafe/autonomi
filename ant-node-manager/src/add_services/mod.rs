@@ -201,7 +201,7 @@ pub async fn add_node(
                         alpha: options.alpha,
                         antnode_path: service_antnode_path,
                         auto_restart: options.auto_restart,
-                        connected_peers: None,
+                        connected_peers: 0,
                         data_dir_path: service_data_dir_path.clone(),
                         evm_network: options.evm_network.clone(),
                         initial_peers_config: options.init_peers_config.clone(),
