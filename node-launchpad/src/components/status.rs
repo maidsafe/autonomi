@@ -220,10 +220,7 @@ impl Status<'_> {
                     }
 
                     // Update peers count
-                    item.peers = match node_item.connected_peers {
-                        Some(ref peers) => peers.len(),
-                        None => 0,
-                    };
+                    item.peers = node_item.connected_peers as usize;
 
                     // Update individual stats if available
                     if let Some(stats) = self

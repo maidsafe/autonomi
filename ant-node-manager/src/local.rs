@@ -400,12 +400,11 @@ pub async fn run_node(
     )?;
     launcher.wait(run_options.interval);
 
-    let _node_metrics = metrics_actions.get_node_metrics().await?;
+    let node_metrics = metrics_actions.get_node_metrics().await?;
     let node_metadata_extended = metrics_actions.get_node_metadata_extended().await?;
     let node_info = fs_actions.node_info(&node_metadata_extended.root_dir)?;
 
     let peer_id = node_metadata_extended.peer_id;
-    let connected_peers = Some(Vec::new());
     let listen_addrs = node_info
         .listeners
         .into_iter()
@@ -416,7 +415,7 @@ pub async fn run_node(
         alpha: false,
         antnode_path: launcher.get_antnode_path(),
         auto_restart: false,
-        connected_peers,
+        connected_peers: node_metrics.connected_peers,
         data_dir_path: node_metadata_extended.root_dir,
         evm_network: run_options.evm_network,
         relay: false,
