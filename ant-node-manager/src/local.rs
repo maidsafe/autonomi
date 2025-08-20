@@ -15,12 +15,10 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::fs::{FileSystemActions, FileSystemClient};
+use ant_service_management::metric::{MetricsAction, MetricsClient};
 use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
-use ant_service_management::{
-    NodeServiceData, ServiceStatus,
-    control::ServiceControl,
-    rpc::{RpcActions, RpcClient},
-};
+use ant_service_management::{NodeServiceData, ServiceStatus, control::ServiceControl};
 use color_eyre::eyre::OptionExt;
 use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
@@ -267,19 +265,19 @@ pub async fn run_network(
             service_control.get_available_port()?
         };
         let metrics_free_port = if let Some(port) = metrics_port {
-            Some(port)
+            port
         } else {
-            Some(service_control.get_available_port()?)
+            service_control.get_available_port()?
         };
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
-        let rpc_client = RpcClient::from_socket_addr(rpc_socket_addr);
+        let metrics_client = MetricsClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.read().await.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: true,
-                metrics_port: metrics_free_port,
+                metrics_port: Some(metrics_free_port),
                 node_port,
                 interval: options.interval,
                 log_format: options.log_format,
@@ -290,7 +288,8 @@ pub async fn run_network(
                 version: get_bin_version(&launcher.get_antnode_path())?,
             },
             &launcher,
-            &rpc_client,
+            &metrics_client,
+            &FileSystemClient,
         )
         .await?;
         node_registry.push_node(node.clone()).await;
@@ -311,19 +310,19 @@ pub async fn run_network(
             service_control.get_available_port()?
         };
         let metrics_free_port = if let Some(port) = metrics_port {
-            Some(port)
+            port
         } else {
-            Some(service_control.get_available_port()?)
+            service_control.get_available_port()?
         };
         let rpc_socket_addr =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
-        let rpc_client = RpcClient::from_socket_addr(rpc_socket_addr);
+        let metrics_client = MetricsClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.read().await.len() as u16) + 1;
         let node = run_node(
             RunNodeOptions {
                 first: false,
-                metrics_port: metrics_free_port,
+                metrics_port: Some(metrics_free_port),
                 node_port,
                 interval: options.interval,
                 log_format: options.log_format,
@@ -334,7 +333,8 @@ pub async fn run_network(
                 version: get_bin_version(&launcher.get_antnode_path())?,
             },
             &launcher,
-            &rpc_client,
+            &metrics_client,
+            &FileSystemClient,
         )
         .await?;
         node_registry.push_node(node).await;
@@ -376,7 +376,8 @@ pub struct RunNodeOptions {
 pub async fn run_node(
     run_options: RunNodeOptions,
     launcher: &dyn Launcher,
-    rpc_client: &dyn RpcActions,
+    metrics_actions: &dyn MetricsAction,
+    fs_actions: &dyn FileSystemActions,
 ) -> Result<NodeServiceData> {
     // For local network, after the first node got launched,
     // it takes little bit time to setup the contact_service.
@@ -399,14 +400,16 @@ pub async fn run_node(
     )?;
     launcher.wait(run_options.interval);
 
-    let node_info = rpc_client.node_info().await?;
-    let peer_id = node_info.peer_id;
-    let network_info = rpc_client.network_info().await?;
-    let connected_peers = Some(network_info.connected_peers);
-    let listen_addrs = network_info
+    let _node_metrics = metrics_actions.get_node_metrics().await?;
+    let node_metadata_extended = metrics_actions.get_node_metadata_extended().await?;
+    let node_info = fs_actions.node_info(&node_metadata_extended.root_dir)?;
+
+    let peer_id = node_metadata_extended.peer_id;
+    let connected_peers = Some(Vec::new());
+    let listen_addrs = node_info
         .listeners
         .into_iter()
-        .map(|addr| addr.with(Protocol::P2p(node_info.peer_id)))
+        .map(|addr| addr.with(Protocol::P2p(node_metadata_extended.peer_id)))
         .collect();
 
     Ok(NodeServiceData {
@@ -414,7 +417,7 @@ pub async fn run_node(
         antnode_path: launcher.get_antnode_path(),
         auto_restart: false,
         connected_peers,
-        data_dir_path: node_info.data_path,
+        data_dir_path: node_metadata_extended.root_dir,
         evm_network: run_options.evm_network,
         relay: false,
         initial_peers_config: InitialPeersConfig {
@@ -426,7 +429,7 @@ pub async fn run_node(
             bootstrap_cache_dir: None,
         },
         listen_addr: Some(listen_addrs),
-        log_dir_path: node_info.log_path,
+        log_dir_path: node_metadata_extended.log_dir,
         log_format: run_options.log_format,
         max_archived_log_files: None,
         max_log_files: None,
@@ -436,7 +439,7 @@ pub async fn run_node(
         node_port: run_options.node_port,
         number: run_options.number,
         peer_id: Some(peer_id),
-        pid: Some(node_info.pid),
+        pid: Some(node_metadata_extended.pid),
         reachability_check: false,
         rewards_address: run_options.rewards_address,
         reward_balance: None,
@@ -485,31 +488,22 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
     all_peers.extend(additional_peers);
 
     for node in node_registry.nodes.read().await.iter() {
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
-        let net_info = rpc_client.network_info().await?;
-        let peers = net_info.connected_peers;
+        let metrics_client = MetricsClient::new(
+            node.read()
+                .await
+                .metrics_port
+                .ok_or_else(|| eyre!("Metrics port not set for node"))?,
+        );
+
+        let node_metrics = metrics_client.get_node_metrics().await?;
+        let connected_peers = node_metrics.connected_peers;
         let peer_id = node
             .read()
             .await
             .peer_id
             .ok_or_eyre("The PeerId was not set")?;
-        debug!("Node {peer_id} has {} peers", peers.len());
-        println!("Node {peer_id} has {} peers", peers.len());
-
-        // Look for peers that are not supposed to be present in the network. This can happen if
-        // the node has connected to peers on other networks.
-        let invalid_peers: Vec<PeerId> = peers
-            .iter()
-            .filter(|peer| !all_peers.contains(peer))
-            .cloned()
-            .collect();
-        if !invalid_peers.is_empty() {
-            for invalid_peer in invalid_peers.iter() {
-                println!("Invalid peer found: {invalid_peer}");
-            }
-            error!("Network validation failed: {invalid_peers:?}");
-            return Err(eyre!("Network validation failed",));
-        }
+        debug!("Node {peer_id} has {connected_peers} peers");
+        println!("Node {peer_id} has {connected_peers} peers");
     }
     Ok(())
 }
@@ -518,10 +512,10 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
 mod tests {
     use super::*;
     use ant_evm::utils::dummy_address;
-    use ant_service_management::{
-        error::Result as RpcResult,
-        rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
-    };
+    use ant_service_management::metric::MetricsAction;
+    use ant_service_management::metric::NodeMetadataExtended;
+    use ant_service_management::metric::NodeMetrics;
+    use ant_service_management::metric::ReachabilityStatusValues;
     use async_trait::async_trait;
     use evmlib::CustomNetwork;
     use libp2p_identity::PeerId;
@@ -530,24 +524,30 @@ mod tests {
     use std::str::FromStr;
 
     mock! {
-        pub RpcClient {}
+        pub MetricClient {}
         #[async_trait]
-        impl RpcActions for RpcClient {
-            async fn node_info(&self) -> RpcResult<NodeInfo>;
-            async fn network_info(&self) -> RpcResult<NetworkInfo>;
-            async fn record_addresses(&self) -> RpcResult<Vec<RecordAddress>>;
-            async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> RpcResult<()>;
-            async fn node_stop(&self, delay_millis: u64) -> RpcResult<()>;
-            async fn node_update(&self, delay_millis: u64) -> RpcResult<()>;
-            async fn wait_until_node_connects_to_network(&self, timeout: Option<std::time::Duration>) -> RpcResult<()>;
-            async fn update_log_level(&self, log_levels: String) -> RpcResult<()>;
+        impl MetricsAction for MetricClient {
+            async fn get_node_metrics(&self) -> Result<ant_service_management::metric::NodeMetrics, ant_service_management::metric::MetricsActionError>;
+            async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, ant_service_management::metric::MetricsActionError>;
+            async fn wait_until_reachability_check_completes(
+                &self,
+                timeout: Option<std::time::Duration>,
+            ) -> Result<(), ant_service_management::metric::MetricsActionError>;
+        }
+    }
+
+    mock! {
+        pub FileSystemClient {}
+        impl FileSystemActions for FileSystemClient {
+            fn node_info(&self, root_dir: &std::path::Path) -> Result<ant_service_management::fs::NodeInfo, ant_service_management::Error>;
         }
     }
 
     #[tokio::test]
     async fn run_node_should_launch_the_genesis_node() -> Result<()> {
         let mut mock_launcher = MockLauncher::new();
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mut mock_metrics_client = MockMetricClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let rewards_address = dummy_address();
 
         let peer_id = PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?;
@@ -579,27 +579,38 @@ mod tests {
             .times(1)
             .returning(|| PathBuf::from("/usr/local/bin/antnode"));
 
-        mock_rpc_client
-            .expect_node_info()
+        mock_metrics_client
+            .expect_get_node_metrics()
             .times(1)
             .returning(move || {
-                Ok(NodeInfo {
-                    pid: 1000,
-                    peer_id,
-                    data_path: PathBuf::from(format!("~/.local/share/autonomi/{peer_id}")),
-                    log_path: PathBuf::from(format!("~/.local/share/autonomi/{peer_id}/logs")),
-                    version: "0.100.12".to_string(),
-                    uptime: std::time::Duration::from_secs(1), // the service was just started
-                    wallet_balance: 0,
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: true,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
                 })
             });
-        mock_rpc_client
-            .expect_network_info()
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
             .times(1)
             .returning(move || {
-                Ok(NetworkInfo {
-                    connected_peers: Vec::new(),
-                    listeners: Vec::new(),
+                Ok(NodeMetadataExtended {
+                    peer_id,
+                    pid: 1000,
+                    root_dir: PathBuf::from(format!("~/.local/share/autonomi/{peer_id}")),
+                    log_dir: PathBuf::from(format!("~/.local/share/autonomi/{peer_id}/logs")),
+                })
+            });
+
+        mock_fs_client
+            .expect_node_info()
+            .times(1)
+            .returning(move |_| {
+                Ok(ant_service_management::fs::NodeInfo {
+                    listeners: vec![Multiaddr::from_str("/ip4/127.0.0.1/udp/13000").unwrap()],
                 })
             });
 
@@ -621,7 +632,8 @@ mod tests {
                 version: "0.100.12".to_string(),
             },
             &mock_launcher,
-            &mock_rpc_client,
+            &mock_metrics_client,
+            &mock_fs_client,
         )
         .await?;
 

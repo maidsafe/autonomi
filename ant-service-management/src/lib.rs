@@ -13,10 +13,10 @@
 pub mod control;
 pub mod daemon;
 pub mod error;
+pub mod fs;
 pub mod metric;
 pub mod node;
 pub mod registry;
-pub mod rpc;
 
 #[macro_use]
 extern crate tracing;
