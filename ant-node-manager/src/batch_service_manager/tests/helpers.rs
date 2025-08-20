@@ -34,6 +34,28 @@ use std::{
 };
 use tokio::sync::RwLock;
 
+// Helper function to get consistent test PeerIDs
+pub fn get_test_peer_id(index: usize) -> PeerId {
+    let hardcoded_peer_ids = [
+        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
+        "12D3KooWRBhwfeGyVBSZZxT3ZfqNMDt6rrHkPFSBNJJ1tF8QWQG5",
+        "12D3KooWHFGAWKDEsHi6L67N4KJJjG5UrQzWjgF4gJr3noPwxBhz",
+        "12D3KooWPLxNqZV7xN5FJnJBjR7G8QwGBRFBNGz8xGqY4DcLnK8M",
+        "12D3KooWQtA5VdYQ3RJfNzCKHkFGTPqjLN4KJJjG5UrQzWjgF4gK",
+        "12D3KooWRmZVd7NJJyHFGAWKDEsHi6L67N4KJJjG5UrQzWjgF4h8",
+        "12D3KooWSnBvNqZV7xN5FJnJBjR7G8QwGBRFBNGz8xGqY4DcLnP9",
+        "12D3KooWTbA5VdYQ3RJfNzCKHkFGTPqjLN4KJJjG5UrQzWjgF4jL",
+        "12D3KooWUcZVd7NJJyHFGAWKDEsHi6L67N4KJJjG5UrQzWjgF4k2",
+        "12D3KooWVdBvNqZV7xN5FJnJBjR7G8QwGBRFBNGz8xGqY4DcLnQ3",
+    ];
+
+    let peer_id = hardcoded_peer_ids
+        .get(index)
+        .expect("Index out of bounds. Please add more test peer ids");
+
+    PeerId::from_str(peer_id).expect("Failed to parse test PeerId")
+}
+
 mock! {
     pub ServiceControl {}
     impl ant_service_management::control::ServiceControl for ServiceControl {
@@ -126,7 +148,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
 // Helper function to create test services with RPC mocks
 pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeService>> {
     let peer_ids = (1..=count)
-        .map(|_i| PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR").unwrap())
+        .map(|i| get_test_peer_id(i - 1))
         .collect::<Vec<_>>();
 
     let mut services = Vec::new();
