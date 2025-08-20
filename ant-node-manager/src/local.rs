@@ -441,7 +441,6 @@ pub async fn run_node(
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
         rewards_address: run_options.rewards_address,
-        reward_balance: None,
         rpc_socket_addr: run_options.rpc_socket_addr,
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         status: ServiceStatus::Running,
