@@ -1074,30 +1074,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ant-node-rpc-client"
-version = "0.6.48"
-dependencies = [
- "ant-build-info",
- "ant-logging",
- "ant-node",
- "ant-protocol",
- "ant-service-management",
- "async-trait",
- "blsttc",
- "clap",
- "color-eyre",
- "hex",
- "libp2p",
- "libp2p-identity",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tonic 0.6.2",
- "tracing",
- "tracing-core",
-]
-
-[[package]]
 name = "ant-protocol"
 version = "1.0.9"
 dependencies = [
@@ -6682,7 +6658,7 @@ version = "6.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6205bd8bb1e454ad2e27422015fb5e4f2bcc7e08fa8f27058670d208324a4d2d"
 dependencies = [
- "bitflags 2.9.1",
+ "bitflags 2.9.4",
  "crossbeam-channel",
  "filetime",
  "fsevent-sys",

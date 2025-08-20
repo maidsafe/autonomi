@@ -13,12 +13,16 @@ use ant_evm::{AttoTokens, CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
     NodeRegistryManager, ServiceStatus,
     error::Result as ServiceControlResult,
-    metric::{MetricsAction, MetricsActionError, NodeMetrics},
+    fs::{FileSystemActions, NodeInfo},
+    metric::{
+        MetricsAction, MetricsActionError, NodeMetadataExtended, NodeMetrics,
+        ReachabilityStatusValues,
+    },
     node::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeService, NodeServiceData},
-    rpc::{NetworkInfo, NodeInfo, RecordAddress, RpcActions},
 };
 use async_trait::async_trait;
 use color_eyre::eyre::Result;
+use libp2p::Multiaddr;
 use libp2p_identity::PeerId;
 use mockall::{mock, predicate::*};
 use service_manager::ServiceInstallCtx;
@@ -29,21 +33,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::RwLock;
-
-mock! {
-    pub RpcClient {}
-    #[async_trait]
-    impl RpcActions for RpcClient {
-        async fn node_info(&self) -> ServiceControlResult<NodeInfo>;
-        async fn network_info(&self) -> ServiceControlResult<NetworkInfo>;
-        async fn record_addresses(&self) -> ServiceControlResult<Vec<RecordAddress>>;
-        async fn node_restart(&self, delay_millis: u64, retain_peer_id: bool) -> ServiceControlResult<()>;
-        async fn node_stop(&self, delay_millis: u64) -> ServiceControlResult<()>;
-        async fn node_update(&self, delay_millis: u64) -> ServiceControlResult<()>;
-        async fn wait_until_node_connects_to_network(&self, timeout: Option<std::time::Duration>) -> ServiceControlResult<()>;
-        async fn update_log_level(&self, log_levels: String) -> ServiceControlResult<()>;
-    }
-}
 
 mock! {
     pub ServiceControl {}
@@ -68,6 +57,14 @@ mock! {
         async fn wait_until_reachability_check_completes(&self, timeout: Option<std::time::Duration>) -> Result<(), MetricsActionError>;
     }
 
+}
+
+mock! {
+    pub FileSystemClient {}
+
+    impl FileSystemActions for FileSystemClient {
+        fn node_info(&self, root_dir: &std::path::Path) -> Result<ant_service_management::fs::NodeInfo, ant_service_management::Error>;
+    }
 }
 
 // Helper function to create a test NodeRegistryManager
@@ -128,48 +125,55 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
 
 // Helper function to create test services with RPC mocks
 pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeService>> {
+    let peer_ids = (1..=count)
+        .map(|_i| PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR").unwrap())
+        .collect::<Vec<_>>();
+
     let mut services = Vec::new();
 
     for i in 1..=count {
-        let mut mock_rpc_client = MockRpcClient::new();
+        let peer_ids_clone = peer_ids.clone();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up RPC mock expectations
-        mock_rpc_client
-            .expect_node_info()
+        // Set up mock expectations
+        mock_metrics_client
+            .expect_get_node_metrics()
             .times(1)
             .returning(move || {
-                Ok(NodeInfo {
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(move || {
+                Ok(NodeMetadataExtended {
                     pid: 1000 + i as u32,
-                    peer_id: PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?,
-                    data_path: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                    log_path: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                    version: "0.98.1".to_string(),
-                    uptime: std::time::Duration::from_secs(1),
-                    wallet_balance: 0,
+                    peer_id: peer_ids_clone[i - 1],
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
 
-        mock_rpc_client
-            .expect_network_info()
+        mock_fs_client
+            .expect_node_info()
             .times(1)
-            .returning(|| {
-                Ok(NetworkInfo {
-                    connected_peers: vec![PeerId::from_str(
-                        "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                    )?],
-                    listeners: Vec::new(),
+            .returning(move |_root_dir| {
+                Ok(NodeInfo {
+                    listeners: vec![
+                        Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
+                    ],
                 })
             });
-
-        // Set up RPC mock expectations for wait_until_node_connects_to_network
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         // Set up metrics mock expectations for wait_until_reachability_check_completes
         mock_metrics_client
@@ -183,7 +187,7 @@ pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeServi
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
 
@@ -198,15 +202,10 @@ pub fn create_test_services_with_failing_rpc_mocks(count: usize) -> Vec<NodeServ
     let mut services = Vec::new();
 
     for i in 1..=count {
-        let mut mock_rpc_client = MockRpcClient::new();
+        let mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
         // Set up expectations for services that start but fail to find PIDs afterward
-        mock_rpc_client
-            .expect_wait_until_node_connects_to_network()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
         mock_metrics_client
             .expect_wait_until_reachability_check_completes()
             .with(eq(None))
@@ -218,7 +217,7 @@ pub fn create_test_services_with_failing_rpc_mocks(count: usize) -> Vec<NodeServ
 
         let service = NodeService::new(
             service_data,
-            Box::new(mock_rpc_client),
+            Box::new(mock_fs_client),
             Box::new(mock_metrics_client),
         );
         services.push(service);
@@ -234,12 +233,12 @@ pub fn create_test_services_simple(count: usize) -> Vec<NodeService> {
             let service_data = create_test_service_data(i as u16);
             let service_data = Arc::new(RwLock::new(service_data));
 
-            let mock_rpc_client = MockRpcClient::new();
+            let mock_fs_client = MockFileSystemClient::new();
             let mock_metrics_client = MockMetricsClient::new();
 
             NodeService::new(
                 service_data,
-                Box::new(mock_rpc_client),
+                Box::new(mock_fs_client),
                 Box::new(mock_metrics_client),
             )
         })

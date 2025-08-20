@@ -9,7 +9,6 @@ members = [
     "ant-metrics",
     "ant-node",
     "ant-node-manager",
-    "ant-node-rpc-client",
     "ant-protocol",
     "ant-service-management",
     "ant-token-supplies",

@@ -28,8 +28,8 @@ use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::{
     NodeRegistryManager, NodeService, NodeServiceData, ServiceStatus, UpgradeOptions,
     control::{ServiceControl, ServiceController},
+    fs::FileSystemClient,
     metric::MetricsClient,
-    rpc::RpcClient,
 };
 use color_eyre::{Result, Section, eyre::eyre};
 use colored::Colorize;
@@ -746,19 +746,17 @@ async fn get_services_for_ops(
 
 async fn get_batch_manager_from_service_data(
     node_registry: NodeRegistryManager,
-
     service_data: Vec<Arc<RwLock<NodeServiceData>>>,
     verbosity: VerbosityLevel,
 ) -> Result<BatchServiceManager<NodeService>> {
     let mut services = Vec::new();
     for node in service_data {
-        let rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
         let metrics_client = MetricsClient::new(node.read().await.metrics_port.ok_or(
             crate::error::Error::MetricsPortNotSet(node.read().await.service_name.clone()),
         )?);
         let service = NodeService::new(
             Arc::clone(&node),
-            Box::new(rpc_client),
+            Box::new(FileSystemClient),
             Box::new(metrics_client),
         );
         services.push(service);
