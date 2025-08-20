@@ -50,7 +50,7 @@ hyper = { version = "0.14", features = [
     "tcp",
     "http1",
 ], optional = true }
-igd-next = "0.16.2"
+igd-next = { version = "0.16.2", features = ["aio_tokio"] }
 itertools = "~0.12.1"
 libp2p = { version = "0.56.0", features = [
     "tokio",
