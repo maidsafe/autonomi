@@ -17,7 +17,7 @@ pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
 use crate::{
     ServiceStateActions, ServiceStatus, UpgradeOptions, control::ServiceControl, error::Result,
-    metric::MetricsAction, rpc::RpcActions,
+    fs::FileSystemActions, metric::MetricsAction,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
@@ -31,17 +31,17 @@ use tonic::async_trait;
 pub struct NodeService {
     pub service_data: Arc<RwLock<NodeServiceData>>,
     pub metrics_action: Box<dyn MetricsAction + Send>,
-    pub rpc_actions: Box<dyn RpcActions + Send>,
+    pub fs_actions: Box<dyn FileSystemActions + Send>,
 }
 
 impl NodeService {
     pub fn new(
         service_data: Arc<RwLock<NodeServiceData>>,
-        rpc_actions: Box<dyn RpcActions + Send>,
+        fs_actions: Box<dyn FileSystemActions + Send>,
         metrics_action: Box<dyn MetricsAction + Send>,
     ) -> NodeService {
         NodeService {
-            rpc_actions,
+            fs_actions,
             metrics_action,
             service_data,
         }
@@ -181,26 +181,42 @@ impl ServiceStateActions for NodeService {
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
         let (connected_peers, pid, peer_id) = if full_refresh {
+            let _node_metrics =
+                self.metrics_action
+                    .get_node_metrics()
+                    .await
+                    .inspect_err(|err| {
+                        error!("Error obtaining node_metrics via metrics actions: {err:?}")
+                    })?;
+
+            let node_metadata_extended = self
+                .metrics_action
+                .get_node_metadata_extended()
+                .await
+                .inspect_err(|err| {
+                    error!("Error obtaining metadata_extended via metrics actions: {err:?}")
+                })?;
+
             let node_info = self
-                .rpc_actions
-                .node_info()
-                .await
-                .inspect_err(|err| error!("Error obtaining node_info via RPC: {err:?}"))?;
-            let network_info = self
-                .rpc_actions
-                .network_info()
-                .await
-                .inspect_err(|err| error!("Error obtaining network_info via RPC: {err:?}"))?;
+                .fs_actions
+                .node_info(&node_metadata_extended.root_dir)
+                .inspect_err(|err| {
+                    error!(
+                        "Error obtaining NodeInfo via fs actions on path {:?}: {err:?}",
+                        node_metadata_extended.root_dir
+                    )
+                })?;
 
             self.service_data.write().await.listen_addr = Some(
-                network_info
+                node_info
                     .listeners
                     .iter()
                     .cloned()
-                    .map(|addr| addr.with(Protocol::P2p(node_info.peer_id)))
+                    .map(|addr| addr.with(Protocol::P2p(node_metadata_extended.peer_id)))
                     .collect(),
             );
-            for addr in &network_info.listeners {
+
+            for addr in &node_info.listeners {
                 if let Some(port) = get_port_from_multiaddr(addr) {
                     debug!("Found antnode port for {service_name}: {port}");
                     self.service_data.write().await.node_port = Some(port);
@@ -214,9 +230,9 @@ impl ServiceStateActions for NodeService {
             }
 
             (
-                Some(network_info.connected_peers),
-                Some(node_info.pid),
-                Some(node_info.peer_id),
+                Some(Vec::new()),
+                Some(node_metadata_extended.pid),
+                Some(node_metadata_extended.peer_id),
             )
         } else {
             debug!("Performing partial refresh for {service_name}");
@@ -242,14 +258,7 @@ impl ServiceStateActions for NodeService {
             .wait_until_reachability_check_completes(None)
             .await?;
 
-        info!(
-            "Reachability check completed for {service_name}. Now waiting for the node to connect to the network"
-        );
-
-        self.rpc_actions
-            .wait_until_node_connects_to_network(None)
-            .await?;
-        info!("{service_name} is now connected to the network");
+        info!("Reachability check completed for {service_name}. Considering the node as started");
         Ok(())
     }
 

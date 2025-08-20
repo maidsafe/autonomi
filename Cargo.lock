@@ -1059,30 +1059,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ant-node-rpc-client"
-version = "0.6.48"
-dependencies = [
- "ant-build-info",
- "ant-logging",
- "ant-node",
- "ant-protocol",
- "ant-service-management",
- "async-trait",
- "blsttc",
- "clap",
- "color-eyre",
- "hex",
- "libp2p",
- "libp2p-identity",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tonic 0.6.2",
- "tracing",
- "tracing-core",
-]
-
-[[package]]
 name = "ant-protocol"
 version = "1.0.8"
 dependencies = [
