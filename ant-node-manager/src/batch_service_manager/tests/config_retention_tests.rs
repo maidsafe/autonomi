@@ -78,10 +78,7 @@ fn create_test_service_with_config(
         .returning(move || {
             Ok(ant_service_management::metric::NodeMetadataExtended {
                 pid: 1000 + number as u32,
-                peer_id: libp2p_identity::PeerId::from_str(
-                    "12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR",
-                )
-                .unwrap(),
+                peer_id: get_test_peer_id(number as usize - 1),
                 root_dir: PathBuf::from(format!("/var/antctl/services/antnode{number}")),
                 log_dir: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
             })
