@@ -498,7 +498,7 @@ async fn upgrade_all_should_retain_the_relay_flag() -> Result<()> {
 }
 
 #[tokio::test]
-async fn upgrade_all_should_retain_the_reachability_check_flag() -> Result<()> {
+async fn upgrade_all_should_retain_the_skip_reachability_check_flag() -> Result<()> {
     let mut mock_service_control = MockServiceControl::new();
 
     // Set up upgrade expectations for 2 services
@@ -507,7 +507,7 @@ async fn upgrade_all_should_retain_the_reachability_check_flag() -> Result<()> {
     let mut services = Vec::new();
     for i in 1..=2 {
         let service = create_test_service_with_config(i, |data| {
-            data.reachability_check = true;
+            data.skip_reachability_check = true;
             data.status = ServiceStatus::Running;
             data.pid = Some(1000 + i as u32);
         })?;
@@ -520,10 +520,10 @@ async fn upgrade_all_should_retain_the_reachability_check_flag() -> Result<()> {
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
-    // Verify reachability_check flag is retained for all services
+    // Verify skip_reachability_check flag is retained for all services
     for service in &batch_manager.services {
         let service_data = service.service_data.read().await;
-        assert!(service_data.reachability_check);
+        assert!(service_data.skip_reachability_check);
     }
 
     Ok(())

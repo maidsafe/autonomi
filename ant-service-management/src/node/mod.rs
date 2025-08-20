@@ -78,8 +78,8 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
-        if service_data.reachability_check {
-            args.push(OsString::from("--reachability-check"));
+        if service_data.skip_reachability_check {
+            args.push(OsString::from("--skip-reachability-check"));
         }
         if service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));

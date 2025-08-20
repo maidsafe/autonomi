@@ -189,12 +189,6 @@ struct Opt {
     #[clap(long, default_value_t = 0)]
     port: u16,
 
-    /// Enabling this will run an optional reachability check before starting the node.
-    ///
-    /// Enabling this will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
-    #[clap(long, default_value_t = false)]
-    reachability_check: bool,
-
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
@@ -220,6 +214,12 @@ struct Opt {
     /// The RPC service can be used for querying information about the running node.
     #[clap(long)]
     rpc: Option<SocketAddr>,
+    /// Disable running reachability checks before starting the node.
+    ///
+    /// Reachability check determines the network connectivity and auto configures the node for you. Disable only
+    /// if you are sure about the network configuration.
+    #[clap(long, default_value_t = false)]
+    skip_reachability_check: bool,
 
     /// Print version information.
     #[clap(long)]
@@ -353,7 +353,7 @@ fn run() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
-        node_builder.with_reachability_check(opt.reachability_check);
+        node_builder.with_reachability_check(!opt.skip_reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);

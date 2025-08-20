@@ -54,8 +54,6 @@ pub struct NodeServiceDataV3 {
     #[serde(serialize_with = "NodeServiceData::serialize_peer_id")]
     pub peer_id: Option<PeerId>,
     pub pid: Option<u32>,
-    /// Added `reachability_check` to indicate if the node should perform a reachability check.
-    pub reachability_check: bool,
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
@@ -64,6 +62,8 @@ pub struct NodeServiceDataV3 {
     #[serde(default = "schema_v3_value")]
     pub schema_version: u32,
     pub service_name: String,
+    /// Added `skip_reachability_check` to indicate if the node should skip performing the reachability check.
+    pub skip_reachability_check: bool,
     pub status: ServiceStatus,
     pub user: Option<String>,
     pub user_mode: bool,
@@ -107,7 +107,7 @@ impl NodeServiceDataV3 {
             #[serde(deserialize_with = "NodeServiceData::deserialize_peer_id")]
             peer_id: Option<PeerId>,
             pid: Option<u32>,
-            reachability_check: bool,
+            skip_reachability_check: bool,
             relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
@@ -146,13 +146,13 @@ impl NodeServiceDataV3 {
             number: helper.number,
             peer_id: helper.peer_id,
             pid: helper.pid,
-            reachability_check: helper.reachability_check,
             relay: helper.relay,
             rewards_address: helper.rewards_address,
             reward_balance: helper.reward_balance,
             rpc_socket_addr: helper.rpc_socket_addr,
             service_name: helper.service_name,
             schema_version: helper.schema_version,
+            skip_reachability_check: helper.skip_reachability_check,
             status: helper.status,
             user: helper.user,
             user_mode: helper.user_mode,
@@ -195,7 +195,6 @@ mod tests {
             version: "0.1.0".to_string(),
             no_upnp: false,
             relay: true,
-            reachability_check: true,
             auto_restart: false,
             connected_peers: 10,
             evm_network: EvmNetwork::ArbitrumSepoliaTest,
@@ -219,6 +218,7 @@ mod tests {
             pid: None,
             rewards_address: Default::default(),
             reward_balance: None,
+            skip_reachability_check: true,
             user: None,
             write_older_cache_files: false,
         };

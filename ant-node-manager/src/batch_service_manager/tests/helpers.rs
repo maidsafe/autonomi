@@ -128,7 +128,6 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         number,
         peer_id: None,
         pid: None,
-        reachability_check: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
         reward_balance: Some(AttoTokens::zero()),
@@ -136,6 +135,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         antnode_path: PathBuf::from(format!("/var/antctl/services/antnode{number}/antnode")),
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         service_name: format!("antnode{number}"),
+        skip_reachability_check: false,
         status: ServiceStatus::Added,
         no_upnp: false,
         user: Some("ant".to_string()),
