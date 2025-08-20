@@ -99,7 +99,6 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             number: v2.number,
             peer_id: v2.peer_id,
             pid: v2.pid,
-            reachability_check: false, // Default value for upgraded instances
             relay: v2.relay,
             rewards_address: v2.rewards_address,
             reward_balance: v2.reward_balance,
@@ -107,6 +106,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             schema_version: NODE_SERVICE_DATA_SCHEMA_V3,
             service_name: v2.service_name,
             status: v2.status,
+            // Default to not skip reachability check for upgraded instances
+            skip_reachability_check: false,
             user: v2.user,
             user_mode: v2.user_mode,
             version: v2.version,
@@ -232,6 +233,7 @@ mod tests {
         let v3: NodeServiceDataV3 = v2_data.into();
 
         // Check field transformations
+        assert!(!v3.skip_reachability_check); // V3 adds skip_reachability_check field and sets it to false
         assert_eq!(
             v3.connected_peers,
             v2_clone

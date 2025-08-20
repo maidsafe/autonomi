@@ -72,6 +72,7 @@ impl Launcher for LocalSafeLauncher {
     ) -> Result<()> {
         let mut args = Vec::new();
 
+        args.push("--skip-reachability-check".to_string());
         if first {
             args.push("--first".to_string())
         }
@@ -362,6 +363,7 @@ pub async fn run_network(
 
 pub struct RunNodeOptions {
     pub first: bool,
+    pub evm_network: EvmNetwork,
     pub interval: u64,
     pub log_format: Option<LogFormat>,
     pub metrics_port: Option<u16>,
@@ -369,7 +371,6 @@ pub struct RunNodeOptions {
     pub number: u16,
     pub rpc_socket_addr: SocketAddr,
     pub rewards_address: RewardsAddress,
-    pub evm_network: EvmNetwork,
     pub version: String,
 }
 
@@ -439,13 +440,13 @@ pub async fn run_node(
         number: run_options.number,
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
-        reachability_check: false,
         rewards_address: run_options.rewards_address,
         reward_balance: None,
         rpc_socket_addr: run_options.rpc_socket_addr,
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         status: ServiceStatus::Running,
         service_name: format!("antnode-local{}", run_options.number),
+        skip_reachability_check: true,
         no_upnp: false,
         user: None,
         user_mode: false,
