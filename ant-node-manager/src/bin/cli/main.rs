@@ -182,11 +182,6 @@ pub enum SubCmd {
         path: Option<PathBuf>,
         #[command(flatten)]
         peers: InitialPeersConfig,
-        /// Enabling this will run an optional reachability check before starting the node.
-        ///
-        /// This will cause the node to override some of the network flags like `--home-network`, `--upnp`, `--ip`.
-        #[clap(long, default_value_t = false)]
-        reachability_check: bool,
         /// Specify the wallet address that will receive the node's earnings.
         #[clap(long)]
         rewards_address: RewardsAddress,
@@ -206,6 +201,12 @@ pub enum SubCmd {
         /// services, which in this case would be 5. The range must also go from lower to higher.
         #[clap(long, value_parser = PortRange::parse)]
         rpc_port: Option<PortRange>,
+        /// Disable running reachability checks before starting the node.
+        ///
+        /// Reachability check determines the network connectivity and auto configures the node for you. Disable only
+        /// if you are sure about the network configuration.
+        #[clap(long, default_value_t = false)]
+        skip_reachability_check: bool,
         /// Disables UPnP.
         ///
         /// By default, antnode will try to use UPnP if available. Use this flag to disable UPnP.
@@ -762,10 +763,10 @@ async fn main() -> Result<()> {
             node_port,
             path,
             peers,
-            reachability_check,
             rewards_address,
             rpc_address,
             rpc_port,
+            skip_reachability_check,
             url,
             no_upnp,
             user,
@@ -790,10 +791,10 @@ async fn main() -> Result<()> {
                 node_registry,
                 peers,
                 relay,
-                reachability_check,
                 rewards_address,
                 rpc_address,
                 rpc_port,
+                skip_reachability_check,
                 path,
                 no_upnp,
                 url,

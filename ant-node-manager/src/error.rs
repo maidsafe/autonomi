@@ -20,7 +20,7 @@ pub enum Error {
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(
-        "Metrics port is not set for service {0}. Upgrade nodes to the latest version to set the metrics port."
+        "Metrics port is not set for service {0}. Upgrade nodes and ant-node-manager to the latest version to set the metrics port."
     )]
     MetricsPortNotSet(String),
     #[error("The PID of the process was not found after starting it.")]
