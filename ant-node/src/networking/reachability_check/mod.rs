@@ -8,6 +8,7 @@
 
 mod dialer;
 mod listener;
+mod progress;
 
 use custom_debug::Debug as CustomDebug;
 use dialer::DialManager;
@@ -22,6 +23,7 @@ use libp2p::{
     Swarm,
     swarm::{NetworkBehaviour, SwarmEvent},
 };
+use progress::ProgressCalculator;
 use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::time::Instant;
@@ -119,6 +121,7 @@ pub(crate) struct ReachabilityCheckSwarmDriver {
     pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
     pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
+    pub(crate) progress_calculator: ProgressCalculator,
     #[cfg(feature = "open-metrics")]
     pub(crate) metrics_recorder: Option<NetworkMetricsRecorder>,
 }
@@ -170,6 +173,7 @@ impl ReachabilityCheckSwarmDriver {
             swarm,
             dial_manager: DialManager::new(initial_contacts),
             upnp_supported,
+            progress_calculator: ProgressCalculator::new(),
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
         })
@@ -679,9 +683,8 @@ impl ReachabilityCheckSwarmDriver {
     }
 
     fn workflow_progress(&self) -> f64 {
-        let value =
-            self.dial_manager.current_workflow_attempt as f64 / MAX_WORKFLOW_ATTEMPTS as f64;
-        value.clamp(0.0, 1.0)
+        self.progress_calculator
+            .calculate_progress(&self.dial_manager)
     }
 }
 
