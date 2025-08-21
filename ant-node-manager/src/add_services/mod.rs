@@ -9,23 +9,19 @@ pub mod config;
 #[cfg(test)]
 mod tests;
 
-use self::config::{AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
+use self::config::{AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
 use crate::{
-    DAEMON_SERVICE_NAME, VerbosityLevel,
+    VerbosityLevel,
     config::{create_owned_dir, get_user_antnode_data_dir},
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
 };
 use ant_service_management::{
-    DaemonServiceData, NodeRegistryManager, NodeServiceData, ServiceStatus,
-    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
+    NodeRegistryManager, NodeServiceData, ServiceStatus, control::ServiceControl,
+    node::NODE_SERVICE_DATA_SCHEMA_LATEST,
 };
 use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
-use service_manager::ServiceInstallCtx;
-use std::{
-    ffi::OsString,
-    net::{IpAddr, SocketAddr},
-};
+use std::net::{IpAddr, SocketAddr};
 
 /// Install antnode as a service.
 ///
@@ -292,70 +288,4 @@ pub async fn add_node(
         .collect();
 
     Ok(added_services_names)
-}
-
-/// Install the daemon as a service.
-///
-/// This only defines the service; it does not start it.
-pub async fn add_daemon(
-    options: AddDaemonServiceOptions,
-    node_registry: NodeRegistryManager,
-    service_control: &dyn ServiceControl,
-) -> Result<()> {
-    if node_registry.daemon.read().await.is_some() {
-        error!("A antctld service has already been created");
-        return Err(eyre!("A antctld service has already been created"));
-    }
-
-    debug!(
-        "Copying daemon binary file to {:?}",
-        options.daemon_install_bin_path
-    );
-    std::fs::copy(
-        options.daemon_src_bin_path.clone(),
-        options.daemon_install_bin_path.clone(),
-    )?;
-
-    let install_ctx = ServiceInstallCtx {
-        args: vec![
-            OsString::from("--port"),
-            OsString::from(options.port.to_string()),
-            OsString::from("--address"),
-            OsString::from(options.address.to_string()),
-        ],
-        autostart: true,
-        contents: None,
-        environment: options.env_variables,
-        label: DAEMON_SERVICE_NAME.parse()?,
-        program: options.daemon_install_bin_path.clone(),
-        username: Some(options.user),
-        working_directory: None,
-        disable_restart_on_failure: false,
-    };
-
-    match service_control.install(install_ctx, false) {
-        Ok(()) => {
-            let daemon = DaemonServiceData {
-                daemon_path: options.daemon_install_bin_path.clone(),
-                endpoint: Some(SocketAddr::new(IpAddr::V4(options.address), options.port)),
-                pid: None,
-                service_name: DAEMON_SERVICE_NAME.to_string(),
-                status: ServiceStatus::Added,
-                version: options.version,
-            };
-
-            node_registry.insert_daemon(daemon).await;
-            info!("Daemon service has been added successfully");
-            println!("Daemon service added {}", "✓".green());
-            println!("[!] Note: the service has not been started");
-            node_registry.save().await?;
-            std::fs::remove_file(options.daemon_src_bin_path)?;
-            Ok(())
-        }
-        Err(e) => {
-            error!("Failed to add daemon service: {e}");
-            println!("Failed to add daemon service: {e}");
-            Err(e.into())
-        }
-    }
 }
