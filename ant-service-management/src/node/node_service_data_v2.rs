@@ -100,6 +100,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             number: v2.number,
             peer_id: v2.peer_id,
             pid: v2.pid,
+            // Default to None
+            reachability_check_progress: None,
             relay: v2.relay,
             rewards_address: v2.rewards_address,
             // Removed reward_balance field in V3
