@@ -7,7 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::MAX_CONCURRENT_DIALS;
-use crate::networking::{driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p};
+use crate::networking::{
+    driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p, reachability_check::get_majority,
+};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol, swarm::ConnectionId};
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
@@ -184,6 +186,10 @@ impl InitialContactsManager {
         Some(self.initial_contacts[index].clone())
     }
 
+    pub(crate) fn has_extra_peers_for_dialing(&self) -> bool {
+        self.attempted_indices.len() < self.initial_contacts.len()
+    }
+
     pub(crate) fn reset(&mut self) {
         self.attempted_indices.clear();
     }
@@ -215,9 +221,16 @@ impl DialManager {
     }
 
     /// Dialing has completed if:
+    /// 1. we have no more peers to dial and we do not have majority dial attempts in progress.
     /// 1. We still have peers that we haven't successfully connected to yet.
     /// 2. We are still waiting for DIAL_BACK_DELAY on peers whom we have successfully connected to, but not yet received a response from.
     pub(crate) fn has_dialing_completed(&self) -> bool {
+        if self.dialer.ongoing_dial_attempts.len() < get_majority(MAX_CONCURRENT_DIALS)
+            && !self.initial_contacts_manager.has_extra_peers_for_dialing()
+        {
+            return true;
+        }
+
         let mut still_waiting_for_dial_back = false;
         debug!(
             "Checking if dialing has completed. Ongoing dial attempts: {:?}",
