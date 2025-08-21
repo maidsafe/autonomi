@@ -282,7 +282,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             number: 1,
             peer_id: None,
             pid: None,
-            skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -294,6 +294,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
+            skip_reachability_check: false,
             status: ServiceStatus::Added,
             no_upnp: false,
             user: Some("ant".to_string()),
@@ -912,7 +913,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             number: 1,
             peer_id: None,
             pid: None,
-            skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -924,6 +925,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
+            skip_reachability_check: false,
             status: ServiceStatus::Added,
             no_upnp: false,
             user: Some("ant".to_string()),
@@ -2655,7 +2657,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             number: 1,
             peer_id: None,
             pid: None,
-            skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2667,6 +2669,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
+            skip_reachability_check: false,
             status: ServiceStatus::Added,
             no_upnp: false,
             user: Some("ant".to_string()),
@@ -2775,7 +2778,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             number: 1,
             peer_id: None,
             pid: None,
-            skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2787,6 +2790,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             antnode_path: PathBuf::from("/var/antctl/services/antnode1/antnode"),
             schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
             service_name: "antnode1".to_string(),
+            skip_reachability_check: false,
             status: ServiceStatus::Added,
             no_upnp: false,
             user: Some("ant".to_string()),
@@ -3676,6 +3680,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3797,6 +3802,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4193,6 +4199,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4314,6 +4321,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
+            reachability_check_progress: None,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5509,7 +5517,6 @@ async fn add_node_should_add_the_node_with_skip_reachability_check_flag() -> Res
         AddNodeServiceOptions {
             alpha: false,
             auto_restart: false,
-
             count: Some(1),
             delete_antnode_src: false,
             env_variables: None,
@@ -5556,6 +5563,131 @@ async fn add_node_should_add_the_node_with_skip_reachability_check_flag() -> Res
     assert_eq!(node_registry.nodes.read().await.len(), 1);
     let node0 = node_registry.nodes.read().await[0].read().await.clone();
     assert!(node0.skip_reachability_check);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_node_should_set_reachability_check_progress_to_none() -> Result<()> {
+    let tmp_data_dir = assert_fs::TempDir::new()?;
+    let node_reg_path = tmp_data_dir.child("node_reg.json");
+
+    let mut mock_service_control = MockServiceControl::new();
+
+    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
+
+    let latest_version = "0.96.4";
+    let temp_dir = assert_fs::TempDir::new()?;
+    let node_data_dir = temp_dir.child("data");
+    node_data_dir.create_dir_all()?;
+    let node_logs_dir = temp_dir.child("logs");
+    node_logs_dir.create_dir_all()?;
+    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
+    antnode_download_path.write_binary(b"fake antnode bin")?;
+
+    let mut seq = Sequence::new();
+
+    mock_service_control
+        .expect_get_available_port()
+        .times(1)
+        .returning(|| Ok(6001))
+        .in_sequence(&mut seq);
+
+    let install_ctx = InstallNodeServiceCtxBuilder {
+        alpha: false,
+        autostart: false,
+        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
+        env_variables: None,
+        evm_network: EvmNetwork::Custom(CustomNetwork {
+            rpc_url_http: "http://localhost:8545".parse()?,
+            payment_token_address: RewardsAddress::from_str(
+                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+            )?,
+            data_payments_address: RewardsAddress::from_str(
+                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+            )?,
+        }),
+        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
+        log_format: None,
+        max_archived_log_files: None,
+        max_log_files: None,
+        metrics_port: 6001,
+        network_id: None,
+        name: "antnode1".to_string(),
+        node_ip: None,
+        node_port: None,
+        init_peers_config: InitialPeersConfig::default(),
+        skip_reachability_check: false,
+        relay: true,
+        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
+        rpc_socket_addr: None,
+        antnode_path: node_data_dir
+            .to_path_buf()
+            .join("antnode1")
+            .join(ANTNODE_FILE_NAME),
+        service_user: Some(get_username()),
+        no_upnp: true,
+        write_older_cache_files: false,
+    }
+    .build()?;
+
+    mock_service_control
+        .expect_install()
+        .times(1)
+        .with(eq(install_ctx), eq(true))
+        .returning(|_, _| Ok(()))
+        .in_sequence(&mut seq);
+
+    add_node(
+        AddNodeServiceOptions {
+            alpha: false,
+            auto_restart: false,
+            count: Some(1),
+            delete_antnode_src: false,
+            env_variables: None,
+            log_format: None,
+            max_archived_log_files: None,
+            max_log_files: None,
+            metrics_port: None,
+            network_id: None,
+            node_ip: None,
+            node_port: None,
+            init_peers_config: InitialPeersConfig::default(),
+            relay: true,
+            rpc_address: None,
+            rpc_port: None,
+            antnode_dir_path: temp_dir.to_path_buf(),
+            antnode_src_path: antnode_download_path.to_path_buf(),
+            service_data_dir_path: node_data_dir.to_path_buf(),
+            service_log_dir_path: node_logs_dir.to_path_buf(),
+            skip_reachability_check: false,
+            no_upnp: true,
+            user: Some(get_username()),
+            user_mode: true,
+            version: latest_version.to_string(),
+            evm_network: EvmNetwork::Custom(CustomNetwork {
+                rpc_url_http: "http://localhost:8545".parse()?,
+                payment_token_address: RewardsAddress::from_str(
+                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+                )?,
+                data_payments_address: RewardsAddress::from_str(
+                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                )?,
+            }),
+            rewards_address: RewardsAddress::from_str(
+                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
+            )?,
+            write_older_cache_files: false,
+        },
+        node_registry.clone(),
+        &mock_service_control,
+        VerbosityLevel::Normal,
+    )
+    .await?;
+
+    assert_eq!(node_registry.nodes.read().await.len(), 1);
+    let node0 = node_registry.nodes.read().await[0].read().await.clone();
+    assert!(node0.reachability_check_progress.is_none());
 
     Ok(())
 }
