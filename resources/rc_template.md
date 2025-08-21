@@ -11,7 +11,6 @@ It should only be edited by the RC owner, i.e., the original poster.
 * `autonomi` __REPLACE__
 * `antnode` __REPLACE__
 * `antctl` __REPLACE__
-* `antnode_rpc_client` __REPLACE__
 
 ## Closed Pull Requests
 
