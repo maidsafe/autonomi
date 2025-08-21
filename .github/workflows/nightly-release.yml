@@ -115,7 +115,6 @@ jobs:
           just delete-s3-bin "node-launchpad" "nightly"
           just delete-s3-bin "autonomi" "nightly"
           just delete-s3-bin "antnode" "nightly"
-          just delete-s3-bin "antnode_rpc_client" "nightly"
           just delete-s3-bin "antctl" "nightly"
 
       - name: upload binaries to S3
@@ -125,7 +124,6 @@ jobs:
           just package-bin "node-launchpad" "$version"
           just package-bin "autonomi" "$version"
           just package-bin "antnode" "$version"
-          just package-bin "antnode_rpc_client" "$version"
           just package-bin "antctl" "$version"
           just upload-all-packaged-bins-to-s3
 
@@ -133,7 +131,6 @@ jobs:
           just package-bin "node-launchpad" "nightly"
           just package-bin "autonomi" "nightly"
           just package-bin "antnode" "nightly"
-          just package-bin "antnode_rpc_client" "nightly"
           just package-bin "antctl" "nightly"
           just upload-all-packaged-bins-to-s3
 

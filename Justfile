@@ -70,13 +70,11 @@ build-release-artifacts arch nightly="false":
     cross build --release --target $arch --bin ant $nightly_feature --features loud
     cross build --release --target $arch --bin antnode $nightly_feature
     cross build --release --target $arch --bin antctl $nightly_feature
-    cross build --release --target $arch --bin antnode_rpc_client $nightly_feature
   else
     cargo build --release --target $arch --bin node-launchpad $nightly_feature
     cargo build --release --target $arch --bin ant $nightly_feature --features loud
     cargo build --release --target $arch --bin antnode $nightly_feature
     cargo build --release --target $arch --bin antctl $nightly_feature
-    cargo build --release --target $arch --bin antnode_rpc_client $nightly_feature
   fi
 
   find target/$arch/release -maxdepth 1 -type f -exec cp '{}' artifacts \;
@@ -113,7 +111,6 @@ package-all-bins:
   just package-bin "ant"
   just package-bin "antnode"
   just package-bin "antctl"
-  just package-bin "antnode_rpc_client"
 
 package-bin bin version="":
   #!/usr/bin/env bash
@@ -135,8 +132,7 @@ package-bin bin version="":
     "node-launchpad" \
     "ant" \
     "antnode" \
-    "antctl" \
-    "antnode_rpc_client")
+    "antctl")
   crate_dir_name=""
 
   bin="{{bin}}"
@@ -152,9 +148,6 @@ package-bin bin version="":
       ;;
     antctl)
       crate_dir_name="ant-node-manager"
-      ;;
-    antnode_rpc_client)
-      crate_dir_name="ant-node-rpc-client"
       ;;
     *)
       echo "The $bin binary is not supported"
@@ -196,7 +189,6 @@ upload-all-packaged-bins-to-s3:
     ant
     antnode
     antctl
-    antnode_rpc_client
   )
   for binary in "${binaries[@]}"; do
     just upload-packaged-bin-to-s3 "$binary"
@@ -218,9 +210,6 @@ upload-packaged-bin-to-s3 bin_name:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     *)
       echo "The {{bin_name}} binary is not supported"
@@ -262,9 +251,6 @@ delete-s3-bin bin_name version:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     *)
       echo "The {{bin_name}} binary is not supported"
@@ -337,7 +323,6 @@ package-arch arch:
     ant
     antnode
     antctl
-    antnode_rpc_client
   )
 
   if [[ "$architecture" == *"windows"* ]]; then
