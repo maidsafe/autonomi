@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::{Error, Result};
-use crate::{DaemonServiceData, NatDetectionStatus, NodeServiceData};
+use crate::{NatDetectionStatus, NodeServiceData};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -23,7 +23,6 @@ use tokio::sync::{RwLock, mpsc};
 #[derive(Clone, Debug)]
 #[allow(clippy::type_complexity)]
 pub struct NodeRegistryManager {
-    pub daemon: Arc<RwLock<Option<Arc<RwLock<DaemonServiceData>>>>>,
     pub environment_variables: Arc<RwLock<Option<Vec<(String, String)>>>>,
     pub nat_status: Arc<RwLock<Option<NatDetectionStatus>>>,
     pub nodes: Arc<RwLock<Vec<Arc<RwLock<NodeServiceData>>>>>,
@@ -33,9 +32,6 @@ pub struct NodeRegistryManager {
 impl From<NodeRegistry> for NodeRegistryManager {
     fn from(registry: NodeRegistry) -> Self {
         NodeRegistryManager {
-            daemon: Arc::new(RwLock::new(
-                registry.daemon.map(|daemon| Arc::new(RwLock::new(daemon))),
-            )),
             environment_variables: Arc::new(RwLock::new(registry.environment_variables)),
             nat_status: Arc::new(RwLock::new(registry.nat_status)),
             nodes: Arc::new(RwLock::new(
@@ -56,7 +52,6 @@ impl NodeRegistryManager {
     /// This is primarily used for testing purposes.
     pub fn empty(save_path: PathBuf) -> Self {
         NodeRegistryManager {
-            daemon: Arc::new(RwLock::new(None)),
             environment_variables: Arc::new(RwLock::new(None)),
             nat_status: Arc::new(RwLock::new(None)),
             nodes: Arc::new(RwLock::new(Vec::new())),
@@ -84,14 +79,7 @@ impl NodeRegistryManager {
     /// Converts the current state of the `NodeRegistryManager` to a `NodeRegistry`.
     async fn to_registry(&self) -> NodeRegistry {
         let nodes = self.get_node_service_data().await;
-        let mut daemon = None;
-        {
-            if let Some(d) = self.daemon.read().await.as_ref() {
-                daemon = Some(d.read().await.clone());
-            }
-        }
         NodeRegistry {
-            daemon,
             environment_variables: self.environment_variables.read().await.clone(),
             nat_status: self.nat_status.read().await.clone(),
             nodes,
@@ -109,12 +97,6 @@ impl NodeRegistryManager {
     pub async fn push_node(&self, node: NodeServiceData) {
         let mut nodes = self.nodes.write().await;
         nodes.push(Arc::new(RwLock::new(node)));
-    }
-
-    /// Inserts the DaemonServiceData into the registry.
-    pub async fn insert_daemon(&self, daemon: DaemonServiceData) {
-        let mut daemon_lock = self.daemon.write().await;
-        *daemon_lock = Some(Arc::new(RwLock::new(daemon)));
     }
 
     pub async fn get_node_service_data(&self) -> Vec<NodeServiceData> {
@@ -207,7 +189,6 @@ impl NodeRegistryManager {
     async fn reload(&self) -> Result<()> {
         let registry = NodeRegistry::load(&self.save_path)?;
         let new_manager = NodeRegistryManager::from(registry);
-        *self.daemon.write().await = new_manager.daemon.read().await.clone();
         *self.environment_variables.write().await =
             new_manager.environment_variables.read().await.clone();
         *self.nat_status.write().await = new_manager.nat_status.read().await.clone();
@@ -220,7 +201,6 @@ impl NodeRegistryManager {
 /// The struct that is written to the fs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NodeRegistry {
-    daemon: Option<DaemonServiceData>,
     environment_variables: Option<Vec<(String, String)>>,
     nat_status: Option<NatDetectionStatus>,
     nodes: Vec<NodeServiceData>,
@@ -230,7 +210,6 @@ struct NodeRegistry {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatusSummary {
     pub nodes: Vec<NodeServiceData>,
-    pub daemon: Option<DaemonServiceData>,
 }
 
 impl NodeRegistry {
@@ -259,7 +238,6 @@ impl NodeRegistry {
         if !path.exists() {
             debug!("Loading default node registry as {path:?} does not exist");
             return Ok(NodeRegistry {
-                daemon: None,
                 environment_variables: None,
                 nat_status: None,
                 nodes: vec![],
@@ -279,7 +257,6 @@ impl NodeRegistry {
         // services were added.
         if contents.is_empty() {
             return Ok(NodeRegistry {
-                daemon: None,
                 environment_variables: None,
                 nat_status: None,
                 nodes: vec![],
@@ -299,7 +276,6 @@ impl NodeRegistry {
     fn to_status_summary(&self) -> StatusSummary {
         StatusSummary {
             nodes: self.nodes.clone(),
-            daemon: self.daemon.clone(),
         }
     }
 }
@@ -336,7 +312,6 @@ mod tests {
 
         // Create an initial empty registry file
         let initial_registry = NodeRegistry {
-            daemon: None,
             environment_variables: None,
             nat_status: None,
             nodes: vec![],
@@ -509,7 +484,6 @@ mod tests {
 
         // Create an initial empty registry file
         let initial_registry = NodeRegistry {
-            daemon: None,
             environment_variables: None,
             nat_status: None,
             nodes: vec![],
@@ -600,7 +574,6 @@ mod tests {
 
         // Create an initial empty registry
         let initial_registry = NodeRegistry {
-            daemon: None,
             environment_variables: None,
             nat_status: None,
             nodes: vec![],
@@ -655,7 +628,6 @@ mod tests {
             }
 
             let registry = NodeRegistry {
-                daemon: None,
                 environment_variables: None,
                 nat_status: None,
                 nodes,

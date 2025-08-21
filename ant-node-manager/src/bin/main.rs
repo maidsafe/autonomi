@@ -6,11 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-mod subcommands;
-
-use crate::subcommands::evm_network::EvmNetworkCommand;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::RewardsAddress;
+use ant_evm::{EvmNetwork, get_evm_network};
 use ant_logging::{LogBuilder, LogFormat};
 use ant_node_manager::{
     DEFAULT_NODE_STARTUP_INTERVAL_MS, VerbosityLevel,
@@ -19,8 +17,10 @@ use ant_node_manager::{
     config,
 };
 use ant_service_management::NodeRegistryManager;
-use clap::{Parser, Subcommand};
-use color_eyre::{Result, eyre::eyre};
+use clap::Parser;
+use clap::Subcommand;
+use color_eyre::Result;
+use color_eyre::eyre::eyre;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tracing::Level;
 
@@ -56,6 +56,58 @@ pub(crate) struct Cmd {
     /// Print version information.
     #[clap(long)]
     version: bool,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum EvmNetworkCommand {
+    /// Use the Arbitrum One network
+    EvmArbitrumOne,
+
+    /// Use the Arbitrum Sepolia network with test contracts
+    EvmArbitrumSepoliaTest,
+
+    /// Use a custom network
+    EvmCustom {
+        /// The RPC URL for the custom network
+        #[arg(long)]
+        rpc_url: String,
+
+        /// The payment token contract address
+        #[arg(long, short)]
+        payment_token_address: String,
+
+        /// The chunk payments contract address
+        #[arg(long, short)]
+        data_payments_address: String,
+    },
+
+    /// Use the local EVM testnet, loaded from a CSV file.
+    EvmLocal,
+}
+
+impl TryInto<EvmNetwork> for EvmNetworkCommand {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_into(self) -> Result<EvmNetwork> {
+        match self {
+            Self::EvmArbitrumOne => Ok(EvmNetwork::ArbitrumOne),
+            Self::EvmArbitrumSepoliaTest => Ok(EvmNetwork::ArbitrumSepoliaTest),
+            Self::EvmLocal => {
+                let network = get_evm_network(true, None)?;
+                Ok(network)
+            }
+            Self::EvmCustom {
+                rpc_url,
+                payment_token_address,
+                data_payments_address,
+            } => Ok(EvmNetwork::new_custom(
+                &rpc_url,
+                &payment_token_address,
+                &data_payments_address,
+            )),
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -254,8 +306,6 @@ pub enum SubCmd {
         service_name: Vec<String>,
     },
     #[clap(subcommand)]
-    Daemon(DaemonSubCmd),
-    #[clap(subcommand)]
     Local(LocalSubCmd),
     /// Remove antnode service(s).
     ///
@@ -422,68 +472,6 @@ pub enum SubCmd {
         #[clap(long)]
         version: Option<String>,
     },
-}
-
-/// Manage the RPC service.
-#[derive(Subcommand, Debug)]
-pub enum DaemonSubCmd {
-    /// Add a daemon service for issuing commands via RPC.
-    ///
-    /// By default, the latest antctld binary will be downloaded; however, it is possible to
-    /// provide a binary either by specifying a URL, a local path, or a specific version number.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "add")]
-    Add {
-        /// Specify an Ipv4Addr for the daemon to listen on.
-        ///
-        /// This is useful for managing nodes remotely.
-        ///
-        /// If not set, the daemon listens locally.
-        #[clap(long, default_value_t = Ipv4Addr::new(127, 0, 0, 1))]
-        address: Ipv4Addr,
-        /// Provide environment variables for the daemon service.
-        ///
-        /// Useful to set log levels. Variables should be comma separated without spaces.
-        ///
-        /// Example: --env ANT_LOG=all,RUST_LOG=libp2p=debug
-        #[clap(name = "env", long, use_value_delimiter = false, value_parser = parse_environment_variables)]
-        env_variables: Option<Vec<(String, String)>>,
-        /// Specify a port for the daemon to listen on.
-        #[clap(long, default_value_t = 12500)]
-        port: u16,
-        /// Provide a path for the daemon binary to be used by the service.
-        ///
-        /// Useful for creating the daemon service using a custom built binary.
-        #[clap(long)]
-        path: Option<PathBuf>,
-        /// Provide a faucet binary using a URL.
-        ///
-        /// The binary must be inside a zip or gzipped tar archive.
-        ///
-        /// This option can be used to test a faucet binary that has been built from a forked
-        /// branch and uploaded somewhere. A typical use case would be for a developer who launches
-        /// a testnet to test some changes they have on a fork.
-        #[clap(long, conflicts_with = "version")]
-        url: Option<String>,
-        /// Provide a specific version of the daemon to be installed.
-        ///
-        /// The version number should be in the form X.Y.Z, with no 'v' prefix.
-        ///
-        /// The binary will be downloaded.
-        #[clap(long)]
-        version: Option<String>,
-    },
-    /// Start the daemon service.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "start")]
-    Start {},
-    /// Stop the daemon service.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "stop")]
-    Stop {},
 }
 
 /// Manage local networks.
@@ -810,16 +798,6 @@ async fn main() -> Result<()> {
             peer_id: peer_ids,
             service_name: service_names,
         }) => cmd::node::balance(peer_ids, node_registry, service_names, verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Add {
-            address,
-            env_variables,
-            port,
-            path,
-            url,
-            version,
-        })) => cmd::daemon::add(address, env_variables, port, path, url, version, verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Start {})) => cmd::daemon::start(verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Stop {})) => cmd::daemon::stop(verbosity).await,
         Some(SubCmd::Local(local_command)) => match local_command {
             LocalSubCmd::Join {
                 build,
@@ -971,7 +949,6 @@ fn get_log_builder(level: Level) -> Result<LogBuilder> {
         ("evm-testnet".to_string(), level),
         ("ant_node_manager".to_string(), level),
         ("antctl".to_string(), level),
-        ("antctld".to_string(), level),
         ("ant_service_management".to_string(), level),
     ];
     let mut log_builder = LogBuilder::new(logging_targets);

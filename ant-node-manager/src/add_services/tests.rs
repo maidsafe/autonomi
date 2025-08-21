@@ -9,18 +9,14 @@
 use crate::{
     VerbosityLevel,
     add_services::{
-        add_daemon, add_node,
-        config::{
-            AddDaemonServiceOptions, AddNodeServiceOptions, InstallNodeServiceCtxBuilder, PortRange,
-        },
+        add_node,
+        config::{AddNodeServiceOptions, InstallNodeServiceCtxBuilder, PortRange},
     },
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::error::Result as ServiceControlResult;
-use ant_service_management::{
-    DaemonServiceData, NodeRegistryManager, NodeServiceData, ServiceStatus,
-};
+use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
 use ant_service_management::{control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
@@ -39,10 +35,6 @@ use std::{
 const ANTNODE_FILE_NAME: &str = "antnode";
 #[cfg(target_os = "windows")]
 const ANTNODE_FILE_NAME: &str = "antnode.exe";
-#[cfg(not(target_os = "windows"))]
-const DAEMON_FILE_NAME: &str = "antctld";
-#[cfg(target_os = "windows")]
-const DAEMON_FILE_NAME: &str = "antctld.exe";
 
 mock! {
     pub ServiceControl {}
@@ -4405,141 +4397,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             Ok(())
         }
     }
-}
-
-#[tokio::test]
-async fn add_daemon_should_add_a_daemon_service() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let daemon_install_dir = temp_dir.child("install");
-    daemon_install_dir.create_dir_all()?;
-    let daemon_install_path = daemon_install_dir.child(DAEMON_FILE_NAME);
-    let daemon_download_path = temp_dir.child(DAEMON_FILE_NAME);
-    daemon_download_path.write_binary(b"fake daemon bin")?;
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-
-    let mut mock_service_control = MockServiceControl::new();
-
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(
-            eq(ServiceInstallCtx {
-                args: vec![
-                    OsString::from("--port"),
-                    OsString::from("8080"),
-                    OsString::from("--address"),
-                    OsString::from("127.0.0.1"),
-                ],
-                autostart: true,
-                contents: None,
-                environment: Some(vec![("ANT_LOG".to_string(), "ALL".to_string())]),
-                label: "antctld".parse()?,
-                program: daemon_install_path.to_path_buf(),
-                username: Some(get_username()),
-                working_directory: None,
-                disable_restart_on_failure: false,
-            }),
-            eq(false),
-        )
-        .returning(|_, _| Ok(()));
-
-    add_daemon(
-        AddDaemonServiceOptions {
-            address: Ipv4Addr::new(127, 0, 0, 1),
-            daemon_install_bin_path: daemon_install_path.to_path_buf(),
-            daemon_src_bin_path: daemon_download_path.to_path_buf(),
-            env_variables: Some(vec![("ANT_LOG".to_string(), "ALL".to_string())]),
-            port: 8080,
-            user: get_username(),
-            version: latest_version.to_string(),
-        },
-        node_registry.clone(),
-        &mock_service_control,
-    )
-    .await?;
-
-    daemon_download_path.assert(predicate::path::missing());
-    daemon_install_path.assert(predicate::path::is_file());
-
-    node_reg_path.assert(predicates::path::is_file());
-
-    let saved_daemon = node_registry
-        .daemon
-        .read()
-        .await
-        .as_ref()
-        .unwrap()
-        .read()
-        .await
-        .clone();
-    assert_eq!(saved_daemon.daemon_path, daemon_install_path.to_path_buf());
-    assert!(saved_daemon.pid.is_none());
-    assert_eq!(saved_daemon.service_name, "antctld");
-    assert_eq!(saved_daemon.status, ServiceStatus::Added);
-    assert_eq!(saved_daemon.version, latest_version);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn add_daemon_should_return_an_error_if_a_daemon_service_was_already_created() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let daemon_install_dir = temp_dir.child("install");
-    daemon_install_dir.create_dir_all()?;
-    let daemon_install_path = daemon_install_dir.child(DAEMON_FILE_NAME);
-    let daemon_download_path = temp_dir.child(DAEMON_FILE_NAME);
-    daemon_download_path.write_binary(b"fake daemon bin")?;
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-    node_registry
-        .insert_daemon(DaemonServiceData {
-            daemon_path: PathBuf::from("/usr/local/bin/antctld"),
-            endpoint: Some(SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-                8080,
-            )),
-            pid: Some(1234),
-            service_name: "antctld".to_string(),
-            status: ServiceStatus::Running,
-            version: latest_version.to_string(),
-        })
-        .await;
-
-    let result = add_daemon(
-        AddDaemonServiceOptions {
-            address: Ipv4Addr::new(127, 0, 0, 1),
-            daemon_install_bin_path: daemon_install_path.to_path_buf(),
-            daemon_src_bin_path: daemon_download_path.to_path_buf(),
-            env_variables: Some(Vec::new()),
-            port: 8080,
-            user: get_username(),
-            version: latest_version.to_string(),
-        },
-        node_registry.clone(),
-        &MockServiceControl::new(),
-    )
-    .await;
-
-    match result {
-        Ok(_) => panic!("This test should result in an error"),
-        Err(e) => {
-            assert_eq!(
-                format!("A antctld service has already been created"),
-                e.to_string()
-            )
-        }
-    }
-
-    Ok(())
 }
 
 #[tokio::test]

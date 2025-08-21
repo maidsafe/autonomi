@@ -270,7 +270,6 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
                 ("antnode".to_string(), Level::TRACE),
                 ("antnode_rpc_client".to_string(), Level::TRACE),
                 ("antctl".to_string(), Level::TRACE),
-                ("antctld".to_string(), Level::TRACE),
                 // libs
                 ("ant_bootstrap".to_string(), Level::TRACE),
                 ("ant_build_info".to_string(), Level::TRACE),

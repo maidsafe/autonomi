@@ -11,11 +11,7 @@ version = "0.13.3"
 
 [[bin]]
 name = "antctl"
-path = "src/bin/cli/main.rs"
-
-[[bin]]
-name = "antctld"
-path = "src/bin/daemon/main.rs"
+path = "src/bin/main.rs"
 
 [features]
 chaos = []

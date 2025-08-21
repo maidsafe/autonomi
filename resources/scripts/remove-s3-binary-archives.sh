@@ -21,7 +21,6 @@ declare -A binary_crate_dir_mappings=(
   ["antnode"]="ant-node"
   ["antctl"]="ant-node-manager"
   ["antnode_rpc_client"]="ant-node-rpc-client"
-  ["antctld"]="ant-node-manager"
 )
 declare -A binary_s3_bucket_mappings=(
   ["nat-detection"]="nat-detection"
@@ -30,7 +29,6 @@ declare -A binary_s3_bucket_mappings=(
   ["antnode"]="antnode"
   ["antctl"]="antctl"
   ["antnode_rpc_client"]="antnode-rpc-client"
-  ["antctld"]="antctl"
 )
 
 for arch in "${architectures[@]}"; do
