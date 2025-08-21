@@ -685,6 +685,6 @@ impl ReachabilityCheckSwarmDriver {
     }
 }
 
-fn get_majority(value: usize) -> usize {
+pub(crate) fn get_majority(value: usize) -> usize {
     if value == 0 { 0 } else { (value / 2) + 1 }
 }
