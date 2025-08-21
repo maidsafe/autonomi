@@ -53,9 +53,6 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use tracing::debug;
 
-pub const DAEMON_DEFAULT_PORT: u16 = 12500;
-pub const DAEMON_SERVICE_NAME: &str = "antctld";
-
 pub async fn status_report(
     node_registry: &NodeRegistryManager,
     service_control: &dyn ServiceControl,
@@ -111,17 +108,6 @@ pub async fn status_report(
             println!("Rewards address: {}", node.rewards_address);
             println!();
         }
-
-        if let Some(daemon) = node_registry.daemon.read().await.as_ref() {
-            let daemon = daemon.read().await;
-            print_banner(&format!(
-                "{} - {}",
-                &daemon.service_name,
-                format_status(&daemon.status)
-            ));
-            println!("Version: {}", daemon.version);
-            println!("Bin path: {}", daemon.daemon_path.to_string_lossy());
-        }
     } else {
         println!(
             "{:<18} {:<52} {:<7} {:>15} {:<}",
@@ -149,17 +135,6 @@ pub async fn status_report(
                 format_status(&node.status),
                 node.connected_peers,
                 failure_reason
-            );
-        }
-        if let Some(daemon) = node_registry.daemon.read().await.as_ref() {
-            let daemon = daemon.read().await;
-            println!(
-                "{:<18} {:<52} {:<7} {:>15} {:>15}",
-                daemon.service_name,
-                "-",
-                format_status(&daemon.status),
-                "-",
-                "-"
             );
         }
     }
