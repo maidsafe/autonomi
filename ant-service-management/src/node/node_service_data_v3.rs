@@ -42,8 +42,8 @@ pub struct NodeServiceDataV3 {
     pub log_format: Option<LogFormat>,
     pub max_archived_log_files: Option<usize>,
     pub max_log_files: Option<usize>,
-    #[serde(default)]
-    pub metrics_port: Option<u16>,
+    /// Updated the metrics_port field to be a required field.
+    pub metrics_port: u16,
     pub network_id: Option<u8>,
     #[serde(default)]
     pub node_ip: Option<Ipv4Addr>,
@@ -57,8 +57,9 @@ pub struct NodeServiceDataV3 {
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
-    // Removed reward_balance field in V3
-    pub rpc_socket_addr: SocketAddr,
+    /// Removed reward_balance field in V3
+    /// Updated rpc_socket_addr to be optional
+    pub rpc_socket_addr: Option<SocketAddr>,
     #[serde(default = "schema_v3_value")]
     pub schema_version: u32,
     pub service_name: String,
@@ -95,8 +96,7 @@ impl NodeServiceDataV3 {
             log_format: Option<LogFormat>,
             max_archived_log_files: Option<usize>,
             max_log_files: Option<usize>,
-            #[serde(default)]
-            metrics_port: Option<u16>,
+            metrics_port: u16,
             network_id: Option<u8>,
             #[serde(default)]
             node_ip: Option<Ipv4Addr>,
@@ -111,7 +111,7 @@ impl NodeServiceDataV3 {
             relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
-            rpc_socket_addr: SocketAddr,
+            rpc_socket_addr: Option<SocketAddr>,
             #[serde(default = "schema_v3_value")]
             schema_version: u32,
             service_name: String,
@@ -172,10 +172,7 @@ mod tests {
     };
     use ant_bootstrap::InitialPeersConfig;
     use ant_evm::EvmNetwork;
-    use std::{
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-        path::PathBuf,
-    };
+    use std::path::PathBuf;
 
     #[test]
     fn test_v3_conversion_to_latest() {
@@ -186,7 +183,7 @@ mod tests {
             data_dir_path: PathBuf::from("/data"),
             log_dir_path: PathBuf::from("/logs"),
             number: 1,
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8000),
+            rpc_socket_addr: None,
             service_name: "test".to_string(),
             status: ServiceStatus::Running,
             user_mode: true,
@@ -208,7 +205,7 @@ mod tests {
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
-            metrics_port: None,
+            metrics_port: 0,
             network_id: None,
             node_ip: None,
             node_port: None,

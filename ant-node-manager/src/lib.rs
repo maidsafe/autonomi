@@ -89,7 +89,8 @@ pub async fn status_report(
                 "Peer ID: {}",
                 node.peer_id.map_or("-".to_string(), |p| p.to_string())
             );
-            println!("RPC Socket: {}", node.rpc_socket_addr);
+            let metrics_socket_addr = format!("http://localhost:{}", node.metrics_port);
+            println!("Metrics Socket addr: {metrics_socket_addr}");
             println!("Listen Addresses: {:?}", node.listen_addr);
             println!(
                 "PID: {}",
@@ -232,13 +233,7 @@ pub async fn refresh_node_registry(
     // Main processing loop
     for node in node_registry.nodes.read().await.iter() {
         let service_name = node.read().await.service_name.clone();
-
-        let metrics_client = MetricsClient::new(
-            node.read()
-                .await
-                .metrics_port
-                .ok_or(Error::MetricsPortNotSet(service_name.clone()))?,
-        );
+        let metrics_client = MetricsClient::new(node.read().await.metrics_port);
 
         let service = NodeService::new(
             Arc::clone(node),

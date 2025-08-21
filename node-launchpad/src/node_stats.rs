@@ -72,19 +72,11 @@ impl NodeStats {
             .iter()
             .filter_map(|node| {
                 if node.status == ServiceStatus::Running || node.status == ServiceStatus::Added {
-                    if let Some(metrics_port) = node.metrics_port {
-                        Some((
-                            node.service_name.clone(),
-                            metrics_port,
-                            node.data_dir_path.clone(),
-                        ))
-                    } else {
-                        error!(
-                            "No metrics port found for {:?}. Skipping stat fetch.",
-                            node.service_name
-                        );
-                        None
-                    }
+                    Some((
+                        node.service_name.clone(),
+                        node.metrics_port,
+                        node.data_dir_path.clone(),
+                    ))
                 } else {
                     None
                 }

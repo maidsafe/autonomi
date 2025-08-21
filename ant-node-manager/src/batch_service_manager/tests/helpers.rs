@@ -27,7 +27,6 @@ use libp2p_identity::PeerId;
 use mockall::{mock, predicate::*};
 use service_manager::ServiceInstallCtx;
 use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -121,7 +120,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         log_format: None,
         max_archived_log_files: None,
         max_log_files: None,
-        metrics_port: None,
+        metrics_port: 600 + number,
         network_id: None,
         node_ip: None,
         node_port: None,
@@ -130,7 +129,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         pid: None,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080 + number),
+        rpc_socket_addr: None,
         antnode_path: PathBuf::from(format!("/var/antctl/services/antnode{number}/antnode")),
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
         service_name: format!("antnode{number}"),

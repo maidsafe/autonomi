@@ -61,13 +61,15 @@ impl ServiceStateActions for NodeService {
         let service_data = self.service_data.read().await;
         let label: ServiceLabel = service_data.service_name.parse()?;
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(service_data.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(service_data.data_dir_path.to_string_lossy().to_string()),
             OsString::from("--log-output-dest"),
             OsString::from(service_data.log_dir_path.to_string_lossy().to_string()),
         ];
+        if let Some(rpc_socket_addr) = service_data.rpc_socket_addr {
+            args.push(OsString::from("--rpc"));
+            args.push(OsString::from(rpc_socket_addr.to_string()));
+        }
 
         push_arguments_from_initial_peers_config(&service_data.initial_peers_config, &mut args);
         if let Some(log_fmt) = service_data.log_format {
@@ -102,14 +104,8 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from(node_port.to_string()));
         }
 
-        if let Some(metrics_port) = service_data.metrics_port {
-            args.push(OsString::from("--metrics-server-port"));
-            args.push(OsString::from(metrics_port.to_string()));
-        } else {
-            error!(
-                "Metrics port not available during upgrade_install_context. Make sure to call ServiceStateActions::set_metrics_port_if_not_set before building context"
-            );
-        }
+        args.push(OsString::from("--metrics-server-port"));
+        args.push(OsString::from(service_data.metrics_port.to_string()));
 
         if let Some(max_archived_log_files) = service_data.max_archived_log_files {
             args.push(OsString::from("--max-archived-log-files"));
@@ -291,13 +287,13 @@ impl ServiceStateActions for NodeService {
         &self,
         service_control: &dyn ServiceControl,
     ) -> Result<()> {
-        if self.service_data.read().await.metrics_port.is_none() {
+        if self.service_data.read().await.metrics_port == 0 {
             info!(
                 "Setting port for {} as it does not have any",
                 self.service_data.read().await.service_name
             );
             let port = service_control.get_available_port()?;
-            self.service_data.write().await.metrics_port = Some(port);
+            self.service_data.write().await.metrics_port = port;
         }
 
         Ok(())

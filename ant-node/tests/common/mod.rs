@@ -203,10 +203,14 @@ impl NodeRestart {
                     let peer_id = node.peer_id.ok_or_eyre(
                         "PeerId should be present for a local node in NodeRegistryManager",
                     )?;
-                    let antnode_rpc_endpoint = node.rpc_socket_addr;
-                    self.restart(peer_id, antnode_rpc_endpoint, progress_on_error)
-                        .await?;
-                    Some(antnode_rpc_endpoint)
+                    if let Some(antnode_rpc_endpoint) = node.rpc_socket_addr {
+                        self.restart(peer_id, antnode_rpc_endpoint, progress_on_error)
+                            .await?;
+                        Some(antnode_rpc_endpoint)
+                    } else {
+                        warn!("Node does not have an RPC endpoint configured");
+                        None
+                    }
                 } else {
                     warn!(
                         "We have restarted all the nodes in the list. Since loop_over is false, we are not restarting any nodes now."

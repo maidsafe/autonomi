@@ -751,9 +751,7 @@ async fn get_batch_manager_from_service_data(
 ) -> Result<BatchServiceManager<NodeService>> {
     let mut services = Vec::new();
     for node in service_data {
-        let metrics_client = MetricsClient::new(node.read().await.metrics_port.ok_or(
-            crate::error::Error::MetricsPortNotSet(node.read().await.service_name.clone()),
-        )?);
+        let metrics_client = MetricsClient::new(node.read().await.metrics_port);
         let service = NodeService::new(
             Arc::clone(&node),
             Box::new(FileSystemClient),

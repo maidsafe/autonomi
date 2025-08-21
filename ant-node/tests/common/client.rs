@@ -105,7 +105,9 @@ pub async fn get_all_rpc_addresses(_skip_genesis_for_droplet: bool) -> Result<Ve
             let mut rpc_endpoints = Vec::new();
             for node in local_node_registry.nodes.read().await.iter() {
                 let node_data = node.read().await;
-                rpc_endpoints.push(node_data.rpc_socket_addr);
+                if let Some(rpc_addr) = node_data.rpc_socket_addr {
+                    rpc_endpoints.push(rpc_addr);
+                }
             }
 
             Ok(rpc_endpoints)

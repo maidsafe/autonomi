@@ -398,13 +398,13 @@ pub async fn check_port_availability(
     let mut all_ports = Vec::new();
     for node in nodes.read().await.iter() {
         let node = node.read().await;
-        if let Some(port) = node.metrics_port {
-            all_ports.push(port);
-        }
+        all_ports.push(node.metrics_port);
         if let Some(port) = node.node_port {
             all_ports.push(port);
         }
-        all_ports.push(node.rpc_socket_addr.port());
+        if let Some(rpc_socket) = node.rpc_socket_addr {
+            all_ports.push(rpc_socket.port());
+        }
     }
 
     match port_option {

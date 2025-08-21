@@ -91,7 +91,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             log_format: v2.log_format,
             max_archived_log_files: v2.max_archived_log_files,
             max_log_files: v2.max_log_files,
-            metrics_port: v2.metrics_port,
+            // Updated the metrics_port field to be a required field.
+            metrics_port: v2.metrics_port.unwrap_or(0),
             network_id: v2.network_id,
             node_ip: v2.node_ip,
             node_port: v2.node_port,
@@ -102,7 +103,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             relay: v2.relay,
             rewards_address: v2.rewards_address,
             // Removed reward_balance field in V3
-            rpc_socket_addr: v2.rpc_socket_addr,
+            // rpc_socket_addr is now optional
+            rpc_socket_addr: Some(v2.rpc_socket_addr),
             schema_version: NODE_SERVICE_DATA_SCHEMA_V3,
             service_name: v2.service_name,
             status: v2.status,

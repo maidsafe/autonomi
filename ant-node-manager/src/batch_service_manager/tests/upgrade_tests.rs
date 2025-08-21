@@ -746,7 +746,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         let mut service_data = create_test_service_data(i);
         service_data.status = ServiceStatus::Running;
         service_data.pid = Some(1000 + i as u32);
-        service_data.metrics_port = None; // Important: no metrics port initially
+        service_data.metrics_port = 0; // Important: no metrics port initially
         service_data.version = current_version.to_string();
 
         // Set specific binary path for this test
@@ -786,15 +786,12 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         let expected_service_name = service_name.clone();
         let expected_bin_path = current_node_bin.to_path_buf();
         let expected_port_for_assert = expected_port;
-        let expected_rpc_port = 8080 + i;
 
         mock_service_control
             .expect_install()
             .with(
                 eq(ServiceInstallCtx {
                     args: vec![
-                        OsString::from("--rpc"),
-                        OsString::from(format!("127.0.0.1:{expected_rpc_port}")),
                         OsString::from("--root-dir"),
                         OsString::from(format!("/var/antctl/services/antnode{i}")),
                         OsString::from("--log-output-dest"),
@@ -912,8 +909,8 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
 
         // Verify metrics port has been set
         let service_data = service.service_data.read().await;
-        assert!(service_data.metrics_port.is_some());
-        assert_eq!(service_data.metrics_port.unwrap(), 6001 + i as u16);
+        assert!(service_data.metrics_port != 0);
+        assert_eq!(service_data.metrics_port, 6001 + i as u16);
     }
 
     Ok(())
