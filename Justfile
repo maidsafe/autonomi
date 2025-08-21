@@ -113,7 +113,6 @@ package-all-bins:
   just package-bin "ant"
   just package-bin "antnode"
   just package-bin "antctl"
-  just package-bin "antnode_rpc_client"
   just package-bin "evm-testnet"
 
 package-bin bin version="":
@@ -137,7 +136,6 @@ package-bin bin version="":
     "ant" \
     "antnode" \
     "antctl" \
-    "antnode_rpc_client" \
     "evm-testnet")
   crate_dir_name=""
 
@@ -154,9 +152,6 @@ package-bin bin version="":
       ;;
     antctl)
       crate_dir_name="ant-node-manager"
-      ;;
-    antnode_rpc_client)
-      crate_dir_name="ant-node-rpc-client"
       ;;
     evm-testnet)
       crate_dir_name="evm-testnet"
@@ -201,7 +196,6 @@ upload-all-packaged-bins-to-s3:
     ant
     antnode
     antctl
-    antnode_rpc_client
     antctld
   )
   for binary in "${binaries[@]}"; do
@@ -224,9 +218,6 @@ upload-packaged-bin-to-s3 bin_name:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     evm-testnet)
       bucket="evm-testnet"
@@ -271,9 +262,6 @@ delete-s3-bin bin_name version:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     evm-testnet)
       bucket="evm-testnet"
@@ -349,7 +337,6 @@ package-arch arch:
     ant
     antnode
     antctl
-    antnode_rpc_client
     antctld
   )
 

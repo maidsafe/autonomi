@@ -61,8 +61,6 @@ More options about EVM Network below.
   Autonomi network. Nodes can be run on commodity hardware and connect to the network.
 - [Node Manager](https://github.com/maidsafe/autonomi/blob/main/ant-node-manager/README.md) Use
   to create a local network for development and testing.
-- [Node RPC](https://github.com/maidsafe/autonomi/blob/main/ant-node-rpc-client/README.md) The
-  RPC server used by the nodes to expose API calls to the outside world.
 
 #### Transport Protocols and Architectures
 
@@ -144,89 +142,6 @@ Now to download the files again:
 ```bash
 cargo run --bin ant -- --local file download <addr> <dest_path>
 ```
-
-### RPC
-
-The node manager launches each node process with a remote procedure call (RPC) service. The
-workspace has a client binary that can be used to run commands against these services.
-
-Run the `status` command with the `--details` flag to get the RPC port for each node:
-
-```
-$ cargo run --bin antctl -- status --details
-...
-===================================
-antctl-local25 - RUNNING
-===================================
-Version: 0.103.21
-Peer ID: 12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8
-Port: 38835
-RPC Port: 34416
-Multiaddr: /ip4/127.0.0.1/udp/38835/quic-v1/p2p/12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8
-PID: 62369
-Data path: /home/<<user_directory>>/.local/share/autonomi/node/12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8
-Log path: /home/<<user_directory>>/.local/share/autonomi/node/12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8/logs
-Bin path: target/release/antnode
-Connected peers: 24
-```
-
-Now you can run RPC commands against any node.
-
-The `info` command will retrieve basic information about the node:
-
-```
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 info
-Node info:
-==========
-RPC endpoint: https://127.0.0.1:34416
-Peer Id: 12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8
-Logs dir: /home/<<user_directory>>/.local/share/autonomi/node/12D3KooWJ4Yp8CjrbuUyeLDsAgMfCb3GAYMoBvJCRp1axjHr9cf8/logs
-PID: 62369
-Binary version: 0.103.21
-Time since last restart: 1614s
-```
-
-The `netinfo` command will return connected peers and listeners:
-
-```
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 netinfo
-Node's connections to the Network:
-
-Connected peers:
-Peer: 12D3KooWJkD2pB2WdczBJWt4ZSAWfFFMa8FHe6w9sKvH2mZ6RKdm
-Peer: 12D3KooWRNCqFYX8dJKcSTAgxcy5CLMcEoM87ZSzeF43kCVCCFnc
-Peer: 12D3KooWLDUFPR2jCZ88pyYCNMZNa4PruweMsZDJXUvVeg1sSMtN
-Peer: 12D3KooWC8GR5NQeJwTsvn9SKChRZqJU8XS8ZzKPwwgBi63FHdUQ
-Peer: 12D3KooWJGERJnGd5N814V295zq1CioxUUWKgNZy4zJmBLodAPEj
-Peer: 12D3KooWJ9KHPwwiRpgxwhwsjCiHecvkr2w3JsUQ1MF8q9gzWV6U
-Peer: 12D3KooWSBafke1pzz3KUXbH875GYcMLVqVht5aaXNSRtbie6G9g
-Peer: 12D3KooWJtKc4C7SRkei3VURDpnsegLUuQuyKxzRpCtsJGhakYfX
-Peer: 12D3KooWKg8HsTQ2XmBVCeGxk7jHTxuyv4wWCWE2pLPkrhFHkwXQ
-Peer: 12D3KooWQshef5sJy4rEhrtq2cHGagdNLCvcvMn9VXwMiLnqjPFA
-Peer: 12D3KooWLfXHapVy4VV1DxWndCt3PmqkSRjFAigsSAaEnKzrtukD
-
-Node's listeners:
-Listener: /ip4/127.0.0.1/udp/38835/quic-v1
-Listener: /ip4/192.168.1.86/udp/38835/quic-v1
-Listener: /ip4/172.17.0.1/udp/38835/quic-v1
-Listener: /ip4/172.18.0.1/udp/38835/quic-v1
-Listener: /ip4/172.20.0.1/udp/38835/quic-v1
-```
-
-Node control commands:
-
-```
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 restart 5000
-Node successfully received the request to restart in 5s
-
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 stop 6000
-Node successfully received the request to stop in 6s
-
-$ cargo run --bin antnode_rpc_client -- 127.0.0.1:34416 update 7000
-Node successfully received the request to try to update in 7s
-```
-
-NOTE: it is preferable to use the node manager to control the node rather than RPC commands.
 
 ### Tear Down
 
