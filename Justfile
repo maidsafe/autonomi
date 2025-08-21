@@ -66,21 +66,15 @@ build-release-artifacts arch nightly="false":
   if [[ $arch == arm* || $arch == armv7* || $arch == aarch64* ]]; then
     echo "Passing to cross CROSS_CONTAINER_OPTS=$CROSS_CONTAINER_OPTS"
     cargo binstall --no-confirm cross
-    cross build --release --target $arch --bin nat-detection $nightly_feature
     cross build --release --target $arch --bin node-launchpad $nightly_feature
     cross build --release --target $arch --bin ant $nightly_feature --features loud
     cross build --release --target $arch --bin antnode $nightly_feature
     cross build --release --target $arch --bin antctl $nightly_feature
-    cross build --release --target $arch --bin antctld $nightly_feature
-    cross build --release --target $arch --bin antnode_rpc_client $nightly_feature
   else
-    cargo build --release --target $arch --bin nat-detection $nightly_feature
     cargo build --release --target $arch --bin node-launchpad $nightly_feature
     cargo build --release --target $arch --bin ant $nightly_feature --features loud
     cargo build --release --target $arch --bin antnode $nightly_feature
     cargo build --release --target $arch --bin antctl $nightly_feature
-    cargo build --release --target $arch --bin antctld $nightly_feature
-    cargo build --release --target $arch --bin antnode_rpc_client $nightly_feature
   fi
 
   find target/$arch/release -maxdepth 1 -type f -exec cp '{}' artifacts \;
@@ -113,13 +107,10 @@ make-artifacts-directory:
 package-all-bins:
   #!/usr/bin/env bash
   set -e
-  just package-bin "nat-detection"
   just package-bin "node-launchpad"
   just package-bin "ant"
   just package-bin "antnode"
   just package-bin "antctl"
-  just package-bin "antctld"
-  just package-bin "antnode_rpc_client"
 
 package-bin bin version="":
   #!/usr/bin/env bash
@@ -138,20 +129,14 @@ package-bin bin version="":
   bin="{{bin}}"
 
   supported_bins=(\
-    "nat-detection" \
     "node-launchpad" \
     "ant" \
     "antnode" \
-    "antctl" \
-    "antctld" \
-    "antnode_rpc_client")
+    "antctl")
   crate_dir_name=""
 
   bin="{{bin}}"
   case "$bin" in
-    nat-detection)
-      crate_dir_name="nat-detection"
-      ;;
     node-launchpad)
       crate_dir_name="node-launchpad"
       ;;
@@ -163,12 +148,6 @@ package-bin bin version="":
       ;;
     antctl)
       crate_dir_name="ant-node-manager"
-      ;;
-    antctld)
-      crate_dir_name="ant-node-manager"
-      ;;
-    antnode_rpc_client)
-      crate_dir_name="ant-node-rpc-client"
       ;;
     *)
       echo "The $bin binary is not supported"
@@ -206,13 +185,10 @@ upload-all-packaged-bins-to-s3:
   set -e
 
   binaries=(
-    nat-detection
     node-launchpad
     ant
     antnode
     antctl
-    antnode_rpc_client
-    antctld
   )
   for binary in "${binaries[@]}"; do
     just upload-packaged-bin-to-s3 "$binary"
@@ -223,9 +199,6 @@ upload-packaged-bin-to-s3 bin_name:
   set -e
 
   case "{{bin_name}}" in
-    nat-detection)
-      bucket="nat-detection"
-      ;;
     node-launchpad)
       bucket="node-launchpad"
       ;;
@@ -237,12 +210,6 @@ upload-packaged-bin-to-s3 bin_name:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antctld)
-      bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     *)
       echo "The {{bin_name}} binary is not supported"
@@ -273,9 +240,6 @@ delete-s3-bin bin_name version:
   set -e
 
   case "{{bin_name}}" in
-    nat-detection)
-      bucket="nat-detection"
-      ;;
     node-launchpad)
       bucket="node-launchpad"
       ;;
@@ -287,12 +251,6 @@ delete-s3-bin bin_name version:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antctld)
-      bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     *)
       echo "The {{bin_name}} binary is not supported"
@@ -361,13 +319,10 @@ package-arch arch:
   cd artifacts/$architecture/release
 
   binaries=(
-    nat-detection
     node-launchpad
     ant
     antnode
     antctl
-    antnode_rpc_client
-    antctld
   )
 
   if [[ "$architecture" == *"windows"* ]]; then

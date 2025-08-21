@@ -10,44 +10,41 @@ mod node_service_data;
 mod node_service_data_v0;
 mod node_service_data_v1;
 mod node_service_data_v2;
+mod node_service_data_v3;
 
 // Re-export types
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
-use crate::{ServiceStateActions, ServiceStatus, UpgradeOptions, error::Result, rpc::RpcActions};
+use crate::{
+    ServiceStateActions, ServiceStatus, UpgradeOptions, control::ServiceControl, error::Result,
+    fs::FileSystemActions, metric::MetricsAction,
+};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
 use libp2p::multiaddr::Protocol;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
+use std::{ffi::OsString, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tonic::async_trait;
 
 pub struct NodeService {
     pub service_data: Arc<RwLock<NodeServiceData>>,
-    pub rpc_actions: Box<dyn RpcActions + Send>,
-    /// Used to enable dynamic startup delay based on the time it takes for a node to connect to the network.
-    pub connection_timeout: Option<Duration>,
+    pub metrics_action: Box<dyn MetricsAction + Send>,
+    pub fs_actions: Box<dyn FileSystemActions + Send>,
 }
 
 impl NodeService {
     pub fn new(
         service_data: Arc<RwLock<NodeServiceData>>,
-        rpc_actions: Box<dyn RpcActions + Send>,
+        fs_actions: Box<dyn FileSystemActions + Send>,
+        metrics_action: Box<dyn MetricsAction + Send>,
     ) -> NodeService {
         NodeService {
-            rpc_actions,
+            fs_actions,
+            metrics_action,
             service_data,
-            connection_timeout: None,
         }
-    }
-
-    /// Set the max time to wait for the node to connect to the network.
-    /// If not set, we do not perform a dynamic startup delay.
-    pub fn with_connection_timeout(mut self, connection_timeout: Duration) -> NodeService {
-        self.connection_timeout = Some(connection_timeout);
-        self
     }
 }
 
@@ -64,13 +61,15 @@ impl ServiceStateActions for NodeService {
         let service_data = self.service_data.read().await;
         let label: ServiceLabel = service_data.service_name.parse()?;
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(service_data.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(service_data.data_dir_path.to_string_lossy().to_string()),
             OsString::from("--log-output-dest"),
             OsString::from(service_data.log_dir_path.to_string_lossy().to_string()),
         ];
+        if let Some(rpc_socket_addr) = service_data.rpc_socket_addr {
+            args.push(OsString::from("--rpc"));
+            args.push(OsString::from(rpc_socket_addr.to_string()));
+        }
 
         push_arguments_from_initial_peers_config(&service_data.initial_peers_config, &mut args);
         if let Some(log_fmt) = service_data.log_format {
@@ -80,6 +79,9 @@ impl ServiceStateActions for NodeService {
         if let Some(id) = service_data.network_id {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
+        }
+        if service_data.skip_reachability_check {
+            args.push(OsString::from("--skip-reachability-check"));
         }
         if service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));
@@ -101,10 +103,10 @@ impl ServiceStateActions for NodeService {
             args.push(OsString::from("--port"));
             args.push(OsString::from(node_port.to_string()));
         }
-        if let Some(metrics_port) = service_data.metrics_port {
-            args.push(OsString::from("--metrics-server-port"));
-            args.push(OsString::from(metrics_port.to_string()));
-        }
+
+        args.push(OsString::from("--metrics-server-port"));
+        args.push(OsString::from(service_data.metrics_port.to_string()));
+
         if let Some(max_archived_log_files) = service_data.max_archived_log_files {
             args.push(OsString::from("--max-archived-log-files"));
             args.push(OsString::from(max_archived_log_files.to_string()));
@@ -173,77 +175,94 @@ impl ServiceStateActions for NodeService {
     }
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
-        let mut service_data = self.service_data.write().await;
-        let (connected_peers, pid, peer_id) = if full_refresh {
-            debug!("Performing full refresh for {}", service_data.service_name);
-            if let Some(connection_timeout) = self.connection_timeout {
-                debug!(
-                    "Performing dynamic startup delay for {}",
-                    service_data.service_name
-                );
-                self.rpc_actions
-                    .is_node_connected_to_network(connection_timeout)
-                    .await?;
-            }
+        let service_name = self.service_data.read().await.service_name.clone();
+        let (reachability_check_progress_percent, connected_peers, pid, peer_id) = if full_refresh {
+            let node_metrics = self
+                .metrics_action
+                .get_node_metrics()
+                .await
+                .inspect_err(|err| {
+                    error!("Error obtaining node_metrics via metrics actions: {err:?}")
+                })?;
+
+            let node_metadata_extended = self
+                .metrics_action
+                .get_node_metadata_extended()
+                .await
+                .inspect_err(|err| {
+                    error!("Error obtaining metadata_extended via metrics actions: {err:?}")
+                })?;
 
             let node_info = self
-                .rpc_actions
-                .node_info()
-                .await
-                .inspect_err(|err| error!("Error obtaining node_info via RPC: {err:?}"))?;
-            let network_info = self
-                .rpc_actions
-                .network_info()
-                .await
-                .inspect_err(|err| error!("Error obtaining network_info via RPC: {err:?}"))?;
+                .fs_actions
+                .node_info(&node_metadata_extended.root_dir)
+                .inspect_err(|err| {
+                    error!(
+                        "Error obtaining NodeInfo via fs actions on path {:?}: {err:?}",
+                        node_metadata_extended.root_dir
+                    )
+                })?;
 
-            service_data.listen_addr = Some(
-                network_info
+            self.service_data.write().await.listen_addr = Some(
+                node_info
                     .listeners
                     .iter()
                     .cloned()
-                    .map(|addr| addr.with(Protocol::P2p(node_info.peer_id)))
+                    .map(|addr| addr.with(Protocol::P2p(node_metadata_extended.peer_id)))
                     .collect(),
             );
-            for addr in &network_info.listeners {
+
+            for addr in &node_info.listeners {
                 if let Some(port) = get_port_from_multiaddr(addr) {
-                    debug!(
-                        "Found antnode port for {}: {port}",
-                        service_data.service_name
-                    );
-                    service_data.node_port = Some(port);
+                    debug!("Found antnode port for {service_name}: {port}");
+                    self.service_data.write().await.node_port = Some(port);
                     break;
                 }
             }
 
-            if service_data.node_port.is_none() {
+            if self.service_data.read().await.node_port.is_none() {
                 error!("Could not find antnode port");
                 error!("This will cause the node to have a different port during upgrade");
             }
 
             (
-                Some(network_info.connected_peers),
-                pid,
-                Some(node_info.peer_id),
+                Some(node_metrics.reachability_status.progress_percent),
+                node_metrics.connected_peers,
+                Some(node_metadata_extended.pid),
+                Some(node_metadata_extended.peer_id),
             )
         } else {
-            debug!(
-                "Performing partial refresh for {}",
-                service_data.service_name
-            );
+            debug!("Performing partial refresh for {service_name}");
             debug!("Previously assigned data will be used");
             (
-                service_data.connected_peers.clone(),
+                self.service_data.read().await.reachability_check_progress,
+                self.service_data.read().await.connected_peers,
                 pid,
-                service_data.peer_id,
+                self.service_data.read().await.peer_id,
             )
         };
 
-        service_data.connected_peers = connected_peers;
-        service_data.peer_id = peer_id;
-        service_data.pid = pid;
-        service_data.status = ServiceStatus::Running;
+        self.service_data.write().await.connected_peers = connected_peers;
+        self.service_data.write().await.peer_id = peer_id;
+        self.service_data.write().await.pid = pid;
+        self.service_data.write().await.status = ServiceStatus::Running;
+        self.service_data.write().await.reachability_check_progress =
+            reachability_check_progress_percent;
+
         Ok(())
+    }
+
+    async fn start_progress(&self) -> Result<u8> {
+        let service_name = self.service_data.read().await.service_name.clone();
+        let progress = self
+            .metrics_action
+            .get_node_metrics()
+            .await?
+            .reachability_status
+            .progress_percent;
+
+        info!("The reachability check progress for {service_name} is {progress}%");
+        Ok(progress)
     }
 
     async fn on_stop(&self) -> Result<()> {
@@ -251,7 +270,7 @@ impl ServiceStateActions for NodeService {
         debug!("Marking {} as stopped", service_data.service_name);
         service_data.pid = None;
         service_data.status = ServiceStatus::Stopped;
-        service_data.connected_peers = None;
+        service_data.connected_peers = 0;
         Ok(())
     }
 
@@ -263,8 +282,28 @@ impl ServiceStateActions for NodeService {
         self.service_data.read().await.status.clone()
     }
 
+    async fn set_status(&self, status: ServiceStatus) {
+        self.service_data.write().await.status = status;
+    }
+
     async fn version(&self) -> String {
         self.service_data.read().await.version.clone()
+    }
+
+    async fn set_metrics_port_if_not_set(
+        &self,
+        service_control: &dyn ServiceControl,
+    ) -> Result<()> {
+        if self.service_data.read().await.metrics_port == 0 {
+            info!(
+                "Setting port for {} as it does not have any",
+                self.service_data.read().await.service_name
+            );
+            let port = service_control.get_available_port()?;
+            self.service_data.write().await.metrics_port = port;
+        }
+
+        Ok(())
     }
 }
 

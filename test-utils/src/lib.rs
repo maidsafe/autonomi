@@ -11,7 +11,6 @@
 #![allow(clippy::panic)]
 
 pub mod evm;
-pub mod testnet;
 
 use bytes::Bytes;
 use rand::Rng;

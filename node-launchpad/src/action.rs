@@ -56,36 +56,20 @@ pub enum StatusActions {
     StartStopNode,
     StartNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     StopNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     ResetNodesCompleted {
         trigger_start_node: bool,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     RemoveNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     AddNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
-    UpdateNodesCompleted {
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    NatDetectionStarted,
-    SuccessfullyDetectedNatStatus,
-    ErrorWhileRunningNatDetection,
+    UpdateNodesCompleted,
     ErrorLoadingNodeRegistry {
         raw_error: String,
     },
@@ -117,6 +101,10 @@ pub enum StatusActions {
         raw_error: String,
     },
     NodesStatsObtained(NodeStats),
+
+    RegistryUpdated {
+        all_nodes_data: Vec<NodeServiceData>,
+    },
 
     TriggerManageNodes,
     TriggerRewardsAddress,

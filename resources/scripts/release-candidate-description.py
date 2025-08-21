@@ -81,8 +81,6 @@ def main(pr_numbers):
     markdown_doc.append("## Binary Versions\n")
     for crate, binary in crate_binary_map.items():
         version = get_crate_version(crate)
-        if crate == "ant-node-manager":
-            markdown_doc.append(f"* `antctld`: v{version}")
         markdown_doc.append(f"* `{binary}`: v{version}")
     
     markdown_doc.append("\n## Merged Pull Requests\n")

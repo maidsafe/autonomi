@@ -11,11 +11,11 @@
 #![allow(clippy::expect_used)]
 
 pub mod control;
-pub mod daemon;
 pub mod error;
+pub mod fs;
+pub mod metric;
 pub mod node;
 pub mod registry;
-pub mod rpc;
 
 #[macro_use]
 extern crate tracing;
@@ -25,14 +25,13 @@ pub mod antctl_proto {
     tonic::include_proto!("antctl_proto");
 }
 
-use std::path::PathBuf;
-
+use crate::control::ServiceControl;
 use async_trait::async_trait;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
+use std::path::PathBuf;
 
-pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
 pub use node::{NodeService, NodeServiceData};
 pub use registry::{NodeRegistryManager, StatusSummary, get_local_node_registry_path};
@@ -50,13 +49,14 @@ pub enum ServiceStatus {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Deprecated. We don't use this anymore, but keeping it for backward compatibility.
 pub enum NatDetectionStatus {
     Public,
     UPnP,
     Private,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UpgradeResult {
     Forced(String, String),
     NotRequired,
@@ -89,8 +89,13 @@ pub trait ServiceStateActions {
     async fn pid(&self) -> Option<u32>;
     async fn on_remove(&self);
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
+    /// Returns the progress of the service startup. 0 <= progress <= 100
+    async fn start_progress(&self) -> Result<u8>;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;
+    async fn set_status(&self, status: ServiceStatus);
+    async fn set_metrics_port_if_not_set(&self, service_control: &dyn ServiceControl)
+    -> Result<()>;
     async fn version(&self) -> String;
 }

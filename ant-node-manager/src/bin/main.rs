@@ -6,22 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-mod subcommands;
-
-use crate::subcommands::evm_network::EvmNetworkCommand;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::RewardsAddress;
+use ant_evm::{EvmNetwork, get_evm_network};
 use ant_logging::{LogBuilder, LogFormat};
 use ant_node_manager::{
-    DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, VerbosityLevel,
+    DEFAULT_NODE_STARTUP_INTERVAL_MS, VerbosityLevel,
     add_services::config::PortRange,
     cmd::{self},
     config,
 };
 use ant_service_management::NodeRegistryManager;
-use clap::{Parser, Subcommand};
-use color_eyre::{Result, eyre::eyre};
-use libp2p::Multiaddr;
+use clap::Parser;
+use clap::Subcommand;
+use color_eyre::Result;
+use color_eyre::eyre::eyre;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tracing::Level;
 
@@ -59,6 +58,58 @@ pub(crate) struct Cmd {
     version: bool,
 }
 
+#[derive(Subcommand, Clone, Debug)]
+#[allow(clippy::enum_variant_names)]
+pub enum EvmNetworkCommand {
+    /// Use the Arbitrum One network
+    EvmArbitrumOne,
+
+    /// Use the Arbitrum Sepolia network with test contracts
+    EvmArbitrumSepoliaTest,
+
+    /// Use a custom network
+    EvmCustom {
+        /// The RPC URL for the custom network
+        #[arg(long)]
+        rpc_url: String,
+
+        /// The payment token contract address
+        #[arg(long, short)]
+        payment_token_address: String,
+
+        /// The chunk payments contract address
+        #[arg(long, short)]
+        data_payments_address: String,
+    },
+
+    /// Use the local EVM testnet, loaded from a CSV file.
+    EvmLocal,
+}
+
+impl TryInto<EvmNetwork> for EvmNetworkCommand {
+    type Error = color_eyre::eyre::Error;
+
+    fn try_into(self) -> Result<EvmNetwork> {
+        match self {
+            Self::EvmArbitrumOne => Ok(EvmNetwork::ArbitrumOne),
+            Self::EvmArbitrumSepoliaTest => Ok(EvmNetwork::ArbitrumSepoliaTest),
+            Self::EvmLocal => {
+                let network = get_evm_network(true, None)?;
+                Ok(network)
+            }
+            Self::EvmCustom {
+                rpc_url,
+                payment_token_address,
+                data_payments_address,
+            } => Ok(EvmNetwork::new_custom(
+                &rpc_url,
+                &payment_token_address,
+                &data_payments_address,
+            )),
+        }
+    }
+}
+
 #[derive(Subcommand, Debug)]
 pub enum SubCmd {
     /// Add one or more antnode services.
@@ -88,15 +139,6 @@ pub enum SubCmd {
         /// and they will need to be explicitly started again.
         #[clap(long, default_value_t = false)]
         auto_restart: bool,
-        /// Auto set NAT flags (--no-upnp or --relay) if our NAT status has been obtained by
-        /// running the NAT detection command.
-        ///
-        /// Using the argument will cause an error if the NAT detection command has not already
-        /// ran.
-        ///
-        /// This will override any --no-upnp or --relay options.
-        #[clap(long, default_value_t = false)]
-        auto_set_nat_flags: bool,
         /// The number of service instances.
         ///
         /// If the --first argument is used, the count has to be one, so --count and --first are
@@ -113,14 +155,6 @@ pub enum SubCmd {
         ///  - Windows: C:\ProgramData\antnode\services
         #[clap(long, verbatim_doc_comment)]
         data_dir_path: Option<PathBuf>,
-        /// Set this flag to enable the metrics server. The ports will be selected at random.
-        ///
-        /// If you're passing the compiled antnode via --path, make sure to enable the open-metrics feature
-        /// when compiling.
-        ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// Provide environment variables for the antnode service.
         ///
         /// Useful to set log levels. Variables should be comma separated without spaces.
@@ -167,8 +201,7 @@ pub enum SubCmd {
         /// If you're passing the compiled antnode via --node-path, make sure to enable the open-metrics feature
         /// when compiling.
         ///
-        /// If not set, metrics server will not be started. Use --enable-metrics-server to start
-        /// the metrics server without specifying a port.
+        /// If not set, metrics server will be started on a random port.
         ///
         /// If multiple services are being added and this argument is used, you must specify a
         /// range. For example, '12000-12004'. The length of the range must match the number of
@@ -220,6 +253,12 @@ pub enum SubCmd {
         /// services, which in this case would be 5. The range must also go from lower to higher.
         #[clap(long, value_parser = PortRange::parse)]
         rpc_port: Option<PortRange>,
+        /// Disable running reachability checks before starting the node.
+        ///
+        /// Reachability check determines the network connectivity and auto configures the node for you. Disable only
+        /// if you are sure about the network configuration.
+        #[clap(long, default_value_t = false)]
+        skip_reachability_check: bool,
         /// Disables UPnP.
         ///
         /// By default, antnode will try to use UPnP if available. Use this flag to disable UPnP.
@@ -267,11 +306,7 @@ pub enum SubCmd {
         service_name: Vec<String>,
     },
     #[clap(subcommand)]
-    Daemon(DaemonSubCmd),
-    #[clap(subcommand)]
     Local(LocalSubCmd),
-    #[clap(subcommand)]
-    NatDetection(NatDetectionSubCmd),
     /// Remove antnode service(s).
     ///
     /// If no peer ID(s) or service name(s) are supplied, all services will be removed.
@@ -321,22 +356,11 @@ pub enum SubCmd {
     /// sudo if you defined system-wide services; otherwise, do not run the command elevated.
     #[clap(name = "start")]
     Start {
-        /// The max time in seconds to wait for a node to connect to the network. If the node does not connect to the
-        /// network within this time, the node is considered failed.
-        ///
-        /// This argument is mutually exclusive with the 'interval' argument.
-        ///
-        /// Defaults to 300s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, conflicts_with = "interval")]
-        connection_timeout: u64,
         /// An interval applied between launching each service.
         ///
-        /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
-        /// 'connection-timeout' argument.
-        ///
-        /// Units are milliseconds.
-        #[clap(long, conflicts_with = "connection_timeout")]
-        interval: Option<u64>,
+        /// Units are milliseconds. Defaults to 10s.
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS)]
+        interval: u64,
         /// The peer ID of the service to start.
         ///
         /// The argument can be used multiple times to start many services.
@@ -398,14 +422,6 @@ pub enum SubCmd {
     /// sudo if you defined system-wide services; otherwise, do not run the command elevated.
     #[clap(name = "upgrade")]
     Upgrade {
-        /// The max time in seconds to wait for a node to connect to the network. If the node does not connect to the
-        /// network within this time, the node is considered failed.
-        ///
-        /// This argument is mutually exclusive with the 'interval' argument.
-        ///
-        /// Defaults to 300s.
-        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_CONNECTION_TIMEOUT_S, conflicts_with = "interval")]
-        connection_timeout: u64,
         /// Set this flag to upgrade the nodes without automatically starting them.
         ///
         /// Can be useful for testing scenarios.
@@ -429,12 +445,9 @@ pub enum SubCmd {
         force: bool,
         /// An interval applied between upgrading each service.
         ///
-        /// Use connection-timeout to scale the interval automatically. This argument is mutually exclusive with the
-        /// 'connection-timeout' argument.
-        ///
-        /// Units are milliseconds.
-        #[clap(long, conflicts_with = "connection_timeout")]
-        interval: Option<u64>,
+        /// Units are milliseconds. Defaults to 10s.
+        #[clap(long, default_value_t = DEFAULT_NODE_STARTUP_INTERVAL_MS)]
+        interval: u64,
         /// Provide a path for the antnode binary to be used by the service.
         ///
         /// Useful for upgrading the service using a custom built binary.
@@ -457,107 +470,6 @@ pub enum SubCmd {
         ///
         /// The version number should be in the form X.Y.Z, with no 'v' prefix.
         #[clap(long)]
-        version: Option<String>,
-    },
-}
-
-/// Manage the RPC service.
-#[derive(Subcommand, Debug)]
-pub enum DaemonSubCmd {
-    /// Add a daemon service for issuing commands via RPC.
-    ///
-    /// By default, the latest antctld binary will be downloaded; however, it is possible to
-    /// provide a binary either by specifying a URL, a local path, or a specific version number.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "add")]
-    Add {
-        /// Specify an Ipv4Addr for the daemon to listen on.
-        ///
-        /// This is useful for managing nodes remotely.
-        ///
-        /// If not set, the daemon listens locally.
-        #[clap(long, default_value_t = Ipv4Addr::new(127, 0, 0, 1))]
-        address: Ipv4Addr,
-        /// Provide environment variables for the daemon service.
-        ///
-        /// Useful to set log levels. Variables should be comma separated without spaces.
-        ///
-        /// Example: --env ANT_LOG=all,RUST_LOG=libp2p=debug
-        #[clap(name = "env", long, use_value_delimiter = false, value_parser = parse_environment_variables)]
-        env_variables: Option<Vec<(String, String)>>,
-        /// Specify a port for the daemon to listen on.
-        #[clap(long, default_value_t = 12500)]
-        port: u16,
-        /// Provide a path for the daemon binary to be used by the service.
-        ///
-        /// Useful for creating the daemon service using a custom built binary.
-        #[clap(long)]
-        path: Option<PathBuf>,
-        /// Provide a faucet binary using a URL.
-        ///
-        /// The binary must be inside a zip or gzipped tar archive.
-        ///
-        /// This option can be used to test a faucet binary that has been built from a forked
-        /// branch and uploaded somewhere. A typical use case would be for a developer who launches
-        /// a testnet to test some changes they have on a fork.
-        #[clap(long, conflicts_with = "version")]
-        url: Option<String>,
-        /// Provide a specific version of the daemon to be installed.
-        ///
-        /// The version number should be in the form X.Y.Z, with no 'v' prefix.
-        ///
-        /// The binary will be downloaded.
-        #[clap(long)]
-        version: Option<String>,
-    },
-    /// Start the daemon service.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "start")]
-    Start {},
-    /// Stop the daemon service.
-    ///
-    /// This command must run as the root/administrative user.
-    #[clap(name = "stop")]
-    Stop {},
-}
-
-/// Manage NAT detection.
-#[derive(Subcommand, Debug, Clone)]
-pub enum NatDetectionSubCmd {
-    /// Use NAT detection to determine NAT status.
-    ///
-    /// The status can be used with the '--auto-set-nat-flags' argument on the 'add' command.
-    Run {
-        /// Provide a path for the NAT detection binary to be used.
-        ///
-        /// Useful for running NAT detection using a custom built binary.
-        #[clap(long)]
-        path: Option<PathBuf>,
-        /// Provide NAT servers in the form of a multiaddr or an address/port pair. If no servers are provided,
-        /// the default servers will be used.
-        ///
-        /// We attempt to establish connections to these servers to determine our own NAT status.
-        ///
-        /// The argument can be used multiple times.
-        #[clap(long, value_delimiter = ',')]
-        servers: Option<Vec<Multiaddr>>,
-        /// Provide a NAT detection binary using a URL.
-        ///
-        /// The binary must be inside a zip or gzipped tar archive.
-        ///
-        /// This option can be used to test a nat detection binary that has been built from a forked
-        /// branch and uploaded somewhere. A typical use case would be for a developer who launches
-        /// a testnet to test some changes they have on a fork.
-        #[clap(long, conflicts_with = "version")]
-        url: Option<String>,
-        /// Provide a specific version of the NAT detection to be installed.
-        ///
-        /// The version number should be in the form X.Y.Z, with no 'v' prefix.
-        ///
-        /// The binary will be downloaded.
-        #[clap(long, default_value = "0.1.0")]
         version: Option<String>,
     },
 }
@@ -595,9 +507,6 @@ pub enum LocalSubCmd {
         /// on the antnode when compiling. If you're using --build, then make sure to enable the feature flag on
         /// antctl.
         ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
@@ -694,9 +603,6 @@ pub enum LocalSubCmd {
         /// on the antnode when compiling. If you're using --build, then make sure to enable the feature flag on
         /// antctl.
         ///
-        /// If you want to specify the ports, use the --metrics-port argument.
-        #[clap(long)]
-        enable_metrics_server: bool,
         /// An interval applied between launching each node.
         ///
         /// Units are milliseconds.
@@ -830,10 +736,8 @@ async fn main() -> Result<()> {
         Some(SubCmd::Add {
             alpha,
             auto_restart,
-            auto_set_nat_flags,
             count,
             data_dir_path,
-            enable_metrics_server,
             env_variables,
             evm_network,
             relay,
@@ -850,6 +754,7 @@ async fn main() -> Result<()> {
             rewards_address,
             rpc_address,
             rpc_port,
+            skip_reachability_check,
             url,
             no_upnp,
             user,
@@ -859,10 +764,8 @@ async fn main() -> Result<()> {
             cmd::node::add(
                 alpha,
                 auto_restart,
-                auto_set_nat_flags,
                 count,
                 data_dir_path,
-                enable_metrics_server,
                 env_variables,
                 Some(evm_network.try_into()?),
                 log_dir_path,
@@ -879,6 +782,7 @@ async fn main() -> Result<()> {
                 rewards_address,
                 rpc_address,
                 rpc_port,
+                skip_reachability_check,
                 path,
                 no_upnp,
                 url,
@@ -894,21 +798,10 @@ async fn main() -> Result<()> {
             peer_id: peer_ids,
             service_name: service_names,
         }) => cmd::node::balance(peer_ids, node_registry, service_names, verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Add {
-            address,
-            env_variables,
-            port,
-            path,
-            url,
-            version,
-        })) => cmd::daemon::add(address, env_variables, port, path, url, version, verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Start {})) => cmd::daemon::start(verbosity).await,
-        Some(SubCmd::Daemon(DaemonSubCmd::Stop {})) => cmd::daemon::stop(verbosity).await,
         Some(SubCmd::Local(local_command)) => match local_command {
             LocalSubCmd::Join {
                 build,
                 count,
-                enable_metrics_server,
                 interval,
                 metrics_port,
                 node_path,
@@ -928,7 +821,6 @@ async fn main() -> Result<()> {
                 cmd::local::join(
                     build,
                     count,
-                    enable_metrics_server,
                     interval,
                     metrics_port,
                     node_path,
@@ -951,7 +843,6 @@ async fn main() -> Result<()> {
                 build,
                 clean,
                 count,
-                enable_metrics_server,
                 interval,
                 log_format,
                 metrics_port,
@@ -971,7 +862,6 @@ async fn main() -> Result<()> {
                     build,
                     clean,
                     count,
-                    enable_metrics_server,
                     interval,
                     metrics_port,
                     node_path,
@@ -992,15 +882,6 @@ async fn main() -> Result<()> {
                 json,
             } => cmd::local::status(details, fail, json).await,
         },
-        Some(SubCmd::NatDetection(NatDetectionSubCmd::Run {
-            path,
-            servers,
-            url,
-            version,
-        })) => {
-            cmd::nat_detection::run_nat_detection(servers, true, path, url, version, verbosity)
-                .await
-        }
         Some(SubCmd::Remove {
             keep_directories,
             peer_id: peer_ids,
@@ -1017,21 +898,10 @@ async fn main() -> Result<()> {
         }
         Some(SubCmd::Reset { force }) => cmd::node::reset(force, node_registry, verbosity).await,
         Some(SubCmd::Start {
-            connection_timeout,
             interval,
             peer_id: peer_ids,
             service_name: service_names,
-        }) => {
-            cmd::node::start(
-                connection_timeout,
-                interval,
-                node_registry,
-                peer_ids,
-                service_names,
-                verbosity,
-            )
-            .await
-        }
+        }) => cmd::node::start(interval, node_registry, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Status {
             details,
             fail,
@@ -1043,7 +913,6 @@ async fn main() -> Result<()> {
             service_name: service_names,
         }) => cmd::node::stop(interval, node_registry, peer_ids, service_names, verbosity).await,
         Some(SubCmd::Upgrade {
-            connection_timeout,
             do_not_start,
             force,
             interval,
@@ -1055,7 +924,6 @@ async fn main() -> Result<()> {
             version,
         }) => {
             cmd::node::upgrade(
-                connection_timeout,
                 do_not_start,
                 path,
                 force,
@@ -1081,7 +949,6 @@ fn get_log_builder(level: Level) -> Result<LogBuilder> {
         ("evm-testnet".to_string(), level),
         ("ant_node_manager".to_string(), level),
         ("antctl".to_string(), level),
-        ("antctld".to_string(), level),
         ("ant_service_management".to_string(), level),
     ];
     let mut log_builder = LogBuilder::new(logging_targets);

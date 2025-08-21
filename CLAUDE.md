@@ -98,7 +98,6 @@ just build-release-artifacts <architecture>
 
 ### Development Tools
 - **node-launchpad**: TUI application for managing nodes
-- **nat-detection**: NAT traversal and network connectivity detection
 - **test-utils**: Shared testing utilities across the workspace
 
 ## Key Development Patterns

@@ -1,4 +1,4 @@
-// Copyright (C) 2024 MaidSafe.net limited.
+// Copyright (C) 2025 MaidSafe.net limited.
 //
 // This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
 // Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
@@ -6,4 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-pub mod evm_network;
+mod config_retention_tests;
+mod helpers;
+mod remove_tests;
+mod start_tests;
+mod stop_tests;
+mod upgrade_tests;
+
+// Re-export helpers for use in all test modules

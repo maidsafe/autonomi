@@ -15,6 +15,7 @@ use color_eyre::{
     Result,
     eyre::{bail, eyre},
 };
+use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use semver::Version;
 use std::{
@@ -397,13 +398,13 @@ pub async fn check_port_availability(
     let mut all_ports = Vec::new();
     for node in nodes.read().await.iter() {
         let node = node.read().await;
-        if let Some(port) = node.metrics_port {
-            all_ports.push(port);
-        }
+        all_ports.push(node.metrics_port);
         if let Some(port) = node.node_port {
             all_ports.push(port);
         }
-        all_ports.push(node.rpc_socket_addr.port());
+        if let Some(rpc_socket) = node.rpc_socket_addr {
+            all_ports.push(rpc_socket.port());
+        }
     }
 
     match port_option {
@@ -421,6 +422,30 @@ pub async fn check_port_availability(
                 }
             }
         }
+    }
+    Ok(())
+}
+
+pub fn summarise_any_failed_ops<T>(
+    failed_services: T,
+    verb: &str,
+    verbosity: VerbosityLevel,
+) -> Result<()>
+where
+    T: IntoIterator<Item = (String, String)>,
+    T::IntoIter: ExactSizeIterator,
+{
+    let failed_services: Vec<_> = failed_services.into_iter().collect();
+    if !failed_services.is_empty() {
+        if verbosity != VerbosityLevel::Minimal {
+            println!("Failed to {verb} {} service(s):", failed_services.len());
+            for failed in failed_services.iter() {
+                println!("{} {}: {}", "✕".red(), failed.0, failed.1);
+            }
+        }
+
+        error!("Failed to {verb} one or more services");
+        return Err(eyre!("Failed to {verb} one or more services"));
     }
     Ok(())
 }
