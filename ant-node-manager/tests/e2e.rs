@@ -41,6 +41,7 @@ fn cross_platform_service_install_and_control() {
     cmd.arg("--trace")
         .arg("add")
         .arg("--local")
+        .arg("--skip-reachability-check")
         .arg("--user")
         .arg(CI_USER)
         .arg("--count")
