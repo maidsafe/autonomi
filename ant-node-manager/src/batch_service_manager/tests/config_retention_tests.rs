@@ -673,7 +673,7 @@ async fn upgrade_all_should_retain_custom_metrics_ports() -> Result<()> {
     let mut services = Vec::new();
     for i in 1..=2 {
         let service = create_test_service_with_config(i, |data| {
-            data.metrics_port = Some(8000 + i);
+            data.metrics_port = 8000 + i;
             data.status = ServiceStatus::Running;
             data.pid = Some(1000 + i as u32);
         })?;
@@ -689,7 +689,7 @@ async fn upgrade_all_should_retain_custom_metrics_ports() -> Result<()> {
     // Verify metrics_port is retained for all services
     for (idx, service) in batch_manager.services.iter().enumerate() {
         let service_data = service.service_data.read().await;
-        assert_eq!(service_data.metrics_port, Some(8000 + (idx + 1) as u16));
+        assert_eq!(service_data.metrics_port, 8000 + (idx + 1) as u16);
     }
 
     Ok(())
@@ -705,8 +705,10 @@ async fn upgrade_all_should_retain_custom_rpc_ports() -> Result<()> {
     let mut services = Vec::new();
     for i in 1..=2 {
         let service = create_test_service_with_config(i, |data| {
-            data.rpc_socket_addr =
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7000 + i);
+            data.rpc_socket_addr = Some(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                7000 + i,
+            ));
             data.status = ServiceStatus::Running;
             data.pid = Some(1000 + i as u32);
         })?;
@@ -726,7 +728,7 @@ async fn upgrade_all_should_retain_custom_rpc_ports() -> Result<()> {
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             7000 + (idx + 1) as u16,
         );
-        assert_eq!(service_data.rpc_socket_addr, expected_addr);
+        assert_eq!(service_data.rpc_socket_addr, Some(expected_addr));
     }
 
     Ok(())

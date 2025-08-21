@@ -24,7 +24,7 @@ use colored::Colorize;
 use service_manager::ServiceInstallCtx;
 use std::{
     ffi::OsString,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
 };
 
 /// Install antnode as a service.
@@ -106,21 +106,25 @@ pub async fn add_node(
 
     while node_number <= target_node_count {
         trace!("Adding node with node_number {node_number}");
-        let rpc_free_port = if let Some(port) = rpc_port {
+
+        let metrics_free_port = if let Some(port) = metrics_port {
             port
         } else {
             service_control.get_available_port()?
         };
-        let metrics_free_port = if let Some(port) = metrics_port {
-            Some(port)
-        } else {
-            Some(service_control.get_available_port()?)
-        };
 
-        let rpc_socket_addr = if let Some(addr) = options.rpc_address {
-            SocketAddr::new(IpAddr::V4(addr), rpc_free_port)
+        let rpc_socket_addr = if options.rpc_address.is_some() || rpc_port.is_some() {
+            let rpc_free_port = if let Some(port) = rpc_port {
+                port
+            } else {
+                service_control.get_available_port()?
+            };
+            let rpc_addr = options
+                .rpc_address
+                .unwrap_or(std::net::Ipv4Addr::new(127, 0, 0, 1));
+            Some(SocketAddr::new(IpAddr::V4(rpc_addr), rpc_free_port))
         } else {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port)
+            None
         };
 
         let service_name = format!("antnode{node_number}");
@@ -193,7 +197,7 @@ pub async fn add_node(
                     service_antnode_path.to_string_lossy().into_owned(),
                     service_data_dir_path.to_string_lossy().into_owned(),
                     service_log_dir_path.to_string_lossy().into_owned(),
-                    rpc_socket_addr,
+                    metrics_free_port,
                 ));
 
                 node_registry
@@ -265,7 +269,7 @@ pub async fn add_node(
             println!("    - Antnode path: {}", install.1);
             println!("    - Data path: {}", install.2);
             println!("    - Log path: {}", install.3);
-            println!("    - RPC port: {}", install.4);
+            println!("    - Metrics port: {}", install.4);
         }
         println!("[!] Note: newly added services have not been started");
     }
