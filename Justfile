@@ -58,14 +58,12 @@ build-release-artifacts arch nightly="false":
     cross build --release --target $arch --bin ant $nightly_feature --features loud
     cross build --release --target $arch --bin antnode $nightly_feature
     cross build --release --target $arch --bin antctl $nightly_feature
-    cross build --release --target $arch --bin antnode_rpc_client $nightly_feature
     cross build --release --target $arch --bin evm-testnet $nightly_feature
   else
     cargo build --release --target $arch --bin node-launchpad $nightly_feature
     cargo build --release --target $arch --bin ant $nightly_feature --features loud
     cargo build --release --target $arch --bin antnode $nightly_feature
     cargo build --release --target $arch --bin antctl $nightly_feature
-    cargo build --release --target $arch --bin antnode_rpc_client $nightly_feature
     cargo build --release --target $arch --bin evm-testnet $nightly_feature
   fi
 
@@ -103,7 +101,6 @@ package-all-bins:
   just package-bin "ant"
   just package-bin "antnode"
   just package-bin "antctl"
-  just package-bin "antnode_rpc_client"
   just package-bin "evm-testnet"
 
 package-bin bin version="":
@@ -127,7 +124,6 @@ package-bin bin version="":
     "ant" \
     "antnode" \
     "antctl" \
-    "antnode_rpc_client" \
     "evm-testnet")
   crate_dir_name=""
 
@@ -144,9 +140,6 @@ package-bin bin version="":
       ;;
     antctl)
       crate_dir_name="ant-node-manager"
-      ;;
-    antnode_rpc_client)
-      crate_dir_name="ant-node-rpc-client"
       ;;
     evm-testnet)
       crate_dir_name="evm-testnet"
@@ -191,7 +184,6 @@ upload-all-packaged-bins-to-s3:
     ant
     antnode
     antctl
-    antnode_rpc_client
     antctld
   )
   for binary in "${binaries[@]}"; do
@@ -214,9 +206,6 @@ upload-packaged-bin-to-s3 bin_name:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     evm-testnet)
       bucket="evm-testnet"
@@ -261,9 +250,6 @@ delete-s3-bin bin_name version:
       ;;
     antctl)
       bucket="antctl"
-      ;;
-    antnode_rpc_client)
-      bucket="antnode-rpc-client"
       ;;
     evm-testnet)
       bucket="evm-testnet"
@@ -339,7 +325,6 @@ package-arch arch:
     ant
     antnode
     antctl
-    antnode_rpc_client
     antctld
   )
 
