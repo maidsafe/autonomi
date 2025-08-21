@@ -70,14 +70,12 @@ build-release-artifacts arch nightly="false":
     cross build --release --target $arch --bin ant $nightly_feature --features loud
     cross build --release --target $arch --bin antnode $nightly_feature
     cross build --release --target $arch --bin antctl $nightly_feature
-    cross build --release --target $arch --bin antctld $nightly_feature
     cross build --release --target $arch --bin antnode_rpc_client $nightly_feature
   else
     cargo build --release --target $arch --bin node-launchpad $nightly_feature
     cargo build --release --target $arch --bin ant $nightly_feature --features loud
     cargo build --release --target $arch --bin antnode $nightly_feature
     cargo build --release --target $arch --bin antctl $nightly_feature
-    cargo build --release --target $arch --bin antctld $nightly_feature
     cargo build --release --target $arch --bin antnode_rpc_client $nightly_feature
   fi
 
@@ -115,7 +113,6 @@ package-all-bins:
   just package-bin "ant"
   just package-bin "antnode"
   just package-bin "antctl"
-  just package-bin "antctld"
   just package-bin "antnode_rpc_client"
 
 package-bin bin version="":
@@ -139,7 +136,6 @@ package-bin bin version="":
     "ant" \
     "antnode" \
     "antctl" \
-    "antctld" \
     "antnode_rpc_client")
   crate_dir_name=""
 
@@ -155,9 +151,6 @@ package-bin bin version="":
       crate_dir_name="ant-node"
       ;;
     antctl)
-      crate_dir_name="ant-node-manager"
-      ;;
-    antctld)
       crate_dir_name="ant-node-manager"
       ;;
     antnode_rpc_client)
@@ -204,7 +197,6 @@ upload-all-packaged-bins-to-s3:
     antnode
     antctl
     antnode_rpc_client
-    antctld
   )
   for binary in "${binaries[@]}"; do
     just upload-packaged-bin-to-s3 "$binary"
@@ -225,9 +217,6 @@ upload-packaged-bin-to-s3 bin_name:
       bucket="antnode"
       ;;
     antctl)
-      bucket="antctl"
-      ;;
-    antctld)
       bucket="antctl"
       ;;
     antnode_rpc_client)
@@ -272,9 +261,6 @@ delete-s3-bin bin_name version:
       bucket="antnode"
       ;;
     antctl)
-      bucket="antctl"
-      ;;
-    antctld)
       bucket="antctl"
       ;;
     antnode_rpc_client)
@@ -352,7 +338,6 @@ package-arch arch:
     antnode
     antctl
     antnode_rpc_client
-    antctld
   )
 
   if [[ "$architecture" == *"windows"* ]]; then
