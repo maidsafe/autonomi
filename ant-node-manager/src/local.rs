@@ -73,6 +73,7 @@ impl Launcher for LocalSafeLauncher {
         let mut args = Vec::new();
 
         args.push("--skip-reachability-check".to_string());
+
         if first {
             args.push("--first".to_string())
         }
@@ -311,9 +312,13 @@ pub async fn run_network(
         } else {
             service_control.get_available_port()?
         };
-        let rpc_socket_addr = rpc_port.map(|rpc_free_port| {
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port)
-        });
+        let rpc_free_port = if let Some(port) = rpc_port {
+            port
+        } else {
+            service_control.get_available_port()?
+        };
+        let rpc_socket_addr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_free_port);
         let metrics_client = MetricsClient::new(metrics_free_port);
 
         let number = (node_registry.nodes.read().await.len() as u16) + 1;
@@ -325,7 +330,7 @@ pub async fn run_network(
                 interval: options.interval,
                 log_format: options.log_format,
                 number,
-                rpc_socket_addr,
+                rpc_socket_addr: Some(rpc_socket_addr),
                 rewards_address: options.rewards_address,
                 evm_network: options.evm_network.clone(),
                 version: get_bin_version(&launcher.get_antnode_path())?,

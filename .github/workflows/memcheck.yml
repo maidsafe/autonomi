@@ -52,7 +52,11 @@ jobs:
         run: |
           mkdir -p $RESTART_TEST_NODE_DATA_PATH
           ./target/release/antnode \
-            --root-dir $RESTART_TEST_NODE_DATA_PATH --log-output-dest $RESTART_TEST_NODE_DATA_PATH --local --rewards-address "0x03B770D9cD32077cC0bF330c13C114a87643B124" &
+            --skip-reachability-check \
+            --root-dir $RESTART_TEST_NODE_DATA_PATH \
+            --log-output-dest $RESTART_TEST_NODE_DATA_PATH \
+            --local \
+            --rewards-address "0x03B770D9cD32077cC0bF330c13C114a87643B124" &
           sleep 10
         env:
           ANT_LOG: "all"
@@ -111,6 +115,7 @@ jobs:
       - name: Start the restart node again
         run: |
           ./target/release/antnode \
+            --skip-reachability-check \
             --root-dir $RESTART_TEST_NODE_DATA_PATH \
             --log-output-dest $RESTART_TEST_NODE_DATA_PATH \
             --local \
