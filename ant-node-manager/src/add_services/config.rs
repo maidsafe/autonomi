@@ -219,16 +219,6 @@ pub struct AddNodeServiceOptions {
     pub write_older_cache_files: bool,
 }
 
-pub struct AddDaemonServiceOptions {
-    pub address: Ipv4Addr,
-    pub env_variables: Option<Vec<(String, String)>>,
-    pub daemon_install_bin_path: PathBuf,
-    pub daemon_src_bin_path: PathBuf,
-    pub port: u16,
-    pub user: String,
-    pub version: String,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

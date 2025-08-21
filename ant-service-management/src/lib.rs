@@ -11,7 +11,6 @@
 #![allow(clippy::expect_used)]
 
 pub mod control;
-pub mod daemon;
 pub mod error;
 pub mod fs;
 pub mod metric;
@@ -33,7 +32,6 @@ use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
 use std::path::PathBuf;
 
-pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
 pub use node::{NodeService, NodeServiceData};
 pub use registry::{NodeRegistryManager, StatusSummary, get_local_node_registry_path};
