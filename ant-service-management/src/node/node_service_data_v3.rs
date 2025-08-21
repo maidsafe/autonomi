@@ -57,6 +57,9 @@ pub struct NodeServiceDataV3 {
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
+    /// Added reachability_check_progress field in V3
+    #[serde(default)]
+    pub reachability_check_progress: Option<u8>,
     /// Removed reward_balance field in V3
     /// Updated rpc_socket_addr to be optional
     pub rpc_socket_addr: Option<SocketAddr>,
@@ -111,6 +114,8 @@ impl NodeServiceDataV3 {
             relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
+            #[serde(default)]
+            reachability_check_progress: Option<u8>,
             rpc_socket_addr: Option<SocketAddr>,
             #[serde(default = "schema_v3_value")]
             schema_version: u32,
@@ -147,6 +152,7 @@ impl NodeServiceDataV3 {
             pid: helper.pid,
             relay: helper.relay,
             rewards_address: helper.rewards_address,
+            reachability_check_progress: helper.reachability_check_progress,
             rpc_socket_addr: helper.rpc_socket_addr,
             service_name: helper.service_name,
             schema_version: helper.schema_version,
@@ -212,6 +218,7 @@ mod tests {
             peer_id: None,
             pid: None,
             rewards_address: Default::default(),
+            reachability_check_progress: None,
             skip_reachability_check: true,
             user: None,
             write_older_cache_files: false,

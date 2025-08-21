@@ -416,7 +416,6 @@ pub async fn run_node(
         connected_peers: node_metrics.connected_peers,
         data_dir_path: node_metadata_extended.root_dir,
         evm_network: run_options.evm_network,
-        relay: false,
         initial_peers_config: InitialPeersConfig {
             first: run_options.first,
             addrs: vec![],
@@ -437,6 +436,8 @@ pub async fn run_node(
         number: run_options.number,
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
+        reachability_check_progress: None,
+        relay: false,
         rewards_address: run_options.rewards_address,
         rpc_socket_addr: run_options.rpc_socket_addr,
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,

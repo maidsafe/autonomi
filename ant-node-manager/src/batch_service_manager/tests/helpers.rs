@@ -113,7 +113,6 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
             )
             .unwrap(),
         }),
-        relay: false,
         initial_peers_config: InitialPeersConfig::default(),
         listen_addr: None,
         log_dir_path: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
@@ -127,6 +126,8 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         number,
         peer_id: None,
         pid: None,
+        reachability_check_progress: None,
+        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
         rpc_socket_addr: None,
