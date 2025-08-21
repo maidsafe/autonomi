@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::dialer::{DialManager, TIMEOUT_ON_INITIATED_STATE};
+use super::dialer::DialManager;
 use super::{MAX_CONCURRENT_DIALS, MAX_WORKFLOW_ATTEMPTS};
 use crate::networking::driver::event::DIAL_BACK_DELAY;
 
@@ -43,24 +43,23 @@ impl ProgressCalculator {
         let workflow_progress = self.calculate_workflow_progress(dial_manager);
 
         let progress = (workflow_base + (workflow_progress * workflow_range)).min(1.0);
+        trace!("Workflow base {workflow_base}, range {workflow_range}, progress {progress}");
+
         if progress <= 0.0 {
             return 0.1; // Ensure we never return 0.0 for progress
         }
+
         progress
     }
 
     /// Calculate progress within the current workflow (0.0 to 1.0).
     fn calculate_workflow_progress(&self, dial_manager: &DialManager) -> f64 {
         let ongoing_attempts = dial_manager.get_ongoing_dial_attempts();
-
-        let total_attempts = ongoing_attempts.len();
-        if total_attempts == 0 {
+        if ongoing_attempts.is_empty() {
             return 0.0;
         }
 
         let mut total_progress = 0.0;
-        let max_concurrent = MAX_CONCURRENT_DIALS as f64;
-
         // Calculate progress for ongoing attempts
         for dial_state in ongoing_attempts.values() {
             let individual_progress =
@@ -69,7 +68,13 @@ impl ProgressCalculator {
         }
 
         // Average across all concurrent slots (even if not all filled)
-        (total_progress / max_concurrent).min(1.0)
+        let avg = (total_progress / MAX_CONCURRENT_DIALS as f64).min(1.0);
+
+        trace!(
+            "Progress for {} ongoing attempts, total progress: {total_progress}, average progress: {avg}",
+            ongoing_attempts.len()
+        );
+        avg
     }
 
     /// Calculate progress for an ongoing dial attempt based on its state and timing.
@@ -79,11 +84,7 @@ impl ProgressCalculator {
     ) -> f64 {
         use super::dialer::DialState;
         match state {
-            DialState::Initiated { at } => {
-                // Connection phase: 0-TIMEOUT_ON_INITIATED_STATE seconds = 20% of individual progress
-                let elapsed_secs = at.elapsed().as_secs();
-                ((elapsed_secs as f64) / TIMEOUT_ON_INITIATED_STATE.as_secs() as f64).min(1.0) * 0.2
-            }
+            DialState::Initiated { .. } => 0.0,
             DialState::Connected { at } => {
                 // Connected, waiting for dial-back: 0-DIAL_BACK_DELAY seconds
                 // 20% base for connection + progress through dial-back wait (80%)
@@ -108,16 +109,14 @@ mod tests {
     fn test_dial_state_progress() {
         let calculator = ProgressCalculator::new();
 
-        // Test initiated state at 50% of timeout
-        let half_timeout = Duration::from_secs(TIMEOUT_ON_INITIATED_STATE.as_secs() / 2);
-        let at = Instant::now() - half_timeout;
+        // Test initiated state - always returns 0.0
+        let at = Instant::now() - Duration::from_secs(15);
         let state = DialState::Initiated { at };
 
         let progress = calculator.calculate_individual_dial_progress_from_state(&state);
-        let expected = 0.5 * 0.2; // 50% of connection phase
-        assert!(
-            (progress - expected).abs() < 0.01,
-            "Initiated at 50% should give 10% total progress"
+        assert_eq!(
+            progress, 0.0,
+            "Initiated state should always return 0.0 progress"
         );
 
         // Test connected state at 50% of dial-back delay
@@ -225,19 +224,19 @@ mod tests {
             );
         }
 
-        // Test initiated state progress
+        // Test initiated state progress - always returns 0.0 regardless of elapsed time
         let test_cases = [
             (0, 0.0),  // Just initiated: 0% progress
-            (15, 0.1), // Half way through connection: 50% of 20% = 10%
-            (30, 0.2), // Full connection time: 100% of 20% = 20%
+            (15, 0.0), // Any elapsed time: still 0% progress
+            (30, 0.0), // Any elapsed time: still 0% progress
         ];
 
         for (elapsed_secs, expected_progress) in test_cases {
             let at = Instant::now() - Duration::from_secs(elapsed_secs);
             let state = DialState::Initiated { at };
             let progress = calculator.calculate_individual_dial_progress_from_state(&state);
-            assert!(
-                (progress - expected_progress).abs() < 0.01,
+            assert_eq!(
+                progress, expected_progress,
                 "Initiated state at {elapsed_secs}s should give {expected_progress} progress, got {progress}"
             );
         }
