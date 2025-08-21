@@ -207,6 +207,12 @@ impl ReachabilityCheckSwarmDriver {
                     if let Some(status) = self.handle_dial_check_interval() {
                         return Ok(status)
                     }
+
+                    if let Some(recorder) = &self.metrics_recorder {
+                        let _ = recorder
+                            .reachability_check_progress
+                            .set(self.workflow_progress());
+                    }
                 }
             }
         }
@@ -508,11 +514,6 @@ impl ReachabilityCheckSwarmDriver {
     /// If the node is not yet reachable, it will return `None` and the workflow will be retried.
     fn get_reachability_status(&mut self) -> Option<ReachabilityStatus> {
         let reachable_addrs = self.obtain_reachable_addrs();
-        if let Some(recorder) = &self.metrics_recorder {
-            let _ = recorder
-                .reachability_check_progress
-                .set(self.workflow_progress());
-        }
 
         match reachable_addrs {
             Ok((external_addr, local_adapter)) => {
