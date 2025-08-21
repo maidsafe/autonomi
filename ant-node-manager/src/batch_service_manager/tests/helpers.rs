@@ -75,7 +75,6 @@ mock! {
     impl MetricsAction for MetricsClient {
         async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
         async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, MetricsActionError>;
-        async fn wait_until_reachability_check_completes(&self, timeout: Option<std::time::Duration>) -> Result<(), MetricsActionError>;
     }
 
 }
@@ -197,11 +196,11 @@ pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeServi
             });
 
         // Set up metrics mock expectations for wait_until_reachability_check_completes
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));
@@ -227,11 +226,11 @@ pub fn create_test_services_with_failing_rpc_mocks(count: usize) -> Vec<NodeServ
         let mut mock_metrics_client = MockMetricsClient::new();
 
         // Set up expectations for services that start but fail to find PIDs afterward
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));

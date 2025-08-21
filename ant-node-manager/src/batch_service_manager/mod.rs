@@ -16,6 +16,7 @@ use ant_service_management::{
 };
 use color_eyre::eyre::eyre;
 use colored::Colorize;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use semver::Version;
 use std::collections::{HashMap, HashSet};
 
@@ -404,6 +405,95 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             };
         }
 
+        // Create progress bars for each service if not in minimal verbosity mode
+        let multi_progress = if self.verbosity != VerbosityLevel::Minimal {
+            Some(MultiProgress::new())
+        } else {
+            None
+        };
+        let mut progress_bars = HashMap::new();
+
+        if let Some(ref mp) = multi_progress {
+            for service in &self.services {
+                let service_name = service.name().await;
+                if !batch_result.contains_errors(&service_name) {
+                    let pb = mp.add(ProgressBar::new(100));
+                    pb.set_style(
+                        ProgressStyle::with_template(
+                            "{prefix:>15} [{bar:40.cyan/blue}] {pos:>3}% {msg}",
+                        )
+                        .expect("Failed to create progress bar template")
+                        .progress_chars("##-"),
+                    );
+                    pb.set_prefix(service_name.clone());
+                    pb.set_message("Node starting, running reachability check...");
+                    progress_bars.insert(service_name, pb);
+                }
+            }
+        }
+
+        loop {
+            let mut all_complete = true;
+
+            for service in &self.services {
+                if batch_result.contains_errors(&service.name().await) {
+                    continue;
+                }
+                let service_name = service.name().await;
+
+                match service.start_progress().await {
+                    Ok(progress) => {
+                        info!("The reachability check progress for {service_name} is {progress}%");
+
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.set_position(progress as u64);
+                            pb.set_message(format!("◔ Reachability Check"));
+
+                            if progress < 100 {
+                                all_complete = false;
+                            } else {
+                                pb.finish_with_message(
+                                    "Node started, reachability check complete ✓"
+                                        .green()
+                                        .to_string(),
+                                );
+                            }
+                        } else if progress < 100 {
+                            all_complete = false;
+                        }
+                    }
+                    Err(err) => {
+                        error!(
+                            "Failed to get reachability check progress for {service_name}: {err}"
+                        );
+
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.finish_with_message("Failed ✗".red().to_string());
+                        }
+
+                        batch_result.insert_error(service_name.clone(), err.into());
+                    }
+                }
+            }
+
+            // Exit the loop when all services are complete or have errors
+            if all_complete {
+                break;
+            }
+
+            // Small delay to avoid busy waiting
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
+
+        // Finish any remaining progress bars
+        if let Some(ref _mp) = multi_progress {
+            for (_service_name, pb) in progress_bars {
+                if !pb.is_finished() {
+                    pb.finish_with_message("Complete".to_string());
+                }
+            }
+        }
+
         // Now we wait for the service to be started.
         for service in &self.services {
             let service_name = service.name().await;
@@ -417,11 +507,11 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             if self.verbosity != VerbosityLevel::Minimal {
                 println!("Waiting for {service_name} to start...");
             }
-            if let Err(err) = service.wait_until_started().await {
-                error!("Service {service_name} failed to wait_until_started: {err}");
-                batch_result.insert_error(service_name.clone(), err.into());
-                continue;
-            }
+            // if let Err(err) = service.wait_until_started().await {
+            //     error!("Service {service_name} failed to wait_until_started: {err}");
+            //     batch_result.insert_error(service_name.clone(), err.into());
+            //     continue;
+            // }
 
             // This is an attempt to see whether the service process has actually launched. You don't
             // always get an error from the service infrastructure.

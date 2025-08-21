@@ -85,11 +85,11 @@ fn create_test_service_with_config(
         });
 
     // Set up metrics mock expectations for wait_until_reachability_check_completes
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
+    // mock_metrics_client
+    //     .expect_wait_until_reachability_check_completes()
+    //     .with(eq(None))
+    //     .times(1)
+    //     .returning(|_| Ok(()));
 
     Ok(NodeService::new(
         service_data,

@@ -142,11 +142,12 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
             });
 
         // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // Set up metrics mock expectations - these will be called during start but fail
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -344,11 +345,12 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
             });
 
         // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // Set up metrics mock expectations - these will be called during start but fail
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -537,11 +539,11 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
         let mut mock_metrics_client = MockMetricsClient::new();
 
         // Set up metrics mock expectations - these will be called during start but fail
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -688,11 +690,12 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
             });
 
         // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // Set up metrics mock expectations - these will be called during start but fail
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -879,11 +882,12 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
             });
 
         // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
+        // Set up metrics mock expectations - these will be called during start but fail
+        // mock_metrics_client
+        //     .expect_wait_until_reachability_check_completes()
+        //     .with(eq(None))
+        //     .times(1)
+        //     .returning(|_| Ok(()));
 
         let service = NodeService::new(
             Arc::clone(&service_data),
