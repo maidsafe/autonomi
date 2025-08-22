@@ -305,6 +305,18 @@ fn run() -> Result<()> {
     }?;
 
     println!("EVM network: {evm_network:?}");
+    let msg = format!(
+        "Running {} v{}",
+        env!("CARGO_BIN_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
+
+    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
+    debug!(
+        "antnode built with git version: {}",
+        ant_build_info::git_info()
+    );
 
     let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
     let (root_dir, keypair) = get_root_dir_and_keypair(&opt.root_dir)?;
@@ -325,19 +337,6 @@ fn run() -> Result<()> {
         info!("First node in network, writing empty cache to disk");
         rt.block_on(bootstrap_cache.write())?;
     }
-
-    let msg = format!(
-        "Running {} v{}",
-        env!("CARGO_BIN_NAME"),
-        env!("CARGO_PKG_VERSION")
-    );
-    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
-
-    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
-    debug!(
-        "antnode built with git version: {}",
-        ant_build_info::git_info()
-    );
 
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
