@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755789598570,
+  "lastUpdate": 1755866740108,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -701,6 +701,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 26.904904077895562,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ca2da0658be359855938d70084bb0918fdd6dde5",
+          "message": "Merge pull request #3167 from RolandSherwin/bootstrap_fix\n\nfix(bootstrap): dont overwrite self with peers from fs",
+          "timestamp": "2025-08-22T11:50:34Z",
+          "tree_id": "e2e7ac0ae20cd0e905b7d634b17d6588dfcff75e",
+          "url": "https://github.com/maidsafe/autonomi/commit/ca2da0658be359855938d70084bb0918fdd6dde5"
+        },
+        "date": 1755866732441,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.6447784971038546,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.234547006947858,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 27.400527551170363,
             "unit": "MiB/s"
           }
         ]
