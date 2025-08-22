@@ -58,7 +58,7 @@ fn create_test_service_with_config(
     // Set up metrics mock expectations for get_node_metrics
     mock_metrics_client
         .expect_get_node_metrics()
-        .times(1)
+        .times(2)
         .returning(move || {
             Ok(ant_service_management::metric::NodeMetrics {
                 reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -83,13 +83,6 @@ fn create_test_service_with_config(
                 log_dir: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
             })
         });
-
-    // Set up metrics mock expectations for wait_until_reachability_check_completes
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
 
     Ok(NodeService::new(
         service_data,

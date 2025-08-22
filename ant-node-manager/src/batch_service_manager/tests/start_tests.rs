@@ -47,7 +47,7 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
         .returning(|_| Ok(1002));
 
     // Create services with proper mock setup
-    let services = create_test_services_with_rpc_mocks(2)?;
+    let services = create_test_services_with_mocks(2)?;
 
     let batch_manager = setup_batch_service_manager(services, mock_service_control);
 
@@ -97,7 +97,7 @@ async fn start_all_should_start_stopped_services() -> Result<()> {
         .returning(|_| Ok(1002));
 
     // Create services and set them to stopped state
-    let services = create_test_services_with_rpc_mocks(2)?;
+    let services = create_test_services_with_mocks(2)?;
     for service in &services {
         let mut service_data = service.service_data.write().await;
         service_data.status = ServiceStatus::Stopped;
@@ -214,7 +214,7 @@ async fn start_all_should_start_services_marked_as_running_but_had_since_stopped
         .returning(|_| Ok(1002));
 
     // Create services with proper mock setup and set them to running state
-    let services = create_test_services_with_rpc_mocks(2)?;
+    let services = create_test_services_with_mocks(2)?;
     for service in &services {
         let mut service_data = service.service_data.write().await;
         service_data.status = ServiceStatus::Running;
@@ -326,7 +326,7 @@ async fn start_all_should_start_user_mode_services() -> Result<()> {
         .returning(|_| Ok(1002));
 
     // Create services and set them to user mode
-    let services = create_test_services_with_rpc_mocks(2)?;
+    let services = create_test_services_with_mocks(2)?;
     for service in &services {
         let mut service_data = service.service_data.write().await;
         service_data.user_mode = true;

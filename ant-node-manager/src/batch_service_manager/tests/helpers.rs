@@ -75,7 +75,6 @@ mock! {
     impl MetricsAction for MetricsClient {
         async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
         async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, MetricsActionError>;
-        async fn wait_until_reachability_check_completes(&self, timeout: Option<std::time::Duration>) -> Result<(), MetricsActionError>;
     }
 
 }
@@ -144,8 +143,8 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
     }
 }
 
-// Helper function to create test services with RPC mocks
-pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeService>> {
+// Helper function to create test services with mocks
+pub fn create_test_services_with_mocks(count: usize) -> Result<Vec<NodeService>> {
     let peer_ids = (1..=count)
         .map(|i| get_test_peer_id(i - 1))
         .collect::<Vec<_>>();
@@ -160,7 +159,7 @@ pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeServi
         // Set up mock expectations
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(NodeMetrics {
                     reachability_status: ReachabilityStatusValues {
@@ -196,13 +195,6 @@ pub fn create_test_services_with_rpc_mocks(count: usize) -> Result<Vec<NodeServi
                 })
             });
 
-        // Set up metrics mock expectations for wait_until_reachability_check_completes
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));
 
@@ -228,10 +220,19 @@ pub fn create_test_services_with_failing_rpc_mocks(count: usize) -> Vec<NodeServ
 
         // Set up expectations for services that start but fail to find PIDs afterward
         mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
+            .expect_get_node_metrics()
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(|| {
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
 
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));

@@ -112,10 +112,9 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -140,13 +139,6 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
-
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -317,7 +309,7 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -342,13 +334,6 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
-
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -536,12 +521,20 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
         let mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up metrics mock expectations - these will be called during start but fail
         mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
+            .expect_get_node_metrics()
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
 
         let service = NodeService::new(
             service_data,
@@ -661,7 +654,7 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -686,13 +679,6 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
-
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         let service = NodeService::new(
             service_data,
@@ -852,7 +838,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -877,13 +863,6 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
                     log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
                 })
             });
-
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
 
         let service = NodeService::new(
             Arc::clone(&service_data),

@@ -13,8 +13,6 @@ use std::{path::PathBuf, str::FromStr, time::Duration};
 use thiserror::Error;
 use tonic::async_trait;
 
-const REACHABILITY_CHECK_TIMEOUT_SEC: u64 = 14 * 60;
-
 #[derive(Debug, Error)]
 pub enum MetricsActionError {
     #[error("Could not find PeerId while parsing the metrics")]
@@ -72,10 +70,6 @@ pub struct NodeMetadataExtended {
 pub trait MetricsAction: Sync + Send {
     async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
     async fn get_node_metadata_extended(&self) -> Result<NodeMetadataExtended, MetricsActionError>;
-    async fn wait_until_reachability_check_completes(
-        &self,
-        timeout: Option<Duration>,
-    ) -> Result<(), MetricsActionError>;
 }
 
 #[derive(Debug, Clone)]
@@ -208,62 +202,6 @@ impl MetricsAction for MetricsClient {
         let node_metadata = NodeMetadataExtended::try_from(&all_metrics.samples)?;
 
         Ok(node_metadata)
-    }
-
-    /// Waits until the reachability check completes or times out.
-    ///
-    /// The default timeout is set to 14 minutes, which is the maximum time the reachability check can take.
-    async fn wait_until_reachability_check_completes(
-        &self,
-        timeout: Option<Duration>,
-    ) -> Result<(), MetricsActionError> {
-        let timeout =
-            timeout.unwrap_or_else(|| Duration::from_secs(REACHABILITY_CHECK_TIMEOUT_SEC));
-        debug!("Waiting for node to complete reachability check with a timeout of {timeout:?}...");
-
-        let max_attempts = std::cmp::max(1, timeout.as_secs() / self.retry_delay.as_secs());
-        trace!(
-            "Metrics: reachability check max attempts set to: {max_attempts} with retry_delay of {:?}",
-            self.retry_delay
-        );
-
-        let mut attempts = 0;
-        loop {
-            debug!("Attempting to check if reachability check is completed");
-
-            let metrics = self
-                .get_node_metrics()
-                .await
-                .inspect_err(|err| error!("Error getting node metrics: {err}"))?;
-
-            if metrics.reachability_status.progress_percent == 0 {
-                debug!(
-                    "Reachability check has not been enabled/performed (0). Considering reachability check completed."
-                );
-                return Ok(());
-            }
-
-            if metrics.reachability_status.progress_percent == 100 {
-                debug!("Reachability check is complete (100).");
-                return Ok(());
-            }
-
-            attempts += 1;
-            debug!(
-                "Reachability check is ongoing. Waiting for it to complete... {attempts} / {max_attempts} attempts",
-            );
-
-            tokio::time::sleep(self.retry_delay).await;
-            if attempts >= max_attempts {
-                error!(
-                    "Reachability check has not completed after {max_attempts} attempts. Timing out."
-                );
-                return Err(MetricsActionError::ReachabilityStatusCheckTimedOut {
-                    metrics_port: self.port,
-                    timeout,
-                });
-            }
-        }
     }
 }
 
