@@ -125,7 +125,12 @@ impl InitialPeersConfig {
 
             if let Some(cfg) = cfg {
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
-                    bootstrap_addresses.extend(data.get_all_addrs().cloned());
+                    let addrs_from_cache = data.get_all_addrs().cloned().collect::<Vec<_>>();
+                    info!(
+                        "Found {} bootstrap addresses from local cache",
+                        addrs_from_cache.len()
+                    );
+                    bootstrap_addresses.extend(addrs_from_cache);
 
                     if let Some(count) = count
                         && bootstrap_addresses.len() >= count
