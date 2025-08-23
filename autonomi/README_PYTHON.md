@@ -171,10 +171,10 @@ Manage mutable encrypted data on the network.
     - Retrieve vault data
     - Returns (data, content_type)
 
-- `get_user_data_from_vault(key: VaultSecretKey) -> UserData`
+- `vault_get_user_data(key: VaultSecretKey) -> UserData`
     - Get user data from vault
 
-- `put_user_data_to_vault(key: VaultSecretKey, payment: PaymentOption, user_data: UserData) -> str`
+- `vault_put_user_data(key: VaultSecretKey, payment: PaymentOption, user_data: UserData) -> str`
     - Store user data in vault
     - Returns vault address
 

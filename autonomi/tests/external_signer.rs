@@ -158,10 +158,10 @@ async fn external_signer_put() -> eyre::Result<()> {
     sleep(Duration::from_secs(5)).await;
 
     let _ = client
-        .put_user_data_to_vault(&vault_key, receipt.into(), user_data)
+        .vault_put_user_data(&vault_key, receipt.into(), user_data)
         .await?;
 
-    let fetched_user_data = client.get_user_data_from_vault(&vault_key).await?;
+    let fetched_user_data = client.vault_get_user_data(&vault_key).await?;
 
     let fetched_private_archive_access = fetched_user_data
         .private_file_archives
