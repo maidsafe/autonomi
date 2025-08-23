@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755866823161,
+  "lastUpdate": 1755951005619,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -740,6 +740,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 27.400527551170363,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chris.oneil@gmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "19fe1cd5d2d5041fc474c41b122491d45c591fc9",
+          "message": "Merge pull request #3165 from jacderida/ci-increase_file_test_coverage\n\nci: provide tests for covering all file types",
+          "timestamp": "2025-08-23T11:08:44Z",
+          "tree_id": "01dfbfe312dc66c9d7b59c888576ff72e03094d2",
+          "url": "https://github.com/maidsafe/autonomi/commit/19fe1cd5d2d5041fc474c41b122491d45c591fc9"
+        },
+        "date": 1755950998399,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.5323702952118055,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.776429315838161,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 27.04559660205595,
             "unit": "MiB/s"
           }
         ]
