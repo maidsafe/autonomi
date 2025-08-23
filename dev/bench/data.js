@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1755951005619,
+  "lastUpdate": 1755951082310,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1327,6 +1327,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/ca2da0658be359855938d70084bb0918fdd6dde5"
         },
         "date": 1755866817432,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 89,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chris.oneil@gmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "19fe1cd5d2d5041fc474c41b122491d45c591fc9",
+          "message": "Merge pull request #3165 from jacderida/ci-increase_file_test_coverage\n\nci: provide tests for covering all file types",
+          "timestamp": "2025-08-23T11:08:44Z",
+          "tree_id": "01dfbfe312dc66c9d7b59c888576ff72e03094d2",
+          "url": "https://github.com/maidsafe/autonomi/commit/19fe1cd5d2d5041fc474c41b122491d45c591fc9"
+        },
+        "date": 1755951081776,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
