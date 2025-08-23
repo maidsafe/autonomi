@@ -67,4 +67,9 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
     },
+    /// Get information about the amount of connections made
+    ConnectionsMade {
+        #[debug(skip)]
+        resp: OneShotTaskResult<usize>,
+    },
 }
