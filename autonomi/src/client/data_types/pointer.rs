@@ -6,24 +6,26 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::collections::HashMap;
+use super::resolve_split_records;
 
-use crate::client::{
-    Client, GetError, PutError,
-    payment::{PayError, PaymentOption},
-    quote::CostError,
+use crate::{
+    client::{
+        Client, GetError, PutError,
+        payment::{PayError, PaymentOption},
+        quote::CostError,
+    },
+    networking::{NetworkError, PeerInfo, Record},
 };
-use crate::networking::{PeerId, PeerInfo, Record};
+
 use ant_evm::{Amount, AttoTokens, EvmWalletError};
 use ant_protocol::{
     NetworkAddress,
     storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
 };
-pub use bls::{PublicKey, SecretKey};
 use tracing::{debug, error, trace};
 
-use crate::networking::NetworkError;
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
+pub use bls::{PublicKey, SecretKey};
 
 /// Errors that can occur when dealing with Pointers
 #[derive(Debug, thiserror::Error)]
@@ -52,6 +54,8 @@ pub enum PointerError {
         "Pointer cannot be updated as it does not exist, please create it first or wait for it to be created"
     )]
     CannotUpdateNewPointer,
+    #[error("Got multiple conflicting pointers with the latest version")]
+    Fork(Vec<Pointer>),
 }
 
 impl Client {
@@ -69,7 +73,19 @@ impl Client {
             Ok(None) => Err(GetError::RecordNotFound)?,
             Err(NetworkError::SplitRecord(result_map)) => {
                 warn!("Pointer at {key:?} is split, trying resolution");
-                select_highest_pointer_version(result_map, key)?
+                resolve_split_records(
+                    result_map,
+                    key.clone(),
+                    pointer_from_record,
+                    |p: &Pointer| p.counter(),
+                    |a: &Pointer, b: &Pointer| a == b,
+                    |multiples: Vec<Pointer>| PointerError::Fork(multiples),
+                    || {
+                        PointerError::Corrupt(format!(
+                            "Found multiple conflicting invalid pointers at {key:?}"
+                        ))
+                    },
+                )?
             }
             Err(err) => {
                 error!("Error fetching pointer: {err:?}");
@@ -340,35 +356,6 @@ impl Client {
         );
         debug!("Calculated the cost to create pointer of {key:?} is {total_cost}");
         Ok(total_cost)
-    }
-}
-
-/// Select the highest versioned pointer from a list of conflicting pointer records
-///
-/// If there are multiple conflicting pointers at the latest version, the first one is returned
-/// If there are no valid pointers, an error is returned
-fn select_highest_pointer_version(
-    result_map: HashMap<PeerId, Record>,
-    key: NetworkAddress,
-) -> Result<Pointer, PointerError> {
-    let highest_version = result_map
-        .into_iter()
-        .filter_map(|(peer, record)| match pointer_from_record(record) {
-            Ok(pointer) => Some(pointer),
-            Err(err) => {
-                warn!("Peer {peer:?} returned invalid pointer at {key} with error: {err}");
-                None
-            }
-        })
-        .max_by_key(|pointer| pointer.counter());
-
-    match highest_version {
-        Some(pointer) => Ok(pointer),
-        None => {
-            let msg = format!("Found multiple conflicting invalid pointers at {key}");
-            warn!("{msg}");
-            Err(PointerError::Corrupt(msg))
-        }
     }
 }
 

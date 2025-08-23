@@ -6,19 +6,25 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::payment::{PayError, PaymentOption};
-use crate::{Amount, AttoTokens};
-use crate::{Client, client::quote::CostError};
-use ant_protocol::storage::{RecordKind, try_serialize_record};
+use super::resolve_split_records;
+
+use crate::{
+    Amount, AttoTokens, Client,
+    client::{
+        GetError, PutError,
+        payment::{PayError, PaymentOption},
+        quote::CostError,
+    },
+    networking::{NetworkError, PeerInfo},
+};
+
 use ant_protocol::{
     NetworkAddress,
-    storage::{DataTypes, try_deserialize_record},
+    storage::{DataTypes, RecordKind, try_deserialize_record, try_serialize_record},
 };
 use libp2p::kad::Record;
 
 pub use crate::Bytes;
-use crate::client::{GetError, PutError};
-use crate::networking::{NetworkError, PeerInfo};
 pub use ant_protocol::storage::{Scratchpad, ScratchpadAddress};
 pub use bls::{PublicKey, SecretKey, Signature};
 
@@ -86,48 +92,21 @@ impl Client {
             }
             Err(NetworkError::SplitRecord(result_map)) => {
                 debug!("Got multiple scratchpads for {scratch_key:?}");
-                let mut pads = result_map
-                    .values()
-                    .map(try_deserialize_record::<Scratchpad>)
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| ScratchpadError::Corrupt(*address))?;
-
-                // take the latest versions and filter out duplicates with same content
-                pads.sort_by_key(|s| s.counter());
-                let max_version = pads.last().map(|p| p.counter()).unwrap_or_else(|| {
-                    error!("Got empty scratchpad vector for {scratch_key:?}");
-                    u64::MAX
-                });
-
-                // Filter to latest version and remove duplicates with same content
-                let latest_pads: Vec<_> = pads
-                    .into_iter()
-                    .filter(|s| s.counter() == max_version)
-                    .collect();
-
-                // Remove duplicates
-                let mut dedup_latest_pads = latest_pads.clone();
-                dedup_latest_pads.dedup_by(|a, b| {
-                    a.data_encoding() == b.data_encoding()
-                        && a.encrypted_data() == b.encrypted_data()
-                });
-
-                // make sure we only have one of latest version
-                let pad = match &dedup_latest_pads[..] {
-                    [one] => one,
-                    [_multi, ..] => {
-                        error!(
-                            "Got multiple conflicting scratchpads for {scratch_key:?} with the latest version: {latest_pads:?}"
-                        );
-                        // Still return with the non-dedup version
-                        return Err(ScratchpadError::Fork(latest_pads));
-                    }
-                    [] => {
-                        error!("Got no valid scratchpads for {scratch_key:?}");
-                        return Err(ScratchpadError::Corrupt(*address));
-                    }
-                };
-                pad.to_owned()
+                resolve_split_records(
+                    result_map,
+                    network_address.clone(),
+                    |r| {
+                        try_deserialize_record::<Scratchpad>(&r)
+                            .map_err(|_| ScratchpadError::Corrupt(*address))
+                    },
+                    |s: &Scratchpad| s.counter(),
+                    |a: &Scratchpad, b: &Scratchpad| {
+                        a.data_encoding() == b.data_encoding()
+                            && a.encrypted_data() == b.encrypted_data()
+                    },
+                    |latest: Vec<Scratchpad>| ScratchpadError::Fork(latest),
+                    || ScratchpadError::Corrupt(*address),
+                )?
             }
             Err(e) => {
                 warn!("Failed to fetch scratchpad {network_address:?} from network: {e}");
