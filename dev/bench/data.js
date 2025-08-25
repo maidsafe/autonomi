@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756133583637,
+  "lastUpdate": 1756133585195,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2927,6 +2927,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0c3f4a7fc609d3d78feb23ae6b4aafdf912b9e3a",
+          "message": "Merge pull request #3168 from maqi/ant_logging\n\nfix(cli): re-enable ant cli logging",
+          "timestamp": "2025-08-25T15:37:17+01:00",
+          "tree_id": "26ed374c8bdece90a5f3e9408a66c2bb27d54919",
+          "url": "https://github.com/maidsafe/autonomi/commit/0c3f4a7fc609d3d78feb23ae6b4aafdf912b9e3a"
+        },
+        "date": 1756133584810,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11604,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 24378,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
             "unit": "ms"
           }
         ]
