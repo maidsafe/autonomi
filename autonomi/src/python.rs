@@ -36,7 +36,8 @@ use xor_name::{XOR_NAME_LEN, XorName};
 use crate::{
     Amount, AttoTokens, Chunk, ChunkAddress, Client, ClientConfig, ClientOperatingStrategy,
     GraphEntry, GraphEntryAddress, InitialPeersConfig, MaxFeePerGas, Network as EVMNetwork,
-    Pointer, PointerAddress, Scratchpad, ScratchpadAddress, Signature, TransactionConfig, Wallet,
+    PaymentOption, Pointer, PointerAddress, Receipt, Scratchpad, ScratchpadAddress, Signature,
+    TransactionConfig, Wallet,
     client::{
         ClientEvent, UploadSummary,
         chunk::DataMapChunk,
@@ -45,7 +46,6 @@ use crate::{
         key_derivation::{
             DerivationIndex, DerivedPubkey, DerivedSecretKey, MainPubkey, MainSecretKey,
         },
-        payment::{PaymentOption, Receipt},
         pointer::PointerTarget,
         quote::{QuoteForAddress, StoreQuote},
         vault::{UserData, VaultSecretKey},

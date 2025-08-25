@@ -8,9 +8,7 @@
 
 use ant_logging::LogBuilder;
 use autonomi::{
-    Client,
-    client::{payment::PaymentOption, register::RegisterAddress},
-    graph::GraphError,
+    Client, PaymentOption, client::register::RegisterAddress, graph::GraphError,
     register::RegisterError,
 };
 use eyre::Result;

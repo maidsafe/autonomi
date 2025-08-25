@@ -8,10 +8,9 @@
 
 use ant_logging::LogBuilder;
 use autonomi::GraphEntryAddress;
-use autonomi::client::payment::PaymentOption;
 use autonomi::pointer::PointerTarget;
 use autonomi::{Bytes, Client, client::chunk::Chunk};
-use autonomi::{GraphEntry, Pointer, Scratchpad, client::analyze::Analysis};
+use autonomi::{GraphEntry, PaymentOption, Pointer, Scratchpad, client::analyze::Analysis};
 use eyre::Result;
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;

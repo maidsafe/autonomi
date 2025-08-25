@@ -12,12 +12,11 @@ pub mod user_data;
 pub use key::{VaultSecretKey, derive_vault_key};
 pub use user_data::UserData;
 
-use crate::client::data_types::scratchpad::ScratchpadError;
 use crate::client::high_level::files::FILE_UPLOAD_BATCH_SIZE;
 use crate::client::key_derivation::{DerivationIndex, MainSecretKey};
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
-use crate::client::utils::process_tasks_with_max_concurrency;
+use crate::client::scratchpad::ScratchpadError;
 use crate::client::{Client, GetError};
 use crate::graph::GraphError;
 use ant_evm::{AttoTokens, U256};
@@ -25,6 +24,7 @@ use ant_protocol::Bytes;
 use ant_protocol::storage::{
     GraphContent, GraphEntry, GraphEntryAddress, Scratchpad, ScratchpadAddress,
 };
+use autonomi_core::client::utils::process_tasks_with_max_concurrency;
 use bls::PublicKey;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use tracing::info;

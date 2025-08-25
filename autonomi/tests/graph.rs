@@ -8,11 +8,8 @@
 
 use ant_logging::LogBuilder;
 use autonomi::{
-    Client,
-    client::{
-        graph::{GraphEntry, GraphError},
-        payment::PaymentOption,
-    },
+    Client, PaymentOption,
+    client::graph::{GraphEntry, GraphError},
 };
 use eyre::Result;
 use serial_test::serial;

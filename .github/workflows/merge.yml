@@ -109,6 +109,10 @@ jobs:
       - name: Set ANT_LOG environment variable
         run: echo "ANT_LOG=all" >> $GITHUB_ENV
 
+      - name: Run autonomi-core tests
+        timeout-minutes: 25
+        run: cargo test --release --package autonomi-core --lib
+
       - name: Run autonomi tests
         timeout-minutes: 25
         run: cargo test --release --package autonomi --lib

@@ -16,12 +16,7 @@ use thiserror::Error;
 
 use crate::Client;
 use crate::chunk::DataMapChunk;
-use crate::client::data_types::chunk::ChunkAddress;
-use crate::client::utils::process_tasks_with_max_concurrency;
 use crate::client::{GetError, PutError, quote::CostError};
-use bytes::Bytes;
-use self_encryption::streaming_decrypt_from_storage;
-use xor_name::XorName;
 
 pub mod archive_private;
 pub mod archive_public;
@@ -154,20 +149,6 @@ pub enum FileCostError {
     WalkDir(#[from] walkdir::Error),
 }
 
-/// Normalize a path to use forward slashes, regardless of the operating system.
-/// This is used to ensure that paths stored in archives always use forward slashes,
-/// which is important for cross-platform compatibility.
-pub(crate) fn normalize_path(path: PathBuf) -> PathBuf {
-    // Convert backslashes to forward slashes (Windows..)
-    let normalized = path
-        .components()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
-
-    PathBuf::from(normalized)
-}
-
 impl Client {
     /// Fetch
     pub(super) async fn stream_download_chunks_to_file(
@@ -182,81 +163,27 @@ impl Client {
         println!("Fetching {total_chunks} chunks ...");
         info!("Fetching {total_chunks} chunks ...");
 
-        // Create parallel chunk fetcher for streaming decryption
-        let client_clone = self.clone();
-        let parallel_chunk_fetcher = move |chunk_names: &[(usize, XorName)]| -> Result<
-            Vec<(usize, Bytes)>,
-            self_encryption::Error,
-        > {
-            let chunk_addresses: Vec<(usize, ChunkAddress)> = chunk_names
-                .iter()
-                .map(|(i, name)| (*i, ChunkAddress::new(*name)))
-                .collect();
-
-            // Use tokio::task::block_in_place to handle async in sync context
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    client_clone
-                        .fetch_chunks_parallel(&chunk_addresses, total_chunks)
-                        .await
-                })
-            })
-        };
-
-        // Stream decrypt directly to file
-        streaming_decrypt_from_storage(&data_map, to_dest, parallel_chunk_fetcher).map_err(
-            |e| {
-                DownloadError::GetError(crate::client::GetError::Decryption(
-                    crate::self_encryption::Error::SelfEncryption(e),
-                ))
-            },
-        )?;
+        self.core_client
+            .fetch_from_data_map(&data_map, Some(to_dest.to_path_buf()), false)
+            .await
+            .map_err(|e| DownloadError::GetError(GetError::from_error(&e)))?;
 
         Ok(())
     }
+}
 
-    /// Fetch multiple chunks in parallel from the network
-    pub(super) async fn fetch_chunks_parallel(
-        &self,
-        chunk_addresses: &[(usize, ChunkAddress)],
-        total_chunks: usize,
-    ) -> Result<Vec<(usize, Bytes)>, self_encryption::Error> {
-        let mut download_tasks = vec![];
+/// Normalize a path to use forward slashes, regardless of the operating system.
+/// This is used to ensure that paths stored in archives always use forward slashes,
+/// which is important for cross-platform compatibility.
+pub(crate) fn normalize_path(path: PathBuf) -> PathBuf {
+    // Convert backslashes to forward slashes (Windows..)
+    let normalized = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/");
 
-        for (i, chunk_addr) in chunk_addresses {
-            let client_clone = self.clone();
-            let addr_clone = *chunk_addr;
-
-            download_tasks.push(async move {
-                #[cfg(feature = "loud")]
-                println!("Fetching chunk {i}/{total_chunks} ...");
-                info!("Fetching chunk {i}/{total_chunks}({addr_clone:?})");
-                let result = client_clone
-                    .chunk_get(&addr_clone)
-                    .await
-                    .map(|chunk| (*i, chunk.value))
-                    .map_err(|e| {
-                        self_encryption::Error::Generic(format!(
-                            "Failed to fetch chunk {addr_clone:?}: {e:?}"
-                        ))
-                    });
-                #[cfg(feature = "loud")]
-                println!("Fetching chunk {i}/{total_chunks} [DONE]");
-                info!("Fetching chunk {i}/{total_chunks}({addr_clone:?}) [DONE]");
-                result
-            });
-        }
-
-        let chunks = process_tasks_with_max_concurrency(
-            download_tasks,
-            *crate::client::data_types::chunk::CHUNK_DOWNLOAD_BATCH_SIZE,
-        )
-        .await
-        .into_iter()
-        .collect::<Result<Vec<(usize, Bytes)>, self_encryption::Error>>()?;
-
-        Ok(chunks)
-    }
+    PathBuf::from(normalized)
 }
 
 pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(
@@ -284,6 +211,46 @@ pub(crate) fn get_relative_file_path_from_abs_file_and_folder_path(
             .strip_prefix(folder_prefix)
             .expect("Could not strip prefix path")
             .to_path_buf()
+    }
+}
+
+// Get metadata from file path. Defaults to `Metadata::default()` if the file cannot be accessed.
+// Logs warnings upon error.
+pub(crate) fn metadata_from_entry(path: &Path) -> Metadata {
+    let fs_metadata = match std::fs::metadata(path) {
+        Ok(metadata) => metadata,
+        Err(err) => {
+            tracing::warn!("Failed to get metadata for `{}`: {err}", path.display());
+            return Metadata::default();
+        }
+    };
+
+    let unix_time = |property: &'static str, time: std::io::Result<SystemTime>| {
+        time.inspect_err(|err| {
+            tracing::warn!(
+                "Failed to get '{property}' metadata for `{}`: {err}",
+                path.display()
+            );
+        })
+        .unwrap_or(SystemTime::UNIX_EPOCH)
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .inspect_err(|err| {
+            tracing::warn!(
+                "'{property}' metadata of `{}` is before UNIX epoch: {err}",
+                path.display()
+            );
+        })
+        .unwrap_or(Duration::from_secs(0))
+        .as_secs()
+    };
+    let created = unix_time("created", fs_metadata.created());
+    let modified = unix_time("modified", fs_metadata.modified());
+
+    Metadata {
+        created,
+        modified,
+        size: fs_metadata.len(),
+        extra: None,
     }
 }
 

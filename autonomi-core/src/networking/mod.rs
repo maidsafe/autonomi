@@ -28,13 +28,44 @@ pub use libp2p::{
     kad::{Quorum, Record},
 };
 
+// Quote types - for now we'll create simple type aliases
+// In the full implementation these would be moved from the quote module
+use ant_evm::Amount;
+use std::collections::HashMap;
+use xor_name::XorName;
+
+/// A quote for a single address (simplified for core)
+pub struct QuoteForAddress(pub Vec<(PeerId, Amount)>);
+
+impl QuoteForAddress {
+    pub fn price(&self) -> Amount {
+        self.0.iter().map(|(_, price)| price).sum()
+    }
+}
+
+/// A quote for many addresses (simplified for core)  
+pub struct StoreQuote(pub HashMap<XorName, QuoteForAddress>);
+
+impl StoreQuote {
+    pub fn price(&self) -> Amount {
+        self.0.values().map(|quote| quote.price()).sum()
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 // internal needs
 use ant_protocol::{CLOSE_GROUP_SIZE, PrettyPrintRecordKey};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use interface::NetworkTask;
 use libp2p::kad::NoKnownPeers;
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use thiserror::Error;
@@ -140,6 +171,14 @@ impl NetworkError {
     /// When encountering these, the request should not be retried
     pub fn cannot_retry(&self) -> bool {
         matches!(self, NetworkError::OutdatedRecordRejected { .. }) || self.is_fatal()
+    }
+
+    /// Try to create a NetworkError from a general client Error
+    pub fn from_error(e: &crate::client::Error) -> Self {
+        match e {
+            crate::client::Error::NetworkError(network_error) => network_error.clone(),
+            err => NetworkError::GetRecordError(format!("{err:?}")),
+        }
     }
 }
 
@@ -510,8 +549,10 @@ impl Network {
 
 fn expected_holders(quorum: Quorum, total: NonZeroUsize) -> NonZeroUsize {
     match quorum {
-        Quorum::One => NonZeroUsize::new(1).expect("0 != 1"),
-        Quorum::Majority => NonZeroUsize::new(total.get() / 2 + 1).expect("n/2+1 != 0"),
+        #[allow(clippy::unwrap_used)]
+        Quorum::One => NonZeroUsize::new(1).unwrap(), // 1 is always non-zero
+        #[allow(clippy::unwrap_used)]
+        Quorum::Majority => NonZeroUsize::new(total.get() / 2 + 1).unwrap(), // n/2+1 is always non-zero for positive n
         Quorum::All => total,
         Quorum::N(n) => n,
     }

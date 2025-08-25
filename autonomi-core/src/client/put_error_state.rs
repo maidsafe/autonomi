@@ -6,8 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::PutError;
-use crate::client::NetworkAddress;
 use crate::client::data_types::chunk::ChunkAddress;
 use crate::client::payment::Receipt;
 
@@ -41,33 +39,7 @@ impl Display for ChunkBatchUploadState {
 }
 
 impl ChunkBatchUploadState {
-    pub fn push_error(&mut self, address: ChunkAddress, err: PutError) {
-        match err {
-            PutError::Network {
-                address,
-                network_error,
-                payment,
-            } => {
-                let chunk_addr = match *address {
-                    NetworkAddress::ChunkAddress(chunk_addr) => chunk_addr,
-                    _ => {
-                        error!("Skip unexpected non-chunk address: {address:?}");
-                        return;
-                    }
-                };
-                self.failed.push((chunk_addr, network_error.to_string()));
-                match self.payment {
-                    Some(ref mut ours) => {
-                        ours.extend(payment.unwrap_or_default());
-                    }
-                    None => {
-                        self.payment = payment;
-                    }
-                }
-            }
-            err => {
-                self.failed.push((address, err.to_string()));
-            }
-        }
+    pub fn push_error(&mut self, address: ChunkAddress, err_str: String) {
+        self.failed.push((address, err_str));
     }
 }
