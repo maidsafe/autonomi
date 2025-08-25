@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756133505661,
+  "lastUpdate": 1756133581818,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1400,6 +1400,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 89,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0c3f4a7fc609d3d78feb23ae6b4aafdf912b9e3a",
+          "message": "Merge pull request #3168 from maqi/ant_logging\n\nfix(cli): re-enable ant cli logging",
+          "timestamp": "2025-08-25T15:37:17+01:00",
+          "tree_id": "26ed374c8bdece90a5f3e9408a66c2bb27d54919",
+          "url": "https://github.com/maidsafe/autonomi/commit/0c3f4a7fc609d3d78feb23ae6b4aafdf912b9e3a"
+        },
+        "date": 1756133581453,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 92,
             "unit": "MB"
           }
         ]
