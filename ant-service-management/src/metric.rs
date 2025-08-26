@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::ReachabilityProgress;
 use libp2p::PeerId;
 use prometheus_parse::{Sample, Value};
 use serde::{Deserialize, Serialize};
@@ -42,8 +43,8 @@ pub enum MetricsActionError {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ReachabilityStatusValues {
-    /// Progress percentage indicator for reachability check. 0 = not started, between 0-99 = in progress, 100 = completed.
-    pub progress_percent: u8,
+    /// Progress indicator for reachability check. 0 = not run, 1-99 = in progress, 100 = completed.
+    pub progress: ReachabilityProgress,
     /// Whether UPnP is enabled.
     pub upnp: bool,
     /// Whether the external address is same as the internal address.
@@ -257,7 +258,7 @@ impl TryFrom<&Vec<Sample>> for NodeMetadataExtended {
 
 impl From<&Vec<Sample>> for ReachabilityStatusValues {
     fn from(samples: &Vec<Sample>) -> Self {
-        let mut progress_percent: u8 = 0;
+        let mut progress: ReachabilityProgress = ReachabilityProgress::NotRun;
         let mut upnp = false;
         let mut public = false;
         let mut private = false;
@@ -265,8 +266,7 @@ impl From<&Vec<Sample>> for ReachabilityStatusValues {
         for sample in samples {
             if sample.metric == "ant_networking_reachability_check_progress" {
                 if let Value::Gauge(value) = sample.value {
-                    let percent = (value * 100.0) as u8;
-                    progress_percent = percent;
+                    progress = ReachabilityProgress::from(value);
                 } else {
                     error!(
                         "Expected Gauge value for 'ant_networking_reachability_check_progress', found: {:?}",
@@ -311,7 +311,7 @@ impl From<&Vec<Sample>> for ReachabilityStatusValues {
             }
         }
         ReachabilityStatusValues {
-            progress_percent,
+            progress,
             upnp,
             public,
             private,

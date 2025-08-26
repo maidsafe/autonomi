@@ -11,7 +11,7 @@ use crate::batch_service_manager::{BatchServiceManager, UpgradeOptions, Verbosit
 use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::{
-    ServiceStatus,
+    ReachabilityProgress, ServiceStatus,
     fs::NodeInfo,
     node::{NodeService, NodeServiceData},
 };
@@ -62,7 +62,7 @@ fn create_test_service_with_config(
         .returning(move || {
             Ok(ant_service_management::metric::NodeMetrics {
                 reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                    progress_percent: 100,
+                    progress: ReachabilityProgress::Complete,
                     upnp: false,
                     public: true,
                     private: false,
