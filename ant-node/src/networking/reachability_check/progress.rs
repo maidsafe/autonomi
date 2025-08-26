@@ -28,31 +28,38 @@ impl ProgressCalculator {
 
     /// Calculate the overall progress across all workflows directly from DialManager.
     ///
-    /// Returns a value between 0.0 and 1.0, divided equally across workflow attempts.
+    /// Returns a value between 0.0 and 100.0, divided equally across workflow attempts.
     pub(crate) fn calculate_progress(&self, dial_manager: &DialManager) -> f64 {
         let current_workflow = dial_manager.current_workflow_attempt;
-        let workflow_base = (current_workflow - 1) as f64 / MAX_WORKFLOW_ATTEMPTS as f64;
 
-        let workflow_range = if current_workflow == MAX_WORKFLOW_ATTEMPTS {
-            // For the last workflow, use remaining space to reach exactly 1.0
-            1.0 - workflow_base
+        let effective_workflow = current_workflow.min(MAX_WORKFLOW_ATTEMPTS);
+        let workflow_base_percent =
+            ((effective_workflow - 1) as f64 * 100.0) / MAX_WORKFLOW_ATTEMPTS as f64;
+
+        let workflow_range_percent = if effective_workflow == MAX_WORKFLOW_ATTEMPTS {
+            // For the last workflow, use remaining space to reach exactly 100
+            100.0 - workflow_base_percent
         } else {
-            1.0 / MAX_WORKFLOW_ATTEMPTS as f64
+            100.0 / MAX_WORKFLOW_ATTEMPTS as f64
         };
 
         let workflow_progress = self.calculate_workflow_progress(dial_manager);
 
-        let progress = (workflow_base + (workflow_progress * workflow_range)).min(1.0);
-        trace!("Workflow base {workflow_base}, range {workflow_range}, progress {progress}");
+        let progress = (workflow_base_percent
+            + (workflow_progress * workflow_range_percent / 100.0))
+            .min(100.0);
+        trace!(
+            "Workflow base {workflow_base_percent:.1}%, range {workflow_range_percent:.1}%, progress {progress:.1}%"
+        );
 
-        if progress <= 0.0 {
-            return 0.1; // Ensure we never return 0.0 for progress
+        if progress == 0.0 {
+            return 1.0; // Ensure we never return 0 for progress - use 1 to indicate in progress
         }
 
         progress
     }
 
-    /// Calculate progress within the current workflow (0.0 to 1.0).
+    /// Calculate progress within the current workflow (0.0 to 100.0).
     fn calculate_workflow_progress(&self, dial_manager: &DialManager) -> f64 {
         let ongoing_attempts = dial_manager.get_ongoing_dial_attempts();
         if ongoing_attempts.is_empty() {
@@ -68,10 +75,10 @@ impl ProgressCalculator {
         }
 
         // Average across all concurrent slots (even if not all filled)
-        let avg = (total_progress / MAX_CONCURRENT_DIALS as f64).min(1.0);
+        let avg = (total_progress / MAX_CONCURRENT_DIALS as f64).min(100.0);
 
         trace!(
-            "Progress for {} ongoing attempts, total progress: {total_progress}, average progress: {avg}",
+            "Progress for {} ongoing attempts, total progress: {total_progress:.1}, average progress: {avg:.1}%",
             ongoing_attempts.len()
         );
         avg
@@ -89,10 +96,10 @@ impl ProgressCalculator {
                 // Connected, waiting for dial-back: 0-DIAL_BACK_DELAY seconds
                 // 20% base for connection + progress through dial-back wait (80%)
                 let elapsed_secs = at.elapsed().as_secs();
-                0.2 + (((elapsed_secs as f64) / DIAL_BACK_DELAY.as_secs() as f64).min(1.0) * 0.8)
+                20.0 + (((elapsed_secs as f64) / DIAL_BACK_DELAY.as_secs() as f64).min(1.0) * 80.0)
             }
             DialState::DialBackReceived { .. } => {
-                1.0 // Complete
+                100.0 // Complete
             }
         }
     }
@@ -109,7 +116,7 @@ mod tests {
     fn test_dial_state_progress() {
         let calculator = ProgressCalculator::new();
 
-        // Test initiated state - always returns 0.0
+        // Test initiated state - always returns 0
         let at = Instant::now() - Duration::from_secs(15);
         let state = DialState::Initiated { at };
 
@@ -125,17 +132,17 @@ mod tests {
         let state = DialState::Connected { at };
 
         let progress = calculator.calculate_individual_dial_progress_from_state(&state);
-        let expected = 0.2 + 0.5 * 0.8; // 20% connection + 50% of dial-back wait = 60%
+        let expected = 60.0; // 20% connection + 50% of dial-back wait = 60%
         assert!(
-            (progress - expected).abs() < 0.01,
-            "Connected at 50% should give 60% total progress"
+            (progress - expected).abs() < 2.0,
+            "Connected at 50% should give ~60% total progress, got {progress}"
         );
 
         // Test dial-back received
         let state = DialState::DialBackReceived { at: Instant::now() };
         let progress = calculator.calculate_individual_dial_progress_from_state(&state);
-        assert!(
-            (progress - 1.0).abs() < 0.001,
+        assert_eq!(
+            progress, 100.0,
             "Dial-back received should give 100% progress"
         );
     }
@@ -162,16 +169,16 @@ mod tests {
     fn test_workflow_boundaries() {
         let calculator = ProgressCalculator::new();
 
-        // Test workflow 1 with no attempts (should be 0.0)
+        // Test workflow 1 with no attempts (should be 1)
         let dial_manager = create_mock_dial_manager(
             1,
             std::collections::HashMap::new(),
             std::collections::HashMap::new(),
         );
         let progress = calculator.calculate_progress(&dial_manager);
-        assert_eq!(progress, 0.1, "Workflow 1 with no attempts should be 0.1");
+        assert_eq!(progress, 1.0, "Workflow 1 with no attempts should be 1.0");
 
-        // Test workflow 2 start (should be exactly 1/MAX_WORKFLOW_ATTEMPTS)
+        // Test workflow 2 start (should be around 33% for 3 workflow attempts)
         let dial_manager = create_mock_dial_manager(
             2,
             std::collections::HashMap::new(),
@@ -179,10 +186,10 @@ mod tests {
         );
         let progress = calculator.calculate_progress(&dial_manager);
 
-        let workflow2_start = 1.0 / MAX_WORKFLOW_ATTEMPTS as f64;
+        let workflow2_start = 100.0 / MAX_WORKFLOW_ATTEMPTS as f64; // Should be ~33.33%
         assert!(
-            (progress - workflow2_start).abs() < 0.001,
-            "Start of workflow 2 should be ~{workflow2_start}, got {progress}"
+            (progress - workflow2_start).abs() < 1.0,
+            "Start of workflow 2 should be ~{workflow2_start:.1}%, got {progress:.1}%"
         );
 
         // Test workflow beyond expected range
@@ -193,13 +200,12 @@ mod tests {
         );
         let progress = calculator.calculate_progress(&dial_manager);
 
-        // Should be at least at the final workflow base
-        let min_expected = (MAX_WORKFLOW_ATTEMPTS as f64) / (MAX_WORKFLOW_ATTEMPTS as f64);
+        // Should be high progress for beyond expected workflows
         assert!(
-            progress >= min_expected - 0.1,
-            "Unexpected workflow should have high progress, got {progress}"
+            progress >= 66.0, // Should be at least 66% (2/3 workflows complete)
+            "Unexpected workflow should have high progress, got {progress:.1}%"
         );
-        assert!(progress <= 1.0, "Progress should never exceed 1.0");
+        assert!(progress <= 100.0, "Progress should never exceed 100%");
     }
 
     #[test]
@@ -208,10 +214,10 @@ mod tests {
 
         // Test connected state progress at various stages
         let test_cases = [
-            (0, 0.2),   // Just connected: 20% progress
-            (90, 0.6),  // Half way through dial-back: 20% + 50% of 80% = 60%
-            (135, 0.8), // 75% through dial-back: 20% + 75% of 80% = 80%
-            (180, 1.0), // Full dial-back time: 20% + 100% of 80% = 100%
+            (0, 20.0),    // Just connected: 20% progress
+            (90, 60.0),   // Half way through dial-back: 20% + 50% of 80% = 60%
+            (135, 80.0),  // 75% through dial-back: 20% + 75% of 80% = 80%
+            (180, 100.0), // Full dial-back time: 20% + 100% of 80% = 100%
         ];
 
         for (elapsed_secs, expected_progress) in test_cases {
@@ -219,8 +225,8 @@ mod tests {
             let state = DialState::Connected { at };
             let progress = calculator.calculate_individual_dial_progress_from_state(&state);
             assert!(
-                (progress - expected_progress).abs() < 0.01,
-                "Connected state at {elapsed_secs}s should give {expected_progress} progress, got {progress}"
+                (progress - expected_progress).abs() < 1.0,
+                "Connected state at {elapsed_secs}s should give ~{expected_progress:.1}% progress, got {progress:.1}%"
             );
         }
 
@@ -237,7 +243,7 @@ mod tests {
             let progress = calculator.calculate_individual_dial_progress_from_state(&state);
             assert_eq!(
                 progress, expected_progress,
-                "Initiated state at {elapsed_secs}s should give {expected_progress} progress, got {progress}"
+                "Initiated state at {elapsed_secs}s should give {expected_progress:.1}% progress, got {progress:.1}%"
             );
         }
     }

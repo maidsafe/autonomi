@@ -8,7 +8,9 @@
 
 use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
-use ant_service_management::{NodeService, ServiceStateActions, ServiceStatus};
+use ant_service_management::{
+    NodeService, ReachabilityProgress, ServiceStateActions, ServiceStatus,
+};
 use assert_matches::assert_matches;
 use color_eyre::eyre::Result;
 use mockall::predicate::*;
@@ -71,7 +73,7 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -725,7 +727,7 @@ async fn start_all_should_handle_mixed_user_and_system_modes() -> Result<()> {
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
