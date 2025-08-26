@@ -56,6 +56,47 @@ pub enum NatDetectionStatus {
     Private,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ReachabilityProgress {
+    /// Reachability check has not been run (0%)
+    #[default]
+    NotRun,
+    /// Reachability check is in progress (1-99%)
+    InProgress(u8),
+    /// Reachability check is completed (100%)
+    Complete,
+}
+
+impl From<f64> for ReachabilityProgress {
+    fn from(value: f64) -> Self {
+        if value == 0.0 {
+            ReachabilityProgress::NotRun
+        } else if value > 0.0 && value < 100.0 {
+            ReachabilityProgress::InProgress(value as u8)
+        } else {
+            ReachabilityProgress::Complete
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServiceStartupStatus {
+    /// Service startup is in progress with percentage value (0-99)
+    InProgress(u8),
+    /// Service has completed startup (reachability check complete)
+    Started,
+}
+
+impl From<ReachabilityProgress> for ServiceStartupStatus {
+    fn from(progress: ReachabilityProgress) -> Self {
+        match progress {
+            ReachabilityProgress::Complete => ServiceStartupStatus::Started,
+            ReachabilityProgress::NotRun => ServiceStartupStatus::Started,
+            ReachabilityProgress::InProgress(value) => ServiceStartupStatus::InProgress(value),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UpgradeResult {
     Forced(String, String),
@@ -89,8 +130,8 @@ pub trait ServiceStateActions {
     async fn pid(&self) -> Option<u32>;
     async fn on_remove(&self);
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
-    /// Returns the progress of the service startup. 0 <= progress <= 100
-    async fn start_progress(&self) -> Result<u8>;
+    /// Returns the startup status of the service
+    async fn startup_status(&self) -> Result<ServiceStartupStatus>;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;

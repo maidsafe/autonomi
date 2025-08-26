@@ -9,7 +9,8 @@
 use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{
-    ServiceStateActions, ServiceStatus, UpgradeOptions, fs::NodeInfo, node::NodeService,
+    ReachabilityProgress, ServiceStateActions, ServiceStatus, UpgradeOptions, fs::NodeInfo,
+    node::NodeService,
 };
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
@@ -119,7 +120,7 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -324,7 +325,7 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -548,7 +549,7 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -684,7 +685,7 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -873,7 +874,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
