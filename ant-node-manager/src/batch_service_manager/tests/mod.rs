@@ -8,6 +8,7 @@
 
 mod config_retention_tests;
 mod helpers;
+mod progress_tests;
 mod remove_tests;
 mod start_tests;
 mod stop_tests;

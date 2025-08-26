@@ -252,15 +252,17 @@ impl ServiceStateActions for NodeService {
         Ok(())
     }
 
-    async fn wait_until_started(&self) -> Result<()> {
+    async fn start_progress(&self) -> Result<u8> {
         let service_name = self.service_data.read().await.service_name.clone();
-        info!("Waiting for {service_name} to complete reachability check");
-        self.metrics_action
-            .wait_until_reachability_check_completes(None)
-            .await?;
+        let progress = self
+            .metrics_action
+            .get_node_metrics()
+            .await?
+            .reachability_status
+            .progress_percent;
 
-        info!("Reachability check completed for {service_name}. Considering the node as started");
-        Ok(())
+        info!("The reachability check progress for {service_name} is {progress}%");
+        Ok(progress)
     }
 
     async fn on_stop(&self) -> Result<()> {

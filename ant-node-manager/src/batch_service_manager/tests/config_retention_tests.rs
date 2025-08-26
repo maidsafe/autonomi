@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::helpers::*;
-use crate::batch_service_manager::UpgradeOptions;
+use crate::batch_service_manager::{BatchServiceManager, UpgradeOptions, VerbosityLevel};
 use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::{
@@ -58,7 +58,7 @@ fn create_test_service_with_config(
     // Set up metrics mock expectations for get_node_metrics
     mock_metrics_client
         .expect_get_node_metrics()
-        .times(1)
+        .times(2)
         .returning(move || {
             Ok(ant_service_management::metric::NodeMetrics {
                 reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -83,13 +83,6 @@ fn create_test_service_with_config(
                 log_dir: PathBuf::from(format!("/var/log/antnode/antnode{number}")),
             })
         });
-
-    // Set up metrics mock expectations for wait_until_reachability_check_completes
-    mock_metrics_client
-        .expect_wait_until_reachability_check_completes()
-        .with(eq(None))
-        .times(1)
-        .returning(|_| Ok(()));
 
     Ok(NodeService::new(
         service_data,
@@ -175,7 +168,12 @@ async fn upgrade_all_should_retain_the_first_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -212,7 +210,12 @@ async fn upgrade_all_should_retain_the_peers_arg() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -246,7 +249,12 @@ async fn upgrade_all_should_retain_the_network_id_arg() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -278,7 +286,12 @@ async fn upgrade_all_should_retain_the_local_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -312,7 +325,12 @@ async fn upgrade_all_should_retain_the_network_contacts_url_arg() -> Result<()> 
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -347,7 +365,12 @@ async fn upgrade_all_should_retain_the_ignore_cache_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -381,7 +404,12 @@ async fn upgrade_all_should_retain_the_custom_bootstrap_cache_path() -> Result<(
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -416,7 +444,12 @@ async fn upgrade_all_should_retain_the_no_upnp_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -450,7 +483,12 @@ async fn upgrade_all_should_retain_the_log_format_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -482,7 +520,12 @@ async fn upgrade_all_should_retain_the_relay_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -514,7 +557,12 @@ async fn upgrade_all_should_retain_the_skip_reachability_check_flag() -> Result<
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -548,7 +596,12 @@ async fn upgrade_all_should_retain_custom_node_ip() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -580,7 +633,12 @@ async fn upgrade_all_should_retain_custom_node_ports() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -614,7 +672,12 @@ async fn upgrade_all_should_retain_max_archived_log_files() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -648,7 +711,12 @@ async fn upgrade_all_should_retain_max_log_files() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -680,7 +748,12 @@ async fn upgrade_all_should_retain_custom_metrics_ports() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -715,7 +788,12 @@ async fn upgrade_all_should_retain_custom_rpc_ports() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -751,7 +829,12 @@ async fn upgrade_all_should_retain_auto_restart() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -793,7 +876,12 @@ async fn upgrade_all_should_retain_evm_network_settings() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -835,7 +923,12 @@ async fn upgrade_all_should_retain_the_rewards_address() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -867,7 +960,12 @@ async fn upgrade_all_should_retain_the_alpha_flag() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
@@ -899,7 +997,12 @@ async fn upgrade_should_retain_write_older_cache_files() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let upgrade_options = create_upgrade_options();
 
