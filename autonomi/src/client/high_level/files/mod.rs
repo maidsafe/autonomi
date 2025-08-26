@@ -179,8 +179,8 @@ impl Client {
         let total_chunks = data_map.infos().len();
 
         #[cfg(feature = "loud")]
-        println!("Fetching {total_chunks} chunks ...");
-        info!("Fetching {total_chunks} chunks ...");
+        println!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
+        info!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
 
         // Create parallel chunk fetcher for streaming decryption
         let client_clone = self.clone();
