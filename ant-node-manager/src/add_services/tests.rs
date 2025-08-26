@@ -16,7 +16,9 @@ use crate::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::error::Result as ServiceControlResult;
-use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
+use ant_service_management::{
+    NodeRegistryManager, NodeServiceData, ReachabilityProgress, ServiceStatus,
+};
 use ant_service_management::{control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST};
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
@@ -274,7 +276,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             number: 1,
             peer_id: None,
             pid: None,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -905,7 +907,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             number: 1,
             peer_id: None,
             pid: None,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2649,7 +2651,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             number: 1,
             peer_id: None,
             pid: None,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2770,7 +2772,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             number: 1,
             peer_id: None,
             pid: None,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3672,7 +3674,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3794,7 +3796,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4191,7 +4193,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4313,7 +4315,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             peer_id: None,
             pid: None,
             skip_reachability_check: false,
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5544,7 +5546,7 @@ async fn add_node_should_set_reachability_check_progress_to_none() -> Result<()>
 
     assert_eq!(node_registry.nodes.read().await.len(), 1);
     let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert!(node0.reachability_check_progress.is_none());
+    assert_eq!(node0.reachability_progress, ReachabilityProgress::NotRun);
 
     Ok(())
 }
