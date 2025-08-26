@@ -9,7 +9,7 @@
 use super::get_progress_bar;
 use crate::exit_code::{self, ExitCodeError, INVALID_INPUT_EXIT_CODE, IO_ERROR};
 use autonomi::{
-    Client,
+    ChunkAddress, Client,
     chunk::DataMapChunk,
     client::{analyze::Analysis, files::archive_private::PrivateArchiveDataMap},
     data::DataAddress,
@@ -130,7 +130,45 @@ async fn download_public(
     dest_path: &str,
     client: &Client,
 ) -> Result<(), ExitCodeError> {
-    // First try to get the raw data
+    // First try to get the raw chunk
+    let data = match client
+        .chunk_get(&ChunkAddress::new(*address.xorname()))
+        .await
+    {
+        Ok(chunk) => chunk.value.clone(),
+        Err(e) => {
+            let exit_code = exit_code::get_error_exit_code(&e);
+            return Err((
+                eyre!(e).wrap_err("Failed to fetch data from address"),
+                exit_code,
+            ));
+        }
+    };
+    // Stream download only if the target chunk is a DataMapChunk of a large sized file
+    if let Ok(datamap) = autonomi::Client::deserialize_data_map(&data)
+        // This size check also avoid the case that the root DataMapChunk is actually
+        // pointing to an Archive, instead of a file. Which shall be handled in the later on workflow.
+        && datamap.infos().len() > 20
+    {
+        info!(
+            "Root chunk is a potential DataMap of large file, trying to fetch using stream download"
+        );
+        let path = PathBuf::from(dest_path);
+        if let Err(e) = client.streaming_data_get_public(&address, path).await {
+            error!("Error while downloading from root datamap at {addr}: {e:?}");
+            let exit_code = exit_code::get_error_exit_code(&e);
+            return Err((
+                eyre!(e).wrap_err("Failed to fetch data from address"),
+                exit_code,
+            ));
+        } else {
+            info!("Successfully downloaded file at: {addr}");
+            println!("Successfully downloaded file at: {addr}");
+            return Ok(());
+        }
+    }
+
+    // Then try to fetch as a public archive
     let data = match client.data_get_public(&address).await {
         Ok(data) => data,
         Err(e) => {
