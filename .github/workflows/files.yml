@@ -177,19 +177,38 @@ jobs:
                   continue
                 fi
                 
-                ./target/release/ant --local file download "$ADDRESS" "test_download/downloaded_${size}_file_${test_name}"
+                ./target/release/ant --local file download "$ADDRESS" "test_download/downloaded_${size}_file_${test_name}" 2>&1 | tee "./${size}_download_output_${test_name}"
                 find test_download -type f -exec ls -lh {} \;
+                
+                # Show download output to screen
+                echo "=== Download Output for ${size} file ==="
+                cat "./${size}_download_output_${test_name}"
+                echo "=== End Download Output ==="
+                
+                # Check for streaming download when file_size_mb is 200
+                streaming_check_passed=true
+                if [[ $file_size_mb -eq 200 ]]; then
+                  if ! grep -q "Streaming fetching" "./${size}_download_output_${test_name}"; then
+                    echo "⚠️  WARNING: streaming download not detected for 200MB file"
+                    streaming_check_passed=false
+                  else
+                    echo "✅ Streaming download detected for 200MB file"
+                  fi
+                fi
                 
                 if [[ -f "test_download/downloaded_${size}_file_${test_name}" ]]; then
                   original_size=$(stat -c%s "$test_file" 2>/dev/null || stat -f%z "$test_file")
                   downloaded_size=$(stat -c%s "test_download/downloaded_${size}_file_${test_name}" 2>/dev/null || stat -f%z "test_download/downloaded_${size}_file_${test_name}")
                   
-                  if [[ $original_size -eq $downloaded_size ]]; then
+                  if [[ $original_size -eq $downloaded_size ]] && [[ $streaming_check_passed == true ]]; then
                     echo "✅ $test_name ${size} file test passed: $downloaded_size bytes"
                     passed_tests+=("$test_name ($size file) - $downloaded_size bytes")
-                  else
+                  elif [[ $original_size -ne $downloaded_size ]]; then
                     echo "❌ $test_name ${size} file size mismatch - original: $original_size, downloaded: $downloaded_size"
                     failed_tests+=("$test_name ($size file) - size mismatch")
+                  elif [[ $streaming_check_passed == false ]]; then
+                    echo "❌ $test_name ${size} file test failed: streaming download not detected"
+                    failed_tests+=("$test_name ($size file) - streaming download not detected")
                   fi
                 else
                   echo "❌ $test_name ${size} file download failed"
@@ -455,18 +474,39 @@ jobs:
                   continue
                 }
                 
-                & ".\target\release\ant.exe" --local file download $address "test_download\downloaded_${size}_file_$testName"
+                $downloadOutput = "${size}_download_output_$testName"
+                & ".\target\release\ant.exe" --local file download $address "test_download\downloaded_${size}_file_$testName" 2>&1 | Tee-Object -FilePath $downloadOutput
+                
+                # Show download output to screen
+                Write-Host "=== Download Output for $size file ==="
+                Get-Content $downloadOutput
+                Write-Host "=== End Download Output ==="
+                
+                # Check for streaming download when fileSizeMB is 200
+                $streamingCheckPassed = $true
+                if ($fileSizeMB -eq 200) {
+                  $downloadContent = Get-Content $downloadOutput -Raw
+                  if ($downloadContent -notmatch "Streaming fetching") {
+                    Write-Host "⚠️  WARNING: streaming download not detected for 200MB file"
+                    $streamingCheckPassed = $false
+                  } else {
+                    Write-Host "✅ Streaming download detected for 200MB file"
+                  }
+                }
                 
                 if (Test-Path "test_download\downloaded_${size}_file_$testName") {
                   $originalSize = (Get-Item $testFile).Length
                   $downloadedSize = (Get-Item "test_download\downloaded_${size}_file_$testName").Length
                   
-                  if ($originalSize -eq $downloadedSize) {
+                  if (($originalSize -eq $downloadedSize) -and $streamingCheckPassed) {
                     Write-Host "✅ $testName $size file test passed: $downloadedSize bytes"
                     $passedTests += "$testName ($size file) - $downloadedSize bytes"
-                  } else {
+                  } elseif ($originalSize -ne $downloadedSize) {
                     Write-Host "❌ $testName $size file size mismatch - original: $originalSize, downloaded: $downloadedSize"
                     $failedTests += "$testName ($size file) - size mismatch"
+                  } elseif (-not $streamingCheckPassed) {
+                    Write-Host "❌ $testName $size file test failed: streaming download not detected"
+                    $failedTests += "$testName ($size file) - streaming download not detected"
                   }
                 } else {
                   Write-Host "❌ $testName $size file download failed"
