@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::helpers::*;
+use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{ServiceStateActions, ServiceStatus};
 use assert_matches::assert_matches;
 use color_eyre::eyre::Result;
@@ -32,7 +33,12 @@ async fn remove_all_should_remove_added_services() -> Result<()> {
     // Create services in Added state (default)
     let services = create_test_services_simple(2);
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.remove_all(false).await;
     assert!(batch_result.errors.is_empty());
@@ -71,7 +77,12 @@ async fn remove_all_should_error_for_running_services() -> Result<()> {
         service_data.pid = Some(1001);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // This should return a BatchResult with errors due to running services
     let result = batch_manager.remove_all(false).await;
@@ -123,7 +134,12 @@ async fn remove_all_should_error_for_inconsistent_state() -> Result<()> {
         service_data.pid = Some(1001);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // This should return a BatchResult with errors due to inconsistent state
     let result = batch_manager.remove_all(false).await;
@@ -156,7 +172,12 @@ async fn remove_all_should_remove_and_keep_directories() -> Result<()> {
     // Create services in Added state
     let services = create_test_services_simple(2);
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // Remove with keep_directories = true
     let batch_result = batch_manager.remove_all(true).await;
@@ -193,7 +214,12 @@ async fn remove_all_should_remove_user_mode_services() -> Result<()> {
         service_data.user_mode = true;
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.remove_all(false).await;
     assert!(batch_result.errors.is_empty());
@@ -240,7 +266,12 @@ async fn remove_all_should_handle_mixed_service_states() -> Result<()> {
         service_data.status = ServiceStatus::Added;
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // This should return a BatchResult with errors due to the first service being running
     let result = batch_manager.remove_all(false).await;

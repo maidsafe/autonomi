@@ -35,4 +35,9 @@ pub enum Error {
     ServiceStatusMismatch {
         expected: ant_service_management::ServiceStatus,
     },
+    #[error("Service '{service_name}' progress monitoring timed out after {timeout:?}")]
+    ServiceProgressTimeout {
+        service_name: String,
+        timeout: std::time::Duration,
+    },
 }

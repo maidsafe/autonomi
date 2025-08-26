@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::helpers::*;
+use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{ServiceStateActions, ServiceStatus};
 use assert_matches::assert_matches;
 use color_eyre::eyre::Result;
@@ -49,7 +50,12 @@ async fn stop_all_should_stop_running_services() -> Result<()> {
         service_data.pid = Some(1001);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.stop_all(None).await;
     assert!(batch_result.errors.is_empty());
@@ -72,7 +78,12 @@ async fn stop_all_should_not_error_for_installed_services() -> Result<()> {
     // Create services in Added state (default)
     let services = create_test_services_simple(2);
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // This should not error
     let batch_result = batch_manager.stop_all(None).await;
@@ -99,7 +110,12 @@ async fn stop_all_should_handle_already_stopped_services() -> Result<()> {
         service_data.status = ServiceStatus::Stopped;
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.stop_all(None).await;
     assert!(batch_result.errors.is_empty());
@@ -125,7 +141,12 @@ async fn stop_all_should_handle_removed_services() -> Result<()> {
         service_data.status = ServiceStatus::Removed;
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.stop_all(None).await;
     assert!(batch_result.errors.is_empty());
@@ -175,7 +196,12 @@ async fn stop_all_should_stop_user_mode_services() -> Result<()> {
         service_data.pid = Some(1001);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let batch_result = batch_manager.stop_all(None).await;
     assert!(batch_result.errors.is_empty());
@@ -225,7 +251,12 @@ async fn stop_all_with_interval_should_delay_between_stops() -> Result<()> {
         service_data.pid = Some(1001);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let start_time = std::time::Instant::now();
     let batch_result = batch_manager.stop_all(Some(100)).await; // 100ms interval

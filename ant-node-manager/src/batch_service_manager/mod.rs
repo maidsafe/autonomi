@@ -16,8 +16,14 @@ use ant_service_management::{
 };
 use color_eyre::eyre::eyre;
 use colored::Colorize;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use semver::Version;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
+
+const DEFAULT_PROGRESS_TIMEOUT: Duration = Duration::from_secs(14 * 60);
 
 /// A manager for batch operations on multiple services.
 /// This is similar to the `ServiceManager` but designed to handle multiple services together.
@@ -28,6 +34,7 @@ pub struct BatchServiceManager<T: ServiceStateActions + Send> {
     service_control: Box<dyn ServiceControl + Send>,
     node_registry: NodeRegistryManager,
     verbosity: VerbosityLevel,
+    progress_timeout: Duration,
 }
 
 impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
@@ -42,7 +49,12 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             service_control,
             node_registry,
             verbosity,
+            progress_timeout: DEFAULT_PROGRESS_TIMEOUT,
         }
+    }
+
+    pub fn set_progress_timeout(&mut self, timeout: Duration) {
+        self.progress_timeout = timeout;
     }
 
     /// Starts all the services in the batch with a fixed interval between each start.
@@ -70,7 +82,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 debug!(
                     "Sleeping for {interval} milliseconds before stopping service {service_name}"
                 );
-                std::thread::sleep(std::time::Duration::from_millis(interval));
+                std::thread::sleep(Duration::from_millis(interval));
             }
 
             match Self::stop(service, self.service_control.as_ref(), self.verbosity).await {
@@ -399,28 +411,172 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 }
                 Err(err) => {
                     error!("Failed to start service {service_name}: {err}");
+
                     batch_result.insert_error(service_name.clone(), err.into());
                 }
             };
         }
 
-        // Now we wait for the service to be started.
+        let multi_progress = if self.verbosity != VerbosityLevel::Minimal {
+            Some(MultiProgress::new())
+        } else {
+            None
+        };
+        let mut progress_bars = HashMap::new();
+
+        if let Some(ref mp) = multi_progress {
+            for service in &self.services {
+                let service_name = service.name().await;
+                if !batch_result.contains_errors(&service_name) {
+                    let pb = mp.add(ProgressBar::new(100));
+                    #[allow(clippy::expect_used)]
+                    pb.set_style(
+                        ProgressStyle::with_template(
+                            "{prefix:>15} [{bar:40.cyan/blue}] {pos:>3}% {msg}",
+                        )
+                        .expect("Failed to create progress bar template")
+                        .progress_chars("##-"),
+                    );
+                    pb.set_prefix(service_name.clone());
+                    pb.set_message("Node starting, running reachability check...");
+                    progress_bars.insert(service_name, pb);
+                }
+            }
+        }
+
+        let progress_start_time = std::time::Instant::now();
+        let mut completed_services = HashSet::<String>::new();
+
+        loop {
+            if progress_start_time.elapsed() > self.progress_timeout {
+                error!(
+                    "Progress monitoring timed out after {:?}. Some services may not have completed their reachability check.",
+                    self.progress_timeout
+                );
+                for service in &self.services {
+                    let service_name = service.name().await;
+                    if !skip_services.contains(&service_name)
+                        && !batch_result.contains_errors(&service_name)
+                        && !completed_services.contains(&service_name)
+                    {
+                        batch_result.insert_error(
+                            service_name.clone(),
+                            crate::error::Error::ServiceProgressTimeout {
+                                service_name: service_name.clone(),
+                                timeout: self.progress_timeout,
+                            },
+                        );
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.finish_with_message("Timed out ⏰".red().to_string());
+                        }
+                    }
+                }
+                break;
+            }
+
+            let mut all_complete = true;
+
+            for service in &self.services {
+                let service_name = service.name().await;
+                if skip_services.contains(&service_name)
+                    || batch_result.contains_errors(&service_name)
+                {
+                    debug!(
+                        "Skipping service (progress) {service_name} as it is marked to be skipped"
+                    );
+                    continue;
+                }
+
+                match service.start_progress().await {
+                    Ok(progress) => {
+                        info!("The reachability check progress for {service_name} is {progress}%");
+
+                        if progress < 100 {
+                            all_complete = false;
+                            if let Some(pb) = progress_bars.get(&service_name) {
+                                pb.set_position(progress as u64);
+                                pb.set_message("◔ Reachability Check".to_string());
+                            }
+                        } else {
+                            completed_services.insert(service_name.clone());
+                            if let Some(pb) = progress_bars.get(&service_name) {
+                                pb.finish_with_message(
+                                    "Node started, reachability check complete ✓"
+                                        .green()
+                                        .to_string(),
+                                );
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        error!(
+                            "Failed to get reachability check progress for {service_name}: {err}"
+                        );
+
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.finish_with_message("Failed ✗".red().to_string());
+                        }
+
+                        batch_result.insert_error(service_name.clone(), err.into());
+                    }
+                }
+            }
+
+            if all_complete {
+                break;
+            }
+
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // Finish any remaining progress bars
+        if let Some(ref _mp) = multi_progress {
+            for (_service_name, pb) in progress_bars {
+                if !pb.is_finished() {
+                    pb.finish_with_message("Complete".to_string());
+                }
+            }
+        }
+
+        // Now we update the service data.
         for service in &self.services {
             let service_name = service.name().await;
-            if skip_services.contains(&service_name) || batch_result.contains_errors(&service_name)
-            {
+            if skip_services.contains(&service_name) {
                 debug!("Skipping service {service_name} as it is marked to be skipped");
+                if self.verbosity != VerbosityLevel::Minimal {
+                    println!("{} Service {service_name} is already running", "✓".green(),);
+                    println!(
+                        "  - PID: {}",
+                        service
+                            .pid()
+                            .await
+                            .map_or("-".to_string(), |p| p.to_string())
+                    );
+                    println!(
+                        "  - Bin path: {}",
+                        service.bin_path().await.to_string_lossy()
+                    );
+                    println!(
+                        "  - Data path: {}",
+                        service.data_dir_path().await.to_string_lossy()
+                    );
+                    println!(
+                        "  - Logs path: {}",
+                        service.log_dir_path().await.to_string_lossy()
+                    );
+                }
+                continue;
+            } else if batch_result.contains_errors(&service_name) {
+                debug!("Service {service_name} has errors, skipping.");
+                if self.verbosity != VerbosityLevel::Minimal {
+                    println!("{} Failed to start {service_name} service", "✗".red());
+                }
                 continue;
             }
 
             info!("Waiting for service {service_name} to start...");
             if self.verbosity != VerbosityLevel::Minimal {
                 println!("Waiting for {service_name} to start...");
-            }
-            if let Err(err) = service.wait_until_started().await {
-                error!("Service {service_name} failed to wait_until_started: {err}");
-                batch_result.insert_error(service_name.clone(), err.into());
-                continue;
             }
 
             // This is an attempt to see whether the service process has actually launched. You don't
@@ -476,6 +632,9 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 }
                 Err(err) => {
                     error!("Service {service_name} failed to run on_start: {err}");
+                    if self.verbosity != VerbosityLevel::Minimal {
+                        println!("{} Failed to start {service_name} service", "✗".red());
+                    }
                     batch_result.insert_error(service_name.clone(), err.into());
                     continue;
                 }

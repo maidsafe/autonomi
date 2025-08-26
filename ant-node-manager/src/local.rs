@@ -526,10 +526,6 @@ mod tests {
         impl MetricsAction for MetricClient {
             async fn get_node_metrics(&self) -> Result<ant_service_management::metric::NodeMetrics, ant_service_management::metric::MetricsActionError>;
             async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, ant_service_management::metric::MetricsActionError>;
-            async fn wait_until_reachability_check_completes(
-                &self,
-                timeout: Option<std::time::Duration>,
-            ) -> Result<(), ant_service_management::metric::MetricsActionError>;
         }
     }
 

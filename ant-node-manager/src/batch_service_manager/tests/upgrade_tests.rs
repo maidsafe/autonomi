@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::helpers::*;
+use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{
     ServiceStateActions, ServiceStatus, UpgradeOptions, fs::NodeInfo, node::NodeService,
 };
@@ -112,10 +113,9 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -141,13 +141,6 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-
         let service = NodeService::new(
             service_data,
             Box::new(mock_fs_client),
@@ -156,7 +149,12 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
@@ -209,7 +207,12 @@ async fn upgrade_all_should_skip_if_target_version_lower() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
@@ -317,7 +320,7 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -343,13 +346,6 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-
         let service = NodeService::new(
             service_data,
             Box::new(mock_fs_client),
@@ -358,7 +354,12 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
@@ -436,7 +437,12 @@ async fn upgrade_all_should_upgrade_and_not_start_services() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
@@ -536,12 +542,20 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
         let mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up metrics mock expectations - these will be called during start but fail
         mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
+            .expect_get_node_metrics()
             .times(1)
-            .returning(|_| Ok(()));
+            .returning(move || {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress_percent: 100,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
 
         let service = NodeService::new(
             service_data,
@@ -551,7 +565,12 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     // This should complete but with errors in the BatchResult
     let (batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
@@ -661,7 +680,7 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -687,13 +706,6 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-
         let service = NodeService::new(
             service_data,
             Box::new(mock_fs_client),
@@ -702,7 +714,12 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         services.push(service);
     }
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
@@ -852,7 +869,7 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         // Set up metrics mock expectations for get_node_metrics
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -878,13 +895,6 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
                 })
             });
 
-        // Set up metrics mock expectations
-        mock_metrics_client
-            .expect_wait_until_reachability_check_completes()
-            .with(eq(None))
-            .times(1)
-            .returning(|_| Ok(()));
-
         let service = NodeService::new(
             Arc::clone(&service_data),
             Box::new(mock_fs_client),
@@ -898,7 +908,12 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         .with(eq(1000))
         .returning(|_| ());
 
-    let batch_manager = setup_batch_service_manager(services, mock_service_control);
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
 
     let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
 
