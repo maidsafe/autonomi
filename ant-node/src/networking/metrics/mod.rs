@@ -111,15 +111,15 @@ impl NetworkMetricsRecorder {
         );
 
         let reachability_check_progress = Gauge::<f64, AtomicU64>::default();
-        // set to 1 if reachability_status is found
+        // set to 100 if reachability_status is found (completed)
         if reachability_status.is_some() {
-            let _ = reachability_check_progress.set(1.0);
+            let _ = reachability_check_progress.set(100.0);
         } else {
             let _ = reachability_check_progress.set(0.0);
         }
         sub_registry.register(
             "reachability_check_progress",
-            "Progress indicator for reachability check. 0 = not started, between 0-1 = in progress, 1 = completed",
+            "Progress indicator for reachability check. 0 = not run, 1-99 = in progress, 100 = completed",
             reachability_check_progress.clone(),
         );
 

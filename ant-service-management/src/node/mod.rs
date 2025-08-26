@@ -16,8 +16,8 @@ mod node_service_data_v3;
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
 use crate::{
-    ServiceStateActions, ServiceStatus, UpgradeOptions, control::ServiceControl, error::Result,
-    fs::FileSystemActions, metric::MetricsAction,
+    ServiceStartupStatus, ServiceStateActions, ServiceStatus, UpgradeOptions,
+    control::ServiceControl, error::Result, fs::FileSystemActions, metric::MetricsAction,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
@@ -176,7 +176,7 @@ impl ServiceStateActions for NodeService {
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
-        let (reachability_check_progress_percent, connected_peers, pid, peer_id) = if full_refresh {
+        let (reachability_progress, connected_peers, pid, peer_id) = if full_refresh {
             let node_metrics = self
                 .metrics_action
                 .get_node_metrics()
@@ -226,7 +226,7 @@ impl ServiceStateActions for NodeService {
             }
 
             (
-                Some(node_metrics.reachability_status.progress_percent),
+                node_metrics.reachability_status.progress,
                 node_metrics.connected_peers,
                 Some(node_metadata_extended.pid),
                 Some(node_metadata_extended.peer_id),
@@ -235,7 +235,7 @@ impl ServiceStateActions for NodeService {
             debug!("Performing partial refresh for {service_name}");
             debug!("Previously assigned data will be used");
             (
-                self.service_data.read().await.reachability_check_progress,
+                self.service_data.read().await.reachability_progress.clone(),
                 self.service_data.read().await.connected_peers,
                 pid,
                 self.service_data.read().await.peer_id,
@@ -246,23 +246,30 @@ impl ServiceStateActions for NodeService {
         self.service_data.write().await.peer_id = peer_id;
         self.service_data.write().await.pid = pid;
         self.service_data.write().await.status = ServiceStatus::Running;
-        self.service_data.write().await.reachability_check_progress =
-            reachability_check_progress_percent;
+        self.service_data.write().await.reachability_progress = reachability_progress;
 
         Ok(())
     }
 
-    async fn start_progress(&self) -> Result<u8> {
+    async fn startup_status(&self) -> Result<ServiceStartupStatus> {
         let service_name = self.service_data.read().await.service_name.clone();
-        let progress = self
-            .metrics_action
-            .get_node_metrics()
-            .await?
-            .reachability_status
-            .progress_percent;
+        let startup_status = ServiceStartupStatus::from(
+            self.metrics_action
+                .get_node_metrics()
+                .await?
+                .reachability_status
+                .progress,
+        );
 
-        info!("The reachability check progress for {service_name} is {progress}%");
-        Ok(progress)
+        match startup_status {
+            ServiceStartupStatus::InProgress(progress) => {
+                info!("The reachability check progress for {service_name} is {progress}%");
+            }
+            ServiceStartupStatus::Started => {
+                info!("The reachability check for {service_name} is complete");
+            }
+        }
+        Ok(startup_status)
     }
 
     async fn on_stop(&self) -> Result<()> {

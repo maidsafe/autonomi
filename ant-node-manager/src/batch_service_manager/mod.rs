@@ -11,8 +11,8 @@ mod tests;
 
 use crate::{VerbosityLevel, error::Error};
 use ant_service_management::{
-    Error as ServiceError, NodeRegistryManager, ServiceStateActions, ServiceStatus, UpgradeOptions,
-    UpgradeResult, control::ServiceControl,
+    Error as ServiceError, NodeRegistryManager, ServiceStartupStatus, ServiceStateActions,
+    ServiceStatus, UpgradeOptions, UpgradeResult, control::ServiceControl,
 };
 use color_eyre::eyre::eyre;
 use colored::Colorize;
@@ -487,17 +487,20 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                     continue;
                 }
 
-                match service.start_progress().await {
-                    Ok(progress) => {
-                        info!("The reachability check progress for {service_name} is {progress}%");
-
-                        if progress < 100 {
+                match service.startup_status().await {
+                    Ok(startup_status) => match startup_status {
+                        ServiceStartupStatus::InProgress(progress) => {
+                            info!(
+                                "The reachability check progress for {service_name} is {progress}%"
+                            );
                             all_complete = false;
                             if let Some(pb) = progress_bars.get(&service_name) {
                                 pb.set_position(progress as u64);
                                 pb.set_message("◔ Reachability Check".to_string());
                             }
-                        } else {
+                        }
+                        ServiceStartupStatus::Started => {
+                            info!("The reachability check for {service_name} is complete");
                             completed_services.insert(service_name.clone());
                             if let Some(pb) = progress_bars.get(&service_name) {
                                 pb.finish_with_message(
@@ -507,7 +510,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                                 );
                             }
                         }
-                    }
+                    },
                     Err(err) => {
                         error!(
                             "Failed to get reachability check progress for {service_name}: {err}"

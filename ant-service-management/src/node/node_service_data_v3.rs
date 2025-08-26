@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::NodeServiceData;
-use crate::{ServiceStatus, error::Result};
+use crate::{ReachabilityProgress, ServiceStatus, error::Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -57,9 +57,8 @@ pub struct NodeServiceDataV3 {
     pub relay: bool,
     #[serde(default)]
     pub rewards_address: RewardsAddress,
-    /// Added reachability_check_progress field in V3
-    #[serde(default)]
-    pub reachability_check_progress: Option<u8>,
+    /// Added a mandatory Reachability progress enum in V3
+    pub reachability_progress: ReachabilityProgress,
     /// Removed reward_balance field in V3
     /// Updated rpc_socket_addr to be optional
     pub rpc_socket_addr: Option<SocketAddr>,
@@ -114,8 +113,7 @@ impl NodeServiceDataV3 {
             relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
-            #[serde(default)]
-            reachability_check_progress: Option<u8>,
+            reachability_progress: ReachabilityProgress,
             rpc_socket_addr: Option<SocketAddr>,
             #[serde(default = "schema_v3_value")]
             schema_version: u32,
@@ -152,7 +150,7 @@ impl NodeServiceDataV3 {
             pid: helper.pid,
             relay: helper.relay,
             rewards_address: helper.rewards_address,
-            reachability_check_progress: helper.reachability_check_progress,
+            reachability_progress: helper.reachability_progress,
             rpc_socket_addr: helper.rpc_socket_addr,
             service_name: helper.service_name,
             schema_version: helper.schema_version,
@@ -170,7 +168,7 @@ impl NodeServiceDataV3 {
 mod tests {
     use super::super::node_service_data::NodeServiceData;
     use crate::{
-        ServiceStatus,
+        ReachabilityProgress, ServiceStatus,
         node::{
             NODE_SERVICE_DATA_SCHEMA_LATEST,
             node_service_data_v3::{NODE_SERVICE_DATA_SCHEMA_V3, NodeServiceDataV3},
@@ -218,7 +216,7 @@ mod tests {
             peer_id: None,
             pid: None,
             rewards_address: Default::default(),
-            reachability_check_progress: None,
+            reachability_progress: ReachabilityProgress::NotRun,
             skip_reachability_check: true,
             user: None,
             write_older_cache_files: false,

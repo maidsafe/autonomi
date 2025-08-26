@@ -9,7 +9,7 @@
 use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{
-    NodeService, ServiceStateActions, ServiceStatus,
+    NodeService, ReachabilityProgress, ServiceStateActions, ServiceStatus,
     metric::{NodeMetrics, ReachabilityStatusValues},
 };
 use assert_matches::assert_matches;
@@ -119,7 +119,7 @@ async fn start_all_should_handle_mixed_progress_rates() -> Result<()> {
             max: 100,
         },
         MockMetricsProgressScenario::Staged(vec![10, 50, 80, 100]),
-        MockMetricsProgressScenario::StuckAt(75),
+        MockMetricsProgressScenario::StuckAt(75.0),
         MockMetricsProgressScenario::Immediate,
     ];
 
@@ -434,7 +434,7 @@ async fn start_all_should_timeout_stuck_services() -> Result<()> {
         .returning(|| {
             Ok(NodeMetrics {
                 reachability_status: ReachabilityStatusValues {
-                    progress_percent: 50, // Always stuck at 50%
+                    progress: ReachabilityProgress::InProgress(50), // Always stuck at 50%
                     upnp: false,
                     public: true,
                     private: false,

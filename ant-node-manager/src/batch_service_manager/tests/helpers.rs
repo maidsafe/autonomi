@@ -9,7 +9,7 @@
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
-    NodeRegistryManager, ServiceStatus,
+    NodeRegistryManager, ReachabilityProgress, ServiceStatus,
     error::Result as ServiceControlResult,
     fs::{FileSystemActions, NodeInfo},
     metric::{
@@ -126,7 +126,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         number,
         peer_id: None,
         pid: None,
-        reachability_check_progress: None,
+        reachability_progress: ReachabilityProgress::NotRun,
         relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
@@ -164,7 +164,7 @@ pub fn create_test_services_with_mocks(count: usize) -> Result<Vec<NodeService>>
             .returning(move || {
                 Ok(NodeMetrics {
                     reachability_status: ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: false,
                         public: true,
                         private: false,
@@ -242,7 +242,7 @@ pub enum MockMetricsProgressScenario {
     /// Never called - for services that fail to start and never reach progress monitoring
     NeverCalled,
     /// Gets stuck at a specific progress value
-    StuckAt(u8),
+    StuckAt(f64),
 }
 
 /// Helper function to create test services with progressive metrics mocking
@@ -335,7 +335,7 @@ fn setup_metrics_mock_for_scenario(
                 .returning(|| {
                     Ok(NodeMetrics {
                         reachability_status: ReachabilityStatusValues {
-                            progress_percent: 100,
+                            progress: ReachabilityProgress::Complete,
                             upnp: false,
                             public: true,
                             private: false,
@@ -364,7 +364,7 @@ fn setup_metrics_mock_for_scenario(
 
                     Ok(NodeMetrics {
                         reachability_status: ReachabilityStatusValues {
-                            progress_percent: current,
+                            progress: ReachabilityProgress::from(current as f64),
                             upnp: false,
                             public: true,
                             private: false,
@@ -388,7 +388,7 @@ fn setup_metrics_mock_for_scenario(
 
                     Ok(NodeMetrics {
                         reachability_status: ReachabilityStatusValues {
-                            progress_percent: progress,
+                            progress: ReachabilityProgress::from(progress as f64),
                             upnp: false,
                             public: true,
                             private: false,
@@ -408,7 +408,7 @@ fn setup_metrics_mock_for_scenario(
                 .returning(move || {
                     Ok(NodeMetrics {
                         reachability_status: ReachabilityStatusValues {
-                            progress_percent: progress,
+                            progress: ReachabilityProgress::from(progress),
                             upnp: false,
                             public: true,
                             private: false,

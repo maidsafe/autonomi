@@ -16,8 +16,8 @@ use crate::{
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
 };
 use ant_service_management::{
-    NodeRegistryManager, NodeServiceData, ServiceStatus, control::ServiceControl,
-    node::NODE_SERVICE_DATA_SCHEMA_LATEST,
+    NodeRegistryManager, NodeServiceData, ReachabilityProgress, ServiceStatus,
+    control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
 };
 use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
@@ -215,7 +215,7 @@ pub async fn add_node(
                         node_ip: options.node_ip,
                         node_port,
                         number: node_number,
-                        reachability_check_progress: None,
+                        reachability_progress: ReachabilityProgress::NotRun,
                         relay: options.relay,
                         rewards_address: options.rewards_address,
                         rpc_socket_addr,

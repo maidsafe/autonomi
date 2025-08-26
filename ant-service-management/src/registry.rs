@@ -298,6 +298,7 @@ pub fn get_local_node_registry_path() -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ReachabilityProgress;
     use ant_logging::LogBuilder;
     use tempfile::TempDir;
     use tokio::time::{Duration, sleep};
@@ -360,7 +361,7 @@ mod tests {
                 pid: Some(12345),
                 skip_reachability_check: false,
                 relay: false,
-                reachability_check_progress: None,
+                reachability_progress: ReachabilityProgress::NotRun,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
                 schema_version: 3,
@@ -411,7 +412,7 @@ mod tests {
                 peer_id: None,
                 pid: Some(12346),
                 skip_reachability_check: false,
-                reachability_check_progress: None,
+                reachability_progress: ReachabilityProgress::NotRun,
                 relay: false,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
@@ -525,7 +526,7 @@ mod tests {
                 peer_id: None,
                 pid: Some(12345),
                 skip_reachability_check: false,
-                reachability_check_progress: None,
+                reachability_progress: ReachabilityProgress::NotRun,
                 relay: false,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
@@ -613,7 +614,7 @@ mod tests {
                     peer_id: None,
                     pid: Some(12345 + j as u32),
                     skip_reachability_check: false,
-                    reachability_check_progress: None,
+                    reachability_progress: ReachabilityProgress::NotRun,
                     relay: false,
                     rewards_address: ant_evm::RewardsAddress::default(),
                     rpc_socket_addr: None,

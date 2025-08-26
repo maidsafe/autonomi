@@ -14,10 +14,10 @@ use crate::helpers::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
-use ant_service_management::NodeRegistryManager;
 use ant_service_management::fs::{FileSystemActions, FileSystemClient};
 use ant_service_management::metric::{MetricsAction, MetricsClient};
 use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
+use ant_service_management::{NodeRegistryManager, ReachabilityProgress};
 use ant_service_management::{NodeServiceData, ServiceStatus, control::ServiceControl};
 use color_eyre::eyre::OptionExt;
 use color_eyre::{Result, eyre::eyre};
@@ -441,7 +441,7 @@ pub async fn run_node(
         number: run_options.number,
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
-        reachability_check_progress: None,
+        reachability_progress: ReachabilityProgress::NotRun,
         relay: false,
         rewards_address: run_options.rewards_address,
         rpc_socket_addr: run_options.rpc_socket_addr,
@@ -509,6 +509,7 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
 mod tests {
     use super::*;
     use ant_evm::utils::dummy_address;
+    use ant_service_management::ReachabilityProgress;
     use ant_service_management::metric::MetricsAction;
     use ant_service_management::metric::NodeMetadataExtended;
     use ant_service_management::metric::NodeMetrics;
@@ -578,7 +579,7 @@ mod tests {
             .returning(move || {
                 Ok(NodeMetrics {
                     reachability_status: ReachabilityStatusValues {
-                        progress_percent: 100,
+                        progress: ReachabilityProgress::Complete,
                         upnp: true,
                         public: true,
                         private: false,

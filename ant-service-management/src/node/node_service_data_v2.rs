@@ -9,7 +9,7 @@
 use super::NodeServiceData;
 use super::node_service_data_v3::NODE_SERVICE_DATA_SCHEMA_V3;
 use super::node_service_data_v3::NodeServiceDataV3;
-use crate::ServiceStatus;
+use crate::{ReachabilityProgress, ServiceStatus};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{AttoTokens, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -100,8 +100,8 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             number: v2.number,
             peer_id: v2.peer_id,
             pid: v2.pid,
-            // Default to None
-            reachability_check_progress: None,
+            // Default to NotRun for upgraded instances
+            reachability_progress: ReachabilityProgress::NotRun,
             relay: v2.relay,
             rewards_address: v2.rewards_address,
             // Removed reward_balance field in V3
