@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::components::popup::upgrade_launchpad::UpgradeLaunchpadPopup;
-use crate::upnp::{UpnpSupport, get_upnp_support};
 use crate::{
     action::Action,
     components::{
@@ -81,8 +80,6 @@ impl App {
             .connection_mode
             .unwrap_or(ConnectionMode::Automatic);
 
-        let upnp_support = UpnpSupport::Loading;
-
         let port_from = app_data.port_from.unwrap_or(PORT_MIN);
         let port_to = app_data.port_to.unwrap_or(PORT_MAX);
         let storage_mountpoint = app_data
@@ -103,7 +100,6 @@ impl App {
             antnode_path,
             data_dir_path,
             connection_mode,
-            upnp_support,
             port_from: Some(port_from),
             port_to: Some(port_to),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -174,13 +170,6 @@ impl App {
 
     pub async fn run(&mut self) -> Result<()> {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
-
-        let action_tx_clone = action_tx.clone();
-
-        tokio::spawn(async move {
-            let upnp_support = get_upnp_support();
-            let _ = action_tx_clone.send(Action::SetUpnpSupport(upnp_support));
-        });
 
         let mut tui = tui::Tui::new()?
             .tick_rate(self.tick_rate)
