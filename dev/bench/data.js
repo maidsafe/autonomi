@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756293461741,
+  "lastUpdate": 1756299836815,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -857,6 +857,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 27.316640870315762,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "89fc3eb63c63781ebf023e810c091a9ad6abc942",
+          "message": "Merge pull request #3172 from maqi/extend_stream_download_coverage\n\nExtend stream download coverage",
+          "timestamp": "2025-08-27T12:18:02Z",
+          "tree_id": "6429e274e06cf83739a96d19c1ef0b9d845a4a4b",
+          "url": "https://github.com/maidsafe/autonomi/commit/89fc3eb63c63781ebf023e810c091a9ad6abc942"
+        },
+        "date": 1756299828860,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.7431309879621177,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.311723250985734,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 27.347444678096146,
             "unit": "MiB/s"
           }
         ]
