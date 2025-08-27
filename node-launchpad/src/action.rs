@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::upnp::UpnpSupport;
 use crate::{
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
@@ -30,8 +29,6 @@ pub enum Action {
     StorePortRange(u32, u32),
     StoreRewardsAddress(String),
     StoreNodesToStart(usize),
-
-    SetUpnpSupport(UpnpSupport),
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
