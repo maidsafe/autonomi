@@ -416,7 +416,6 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
         port_range, // node_port
         node_registry.clone(),
         config.init_peers_config.clone(),
-        config.relay, // relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
@@ -503,7 +502,6 @@ struct NodeConfig {
     count: u16,
     custom_ports: Option<PortRange>,
     data_dir_path: Option<PathBuf>,
-    relay: bool,
     network_id: Option<u8>,
     owner: Option<String>,
     init_peers_config: InitialPeersConfig,
@@ -527,7 +525,6 @@ fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
         } else {
             Some(args.owner.clone())
         },
-        relay: args.connection_mode == ConnectionMode::HomeNetwork,
         network_id: args.network_id,
         init_peers_config: args.init_peers_config.clone(),
         skip_reachability_check: true,
@@ -594,7 +591,6 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         None, // We don't care about the port, as we are scaling down
         node_registry,
         config.init_peers_config.clone(),
-        config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,
         None,
@@ -668,7 +664,6 @@ async fn add_nodes(
             port_range,
             node_registry.clone(),
             config.init_peers_config.clone(),
-            config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
             None,
             None,
