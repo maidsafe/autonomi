@@ -6417,7 +6417,6 @@ dependencies = [
  "fs_extra",
  "futures",
  "human-panic",
- "igd-next",
  "itertools 0.12.1",
  "json5",
  "libc",

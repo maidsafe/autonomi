@@ -22,10 +22,9 @@ use crate::node_mgmt::{
     UpgradeNodesArgs,
 };
 use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED};
+use crate::style::{COOL_GREY, INDIGO};
 use crate::system::{get_available_space_b, get_drive_name};
 use crate::tui::Event;
-use crate::upnp::UpnpSupport;
 use crate::{
     action::{Action, StatusActions},
     config::Config,
@@ -97,8 +96,6 @@ pub struct Status<'a> {
     data_dir_path: PathBuf,
     // Connection mode
     connection_mode: ConnectionMode,
-    // UPnP support
-    upnp_support: UpnpSupport,
     // Port from
     port_from: Option<u32>,
     // Port to
@@ -112,7 +109,6 @@ pub struct StatusConfig {
     pub allocated_disk_space: usize,
     pub antnode_path: Option<PathBuf>,
     pub connection_mode: ConnectionMode,
-    pub upnp_support: UpnpSupport,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub init_peers_config: InitialPeersConfig,
@@ -143,7 +139,6 @@ impl<'a> Status<'a> {
             antnode_path: config.antnode_path,
             data_dir_path: config.data_dir_path,
             connection_mode: config.connection_mode,
-            upnp_support: config.upnp_support,
             port_from: config.port_from,
             port_to: config.port_to,
             error_popup: None,
@@ -458,10 +453,6 @@ impl Component for Status<'_> {
                         start_nodes_after_reset: false,
                         action_sender,
                     })?;
-            }
-            Action::SetUpnpSupport(ref upnp_support) => {
-                debug!("Setting UPnP support: {upnp_support:?}");
-                self.upnp_support = upnp_support.clone();
             }
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::RegistryUpdated { all_nodes_data } => {
@@ -1023,40 +1014,10 @@ impl Component for Status<'_> {
             ConnectionMode::Automatic => "Automatic".to_string(),
         };
 
-        let mut connection_mode_line = vec![Span::styled(
+        let connection_mode_line = vec![Span::styled(
             connection_mode_string,
             Style::default().fg(GHOST_WHITE),
         )];
-
-        if matches!(
-            self.connection_mode,
-            ConnectionMode::Automatic | ConnectionMode::UPnP
-        ) {
-            connection_mode_line.push(Span::styled(" (", Style::default().fg(GHOST_WHITE)));
-
-            if self.connection_mode == ConnectionMode::Automatic {
-                connection_mode_line.push(Span::styled("UPnP: ", Style::default().fg(GHOST_WHITE)));
-            }
-
-            let span = match self.upnp_support {
-                UpnpSupport::Supported => {
-                    Span::styled("supported", Style::default().fg(EUCALYPTUS))
-                }
-                UpnpSupport::Unsupported => {
-                    Span::styled("disabled / unsupported", Style::default().fg(SIZZLING_RED))
-                }
-                UpnpSupport::Loading => {
-                    Span::styled("loading..", Style::default().fg(LIGHT_PERIWINKLE))
-                }
-                UpnpSupport::Unknown => {
-                    Span::styled("unknown", Style::default().fg(LIGHT_PERIWINKLE))
-                }
-            };
-
-            connection_mode_line.push(span);
-
-            connection_mode_line.push(Span::styled(")", Style::default().fg(GHOST_WHITE)));
-        }
 
         let connection_mode_row = Row::new(vec![
             Cell::new("Connection".to_string()).fg(GHOST_WHITE),
