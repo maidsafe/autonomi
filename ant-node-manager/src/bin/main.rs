@@ -165,9 +165,6 @@ pub enum SubCmd {
         /// Specify what EVM network to use for payments.
         #[command(subcommand)]
         evm_network: EvmNetworkCommand,
-        /// Set this flag if UPnP doesn't work, and you are not able to manually port forward.
-        #[clap(long)]
-        relay: bool,
         /// Provide the path for the log directory for the installed node.
         ///
         /// This path is a prefix. Each installed node will have its own directory underneath it.
@@ -740,7 +737,6 @@ async fn main() -> Result<()> {
             data_dir_path,
             env_variables,
             evm_network,
-            relay,
             log_dir_path,
             log_format,
             max_archived_log_files,
@@ -778,7 +774,6 @@ async fn main() -> Result<()> {
                 node_port,
                 node_registry,
                 peers,
-                relay,
                 rewards_address,
                 rpc_address,
                 rpc_port,

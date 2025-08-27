@@ -120,7 +120,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         node_port: None,
         init_peers_config: init_peers_config.clone(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -155,7 +154,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             node_port: None,
             init_peers_config,
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -277,7 +275,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -325,7 +322,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             node_port: None,
             init_peers_config,
             skip_reachability_check: false,
-            relay: false,
             rpc_address: Some(custom_rpc_address),
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -407,7 +403,6 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             node_port: None,
             init_peers_config,
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -497,7 +492,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
             .to_path_buf()
@@ -548,7 +542,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -599,7 +592,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -635,7 +627,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
-            relay: false,
             skip_reachability_check: false,
             rpc_address: None,
             rpc_port: None,
@@ -774,7 +765,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -810,7 +800,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -908,7 +897,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -967,7 +955,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -1004,7 +991,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
@@ -1166,7 +1152,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             node_ip: None,
             node_port: None,
             init_peers_config: init_peers_config.clone(),
-            relay: false,
             skip_reachability_check: false,
             rpc_address: None,
             rpc_port: None,
@@ -1318,7 +1303,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             node_port: None,
             init_peers_config: initial_peers_config.clone(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1463,7 +1447,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             node_ip: None,
             node_port: None,
             init_peers_config: init_peers_config.clone(),
-            relay: false,
             skip_reachability_check: false,
             rpc_address: None,
             rpc_port: None,
@@ -1614,7 +1597,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             node_port: None,
             init_peers_config: init_peers_config.clone(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1760,7 +1742,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             node_port: None,
             init_peers_config: init_peers_config.clone(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -1907,7 +1888,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             node_ip: None,
             node_port: None,
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2048,7 +2028,6 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             node_port: None,
             init_peers_config: Default::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2187,7 +2166,6 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2280,7 +2258,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         node_port: Some(custom_port),
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -2317,7 +2294,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             node_port: Some(PortRange::Single(custom_port)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2572,7 +2548,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             node_port: Some(PortRange::Range(12000, 12002)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2652,7 +2627,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -2698,7 +2672,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             node_port: Some(PortRange::Single(12000)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2773,7 +2746,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -2819,7 +2791,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             node_port: Some(PortRange::Range(12000, 12002)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -2891,7 +2862,6 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             node_port: Some(PortRange::Range(12000, 12002)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_src_path: antnode_download_path.to_path_buf(),
@@ -2968,7 +2938,6 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             node_port: Some(PortRange::Single(12000)),
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3104,7 +3073,6 @@ async fn add_node_should_set_random_ports_for_metrics_server() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3235,7 +3203,6 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3367,7 +3334,6 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3596,7 +3562,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3675,7 +3640,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -3720,7 +3684,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -3797,7 +3760,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -3842,7 +3804,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4096,7 +4057,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: Some(PortRange::Range(8081, 8083)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4194,7 +4154,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -4239,7 +4198,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: Some(PortRange::Single(8081)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4316,7 +4274,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: false,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -4361,7 +4318,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: Some(PortRange::Range(8081, 8082)),
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4453,7 +4409,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -4490,7 +4445,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4522,132 +4476,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
     .await?;
 
     antnode_download_path.assert(predicate::path::is_file());
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let mut mock_service_control = MockServiceControl::new();
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let node_data_dir = temp_dir.child("data");
-    node_data_dir.create_dir_all()?;
-    let node_logs_dir = temp_dir.child("logs");
-    node_logs_dir.create_dir_all()?;
-    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
-    antnode_download_path.write_binary(b"fake antnode bin")?;
-
-    let mut seq = Sequence::new();
-
-    // Expected calls for first installation
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(6001))
-        .in_sequence(&mut seq);
-
-    let install_ctx = InstallNodeServiceCtxBuilder {
-        alpha: false,
-        autostart: false,
-        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
-        env_variables: None,
-        evm_network: EvmNetwork::Custom(CustomNetwork {
-            rpc_url_http: "http://localhost:8545".parse()?,
-            payment_token_address: RewardsAddress::from_str(
-                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-            )?,
-            data_payments_address: RewardsAddress::from_str(
-                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-            )?,
-        }),
-        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
-        log_format: None,
-        max_archived_log_files: None,
-        max_log_files: None,
-        metrics_port: 6001,
-        network_id: None,
-        name: "antnode1".to_string(),
-        node_ip: None,
-        node_port: None,
-        init_peers_config: InitialPeersConfig::default(),
-        skip_reachability_check: false,
-        relay: true,
-        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: None,
-        antnode_path: node_data_dir
-            .to_path_buf()
-            .join("antnode1")
-            .join(ANTNODE_FILE_NAME),
-        service_user: Some(get_username()),
-        no_upnp: false,
-        write_older_cache_files: false,
-    }
-    .build()?;
-
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(eq(install_ctx), eq(false))
-        .returning(|_, _| Ok(()))
-        .in_sequence(&mut seq);
-
-    add_node(
-        AddNodeServiceOptions {
-            alpha: false,
-            auto_restart: false,
-
-            count: Some(1),
-            delete_antnode_src: false,
-            env_variables: None,
-            log_format: None,
-            max_archived_log_files: None,
-            max_log_files: None,
-            metrics_port: None,
-            network_id: None,
-            node_ip: None,
-            node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
-            skip_reachability_check: false,
-            relay: true,
-            rpc_address: None,
-            rpc_port: None,
-            antnode_dir_path: temp_dir.to_path_buf(),
-            antnode_src_path: antnode_download_path.to_path_buf(),
-            service_data_dir_path: node_data_dir.to_path_buf(),
-            service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
-            user: Some(get_username()),
-            user_mode: false,
-            version: latest_version.to_string(),
-            evm_network: EvmNetwork::Custom(CustomNetwork {
-                rpc_url_http: "http://localhost:8545".parse()?,
-                payment_token_address: RewardsAddress::from_str(
-                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                )?,
-                data_payments_address: RewardsAddress::from_str(
-                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-                )?,
-            }),
-            rewards_address: RewardsAddress::from_str(
-                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
-            )?,
-            write_older_cache_files: false,
-        },
-        node_registry.clone(),
-        &mock_service_control,
-        VerbosityLevel::Normal,
-    )
-    .await?;
-
-    let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert!(node0.relay);
 
     Ok(())
 }
@@ -4704,7 +4532,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: true,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -4741,7 +4568,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: true,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4826,7 +4652,6 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: true,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -4863,7 +4688,6 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: true,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -4992,7 +4816,6 @@ async fn add_node_should_auto_restart() -> Result<()> {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5069,7 +4892,6 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5108,7 +4930,6 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             count: Some(1),
             delete_antnode_src: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -5249,7 +5070,6 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
             count: None,
             delete_antnode_src: true,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -5352,7 +5172,6 @@ async fn add_node_should_add_the_node_with_skip_reachability_check_flag() -> Res
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: true,
-        relay: true,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -5388,7 +5207,6 @@ async fn add_node_should_add_the_node_with_skip_reachability_check_flag() -> Res
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: true,
-            relay: true,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),
@@ -5477,7 +5295,6 @@ async fn add_node_should_set_reachability_check_progress_to_none() -> Result<()>
         node_port: None,
         init_peers_config: InitialPeersConfig::default(),
         skip_reachability_check: false,
-        relay: true,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
         rpc_socket_addr: None,
         antnode_path: node_data_dir
@@ -5512,7 +5329,6 @@ async fn add_node_should_set_reachability_check_progress_to_none() -> Result<()>
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
-            relay: true,
             rpc_address: None,
             rpc_port: None,
             antnode_dir_path: temp_dir.to_path_buf(),

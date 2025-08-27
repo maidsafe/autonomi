@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::NodeServiceData;
 use crate::error::{Error, Result};
-use crate::{NatDetectionStatus, NodeServiceData};
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -24,7 +24,6 @@ use tokio::sync::{RwLock, mpsc};
 #[allow(clippy::type_complexity)]
 pub struct NodeRegistryManager {
     pub environment_variables: Arc<RwLock<Option<Vec<(String, String)>>>>,
-    pub nat_status: Arc<RwLock<Option<NatDetectionStatus>>>,
     pub nodes: Arc<RwLock<Vec<Arc<RwLock<NodeServiceData>>>>>,
     pub save_path: PathBuf,
 }
@@ -33,7 +32,6 @@ impl From<NodeRegistry> for NodeRegistryManager {
     fn from(registry: NodeRegistry) -> Self {
         NodeRegistryManager {
             environment_variables: Arc::new(RwLock::new(registry.environment_variables)),
-            nat_status: Arc::new(RwLock::new(registry.nat_status)),
             nodes: Arc::new(RwLock::new(
                 registry
                     .nodes
@@ -53,7 +51,6 @@ impl NodeRegistryManager {
     pub fn empty(save_path: PathBuf) -> Self {
         NodeRegistryManager {
             environment_variables: Arc::new(RwLock::new(None)),
-            nat_status: Arc::new(RwLock::new(None)),
             nodes: Arc::new(RwLock::new(Vec::new())),
             save_path,
         }
@@ -81,7 +78,6 @@ impl NodeRegistryManager {
         let nodes = self.get_node_service_data().await;
         NodeRegistry {
             environment_variables: self.environment_variables.read().await.clone(),
-            nat_status: self.nat_status.read().await.clone(),
             nodes,
             save_path: self.save_path.clone(),
         }
@@ -191,7 +187,6 @@ impl NodeRegistryManager {
         let new_manager = NodeRegistryManager::from(registry);
         *self.environment_variables.write().await =
             new_manager.environment_variables.read().await.clone();
-        *self.nat_status.write().await = new_manager.nat_status.read().await.clone();
         *self.nodes.write().await = new_manager.nodes.read().await.clone();
 
         Ok(())
@@ -202,7 +197,6 @@ impl NodeRegistryManager {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NodeRegistry {
     environment_variables: Option<Vec<(String, String)>>,
-    nat_status: Option<NatDetectionStatus>,
     nodes: Vec<NodeServiceData>,
     save_path: PathBuf,
 }
@@ -239,7 +233,6 @@ impl NodeRegistry {
             debug!("Loading default node registry as {path:?} does not exist");
             return Ok(NodeRegistry {
                 environment_variables: None,
-                nat_status: None,
                 nodes: vec![],
                 save_path: path.to_path_buf(),
             });
@@ -258,7 +251,6 @@ impl NodeRegistry {
         if contents.is_empty() {
             return Ok(NodeRegistry {
                 environment_variables: None,
-                nat_status: None,
                 nodes: vec![],
                 save_path: path.to_path_buf(),
             });
@@ -314,7 +306,6 @@ mod tests {
         // Create an initial empty registry file
         let initial_registry = NodeRegistry {
             environment_variables: None,
-            nat_status: None,
             nodes: vec![],
             save_path: registry_path.clone(),
         };
@@ -360,7 +351,6 @@ mod tests {
                 peer_id: None,
                 pid: Some(12345),
                 skip_reachability_check: false,
-                relay: false,
                 reachability_progress: ReachabilityProgress::NotRun,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
@@ -413,7 +403,6 @@ mod tests {
                 pid: Some(12346),
                 skip_reachability_check: false,
                 reachability_progress: ReachabilityProgress::NotRun,
-                relay: false,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
                 schema_version: 3,
@@ -486,8 +475,7 @@ mod tests {
         // Create an initial empty registry file
         let initial_registry = NodeRegistry {
             environment_variables: None,
-            nat_status: None,
-            nodes: vec![],
+            nodes: Default::default(),
             save_path: registry_path.clone(),
         };
         initial_registry.save().unwrap();
@@ -527,7 +515,6 @@ mod tests {
                 pid: Some(12345),
                 skip_reachability_check: false,
                 reachability_progress: ReachabilityProgress::NotRun,
-                relay: false,
                 rewards_address: ant_evm::RewardsAddress::default(),
                 rpc_socket_addr: None,
                 schema_version: 3,
@@ -576,7 +563,6 @@ mod tests {
         // Create an initial empty registry
         let initial_registry = NodeRegistry {
             environment_variables: None,
-            nat_status: None,
             nodes: vec![],
             save_path: registry_path.clone(),
         };
@@ -615,7 +601,6 @@ mod tests {
                     pid: Some(12345 + j as u32),
                     skip_reachability_check: false,
                     reachability_progress: ReachabilityProgress::NotRun,
-                    relay: false,
                     rewards_address: ant_evm::RewardsAddress::default(),
                     rpc_socket_addr: None,
                     schema_version: 3,
@@ -630,7 +615,6 @@ mod tests {
 
             let registry = NodeRegistry {
                 environment_variables: None,
-                nat_status: None,
                 nodes,
                 save_path: registry_path.clone(),
             };

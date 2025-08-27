@@ -48,14 +48,6 @@ pub enum ServiceStatus {
     Removed,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-/// Deprecated. We don't use this anymore, but keeping it for backward compatibility.
-pub enum NatDetectionStatus {
-    Public,
-    UPnP,
-    Private,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ReachabilityProgress {
     /// Reachability check has not been run (0%)

@@ -102,7 +102,7 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             pid: v2.pid,
             // Default to NotRun for upgraded instances
             reachability_progress: ReachabilityProgress::NotRun,
-            relay: v2.relay,
+            // Removed relay field in V3
             rewards_address: v2.rewards_address,
             // Removed reward_balance field in V3
             // rpc_socket_addr is now optional
@@ -246,7 +246,6 @@ mod tests {
                 .map(|peers| peers.len())
                 .unwrap_or(0) as u32
         ); // V3 expects the count
-        assert!(!v3.relay); // V2 field preserved
         assert!(v3.alpha); // V2 field preserved
         assert!(v3.no_upnp); // V2 field preserved
         assert!(v3.write_older_cache_files); // V2 field preserved

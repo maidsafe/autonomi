@@ -442,7 +442,6 @@ pub async fn run_node(
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
         reachability_progress: ReachabilityProgress::NotRun,
-        relay: false,
         rewards_address: run_options.rewards_address,
         rpc_socket_addr: run_options.rpc_socket_addr,
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,

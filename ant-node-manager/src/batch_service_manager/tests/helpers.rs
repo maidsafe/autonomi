@@ -127,7 +127,6 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         peer_id: None,
         pid: None,
         reachability_progress: ReachabilityProgress::NotRun,
-        relay: false,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
         rpc_socket_addr: None,

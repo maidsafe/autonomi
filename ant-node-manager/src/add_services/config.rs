@@ -88,7 +88,6 @@ pub struct InstallNodeServiceCtxBuilder {
     pub node_port: Option<u16>,
     pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
-    pub relay: bool,
     pub rpc_socket_addr: Option<SocketAddr>,
     pub service_user: Option<String>,
     pub skip_reachability_check: bool,
@@ -123,9 +122,6 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--skip-reachability-check"));
         }
 
-        if self.relay {
-            args.push(OsString::from("--relay"));
-        }
         if let Some(log_format) = self.log_format {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_format.as_str()));
@@ -207,7 +203,6 @@ pub struct AddNodeServiceOptions {
     pub node_port: Option<PortRange>,
     pub no_upnp: bool,
     pub skip_reachability_check: bool,
-    pub relay: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
@@ -245,7 +240,6 @@ mod tests {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: None,
@@ -282,7 +276,6 @@ mod tests {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: None,
@@ -321,7 +314,6 @@ mod tests {
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
             skip_reachability_check: false,
-            relay: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: Some(SocketAddr::new(
@@ -409,7 +401,6 @@ mod tests {
     fn build_should_assign_expected_values_when_all_options_are_enabled() {
         let mut builder = create_builder_with_all_options_enabled();
         builder.alpha = true;
-        builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
         builder.no_upnp = true;
         builder.skip_reachability_check = true;
@@ -452,7 +443,6 @@ mod tests {
             "--network-id",
             "5",
             "--skip-reachability-check",
-            "--relay",
             "--log-format",
             "json",
             "--no-upnp",
