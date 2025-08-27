@@ -80,7 +80,7 @@ pub struct Status<'a> {
     // Nodes
     node_services: Vec<NodeServiceData>,
     node_registry: NodeRegistryManager,
-    items: Option<StatefulTable<NodeItem<'a>>>,
+    items: StatefulTable<NodeItem<'a>>,
     /// To pass into node services.
     network_id: Option<u8>,
     // Node Management
@@ -122,7 +122,7 @@ pub struct StatusConfig {
     pub rewards_address: String,
 }
 
-impl Status<'_> {
+impl<'a> Status<'a> {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
 
@@ -137,7 +137,7 @@ impl Status<'_> {
             node_services: Default::default(),
             node_registry: node_registry.clone(),
             node_management: NodeManagement::new(node_registry.clone())?,
-            items: None,
+            items: StatefulTable::with_items(vec![]),
             nodes_to_start: config.allocated_disk_space,
             rewards_address: config.rewards_address,
             antnode_path: config.antnode_path,
@@ -154,159 +154,94 @@ impl Status<'_> {
         Ok(status)
     }
 
-    fn set_lock(&mut self, service_name: &str, locked: bool) {
-        if let Some(ref mut items) = self.items {
-            for item in &mut items.items {
-                if item.name == *service_name {
-                    item.locked = locked;
-                }
-            }
-        }
-    }
-
-    // FIXME: Can be used if NodeItem implements Copy. Dependencies cannot.
-    fn _lock_service(&mut self, service_name: &str) {
-        self.set_lock(service_name, true);
-    }
-
-    fn unlock_service(&mut self, service_name: &str) {
-        self.set_lock(service_name, false);
-    }
-
-    /// Updates the NodeStatus of a specific item in the items list based on its service name.
-    ///
-    /// # Arguments
-    ///
-    /// * `service_name` - The name of the service to update.
-    /// * `status` - The new status to assign to the item.
-    fn update_item(&mut self, service_name: String, status: NodeStatus) -> Result<()> {
-        if let Some(ref mut items) = self.items {
-            for item in &mut items.items {
-                if item.name == service_name {
-                    item.status = status;
-                }
-            }
-        }
-        Ok(())
-    }
-
     fn update_node_items(&mut self, new_status: Option<NodeStatus>) -> Result<()> {
-        // Iterate over existing node services and update their corresponding NodeItem
-        if let Some(ref mut items) = self.items {
-            for node_item in self.node_services.iter() {
-                // Find the corresponding item by service name
-                if let Some(item) = items
-                    .items
-                    .iter_mut()
-                    .find(|i| i.name == node_item.service_name)
-                {
-                    if let Some(status) = new_status {
-                        item.status = status;
-                    } else if item.status == NodeStatus::Updating
-                        || item.status == NodeStatus::Starting
-                    {
-                        item.spinner_state.calc_next();
-                    } else if new_status != Some(NodeStatus::Updating) {
-                        // Update status based on current node status
-                        item.status = match node_item.status {
-                            ServiceStatus::Running => {
-                                item.spinner_state.calc_next();
-                                NodeStatus::Running
-                            }
-                            ServiceStatus::Stopped => NodeStatus::Stopped,
-                            ServiceStatus::Added => NodeStatus::Added,
-                            ServiceStatus::Removed => NodeStatus::Removed,
-                        };
-                    }
-
-                    // Update peers count
-                    item.peers = node_item.connected_peers as usize;
-
-                    // Update individual stats if available
-                    if let Some(stats) = self
-                        .node_stats
-                        .individual_stats
-                        .iter()
-                        .find(|s| s.service_name == node_item.service_name)
-                    {
-                        item.attos = stats.rewards_wallet_balance;
-                        item.memory = stats.memory_usage_mb;
-                        item.mbps = format!(
-                            "↓{:0>5.0} ↑{:0>5.0}",
-                            (stats.bandwidth_inbound_rate * 8) as f64 / 1_000_000.0,
-                            (stats.bandwidth_outbound_rate * 8) as f64 / 1_000_000.0,
-                        );
-                        item.records = stats.max_records;
-                        item.connections = stats.connections;
-                    }
-                } else {
-                    // If not found, create a new NodeItem and add it to items
-                    let new_item = NodeItem {
-                        name: node_item.service_name.clone(),
-                        version: node_item.version.to_string(),
-                        attos: 0,
-                        memory: 0,
-                        mbps: "-".to_string(),
-                        records: 0,
-                        peers: 0,
-                        connections: 0,
-                        mode: NodeConnectionMode::from(node_item),
-                        locked: false,
-                        status: NodeStatus::Added, // Set initial status as Added
-                        failure: node_item.get_critical_failure(),
-                        spinner: Throbber::default(),
-                        spinner_state: ThrobberState::default(),
-                    };
-                    items.items.push(new_item);
-                }
-            }
-        } else {
-            // If items is None, create a new list (fallback)
-            let node_items: Vec<NodeItem> = self
-                .node_services
+        for node_service in self.node_services.iter() {
+            let service_name = &node_service.service_name;
+            let node_stat = self
+                .node_stats
+                .individual_stats
                 .iter()
-                .filter_map(|node_item| {
-                    if node_item.status == ServiceStatus::Removed {
-                        return None;
-                    }
-                    // Update status based on current node status
-                    let status = match node_item.status {
-                        ServiceStatus::Running => NodeStatus::Running,
-                        ServiceStatus::Stopped => NodeStatus::Stopped,
-                        ServiceStatus::Added => NodeStatus::Added,
-                        ServiceStatus::Removed => NodeStatus::Removed,
-                    };
+                .find(|&s| &s.service_name == service_name)
+                .cloned();
 
-                    // Create a new NodeItem for the first time
-                    Some(NodeItem {
-                        name: node_item.service_name.clone().to_string(),
-                        version: node_item.version.to_string(),
+            let node_item = match self
+                .items
+                .items
+                .iter_mut()
+                .find(|node_item| &node_item.name == service_name)
+            {
+                Some(node_item) => node_item,
+                None => {
+                    trace!("Node service {service_name} not found in items, adding it",);
+                    if node_service.status == ServiceStatus::Removed {
+                        trace!("Node service has a removed status, not adding it.");
+                        return Ok(());
+                    }
+
+                    let new_item = NodeItem {
+                        name: service_name.clone(),
+                        version: node_service.version.to_string(),
                         attos: 0,
                         memory: 0,
                         mbps: "-".to_string(),
                         records: 0,
                         peers: 0,
                         connections: 0,
+                        mode: NodeConnectionMode::from(node_service),
                         locked: false,
-                        mode: NodeConnectionMode::from(node_item),
-                        status,
-                        failure: node_item.get_critical_failure(),
+                        status: NodeStatus::from(&node_service.status),
+                        failure: node_service.get_critical_failure(),
                         spinner: Throbber::default(),
                         spinner_state: ThrobberState::default(),
-                    })
-                })
-                .collect();
-            self.items = Some(StatefulTable::with_items(node_items));
+                    };
+                    self.items.items.push(new_item);
+                    continue;
+                }
+            };
+
+            // now modify the existing node_item
+            if let Some(status) = new_status {
+                node_item.status = status;
+            } else if node_item.status != NodeStatus::Updating
+                || node_item.status != NodeStatus::Starting
+            {
+                // Update status based on current node status if we're not updating/starting.
+                node_item.status = match node_service.status {
+                    ServiceStatus::Running => NodeStatus::Running,
+                    ServiceStatus::Stopped => NodeStatus::Stopped,
+                    ServiceStatus::Added => NodeStatus::Added,
+                    ServiceStatus::Removed => NodeStatus::Removed,
+                };
+            }
+
+            if node_item.status == NodeStatus::Updating
+                || node_item.status == NodeStatus::Starting
+                || node_item.status == NodeStatus::Running
+            {
+                node_item.spinner_state.calc_next();
+            }
+
+            node_item.peers = node_service.connected_peers as usize;
+
+            // Update individual stats if available
+            if let Some(stats) = node_stat {
+                node_item.attos = stats.rewards_wallet_balance;
+                node_item.memory = stats.memory_usage_mb;
+                node_item.mbps = format!(
+                    "↓{:0>5.0} ↑{:0>5.0}",
+                    (stats.bandwidth_inbound_rate * 8) as f64 / 1_000_000.0,
+                    (stats.bandwidth_outbound_rate * 8) as f64 / 1_000_000.0,
+                );
+                node_item.records = stats.max_records;
+                node_item.connections = stats.connections;
+            }
         }
         Ok(())
     }
 
     fn clear_node_items(&mut self) {
-        debug!("Cleaning items on Status page");
-        if let Some(items) = self.items.as_mut() {
-            items.items.clear();
-            debug!("Cleared the items on status page");
-        }
+        self.items.items.clear();
+        debug!("Cleared the items on status page");
     }
 
     /// Tries to trigger the update of node stats if the last update was more than `NODE_STAT_UPDATE_INTERVAL` ago.
@@ -319,10 +254,26 @@ impl Status<'_> {
         }
         Ok(())
     }
+
     fn get_actions_sender(&self) -> Result<UnboundedSender<Action>> {
         self.action_sender
             .clone()
             .ok_or_eyre("Action sender not registered")
+    }
+
+    fn get_node_item_mut(&mut self, service_name: &str) -> Option<&mut NodeItem<'a>> {
+        match self
+            .items
+            .items
+            .iter_mut()
+            .find(|node_item| node_item.name == service_name)
+        {
+            Some(node_item) => Some(node_item),
+            None => {
+                warn!("No node item found for service name: {service_name}",);
+                None
+            }
+        }
     }
 
     fn update_node_state(&mut self, all_nodes_data: Vec<NodeServiceData>) -> Result<()> {
@@ -337,17 +288,6 @@ impl Status<'_> {
         );
 
         Ok(())
-    }
-
-    fn _nodes_starting(&self) -> bool {
-        if let Some(items) = &self.items {
-            items
-                .items
-                .iter()
-                .any(|item| item.status == NodeStatus::Starting)
-        } else {
-            false
-        }
     }
 
     fn get_running_nodes(&self) -> Vec<String> {
@@ -533,40 +473,34 @@ impl Component for Status<'_> {
                 }
                 StatusActions::StartNodesCompleted { service_name } => {
                     if service_name == *NODES_ALL {
-                        if let Some(items) = &self.items {
-                            let items_clone = items.clone();
-                            for item in &items_clone.items {
-                                self.unlock_service(item.name.as_str());
-                                self.update_item(item.name.clone(), NodeStatus::Running)?;
-                            }
+                        for node_item in self.items.items.iter_mut() {
+                            node_item.unlock();
+                            node_item.update_status(NodeStatus::Running);
                         }
-                    } else {
-                        self.unlock_service(service_name.as_str());
-                        self.update_item(service_name, NodeStatus::Running)?;
+                    } else if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                        node_item.unlock();
+                        node_item.update_status(NodeStatus::Running);
                     }
                 }
                 StatusActions::StopNodesCompleted { service_name } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name, NodeStatus::Stopped)?;
+                    if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                        node_item.unlock();
+                        node_item.update_status(NodeStatus::Stopped);
+                    }
                 }
                 StatusActions::UpdateNodesCompleted => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
+                    for node_item in self.items.items.iter_mut() {
+                        node_item.unlock();
                     }
+
                     self.clear_node_items();
 
                     let _ = self.update_node_items(None);
                     debug!("Update nodes completed");
                 }
                 StatusActions::ResetNodesCompleted { trigger_start_node } => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
+                    for node_item in self.items.items.iter_mut() {
+                        node_item.unlock();
                     }
 
                     self.clear_node_items();
@@ -578,14 +512,17 @@ impl Component for Status<'_> {
                     debug!("Reset nodes completed");
                 }
                 StatusActions::AddNodesCompleted { service_name } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name.clone(), NodeStatus::Stopped)?;
-
-                    debug!("Adding {:?} completed", service_name.clone());
+                    if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                        node_item.unlock();
+                        node_item.update_status(NodeStatus::Stopped);
+                    }
+                    debug!("Adding {service_name:?} completed");
                 }
                 StatusActions::RemoveNodesCompleted { service_name } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name, NodeStatus::Removed)?;
+                    if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                        node_item.unlock();
+                        node_item.update_status(NodeStatus::Removed);
+                    }
 
                     let _ = self.update_node_items(None);
                     debug!("Removing nodes completed");
@@ -620,7 +557,9 @@ impl Component for Status<'_> {
                     raw_error,
                 } => {
                     for service_name in services {
-                        self.unlock_service(service_name.as_str());
+                        if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                            node_item.unlock();
+                        }
                     }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
@@ -634,11 +573,8 @@ impl Component for Status<'_> {
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
                 StatusActions::ErrorUpdatingNodes { raw_error } => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
+                    for node_item in self.items.items.iter_mut() {
+                        node_item.unlock();
                     }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
@@ -680,7 +616,9 @@ impl Component for Status<'_> {
                     raw_error,
                 } => {
                     for service_name in services {
-                        self.unlock_service(service_name.as_str());
+                        if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                            node_item.unlock();
+                        }
                     }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
@@ -698,7 +636,9 @@ impl Component for Status<'_> {
                     raw_error,
                 } => {
                     for service_name in services {
-                        self.unlock_service(service_name.as_str());
+                        if let Some(node_item) = self.get_node_item_mut(&service_name) {
+                            node_item.unlock();
+                        }
                     }
                     self.error_popup = Some(ErrorPopup::new(
                         "Error".to_string(),
@@ -712,18 +652,12 @@ impl Component for Status<'_> {
                     return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
                 }
                 StatusActions::TriggerManageNodes => {
-                    let mut amount_of_nodes = 0;
-                    if let Some(items) = &mut self.items {
-                        amount_of_nodes = items.items.len();
-                    }
-
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
-                        amount_of_nodes,
+                        amount_of_nodes: self.items.items.len(),
                     })));
                 }
                 StatusActions::TriggerRemoveNode => {
-                    if let Some(_node) = self.items.as_ref().and_then(|items| items.selected_item())
-                    {
+                    if let Some(_node) = self.items.selected_item() {
                         return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)));
                     } else {
                         debug!("No items to be removed");
@@ -731,70 +665,61 @@ impl Component for Status<'_> {
                     }
                 }
                 StatusActions::PreviousTableItem => {
-                    if let Some(items) = &mut self.items {
-                        items.previous();
-                    }
+                    self.items.previous();
                 }
                 StatusActions::NextTableItem => {
-                    if let Some(items) = &mut self.items {
-                        items.next();
-                    }
+                    self.items.next();
                 }
                 StatusActions::StartStopNode => {
                     debug!("Start/Stop node");
-
                     // Check if a node is selected
-                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
-                    {
-                        let node_index = self
-                            .items
-                            .as_ref()
-                            .unwrap()
-                            .items
-                            .iter()
-                            .position(|item| item.name == node.name)
-                            .unwrap();
-                        let action_sender = self.get_actions_sender()?;
-                        let node = &mut self.items.as_mut().unwrap().items[node_index];
+                    let action_sender = self.get_actions_sender()?;
 
-                        if node.status == NodeStatus::Removed {
-                            debug!("Node is removed. Cannot be started.");
+                    let node_item = match self.items.selected_item_mut() {
+                        Some(node) => node,
+                        None => {
+                            debug!("Got action to Start/Stop node but no node was selected.");
                             return Ok(None);
                         }
+                    };
 
-                        if node.locked {
-                            debug!("Node still performing operation");
-                            return Ok(None);
-                        }
-                        node.locked = true; // Lock the node before starting or stopping
-
-                        let service_name = vec![node.name.clone()];
-
-                        match node.status {
-                            NodeStatus::Stopped | NodeStatus::Added => {
-                                debug!("Starting Node {:?}", node.name);
-                                self.node_management
-                                    .send_task(NodeManagementTask::StartNode {
-                                        services: service_name,
-                                        action_sender,
-                                    })?;
-                                node.status = NodeStatus::Starting;
-                            }
-                            NodeStatus::Running => {
-                                debug!("Stopping Node {:?}", node.name);
-                                self.node_management
-                                    .send_task(NodeManagementTask::StopNodes {
-                                        services: service_name,
-                                        action_sender,
-                                    })?;
-                            }
-                            _ => {
-                                debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
-                            }
-                        }
-                    } else {
-                        debug!("Got action to Start/Stop node but no node was selected.");
+                    if node_item.status == NodeStatus::Removed {
+                        debug!("Node is removed. Cannot be started.");
                         return Ok(None);
+                    }
+
+                    if node_item.locked {
+                        debug!("Node still performing operation");
+                        return Ok(None);
+                    }
+                    node_item.lock(); // Lock the node before starting or stopping
+
+                    let service_name = vec![node_item.name.clone()];
+
+                    match node_item.status {
+                        NodeStatus::Stopped | NodeStatus::Added => {
+                            debug!("Starting Node {:?}", node_item.name);
+                            self.node_management
+                                .send_task(NodeManagementTask::StartNode {
+                                    services: service_name,
+                                    action_sender,
+                                })?;
+                            node_item.status = NodeStatus::Starting;
+                        }
+                        NodeStatus::Running => {
+                            debug!("Stopping Node {:?}", node_item.name);
+                            self.node_management
+                                .send_task(NodeManagementTask::StopNodes {
+                                    services: service_name,
+                                    action_sender,
+                                })?;
+                        }
+                        _ => {
+                            debug!(
+                                "Cannot Start/Stop node. Node status is {:?}",
+                                node_item.status
+                            );
+                        }
                     }
                 }
                 StatusActions::StartNodes => {
@@ -815,14 +740,12 @@ impl Component for Status<'_> {
                     }
 
                     // Set status and locking
-                    if let Some(ref mut items) = self.items {
-                        for item in &mut items.items {
-                            if item.status == NodeStatus::Added
-                                || item.status == NodeStatus::Stopped
-                            {
-                                item.status = NodeStatus::Starting;
-                                item.locked = true;
-                            }
+                    for node_item in self.items.items.iter_mut() {
+                        if node_item.status == NodeStatus::Added
+                            || node_item.status == NodeStatus::Stopped
+                        {
+                            node_item.update_status(NodeStatus::Starting);
+                            node_item.lock();
                         }
                     }
 
@@ -888,11 +811,7 @@ impl Component for Status<'_> {
                     }
 
                     // Validations - Amount of nodes
-                    let amount_of_nodes = if let Some(ref items) = self.items {
-                        items.items.len()
-                    } else {
-                        0
-                    };
+                    let amount_of_nodes = self.items.items.len();
 
                     if amount_of_nodes + 1 > MAX_NODE_COUNT {
                         self.error_popup = Some(ErrorPopup::new(
@@ -950,40 +869,24 @@ impl Component for Status<'_> {
                 }
                 StatusActions::RemoveNodes => {
                     debug!("Got action to remove node");
-                    // Check if a node is selected
-                    if self
-                        .items
-                        .as_ref()
-                        .and_then(|items| items.selected_item())
-                        .is_none()
-                    {
-                        debug!("Got action to Start/Stop node but no node was selected.");
-                        return Ok(None);
-                    }
-
-                    let node_index =
-                        self.items
-                            .as_ref()
-                            .and_then(|items| {
-                                items.items.iter().position(|item| {
-                                    item.name == items.selected_item().unwrap().name
-                                })
-                            })
-                            .unwrap();
-
                     let action_sender = self.get_actions_sender()?;
+                    let node_item = match self.items.selected_item_mut() {
+                        Some(node_item) => node_item,
+                        None => {
+                            debug!("Got action to Remove node but no node was selected.");
+                            return Ok(None);
+                        }
+                    };
 
-                    let node = &mut self.items.as_mut().unwrap().items[node_index];
-
-                    if node.locked {
+                    if node_item.locked {
                         debug!("Node still performing operation");
                         return Ok(None);
                     } else {
                         // Lock the node before starting or stopping
-                        node.locked = true;
+                        node_item.lock();
                     }
 
-                    let service_name = vec![node.name.clone()];
+                    let service_name = vec![node_item.name.clone()];
 
                     // Send the task to remove the node
                     self.node_management
@@ -1000,8 +903,7 @@ impl Component for Status<'_> {
                     }
                 }
                 StatusActions::TriggerNodeLogs => {
-                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
-                    {
+                    if let Some(node) = self.items.selected_item() {
                         debug!("Got action to open node logs {:?}", node.name);
                         open_logs(Some(node.name.clone()))?;
                     } else {
@@ -1222,155 +1124,137 @@ impl Component for Status<'_> {
         // ==== Node Status =====
 
         // No nodes. Empty Table.
-        if let Some(ref items) = self.items {
-            if items.items.is_empty() || self.rewards_address.is_empty() {
-                let line1 = Line::from(vec![
-                    Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
-                    Span::styled("to Add and ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled(
-                        "Start your first node ",
-                        Style::default().fg(GHOST_WHITE).bold(),
-                    ),
-                    Span::styled("on this device", Style::default().fg(LIGHT_PERIWINKLE)),
-                ]);
+        if self.items.items.is_empty() || self.rewards_address.is_empty() {
+            let line1 = Line::from(vec![
+                Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
+                Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
+                Span::styled("to Add and ", Style::default().fg(LIGHT_PERIWINKLE)),
+                Span::styled(
+                    "Start your first node ",
+                    Style::default().fg(GHOST_WHITE).bold(),
+                ),
+                Span::styled("on this device", Style::default().fg(LIGHT_PERIWINKLE)),
+            ]);
 
-                let line2 = Line::from(vec![Span::styled(
-                    format!(
-                        "Each node will use {GB_PER_NODE}GB of storage and a small amount of memory, \
+            let line2 = Line::from(vec![Span::styled(
+                format!(
+                    "Each node will use {GB_PER_NODE}GB of storage and a small amount of memory, \
                         CPU, and Network bandwidth. Most computers can run many nodes at once, \
                         but we recommend you add them gradually"
+                ),
+                Style::default().fg(LIGHT_PERIWINKLE),
+            )]);
+
+            f.render_widget(
+                Paragraph::new(vec![Line::raw(""), line1, Line::raw(""), line2])
+                    .wrap(Wrap { trim: false })
+                    .fg(LIGHT_PERIWINKLE)
+                    .block(
+                        Block::default()
+                            .title(Line::from(vec![
+                                Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
+                                Span::styled(" (0) ", Style::default().fg(LIGHT_PERIWINKLE)),
+                            ]))
+                            .title_style(Style::default().fg(LIGHT_PERIWINKLE))
+                            .borders(Borders::ALL)
+                            .border_style(style::Style::default().fg(EUCALYPTUS))
+                            .padding(Padding::horizontal(1)),
                     ),
-                    Style::default().fg(LIGHT_PERIWINKLE),
-                )]);
-
-                f.render_widget(
-                    Paragraph::new(vec![Line::raw(""), line1, Line::raw(""), line2])
-                        .wrap(Wrap { trim: false })
-                        .fg(LIGHT_PERIWINKLE)
-                        .block(
-                            Block::default()
-                                .title(Line::from(vec![
-                                    Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
-                                    Span::styled(" (0) ", Style::default().fg(LIGHT_PERIWINKLE)),
-                                ]))
-                                .title_style(Style::default().fg(LIGHT_PERIWINKLE))
-                                .borders(Borders::ALL)
-                                .border_style(style::Style::default().fg(EUCALYPTUS))
-                                .padding(Padding::horizontal(1)),
-                        ),
-                    layout[2],
-                );
-            } else {
-                // Node/s block
-                let block_nodes = Block::default()
-                    .title(Line::from(vec![
-                        Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
-                        Span::styled(
-                            format!(
-                                " ({}) ",
-                                if let Some(ref items) = self.items {
-                                    items.items.len()
-                                } else {
-                                    0
-                                }
-                            ),
-                            Style::default().fg(LIGHT_PERIWINKLE),
-                        ),
-                    ]))
-                    .padding(Padding::new(1, 1, 0, 0))
-                    .title_style(Style::default().fg(GHOST_WHITE))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(EUCALYPTUS));
-
-                // Split the inner area of the combined block
-                let inner_area = block_nodes.inner(layout[2]);
-
-                // Column Widths
-                let node_widths = [
-                    Constraint::Min(NODE_WIDTH as u16),
-                    Constraint::Min(VERSION_WIDTH as u16),
-                    Constraint::Min(ATTOS_WIDTH as u16),
-                    Constraint::Min(MEMORY_WIDTH as u16),
-                    Constraint::Min(MBPS_WIDTH as u16),
-                    Constraint::Min(RECORDS_WIDTH as u16),
-                    Constraint::Min(PEERS_WIDTH as u16),
-                    Constraint::Min(CONNS_WIDTH as u16),
-                    Constraint::Min(MODE_WIDTH as u16),
-                    Constraint::Min(STATUS_WIDTH as u16),
-                    Constraint::Fill(FAILURE_WIDTH as u16),
-                    Constraint::Max(SPINNER_WIDTH as u16),
-                ];
-
-                // Header
-                let header_row = Row::new(vec![
-                    Cell::new("Node").fg(COOL_GREY),
-                    Cell::new("Version").fg(COOL_GREY),
-                    Cell::new("Attos").fg(COOL_GREY),
-                    Cell::new("Memory").fg(COOL_GREY),
-                    Cell::new(
-                        format!("{}{}", " ".repeat(MBPS_WIDTH - "Mbps".len()), "Mbps")
-                            .fg(COOL_GREY),
+                layout[2],
+            );
+        } else {
+            // Node/s block
+            let block_nodes = Block::default()
+                .title(Line::from(vec![
+                    Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
+                    Span::styled(
+                        format!(" ({}) ", self.items.items.len()),
+                        Style::default().fg(LIGHT_PERIWINKLE),
                     ),
-                    Cell::new("Recs").fg(COOL_GREY),
-                    Cell::new("Peers").fg(COOL_GREY),
-                    Cell::new("Conns").fg(COOL_GREY),
-                    Cell::new("Mode").fg(COOL_GREY),
-                    Cell::new("Status").fg(COOL_GREY),
-                    Cell::new("Failure").fg(COOL_GREY),
-                    Cell::new(" ").fg(COOL_GREY), // Spinner
-                ])
-                .style(Style::default().add_modifier(Modifier::BOLD));
+                ]))
+                .padding(Padding::new(1, 1, 0, 0))
+                .title_style(Style::default().fg(GHOST_WHITE))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(EUCALYPTUS));
 
-                let mut items: Vec<Row> = Vec::new();
-                if let Some(ref mut items_table) = self.items {
-                    for (i, node_item) in items_table.items.iter_mut().enumerate() {
-                        let is_selected = items_table.state.selected() == Some(i);
-                        items.push(node_item.render_as_row(i, layout[2], f, is_selected));
-                    }
-                }
+            // Split the inner area of the combined block
+            let inner_area = block_nodes.inner(layout[2]);
 
-                // Table items
-                let table = Table::new(items, node_widths)
-                    .header(header_row)
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default().bg(INDIGO))
-                    .highlight_spacing(HighlightSpacing::Always);
+            // Column Widths
+            let node_widths = [
+                Constraint::Min(NODE_WIDTH as u16),
+                Constraint::Min(VERSION_WIDTH as u16),
+                Constraint::Min(ATTOS_WIDTH as u16),
+                Constraint::Min(MEMORY_WIDTH as u16),
+                Constraint::Min(MBPS_WIDTH as u16),
+                Constraint::Min(RECORDS_WIDTH as u16),
+                Constraint::Min(PEERS_WIDTH as u16),
+                Constraint::Min(CONNS_WIDTH as u16),
+                Constraint::Min(MODE_WIDTH as u16),
+                Constraint::Min(STATUS_WIDTH as u16),
+                Constraint::Fill(FAILURE_WIDTH as u16),
+                Constraint::Max(SPINNER_WIDTH as u16),
+            ];
 
-                f.render_widget(table, inner_area);
+            // Header
+            let header_row = Row::new(vec![
+                Cell::new("Node").fg(COOL_GREY),
+                Cell::new("Version").fg(COOL_GREY),
+                Cell::new("Attos").fg(COOL_GREY),
+                Cell::new("Memory").fg(COOL_GREY),
+                Cell::new(
+                    format!("{}{}", " ".repeat(MBPS_WIDTH - "Mbps".len()), "Mbps").fg(COOL_GREY),
+                ),
+                Cell::new("Recs").fg(COOL_GREY),
+                Cell::new("Peers").fg(COOL_GREY),
+                Cell::new("Conns").fg(COOL_GREY),
+                Cell::new("Mode").fg(COOL_GREY),
+                Cell::new("Status").fg(COOL_GREY),
+                Cell::new("Failure").fg(COOL_GREY),
+                Cell::new(" ").fg(COOL_GREY), // Spinner
+            ])
+            .style(Style::default().add_modifier(Modifier::BOLD));
 
-                f.render_widget(block_nodes, layout[2]);
+            let mut items: Vec<Row> = Vec::new();
+
+            for (i, node_item) in self.items.items.iter_mut().enumerate() {
+                let is_selected = self.items.state.selected() == Some(i);
+                items.push(node_item.render_as_row(i, layout[2], f, is_selected));
             }
+
+            // Table items
+            let table = Table::new(items, node_widths)
+                .header(header_row)
+                .column_spacing(1)
+                .row_highlight_style(Style::default().bg(INDIGO))
+                .highlight_spacing(HighlightSpacing::Always);
+
+            f.render_widget(table, inner_area);
+
+            f.render_widget(block_nodes, layout[2]);
         }
 
         // ==== Footer =====
 
-        let selected = self
-            .items
-            .as_ref()
-            .and_then(|items| items.selected_item())
-            .is_some();
+        let selected = self.items.selected_item().is_some();
 
         let footer = Footer::default();
-        let footer_state = if let Some(ref items) = self.items {
-            if !items.items.is_empty() || !self.rewards_address.is_empty() {
-                if !self.get_running_nodes().is_empty() {
-                    if selected {
-                        &mut NodesToStart::RunningSelected
-                    } else {
-                        &mut NodesToStart::Running
-                    }
-                } else if selected {
-                    &mut NodesToStart::NotRunningSelected
+        let footer_state = if !self.items.items.is_empty() || !self.rewards_address.is_empty() {
+            if !self.get_running_nodes().is_empty() {
+                if selected {
+                    &mut NodesToStart::RunningSelected
                 } else {
-                    &mut NodesToStart::NotRunning
+                    &mut NodesToStart::Running
                 }
+            } else if selected {
+                &mut NodesToStart::NotRunningSelected
             } else {
                 &mut NodesToStart::NotRunning
             }
         } else {
             &mut NodesToStart::NotRunning
         };
+
         f.render_stateful_widget(footer, layout[3], footer_state);
 
         // ===== Popups =====
@@ -1452,6 +1336,12 @@ impl<T> StatefulTable<T> {
             .selected()
             .and_then(|index| self.items.get(index))
     }
+
+    fn selected_item_mut(&mut self) -> Option<&mut T> {
+        self.state
+            .selected()
+            .and_then(|index| self.items.get_mut(index))
+    }
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
@@ -1463,6 +1353,17 @@ enum NodeStatus {
     Stopped,
     Removed,
     Updating,
+}
+
+impl From<&ServiceStatus> for NodeStatus {
+    fn from(status: &ServiceStatus) -> Self {
+        match status {
+            ServiceStatus::Added => NodeStatus::Added,
+            ServiceStatus::Running => NodeStatus::Running,
+            ServiceStatus::Stopped => NodeStatus::Stopped,
+            ServiceStatus::Removed => NodeStatus::Removed,
+        }
+    }
 }
 
 impl fmt::Display for NodeStatus {
@@ -1497,6 +1398,18 @@ pub struct NodeItem<'a> {
 }
 
 impl NodeItem<'_> {
+    fn lock(&mut self) {
+        self.locked = true;
+    }
+
+    fn unlock(&mut self) {
+        self.locked = false;
+    }
+
+    fn update_status(&mut self, status: NodeStatus) {
+        self.status = status;
+    }
+
     fn render_as_row(
         &mut self,
         index: usize,

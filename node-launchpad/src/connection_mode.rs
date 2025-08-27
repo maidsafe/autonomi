@@ -63,7 +63,6 @@ impl Serialize for ConnectionMode {
 #[derive(Default, Debug, Clone, Serialize, Display)]
 pub enum NodeConnectionMode {
     UPnP,
-    Relay,
     Manual,
     #[default]
     Unknown,
@@ -72,9 +71,9 @@ pub enum NodeConnectionMode {
 impl From<&NodeServiceData> for NodeConnectionMode {
     fn from(nsd: &NodeServiceData) -> Self {
         if nsd.no_upnp {
-            Self::UPnP
-        } else {
             Self::Manual
+        } else {
+            Self::UPnP
         }
     }
 }
