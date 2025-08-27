@@ -54,7 +54,7 @@ pub struct NodeServiceDataV3 {
     #[serde(serialize_with = "NodeServiceData::serialize_peer_id")]
     pub peer_id: Option<PeerId>,
     pub pid: Option<u32>,
-    pub relay: bool,
+    /// Removed relay field in V3
     #[serde(default)]
     pub rewards_address: RewardsAddress,
     /// Added a mandatory Reachability progress enum in V3
@@ -110,7 +110,6 @@ impl NodeServiceDataV3 {
             peer_id: Option<PeerId>,
             pid: Option<u32>,
             skip_reachability_check: bool,
-            relay: bool,
             #[serde(default)]
             rewards_address: RewardsAddress,
             reachability_progress: ReachabilityProgress,
@@ -148,7 +147,6 @@ impl NodeServiceDataV3 {
             number: helper.number,
             peer_id: helper.peer_id,
             pid: helper.pid,
-            relay: helper.relay,
             rewards_address: helper.rewards_address,
             reachability_progress: helper.reachability_progress,
             rpc_socket_addr: helper.rpc_socket_addr,
@@ -193,7 +191,6 @@ mod tests {
             user_mode: true,
             version: "0.1.0".to_string(),
             no_upnp: false,
-            relay: true,
             auto_restart: false,
             connected_peers: 10,
             evm_network: EvmNetwork::ArbitrumSepoliaTest,

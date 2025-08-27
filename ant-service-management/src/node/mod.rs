@@ -86,9 +86,6 @@ impl ServiceStateActions for NodeService {
         if service_data.no_upnp {
             args.push(OsString::from("--no-upnp"));
         }
-        if service_data.relay {
-            args.push(OsString::from("--relay"));
-        }
 
         if service_data.alpha {
             args.push(OsString::from("--alpha"));
