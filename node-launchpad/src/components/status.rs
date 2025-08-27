@@ -121,6 +121,7 @@ pub struct StatusConfig {
 impl<'a> Status<'a> {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
+        let node_services = node_registry.get_node_service_data().await;
 
         let status = Self {
             init_peers_config: config.init_peers_config,
@@ -130,7 +131,7 @@ impl<'a> Status<'a> {
             network_id: config.network_id,
             node_stats: NodeStats::default(),
             node_stats_last_update: Instant::now(),
-            node_services: Default::default(),
+            node_services,
             node_registry: node_registry.clone(),
             node_management: NodeManagement::new(node_registry.clone())?,
             items: StatefulTable::with_items(vec![]),
