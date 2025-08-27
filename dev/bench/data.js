@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756299836815,
+  "lastUpdate": 1756299914377,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1536,6 +1536,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 90,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "89fc3eb63c63781ebf023e810c091a9ad6abc942",
+          "message": "Merge pull request #3172 from maqi/extend_stream_download_coverage\n\nExtend stream download coverage",
+          "timestamp": "2025-08-27T12:18:02Z",
+          "tree_id": "6429e274e06cf83739a96d19c1ef0b9d845a4a4b",
+          "url": "https://github.com/maidsafe/autonomi/commit/89fc3eb63c63781ebf023e810c091a9ad6abc942"
+        },
+        "date": 1756299913274,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 91,
             "unit": "MB"
           }
         ]
