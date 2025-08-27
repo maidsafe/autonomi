@@ -159,15 +159,10 @@ impl AppData {
             color_eyre::eyre::eyre!("Failed to read app data file: {}", e)
         })?;
 
-        let mut app_data: AppData = serde_json::from_str(&data).map_err(|e| {
+        let app_data: AppData = serde_json::from_str(&data).map_err(|e| {
             error!("Failed to parse app data: {}", e);
             color_eyre::eyre::eyre!("Failed to parse app data: {}", e)
         })?;
-
-        // Don't allow the manual setting to HomeNetwork anymore
-        if let Some(ConnectionMode::HomeNetwork) = app_data.connection_mode {
-            app_data.connection_mode = Some(ConnectionMode::Automatic);
-        }
 
         Ok(app_data)
     }
