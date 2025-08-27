@@ -24,7 +24,6 @@ pub mod node_stats;
 pub mod style;
 pub mod system;
 pub mod tui;
-mod upnp;
 pub mod utils;
 pub mod widgets;
 
