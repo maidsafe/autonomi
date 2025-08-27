@@ -1113,7 +1113,6 @@ impl Component for Status<'_> {
         ]);
 
         let connection_mode_string = match self.connection_mode {
-            ConnectionMode::HomeNetwork => "Home Network".to_string(),
             ConnectionMode::UPnP => "UPnP".to_string(),
             ConnectionMode::CustomPorts => format!(
                 "Custom Ports  {}-{}",
