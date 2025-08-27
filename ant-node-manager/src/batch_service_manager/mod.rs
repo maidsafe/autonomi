@@ -417,6 +417,10 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             };
         }
 
+        if let Err(err) = self.node_registry.save().await {
+            error!("Failed to save node registry after starting services: {err}");
+        }
+
         let multi_progress = if self.verbosity != VerbosityLevel::Minimal {
             Some(MultiProgress::new())
         } else {

@@ -248,6 +248,7 @@ fn run() -> Result<()> {
     }));
 
     let opt = Opt::parse();
+    info!("Antnode started with opt: {opt:?}");
 
     let network_id = if let Some(network_id) = opt.network_id {
         network_id

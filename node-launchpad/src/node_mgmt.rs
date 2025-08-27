@@ -527,7 +527,7 @@ fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
         },
         network_id: args.network_id,
         init_peers_config: args.init_peers_config.clone(),
-        skip_reachability_check: true,
+        skip_reachability_check: false,
         rewards_address: args.rewards_address.clone(),
         upnp: args.connection_mode == ConnectionMode::UPnP,
     }

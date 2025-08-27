@@ -49,3 +49,80 @@ pre-built node binary and connect it to a network with a custom network ID.
 ```bash
 ./node-launchpad --network-id 2 --antnode-path /path/to/antnode --peer /ip4/1.2.3.4/tcp/12000/p2p/12D3KooWAbCxMV2Zm3Pe4HcAokWDG9w8UMLpDiKpMxwLK3mixpkL
 ```
+
+## Testing
+
+The node-launchpad includes comprehensive testing for its TUI components using ratatui's testing framework.
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run specific test file
+cargo test --test header_test
+
+# Run with verbose output
+cargo test -- --nocapture
+
+# Run tests with clippy and formatting
+cgc
+```
+
+### Test Structure
+
+Tests are organized into:
+- **Unit Tests**: Individual component logic in `src/` modules with `#[cfg(test)]`
+- **Integration Tests**: Full component rendering and user interactions in `tests/` directory
+
+### Example Test Pattern
+
+```rust
+use node_launchpad::components::header::{Header, SelectedMenuItem};
+use ratatui::{backend::TestBackend, Terminal, widgets::StatefulWidget};
+
+#[test]
+fn test_header_renders_correctly() {
+    // Create test backend with specific dimensions
+    let backend = TestBackend::new(80, 1);
+    let mut terminal = Terminal::new(backend).unwrap();
+    
+    // Set up component state
+    let mut state = SelectedMenuItem::Status;
+    
+    // Render the component
+    terminal.draw(|f| {
+        let header = Header::new();
+        header.render(f.area(), f.buffer_mut(), &mut state);
+    }).unwrap();
+    
+    // Verify output
+    let buffer = terminal.backend().buffer();
+    let content = buffer.content()
+        .iter()
+        .map(|cell| cell.symbol())
+        .collect::<String>();
+    
+    assert!(content.contains("Autonomi Node Launchpad"));
+    assert!(content.contains("[S]tatus"));
+}
+```
+
+### Testing Best Practices
+
+1. **Use TestBackend**: Create deterministic tests with `TestBackend::new(width, height)`
+2. **Test All States**: Verify component behavior in different states
+3. **Verify Content**: Check both text content and styling/colors
+4. **Mock Dependencies**: Use mock implementations for external services
+5. **Test Edge Cases**: Handle empty data, overflow, and error conditions
+
+### Working Example
+
+See `tests/header_test.rs` for a complete working example that tests:
+- Basic component rendering
+- State-dependent menu highlighting
+- Version display formatting
+- Content verification
+
+This testing approach ensures the TUI interface is reliable and maintains visual consistency across different scenarios.
