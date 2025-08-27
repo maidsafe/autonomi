@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756133585195,
+  "lastUpdate": 1756293381003,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -818,6 +818,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 27.343418119001267,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "497d38e3be8bc47fc3de897ec7c9385513df140e",
+          "message": "Merge pull request #3166 from maqi/unify_Pointer_Scratchpad_split_resolution\n\nchore(client): unify Pointer and Scratchpad split resolution approacch",
+          "timestamp": "2025-08-27T10:15:02Z",
+          "tree_id": "db47d9091a1a4ec587c4522f9da14bbfc4d96f91",
+          "url": "https://github.com/maidsafe/autonomi/commit/497d38e3be8bc47fc3de897ec7c9385513df140e"
+        },
+        "date": 1756293373640,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.67930875639939,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.60447308110574,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 27.316640870315762,
             "unit": "MiB/s"
           }
         ]
