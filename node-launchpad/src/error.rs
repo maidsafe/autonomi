@@ -86,7 +86,7 @@ use ratatui::{
 /// }
 /// ```
 
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ErrorPopup {
     visible: bool,
     title: String,

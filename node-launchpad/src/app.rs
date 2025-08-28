@@ -15,9 +15,9 @@ use crate::{
         options::Options,
         popup::{
             change_drive::ChangeDrivePopup, connection_mode::ChangeConnectionModePopUp,
-            manage_nodes::ManageNodes, port_range::PortRangePopUp, remove_node::RemoveNodePopUp,
-            reset_nodes::ResetNodesPopup, rewards_address::RewardsAddress,
-            upgrade_nodes::UpgradeNodesPopUp,
+            manage_nodes::ManageNodes, node_logs::NodeLogsPopup, port_range::PortRangePopUp,
+            remove_node::RemoveNodePopUp, reset_nodes::ResetNodesPopup,
+            rewards_address::RewardsAddress, upgrade_nodes::UpgradeNodesPopUp,
         },
         status::{Status, StatusConfig},
     },
@@ -130,6 +130,7 @@ impl App {
         let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
         let upgrade_launchpad_popup = UpgradeLaunchpadPopup::default();
+        let node_logs = NodeLogsPopup::new("".to_string()); // Will be updated when triggered
 
         let components: Vec<Box<dyn Component>> = vec![
             // Sections
@@ -146,6 +147,7 @@ impl App {
             Box::new(upgrade_nodes),
             Box::new(remove_node),
             Box::new(upgrade_launchpad_popup),
+            Box::new(node_logs),
         ];
 
         Ok(Self {
@@ -184,6 +186,7 @@ impl App {
                 | Scene::UpgradeNodesPopUp
                 | Scene::UpgradeLaunchpadPopUp
                 | Scene::RemoveNodePopUp
+                | Scene::NodeLogsPopUp
         )
     }
 
@@ -356,6 +359,9 @@ impl App {
                             Scene::RemoveNodePopUp => {
                                 self.focus_manager.push_focus(FocusTarget::RemoveNodePopup);
                             }
+                            Scene::NodeLogsPopUp => {
+                                self.focus_manager.push_focus(FocusTarget::NodeLogsPopup);
+                            }
                         }
 
                         // If we're closing a popup (going from popup to main scene), pop focus
@@ -394,6 +400,11 @@ impl App {
                         debug!("Storing nodes to start: {count:?}");
                         self.app_data.nodes_to_start = *count;
                         self.app_data.save(None)?;
+                    }
+                    Action::SetNodeLogsTarget(ref _node_name) => {
+                        // The action will be forwarded to components below
+                        // After components process it, switch to NodeLogs scene
+                        action_tx.send(Action::SwitchScene(Scene::NodeLogsPopUp))?;
                     }
                     _ => {}
                 }
