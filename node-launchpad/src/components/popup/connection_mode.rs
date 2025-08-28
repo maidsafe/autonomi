@@ -26,6 +26,7 @@ use crate::{
     action::{Action, OptionsActions},
     components::Component,
     connection_mode::ConnectionMode,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{
         COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
@@ -42,7 +43,6 @@ enum ChangeConnectionModeState {
 
 #[derive(Default)]
 pub struct ChangeConnectionModePopUp {
-    active: bool,
     state: ChangeConnectionModeState,
     items: StatefulList<ConnectionModeItem>,
     connection_mode_selection: ConnectionModeItem,
@@ -70,7 +70,6 @@ impl ChangeConnectionModePopUp {
         debug!("Connection Mode in Config: {:?}", connection_mode);
         let items = StatefulList::with_items(connection_modes_items);
         Ok(Self {
-            active: false,
             state: ChangeConnectionModeState::Selection,
             items,
             connection_mode_selection: selected_connection_mode.clone(),
@@ -307,9 +306,13 @@ impl ChangeConnectionModePopUp {
 }
 
 impl Component for ChangeConnectionModePopUp {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         let send_back: Vec<Action> = match &self.state {
             ChangeConnectionModeState::Selection => match key.code {
@@ -396,23 +399,25 @@ impl Component for ChangeConnectionModePopUp {
                 }
             },
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ChangeConnectionModePopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ChangeConnectionModePopUp => {
-                    self.active = true;
-                    self.can_select = false;
-                    self.select_connection_mode();
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ChangeConnectionModePopUp) => {
+                self.can_select = false;
+                self.select_connection_mode();
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             // Useful when the user has selected a connection mode but didn't confirm it
             Action::OptionsActions(OptionsActions::UpdateConnectionMode(connection_mode)) => {
                 self.connection_mode_selection.connection_mode = connection_mode;
@@ -425,10 +430,6 @@ impl Component for ChangeConnectionModePopUp {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
