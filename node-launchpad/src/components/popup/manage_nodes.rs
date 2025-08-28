@@ -17,6 +17,7 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{
     action::Action,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
@@ -26,12 +27,10 @@ use super::super::{Component, utils::centered_rect_fixed};
 pub const GB_PER_NODE: u64 = 35;
 pub const MB: u64 = 1000 * 1000;
 pub const GB: u64 = MB * 1000;
-pub const MAX_NODE_COUNT: usize = 50;
+pub const MAX_NODE_COUNT: u64 = 50;
 
 pub struct ManageNodes {
-    /// Whether the component is active right now, capturing keystrokes + drawing things.
-    active: bool,
-    available_disk_space_gb: usize,
+    available_disk_space_gb: u64,
     storage_mountpoint: PathBuf,
     nodes_to_start_input: Input,
     // cache the old value incase user presses Esc.
@@ -39,11 +38,10 @@ pub struct ManageNodes {
 }
 
 impl ManageNodes {
-    pub fn new(nodes_to_start: usize, storage_mountpoint: PathBuf) -> Result<Self> {
+    pub fn new(nodes_to_start: u64, storage_mountpoint: PathBuf) -> Result<Self> {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
-            active: false,
-            available_disk_space_gb: (get_available_space_b(&storage_mountpoint)? / GB) as usize,
+            available_disk_space_gb: get_available_space_b(&storage_mountpoint)? / GB,
             nodes_to_start_input: Input::default().with_value(nodes_to_start.to_string()),
             old_value: Default::default(),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -51,26 +49,17 @@ impl ManageNodes {
         Ok(new)
     }
 
-    fn get_nodes_to_start_val(&self) -> usize {
+    fn get_nodes_to_start_val(&self) -> u64 {
         self.nodes_to_start_input.value().parse().unwrap_or(0)
     }
 
     // Returns the max number of nodes to start
     // It is the minimum of the available disk space and the max nodes limit
-    fn max_nodes_to_start(&self) -> usize {
-        std::cmp::min(
-            self.available_disk_space_gb / GB_PER_NODE as usize,
-            MAX_NODE_COUNT,
-        )
+    fn max_nodes_to_start(&self) -> u64 {
+        std::cmp::min(self.available_disk_space_gb / GB_PER_NODE, MAX_NODE_COUNT)
     }
-}
 
-impl Component for ManageNodes {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
-        }
-
+    fn handle_key_events_internal(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
         // while in entry mode, key bindings are not captured, so gotta exit entry mode from here
         let send_back = match key.code {
             KeyCode::Enter => {
@@ -109,12 +98,12 @@ impl Component for ManageNodes {
                 if c == '0' && self.nodes_to_start_input.value().is_empty() {
                     return Ok(vec![]);
                 }
-                let number = c.to_string().parse::<usize>().unwrap_or(0);
+                let number = c.to_string().parse::<u64>().unwrap_or(0);
                 let new_value = format!("{}{}", self.get_nodes_to_start_val(), number)
-                    .parse::<usize>()
+                    .parse::<u64>()
                     .unwrap_or(0);
                 // if it might exceed the available space or if more than max_node_count, then enter the max
-                if (new_value as u64) * GB_PER_NODE > (self.available_disk_space_gb as u64) * GB
+                if new_value * GB_PER_NODE > self.available_disk_space_gb * GB
                     || new_value > MAX_NODE_COUNT
                 {
                     self.nodes_to_start_input = self
@@ -137,9 +126,7 @@ impl Component for ManageNodes {
                     if key.code == KeyCode::Up {
                         if current_val + 1 >= MAX_NODE_COUNT {
                             MAX_NODE_COUNT
-                        } else if ((current_val + 1) as u64) * GB_PER_NODE
-                            <= (self.available_disk_space_gb as u64) * GB
-                        {
+                        } else if (current_val + 1) * GB_PER_NODE <= self.available_disk_space_gb {
                             current_val + 1
                         } else {
                             current_val
@@ -162,29 +149,46 @@ impl Component for ManageNodes {
         };
         Ok(send_back)
     }
+}
+
+impl Component for ManageNodes {
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
+        }
+
+        let actions = self.handle_key_events_internal(key)?;
+        let result = if actions.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((actions, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ManageNodesPopup
+    }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ManageNodesPopUp { amount_of_nodes } => {
-                    self.nodes_to_start_input = self
-                        .nodes_to_start_input
-                        .clone()
-                        .with_value(amount_of_nodes.to_string());
-                    self.active = true;
-                    self.old_value = self.nodes_to_start_input.value().to_string();
-                    // set to entry input mode as we want to handle everything within our handle_key_events
-                    // so by default if this scene is active, we capture inputs.
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ManageNodesPopUp { amount_of_nodes }) => {
+                self.nodes_to_start_input = self
+                    .nodes_to_start_input
+                    .clone()
+                    .with_value(amount_of_nodes.to_string());
+                self.old_value = self.nodes_to_start_input.value().to_string();
+                // set to entry input mode as we want to handle everything within our handle_key_events
+                // so by default if this scene is active, we capture inputs.
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = (get_available_space_b(&mountpoint)? / GB) as usize;
+                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
                 None
             }
             _ => None,
@@ -193,10 +197,6 @@ impl Component for ManageNodes {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
         let layer_one = Layout::new(
             Direction::Vertical,
@@ -271,10 +271,7 @@ impl Component for ManageNodes {
         let info = Line::from(vec![
             Span::styled("Using", info_style),
             Span::styled(
-                format!(
-                    " {}GB ",
-                    (self.get_nodes_to_start_val() as u64) * GB_PER_NODE
-                ),
+                format!(" {}GB ", self.get_nodes_to_start_val() * GB_PER_NODE),
                 info_style.bold(),
             ),
             Span::styled(

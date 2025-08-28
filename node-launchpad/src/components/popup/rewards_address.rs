@@ -10,6 +10,7 @@ use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, OptionsActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
@@ -25,8 +26,6 @@ const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
 const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 for the padding
 
 pub struct RewardsAddress {
-    /// Whether the component is active right now, capturing keystrokes + draw things.
-    active: bool,
     state: RewardsAddressState,
     rewards_address_input_field: Input,
     // cache the old value incase user presses Esc.
@@ -49,7 +48,6 @@ impl RewardsAddress {
             RewardsAddressState::RewardsAddressAlreadySet
         };
         Self {
-            active: false,
             state,
             rewards_address_input_field: Input::default().with_value(rewards_address),
             old_value: Default::default(),
@@ -144,9 +142,13 @@ impl RewardsAddress {
 }
 
 impl Component for RewardsAddress {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back = match &self.state {
@@ -177,14 +179,22 @@ impl Component for RewardsAddress {
             },
             RewardsAddressState::AcceptTCsAndEnterRewardsAddress => self.capture_inputs(key),
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::RewardsAddressPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
             Action::SwitchScene(scene) => match scene {
                 Scene::StatusRewardsAddressPopUp | Scene::OptionsRewardsAddressPopUp => {
-                    self.active = true;
                     self.old_value = self.rewards_address_input_field.value().to_string();
                     if scene == Scene::StatusRewardsAddressPopUp {
                         self.back_to = Scene::Status;
@@ -195,10 +205,7 @@ impl Component for RewardsAddress {
                     // so by default if this scene is active, we capture inputs.
                     Some(Action::SwitchInputMode(InputMode::Entry))
                 }
-                _ => {
-                    self.active = false;
-                    None
-                }
+                _ => None,
             },
             _ => None,
         };
@@ -206,10 +213,6 @@ impl Component for RewardsAddress {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(

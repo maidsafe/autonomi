@@ -16,6 +16,7 @@ use crate::style::RED;
 use crate::{
     action::{Action, OptionsActions},
     connection_mode::ConnectionMode,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
@@ -37,7 +38,6 @@ enum PortRangeState {
 }
 
 pub struct PortRangePopUp {
-    active: bool,
     state: PortRangeState,
     connection_mode: ConnectionMode,
     connection_mode_old_value: Option<ConnectionMode>,
@@ -52,7 +52,6 @@ pub struct PortRangePopUp {
 impl PortRangePopUp {
     pub fn new(connection_mode: ConnectionMode, port_from: u32, port_to: u32) -> Self {
         Self {
-            active: false,
             state: PortRangeState::Selection,
             connection_mode,
             connection_mode_old_value: None,
@@ -350,9 +349,13 @@ impl PortRangePopUp {
 }
 
 impl Component for PortRangePopUp {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&FocusTarget::PortRangePopup) {
+            return Ok((vec![], EventResult::Ignored));
         }
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back: Vec<Action> = match &self.state {
@@ -367,14 +370,14 @@ impl Component for PortRangePopUp {
                             && self.can_save
                         {
                             self.state = PortRangeState::ConfirmChange;
-                            return Ok(vec![]);
+                            return Ok((vec![], EventResult::Ignored));
                         }
                         let port_from = self.port_from.value();
                         let port_to = self.port_to.value();
 
                         if port_from.is_empty() || port_to.is_empty() || !self.can_save {
                             debug!("Got Enter, but port_from or port_to is empty, ignoring.");
-                            return Ok(vec![]);
+                            return Ok((vec![], EventResult::Ignored));
                         }
                         debug!("Got Enter, saving the ports and switching to Options Screen",);
                         self.state = PortRangeState::ConfirmChange;
@@ -399,13 +402,14 @@ impl Component for PortRangePopUp {
                                 self.connection_mode = self
                                     .connection_mode_old_value
                                     .unwrap_or(ConnectionMode::Automatic);
-                                return Ok(vec![
+                                let actions = vec![
                                     Action::StoreConnectionMode(self.connection_mode),
                                     Action::OptionsActions(OptionsActions::UpdateConnectionMode(
                                         self.connection_mode,
                                     )),
                                     Action::SwitchScene(Scene::Options),
-                                ]);
+                                ];
+                                return Ok((actions, EventResult::Consumed));
                             }
                             self.port_from = self
                                 .port_from
@@ -541,36 +545,36 @@ impl Component for PortRangePopUp {
                 _ => vec![],
             },
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::PortRangePopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ChangePortsPopUp {
-                    connection_mode_old_value,
-                } => {
-                    if self.connection_mode == ConnectionMode::CustomPorts {
-                        self.active = true;
-                        self.first_stroke = true;
-                        self.connection_mode_old_value = connection_mode_old_value;
-                        self.validate();
-                        self.port_from_old_value =
-                            self.port_from.value().parse().unwrap_or_default();
-                        self.port_to_old_value = self.port_to.value().parse().unwrap_or_default();
-                        // Set to InputMode::Entry as we want to handle everything within our handle_key_events
-                        // so by default if this scene is active, we capture inputs.
-                        Some(Action::SwitchInputMode(InputMode::Entry))
-                    } else {
-                        self.active = false;
-                        Some(Action::SwitchScene(Scene::Options))
-                    }
+            Action::SwitchScene(Scene::ChangePortsPopUp {
+                connection_mode_old_value,
+            }) => {
+                if self.connection_mode == ConnectionMode::CustomPorts {
+                    self.first_stroke = true;
+                    self.connection_mode_old_value = connection_mode_old_value;
+                    self.validate();
+                    self.port_from_old_value = self.port_from.value().parse().unwrap_or_default();
+                    self.port_to_old_value = self.port_to.value().parse().unwrap_or_default();
+                    // Set to InputMode::Entry as we want to handle everything within our handle_key_events
+                    // so by default if this scene is active, we capture inputs.
+                    Some(Action::SwitchInputMode(InputMode::Entry))
+                } else {
+                    Some(Action::SwitchScene(Scene::Options))
                 }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            }
             // Useful when the user has selected a connection mode but didn't confirm it
             Action::OptionsActions(OptionsActions::UpdateConnectionMode(connection_mode)) => {
                 self.connection_mode = connection_mode;
@@ -582,10 +586,6 @@ impl Component for PortRangePopUp {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(

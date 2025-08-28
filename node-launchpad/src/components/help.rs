@@ -28,16 +28,12 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Help {
-    pub active: bool,
     pub action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl Help {
     pub async fn new() -> Result<Self> {
-        Ok(Self {
-            active: false,
-            action_tx: None,
-        })
+        Ok(Self { action_tx: None })
     }
 }
 
@@ -47,10 +43,6 @@ impl Component for Help {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-        // We define a layout, top and down box.
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Length(1), Constraint::Length(9)])
@@ -173,15 +165,14 @@ impl Component for Help {
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        if let Action::SwitchScene(scene) = action {
-            if let Scene::Help = scene {
-                self.active = true;
-                // make sure we're in navigation mode
-                return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
-            } else {
-                self.active = false;
-            }
+        if let Action::SwitchScene(Scene::Help) = action {
+            // make sure we're in navigation mode
+            return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
         }
         Ok(None)
+    }
+
+    fn focus_target(&self) -> crate::focus::FocusTarget {
+        crate::focus::FocusTarget::Help
     }
 }

@@ -24,7 +24,7 @@ pub enum Scene {
     StatusRewardsAddressPopUp,
     OptionsRewardsAddressPopUp,
     ManageNodesPopUp {
-        amount_of_nodes: usize,
+        amount_of_nodes: u64,
     },
     ResetNodesPopUp,
     UpgradeNodesPopUp,

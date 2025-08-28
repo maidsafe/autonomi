@@ -23,6 +23,7 @@ use crate::{
     },
     config::{AppData, Config, get_launchpad_nodes_data_dir_path},
     connection_mode::ConnectionMode,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_mgmt::{PORT_MAX, PORT_MIN},
     style::SPACE_CADET,
@@ -47,6 +48,7 @@ pub struct App {
     pub input_mode: InputMode,
     pub scene: Scene,
     pub last_tick_key_events: Vec<KeyEvent>,
+    pub focus_manager: FocusManager,
 }
 
 impl App {
@@ -165,7 +167,24 @@ impl App {
             input_mode: InputMode::Navigation,
             scene: Scene::Status,
             last_tick_key_events: Vec::new(),
+            focus_manager: FocusManager::new(FocusTarget::Status), // Start with Status focused
         })
+    }
+
+    fn is_popup_scene(&self, scene: Scene) -> bool {
+        matches!(
+            scene,
+            Scene::ChangeDrivePopUp
+                | Scene::ChangeConnectionModePopUp
+                | Scene::ChangePortsPopUp { .. }
+                | Scene::StatusRewardsAddressPopUp
+                | Scene::OptionsRewardsAddressPopUp
+                | Scene::ManageNodesPopUp { .. }
+                | Scene::ResetNodesPopUp
+                | Scene::UpgradeNodesPopUp
+                | Scene::UpgradeLaunchpadPopUp
+                | Scene::RemoveNodePopUp
+        )
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -222,9 +241,14 @@ impl App {
                             };
                         } else if self.input_mode == InputMode::Entry {
                             for component in self.components.iter_mut() {
-                                let send_back_actions = component.handle_events(Some(e.clone()))?;
+                                let (send_back_actions, event_result) =
+                                    component.handle_key_events(key, &self.focus_manager)?;
                                 for action in send_back_actions {
                                     action_tx.send(action)?;
+                                }
+                                // If the event was consumed, break to avoid other components handling it
+                                if matches!(event_result, EventResult::Consumed) {
+                                    break;
                                 }
                             }
                         }
@@ -248,11 +272,19 @@ impl App {
                         tui.resize(Rect::new(0, 0, w, h))?;
                         tui.draw(|f| {
                             for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.area());
-                                if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                        .unwrap();
+                                // Draw all components that are in the focus stack
+                                let should_draw = self
+                                    .focus_manager
+                                    .get_focus_stack()
+                                    .contains(&component.focus_target());
+
+                                if should_draw {
+                                    let r = component.draw(f, f.area());
+                                    if let Err(e) = r {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
+                                            .unwrap();
+                                    }
                                 }
                             }
                         })?;
@@ -264,18 +296,82 @@ impl App {
                                 f.area(),
                             );
                             for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.area());
-                                if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                        .unwrap();
+                                // Draw all components that are in the focus stack
+                                let should_draw = self
+                                    .focus_manager
+                                    .get_focus_stack()
+                                    .contains(&component.focus_target());
+
+                                if should_draw {
+                                    let r = component.draw(f, f.area());
+                                    if let Err(e) = r {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
+                                            .unwrap();
+                                    }
                                 }
                             }
                         })?;
                     }
                     Action::SwitchScene(scene) => {
                         info!("Scene switched to: {scene:?}");
+                        let previous_scene = self.scene;
                         self.scene = scene;
+
+                        // Handle focus transitions based on scene type
+                        match scene {
+                            // Main scenes - set focus directly
+                            Scene::Status => {
+                                self.focus_manager.clear_and_set(FocusTarget::Status);
+                            }
+                            Scene::Options => {
+                                self.focus_manager.clear_and_set(FocusTarget::Options);
+                            }
+                            Scene::Help => {
+                                self.focus_manager.clear_and_set(FocusTarget::Help);
+                            }
+                            // Popup scenes - push focus to maintain stack
+                            Scene::ChangeDrivePopUp => {
+                                self.focus_manager.push_focus(FocusTarget::ChangeDrivePopup);
+                            }
+                            Scene::ChangeConnectionModePopUp => {
+                                self.focus_manager
+                                    .push_focus(FocusTarget::ChangeConnectionModePopup);
+                            }
+                            Scene::ChangePortsPopUp { .. } => {
+                                self.focus_manager.push_focus(FocusTarget::PortRangePopup);
+                            }
+                            Scene::StatusRewardsAddressPopUp => {
+                                self.focus_manager
+                                    .push_focus(FocusTarget::RewardsAddressPopup);
+                            }
+                            Scene::OptionsRewardsAddressPopUp => {
+                                self.focus_manager
+                                    .push_focus(FocusTarget::RewardsAddressPopup);
+                            }
+                            Scene::ManageNodesPopUp { .. } => {
+                                self.focus_manager.push_focus(FocusTarget::ManageNodesPopup);
+                            }
+                            Scene::ResetNodesPopUp => {
+                                self.focus_manager.push_focus(FocusTarget::ResetNodesPopup);
+                            }
+                            Scene::UpgradeNodesPopUp => {
+                                self.focus_manager
+                                    .push_focus(FocusTarget::UpgradeNodesPopup);
+                            }
+                            Scene::UpgradeLaunchpadPopUp => {
+                                self.focus_manager
+                                    .push_focus(FocusTarget::UpgradeLaunchpadPopup);
+                            }
+                            Scene::RemoveNodePopUp => {
+                                self.focus_manager.push_focus(FocusTarget::RemoveNodePopup);
+                            }
+                        }
+
+                        // If we're closing a popup (going from popup to main scene), pop focus
+                        if self.is_popup_scene(previous_scene) && !self.is_popup_scene(scene) {
+                            self.focus_manager.pop_focus();
+                        }
                     }
                     Action::SwitchInputMode(mode) => {
                         info!("Input mode switched to: {mode:?}");

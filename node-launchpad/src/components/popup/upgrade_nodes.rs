@@ -10,6 +10,7 @@ use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, OptionsActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_mgmt,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
@@ -18,14 +19,11 @@ use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 
-pub struct UpgradeNodesPopUp {
-    /// Whether the component is active right now, capturing keystrokes + draw things.
-    active: bool,
-}
+pub struct UpgradeNodesPopUp {}
 
 impl UpgradeNodesPopUp {
     pub fn new() -> Self {
-        Self { active: false }
+        Self {}
     }
 }
 
@@ -36,9 +34,13 @@ impl Default for UpgradeNodesPopUp {
 }
 
 impl Component for UpgradeNodesPopUp {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back = match key.code {
@@ -55,31 +57,29 @@ impl Component for UpgradeNodesPopUp {
             }
             _ => vec![],
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::UpgradeNodesPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::UpgradeNodesPopUp => {
-                    self.active = true;
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::UpgradeNodesPopUp) => {
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             _ => None,
         };
         Ok(send_back)
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
