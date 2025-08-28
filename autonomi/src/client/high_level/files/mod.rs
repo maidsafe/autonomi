@@ -6,16 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use self_encryption::DataMap;
 use serde::{Deserialize, Serialize};
 use std::{
     path::{Path, PathBuf},
-    sync::LazyLock,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
 
 use crate::Client;
-use crate::chunk::DataMapChunk;
 use crate::client::{GetError, PutError, quote::CostError};
 
 pub mod archive_private;
@@ -25,35 +24,6 @@ pub mod fs_public;
 
 pub use archive_private::PrivateArchive;
 pub use archive_public::PublicArchive;
-
-/// Number of files to upload in parallel.
-///
-/// Can be overridden by the `FILE_UPLOAD_BATCH_SIZE` environment variable.
-pub static FILE_UPLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
-    let batch_size = std::env::var("FILE_UPLOAD_BATCH_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
-    info!("File upload batch size: {}", batch_size);
-    batch_size
-});
-
-/// Number of files to encrypt in parallel.
-///
-/// Can be overridden by the `FILE_ENCRYPT_BATCH_SIZE` environment variable.
-pub static FILE_ENCRYPT_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
-    let batch_size = std::env::var("FILE_ENCRYPT_BATCH_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(
-            std::thread::available_parallelism()
-                .map(|n| n.get())
-                .unwrap_or(1)
-                * 8,
-        );
-    info!("File encryption batch size: {}", batch_size);
-    batch_size
-});
 
 /// Metadata for a file in an archive. Time values are UNIX timestamps (UTC).
 ///
@@ -150,18 +120,16 @@ pub enum FileCostError {
 }
 
 impl Client {
-    /// Fetch
-    pub(super) async fn stream_download_chunks_to_file(
+    pub(crate) async fn stream_download_from_datamap(
         &self,
-        data_map_chunk: &DataMapChunk,
+        data_map: DataMap,
         to_dest: &Path,
     ) -> Result<(), DownloadError> {
-        let data_map = self.restore_data_map_from_chunk(data_map_chunk).await?;
         let total_chunks = data_map.infos().len();
 
         #[cfg(feature = "loud")]
-        println!("Fetching {total_chunks} chunks ...");
-        info!("Fetching {total_chunks} chunks ...");
+        println!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
+        info!("Streaming fetching {total_chunks} chunks to {to_dest:?} ...");
 
         self.core_client
             .fetch_from_data_map(&data_map, Some(to_dest.to_path_buf()), false)
@@ -182,7 +150,6 @@ pub(crate) fn normalize_path(path: PathBuf) -> PathBuf {
         .map(|c| c.as_os_str().to_string_lossy())
         .collect::<Vec<_>>()
         .join("/");
-
     PathBuf::from(normalized)
 }
 

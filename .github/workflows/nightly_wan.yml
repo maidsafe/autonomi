@@ -21,7 +21,7 @@ jobs:
       matrix:
         os: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -163,7 +163,7 @@ jobs:
   #         #   node_data_path: /Users/runner/Library/Application Support/autonomi/node
   #         #   safe_path: /Users/runner/Library/Application Support/autonomi
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable
@@ -368,7 +368,7 @@ jobs:
   #         #   node_data_path: /Users/runner/Library/Application Support/autonomi/node
   #         #   safe_path: /Users/runner/Library/Application Support/autonomi
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable

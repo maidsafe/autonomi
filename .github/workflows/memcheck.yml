@@ -1,11 +1,8 @@
 name: Memory Check
 
 on:
-  # tests must run for a PR to be valid and pass merge queue muster
-  # on main, we want to know that all commits are passing at a glance, any deviation should help bisecting errors
-  # the merge run checks should show on master and enable this clear test/passing history
   merge_group:
-    branches: [main, alpha*, beta*, rc*]
+    branches: [main]
   pull_request:
     branches: ["*"]
 
@@ -20,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Check we're on the right commit
         run: git log -1 --oneline
@@ -249,53 +246,6 @@ jobs:
             echo "Client average memory usage exceeded threshold: $client_avg_mem_limit_mb MB"
             exit 1
           fi
-
-      # Logging of handling time is on Trace level,
-      # meanwhile the local_network startup tool sets the logging level on Debug.
-      #
-      # - name: Check node swarm_driver handling statistics
-      #   shell: bash
-      #   # With the latest improvements, swarm_driver will be in high chance
-      #   # has no super long handling (longer than 1s).
-      #   # As the `rg` cmd will fail the shell directly if no entry find,
-      #   # hence not covering it.
-      #   # Be aware that if do need to looking for handlings longer than second, it shall be:
-      #   #   rg "SwarmCmd handled in [^m,µ,n]*s:" $NODE_DATA_PATH/*/logs/* --glob antnode.* -c --stats
-      #   run: |
-      #     num_of_times=$(
-      #       rg "SwarmCmd handled in [0-9.]+ms:" $NODE_DATA_PATH/*/logs/* --glob antnode.* -c --stats |
-      #       rg "(\d+) matches" |
-      #       rg "\d+" -o
-      #     )
-      #     echo "Number of long cmd handling times: $num_of_times"
-      #     total_long_handling_ms=$(
-      #       rg "SwarmCmd handled in [0-9.]+ms:" $NODE_DATA_PATH/*/logs/* --glob antnode.* -o --no-line-number --no-filename |
-      #       awk -F' |ms:' '{sum += $4} END {printf "%.0f\n", sum}'
-      #     )
-      #     echo "Total cmd long handling time is: $total_long_handling_ms ms"
-      #     average_handling_ms=$(($total_long_handling_ms/$(($num_of_times))))
-      #     echo "Average cmd long handling time is: $average_handling_ms ms"
-      #     total_long_handling=$(($total_long_handling_ms))
-      #     total_num_of_times=$(($num_of_times))
-      #     num_of_times=$(
-      #       rg "SwarmEvent handled in [0-9.]+ms:" $NODE_DATA_PATH/*/logs/* --glob antnode.* -c --stats |
-      #       rg "(\d+) matches" |
-      #       rg "\d+" -o
-      #     )
-      #     echo "Number of long event handling times: $num_of_times"
-      #     total_long_handling_ms=$(
-      #       rg "SwarmEvent handled in [0-9.]+ms:" $NODE_DATA_PATH/*/logs/* --glob antnode.* -o --no-line-number --no-filename |
-      #       awk -F' |ms:' '{sum += $4} END {printf "%.0f\n", sum}'
-      #     )
-      #     echo "Total event long handling time is: $total_long_handling_ms ms"
-      #     average_handling_ms=$(($total_long_handling_ms/$(($num_of_times))))
-      #     echo "Average event long handling time is: $average_handling_ms ms"
-      #     total_long_handling=$(($total_long_handling_ms+$total_long_handling))
-      #     total_num_of_times=$(($num_of_times+$total_num_of_times))
-      #     average_handling_ms=$(($total_long_handling/$(($total_num_of_times))))
-      #     echo "Total swarm_driver long handling times is: $total_num_of_times"
-      #     echo "Total swarm_driver long handling duration is: $total_long_handling ms"
-      #     echo "Total average swarm_driver long handling duration is: $average_handling_ms ms"
 
       - name: Move restart_node log to the working directory
         run: |

@@ -265,7 +265,7 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
         if contains_keyword_all_sn_logs || contains_keyword_verbose_sn_logs {
             let mut t = BTreeMap::from_iter(vec![
                 // bins
-                ("autonomi_cli".to_string(), Level::TRACE),
+                ("ant".to_string(), Level::TRACE),
                 ("evm_testnet".to_string(), Level::TRACE),
                 ("antnode".to_string(), Level::TRACE),
                 ("antnode_rpc_client".to_string(), Level::TRACE),

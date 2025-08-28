@@ -6,10 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-//! Pointer operations for the Autonomi client.
-//! This module provides pointer upload, download, and cost estimation.
-//! All operations delegate to autonomi_core::Client through the wrapper.
-
 use crate::client::{Client, GetError, PutError, payment::PaymentOption, quote::CostError};
 
 use ant_evm::{AttoTokens, EvmWalletError};
@@ -49,6 +45,8 @@ pub enum PointerError {
         "Pointer cannot be updated as it does not exist, please create it first or wait for it to be created"
     )]
     CannotUpdateNewPointer,
+    #[error("Got multiple conflicting pointers with the latest version")]
+    Fork(Vec<Pointer>),
 }
 
 impl Client {
@@ -190,7 +188,7 @@ impl Client {
         let network_addr = NetworkAddress::from(pointer_addr);
 
         self.core_client
-            .get_cost_estimation(vec![(network_addr, 0)]) // 0 size means use max size
+            .get_cost_estimation(vec![(network_addr, Pointer::size())])
             .await
             .map_err(|e| CostError::from_error(&e))
     }

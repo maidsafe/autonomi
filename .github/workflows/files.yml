@@ -1,0 +1,561 @@
+name: File Upload/Download Tests
+
+on:
+  merge_group:
+    branches: [ main ]
+  pull_request:
+    branches: [ "*" ]
+
+jobs:
+  file_upload_download_tests:
+    name: "File Upload/Download Tests"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+          - os: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        run: cargo build --release --bin antnode --bin ant --bin antctl
+        timeout-minutes: 30
+
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          build: true
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: bash
+        run: |
+          if [[ -z "$ANT_PEERS" ]]; then
+            echo "The ANT_PEERS variable has not been set"
+            exit 1
+          elif [[ -z "$EVM_NETWORK" ]]; then
+            echo "The EVM_NETWORK variable has not been set"
+            exit 1
+          else
+            echo "ANT_PEERS has been set to $ANT_PEERS"
+            echo "EVM_NETWORK has been set to $EVM_NETWORK"
+          fi
+
+      - name: Set secret key
+        shell: bash
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" >> $GITHUB_ENV
+
+      - name: Create base directory structure
+        shell: bash
+        run: mkdir -p test_upload test_download
+
+      - name: Upload and download test files
+        shell: bash
+        run: |
+          declare -a test_configs=(
+            "public_file|--public|file"
+            "public_file_no_archive|--public --no-archive|file" 
+            "public_dir|--public|dir"
+            "public_dir_no_archive|--public --no-archive|dir"
+            "private_file||file"
+            "private_file_no_archive|--no-archive|file"
+            "private_dir||dir"
+            "private_dir_no_archive|--no-archive|dir"
+          )
+          
+          declare -a passed_tests=()
+          declare -a failed_tests=()
+          
+          extract_address() {
+            local output_file="$1"
+            local address=""
+            
+            # Try to find "At address: <address>" format first
+            address=$(rg "At address: ([0-9a-f]+)" -o -r '$1' "$output_file" 2>/dev/null || true)
+            
+            # If not found, try to find "to: <address>" format (when content already exists)
+            if [[ -z "$address" ]]; then
+              address=$(rg "to: ([0-9a-f]+)" -o -r '$1' "$output_file" 2>/dev/null || true)
+            fi
+            
+            # If still not found, try quoted address format
+            if [[ -z "$address" ]]; then
+              address=$(rg '"([0-9a-f]{64})"' -o -r '$1' "$output_file" 2>/dev/null || true)
+            fi
+            
+            echo "$address"
+          }
+          
+          for config in "${test_configs[@]}"; do
+            IFS='|' read -r test_name upload_args test_type <<< "$config"
+            
+            if [[ "$test_type" == "dir" ]]; then
+              echo "============================================="
+              echo "🧪 Running test: $test_name $test_type"
+              echo "============================================="
+              
+              test_dir="test_upload/test_data_${test_name}"
+              mkdir -p "$test_dir/subdir1/subdir2"
+              
+              echo "Creating unique test data for $test_name..."
+              dd if=/dev/urandom of="$test_dir/file1_${test_name}.bin" bs=1M count=10 2>/dev/null || python3 -c "import os; open('$test_dir/file1_${test_name}.bin', 'wb').write(os.urandom(10*1024*1024))"
+              dd if=/dev/urandom of="$test_dir/subdir1/file2_${test_name}.bin" bs=1M count=8 2>/dev/null || python3 -c "import os; open('$test_dir/subdir1/file2_${test_name}.bin', 'wb').write(os.urandom(8*1024*1024))"
+              dd if=/dev/urandom of="$test_dir/subdir1/subdir2/file3_${test_name}.bin" bs=1M count=7 2>/dev/null || python3 -c "import os; open('$test_dir/subdir1/subdir2/file3_${test_name}.bin', 'wb').write(os.urandom(7*1024*1024))"
+              
+              find "$test_dir" -type f -exec ls -lh {} \;
+              echo "Running ant with args: $upload_args"
+              ./target/release/ant --local file upload "$test_dir" $upload_args 2>&1 | tee ./upload_output_${test_name}
+              
+              ADDRESS=$(extract_address "./upload_output_${test_name}")
+              echo "Directory address: $ADDRESS"
+              
+              if [[ -z "$ADDRESS" ]]; then
+                echo "❌ Failed to extract address for $test_name"
+                echo "Upload output:"
+                cat "./upload_output_${test_name}"
+                failed_tests+=("$test_name (dir) - address extraction failed")
+                continue
+              fi
+              
+              ./target/release/ant --local file download "$ADDRESS" "test_download/downloaded_content_${test_name}"
+              find test_download -type f -exec ls -lh {} \;
+              
+              if [[ "$upload_args" == *"--no-archive"* ]]; then
+                downloaded_files=$(find "test_download/downloaded_content_${test_name}" -type f 2>/dev/null | wc -l)
+                if [[ $downloaded_files -ge 1 ]]; then
+                  echo "✅ $test_name test passed: found $downloaded_files files"
+                  passed_tests+=("$test_name (dir, no-archive) - $downloaded_files files")
+                else
+                  echo "❌ $test_name test failed: no files found"
+                  failed_tests+=("$test_name (dir, no-archive) - no files found")
+                fi
+              else
+                if [[ -d "test_download/downloaded_content_${test_name}" ]] && [[ $(find "test_download/downloaded_content_${test_name}" -type f 2>/dev/null | wc -l) -gt 0 ]]; then
+                  echo "✅ $test_name test passed"
+                  passed_tests+=("$test_name (dir, archive)")
+                else
+                  echo "❌ $test_name test failed"
+                  ls -la "test_download/downloaded_content_${test_name}/" 2>/dev/null || echo "Downloaded directory not found"
+                  failed_tests+=("$test_name (dir, archive) - download failed")
+                fi
+              fi
+            else
+              for size in small medium; do
+                echo "============================================="
+                echo "🧪 Running test: $test_name $test_type ($size)"
+                echo "============================================="
+                
+                if [[ "$size" == "small" ]]; then
+                  file_size_mb=25
+                else
+                  file_size_mb=200
+                fi
+                
+                test_file="test_upload/${size}_${test_name}.bin"
+                echo "Creating unique ${size} test file for $test_name..."
+                dd if=/dev/urandom of="$test_file" bs=1M count=$file_size_mb 2>/dev/null || python3 -c "import os; open('$test_file', 'wb').write(os.urandom($file_size_mb*1024*1024))"
+
+                find test_upload -type f -exec ls -lh {} \;
+                echo "Running ant with args: $upload_args"
+                ./target/release/ant --log-output-dest=data-dir --local file upload "$test_file" $upload_args 2>&1 | tee ./${size}_upload_output_${test_name}
+                
+                ADDRESS=$(extract_address "./${size}_upload_output_${test_name}")
+                echo "${size} file address: $ADDRESS"
+                
+                if [[ -z "$ADDRESS" ]]; then
+                  echo "❌ Failed to extract address for $test_name ${size} file"
+                  echo "Upload output:"
+                  cat "./${size}_upload_output_${test_name}"
+                  failed_tests+=("$test_name ($size file) - address extraction failed")
+                  continue
+                fi
+                
+                ./target/release/ant --local file download "$ADDRESS" "test_download/downloaded_${size}_file_${test_name}" 2>&1 | tee "./${size}_download_output_${test_name}"
+                find test_download -type f -exec ls -lh {} \;
+                
+                # Show download output to screen
+                echo "=== Download Output for ${size} file ==="
+                cat "./${size}_download_output_${test_name}"
+                echo "=== End Download Output ==="
+                
+                # Check for streaming download when file_size_mb is 200
+                streaming_check_passed=true
+                if [[ $file_size_mb -eq 200 ]]; then
+                  if ! grep -q "Streaming fetching" "./${size}_download_output_${test_name}"; then
+                    echo "⚠️  WARNING: streaming download not detected for 200MB file"
+                    streaming_check_passed=false
+                  else
+                    echo "✅ Streaming download detected for 200MB file"
+                  fi
+                fi
+                
+                if [[ -f "test_download/downloaded_${size}_file_${test_name}" ]]; then
+                  original_size=$(stat -c%s "$test_file" 2>/dev/null || stat -f%z "$test_file")
+                  downloaded_size=$(stat -c%s "test_download/downloaded_${size}_file_${test_name}" 2>/dev/null || stat -f%z "test_download/downloaded_${size}_file_${test_name}")
+                  
+                  if [[ $original_size -eq $downloaded_size ]] && [[ $streaming_check_passed == true ]]; then
+                    echo "✅ $test_name ${size} file test passed: $downloaded_size bytes"
+                    passed_tests+=("$test_name ($size file) - $downloaded_size bytes")
+                  elif [[ $original_size -ne $downloaded_size ]]; then
+                    echo "❌ $test_name ${size} file size mismatch - original: $original_size, downloaded: $downloaded_size"
+                    failed_tests+=("$test_name ($size file) - size mismatch")
+                  elif [[ $streaming_check_passed == false ]]; then
+                    echo "❌ $test_name ${size} file test failed: streaming download not detected"
+                    failed_tests+=("$test_name ($size file) - streaming download not detected")
+                  fi
+                else
+                  echo "❌ $test_name ${size} file download failed"
+                  failed_tests+=("$test_name ($size file) - download failed")
+                fi
+              done
+            fi
+            
+            echo "---"
+          done
+          
+          echo ""
+          echo "==============="
+          echo "🏁 TEST SUMMARY"
+          echo "==============="
+          
+          if [[ ${#passed_tests[@]} -gt 0 ]]; then
+            echo "✅ PASSED TESTS (${#passed_tests[@]}):"
+            for test in "${passed_tests[@]}"; do
+              echo "  • $test"
+            done
+          fi
+          
+          if [[ ${#failed_tests[@]} -gt 0 ]]; then
+            echo ""
+            echo "❌ FAILED TESTS (${#failed_tests[@]}):"
+            for test in "${failed_tests[@]}"; do
+              echo "  • $test"
+            done
+          fi
+          
+          echo ""
+          total_tests=$((${#passed_tests[@]} + ${#failed_tests[@]}))
+          echo "📊 RESULTS: ${#passed_tests[@]}/$total_tests tests passed"
+          
+          if [[ ${#failed_tests[@]} -gt 0 ]]; then
+            echo "❌ One or more tests failed"
+            exit 1
+          else
+            echo "🎉 All tests passed!"
+          fi
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 45
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_file_upload_download
+          build: true
+
+  file_upload_download_tests_windows:
+    name: "File Upload/Download Tests (Windows)"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        run: cargo build --release --bin antnode --bin ant --bin antctl
+        timeout-minutes: 30
+
+      - name: Install antctl
+        shell: pwsh
+        run: |
+          $destination = "$env:USERPROFILE\AppData\Local\Microsoft\WindowsApps"
+          Copy-Item "target\release\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
+
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode.exe
+          build: true
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: pwsh
+        run: |
+          if (-not $env:ANT_PEERS) {
+            Write-Host "The ANT_PEERS variable has not been set"
+            exit 1
+          } elseif (-not $env:EVM_NETWORK) {
+            Write-Host "The EVM_NETWORK variable has not been set"
+            exit 1
+          } else {
+            Write-Host "ANT_PEERS has been set to $env:ANT_PEERS"
+            Write-Host "EVM_NETWORK has been set to $env:EVM_NETWORK"
+          }
+
+      - name: Set secret key
+        shell: pwsh
+        run: |
+          "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create base directory structure
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "test_upload"
+          New-Item -ItemType Directory -Force -Path "test_download"
+
+      - name: Upload and download test files
+        shell: pwsh
+        run: |
+          $testConfigs = @(
+            @{name="public_file"; args="--public"; type="file"},
+            @{name="public_file_no_archive"; args="--public --no-archive"; type="file"},
+            @{name="public_dir"; args="--public"; type="dir"},
+            @{name="public_dir_no_archive"; args="--public --no-archive"; type="dir"},
+            @{name="private_file"; args=""; type="file"},
+            @{name="private_file_no_archive"; args="--no-archive"; type="file"},
+            @{name="private_dir"; args=""; type="dir"},
+            @{name="private_dir_no_archive"; args="--no-archive"; type="dir"}
+          )
+          
+          $passedTests = @()
+          $failedTests = @()
+          
+          function Extract-Address {
+            param([string]$outputFile)
+            
+            if (-not (Test-Path $outputFile)) {
+              return ""
+            }
+            
+            $content = Get-Content $outputFile -Raw
+            
+            # Try to find "At address: <address>" format first
+            $match = [regex]::Match($content, "At address: ([0-9a-f]+)")
+            if ($match.Success) {
+              return $match.Groups[1].Value
+            }
+            
+            # Try to find "to: <address>" format (when content already exists)
+            $match = [regex]::Match($content, "to: ([0-9a-f]+)")
+            if ($match.Success) {
+              return $match.Groups[1].Value
+            }
+            
+            # Try quoted address format
+            $match = [regex]::Match($content, '"([0-9a-f]{64})"')
+            if ($match.Success) {
+              return $match.Groups[1].Value
+            }
+            
+            return ""
+          }
+          
+          function Create-RandomFile {
+            param([string]$filePath, [int]$sizeMB)
+            
+            $bytes = New-Object byte[] ($sizeMB * 1024 * 1024)
+            $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
+            $rng.GetBytes($bytes)
+            [System.IO.File]::WriteAllBytes($filePath, $bytes)
+            $rng.Dispose()
+          }
+          
+          foreach ($config in $testConfigs) {
+            $testName = $config.name
+            $uploadArgs = $config.args
+            $testType = $config.type
+            
+            if ($testType -eq "dir") {
+              Write-Host "==================================="
+              Write-Host "🧪 Running test: $testName $testType"
+              Write-Host "==================================="
+              
+              $testDir = "test_upload\test_data_$testName"
+              New-Item -ItemType Directory -Force -Path "$testDir\subdir1\subdir2"
+              
+              Write-Host "Creating unique test data for $testName..."
+              Create-RandomFile "$testDir\file1_$testName.bin" 10
+              Create-RandomFile "$testDir\subdir1\file2_$testName.bin" 8
+              Create-RandomFile "$testDir\subdir1\subdir2\file3_$testName.bin" 7
+              
+              Write-Host "Running ant with args: $uploadArgs"
+              $uploadOutput = "upload_output_$testName"
+              if ($uploadArgs) {
+                & ".\target\release\ant.exe" --local file upload $testDir $uploadArgs.Split(' ') 2>&1 | Tee-Object -FilePath $uploadOutput
+              } else {
+                & ".\target\release\ant.exe" --local file upload $testDir 2>&1 | Tee-Object -FilePath $uploadOutput
+              }
+              
+              $address = Extract-Address $uploadOutput
+              Write-Host "Directory address: $address"
+              
+              if (-not $address) {
+                Write-Host "❌ Failed to extract address for $testName"
+                Write-Host "Upload output:"
+                Get-Content $uploadOutput
+                $failedTests += "$testName (dir) - address extraction failed"
+                continue
+              }
+              
+              & ".\target\release\ant.exe" --local file download $address "test_download\downloaded_content_$testName"
+              
+              Write-Host "Downloaded content:"
+              if (Test-Path "test_download\downloaded_content_$testName") {
+                Get-ChildItem "test_download\downloaded_content_$testName" -Recurse -File | ForEach-Object { 
+                  Write-Host "$($_.FullName) - $($_.Length) bytes"
+                }
+              }
+              
+              if ($uploadArgs -like "*--no-archive*") {
+                $downloadedFiles = @(Get-ChildItem "test_download\downloaded_content_$testName" -Recurse -File -ErrorAction SilentlyContinue)
+                if ($downloadedFiles.Count -ge 1) {
+                  Write-Host "✅ $testName test passed: found $($downloadedFiles.Count) files"
+                  $passedTests += "$testName (dir, no-archive) - $($downloadedFiles.Count) files"
+                } else {
+                  Write-Host "❌ $testName test failed: no files found"
+                  $failedTests += "$testName (dir, no-archive) - no files found"
+                }
+              } else {
+                $downloadedFiles = @(Get-ChildItem "test_download\downloaded_content_$testName" -Recurse -File -ErrorAction SilentlyContinue)
+                if ((Test-Path "test_download\downloaded_content_$testName") -and $downloadedFiles.Count -gt 0) {
+                  Write-Host "✅ $testName test passed"
+                  $passedTests += "$testName (dir, archive)"
+                } else {
+                  Write-Host "❌ $testName test failed"
+                  if (Test-Path "test_download\downloaded_content_$testName") {
+                    Get-ChildItem "test_download\downloaded_content_$testName"
+                  } else {
+                    Write-Host "Downloaded directory not found"
+                  }
+                  $failedTests += "$testName (dir, archive) - download failed"
+                }
+              }
+            } else {
+              foreach ($size in @("small", "medium")) {
+                Write-Host "==========================================="
+                Write-Host "🧪 Running test: $testName $testType ($size)"
+                Write-Host "==========================================="
+                
+                $fileSizeMB = if ($size -eq "small") { 25 } else { 200 }
+                
+                $testFile = "test_upload\${size}_$testName.bin"
+                Write-Host "Creating unique $size test file for $testName..."
+                Create-RandomFile $testFile $fileSizeMB
+                
+                Write-Host "Running ant with args: $uploadArgs"
+                $uploadOutput = "${size}_upload_output_$testName"
+                if ($uploadArgs) {
+                  & ".\target\release\ant.exe" --local file upload $testFile $uploadArgs.Split(' ') 2>&1 | Tee-Object -FilePath $uploadOutput
+                } else {
+                  & ".\target\release\ant.exe" --local file upload $testFile 2>&1 | Tee-Object -FilePath $uploadOutput
+                }
+                
+                $address = Extract-Address $uploadOutput
+                Write-Host "$size file address: $address"
+                
+                if (-not $address) {
+                  Write-Host "❌ Failed to extract address for $testName $size file"
+                  Write-Host "Upload output:"
+                  Get-Content $uploadOutput
+                  $failedTests += "$testName ($size file) - address extraction failed"
+                  continue
+                }
+                
+                $downloadOutput = "${size}_download_output_$testName"
+                & ".\target\release\ant.exe" --local file download $address "test_download\downloaded_${size}_file_$testName" 2>&1 | Tee-Object -FilePath $downloadOutput
+                
+                # Show download output to screen
+                Write-Host "=== Download Output for $size file ==="
+                Get-Content $downloadOutput
+                Write-Host "=== End Download Output ==="
+                
+                # Check for streaming download when fileSizeMB is 200
+                $streamingCheckPassed = $true
+                if ($fileSizeMB -eq 200) {
+                  $downloadContent = Get-Content $downloadOutput -Raw
+                  if ($downloadContent -notmatch "Streaming fetching") {
+                    Write-Host "⚠️  WARNING: streaming download not detected for 200MB file"
+                    $streamingCheckPassed = $false
+                  } else {
+                    Write-Host "✅ Streaming download detected for 200MB file"
+                  }
+                }
+                
+                if (Test-Path "test_download\downloaded_${size}_file_$testName") {
+                  $originalSize = (Get-Item $testFile).Length
+                  $downloadedSize = (Get-Item "test_download\downloaded_${size}_file_$testName").Length
+                  
+                  if (($originalSize -eq $downloadedSize) -and $streamingCheckPassed) {
+                    Write-Host "✅ $testName $size file test passed: $downloadedSize bytes"
+                    $passedTests += "$testName ($size file) - $downloadedSize bytes"
+                  } elseif ($originalSize -ne $downloadedSize) {
+                    Write-Host "❌ $testName $size file size mismatch - original: $originalSize, downloaded: $downloadedSize"
+                    $failedTests += "$testName ($size file) - size mismatch"
+                  } elseif (-not $streamingCheckPassed) {
+                    Write-Host "❌ $testName $size file test failed: streaming download not detected"
+                    $failedTests += "$testName ($size file) - streaming download not detected"
+                  }
+                } else {
+                  Write-Host "❌ $testName $size file download failed"
+                  $failedTests += "$testName ($size file) - download failed"
+                }
+              }
+            }
+            
+            Write-Host "---"
+          }
+          
+          Write-Host ""
+          Write-Host "==============="
+          Write-Host "🏁 TEST SUMMARY"
+          Write-Host "==============="
+          
+          if ($passedTests.Count -gt 0) {
+            Write-Host "✅ PASSED TESTS ($($passedTests.Count)):"
+            foreach ($test in $passedTests) {
+              Write-Host "  • $test"
+            }
+          }
+          
+          if ($failedTests.Count -gt 0) {
+            Write-Host ""
+            Write-Host "❌ FAILED TESTS ($($failedTests.Count)):"
+            foreach ($test in $failedTests) {
+              Write-Host "  • $test"
+            }
+          }
+          
+          Write-Host ""
+          $totalTests = $passedTests.Count + $failedTests.Count
+          Write-Host "📊 RESULTS: $($passedTests.Count)/$totalTests tests passed"
+          
+          if ($failedTests.Count -gt 0) {
+            Write-Host "❌ Some tests failed"
+            exit 1
+          } else {
+            Write-Host "🎉 All tests passed!"
+          }
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 45
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_file_upload_download_windows
+          build: true

@@ -1,26 +1,19 @@
 name: Check before merge
 
 on:
-  # tests must run for a PR to be valid and pass merge queue muster
-  # on main, we want to know that all commits are passing at a glance, any deviation should help bisecting errors
-  # the merge run checks should show on master and enable this clear test/passing history
   merge_group:
-    branches: [ main, alpha*, beta*, rc* ]
+    branches: [ main ]
   pull_request:
     branches: [ "*" ]
 
 env:
   CARGO_INCREMENTAL: 0 # bookkeeping for incremental builds has overhead, not useful in CI.
-  WINSW_URL: https://github.com/winsw/winsw/releases/download/v3.0.0-alpha.11/WinSW-x64.exe
-  GENESIS_PK: 9377ab39708a59d02d09bfd3c9bc7548faab9e0c2a2700b9ac7d5c14f0842f0b4bb0df411b6abd3f1a92b9aa1ebf5c3d
-  GENESIS_SK: 5ec88891c1098a0fede5b98b07f8abc931d7247b7aa310d21ab430cc957f9f02
-  MAX_CHUNK_SIZE: 4194304
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
@@ -28,11 +21,10 @@ jobs:
         run: python --version
 
   cargo-udeps:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Unused dependency check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@nightly # Needs nightly to distinguish between deps of different versions
@@ -54,17 +46,15 @@ jobs:
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      # commitlint check removed - no longer enforcing conventional commits
 
   checks:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: various checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -72,9 +62,6 @@ jobs:
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
-
-      # Formatting check removed - no longer enforcing code formatting in CI
-      # Developers can still use `cargo fmt` locally
 
       - shell: bash
         run: cargo clippy --all-targets --all-features -- -Dwarnings
@@ -103,14 +90,13 @@ jobs:
           cargo clean
 
   unit:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Unit Tests
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check we're on the right commit
         run: git log -1 --oneline
@@ -187,7 +173,6 @@ jobs:
           log_file_prefix: ant_test_logs_unit
 
   e2e:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: E2E tests
     runs-on: ${{ matrix.os }}
     strategy:
@@ -200,7 +185,7 @@ jobs:
           - os: macos-latest
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -612,72 +597,7 @@ jobs:
           log_file_prefix: ant_test_logs_e2e
           build: true
 
-  # token_distribution_test:
-  #   if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
-  #   name: token distribution test
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       os: [ubuntu-latest, windows-latest, macos-latest]
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-
-  #     - uses: Swatinem/rust-cache@v2
-
-  #     - name: Build binaries
-  #       run: cargo build --release --features=distribution --bin antnode
-  #       timeout-minutes: 35
-
-  #     - name: Build faucet binary
-  #       run: cargo build --release --features=distribution,gifting --bin faucet
-  #       timeout-minutes: 35
-
-  #     - name: Build testing executable
-  #       run: cargo test --release --features=distribution --no-run
-  #       env:
-  #         # only set the target dir for windows to bypass the linker issue.
-  #         # happens if we build the node manager via testnet action
-  #         CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
-  #       timeout-minutes: 35
-
-  #     - name: Start a local network
-  #       uses: maidsafe/ant-local-testnet-action@main
-  #       with:
-  #         action: start
-  #         interval: 2000
-  #         node-path: target/release/antnode
-  #         faucet-path: target/release/faucet
-  #         build: true
-
-  #     - name: Check ANT_PEERS was set
-  #       shell: bash
-  #       run: |
-  #         if [[ -z "$ANT_PEERS" ]]; then
-  #           echo "The ANT_PEERS variable has not been set"
-  #           exit 1
-  #         else
-  #           echo "ANT_PEERS has been set to $ANT_PEERS"
-  #         fi
-
-  #     - name: execute token_distribution tests
-  #       run: cargo test --release --features=distribution token_distribution -- --nocapture --test-threads=1
-  #       env:
-  #         ANT_LOG: "all"
-  #         CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
-  #       timeout-minutes: 25
-
-  #     - name: Stop the local network and upload logs
-  #       if: always()
-  #       uses: maidsafe/ant-local-testnet-action@main
-  #       with:
-  #         action: stop
-  #         log_file_prefix: ant_logs_token_distribution
-
   churn:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Network churning tests
     runs-on: ${{ matrix.os }}
     strategy:
@@ -693,7 +613,7 @@ jobs:
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -839,7 +759,6 @@ jobs:
           fi
 
   verify_data_location_routing_table:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Verify data location and Routing Table
     runs-on: ${{ matrix.os }}
     strategy:
@@ -855,7 +774,7 @@ jobs:
             node_data_path: /Users/runner/Library/Application Support/autonomi/node
             ant_path: /Users/runner/Library/Application Support/autonomi
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -967,11 +886,10 @@ jobs:
           fi
 
   large_file_upload_test:
-    if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
     name: Large file upload
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -1115,218 +1033,3 @@ jobs:
           action: stop
           log_file_prefix: ant_test_logs_large_file_upload_no_ws
           build: true
-
-  # replication_bench_with_heavy_upload:
-  #   if: "!startsWith(github.event.head_commit.message, 'chore(release):')"
-  #   name: Replication bench with heavy upload
-  #   runs-on: ubuntu-latest
-  #   env:
-  #     CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
-
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #     - uses: Swatinem/rust-cache@v2
-
-  #     - name: install ripgrep
-  #       shell: bash
-  #       run: sudo apt-get install -y ripgrep
-
-  #     - name: Download materials to create two 300MB test_files to be uploaded by client
-  #       shell: bash
-  #       run: |
-  #         mkdir test_data_1
-  #         cd test_data_1
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/Qi930/safe-qiWithListeners-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/Qi930/safenode-qiWithListeners-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/Qi930/safenode_rpc_client-qiWithListeners-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/QiSubdivisionBranch/faucet-qilesssubs-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/QiSubdivisionBranch/safe-qilesssubs-x86_64.tar.gz
-  #         ls -l
-  #         cd ..
-  #         tar -cvzf test_data_1.tar.gz test_data_1
-  #         mkdir test_data_2
-  #         cd test_data_2
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/QiSubdivisionBranch/safenode-qilesssubs-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/QiSubdivisionBranch/safenode_rpc_client-qilesssubs-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush/faucet-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush/safe-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush/safenode-DebugMem-x86_64.tar.gz
-  #         ls -l
-  #         cd ..
-  #         tar -cvzf test_data_2.tar.gz test_data_2
-  #         ls -l
-  #         mkdir test_data_3
-  #         cd test_data_3
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush/safenode_rpc_client-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush2/faucet-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush2/safe-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush2/safenode-DebugMem-x86_64.tar.gz
-  #         wget https://sn-node.s3.eu-west-2.amazonaws.com/joshuef/RemoveArtificalReplPush2/safenode_rpc_client-DebugMem-x86_64.tar.gz
-  #         ls -l
-  #         cd ..
-  #         tar -cvzf test_data_3.tar.gz test_data_3
-  #         ls -l
-  #         df
-
-  #     - name: Build binaries
-  #       run: cargo build --release --bin antnode --bin safe
-  #       timeout-minutes: 30
-
-  #     - name: Build faucet binary
-  #       run: cargo build --release --bin faucet --features gifting
-  #       timeout-minutes: 30
-
-  #     - name: Start a local network
-  #       uses: maidsafe/ant-local-testnet-action@main
-  #       with:
-  #         action: start
-  #         interval: 2000
-  #         node-path: target/release/antnode
-  #         faucet-path: target/release/faucet
-  #         build: true
-
-  #     - name: Check ANT_PEERS was set
-  #       shell: bash
-  #       run: |
-  #         if [[ -z "$ANT_PEERS" ]]; then
-  #           echo "The ANT_PEERS variable has not been set"
-  #           exit 1
-  #         else
-  #           echo "ANT_PEERS has been set to $ANT_PEERS"
-  #         fi
-
-  #     - name: Create and fund a wallet to pay for files storage
-  #       run: |
-  #         ./target/release/safe --log-output-dest=data-dir wallet create --no-password
-  #         ./target/release/faucet --log-output-dest=data-dir send 100000000 $(./target/release/safe --log-output-dest=data-dir wallet address | tail -n 1) | tail -n 1 > transfer_hex
-  #         ./target/release/safe --log-output-dest=data-dir wallet receive --file transfer_hex
-  #       env:
-  #         ANT_LOG: "all"
-  #       timeout-minutes: 5
-
-  #     - name: Start a client to upload first file
-  #       run: ./target/release/safe --log-output-dest=data-dir files upload "./test_data_1.tar.gz" --retry-strategy quick
-  #       env:
-  #         ANT_LOG: "all"
-  #       timeout-minutes: 5
-
-  #     - name: Ensure no leftover transactions and payment files
-  #       run: |
-  #         expected_transactions_files="1"
-  #         expected_payment_files="0"
-  #         pwd
-  #         ls $CLIENT_DATA_PATH/ -l
-  #         ls $CLIENT_DATA_PATH/wallet -l
-  #         ls $CLIENT_DATA_PATH/wallet/transactions -l
-  #         transaction_files=$(ls $CLIENT_DATA_PATH/wallet/transactions | wc -l)
-  #         echo "Find $transaction_files transaction files"
-  #         if [ $expected_transactions_files -lt $transaction_files ]; then
-  #           echo "Got too many transaction files leftover: $transaction_files"
-  #           exit 1
-  #         fi
-  #         ls $CLIENT_DATA_PATH/wallet/payments -l
-  #         payment_files=$(ls $CLIENT_DATA_PATH/wallet/payments | wc -l)
-  #         if [ $expected_payment_files -lt $payment_files ]; then
-  #           echo "Got too many payment files leftover: $payment_files"
-  #           exit 1
-  #         fi
-  #       env:
-  #         CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
-  #       timeout-minutes: 10
-
-  #     - name: Wait for certain period
-  #       run: sleep 300
-  #       timeout-minutes: 6
-
-  #     - name: Use same client to upload second file
-  #       run: ./target/release/safe --log-output-dest=data-dir files upload "./test_data_2.tar.gz" --retry-strategy quick
-  #       env:
-  #         ANT_LOG: "all"
-  #       timeout-minutes: 10
-
-  #     - name: Ensure no leftover transactions and payment files
-  #       run: |
-  #         expected_transactions_files="1"
-  #         expected_payment_files="0"
-  #         pwd
-  #         ls $CLIENT_DATA_PATH/ -l
-  #         ls $CLIENT_DATA_PATH/wallet -l
-  #         ls $CLIENT_DATA_PATH/wallet/transactions -l
-  #         transaction_files=$(find $CLIENT_DATA_PATH/wallet/transactions -type f | wc -l)
-  #         if (( $(echo "$transaction_files > $expected_transactions_files" | bc -l) )); then
-  #           echo "Got too many transaction files leftover: $transaction_files when we expected $expected_transactions_files"
-  #           exit 1
-  #         fi
-  #         ls $CLIENT_DATA_PATH/wallet/payments -l
-  #         payment_files=$(find $CLIENT_DATA_PATH/wallet/payments -type f | wc -l)
-  #         if (( $(echo "$payment_files > $expected_payment_files" | bc -l) )); then
-  #           echo "Got too many payment files leftover: $payment_files"
-  #           exit 1
-  #         fi
-  #       env:
-  #         CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
-  #       timeout-minutes: 10
-
-  #     - name: Wait for certain period
-  #       run: sleep 300
-  #       timeout-minutes: 6
-
-  #     # Start a different client to avoid local wallet slow down with more payments handled.
-  #     - name: Start a different client
-  #       run: |
-  #         pwd
-  #         mv $CLIENT_DATA_PATH $SAFE_DATA_PATH/client_first
-  #         ls -l $SAFE_DATA_PATH
-  #         ls -l $SAFE_DATA_PATH/client_first
-  #         mkdir $SAFE_DATA_PATH/client
-  #         ls -l $SAFE_DATA_PATH
-  #         mv $SAFE_DATA_PATH/client_first/logs $CLIENT_DATA_PATH/logs
-  #         ls -l $CLIENT_DATA_PATH
-  #         ./target/release/safe --log-output-dest=data-dir wallet create --no-password
-  #         ./target/release/faucet --log-output-dest=data-dir send 100000000 $(./target/release/safe --log-output-dest=data-dir wallet address | tail -n 1) | tail -n 1 > transfer_hex
-  #         ./target/release/safe --log-output-dest=data-dir wallet receive --file transfer_hex
-  #       env:
-  #         ANT_LOG: "all"
-  #         SAFE_DATA_PATH: /home/runner/.local/share/autonomi
-  #         CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
-  #       timeout-minutes: 25
-
-  #     - name: Use second client to upload third file
-  #       run: ./target/release/safe --log-output-dest=data-dir files upload "./test_data_3.tar.gz" --retry-strategy quick
-  #       env:
-  #         ANT_LOG: "all"
-  #       timeout-minutes: 10
-
-  #     - name: Ensure no leftover transactions and payment files
-  #       run: |
-  #         expected_transactions_files="1"
-  #         expected_payment_files="0"
-  #         pwd
-  #         ls $CLIENT_DATA_PATH/ -l
-  #         ls $CLIENT_DATA_PATH/wallet -l
-  #         ls $CLIENT_DATA_PATH/wallet/transactions -l
-  #         transaction_files=$(ls $CLIENT_DATA_PATH/wallet/transactions | wc -l)
-  #         echo "Find $transaction_files transaction files"
-  #         if [ $expected_transactions_files -lt $transaction_files ]; then
-  #           echo "Got too many transaction files leftover: $transaction_files"
-  #           exit 1
-  #         fi
-  #         ls $CLIENT_DATA_PATH/wallet/payments -l
-  #         payment_files=$(ls $CLIENT_DATA_PATH/wallet/payments | wc -l)
-  #         if [ $expected_payment_files -lt $payment_files ]; then
-  #           echo "Got too many payment files leftover: $payment_files"
-  #           exit 1
-  #         fi
-  #       env:
-  #         CLIENT_DATA_PATH: /home/runner/.local/share/autonomi/client
-  #       timeout-minutes: 10
-
-  #     - name: Stop the local network and upload logs
-  #       if: always()
-  #       uses: maidsafe/ant-local-testnet-action@main
-  #       with:
-  #         action: stop
-  #         log_file_prefix: ant_test_logs_heavy_replicate_bench

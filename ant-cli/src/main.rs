@@ -90,15 +90,16 @@ async fn main() -> Result<()> {
 
 fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGuard>)> {
     let logging_targets = vec![
+        // libs
         ("ant_bootstrap".to_string(), Level::INFO),
         ("ant_build_info".to_string(), Level::TRACE),
         ("ant_evm".to_string(), Level::TRACE),
-        ("autonomi_cli".to_string(), Level::TRACE),
         ("autonomi".to_string(), Level::TRACE),
         ("evmlib".to_string(), Level::TRACE),
         ("ant_logging".to_string(), Level::TRACE),
         ("ant_protocol".to_string(), Level::TRACE),
-        ("ant_cli".to_string(), Level::TRACE),
+        // bins
+        ("ant".to_string(), Level::TRACE),
     ];
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(opt.log_output_dest.clone());

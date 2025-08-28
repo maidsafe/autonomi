@@ -47,13 +47,15 @@ pub enum Analysis {
         address: ChunkAddress,
         chunks: Vec<ChunkAddress>,
         points_to_a_data_map: bool,
-        data: Bytes,
+        // Return `None` for large sized target, as it shall not be handled ALL in memory
+        data: Option<Bytes>,
     },
     /// A raw datamap
     RawDataMap {
         chunks: Vec<ChunkAddress>,
         points_to_a_data_map: bool,
-        data: Bytes,
+        // Return `None` for large sized target, as it shall not be handled ALL in memory
+        data: Option<Bytes>,
     },
     /// A public archive
     /// (chunk containing a datamap of a public archive)
@@ -113,7 +115,12 @@ impl std::fmt::Display for Analysis {
                 writeln!(f, "DataMap containing {} Chunks", chunks.len())?;
                 writeln!(f, "Content is another DataMap: {points_to_a_data_map}")?;
                 writeln!(f, "{chunks:#?}")?;
-                writeln!(f, "Decrypted Data in hex: {}", data_hex(data))?;
+                let data_hex = if let Some(data) = data {
+                    data_hex(data)
+                } else {
+                    "None".to_string()
+                };
+                writeln!(f, "Decrypted Data in hex: {data_hex}")?;
             }
             Analysis::RawDataMap {
                 chunks,
@@ -123,7 +130,12 @@ impl std::fmt::Display for Analysis {
                 writeln!(f, "DataMap containing {} Chunks", chunks.len())?;
                 writeln!(f, "Content is another DataMap: {points_to_a_data_map}")?;
                 writeln!(f, "{chunks:#?}")?;
-                writeln!(f, "Decrypted Data in hex: {}", data_hex(data))?;
+                let data_hex = if let Some(data) = data {
+                    data_hex(data)
+                } else {
+                    "None".to_string()
+                };
+                writeln!(f, "Decrypted Data in hex: {data_hex}")?;
             }
             Analysis::PublicArchive { address, archive } => {
                 writeln!(
@@ -336,7 +348,29 @@ async fn analyze_datamap(
     let points_to_a_data_map = map.child.is_some();
 
     println_if_verbose!("Fetching data from the Network...");
-    let data = client.data_get(datamap).await?;
+    let data = match client.data_get(datamap).await {
+        Ok(data) => data,
+        Err(GetError::TooLargeForMemory) => {
+            println_if_verbose!(
+                "Datamap points to a large sized file, not suitable for in-memory fetch."
+            );
+            let analysis = match stored_at {
+                Some(addr) => Analysis::DataMap {
+                    address: addr,
+                    chunks: chunk_list_from_datamap(map),
+                    data: None,
+                    points_to_a_data_map,
+                },
+                None => Analysis::RawDataMap {
+                    chunks: chunk_list_from_datamap(map),
+                    data: None,
+                    points_to_a_data_map,
+                },
+            };
+            return Ok(analysis);
+        }
+        Err(e) => return Err(AnalysisError::GetError(e)),
+    };
     println_if_verbose!("Data fetched from the Network...");
 
     if let Ok(private_archive) = PrivateArchive::from_bytes(data.clone()) {
@@ -377,12 +411,12 @@ async fn analyze_datamap(
         Some(addr) => Analysis::DataMap {
             address: addr,
             chunks: chunk_list_from_datamap(map),
-            data,
+            data: Some(data),
             points_to_a_data_map,
         },
         None => Analysis::RawDataMap {
             chunks: chunk_list_from_datamap(map),
-            data,
+            data: Some(data),
             points_to_a_data_map,
         },
     };
@@ -419,8 +453,46 @@ async fn analyze_datamap_old(
         }
     };
 
+    // Convert old format of DataMap into new
+    let chunk_identifiers: Vec<ChunkInfo> = map
+        .infos()
+        .iter()
+        .map(|ck_info| ChunkInfo {
+            index: ck_info.index,
+            dst_hash: ck_info.dst_hash,
+            src_hash: ck_info.src_hash,
+            src_size: ck_info.src_size,
+        })
+        .collect();
+    let data_map = DataMap {
+        chunk_identifiers,
+        child: None,
+    };
+
     println_if_verbose!("Fetching data from the Network...");
-    let data = client.data_get(datamap).await?;
+    let data = match client.data_get(datamap).await {
+        Ok(data) => data,
+        Err(GetError::TooLargeForMemory) => {
+            println_if_verbose!(
+                "Datamap points to a large sized file, not suitable for in-memory fetch."
+            );
+            let analysis = match stored_at {
+                Some(addr) => Analysis::DataMap {
+                    address: addr,
+                    chunks: chunk_list_from_datamap(data_map),
+                    data: None,
+                    points_to_a_data_map,
+                },
+                None => Analysis::RawDataMap {
+                    chunks: chunk_list_from_datamap(data_map),
+                    data: None,
+                    points_to_a_data_map,
+                },
+            };
+            return Ok(analysis);
+        }
+        Err(e) => return Err(AnalysisError::GetError(e)),
+    };
     println_if_verbose!("Data fetched from the Network...");
 
     if let Ok(private_archive) = PrivateArchive::from_bytes(data.clone()) {
@@ -457,32 +529,16 @@ async fn analyze_datamap_old(
         });
     }
 
-    // Convert old format of DataMap into new
-    let chunk_identifiers: Vec<ChunkInfo> = map
-        .infos()
-        .iter()
-        .map(|ck_info| ChunkInfo {
-            index: ck_info.index,
-            dst_hash: ck_info.dst_hash,
-            src_hash: ck_info.src_hash,
-            src_size: ck_info.src_size,
-        })
-        .collect();
-    let data_map = DataMap {
-        chunk_identifiers,
-        child: None,
-    };
-
     let analysis = match stored_at {
         Some(addr) => Analysis::DataMap {
             address: addr,
             chunks: chunk_list_from_datamap(data_map),
-            data,
+            data: Some(data),
             points_to_a_data_map,
         },
         None => Analysis::RawDataMap {
             chunks: chunk_list_from_datamap(data_map),
-            data,
+            data: Some(data),
             points_to_a_data_map,
         },
     };

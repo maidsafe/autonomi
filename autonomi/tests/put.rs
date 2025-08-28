@@ -11,7 +11,8 @@ use autonomi::Client;
 use eyre::Result;
 use test_utils::{evm::get_funded_wallet, gen_random_data};
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
+#[serial_test::serial]
 async fn put() -> Result<()> {
     let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
 

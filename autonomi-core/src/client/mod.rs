@@ -19,7 +19,7 @@ mod record_get;
 pub mod upload;
 pub mod utils;
 
-use crate::networking::multiaddr_is_global;
+use crate::networking::{Record, multiaddr_is_global};
 use config::{ClientConfig, ClientOperatingStrategy};
 use payment::PayError;
 use quote::CostError;
@@ -257,6 +257,14 @@ pub enum GetError {
     Configuration(String),
     #[error("Unable to recognize the so claimed DataMap: {0}")]
     UnrecognizedDataMap(String),
+    /// When trying to download a file that is too large to be handled in memory
+    /// you can increase the `MAX_IN_MEMORY_DOWNLOAD_SIZE` env var or use the streaming API.
+    #[error(
+        "DataMap points to a file too large to be handled in memory, you can increase the MAX_IN_MEMORY_DOWNLOAD_SIZE env var or use streaming to avoid this error."
+    )]
+    TooLargeForMemory,
+    #[error("Cann't resove split records")]
+    SplitRecord(Vec<Record>),
 }
 
 impl GetError {
@@ -284,6 +292,8 @@ impl GetError {
             GetError::RecordKindMismatch(kind) => GetError::RecordKindMismatch(*kind),
             GetError::Configuration(msg) => GetError::Configuration(msg.clone()),
             GetError::UnrecognizedDataMap(msg) => GetError::UnrecognizedDataMap(msg.clone()),
+            GetError::TooLargeForMemory => GetError::TooLargeForMemory,
+            GetError::SplitRecord(records) => GetError::SplitRecord(records.clone()),
         }
     }
 }

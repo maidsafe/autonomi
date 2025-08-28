@@ -17,24 +17,23 @@ use bytes::Bytes;
 use std::path::{Path, PathBuf};
 
 impl Client {
-    /// Download a private file from network to local file system
+    /// Download private file directly to filesystem. Always uses streaming.
     pub async fn file_download(
         &self,
-        data_access: &DataMapChunk,
+        data_map: &DataMapChunk,
         to_dest: PathBuf,
     ) -> Result<(), DownloadError> {
-        info!("Downloading file to {to_dest:?}");
+        info!("Downloading private file to {to_dest:?}");
 
         // Create parent directories if needed
         if let Some(parent) = to_dest.parent() {
             tokio::fs::create_dir_all(parent).await?;
-            debug!("Created parent directories for {to_dest:?}");
         }
 
-        self.stream_download_chunks_to_file(data_access, &to_dest)
-            .await?;
+        let datamap = self.restore_data_map_from_chunk(data_map).await?;
+        self.stream_download_from_datamap(datamap, &to_dest).await?;
 
-        debug!("Downloaded file to {to_dest:?}");
+        debug!("Successfully downloaded private file to {to_dest:?}");
         Ok(())
     }
 

@@ -47,10 +47,10 @@ use crate::client::config::{ClientConfig, ClientOperatingStrategy};
 
 pub use ant_evm::Amount;
 pub use ant_protocol::CLOSE_GROUP_SIZE;
+pub use autonomi_core::client::ChunkBatchUploadState;
 pub use autonomi_core::{
     ClientEvent, ClientInitSetup, ConnectError, GetError, PutError, UploadSummary,
 };
-pub use autonomi_core::client::ChunkBatchUploadState;
 
 use ant_evm::EvmNetwork;
 use libp2p::Multiaddr;

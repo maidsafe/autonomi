@@ -63,7 +63,6 @@ impl Client {
         match self.core_client.record_get(&network_addr).await {
             Ok(content) => match content {
                 DataContent::GraphEntry(entry) => Ok(entry),
-                DataContent::GraphEntrySplit(entries) => Err(GraphError::Fork(entries)),
                 _ => Err(GraphError::GetError(GetError::RecordKindMismatch(
                     RecordKind::DataOnly(DataTypes::GraphEntry),
                 ))),

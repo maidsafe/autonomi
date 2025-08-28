@@ -32,7 +32,7 @@ impl CacheData {
     /// This has to be bumped whenever the cache data format changes to ensure compatibility.
     pub const CACHE_DATA_VERSION: u32 = 1;
 
-    /// Sync the self cache with another cache. This would just add the 'other' state to self.
+    /// Sync the self cache with another cache. Self peers (newer) are preserved.
     pub fn sync(&mut self, other: &CacheData, max_addrs_per_peer: usize, max_peers: usize) {
         let old_len = self.peers.len();
         let other_len = other.peers.len();
@@ -41,6 +41,8 @@ impl CacheData {
             if other_addrs.is_empty() {
                 continue;
             }
+
+            let mut found_existing = false;
             for (peer, addrs) in self.peers.iter_mut() {
                 if peer == other_peer {
                     for addr in other_addrs.iter() {
@@ -51,15 +53,24 @@ impl CacheData {
                     while addrs.len() > max_addrs_per_peer {
                         addrs.pop_front();
                     }
+                    found_existing = true;
                     break;
                 }
             }
 
-            self.peers.push_back((*other_peer, other_addrs.clone()));
-
-            while self.peers.len() > max_peers {
-                self.peers.pop_front();
+            if !found_existing {
+                self.peers.push_back((*other_peer, other_addrs.clone()));
             }
+
+            // break if limit reached
+            if self.peers.len() >= max_peers {
+                break;
+            }
+        }
+
+        // Apply max_peers limit by removing from back (oldest from other)
+        while self.peers.len() > max_peers {
+            self.peers.pop_back();
         }
 
         let new_len = self.peers.len();

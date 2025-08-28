@@ -31,10 +31,6 @@ pub enum DataContent {
     Pointer(Pointer),
     /// Scratchpad data
     Scratchpad(Scratchpad),
-    /// Split copies of GraphEntry
-    GraphEntrySplit(Vec<GraphEntry>),
-    /// Split copies of Scratchpad
-    ScratchpadSplit(Vec<Scratchpad>),
 }
 
 impl DataContent {
@@ -59,9 +55,9 @@ impl DataContent {
     pub(crate) fn data_types(&self) -> DataTypes {
         match self {
             Self::Chunk(_) => DataTypes::Chunk,
-            Self::GraphEntry(_) | Self::GraphEntrySplit(_) => DataTypes::GraphEntry,
+            Self::GraphEntry(_) => DataTypes::GraphEntry,
             Self::Pointer(_) => DataTypes::Pointer,
-            Self::Scratchpad(_) | Self::ScratchpadSplit(_) => DataTypes::Scratchpad,
+            Self::Scratchpad(_) => DataTypes::Scratchpad,
         }
     }
 
@@ -86,23 +82,6 @@ impl DataContent {
                 scratchpad.size(),
                 scratchpad.network_address(),
             ),
-            DataContent::GraphEntrySplit(entries) => {
-                let total_size = entries.iter().map(|entry| entry.size()).sum();
-                let addr = entries[0].address();
-                (
-                    entries[0].address().xorname(),
-                    total_size,
-                    NetworkAddress::from(addr),
-                )
-            }
-            DataContent::ScratchpadSplit(entries) => {
-                let total_size = entries.iter().map(|entry| entry.size()).sum();
-                (
-                    entries[0].address().xorname(),
-                    total_size,
-                    entries[0].network_address(),
-                )
-            }
         }
     }
 
@@ -129,16 +108,6 @@ impl DataContent {
                 DataContent::Scratchpad(scratchpad) => {
                     try_serialize_record(&(receipt.to_proof_of_payment(), scratchpad), record_kind)
                 }
-                DataContent::GraphEntrySplit(_entries) => {
-                    return Err(Error::PutError(PutError::Serialization(
-                        "Get split GraphEntry: {_entries:?}".to_string(),
-                    )));
-                }
-                DataContent::ScratchpadSplit(_entries) => {
-                    return Err(Error::PutError(PutError::Serialization(
-                        "Get split Scratchpad: {_entries:?}".to_string(),
-                    )));
-                }
             }
             .map_err(|e| {
                 Error::PutError(PutError::Serialization(format!(
@@ -156,16 +125,6 @@ impl DataContent {
                 DataContent::Pointer(pointer) => try_serialize_record(&pointer, record_kind),
                 DataContent::Scratchpad(scratchpad) => {
                     try_serialize_record(&scratchpad, record_kind)
-                }
-                DataContent::GraphEntrySplit(_entries) => {
-                    return Err(Error::PutError(PutError::Serialization(
-                        "Get split GraphEntry: {_entries:?}".to_string(),
-                    )));
-                }
-                DataContent::ScratchpadSplit(_entries) => {
-                    return Err(Error::PutError(PutError::Serialization(
-                        "Get split Scratchpad: {_entries:?}".to_string(),
-                    )));
                 }
             }
             .map_err(|e| {

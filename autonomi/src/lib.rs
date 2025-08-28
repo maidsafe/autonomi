@@ -126,6 +126,5 @@ mod python;
 
 // Re-export to maintain backward compatible naming space
 pub mod networking {
-    pub use autonomi_core::networking::{Quorum, RetryStrategy, Strategy};
-    pub use libp2p::PeerId;
+    pub use autonomi_core::networking::{PeerId, Quorum, Record, RetryStrategy, Strategy};
 }

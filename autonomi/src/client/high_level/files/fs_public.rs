@@ -26,23 +26,13 @@ impl Client {
     ) -> Result<(), DownloadError> {
         info!("Downloading public file to {to_dest:?} from {data_addr:?}");
 
-        // Create parent directories if needed
-        if let Some(parent) = to_dest.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-            debug!("Created parent directories {parent:?} for {to_dest:?}");
-        }
-
-        // Get the datamap chunk from the public address
         let data_map_chunk = DataMapChunk(
             self.chunk_get(&ChunkAddress::new(*data_addr.xorname()))
-                .await?,
+                .await
+                .map_err(DownloadError::GetError)?,
         );
 
-        self.stream_download_chunks_to_file(&data_map_chunk, &to_dest)
-            .await?;
-
-        debug!("Downloaded file to {to_dest:?} from the network address {data_addr:?}");
-        Ok(())
+        self.file_download(&data_map_chunk, to_dest).await
     }
 
     /// Download directory from network to local file system

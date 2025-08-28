@@ -12,6 +12,7 @@ use ant_bootstrap::{
 use ant_logging::LogBuilder;
 use color_eyre::Result;
 use libp2p::Multiaddr;
+use std::collections::HashSet;
 use std::time::Duration;
 use tempfile::TempDir;
 use url::Url;
@@ -382,6 +383,193 @@ async fn test_empty_response_handling() -> Result<()> {
     assert!(
         result.is_ok() && result.unwrap().is_empty(),
         "Should handle empty response gracefully"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_sync_duplicates_overlapping_peers() -> Result<()> {
+    use ant_bootstrap::cache_store::CacheDataLatest;
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+    let mut cache1 = CacheDataLatest::default();
+    let mut cache2 = CacheDataLatest::default();
+
+    let addr1: Multiaddr =
+        "/ip4/127.0.0.1/udp/8081/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UER1"
+            .parse()?;
+    let addr2: Multiaddr =
+        "/ip4/127.0.0.1/udp/8082/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UER2"
+            .parse()?;
+    let addr3: Multiaddr =
+        "/ip4/127.0.0.1/udp/8083/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UER3"
+            .parse()?;
+
+    let peer1 = addr1
+        .iter()
+        .find_map(|p| match p {
+            libp2p::multiaddr::Protocol::P2p(id) => Some(id),
+            _ => None,
+        })
+        .unwrap();
+    let peer2 = addr2
+        .iter()
+        .find_map(|p| match p {
+            libp2p::multiaddr::Protocol::P2p(id) => Some(id),
+            _ => None,
+        })
+        .unwrap();
+    let peer3 = addr3
+        .iter()
+        .find_map(|p| match p {
+            libp2p::multiaddr::Protocol::P2p(id) => Some(id),
+            _ => None,
+        })
+        .unwrap();
+
+    cache1.add_peer(peer1, [addr1.clone()].iter(), 10, 10);
+    cache1.add_peer(peer2, [addr2.clone()].iter(), 10, 10);
+
+    cache2.add_peer(peer1, [addr1.clone()].iter(), 10, 10);
+    cache2.add_peer(peer3, [addr3.clone()].iter(), 10, 10);
+
+    cache1.sync(&cache2, 10, 10);
+
+    let unique_peers: HashSet<_> = cache1.peers.iter().map(|(peer_id, _)| peer_id).collect();
+
+    assert_eq!(
+        unique_peers.len(),
+        cache1.peers.len(),
+        "Duplicate peer entries found after sync"
+    );
+
+    assert_eq!(unique_peers.len(), 3, "Expected 3 unique peers");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_sync_at_limit_overwrites_unique_peers() -> Result<()> {
+    use ant_bootstrap::cache_store::CacheDataLatest;
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+    let mut cache1 = CacheDataLatest::default();
+    let mut cache2 = CacheDataLatest::default();
+
+    let addrs: Vec<Multiaddr> = (1..=7)
+        .map(|i| {
+            format!("/ip4/127.0.0.1/udp/808{i}/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UER{i}")
+                .parse()
+                .unwrap()
+        })
+        .collect();
+
+    let peers: Vec<_> = addrs
+        .iter()
+        .map(|addr| {
+            addr.iter()
+                .find_map(|p| match p {
+                    libp2p::multiaddr::Protocol::P2p(id) => Some(id),
+                    _ => None,
+                })
+                .unwrap()
+        })
+        .collect();
+
+    // cache1: peers 1,2,3,4,5 (at limit)
+    for i in 0..5 {
+        cache1.add_peer(peers[i], [addrs[i].clone()].iter(), 10, 5);
+    }
+
+    // cache2: peers 3,4,5,6,7 (at limit, overlaps with 3,4,5)
+    for i in 2..7 {
+        cache2.add_peer(peers[i], [addrs[i].clone()].iter(), 10, 5);
+    }
+
+    cache1.sync(&cache2, 10, 5);
+
+    println!("Final cache1 length: {}", cache1.peers.len());
+    let cache1_peers_after: HashSet<_> = cache1.peers.iter().map(|(peer_id, _)| *peer_id).collect();
+    println!(
+        "Contains peer1: {}, peer2: {}",
+        cache1_peers_after.contains(&peers[0]),
+        cache1_peers_after.contains(&peers[1])
+    );
+
+    // With newer peer preservation, self peers (1,2) should be preserved
+    // Final result should have peers 1,2,3,4,5 (self peers + some from other)
+    assert_eq!(cache1.peers.len(), 5, "Should maintain max_peers limit");
+    assert!(
+        cache1_peers_after.contains(&peers[0]),
+        "Should preserve peer 1 from self"
+    );
+    assert!(
+        cache1_peers_after.contains(&peers[1]),
+        "Should preserve peer 2 from self"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_sync_other_at_limit_self_below_limit() -> Result<()> {
+    use ant_bootstrap::cache_store::CacheDataLatest;
+    let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+    let mut cache1 = CacheDataLatest::default();
+    let mut cache2 = CacheDataLatest::default();
+
+    let addrs: Vec<Multiaddr> = (1..=7)
+        .map(|i| {
+            format!("/ip4/127.0.0.1/udp/808{i}/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UER{i}")
+                .parse()
+                .unwrap()
+        })
+        .collect();
+
+    let peers: Vec<_> = addrs
+        .iter()
+        .map(|addr| {
+            addr.iter()
+                .find_map(|p| match p {
+                    libp2p::multiaddr::Protocol::P2p(id) => Some(id),
+                    _ => None,
+                })
+                .unwrap()
+        })
+        .collect();
+
+    // cache1: peers 1,2 (below limit of 5)
+    for i in 0..2 {
+        cache1.add_peer(peers[i], [addrs[i].clone()].iter(), 10, 5);
+    }
+
+    // cache2: peers 3,4,5,6,7 (at limit of 5)
+    for i in 2..7 {
+        cache2.add_peer(peers[i], [addrs[i].clone()].iter(), 10, 5);
+    }
+
+    assert_eq!(cache1.peers.len(), 2);
+    assert_eq!(cache2.peers.len(), 5);
+
+    cache1.sync(&cache2, 10, 5);
+
+    println!("Final cache1 length: {}", cache1.peers.len());
+    let cache1_peers_after: HashSet<_> = cache1.peers.iter().map(|(peer_id, _)| *peer_id).collect();
+
+    // With newer peer preservation: cache1 keeps its 2 peers, adds some from cache2
+    // Since we preserve self peers, final result should keep peers 1,2 from cache1
+    assert_eq!(cache1.peers.len(), 5, "Should maintain max_peers limit");
+
+    // Should preserve original cache1 peers (newer)
+    assert!(
+        cache1_peers_after.contains(&peers[0]),
+        "Should preserve peer 1 from self"
+    );
+    assert!(
+        cache1_peers_after.contains(&peers[1]),
+        "Should preserve peer 2 from self"
     );
 
     Ok(())

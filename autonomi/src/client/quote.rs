@@ -6,9 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-//! Quote operations for the Autonomi client.
-//! This module provides quote types that delegate to autonomi_core.
-
 use crate::Client;
 
 // Re-export types from autonomi_core

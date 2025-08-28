@@ -6,10 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-//! Chunk operations for the Autonomi client.
-//! This module provides chunk upload, download, and cost estimation.
-//! All operations delegate to autonomi_core::Client through the wrapper.
-
 use crate::{
     Client,
     client::{
@@ -130,19 +126,6 @@ impl Client {
             .await
             .map_err(|e| PutError::from_error(&e))?;
         Ok(())
-    }
-
-    /// Generic function to unpack a wrapped datamap and fetch all bytes using self-encryption.
-    /// This function automatically detects whether the datamap is in the old format (DataMapLevel)
-    /// or new format (DataMap) and calls the appropriate handler for backward compatibility.
-    pub async fn fetch_from_data_map_chunk(
-        &self,
-        data_map_chunk: &DataMapChunk,
-    ) -> Result<Bytes, GetError> {
-        let mut data_map = self.restore_data_map_from_chunk(data_map_chunk).await?;
-        // To be backward compatible
-        data_map.child = None;
-        self.fetch_from_data_map(&data_map).await
     }
 
     /// Fetch and decrypt all chunks in the datamap.

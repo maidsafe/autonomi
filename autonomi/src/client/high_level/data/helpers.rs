@@ -7,34 +7,21 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
+use crate::client::config::UPLOAD_FLOW_BATCH_SIZE;
 use crate::client::payment::PayError::EvmWalletError;
 use crate::client::payment::PaymentOption;
 use crate::client::payment::Receipt;
 use crate::client::utils::format_upload_error;
 use crate::client::{ClientEvent, PutError, UploadSummary};
+
 use ant_evm::{Amount, AttoTokens};
 use ant_protocol::storage::{Chunk, DataTypes};
 use autonomi_core::EncryptionStream;
-use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use evmlib::wallet::Error::InsufficientTokensForQuotes;
-use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::time::sleep;
 
 type AggregatedChunks = Vec<((String, usize, usize), Chunk)>;
-
-/// Number of batch size of an entire quote-pay-upload flow to process.
-/// Suggested to be multiples of `MAX_TRANSFERS_PER_TRANSACTION  / 3` (records-payouts-per-transaction).
-///
-/// Can be overridden by the `UPLOAD_FLOW_BATCH_SIZE` environment variable.
-static UPLOAD_FLOW_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
-    let batch_size = std::env::var("UPLOAD_FLOW_BATCH_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(MAX_TRANSFERS_PER_TRANSACTION / 3);
-    info!("Upload flow batch size: {}", batch_size);
-    batch_size
-});
 
 impl Client {
     /// Returns total tokens spent or the first encountered upload error

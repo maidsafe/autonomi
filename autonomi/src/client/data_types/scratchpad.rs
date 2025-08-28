@@ -6,17 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-//! Scratchpad operations for the Autonomi client.
-//! This module provides scratchpad upload, download, and cost estimation.
-//! All operations delegate to autonomi_core::Client through the wrapper.
-
 use crate::{
-    AttoTokens, Client, GetError, NetworkError,
+    AttoTokens, Client, GetError,
     client::{PutError, payment::PaymentOption, quote::CostError},
 };
 use ant_protocol::{
     NetworkAddress,
-    storage::{DataTypes, RecordKind, try_deserialize_record},
+    storage::{DataTypes, RecordKind},
 };
 use autonomi_core::DataContent;
 
@@ -75,9 +71,6 @@ impl Client {
         match self.core_client.record_get(&network_addr).await {
             Ok(content) => match content {
                 DataContent::Scratchpad(scratchpad) => Ok(scratchpad),
-                DataContent::ScratchpadSplit(scratchpads) => {
-                    Err(ScratchpadError::Fork(scratchpads))
-                }
                 _ => Err(
                     GetError::RecordKindMismatch(RecordKind::DataOnly(DataTypes::Scratchpad))
                         .into(),
@@ -171,12 +164,6 @@ impl Client {
         let current = match self.scratchpad_get(&address).await {
             Ok(scratchpad) => Some(scratchpad),
             Err(ScratchpadError::GetError(GetError::RecordNotFound)) => None,
-            Err(ScratchpadError::GetError(GetError::Network(NetworkError::SplitRecord(
-                result_map,
-            )))) => result_map
-                .values()
-                .filter_map(|record| try_deserialize_record::<Scratchpad>(record).ok())
-                .max_by_key(|scratchpad: &Scratchpad| scratchpad.counter()),
             Err(err) => {
                 return Err(err);
             }
@@ -235,7 +222,7 @@ impl Client {
         let network_addr = NetworkAddress::from(scratchpad_addr);
 
         self.core_client
-            .get_cost_estimation(vec![(network_addr, 0)]) // 0 size means use max size
+            .get_cost_estimation(vec![(network_addr, SCRATCHPAD_MAX_SIZE)])
             .await
             .map_err(|e| CostError::from_error(&e))
     }

@@ -8,7 +8,6 @@
 
 use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
-use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::client::payment::PaymentOption;
@@ -26,34 +25,13 @@ use xor_name::XorName;
 use super::DataAddress;
 
 impl Client {
-    /// Fetch a blob of data from the network
+    /// Fetch a blob of public data from the network. In-memory only - fails for large files.
+    /// Use file_download_public for large files that need streaming.
     pub async fn data_get_public(&self, addr: &DataAddress) -> Result<Bytes, GetError> {
-        info!("Fetching data from Data Address: {addr:?}");
-        let data_map_chunk = self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?;
-        let data = self
-            .fetch_from_data_map_chunk(&DataMapChunk(data_map_chunk))
-            .await?;
-
-        debug!("Successfully fetched a blob of data from the network");
-        Ok(data)
-    }
-
-    /// Streamingly fetch a blob of data from the network
-    pub async fn streaming_data_get_public(
-        &self,
-        addr: &DataAddress,
-        to_dest: PathBuf,
-    ) -> Result<(), GetError> {
-        info!("Streaming Fetching data from Data Address: {addr:?}");
-        if let Err(e) = self.file_download_public(addr, to_dest).await {
-            error!("Failed to download file at: {addr} : {e:?}");
-            println!("Failed to download file at: {addr} : {e:?}");
-            Err(GetError::Configuration(format!("{e:?}")))
-        } else {
-            info!("Successfully downloaded file at: {addr}");
-            println!("Successfully downloaded file at: {addr}");
-            Ok(())
-        }
+        info!("Fetching public data from Data Address: {addr:?}");
+        let datamap_chunk =
+            DataMapChunk(self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?);
+        self.data_get(&datamap_chunk).await
     }
 
     /// Upload a piece of data to the network. This data is publicly accessible.
