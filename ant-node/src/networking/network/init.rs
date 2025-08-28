@@ -230,14 +230,6 @@ fn init_swarm_driver(
     let transport = transport::build_transport(&config.keypair, &mut metrics_registries);
     #[cfg(not(feature = "open-metrics"))]
     let transport = transport::build_transport(&config.keypair);
-    let transport = if !config.local {
-        debug!("Preventing non-global dials");
-        // Wrap upper in a transport that prevents dialing local addresses.
-        libp2p::core::transport::global_only::Transport::new(transport).boxed()
-    } else {
-        transport
-    };
-
     let (relay_transport, relay_client) =
         libp2p::relay::client::new(config.keypair.public().to_peer_id());
     let relay_transport = relay_transport
@@ -480,13 +472,6 @@ pub(crate) async fn init_reachability_check_swarm(
     let transport = transport::build_transport(&config.keypair, &mut metrics_registries);
     #[cfg(not(feature = "open-metrics"))]
     let transport = transport::build_transport(&self.keypair);
-    let transport = if !config.local {
-        debug!("Preventing non-global dials");
-        // Wrap upper in a transport that prevents dialing local addresses.
-        libp2p::core::transport::global_only::Transport::new(transport).boxed()
-    } else {
-        transport
-    };
 
     let (relay_transport, _relay_client) =
         libp2p::relay::client::new(config.keypair.public().to_peer_id());
