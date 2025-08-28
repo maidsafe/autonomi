@@ -193,6 +193,17 @@ impl Component for NodeTableComponent {
             return Ok((vec![], EventResult::Ignored));
         }
 
+        // Handle error popup first
+        if let Some(error_popup) = &mut self.state.error_popup
+            && error_popup.is_visible()
+        {
+            error_popup.handle_input(key);
+            return Ok((
+                vec![Action::SwitchInputMode(crate::mode::InputMode::Navigation)],
+                EventResult::Consumed,
+            ));
+        }
+
         debug!("NodeTable handling key: {key:?}");
 
         if let (actions, EventResult::Consumed) = self.handle_table_navigation(key)? {

@@ -30,6 +30,7 @@ pub enum Scene {
     UpgradeNodesPopUp,
     UpgradeLaunchpadPopUp,
     RemoveNodePopUp,
+    NodeLogsPopUp,
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

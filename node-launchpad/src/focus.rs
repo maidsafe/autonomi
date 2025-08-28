@@ -23,6 +23,7 @@ pub enum FocusTarget {
     ResetNodesPopup,
     UpgradeNodesPopup,
     UpgradeLaunchpadPopup,
+    NodeLogsPopup,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

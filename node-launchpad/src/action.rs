@@ -33,6 +33,9 @@ pub enum Action {
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
+    ShowErrorPopup(crate::error::ErrorPopup),
+    SetNodeLogsTarget(String),
+
     Tick,
     Render,
     Resize(u16, u16),

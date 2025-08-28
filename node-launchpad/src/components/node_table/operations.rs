@@ -10,7 +10,6 @@ use crate::action::{Action, StatusActions};
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::mode::InputMode;
 use crate::node_mgmt::{
     MaintainNodesArgs, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN, UpgradeNodesArgs,
 };
@@ -74,7 +73,7 @@ impl NodeOperations {
     pub fn handle_add_node(&mut self, config: &AddNodeConfig) -> Result<Option<Action>> {
         // Validation: Available space
         if GB_PER_NODE > config.available_disk_space_gb {
-            let _error_popup = ErrorPopup::new(
+            let error_popup = ErrorPopup::new(
                 "Cannot Add Node".to_string(),
                 format!("\nEach Node requires {GB_PER_NODE}GB of available space."),
                 format!(
@@ -83,20 +82,19 @@ impl NodeOperations {
                     config.available_disk_space_gb
                 ),
             );
-            // Note: In the full implementation, we'd need to handle showing this popup
-            return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+            return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
 
         // Validation: Amount of nodes
         if config.node_count + 1 > MAX_NODE_COUNT {
-            let _error_popup = ErrorPopup::new(
+            let error_popup = ErrorPopup::new(
                 "Cannot Add Node".to_string(),
                 format!(
                     "There are not enough ports available in your\ncustom port range to start another node ({MAX_NODE_COUNT})."
                 ),
                 "\nVisit autonomi.com/support/port-error for help".to_string(),
             );
-            return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+            return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
 
         if config.rewards_address.is_empty() {

@@ -458,7 +458,29 @@ impl Component for Status {
                 }
                 StatusActions::TriggerNodeLogs => {
                     debug!("TriggerNodeLogs action received");
-                    // TODO: Implement node logs viewing
+                    if self.node_table_state.items.items.is_empty() {
+                        debug!("No nodes available for logs viewing");
+                        return Ok(None);
+                    }
+
+                    let selected_node_name = self
+                        .node_table_state
+                        .items
+                        .selected_item()
+                        .map(|node| node.name.clone())
+                        .unwrap_or_else(|| {
+                            // If no specific node is selected, use the first available node
+                            self.node_table_state
+                                .items
+                                .items
+                                .first()
+                                .map(|node| node.name.clone())
+                                .unwrap_or_else(|| "No node available".to_string())
+                        });
+
+                    // First set the target node, then switch to the scene
+                    // Note: The app will need to handle this sequence
+                    return Ok(Some(Action::SetNodeLogsTarget(selected_node_name)));
                 }
                 StatusActions::PreviousTableItem => {
                     self.node_table_state.items.previous();
@@ -561,6 +583,11 @@ impl Component for Status {
                 }
                 _ => {}
             },
+            Action::ShowErrorPopup(mut error_popup) => {
+                error_popup.show();
+                self.error_popup = Some(error_popup);
+                return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+            }
             _ => {}
         }
         Ok(None)
@@ -645,6 +672,7 @@ impl Component for Status {
         let column_constraints = [Constraint::Length(23), Constraint::Fill(1)];
         let stats_table = Table::new(stats_rows, stats_width).widths(column_constraints);
 
+        let wallet_not_set_text = "Press [Ctrl+B] to add your Wallet Address";
         let wallet_not_set = if self.rewards_address.is_empty() {
             vec![
                 Span::styled("Press ".to_string(), Style::default().fg(VIVID_SKY_BLUE)),
@@ -675,14 +703,15 @@ impl Component for Status {
 
         let attos_wallet_rows = vec![total_attos_earned_and_wallet_row];
         let attos_wallet_width = [Constraint::Length(5)];
+        let wallet_column_width = if self.rewards_address.is_empty() {
+            wallet_not_set_text.len() as u16
+        } else {
+            0
+        };
         let column_constraints = [
             Constraint::Length(23),
             Constraint::Fill(1),
-            Constraint::Length(if self.rewards_address.is_empty() {
-                41 //TODO: make it dynamic with wallet_not_set
-            } else {
-                0
-            }),
+            Constraint::Length(wallet_column_width),
         ];
         let attos_wallet_table =
             Table::new(attos_wallet_rows, attos_wallet_width).widths(column_constraints);
