@@ -28,6 +28,7 @@ use crate::{
         popup::manage_nodes::{GB, GB_PER_NODE},
     },
     config::get_launchpad_nodes_data_dir_path,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{
         COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
@@ -45,21 +46,19 @@ enum ChangeDriveState {
 
 #[derive(Default)]
 pub struct ChangeDrivePopup {
-    active: bool,
     state: ChangeDriveState,
     items: Option<StatefulList<DriveItem>>,
     drive_selection: DriveItem,
     drive_selection_initial_state: DriveItem,
-    nodes_to_start: usize,
+    nodes_to_start: u64,
     storage_mountpoint: PathBuf,
     can_select: bool, // Used to enable the "Change Drive" button based on conditions
 }
 
 impl ChangeDrivePopup {
-    pub fn new(storage_mountpoint: PathBuf, nodes_to_start: usize) -> Result<Self> {
+    pub fn new(storage_mountpoint: PathBuf, nodes_to_start: u64) -> Result<Self> {
         debug!("Drive Mountpoint in Config: {:?}", storage_mountpoint);
         Ok(ChangeDrivePopup {
-            active: false,
             state: ChangeDriveState::Selection,
             items: None,
             drive_selection: DriveItem::default(),
@@ -372,9 +371,13 @@ impl ChangeDrivePopup {
 }
 
 impl Component for ChangeDrivePopup {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         let send_back: Vec<Action> = match &self.state {
             ChangeDriveState::Selection => {
@@ -475,25 +478,27 @@ impl Component for ChangeDrivePopup {
                 }
             },
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ChangeDrivePopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ChangeDrivePopUp => {
-                    self.active = true;
-                    self.can_select = false;
-                    self.state = ChangeDriveState::Selection;
-                    let _ = self.update_drive_items();
-                    self.select_drive();
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ChangeDrivePopUp) => {
+                self.can_select = false;
+                self.state = ChangeDriveState::Selection;
+                let _ = self.update_drive_items();
+                self.select_drive();
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             // Useful when the user has selected a drive but didn't confirm it
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, drive_name)) => {
                 self.drive_selection.mountpoint = mountpoint;
@@ -520,10 +525,6 @@ impl Component for ChangeDrivePopup {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(

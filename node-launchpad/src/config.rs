@@ -118,7 +118,7 @@ pub async fn configure_winsw() -> Result<()> {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppData {
     pub discord_username: String,
-    pub nodes_to_start: usize,
+    pub nodes_to_start: u64,
     pub storage_mountpoint: Option<PathBuf>,
     pub storage_drive: Option<String>,
     pub connection_mode: Option<ConnectionMode>,

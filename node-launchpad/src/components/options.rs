@@ -37,7 +37,6 @@ pub struct Options {
     pub port_edit: bool,
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
-    pub active: bool,
     pub action_tx: Option<UnboundedSender<Action>>,
 }
 
@@ -58,17 +57,17 @@ impl Options {
             port_edit: false,
             port_from,
             port_to,
-            active: false,
             action_tx: None,
         })
     }
 }
 
 impl Component for Options {
+    fn focus_target(&self) -> crate::focus::FocusTarget {
+        crate::focus::FocusTarget::Options
+    }
+
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
         // Define the layout to split the area into four sections
         let layout = Layout::default()
             .direction(Direction::Vertical)
@@ -374,20 +373,19 @@ impl Component for Options {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
-            Action::SwitchScene(scene) => match scene {
+            Action::SwitchScene(
                 Scene::Options
                 | Scene::ChangeDrivePopUp
                 | Scene::ChangeConnectionModePopUp
                 | Scene::ChangePortsPopUp { .. }
                 | Scene::OptionsRewardsAddressPopUp
                 | Scene::ResetNodesPopUp
-                | Scene::UpgradeNodesPopUp => {
-                    self.active = true;
-                    // make sure we're in navigation mode
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
-                }
-                _ => self.active = false,
-            },
+                | Scene::UpgradeNodesPopUp,
+            ) => {
+                // make sure we're in navigation mode
+                return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
+            }
+            Action::SwitchScene(_) => {}
             Action::OptionsActions(action) => match action {
                 OptionsActions::TriggerChangeDrive => {
                     return Ok(Some(Action::SwitchScene(Scene::ChangeDrivePopUp)));
