@@ -21,7 +21,8 @@
       "<L>": {"StatusActions":"TriggerNodeLogs"},
       "<+>": {"StatusActions":"AddNode"},
       "<Shift-+>": {"StatusActions":"AddNode"},
-      "<->": {"StatusActions":"TriggerRemoveNode"},
+      "<->": {"StatusActions":"RemoveNodes"},
+      "<Delete>": {"StatusActions":"TriggerRemoveNode"},
 
       "up" : {"StatusActions":"PreviousTableItem"},
       "down": {"StatusActions":"NextTableItem"},
