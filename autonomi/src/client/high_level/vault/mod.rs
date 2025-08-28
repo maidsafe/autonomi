@@ -424,7 +424,8 @@ impl Client {
         secret_key: &VaultSecretKey,
         content_type: VaultContentType,
     ) -> Result<AttoTokens, VaultError> {
-        self.vault_put(data, payment_option, secret_key, content_type).await
+        self.vault_put(data, payment_option, secret_key, content_type)
+            .await
     }
 }
 

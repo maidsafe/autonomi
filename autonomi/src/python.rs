@@ -1242,10 +1242,7 @@ impl PyClient {
         let user_data = user_data.inner.clone();
 
         future_into_py(py, async move {
-            match client
-                .vault_put_user_data(&key, payment, user_data)
-                .await
-            {
+            match client.vault_put_user_data(&key, payment, user_data).await {
                 Ok(cost) => Ok(cost.to_string()),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to put user data: {e}"

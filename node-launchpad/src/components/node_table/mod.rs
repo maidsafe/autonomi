@@ -6,27 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Allow unwrap_used and expect_used in this TUI crate - to be refactored
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
-// Allow unused_async - to be refactored
-#![allow(clippy::unused_async)]
+pub mod component;
+pub mod node_item;
+pub mod operations;
+pub mod state;
+pub mod table_state;
+pub mod widget;
 
-pub mod action;
-pub mod app;
-pub mod components;
-pub mod config;
-pub mod connection_mode;
-pub mod error;
-pub mod focus;
-pub mod mode;
-pub mod node_mgmt;
-pub mod node_stats;
-pub mod style;
-pub mod system;
-pub mod tui;
-pub mod utils;
-pub mod widgets;
-
-#[macro_use]
-extern crate tracing;
+// Re-exports for convenience
+pub use component::NodeTableComponent;
+pub use node_item::{NodeItem, NodeStatus};
+pub use operations::{AddNodeConfig, NodeOperations, StartNodesConfig};
+pub use state::NodeTableState;
+pub use table_state::StatefulTable;
+pub use widget::{NodeTableConfig, NodeTableWidget};
