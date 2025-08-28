@@ -47,13 +47,16 @@ impl RewardsAddress {
         } else {
             RewardsAddressState::RewardsAddressAlreadySet
         };
-        Self {
+        let mut instance = Self {
             state,
             rewards_address_input_field: Input::default().with_value(rewards_address),
             old_value: Default::default(),
             back_to: Scene::Status,
             can_save: false,
-        }
+        };
+        // Set initial validation state
+        instance.validate();
+        instance
     }
 
     pub fn validate(&mut self) {
@@ -242,7 +245,6 @@ impl Component for RewardsAddress {
 
         match self.state {
             RewardsAddressState::RewardsAddressAlreadySet => {
-                self.validate(); // FIXME: maybe this should be somewhere else
                 // split into 4 parts, for the prompt, input, text, dash , and buttons
                 let layer_two = Layout::new(
                     Direction::Vertical,
