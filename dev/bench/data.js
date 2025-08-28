@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756380258309,
+  "lastUpdate": 1756380333651,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1599,6 +1599,35 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/89fc3eb63c63781ebf023e810c091a9ad6abc942"
         },
         "date": 1756299913274,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 91,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d31d297c25cd5fefb5063bc0d89414c67823ea39",
+          "message": "Merge pull request #3173 from grumbach/cleanup_api\n\nfeat: cleanup api methods duplication",
+          "timestamp": "2025-08-28T10:29:53Z",
+          "tree_id": "a36fa314ca35bd7d18d37d18da9409beae2f185b",
+          "url": "https://github.com/maidsafe/autonomi/commit/d31d297c25cd5fefb5063bc0d89414c67823ea39"
+        },
+        "date": 1756380332978,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
