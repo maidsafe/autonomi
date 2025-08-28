@@ -142,8 +142,7 @@ impl NodeTableWidget {
         if let Some(error_popup) = &state.error_popup
             && error_popup.is_visible()
         {
-            // For now, we'll just note that error popup rendering would happen here
-            // In the full implementation, we'd need to handle this properly
+            error_popup.draw_error(f, area);
         }
     }
 

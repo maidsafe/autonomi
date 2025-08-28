@@ -440,10 +440,22 @@ impl Component for ChangeDrivePopup {
                     self.drive_selection = self.return_selection();
                     match get_launchpad_nodes_data_dir_path(&self.drive_selection.mountpoint, true)
                     {
-                        Ok(_path) => {
-                            // TODO: probably delete the old data directory before switching
-                            // Taking in account if it's the default mountpoint
-                            // (were the executable is)
+                        Ok(new_path) => {
+                            // Log the need for old data directory cleanup
+                            if let Ok(current_data_dir) =
+                                get_launchpad_nodes_data_dir_path(&self.storage_mountpoint, false)
+                                && current_data_dir != new_path
+                            {
+                                debug!(
+                                    "Note: Old data directory at {:?} may need cleanup",
+                                    current_data_dir
+                                );
+                                // Future implementation should:
+                                // 1. Add confirmation dialog asking user if they want to delete old data
+                                // 2. Stop all running nodes before cleanup
+                                // 3. Safely remove old directory with error handling
+                                // 4. Handle cases where old directory is default mountpoint
+                            }
                             vec![
                                 Action::StoreStorageDrive(
                                     self.drive_selection.mountpoint.clone(),
