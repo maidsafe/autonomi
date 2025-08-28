@@ -17,6 +17,7 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{
     action::Action,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
@@ -29,8 +30,6 @@ pub const GB: usize = MB * 1000;
 pub const MAX_NODE_COUNT: usize = 50;
 
 pub struct ManageNodes {
-    /// Whether the component is active right now, capturing keystrokes + drawing things.
-    active: bool,
     available_disk_space_gb: usize,
     storage_mountpoint: PathBuf,
     nodes_to_start_input: Input,
@@ -42,7 +41,6 @@ impl ManageNodes {
     pub fn new(nodes_to_start: usize, storage_mountpoint: PathBuf) -> Result<Self> {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
-            active: false,
             available_disk_space_gb: get_available_space_b(&storage_mountpoint)? / GB,
             nodes_to_start_input: Input::default().with_value(nodes_to_start.to_string()),
             old_value: Default::default(),
@@ -60,14 +58,8 @@ impl ManageNodes {
     fn max_nodes_to_start(&self) -> usize {
         std::cmp::min(self.available_disk_space_gb / GB_PER_NODE, MAX_NODE_COUNT)
     }
-}
 
-impl Component for ManageNodes {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
-        }
-
+    fn handle_key_events_internal(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
         // while in entry mode, key bindings are not captured, so gotta exit entry mode from here
         let send_back = match key.code {
             KeyCode::Enter => {
@@ -157,26 +149,43 @@ impl Component for ManageNodes {
         };
         Ok(send_back)
     }
+}
+
+impl Component for ManageNodes {
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
+        }
+
+        let actions = self.handle_key_events_internal(key)?;
+        let result = if actions.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((actions, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ManageNodesPopup
+    }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ManageNodesPopUp { amount_of_nodes } => {
-                    self.nodes_to_start_input = self
-                        .nodes_to_start_input
-                        .clone()
-                        .with_value(amount_of_nodes.to_string());
-                    self.active = true;
-                    self.old_value = self.nodes_to_start_input.value().to_string();
-                    // set to entry input mode as we want to handle everything within our handle_key_events
-                    // so by default if this scene is active, we capture inputs.
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ManageNodesPopUp { amount_of_nodes }) => {
+                self.nodes_to_start_input = self
+                    .nodes_to_start_input
+                    .clone()
+                    .with_value(amount_of_nodes.to_string());
+                self.old_value = self.nodes_to_start_input.value().to_string();
+                // set to entry input mode as we want to handle everything within our handle_key_events
+                // so by default if this scene is active, we capture inputs.
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
                 self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
@@ -188,10 +197,6 @@ impl Component for ManageNodes {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
         let layer_one = Layout::new(
             Direction::Vertical,

@@ -20,7 +20,8 @@
       "<l>": {"StatusActions":"TriggerNodeLogs"},
       "<L>": {"StatusActions":"TriggerNodeLogs"},
       "<+>": {"StatusActions":"AddNode"},
-      "<->": {"StatusActions":"TriggerRemoveNode"},
+      "<->": {"StatusActions":"RemoveNodes"},
+      "<Delete>": {"StatusActions":"TriggerRemoveNode"},
 
       "up" : {"StatusActions":"PreviousTableItem"},
       "down": {"StatusActions":"NextTableItem"},

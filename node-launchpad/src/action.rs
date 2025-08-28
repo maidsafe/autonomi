@@ -20,6 +20,7 @@ use strum::Display;
 pub enum Action {
     StatusActions(StatusActions),
     OptionsActions(OptionsActions),
+    NodeTableActions(NodeTableActions),
 
     SwitchScene(Scene),
     SwitchInputMode(InputMode),
@@ -135,5 +136,16 @@ pub enum UpgradeLaunchpadActions {
     UpdateAvailable {
         current_version: String,
         latest_version: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NodeTableActions {
+    // State updates FROM NodeTable TO Status (push only)
+    // This is the only NodeTableAction that's actually used
+    StateChanged {
+        node_count: usize,
+        has_running_nodes: bool,
+        has_nodes: bool,
     },
 }
