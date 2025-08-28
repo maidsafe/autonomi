@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::client::data_types::graph::{GraphEntryAddress, GraphError};
+use crate::client::graph::{GraphEntryAddress, GraphError};
 use crate::client::high_level::register::{
     PublicKey, RegisterAddress, RegisterError, RegisterValue,
 };

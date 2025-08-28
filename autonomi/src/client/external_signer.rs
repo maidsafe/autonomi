@@ -1,6 +1,13 @@
+// Copyright 2025 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
 use crate::Client;
-use crate::client::PutError;
-use crate::client::quote::DataTypes;
+use crate::client::{PutError, quote::DataTypes};
 use crate::self_encryption::encrypt;
 use ant_evm::QuotePayment;
 use ant_protocol::storage::Chunk;
@@ -30,8 +37,10 @@ impl Client {
         PutError,
     > {
         let quote = self
+            .core_client
             .get_store_quotes(data_type, content_addrs.clone())
-            .await?;
+            .await
+            .map_err(PutError::CostError)?;
         let payments = quote.payments();
         let free_chunks: Vec<_> = content_addrs
             .filter(|(addr, _)| !quote.0.contains_key(addr))

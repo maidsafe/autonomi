@@ -23,8 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (data_map, chunks) = encrypt("Hello, World!".into())?;
 
     // Step 2: Collect all chunks (datamap + content chunks)
-    let mut all_chunks = vec![&data_map];
-    all_chunks.extend(chunks.iter());
+    let mut all_chunks = vec![data_map.clone()];
+    all_chunks.extend(chunks);
 
     // Step 3: Get storage quotes for all chunks
     let quote = client

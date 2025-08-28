@@ -6,11 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_protocol::storage::DataTypes;
+use ant_protocol::storage::{Chunk, DataTypes};
 use bytes::Bytes;
 use std::time::Instant;
 
-use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::{GetError, PutError};
@@ -20,6 +19,7 @@ use crate::{
     self_encryption::encrypt,
 };
 use ant_evm::{Amount, AttoTokens};
+use autonomi_core::EncryptionStream;
 use xor_name::XorName;
 
 use super::DataAddress;
@@ -42,11 +42,12 @@ impl Client {
         data: Bytes,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), PutError> {
-        let (chunk_stream, data_map_chunk) = EncryptionStream::new_in_memory(data, true)?;
-
-        let data_map_addr = *data_map_chunk.0.address();
-        info!("Uploading datamap chunk to the network at: {data_map_addr:?}");
-        let data_address = DataAddress::new(*data_map_addr.xorname());
+        let (chunk_stream, datamap) = EncryptionStream::new_in_memory(None, data, true)?;
+        let datamap_bytes = rmp_serde::to_vec(&datamap).map_err(|e| {
+            self_encryption::Error::Generic(format!("Failed to serialize DataMap: {e}"))
+        })?;
+        let datamap_chunk = DataMapChunk(Chunk::new(Bytes::from(datamap_bytes)));
+        let data_address = DataAddress::new(*datamap_chunk.0.address().xorname());
 
         // Note within the `pay_and_upload`, UploadSummary will be sent to client via event_channel.
         let mut chunk_streams = vec![chunk_stream];
@@ -67,7 +68,8 @@ impl Client {
         data: Bytes,
     ) -> Result<Vec<(XorName, usize)>, CostError> {
         let now = Instant::now();
-        let (data_map_chunks, chunks) = encrypt(data)?;
+        let (data_map_chunks, chunks) =
+            encrypt(data).map_err(|e| CostError::Serialization(format!("{e:?}")))?;
 
         debug!("Encryption took: {:.2?}", now.elapsed());
 
@@ -92,6 +94,7 @@ impl Client {
         content_addrs: Vec<(XorName, usize)>,
     ) -> Result<AttoTokens, CostError> {
         let store_quote = self
+            .core_client
             .get_store_quotes(DataTypes::Chunk, content_addrs.into_iter())
             .await
             .inspect_err(|err| error!("Error getting store quotes: {err:?}"))?;

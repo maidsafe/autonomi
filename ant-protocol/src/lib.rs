@@ -155,6 +155,19 @@ impl NetworkAddress {
     pub fn distance(&self, other: &NetworkAddress) -> Distance {
         self.as_kbucket_key().distance(&other.as_kbucket_key())
     }
+
+    /// Return the xorname of the address.
+    pub fn xorname(&self) -> XorName {
+        match self {
+            NetworkAddress::RecordKey(bytes) | NetworkAddress::PeerId(bytes) => {
+                XorName::from_content(bytes)
+            }
+            NetworkAddress::ChunkAddress(addr) => *addr.xorname(),
+            NetworkAddress::GraphEntryAddress(addr) => addr.xorname(),
+            NetworkAddress::PointerAddress(addr) => addr.xorname(),
+            NetworkAddress::ScratchpadAddress(addr) => addr.xorname(),
+        }
+    }
 }
 
 impl From<XorName> for NetworkAddress {

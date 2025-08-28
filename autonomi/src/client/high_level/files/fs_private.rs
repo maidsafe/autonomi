@@ -9,11 +9,12 @@
 use super::archive_private::{PrivateArchive, PrivateArchiveDataMap};
 use super::{DownloadError, UploadError};
 
-use crate::client::data_types::chunk::DataMapChunk;
+use crate::client::chunk::DataMapChunk;
 use crate::client::payment::PaymentOption;
+use crate::files::{get_relative_file_path_from_abs_file_and_folder_path, metadata_from_entry};
 use crate::{AttoTokens, Client};
 use bytes::Bytes;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 impl Client {
     /// Download private file directly to filesystem. Always uses streaming.
@@ -30,7 +31,7 @@ impl Client {
         }
 
         let datamap = self.restore_data_map_from_chunk(data_map).await?;
-        self.stream_download_from_datamap(datamap, &to_dest)?;
+        self.stream_download_from_datamap(datamap, &to_dest).await?;
 
         debug!("Successfully downloaded private file to {to_dest:?}");
         Ok(())
@@ -63,7 +64,7 @@ impl Client {
 
         // encrypt
         let encryption_results = self
-            .encrypt_directory_files_in_memory(dir_path, false)
+            .encrypt_directory_files_in_memory(dir_path.clone(), false)
             .await?;
         let mut chunk_iterators = vec![];
         for encryption_result in encryption_results {
@@ -92,9 +93,10 @@ impl Client {
         // create an archive
         let mut private_archive = PrivateArchive::new();
         for file in chunk_iterators {
-            let file_path = file.file_path.clone();
-            let relative_path = file.relative_path.clone();
-            let file_metadata = file.metadata.clone();
+            let file_path = Path::new(&file.file_path);
+            let relative_path =
+                get_relative_file_path_from_abs_file_and_folder_path(file_path, &dir_path);
+            let file_metadata = metadata_from_entry(file_path);
             let datamap = match file.data_map_chunk() {
                 Some(datamap) => datamap,
                 None => {

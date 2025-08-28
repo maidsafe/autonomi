@@ -8,7 +8,7 @@
 
 use ant_logging::LogBuilder;
 use autonomi::AttoTokens;
-use autonomi::client::payment::PaymentOption;
+use autonomi::PaymentOption;
 use autonomi::{
     Client,
     chunk::ChunkAddress,

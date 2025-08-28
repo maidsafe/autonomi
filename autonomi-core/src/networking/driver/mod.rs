@@ -112,6 +112,7 @@ impl NetworkDriver {
         let relay_transport = relay_transport
             .upgrade(libp2p::core::upgrade::Version::V1Lazy)
             .authenticate(
+                #[allow(clippy::expect_used)]
                 libp2p::noise::Config::new(&keypair)
                     .expect("Signing libp2p-noise static DH keypair failed."),
             )
@@ -127,6 +128,7 @@ impl NetworkDriver {
 
         // identify behaviour
         let identify = {
+            #[allow(clippy::expect_used)]
             let identify_protocol_str = IDENTIFY_PROTOCOL_STR
                 .read()
                 .expect("Could not get IDENTIFY_PROTOCOL_STR")
@@ -147,10 +149,12 @@ impl NetworkDriver {
         let request_response = {
             let cfg = request_response::Config::default().with_request_timeout(REQ_TIMEOUT);
 
+            #[allow(clippy::expect_used)]
             let req_res_version_str = REQ_RESPONSE_VERSION_STR
                 .read()
                 .expect("no protocol version")
                 .clone();
+            #[allow(clippy::expect_used)]
             let stream = StreamProtocol::try_from_owned(req_res_version_str)
                 .expect("StreamProtocol should start with a /");
             let proto = [(stream, ProtocolSupport::Outbound)];
@@ -247,7 +251,10 @@ impl NetworkDriver {
         for contact in peers {
             let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
                 Some(Protocol::P2p(id)) => id,
-                _ => panic!("No peer id found in contact"),
+                _ => {
+                    warn!("No peer id found in contact: {contact}");
+                    continue;
+                }
             };
 
             self.swarm
