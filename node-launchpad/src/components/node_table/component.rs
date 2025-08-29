@@ -16,7 +16,7 @@ use crate::components::Component;
 use crate::focus::{EventResult, FocusManager, FocusTarget};
 use crate::tui::Frame;
 
-use super::{NodeOperations, NodeTableConfig, NodeTableState, NodeTableWidget, StatefulTable};
+use super::{NodeTableConfig, NodeTableState, NodeTableWidget};
 
 pub struct NodeTableComponent {
     pub state: NodeTableState,
@@ -25,48 +25,13 @@ pub struct NodeTableComponent {
 }
 
 impl NodeTableComponent {
-    pub fn new(config: NodeTableConfig) -> Self {
-        Self {
-            state: Self::create_empty_state(&config),
+    pub async fn new(config: NodeTableConfig) -> Result<Self> {
+        let state = NodeTableState::new(config.clone()).await?;
+        Ok(Self {
+            state,
             config,
             action_sender: None,
-        }
-    }
-
-    fn create_empty_state(config: &NodeTableConfig) -> NodeTableState {
-        use crate::node_mgmt::NodeManagement;
-        use ant_service_management::NodeRegistryManager;
-        use std::time::Instant;
-
-        let registry_path = config.data_dir_path.join("node_registry.json");
-        let node_registry = NodeRegistryManager::empty(registry_path);
-        let node_management = NodeManagement::new(node_registry.clone()).unwrap();
-
-        NodeTableState {
-            items: StatefulTable::with_items(vec![]),
-            node_services: vec![],
-            node_registry,
-            operations: NodeOperations::new(node_management),
-            node_stats_last_update: Instant::now(),
-            network_id: config.network_id,
-            init_peers_config: config.init_peers_config.clone(),
-            antnode_path: config.antnode_path.clone(),
-            data_dir_path: config.data_dir_path.clone(),
-            connection_mode: config.connection_mode,
-            port_from: config.port_from,
-            port_to: config.port_to,
-            rewards_address: config.rewards_address.clone(),
-            nodes_to_start: config.nodes_to_start,
-            storage_mountpoint: config.storage_mountpoint.clone(),
-            available_disk_space_gb: 0,
-            error_popup: None,
-            spinner_states: vec![],
-        }
-    }
-
-    pub async fn initialize(&mut self) -> Result<()> {
-        self.state = NodeTableState::new(self.config.clone()).await?;
-        Ok(())
+        })
     }
 
     pub fn state(&self) -> &NodeTableState {
@@ -80,11 +45,25 @@ impl NodeTableComponent {
     fn handle_table_navigation(&mut self, key: KeyEvent) -> Result<(Vec<Action>, EventResult)> {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
+                debug!("NodeTable: Handling Up key - calling previous()");
+                let before_selected = self.state.items.state.selected();
                 self.state.items.previous();
+                let after_selected = self.state.items.state.selected();
+                debug!(
+                    "NodeTable: Selection changed from {:?} to {:?}",
+                    before_selected, after_selected
+                );
                 Ok((vec![], EventResult::Consumed))
             }
             KeyCode::Down | KeyCode::Char('j') => {
+                debug!("NodeTable: Handling Down key - calling next()");
+                let before_selected = self.state.items.state.selected();
                 self.state.items.next();
+                let after_selected = self.state.items.state.selected();
+                debug!(
+                    "NodeTable: Selection changed from {:?} to {:?}",
+                    before_selected, after_selected
+                );
                 Ok((vec![], EventResult::Consumed))
             }
             KeyCode::Home | KeyCode::Char('g') => {
@@ -202,6 +181,7 @@ impl Component for NodeTableComponent {
         }
 
         debug!("NodeTable handling key: {key:?}");
+        debug!("NodeTable has {} items", self.state.items.items.len());
 
         if let (actions, EventResult::Consumed) = self.handle_table_navigation(key)? {
             return Ok((actions, EventResult::Consumed));

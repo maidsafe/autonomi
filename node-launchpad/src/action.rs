@@ -111,9 +111,6 @@ pub enum StatusActions {
     TriggerRewardsAddress,
     TriggerNodeLogs,
     TriggerRemoveNode,
-
-    PreviousTableItem,
-    NextTableItem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
