@@ -119,15 +119,7 @@ pub fn get_keybindings() -> KeyBindings {
             bind("<L>"),
             Action::StatusActions(StatusActions::TriggerNodeLogs),
         ),
-        // Navigation
-        (
-            bind("up"),
-            Action::StatusActions(StatusActions::PreviousTableItem),
-        ),
-        (
-            bind("down"),
-            Action::StatusActions(StatusActions::NextTableItem),
-        ),
+        // Navigation is now handled directly by NodeTableComponent
     ]);
     keybindings.insert(Scene::Status, status);
 

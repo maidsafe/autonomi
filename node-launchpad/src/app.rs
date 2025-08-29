@@ -199,11 +199,13 @@ impl App {
         let mut actions = Vec::new();
 
         if self.input_mode == InputMode::Navigation {
+            let mut key_handled = false;
             if let Some(keymap) = self.keybindings.get(&self.scene) {
                 if let Some(action) = keymap.get(&vec![key]) {
                     info!("Got action: {action:?}");
                     action_tx.send(action.clone())?;
                     actions.push(action.clone());
+                    key_handled = true;
                 } else {
                     // If the key was not handled as a single key action,
                     // then consider it for multi-key combinations.
@@ -214,6 +216,23 @@ impl App {
                         info!("Got action: {action:?}");
                         action_tx.send(action.clone())?;
                         actions.push(action.clone());
+                        key_handled = true;
+                    }
+                }
+            }
+
+            // If no keybinding handled the key, let components handle it
+            if !key_handled {
+                for component in self.components.iter_mut() {
+                    let (send_back_actions, event_result) =
+                        component.handle_key_events(key, &self.focus_manager)?;
+                    for action in &send_back_actions {
+                        action_tx.send(action.clone())?;
+                    }
+                    actions.extend(send_back_actions);
+                    // If the event was consumed, break to avoid other components handling it
+                    if matches!(event_result, EventResult::Consumed) {
+                        break;
                     }
                 }
             }
