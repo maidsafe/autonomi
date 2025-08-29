@@ -307,6 +307,9 @@ impl Client {
 
         let network = Network::new(initial_peers, config.bootstrap_cache_config)?;
 
+        // Wait for the network to be ready with enough peers
+        network.wait_for_connectivity().await?;
+
         Ok(Self {
             network,
             client_event_sender: None,
@@ -359,4 +362,30 @@ pub struct UploadSummary {
     pub records_already_paid: usize,
     /// Total cost of the upload
     pub tokens_spent: Amount,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ant_logging::LogBuilder;
+
+    #[tokio::test]
+    async fn test_init_fails() {
+        let _guard = LogBuilder::init_single_threaded_tokio_test();
+
+        let initial_peers = vec![
+            "/ip4/127.0.0.1/udp/1/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+                .parse()
+                .unwrap(),
+        ];
+        let network = Network::new(initial_peers, None).unwrap();
+
+        match network.wait_for_connectivity().await {
+            Err(ConnectError::TimedOut) => {} // This is the expected outcome
+            Ok(()) => panic!("Expected `ConnectError::TimedOut`, but got `Ok`"),
+            Err(err) => {
+                panic!("Expected `ConnectError::TimedOut`, but got `{err:?}`")
+            }
+        }
+    }
 }

@@ -13,29 +13,29 @@ mod task_handler;
 use std::collections::BTreeMap;
 use std::{num::NonZeroUsize, time::Duration};
 
-use crate::networking::NetworkError;
 use crate::networking::interface::NetworkTask;
+use crate::networking::NetworkError;
 use ant_bootstrap::BootstrapCacheStore;
-use ant_protocol::NetworkAddress;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
+use ant_protocol::NetworkAddress;
 use ant_protocol::{
     messages::{Query, Request, Response},
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use libp2p::kad::NoKnownPeers;
 use libp2p::kad::store::MemoryStoreConfig;
+use libp2p::kad::NoKnownPeers;
 use libp2p::swarm::ConnectionId;
 use libp2p::{
-    Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
     core::muxing::StreamMuxerBox,
     futures::StreamExt,
     identity::Keypair,
     kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
-    request_response::{self, ProtocolSupport, cbor::codec::Codec as CborCodec},
+    request_response::{self, cbor::codec::Codec as CborCodec, ProtocolSupport},
     swarm::NetworkBehaviour,
+    Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
 };
 use task_handler::TaskHandler;
 use tokio::sync::mpsc;
@@ -79,6 +79,8 @@ pub(crate) struct NetworkDriver {
     /// pending tasks currently awaiting swarm events to progress
     /// this is an opaque struct that can only be mutated by the module were [`crate::driver::task_handler::TaskHandler`] is defined
     pending_tasks: TaskHandler,
+    /// Count of connections established to peers. Can be used to determine if we are a 'connected' client.
+    connections_made: usize,
 }
 
 #[derive(NetworkBehaviour)]
@@ -200,6 +202,7 @@ impl NetworkDriver {
             swarm,
             task_receiver,
             pending_tasks: task_handler,
+            connections_made: 0,
         }
     }
 
@@ -354,6 +357,12 @@ impl NetworkDriver {
                         resp,
                     },
                 );
+            }
+            NetworkTask::ConnectionsMade { resp } => {
+                // Send the current count of connections made
+                if let Err(e) = resp.send(Ok(self.connections_made)) {
+                    error!("Error sending connections made response: {e:?}");
+                }
             }
         }
     }
