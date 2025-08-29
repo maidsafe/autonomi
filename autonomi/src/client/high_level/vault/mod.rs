@@ -74,7 +74,7 @@ impl Client {
     /// Retrieves and returns a decrypted vault if one exists.
     ///
     /// Returns the content type of the bytes in the vault.
-    pub async fn fetch_and_decrypt_vault(
+    pub async fn vault_get(
         &self,
         secret_key: &VaultSecretKey,
     ) -> Result<(Bytes, VaultContentType), VaultError> {
@@ -160,7 +160,7 @@ impl Client {
     /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
     ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
-    pub async fn write_bytes_to_vault(
+    pub async fn vault_put(
         &self,
         data: Bytes,
         payment_option: PaymentOption,
@@ -404,6 +404,27 @@ impl Client {
             content_type,
             has_end_reached,
         ))
+    }
+
+    /// @deprecated Use `vault_get` instead. This function will be removed in a future version.
+    #[deprecated(since = "0.2.0", note = "Use `vault_get` instead")]
+    pub async fn fetch_and_decrypt_vault(
+        &self,
+        secret_key: &VaultSecretKey,
+    ) -> Result<(Bytes, VaultContentType), VaultError> {
+        self.vault_get(secret_key).await
+    }
+
+    /// @deprecated Use `vault_put` instead. This function will be removed in a future version.
+    #[deprecated(since = "0.2.0", note = "Use `vault_put` instead")]
+    pub async fn write_bytes_to_vault(
+        &self,
+        data: Bytes,
+        payment_option: PaymentOption,
+        secret_key: &VaultSecretKey,
+        content_type: VaultContentType,
+    ) -> Result<AttoTokens, VaultError> {
+        self.vault_put(data, payment_option, secret_key, content_type).await
     }
 }
 
