@@ -10,7 +10,7 @@ use crate::action::{NodeTableActions, OptionsActions};
 use crate::components::Component;
 use crate::components::footer::{Footer, NodesToStart};
 use crate::components::header::{Header, SelectedMenuItem};
-use crate::components::node_table::{NodeTableComponent, NodeTableConfig, NodeTableState};
+use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
@@ -56,9 +56,7 @@ pub struct Status {
     available_disk_space_gb: usize,
     error_popup: Option<ErrorPopup>,
 
-    // NodeTable state
-    node_table_state: NodeTableState,
-    // NodeTable component
+    // NodeTable component (contains the state)
     node_table_component: NodeTableComponent,
 
     // Cached state from NodeTable
@@ -95,20 +93,6 @@ impl Status {
             storage_mountpoint: config.storage_mountpoint.clone(),
             available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
 
-            // Initialize NodeTable state
-            node_table_state: NodeTableState::new(NodeTableConfig {
-                network_id: config.network_id,
-                init_peers_config: config.init_peers_config.clone(),
-                antnode_path: config.antnode_path.clone(),
-                data_dir_path: config.data_dir_path.clone(),
-                connection_mode: config.connection_mode,
-                port_from: config.port_from,
-                port_to: config.port_to,
-                rewards_address: config.rewards_address.clone(),
-                nodes_to_start: config.allocated_disk_space,
-                storage_mountpoint: config.storage_mountpoint.clone(),
-            })
-            .await?,
             // Initialize NodeTable component
             node_table_component: NodeTableComponent::new(NodeTableConfig {
                 network_id: config.network_id,
@@ -121,7 +105,8 @@ impl Status {
                 rewards_address: config.rewards_address.clone(),
                 nodes_to_start: config.allocated_disk_space,
                 storage_mountpoint: config.storage_mountpoint.clone(),
-            }),
+            })
+            .await?,
 
             // Initialize cached state
             node_count: 0,
@@ -151,7 +136,8 @@ impl Component for Status {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.action_sender = Some(tx.clone());
         // Register action sender with NodeTable operations
-        self.node_table_state
+        self.node_table_component
+            .state_mut()
             .operations
             .register_action_sender(tx.clone());
 
@@ -160,11 +146,13 @@ impl Component for Status {
             .register_action_handler(tx.clone())?;
 
         // Update the stats to be shown as soon as the app is run
-        self.node_table_state.try_update_node_stats(true)?;
+        self.node_table_component
+            .state_mut()
+            .try_update_node_stats(true)?;
 
         // Refresh registry on startup
         let action_sender_startup = tx.clone();
-        let node_registry_clone = self.node_table_state.node_registry.clone();
+        let node_registry_clone = self.node_table_component.state().node_registry.clone();
         tokio::spawn(async move {
             log::debug!("Refreshing node registry on startup");
             let services = node_registry_clone.get_node_service_data().await;
@@ -180,9 +168,12 @@ impl Component for Status {
 
         // Watch for registry file changes
         let action_sender_clone = tx.clone();
-        let mut node_registry_watcher =
-            self.node_table_state.node_registry.watch_registry_file()?;
-        let node_registry_clone = self.node_table_state.node_registry.clone();
+        let mut node_registry_watcher = self
+            .node_table_component
+            .state_mut()
+            .node_registry
+            .watch_registry_file()?;
+        let node_registry_clone = self.node_table_component.state().node_registry.clone();
         tokio::spawn(async move {
             while let Some(()) = node_registry_watcher.recv().await {
                 let services = node_registry_clone.get_node_service_data().await;
@@ -212,6 +203,10 @@ impl Component for Status {
         focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
         debug!("Key received in Status (focused): {:?}", key);
+        debug!(
+            "Status has focus: {}",
+            focus_manager.has_focus(&FocusTarget::Status)
+        );
 
         // Handle error popup first
         if let Some(error_popup) = &mut self.error_popup
@@ -228,17 +223,24 @@ impl Component for Status {
         let status_only_keys = false; // Add any Status-specific keys here if needed
 
         if status_only_keys && focus_manager.has_focus(&self.focus_target()) {
+            debug!("Status: Handling status-only key");
             // Handle Status-specific keys here
             return Ok((vec![], EventResult::Consumed));
         }
 
         // Delegate node table operations to NodeTableComponent when Status has focus
         if focus_manager.has_focus(&FocusTarget::Status) {
+            debug!("Status: Delegating key {:?} to NodeTableComponent", key);
             let (node_actions, event_result) = self
                 .node_table_component
                 .handle_key_events(key, focus_manager)?;
+            debug!(
+                "Status: NodeTableComponent returned result {:?}",
+                event_result
+            );
             // If the NodeTable component consumed the event, return those actions
             if matches!(event_result, EventResult::Consumed) {
+                debug!("Status: Key was consumed by NodeTableComponent");
                 return Ok((node_actions, event_result));
             }
             // Otherwise, fall through to handle Status-specific operations
@@ -246,15 +248,22 @@ impl Component for Status {
 
         // If Status has focus, handle Status-specific operations
         if focus_manager.has_focus(&self.focus_target()) {
+            debug!("Status: Handling status-specific operations");
             let actions = self.handle_status_key_events(key)?;
             let result = if actions.is_empty() {
                 EventResult::Ignored
             } else {
                 EventResult::Consumed
             };
+            debug!(
+                "Status: Generated {} actions, result: {:?}",
+                actions.len(),
+                result
+            );
             return Ok((actions, result));
         }
 
+        debug!("Status: No focus, ignoring key");
         Ok((vec![], EventResult::Ignored))
     }
 
@@ -280,8 +289,10 @@ impl Component for Status {
         // Handle Status-specific actions
         match action {
             Action::Tick => {
-                self.node_table_state.try_update_node_stats(false)?;
-                self.node_table_state.send_state_update()?;
+                self.node_table_component
+                    .state_mut()
+                    .try_update_node_stats(false)?;
+                self.node_table_component.state_mut().send_state_update()?;
             }
             Action::SwitchScene(scene) => match scene {
                 Scene::Status
@@ -328,8 +339,10 @@ impl Component for Status {
                         "Received RegistryUpdated event with {} nodes",
                         all_nodes_data.len()
                     );
-                    self.node_table_state.update_node_state(&all_nodes_data);
-                    self.node_table_state.send_state_update()?;
+                    self.node_table_component
+                        .state_mut()
+                        .update_node_state(&all_nodes_data);
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::TriggerManageNodes => {
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
@@ -352,16 +365,23 @@ impl Component for Status {
                         storage_mountpoint: &self.storage_mountpoint,
                         rewards_address: &self.rewards_address,
                         nodes_to_start: self.nodes_to_start,
-                        antnode_path: self.node_table_state.antnode_path.clone(),
+                        antnode_path: self.node_table_component.state().antnode_path.clone(),
                         connection_mode: self.connection_mode,
                         data_dir_path: self.data_dir_path.clone(),
-                        network_id: self.node_table_state.network_id,
-                        init_peers_config: self.node_table_state.init_peers_config.clone(),
+                        network_id: self.node_table_component.state().network_id,
+                        init_peers_config: self
+                            .node_table_component
+                            .state()
+                            .init_peers_config
+                            .clone(),
                         port_from: self.port_from,
                         port_to: self.port_to,
                     };
-                    if let Some(result_action) =
-                        self.node_table_state.operations.handle_add_node(&config)?
+                    if let Some(result_action) = self
+                        .node_table_component
+                        .state_mut()
+                        .operations
+                        .handle_add_node(&config)?
                     {
                         return Ok(Some(result_action));
                     }
@@ -371,16 +391,21 @@ impl Component for Status {
                     let config = crate::components::node_table::StartNodesConfig {
                         rewards_address: &self.rewards_address,
                         nodes_to_start: self.nodes_to_start,
-                        antnode_path: self.node_table_state.antnode_path.clone(),
+                        antnode_path: self.node_table_component.state().antnode_path.clone(),
                         connection_mode: self.connection_mode,
                         data_dir_path: self.data_dir_path.clone(),
-                        network_id: self.node_table_state.network_id,
-                        init_peers_config: self.node_table_state.init_peers_config.clone(),
+                        network_id: self.node_table_component.state().network_id,
+                        init_peers_config: self
+                            .node_table_component
+                            .state()
+                            .init_peers_config
+                            .clone(),
                         port_from: self.port_from,
                         port_to: self.port_to,
                     };
                     if let Some(result_action) = self
-                        .node_table_state
+                        .node_table_component
+                        .state_mut()
                         .operations
                         .handle_start_nodes(&config)?
                     {
@@ -389,56 +414,87 @@ impl Component for Status {
                 }
                 StatusActions::StopNodes => {
                     debug!("Got action to stop nodes");
-                    let running_nodes = self.node_table_state.get_running_nodes();
-                    self.node_table_state
+                    let running_nodes = self.node_table_component.state().get_running_nodes();
+                    self.node_table_component
+                        .state_mut()
                         .operations
                         .handle_stop_nodes(running_nodes)?;
                 }
                 StatusActions::StartStopNode => {
                     debug!("Start/Stop node");
-                    if let Some(node_item) = self.node_table_state.items.selected_item_mut() {
-                        if node_item.locked {
-                            debug!("Node still performing operation");
+                    let (service_name, node_locked, node_status) = {
+                        if let Some(node_item) =
+                            self.node_table_component.state().items.selected_item()
+                        {
+                            (
+                                vec![node_item.name.clone()],
+                                node_item.locked,
+                                node_item.status,
+                            )
+                        } else {
                             return Ok(None);
                         }
+                    };
 
-                        let service_name = vec![node_item.name.clone()];
-                        match node_item.status {
-                            crate::components::node_table::NodeStatus::Stopped
-                            | crate::components::node_table::NodeStatus::Added => {
-                                debug!("Starting Node {:?}", node_item.name);
-                                self.node_table_state
-                                    .operations
-                                    .handle_start_node(service_name)?;
+                    if node_locked {
+                        debug!("Node still performing operation");
+                        return Ok(None);
+                    }
+
+                    match node_status {
+                        crate::components::node_table::NodeStatus::Stopped
+                        | crate::components::node_table::NodeStatus::Added => {
+                            debug!("Starting Node {:?}", service_name[0]);
+                            self.node_table_component
+                                .state_mut()
+                                .operations
+                                .handle_start_node(service_name)?;
+                            if let Some(node_item) = self
+                                .node_table_component
+                                .state_mut()
+                                .items
+                                .selected_item_mut()
+                            {
                                 node_item.status =
                                     crate::components::node_table::NodeStatus::Starting;
                             }
-                            crate::components::node_table::NodeStatus::Running => {
-                                debug!("Stopping Node {:?}", node_item.name);
-                                self.node_table_state
-                                    .operations
-                                    .handle_stop_nodes(service_name)?;
-                            }
-                            _ => {
-                                debug!(
-                                    "Cannot Start/Stop node. Node status is {:?}",
-                                    node_item.status
-                                );
+                        }
+                        crate::components::node_table::NodeStatus::Running => {
+                            debug!("Stopping Node {:?}", service_name[0]);
+                            self.node_table_component
+                                .state_mut()
+                                .operations
+                                .handle_stop_nodes(service_name)?;
+                            if let Some(node_item) = self
+                                .node_table_component
+                                .state_mut()
+                                .items
+                                .selected_item_mut()
+                            {
+                                node_item.lock();
                             }
                         }
-                        node_item.lock();
+                        _ => {
+                            debug!("Cannot Start/Stop node. Node status is {:?}", node_status);
+                        }
                     }
                 }
                 StatusActions::RemoveNodes => {
                     debug!("Got action to remove node");
-                    if let Some(node_item) = self.node_table_state.items.selected_item_mut() {
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .items
+                        .selected_item_mut()
+                    {
                         if node_item.locked {
                             debug!("Node still performing operation");
                             return Ok(None);
                         }
                         node_item.lock();
                         let service_name = vec![node_item.name.clone()];
-                        self.node_table_state
+                        self.node_table_component
+                            .state_mut()
                             .operations
                             .handle_remove_nodes(service_name)?;
                     }
@@ -450,19 +506,21 @@ impl Component for Status {
                 }
                 StatusActions::TriggerNodeLogs => {
                     debug!("TriggerNodeLogs action received");
-                    if self.node_table_state.items.items.is_empty() {
+                    if self.node_table_component.state().items.items.is_empty() {
                         debug!("No nodes available for logs viewing");
                         return Ok(None);
                     }
 
                     let selected_node_name = self
-                        .node_table_state
+                        .node_table_component
+                        .state()
                         .items
                         .selected_item()
                         .map(|node| node.name.clone())
                         .unwrap_or_else(|| {
                             // If no specific node is selected, use the first available node
-                            self.node_table_state
+                            self.node_table_component
+                                .state()
                                 .items
                                 .items
                                 .first()
@@ -474,19 +532,13 @@ impl Component for Status {
                     // Note: The app will need to handle this sequence
                     return Ok(Some(Action::SetNodeLogsTarget(selected_node_name)));
                 }
-                StatusActions::PreviousTableItem => {
-                    self.node_table_state.items.previous();
-                }
-                StatusActions::NextTableItem => {
-                    self.node_table_state.items.next();
-                }
 
                 // === Completion Handlers ===
                 StatusActions::StartNodesCompleted { service_name } => {
                     debug!("StartNodesCompleted for service: {service_name}");
                     if service_name == NODES_ALL {
                         // Unlock all nodes that were starting
-                        for item in self.node_table_state.items.items.iter_mut() {
+                        for item in self.node_table_component.state_mut().items.items.iter_mut() {
                             if item.status == crate::components::node_table::NodeStatus::Starting {
                                 item.unlock();
                                 item.update_status(
@@ -494,45 +546,57 @@ impl Component for Status {
                                 );
                             }
                         }
-                    } else if let Some(node_item) =
-                        self.node_table_state.get_node_item_mut(&service_name)
+                    } else if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
                     {
                         node_item.unlock();
                         node_item.update_status(crate::components::node_table::NodeStatus::Running);
                     }
-                    self.node_table_state.send_state_update()?;
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::StopNodesCompleted { service_name } => {
                     debug!("StopNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.node_table_state.get_node_item_mut(&service_name)
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
                     {
                         node_item.unlock();
                         node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
                     }
-                    self.node_table_state.send_state_update()?;
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::AddNodesCompleted { service_name } => {
                     debug!("AddNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.node_table_state.get_node_item_mut(&service_name)
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
                     {
                         node_item.unlock();
                         node_item.update_status(crate::components::node_table::NodeStatus::Added);
                     }
-                    self.node_table_state.send_state_update()?;
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::RemoveNodesCompleted { service_name } => {
                     debug!("RemoveNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.node_table_state.get_node_item_mut(&service_name)
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
                     {
                         node_item.unlock();
                         node_item.update_status(crate::components::node_table::NodeStatus::Removed);
                     }
                     // Remove the node from the list
-                    self.node_table_state
+                    self.node_table_component
+                        .state_mut()
                         .items
                         .items
                         .retain(|item| item.name != service_name);
-                    self.node_table_state.send_state_update()?;
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
 
                 // Ignore all other status actions that are no longer relevant
@@ -547,28 +611,32 @@ impl Component for Status {
                     debug!("Got OptionsActions::ResetNodes - removing all nodes");
                     // Reset all nodes by removing all of them
                     let all_service_names: Vec<String> = self
-                        .node_table_state
+                        .node_table_component
+                        .state()
                         .items
                         .items
                         .iter()
                         .map(|item| item.name.clone())
                         .collect();
                     if !all_service_names.is_empty() {
-                        self.node_table_state
+                        self.node_table_component
+                            .state_mut()
                             .operations
                             .handle_remove_nodes(all_service_names)?;
                     }
                 }
                 OptionsActions::UpdateNodes => {
                     let all_service_names: Vec<String> = self
-                        .node_table_state
+                        .node_table_component
+                        .state()
                         .items
                         .items
                         .iter()
                         .map(|item| item.name.clone())
                         .collect();
                     if !all_service_names.is_empty() {
-                        self.node_table_state
+                        self.node_table_component
+                            .state_mut()
                             .operations
                             .handle_upgrade_nodes(all_service_names)?;
                     }
