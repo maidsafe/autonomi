@@ -18,7 +18,216 @@ use serde::{Deserialize, Serialize, de::Deserializer};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-const CONFIG: &str = include_str!("../.config/config.json5");
+pub fn get_keybindings() -> KeyBindings {
+    use crate::{
+        action::{Action, OptionsActions, StatusActions},
+        mode::Scene,
+    };
+    use std::collections::HashMap;
+
+    let bind = |key: &str| parse_key_sequence(key).unwrap();
+
+    let add_common_bindings = |scene_map: &mut HashMap<_, _>| {
+        scene_map.extend([
+            // Scene navigation
+            (bind("<s>"), Action::SwitchScene(Scene::Status)),
+            (bind("<S>"), Action::SwitchScene(Scene::Status)),
+            (bind("<o>"), Action::SwitchScene(Scene::Options)),
+            (bind("<O>"), Action::SwitchScene(Scene::Options)),
+            (bind("<h>"), Action::SwitchScene(Scene::Help)),
+            (bind("<H>"), Action::SwitchScene(Scene::Help)),
+            // Exit and suspend
+            (bind("<q>"), Action::Quit),
+            (bind("<Q>"), Action::Quit),
+            (bind("<Shift-q>"), Action::Quit),
+            (bind("<Ctrl-c>"), Action::Quit),
+            (bind("<Ctrl-z>"), Action::Suspend),
+        ]);
+    };
+
+    let mut keybindings = HashMap::new();
+
+    // Status scene keybindings
+    let mut status = HashMap::new();
+    add_common_bindings(&mut status);
+    status.extend([
+        // Node control
+        (
+            bind("<Ctrl-s>"),
+            Action::StatusActions(StatusActions::StartStopNode),
+        ),
+        (
+            bind("<Ctrl-S>"),
+            Action::StatusActions(StatusActions::StartStopNode),
+        ),
+        (
+            bind("<Ctrl-Shift-s>"),
+            Action::StatusActions(StatusActions::StartNodes),
+        ),
+        (
+            bind("<Ctrl-x>"),
+            Action::StatusActions(StatusActions::StopNodes),
+        ),
+        (
+            bind("<Ctrl-X>"),
+            Action::StatusActions(StatusActions::StopNodes),
+        ),
+        (
+            bind("<Ctrl-Shift-x>"),
+            Action::StatusActions(StatusActions::StopNodes),
+        ),
+        // Node management
+        (bind("<+>"), Action::StatusActions(StatusActions::AddNode)),
+        (
+            bind("<->"),
+            Action::StatusActions(StatusActions::RemoveNodes),
+        ),
+        (
+            bind("<Delete>"),
+            Action::StatusActions(StatusActions::TriggerRemoveNode),
+        ),
+        (
+            bind("<Ctrl-g>"),
+            Action::StatusActions(StatusActions::TriggerManageNodes),
+        ),
+        (
+            bind("<Ctrl-G>"),
+            Action::StatusActions(StatusActions::TriggerManageNodes),
+        ),
+        (
+            bind("<Ctrl-Shift-g>"),
+            Action::StatusActions(StatusActions::TriggerManageNodes),
+        ),
+        // Settings and logs
+        (
+            bind("<Ctrl-b>"),
+            Action::StatusActions(StatusActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<Ctrl-B>"),
+            Action::StatusActions(StatusActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<Ctrl-Shift-b>"),
+            Action::StatusActions(StatusActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<l>"),
+            Action::StatusActions(StatusActions::TriggerNodeLogs),
+        ),
+        (
+            bind("<L>"),
+            Action::StatusActions(StatusActions::TriggerNodeLogs),
+        ),
+        // Navigation
+        (
+            bind("up"),
+            Action::StatusActions(StatusActions::PreviousTableItem),
+        ),
+        (
+            bind("down"),
+            Action::StatusActions(StatusActions::NextTableItem),
+        ),
+    ]);
+    keybindings.insert(Scene::Status, status);
+
+    // Options scene keybindings
+    let mut options = HashMap::new();
+    add_common_bindings(&mut options);
+    options.extend([
+        // Storage and connection
+        (
+            bind("<Ctrl-d>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeDrive),
+        ),
+        (
+            bind("<Ctrl-D>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeDrive),
+        ),
+        (
+            bind("<Ctrl-Shift-d>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeDrive),
+        ),
+        (
+            bind("<Ctrl-k>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
+        ),
+        (
+            bind("<Ctrl-K>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
+        ),
+        (
+            bind("<Ctrl-Shift-k>"),
+            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
+        ),
+        (
+            bind("<Ctrl-p>"),
+            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
+        ),
+        (
+            bind("<Ctrl-P>"),
+            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
+        ),
+        (
+            bind("<Ctrl-Shift-p>"),
+            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
+        ),
+        // Settings
+        (
+            bind("<Ctrl-b>"),
+            Action::OptionsActions(OptionsActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<Ctrl-B>"),
+            Action::OptionsActions(OptionsActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<Ctrl-Shift-b>"),
+            Action::OptionsActions(OptionsActions::TriggerRewardsAddress),
+        ),
+        (
+            bind("<Ctrl-l>"),
+            Action::OptionsActions(OptionsActions::TriggerAccessLogs),
+        ),
+        (
+            bind("<Ctrl-L>"),
+            Action::OptionsActions(OptionsActions::TriggerAccessLogs),
+        ),
+        (
+            bind("<Ctrl-Shift-l>"),
+            Action::OptionsActions(OptionsActions::TriggerAccessLogs),
+        ),
+        // Node operations
+        (
+            bind("<Ctrl-u>"),
+            Action::OptionsActions(OptionsActions::TriggerUpdateNodes),
+        ),
+        (
+            bind("<Ctrl-U>"),
+            Action::OptionsActions(OptionsActions::TriggerUpdateNodes),
+        ),
+        (
+            bind("<Ctrl-r>"),
+            Action::OptionsActions(OptionsActions::TriggerResetNodes),
+        ),
+        (
+            bind("<Ctrl-R>"),
+            Action::OptionsActions(OptionsActions::TriggerResetNodes),
+        ),
+        (
+            bind("<Ctrl-Shift-r>"),
+            Action::OptionsActions(OptionsActions::TriggerResetNodes),
+        ),
+    ]);
+    keybindings.insert(Scene::Options, options);
+
+    // Help scene keybindings
+    let mut help = HashMap::new();
+    add_common_bindings(&mut help);
+    keybindings.insert(Scene::Help, help);
+
+    KeyBindings(keybindings)
+}
 
 /// Where to store the Nodes data.
 ///
@@ -180,70 +389,6 @@ impl AppData {
         std::fs::write(config_path, serialized_config)?;
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Config {
-    #[serde(default)]
-    pub keybindings: KeyBindings,
-    #[serde(default)]
-    pub styles: Styles,
-}
-
-impl Config {
-    pub fn new() -> Result<Self, config::ConfigError> {
-        let default_config: Config = json5::from_str(CONFIG).unwrap();
-        let data_dir = get_launchpad_data_dir_path()
-            .map_err(|_| config::ConfigError::Message("Could not obtain data dir".to_string()))?;
-        let config_dir = get_config_dir()
-            .map_err(|_| config::ConfigError::Message("Could not obtain data dir".to_string()))?;
-        let mut builder = config::Config::builder()
-            .set_default("_data_dir", data_dir.to_str().unwrap())?
-            .set_default("_config_dir", config_dir.to_str().unwrap())?;
-
-        let config_files = [
-            ("config.json5", config::FileFormat::Json5),
-            ("config.json", config::FileFormat::Json),
-            ("config.yaml", config::FileFormat::Yaml),
-            ("config.toml", config::FileFormat::Toml),
-            ("config.ini", config::FileFormat::Ini),
-        ];
-        let mut found_config = false;
-        for (file, format) in &config_files {
-            builder = builder.add_source(
-                config::File::from(config_dir.join(file))
-                    .format(*format)
-                    .required(false),
-            );
-            if config_dir.join(file).exists() {
-                found_config = true
-            }
-        }
-        if !found_config {
-            log::error!("No configuration file found. Application may not behave as expected");
-        }
-
-        let mut cfg: Self = builder.build()?.try_deserialize()?;
-
-        for (mode, default_bindings) in default_config.keybindings.iter() {
-            let user_bindings = cfg.keybindings.entry(*mode).or_default();
-            for (key, cmd) in default_bindings.iter() {
-                user_bindings
-                    .entry(key.clone())
-                    .or_insert_with(|| cmd.clone());
-            }
-        }
-        for (mode, default_styles) in default_config.styles.iter() {
-            let user_styles = cfg.styles.entry(*mode).or_default();
-            for (style_key, style) in default_styles.iter() {
-                user_styles
-                    .entry(style_key.clone())
-                    .or_insert_with(|| *style);
-            }
-        }
-
-        Ok(cfg)
     }
 }
 
@@ -626,10 +771,10 @@ mod tests {
     }
 
     #[test]
-    fn test_config() -> Result<()> {
-        let c = Config::new()?;
+    fn test_keybindings() -> Result<()> {
+        let keybindings = get_keybindings();
         assert_eq!(
-            c.keybindings
+            keybindings
                 .get(&Scene::Status)
                 .unwrap()
                 .get(&parse_key_sequence("<q>").unwrap_or_default())

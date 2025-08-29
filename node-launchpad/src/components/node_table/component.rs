@@ -13,7 +13,6 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::{Action, StatusActions};
 use crate::components::Component;
-use crate::config::Config;
 use crate::focus::{EventResult, FocusManager, FocusTarget};
 use crate::tui::Frame;
 
@@ -180,16 +179,14 @@ impl Component for NodeTableComponent {
         Ok(())
     }
 
-    fn register_config_handler(&mut self, _config: Config) -> Result<()> {
-        Ok(())
-    }
-
     fn handle_key_events(
         &mut self,
         key: KeyEvent,
         focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
-        if !focus_manager.has_focus(&self.focus_target()) {
+        if !focus_manager.has_focus(&self.focus_target())
+            && !focus_manager.has_focus(&FocusTarget::Status)
+        {
             return Ok((vec![], EventResult::Ignored));
         }
 
@@ -222,6 +219,48 @@ impl Component for NodeTableComponent {
             }
             Action::StatusActions(StatusActions::NodesStatsObtained(_node_stats)) => {
                 self.state.try_update_node_stats(false)?;
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::StartNodesCompleted { service_name }) => {
+                use crate::node_mgmt::NODES_ALL;
+                if service_name == NODES_ALL {
+                    // Unlock all nodes that were starting
+                    for item in self.state.items.items.iter_mut() {
+                        if item.status == crate::components::node_table::NodeStatus::Starting {
+                            item.unlock();
+                            item.update_status(crate::components::node_table::NodeStatus::Running);
+                        }
+                    }
+                } else if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Running);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::StopNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::AddNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Added);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::RemoveNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Removed);
+                }
+                // Remove the node from the list
+                self.state
+                    .items
+                    .items
+                    .retain(|item| item.name != service_name);
                 Ok(None)
             }
             Action::StoreNodesToStart(count) => {

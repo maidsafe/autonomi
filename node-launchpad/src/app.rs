@@ -21,7 +21,7 @@ use crate::{
         },
         status::{Status, StatusConfig},
     },
-    config::{AppData, Config, get_launchpad_nodes_data_dir_path},
+    config::{AppData, KeyBindings, get_keybindings, get_launchpad_nodes_data_dir_path},
     connection_mode::ConnectionMode,
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
@@ -38,7 +38,7 @@ use std::path::PathBuf;
 use tokio::sync::mpsc::{self, UnboundedSender};
 
 pub struct App {
-    pub config: Config,
+    pub keybindings: KeyBindings,
     pub app_data: AppData,
     pub tick_rate: f64,
     pub frame_rate: f64,
@@ -62,7 +62,7 @@ impl App {
     ) -> Result<Self> {
         // Configurations
         let app_data = AppData::load(app_data_path)?;
-        let config = Config::new()?;
+        let keybindings = get_keybindings();
 
         // Tries to set the data dir path based on the storage mountpoint set by the user,
         // if not set, it tries to get the default mount point (where the executable is) and
@@ -151,7 +151,7 @@ impl App {
         ];
 
         Ok(Self {
-            config,
+            keybindings,
             app_data: AppData {
                 discord_username: app_data.discord_username.clone(),
                 nodes_to_start: app_data.nodes_to_start,
@@ -199,7 +199,7 @@ impl App {
         let mut actions = Vec::new();
 
         if self.input_mode == InputMode::Navigation {
-            if let Some(keymap) = self.config.keybindings.get(&self.scene) {
+            if let Some(keymap) = self.keybindings.get(&self.scene) {
                 if let Some(action) = keymap.get(&vec![key]) {
                     info!("Got action: {action:?}");
                     action_tx.send(action.clone())?;
@@ -375,7 +375,6 @@ impl App {
 
         for component in self.components.iter_mut() {
             component.register_action_handler(action_tx.clone())?;
-            component.register_config_handler(self.config.clone())?;
             let size = tui.size()?;
             let rect = Rect::new(0, 0, size.width, size.height);
             component.init(rect)?;
