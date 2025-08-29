@@ -9,7 +9,6 @@
 use crate::{
     action::Action,
     components::{Component, utils::centered_rect},
-    config::Config,
     focus::{EventResult, FocusManager, FocusTarget},
     mode::Scene,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, RED, VERY_LIGHT_AZURE, clear_area},
@@ -257,21 +256,6 @@ impl NodeLogsPopup {
 }
 
 impl Component for NodeLogsPopup {
-    fn init(&mut self, _area: Rect) -> Result<()> {
-        Ok(())
-    }
-
-    fn register_action_handler(
-        &mut self,
-        _action_sender: tokio::sync::mpsc::UnboundedSender<Action>,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    fn register_config_handler(&mut self, _config: Config) -> Result<()> {
-        Ok(())
-    }
-
     fn focus_target(&self) -> FocusTarget {
         FocusTarget::NodeLogsPopup
     }

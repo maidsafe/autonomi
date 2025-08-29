@@ -16,11 +16,10 @@ use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::PORT_MIN;
+use crate::node_mgmt::{NODES_ALL, PORT_MIN};
 use crate::system::get_available_space_b;
 use crate::{
     action::{Action, StatusActions},
-    config::Config,
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_stats::NodeStats,
@@ -39,7 +38,6 @@ pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 
 pub struct Status {
     action_sender: Option<UnboundedSender<Action>>,
-    config: Config,
     // Device Stats Section
     node_stats: NodeStats,
     // Amount of nodes
@@ -86,7 +84,6 @@ impl Status {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let status = Self {
             action_sender: Default::default(),
-            config: Default::default(),
             node_stats: NodeStats::default(),
             nodes_to_start: config.allocated_disk_space,
             rewards_address: config.rewards_address.clone(),
@@ -202,11 +199,6 @@ impl Component for Status {
             }
         });
 
-        Ok(())
-    }
-
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
-        self.config = config;
         Ok(())
     }
 
@@ -492,7 +484,7 @@ impl Component for Status {
                 // === Completion Handlers ===
                 StatusActions::StartNodesCompleted { service_name } => {
                     debug!("StartNodesCompleted for service: {service_name}");
-                    if service_name == "all" {
+                    if service_name == NODES_ALL {
                         // Unlock all nodes that were starting
                         for item in self.node_table_state.items.items.iter_mut() {
                             if item.status == crate::components::node_table::NodeStatus::Starting {
