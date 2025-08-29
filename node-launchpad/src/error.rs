@@ -210,3 +210,82 @@ impl ErrorPopup {
         self.visible
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn test_error_popup_handle_input_enter_key() {
+        let mut error_popup = ErrorPopup::new(
+            "Error".to_string(),
+            "Message".to_string(),
+            "Details".to_string(),
+        );
+        error_popup.show();
+
+        let key_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::empty());
+        let handled = error_popup.handle_input(key_event);
+
+        assert!(handled);
+        assert!(!error_popup.is_visible());
+    }
+
+    #[test]
+    fn test_error_popup_handle_input_esc_key() {
+        let mut error_popup = ErrorPopup::new(
+            "Error".to_string(),
+            "Message".to_string(),
+            "Details".to_string(),
+        );
+        error_popup.show();
+
+        let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let handled = error_popup.handle_input(key_event);
+
+        assert!(handled);
+        assert!(!error_popup.is_visible());
+    }
+
+    #[test]
+    fn test_error_popup_lifecycle_simulation() {
+        let mut error_popup = ErrorPopup::new(
+            "Lifecycle Test".to_string(),
+            "Testing full lifecycle".to_string(),
+            "Complete error lifecycle test".to_string(),
+        );
+
+        // 1. Created - not visible
+        assert!(!error_popup.is_visible());
+
+        // 2. Show the error
+        error_popup.show();
+        assert!(error_popup.is_visible());
+
+        // 3. User presses various keys (ignored)
+        let ignored_keys = [KeyCode::Char('x'), KeyCode::Up, KeyCode::Tab];
+        for key_code in ignored_keys {
+            let key_event = KeyEvent::new(key_code, KeyModifiers::empty());
+            let handled = error_popup.handle_input(key_event);
+            assert!(!handled);
+            assert!(error_popup.is_visible());
+        }
+
+        // 4. User presses Enter to dismiss
+        let key_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::empty());
+        let handled = error_popup.handle_input(key_event);
+        assert!(handled);
+        assert!(!error_popup.is_visible());
+
+        // 5. Show again
+        error_popup.show();
+        assert!(error_popup.is_visible());
+
+        // 6. User presses Esc to dismiss
+        let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let handled = error_popup.handle_input(key_event);
+        assert!(handled);
+        assert!(!error_popup.is_visible());
+    }
+}
