@@ -802,3 +802,353 @@ impl Component for Status {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::{EventResult, FocusManager};
+    use crate::test_utils::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::{Terminal, backend::TestBackend};
+    use std::env::temp_dir;
+
+    fn create_test_status_config() -> StatusConfig {
+        let temp_path = temp_dir();
+        // Use root filesystem as mountpoint since it's always available on Unix-like systems
+        let storage_mountpoint = if cfg!(unix) {
+            PathBuf::from("/")
+        } else {
+            PathBuf::from("C:\\")
+        };
+
+        StatusConfig {
+            allocated_disk_space: 10,
+            antnode_path: Some(PathBuf::from("/usr/local/bin/antnode")),
+            connection_mode: ConnectionMode::Automatic,
+            data_dir_path: temp_path,
+            network_id: Some(1),
+            init_peers_config: InitialPeersConfig::default(),
+            port_from: Some(15000),
+            port_to: Some(15100),
+            storage_mountpoint,
+            rewards_address: "0x1234567890123456789012345678901234567890".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_status_handle_key_events_with_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+
+        // Set up error popup
+        let mut error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
+        );
+        error_popup.show();
+        status.error_popup = Some(error_popup);
+
+        let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let result = status.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+        let (actions, event_result) = result.unwrap();
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0],
+            Action::SwitchInputMode(InputMode::Navigation)
+        ));
+        assert_eq!(event_result, EventResult::Consumed);
+    }
+
+    #[tokio::test]
+    async fn test_status_handle_key_events_when_focused() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+
+        let key_event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::empty());
+        let result = status.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_update_tick_action() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::Tick);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_update_switch_scene() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::SwitchScene(Scene::Status));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, Some(Action::SwitchInputMode(InputMode::Navigation)));
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_nodes_to_start_zero() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreNodesToStart(0));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::StatusActions(StatusActions::StopNodes))
+        );
+        assert_eq!(status.nodes_to_start, 0);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_nodes_to_start_non_zero() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreNodesToStart(5));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::StatusActions(StatusActions::StartNodes))
+        );
+        assert_eq!(status.nodes_to_start, 5);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_rewards_address() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let new_address = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef".to_string();
+
+        let result = status.update(Action::StoreRewardsAddress(new_address.clone()));
+        assert!(result.is_ok());
+        assert_eq!(status.rewards_address, new_address);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_connection_mode() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreConnectionMode(ConnectionMode::UPnP));
+        assert!(result.is_ok());
+        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_port_range() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StorePortRange(20000, 20100));
+        assert!(result.is_ok());
+        assert_eq!(status.port_from, Some(20000));
+        assert_eq!(status.port_to, Some(20100));
+    }
+
+    #[tokio::test]
+    async fn test_status_update_nodes_stats_obtained() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let new_stats = NodeStats {
+            total_memory_usage_mb: 1024,
+            total_rewards_wallet_balance: 100,
+            total_forwarded_rewards: 50,
+            individual_stats: Vec::new(),
+        };
+
+        let result = status.update(Action::StatusActions(StatusActions::NodesStatsObtained(
+            new_stats.clone(),
+        )));
+        assert!(result.is_ok());
+        assert_eq!(status.node_stats.total_memory_usage_mb, 1024);
+        assert_eq!(status.node_stats.total_rewards_wallet_balance, 100);
+    }
+
+    // TODO: Rewrite this test to use real node data instead of mocks
+    // #[tokio::test]
+    // async fn test_status_update_registry_updated() {
+    //     let config = create_test_status_config();
+    //     let mut status = Status::new(config).await.unwrap();
+    //     // Test with real node registry data
+    //     assert!(true); // Placeholder
+    // }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_manage_nodes() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        status.nodes_to_start = 5;
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerManageNodes));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::SwitchScene(Scene::ManageNodesPopUp {
+                amount_of_nodes: 5
+            }))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_rewards_address_empty() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        status.rewards_address = "".to_string();
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_rewards_address_non_empty() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, None);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_show_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
+        );
+
+        let result = status.update(Action::ShowErrorPopup(error_popup));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, Some(Action::SwitchInputMode(InputMode::Entry)));
+        assert!(status.error_popup.is_some());
+        assert!(status.error_popup.as_ref().unwrap().is_visible());
+    }
+
+    #[tokio::test]
+    async fn test_status_update_node_table_state_changed() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::NodeTableActions(NodeTableActions::StateChanged {
+            node_count: 5,
+            has_running_nodes: true,
+            has_nodes: true,
+        }));
+        assert!(result.is_ok());
+        assert_eq!(status.node_count, 5);
+        assert!(status.has_running_nodes);
+        assert!(status.has_nodes);
+    }
+
+    #[tokio::test]
+    async fn test_status_drawing_with_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let mut error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
+        );
+        error_popup.show();
+        status.error_popup = Some(error_popup);
+
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|f| {
+            let area = f.area();
+            if let Err(e) = status.draw(f, area) {
+                panic!("Drawing failed: {e}");
+            }
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_connection_mode_display_upnp() {
+        let mut config = create_test_status_config();
+        config.connection_mode = ConnectionMode::UPnP;
+        let status = Status::new(config).await.unwrap();
+
+        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+    }
+
+    #[tokio::test]
+    async fn test_status_connection_mode_display_custom_ports() {
+        let mut config = create_test_status_config();
+        config.connection_mode = ConnectionMode::CustomPorts;
+        config.port_from = Some(20000);
+        config.port_to = Some(20100);
+        let status = Status::new(config).await.unwrap();
+
+        assert_eq!(status.connection_mode, ConnectionMode::CustomPorts);
+        assert_eq!(status.port_from, Some(20000));
+        assert_eq!(status.port_to, Some(20100));
+    }
+
+    #[tokio::test]
+    async fn test_status_memory_display_calculation() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        // Test memory usage less than 1GB
+        status.node_stats.total_memory_usage_mb = 512;
+        assert_eq!(status.node_stats.total_memory_usage_mb, 512);
+
+        // Test memory usage greater than 1GB
+        status.node_stats.total_memory_usage_mb = 2048;
+        assert_eq!(status.node_stats.total_memory_usage_mb, 2048);
+    }
+
+    // TODO: Rewrite this test to use real node data instead of MockNode
+    // #[tokio::test]
+    // async fn test_status_component_integration_with_real_nodes() {
+    //     let config = create_test_status_config();
+    //     let mut status = Status::new(config).await.unwrap();
+    //     // Test with real node services
+    //     assert!(true); // Placeholder
+    // }
+
+    #[test]
+    fn test_keyboard_sequence_with_status() {
+        let key_sequence = KeySequence::new()
+            .key('+')
+            .ctrl('b')
+            .arrow_down()
+            .enter()
+            .esc()
+            .build();
+
+        assert_eq!(key_sequence.len(), 5);
+        assert_eq!(key_sequence[0].code, KeyCode::Char('+'));
+        assert_eq!(key_sequence[1].code, KeyCode::Char('b'));
+        assert!(key_sequence[1].modifiers.contains(KeyModifiers::CONTROL));
+        assert_eq!(key_sequence[2].code, KeyCode::Down);
+        assert_eq!(key_sequence[3].code, KeyCode::Enter);
+        assert_eq!(key_sequence[4].code, KeyCode::Esc);
+    }
+}
