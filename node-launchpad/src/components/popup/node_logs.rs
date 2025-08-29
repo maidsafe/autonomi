@@ -199,10 +199,16 @@ impl NodeLogsPopup {
     fn handle_scroll_down(&mut self) {
         if let Some(selected) = self.list_state.selected() {
             if selected < self.logs.len().saturating_sub(1) {
-                self.list_state.select(Some(selected + 1));
-                self.scroll_state = self.scroll_state.position(selected + 1);
+                let new_pos = selected + 1;
+                self.list_state.select(Some(new_pos));
+                self.scroll_state = self.scroll_state.position(new_pos);
+
+                // If we've reached the bottom, enable tail following
+                if new_pos == self.logs.len().saturating_sub(1) {
+                    self.is_following_tail = true;
+                }
             } else {
-                // At the bottom, enable tail following
+                // Already at the bottom, enable tail following
                 self.is_following_tail = true;
             }
         } else if !self.logs.is_empty() {
@@ -416,5 +422,443 @@ impl Component for NodeLogsPopup {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        focus::{EventResult, FocusManager, FocusTarget},
+        mode::Scene,
+        test_utils::*,
+    };
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn test_esc_key_closes_popup() {
+        let mut popup = NodeLogsPopup::new("antnode1".to_string());
+        let focus_manager = FocusManager::new(FocusTarget::NodeLogsPopup);
+        let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+
+        let result = popup.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+        let (actions, event_result) = result.unwrap();
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0], Action::SwitchScene(Scene::Status));
+        assert_eq!(event_result, EventResult::Consumed);
+    }
+
+    #[test]
+    fn test_page_up_key_handling() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let focus_manager = FocusManager::new(FocusTarget::NodeLogsPopup);
+        let key_event = KeyEvent::new(KeyCode::PageUp, KeyModifiers::empty());
+
+        let result = popup.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+        let (actions, event_result) = result.unwrap();
+        assert_eq!(actions.len(), 0);
+        assert_eq!(event_result, EventResult::Consumed);
+    }
+
+    #[test]
+    fn test_keyboard_sequence_simulation() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let focus_manager = FocusManager::new(FocusTarget::NodeLogsPopup);
+
+        let key_sequence = KeySequence::new()
+            .arrow_down()
+            .arrow_down()
+            .arrow_up()
+            .page_down()
+            .home()
+            .end()
+            .esc()
+            .build();
+
+        for key_event in key_sequence {
+            let result = popup.handle_key_events(key_event, &focus_manager);
+            assert!(result.is_ok());
+
+            if key_event.code == KeyCode::Esc {
+                let (actions, _) = result.unwrap();
+                assert_eq!(actions.len(), 1);
+                assert_eq!(actions[0], Action::SwitchScene(Scene::Status));
+                break;
+            }
+        }
+    }
+
+    // === ADVANCED TESTING ===
+
+    #[test]
+    fn test_tail_mode_behavior_with_scrolling() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let test_logs = (0..10).map(|i| format!("Log line {i}")).collect();
+        popup.set_logs(test_logs);
+
+        // Should start in tail mode at the end
+        assert!(popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(9));
+
+        // Scrolling up should disable tail mode
+        popup.handle_scroll_up();
+        assert!(!popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(8));
+
+        // Scrolling down to the end should re-enable tail mode
+        popup.handle_scroll_down();
+        assert!(popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(9));
+
+        // Page up should disable tail mode
+        popup.handle_page_up();
+        assert!(!popup.is_following_tail);
+
+        // Page down to the end should re-enable tail mode
+        popup.handle_page_down();
+        assert!(popup.is_following_tail);
+
+        // Home should disable tail mode
+        popup.handle_home();
+        assert!(!popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        // End should re-enable tail mode
+        popup.handle_end();
+        assert!(popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(9));
+    }
+
+    #[test]
+    fn test_set_logs_functionality() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let test_logs = vec![
+            "First log line".to_string(),
+            "Second log line".to_string(),
+            "Third log line".to_string(),
+        ];
+
+        popup.set_logs(test_logs.clone());
+
+        assert_eq!(popup.logs, test_logs);
+        // Should auto-scroll to bottom when in tail mode
+        assert_eq!(popup.list_state.selected(), Some(2));
+    }
+
+    #[test]
+    fn test_set_logs_empty_collection() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        popup.set_logs(vec![]);
+
+        assert!(popup.logs.is_empty());
+        assert_eq!(popup.list_state.selected(), None);
+    }
+
+    #[test]
+    fn test_add_log_line_functionality() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        popup.set_logs(vec!["Initial log".to_string()]);
+
+        // Add a new log line
+        popup.add_log_line("New log line".to_string());
+
+        assert_eq!(popup.logs.len(), 2);
+        assert_eq!(popup.logs[1], "New log line");
+
+        // Should auto-scroll to new line when in tail mode
+        assert!(popup.is_following_tail);
+        assert_eq!(popup.list_state.selected(), Some(1));
+    }
+
+    #[test]
+    fn test_add_log_line_when_not_following_tail() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        popup.set_logs(vec![
+            "Line 1".to_string(),
+            "Line 2".to_string(),
+            "Line 3".to_string(),
+        ]);
+
+        // Disable tail following by scrolling up
+        popup.handle_scroll_up();
+        assert!(!popup.is_following_tail);
+        let selected_before = popup.list_state.selected();
+
+        // Add a new log line
+        popup.add_log_line("New line".to_string());
+
+        assert_eq!(popup.logs.len(), 4);
+        assert_eq!(popup.logs[3], "New line");
+
+        // Should NOT auto-scroll when not following tail
+        assert_eq!(popup.list_state.selected(), selected_before);
+    }
+
+    #[test]
+    fn test_no_node_available_message() {
+        let popup = NodeLogsPopup::new("No node available".to_string());
+
+        // Should display specific messages for no nodes
+        assert!(
+            popup
+                .logs
+                .iter()
+                .any(|log| log.contains("No nodes available for log viewing"))
+        );
+        assert!(
+            popup
+                .logs
+                .iter()
+                .any(|log| log.contains("Add some nodes by pressing [+]"))
+        );
+        assert!(
+            popup
+                .logs
+                .iter()
+                .any(|log| log.contains("Select a node and press [L] to view its logs"))
+        );
+    }
+
+    #[test]
+    fn test_empty_node_name_message() {
+        let popup = NodeLogsPopup::new("".to_string());
+
+        // Should display no nodes message for empty name
+        assert!(
+            popup
+                .logs
+                .iter()
+                .any(|log| log.contains("No nodes available for log viewing"))
+        );
+    }
+
+    #[test]
+    fn test_set_node_name_changes_logs() {
+        let mut popup = NodeLogsPopup::new("initial_node".to_string());
+        assert_eq!(popup.node_name, "initial_node");
+
+        // Change to a different node name
+        popup.set_node_name("new_node".to_string());
+        assert_eq!(popup.node_name, "new_node");
+
+        // Set to same name should not reload
+        popup.set_node_name("new_node".to_string());
+        assert_eq!(popup.node_name, "new_node");
+
+        // Change to "No node available" should trigger special message
+        popup.set_node_name("No node available".to_string());
+        assert!(
+            popup
+                .logs
+                .iter()
+                .any(|log| log.contains("No nodes available for log viewing"))
+        );
+    }
+
+    #[test]
+    fn test_scroll_state_synchronization() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let test_logs: Vec<String> = (0..20).map(|i| format!("Log line {i}")).collect();
+        popup.set_logs(test_logs);
+
+        // Scroll to different positions and verify list state is updated
+        popup.handle_home();
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        popup.handle_page_down();
+        let selected = popup.list_state.selected().unwrap();
+        assert!(selected > 0); // Should have moved from position 0
+
+        popup.handle_end();
+        assert_eq!(popup.list_state.selected(), Some(19));
+    }
+
+    #[test]
+    fn test_scroll_navigation_with_empty_logs() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        popup.set_logs(vec![]);
+
+        // All navigation should be safe with empty logs
+        popup.handle_scroll_up();
+        assert_eq!(popup.list_state.selected(), None);
+
+        popup.handle_scroll_down();
+        assert_eq!(popup.list_state.selected(), None);
+
+        popup.handle_page_up();
+        assert_eq!(popup.list_state.selected(), None);
+
+        popup.handle_page_down();
+        assert_eq!(popup.list_state.selected(), None);
+
+        popup.handle_home();
+        assert_eq!(popup.list_state.selected(), None);
+
+        popup.handle_end();
+        assert_eq!(popup.list_state.selected(), None);
+    }
+
+    #[test]
+    fn test_scroll_navigation_with_single_log() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        popup.set_logs(vec!["Single log line".to_string()]);
+
+        // Should start at the only item
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        // All navigation should keep selection at the single item
+        popup.handle_scroll_up();
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        popup.handle_scroll_down();
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        popup.handle_page_up();
+        assert_eq!(popup.list_state.selected(), Some(0));
+
+        popup.handle_page_down();
+        assert_eq!(popup.list_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_page_navigation_behavior() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let test_logs: Vec<String> = (0..50).map(|i| format!("Log line {i}")).collect();
+        popup.set_logs(test_logs);
+
+        // Start at bottom (index 49)
+        assert_eq!(popup.list_state.selected(), Some(49));
+
+        // Page up should move up by 10
+        popup.handle_page_up();
+        assert_eq!(popup.list_state.selected(), Some(39));
+        assert!(!popup.is_following_tail);
+
+        // Page down should move down by 10
+        popup.handle_page_down();
+        assert_eq!(popup.list_state.selected(), Some(49));
+        assert!(popup.is_following_tail); // Should re-enable tail at bottom
+
+        // From top, page up should stay at 0
+        popup.handle_home();
+        popup.handle_page_up();
+        assert_eq!(popup.list_state.selected(), Some(0));
+    }
+
+    #[test]
+    fn test_log_content_length_management() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+
+        // Start with no logs
+        popup.set_logs(vec![]);
+        assert_eq!(popup.logs.len(), 0);
+
+        // Add some logs
+        let test_logs: Vec<String> = (0..5).map(|i| format!("Log {i}")).collect();
+        popup.set_logs(test_logs.clone());
+        assert_eq!(popup.logs.len(), 5);
+        assert_eq!(popup.logs, test_logs);
+
+        // Add more logs dynamically
+        popup.add_log_line("Extra log".to_string());
+        assert_eq!(popup.logs.len(), 6);
+        assert_eq!(popup.logs[5], "Extra log");
+    }
+
+    #[test]
+    fn test_drawing_with_various_content_states() {
+        let backend = TestBackend::new(100, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // Test drawing with no logs
+        let mut popup_empty = NodeLogsPopup::new("empty_node".to_string());
+        popup_empty.set_logs(vec![]);
+
+        let result = terminal.draw(|f| {
+            let area = f.area();
+            if let Err(e) = popup_empty.draw(f, area) {
+                panic!("Drawing failed with empty logs: {e}");
+            }
+        });
+        assert!(result.is_ok());
+
+        // Test drawing with many logs
+        let mut popup_full = NodeLogsPopup::new("full_node".to_string());
+        let many_logs: Vec<String> = (0..1000).map(|i| format!("Log line {i}")).collect();
+        popup_full.set_logs(many_logs);
+
+        let result = terminal.draw(|f| {
+            let area = f.area();
+            if let Err(e) = popup_full.draw(f, area) {
+                panic!("Drawing failed with many logs: {e}");
+            }
+        });
+        assert!(result.is_ok());
+
+        // Test drawing with "No node available"
+        let mut popup_no_node = NodeLogsPopup::new("No node available".to_string());
+
+        let result = terminal.draw(|f| {
+            let area = f.area();
+            if let Err(e) = popup_no_node.draw(f, area) {
+                panic!("Drawing failed with no node: {e}");
+            }
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tail_indicator_visibility() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let test_logs: Vec<String> = (0..10).map(|i| format!("Log line {i}")).collect();
+        popup.set_logs(test_logs);
+
+        // Should be following tail initially
+        assert!(popup.is_following_tail);
+
+        // Scroll up should disable tail following
+        popup.handle_scroll_up();
+        assert!(!popup.is_following_tail);
+
+        // Back to bottom should re-enable
+        popup.handle_end();
+        assert!(popup.is_following_tail);
+    }
+
+    #[test]
+    fn test_focus_target_consistency() {
+        let popup1 = NodeLogsPopup::new("node1".to_string());
+        let popup2 = NodeLogsPopup::new("node2".to_string());
+        let popup3 = NodeLogsPopup::new("".to_string());
+
+        // All instances should have the same focus target
+        assert_eq!(popup1.focus_target(), FocusTarget::NodeLogsPopup);
+        assert_eq!(popup2.focus_target(), FocusTarget::NodeLogsPopup);
+        assert_eq!(popup3.focus_target(), FocusTarget::NodeLogsPopup);
+    }
+
+    #[test]
+    fn test_log_content_with_special_characters() {
+        let mut popup = NodeLogsPopup::new("test_node".to_string());
+        let special_logs = vec![
+            "Log with émojis 🚀 and ünïcødé".to_string(),
+            "Log with\ttabs and\nnewlines".to_string(),
+            "Log with very long line that exceeds normal width and should be handled gracefully by the display system".to_string(),
+            "".to_string(), // Empty line
+            "   Log with leading/trailing spaces   ".to_string(),
+        ];
+
+        popup.set_logs(special_logs.clone());
+        assert_eq!(popup.logs, special_logs);
+
+        // Should still function normally with special characters
+        assert_eq!(popup.list_state.selected(), Some(4));
+        popup.handle_home();
+        assert_eq!(popup.list_state.selected(), Some(0));
     }
 }
