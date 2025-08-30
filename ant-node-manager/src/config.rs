@@ -11,16 +11,6 @@ use color_eyre::{Result, eyre::eyre};
 use std::path::PathBuf;
 
 #[cfg(unix)]
-pub fn get_daemon_install_path() -> PathBuf {
-    PathBuf::from("/usr/local/bin/antctld")
-}
-
-#[cfg(windows)]
-pub fn get_daemon_install_path() -> PathBuf {
-    PathBuf::from("C:\\ProgramData\\antctld\\antctld.exe")
-}
-
-#[cfg(unix)]
 pub fn get_node_manager_path() -> Result<PathBuf> {
     // This needs to be a system-wide location rather than a user directory because the `install`
     // command will run as the root user. However, it should be readable by non-root users, because

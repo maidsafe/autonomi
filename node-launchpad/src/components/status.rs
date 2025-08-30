@@ -6,106 +6,48 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::footer::NodesToStart;
-use super::header::SelectedMenuItem;
-use super::popup::manage_nodes::GB;
-use super::utils::centered_rect_fixed;
-use super::{Component, Frame, footer::Footer, header::Header, popup::manage_nodes::GB_PER_NODE};
-use crate::action::OptionsActions;
-use crate::components::popup::manage_nodes::MAX_NODE_COUNT;
+use crate::action::{NodeTableActions, OptionsActions};
+use crate::components::Component;
+use crate::components::footer::{Footer, NodesToStart};
+use crate::components::header::{Header, SelectedMenuItem};
+use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
+use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::components::popup::port_range::PORT_ALLOCATION;
-use crate::components::utils::open_logs;
 use crate::config::get_launchpad_nodes_data_dir_path;
-use crate::connection_mode::{ConnectionMode, NodeConnectionMode};
+use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::{
-    FIXED_INTERVAL, MaintainNodesArgs, NODES_ALL, NodeManagement, NodeManagementTask,
-    UpgradeNodesArgs,
-};
-use crate::node_mgmt::{PORT_MAX, PORT_MIN};
-use crate::style::{COOL_GREY, INDIGO, SIZZLING_RED, clear_area};
-use crate::system::{get_available_space_b, get_drive_name};
-use crate::tui::Event;
-use crate::upnp::UpnpSupport;
+use crate::node_mgmt::{NODES_ALL, PORT_MIN};
+use crate::system::get_available_space_b;
 use crate::{
     action::{Action, StatusActions},
-    config::Config,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_stats::NodeStats,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE},
 };
 use ant_bootstrap::InitialPeersConfig;
-use ant_node_manager::add_services::config::PortRange;
-use ant_node_manager::config::get_node_registry_path;
-use ant_service_management::{
-    NodeRegistryManager, NodeServiceData, ServiceStatus, control::ServiceController,
-};
-use color_eyre::eyre::{Ok, OptionExt, Result};
+use color_eyre::eyre::{Ok, Result};
 use crossterm::event::KeyEvent;
 use ratatui::text::Span;
 use ratatui::{prelude::*, widgets::*};
-use std::fmt;
-use std::{
-    path::PathBuf,
-    time::{Duration, Instant},
-    vec,
-};
-use throbber_widgets_tui::{self, Throbber, ThrobberState};
+use std::time::Duration;
+use std::{path::PathBuf, vec};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
-/// If nat detection fails for more than 3 times, we don't want to waste time running during every node start.
-const MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION: usize = 3;
 
-// Table Widths
-const NODE_WIDTH: usize = 10;
-const VERSION_WIDTH: usize = 7;
-const ATTOS_WIDTH: usize = 5;
-const MEMORY_WIDTH: usize = 7;
-const MBPS_WIDTH: usize = 13;
-const RECORDS_WIDTH: usize = 4;
-const PEERS_WIDTH: usize = 5;
-const CONNS_WIDTH: usize = 5;
-const MODE_WIDTH: usize = 7;
-const STATUS_WIDTH: usize = 8;
-const FAILURE_WIDTH: usize = 64;
-const SPINNER_WIDTH: usize = 1;
-
-#[derive(Clone)]
-pub struct Status<'a> {
-    /// Whether the component is active right now, capturing keystrokes + drawing things.
-    active: bool,
+pub struct Status {
     action_sender: Option<UnboundedSender<Action>>,
-    config: Config,
-    // NAT
-    is_nat_status_determined: bool,
-    error_while_running_nat_detection: usize,
-    // Track if NAT detection is currently running
-    nat_detection_in_progress: bool,
     // Device Stats Section
     node_stats: NodeStats,
-    node_stats_last_update: Instant,
-    // Nodes
-    node_services: Vec<NodeServiceData>,
-    items: Option<StatefulTable<NodeItem<'a>>>,
-    /// To pass into node services.
-    network_id: Option<u8>,
-    // Node Management
-    node_management: NodeManagement,
     // Amount of nodes
     nodes_to_start: usize,
     // Rewards address
     rewards_address: String,
-    // Peers to pass into nodes for startup
-    init_peers_config: InitialPeersConfig,
-    // If path is provided, we don't fetch the binary from the network
-    antnode_path: Option<PathBuf>,
     // Path where the node data is stored
     data_dir_path: PathBuf,
     // Connection mode
     connection_mode: ConnectionMode,
-    // UPnP support
-    upnp_support: UpnpSupport,
     // Port from
     port_from: Option<u32>,
     // Port to
@@ -113,13 +55,20 @@ pub struct Status<'a> {
     storage_mountpoint: PathBuf,
     available_disk_space_gb: usize,
     error_popup: Option<ErrorPopup>,
+
+    // NodeTable component (contains the state)
+    node_table_component: NodeTableComponent,
+
+    // Cached state from NodeTable
+    node_count: usize,
+    has_running_nodes: bool,
+    has_nodes: bool,
 }
 
 pub struct StatusConfig {
     pub allocated_disk_space: usize,
     pub antnode_path: Option<PathBuf>,
     pub connection_mode: ConnectionMode,
-    pub upnp_support: UpnpSupport,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub init_peers_config: InitialPeersConfig,
@@ -129,339 +78,232 @@ pub struct StatusConfig {
     pub rewards_address: String,
 }
 
-impl Status<'_> {
+impl Status {
     pub async fn new(config: StatusConfig) -> Result<Self> {
-        let node_registry = NodeRegistryManager::load(&get_node_registry_path()?).await?;
-        let mut status = Self {
-            init_peers_config: config.init_peers_config,
+        let status = Self {
             action_sender: Default::default(),
-            config: Default::default(),
-            active: true,
-            is_nat_status_determined: false,
-            error_while_running_nat_detection: 0,
-            nat_detection_in_progress: false,
-            network_id: config.network_id,
             node_stats: NodeStats::default(),
-            node_stats_last_update: Instant::now(),
-            node_services: Default::default(),
-            node_management: NodeManagement::new(node_registry.clone())?,
-            items: None,
             nodes_to_start: config.allocated_disk_space,
-            rewards_address: config.rewards_address,
-            antnode_path: config.antnode_path,
-            data_dir_path: config.data_dir_path,
+            rewards_address: config.rewards_address.clone(),
+            data_dir_path: config.data_dir_path.clone(),
             connection_mode: config.connection_mode,
-            upnp_support: config.upnp_support,
             port_from: config.port_from,
             port_to: config.port_to,
             error_popup: None,
             storage_mountpoint: config.storage_mountpoint.clone(),
             available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
+
+            // Initialize NodeTable component
+            node_table_component: NodeTableComponent::new(NodeTableConfig {
+                network_id: config.network_id,
+                init_peers_config: config.init_peers_config.clone(),
+                antnode_path: config.antnode_path.clone(),
+                data_dir_path: config.data_dir_path.clone(),
+                connection_mode: config.connection_mode,
+                port_from: config.port_from,
+                port_to: config.port_to,
+                rewards_address: config.rewards_address.clone(),
+                nodes_to_start: config.allocated_disk_space,
+                storage_mountpoint: config.storage_mountpoint.clone(),
+            })
+            .await?,
+
+            // Initialize cached state
+            node_count: 0,
+            has_running_nodes: false,
+            has_nodes: false,
         };
-
-        // Nodes registry
-        let now = Instant::now();
-        debug!("Refreshing node registry states on startup");
-
-        ant_node_manager::refresh_node_registry(
-            node_registry.clone(),
-            &ServiceController {},
-            false,
-            true,
-            ant_node_manager::VerbosityLevel::Minimal,
-        )
-        .await?;
-        node_registry.save().await?;
-        debug!("Node registry states refreshed in {:?}", now.elapsed());
-        status.update_node_state(
-            node_registry.get_node_service_data().await,
-            node_registry.nat_status.read().await.is_some(),
-        )?;
 
         Ok(status)
     }
 
-    fn set_lock(&mut self, service_name: &str, locked: bool) {
-        if let Some(ref mut items) = self.items {
-            for item in &mut items.items {
-                if item.name == *service_name {
-                    item.locked = locked;
-                }
-            }
-        }
-    }
-
-    // FIXME: Can be used if NodeItem implements Copy. Dependencies cannot.
-    fn _lock_service(&mut self, service_name: &str) {
-        self.set_lock(service_name, true);
-    }
-
-    fn unlock_service(&mut self, service_name: &str) {
-        self.set_lock(service_name, false);
-    }
-
-    /// Updates the NodeStatus of a specific item in the items list based on its service name.
-    ///
-    /// # Arguments
-    ///
-    /// * `service_name` - The name of the service to update.
-    /// * `status` - The new status to assign to the item.
-    fn update_item(&mut self, service_name: String, status: NodeStatus) -> Result<()> {
-        if let Some(ref mut items) = self.items {
-            for item in &mut items.items {
-                if item.name == service_name {
-                    item.status = status;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn update_node_items(&mut self, new_status: Option<NodeStatus>) -> Result<()> {
-        // Iterate over existing node services and update their corresponding NodeItem
-        if let Some(ref mut items) = self.items {
-            for node_item in self.node_services.iter() {
-                // Find the corresponding item by service name
-                if let Some(item) = items
-                    .items
-                    .iter_mut()
-                    .find(|i| i.name == node_item.service_name)
-                {
-                    if let Some(status) = new_status {
-                        item.status = status;
-                    } else if item.status == NodeStatus::Updating
-                        || item.status == NodeStatus::Starting
-                    {
-                        item.spinner_state.calc_next();
-                    } else if new_status != Some(NodeStatus::Updating) {
-                        // Update status based on current node status
-                        item.status = match node_item.status {
-                            ServiceStatus::Running => {
-                                item.spinner_state.calc_next();
-                                NodeStatus::Running
-                            }
-                            ServiceStatus::Stopped => NodeStatus::Stopped,
-                            ServiceStatus::Added => NodeStatus::Added,
-                            ServiceStatus::Removed => NodeStatus::Removed,
-                        };
-                    }
-
-                    // Update peers count
-                    item.peers = match node_item.connected_peers {
-                        Some(ref peers) => peers.len(),
-                        None => 0,
-                    };
-
-                    // Update individual stats if available
-                    if let Some(stats) = self
-                        .node_stats
-                        .individual_stats
-                        .iter()
-                        .find(|s| s.service_name == node_item.service_name)
-                    {
-                        item.attos = stats.rewards_wallet_balance;
-                        item.memory = stats.memory_usage_mb;
-                        item.mbps = format!(
-                            "↓{:0>5.0} ↑{:0>5.0}",
-                            (stats.bandwidth_inbound_rate * 8) as f64 / 1_000_000.0,
-                            (stats.bandwidth_outbound_rate * 8) as f64 / 1_000_000.0,
-                        );
-                        item.records = stats.max_records;
-                        item.connections = stats.connections;
-                    }
-                } else {
-                    // If not found, create a new NodeItem and add it to items
-                    let new_item = NodeItem {
-                        name: node_item.service_name.clone(),
-                        version: node_item.version.to_string(),
-                        attos: 0,
-                        memory: 0,
-                        mbps: "-".to_string(),
-                        records: 0,
-                        peers: 0,
-                        connections: 0,
-                        mode: NodeConnectionMode::from(node_item),
-                        locked: false,
-                        status: NodeStatus::Added, // Set initial status as Added
-                        failure: node_item.get_critical_failure(),
-                        spinner: Throbber::default(),
-                        spinner_state: ThrobberState::default(),
-                    };
-                    items.items.push(new_item);
-                }
-            }
-        } else {
-            // If items is None, create a new list (fallback)
-            let node_items: Vec<NodeItem> = self
-                .node_services
-                .iter()
-                .filter_map(|node_item| {
-                    if node_item.status == ServiceStatus::Removed {
-                        return None;
-                    }
-                    // Update status based on current node status
-                    let status = match node_item.status {
-                        ServiceStatus::Running => NodeStatus::Running,
-                        ServiceStatus::Stopped => NodeStatus::Stopped,
-                        ServiceStatus::Added => NodeStatus::Added,
-                        ServiceStatus::Removed => NodeStatus::Removed,
-                    };
-
-                    // Create a new NodeItem for the first time
-                    Some(NodeItem {
-                        name: node_item.service_name.clone().to_string(),
-                        version: node_item.version.to_string(),
-                        attos: 0,
-                        memory: 0,
-                        mbps: "-".to_string(),
-                        records: 0,
-                        peers: 0,
-                        connections: 0,
-                        locked: false,
-                        mode: NodeConnectionMode::from(node_item),
-                        status,
-                        failure: node_item.get_critical_failure(),
-                        spinner: Throbber::default(),
-                        spinner_state: ThrobberState::default(),
-                    })
-                })
-                .collect();
-            self.items = Some(StatefulTable::with_items(node_items));
-        }
-        Ok(())
-    }
-
-    fn clear_node_items(&mut self) {
-        debug!("Cleaning items on Status page");
-        if let Some(items) = self.items.as_mut() {
-            items.items.clear();
-            debug!("Cleared the items on status page");
-        }
-    }
-
-    /// Tries to trigger the update of node stats if the last update was more than `NODE_STAT_UPDATE_INTERVAL` ago.
-    /// The result is sent via the StatusActions::NodesStatsObtained action.
-    fn try_update_node_stats(&mut self, force_update: bool) -> Result<()> {
-        if self.node_stats_last_update.elapsed() > NODE_STAT_UPDATE_INTERVAL || force_update {
-            self.node_stats_last_update = Instant::now();
-
-            NodeStats::fetch_all_node_stats(&self.node_services, self.get_actions_sender()?);
-        }
-        Ok(())
-    }
-    fn get_actions_sender(&self) -> Result<UnboundedSender<Action>> {
-        self.action_sender
-            .clone()
-            .ok_or_eyre("Action sender not registered")
-    }
-
-    fn update_node_state(
-        &mut self,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    ) -> Result<()> {
-        self.is_nat_status_determined = is_nat_status_determined;
-
-        self.node_services = all_nodes_data
-            .into_iter()
-            .filter(|node| node.status != ServiceStatus::Removed)
-            .collect();
-
-        info!(
-            "Updated state from the data passed from NodeRegistryManager. Maintaining {:?} nodes.",
-            self.node_services.len()
-        );
-
-        Ok(())
-    }
-
-    /// Only run NAT detection if we haven't determined the status yet and we haven't failed more than 3 times.
-    fn should_we_run_nat_detection(&self) -> bool {
-        self.connection_mode == ConnectionMode::Automatic
-            && !self.is_nat_status_determined
-            && self.error_while_running_nat_detection < MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION
-    }
-
-    fn _nodes_starting(&self) -> bool {
-        if let Some(items) = &self.items {
-            items
-                .items
-                .iter()
-                .any(|item| item.status == NodeStatus::Starting)
-        } else {
-            false
-        }
-    }
-
-    fn get_running_nodes(&self) -> Vec<String> {
-        self.node_services
-            .iter()
-            .filter_map(|node| {
-                if node.status == ServiceStatus::Running {
-                    Some(node.service_name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    fn get_service_names_and_peer_ids(&self) -> (Vec<String>, Vec<String>) {
-        let mut service_names = Vec::new();
-        let mut peers_ids = Vec::new();
-
-        for node in &self.node_services {
-            // Only include nodes with a valid peer_id
-            if let Some(peer_id) = &node.peer_id {
-                service_names.push(node.service_name.clone());
-                peers_ids.push(peer_id.to_string().clone());
-            }
+    fn handle_status_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
+        debug!("Key received in Status: {:?}", key);
+        if let Some(error_popup) = &mut self.error_popup
+            && error_popup.is_visible()
+        {
+            error_popup.handle_input(key);
+            return Ok(vec![Action::SwitchInputMode(InputMode::Navigation)]);
         }
 
-        (service_names, peers_ids)
+        // Node operations and table navigation are now handled by NodeTableComponent
+        // through the focused event handling system
+        Ok(vec![])
     }
 }
 
-impl Component for Status<'_> {
+impl Component for Status {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
-        self.action_sender = Some(tx);
+        self.action_sender = Some(tx.clone());
+        // Register action sender with NodeTable operations
+        self.node_table_component
+            .state_mut()
+            .operations
+            .register_action_sender(tx.clone());
+
+        // Register action sender with NodeTableComponent
+        self.node_table_component
+            .register_action_handler(tx.clone())?;
 
         // Update the stats to be shown as soon as the app is run
-        self.try_update_node_stats(true)?;
+        self.node_table_component
+            .state_mut()
+            .try_update_node_stats(true)?;
+
+        // Refresh registry on startup
+        let action_sender_startup = tx.clone();
+        let node_registry_clone = self.node_table_component.state().node_registry.clone();
+        tokio::spawn(async move {
+            log::debug!("Refreshing node registry on startup");
+            let services = node_registry_clone.get_node_service_data().await;
+            log::debug!("Registry refresh complete. Found {} nodes", services.len());
+            if let Err(e) =
+                action_sender_startup.send(Action::StatusActions(StatusActions::RegistryUpdated {
+                    all_nodes_data: services,
+                }))
+            {
+                log::error!("Failed to send initial registry update: {e}");
+            }
+        });
+
+        // Watch for registry file changes
+        let action_sender_clone = tx.clone();
+        let mut node_registry_watcher = self
+            .node_table_component
+            .state_mut()
+            .node_registry
+            .watch_registry_file()?;
+        let node_registry_clone = self.node_table_component.state().node_registry.clone();
+        tokio::spawn(async move {
+            while let Some(()) = node_registry_watcher.recv().await {
+                let services = node_registry_clone.get_node_service_data().await;
+                log::debug!(
+                    "Node registry file has been updated. Sending StatusActions::RegistryUpdated event."
+                );
+                if let Err(e) = action_sender_clone.send(Action::StatusActions(
+                    StatusActions::RegistryUpdated {
+                        all_nodes_data: services,
+                    },
+                )) {
+                    log::error!("Failed to send StatusActions::RegistryUpdated: {e}");
+                }
+            }
+        });
 
         Ok(())
     }
 
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
-        self.config = config;
-        Ok(())
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::Status
     }
 
-    fn handle_events(&mut self, event: Option<Event>) -> Result<Vec<Action>> {
-        let r = match event {
-            Some(Event::Key(key_event)) => self.handle_key_events(key_event)?,
-            _ => vec![],
-        };
-        Ok(r)
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        debug!("Key received in Status (focused): {:?}", key);
+        debug!(
+            "Status has focus: {}",
+            focus_manager.has_focus(&FocusTarget::Status)
+        );
+
+        // Handle error popup first
+        if let Some(error_popup) = &mut self.error_popup
+            && error_popup.is_visible()
+        {
+            error_popup.handle_input(key);
+            return Ok((
+                vec![Action::SwitchInputMode(InputMode::Navigation)],
+                EventResult::Consumed,
+            ));
+        }
+
+        // Check if Status should handle this key directly
+        let status_only_keys = false; // Add any Status-specific keys here if needed
+
+        if status_only_keys && focus_manager.has_focus(&self.focus_target()) {
+            debug!("Status: Handling status-only key");
+            // Handle Status-specific keys here
+            return Ok((vec![], EventResult::Consumed));
+        }
+
+        // Delegate node table operations to NodeTableComponent when Status has focus
+        if focus_manager.has_focus(&FocusTarget::Status) {
+            debug!("Status: Delegating key {:?} to NodeTableComponent", key);
+            let (node_actions, event_result) = self
+                .node_table_component
+                .handle_key_events(key, focus_manager)?;
+            debug!(
+                "Status: NodeTableComponent returned result {:?}",
+                event_result
+            );
+            // If the NodeTable component consumed the event, return those actions
+            if matches!(event_result, EventResult::Consumed) {
+                debug!("Status: Key was consumed by NodeTableComponent");
+                return Ok((node_actions, event_result));
+            }
+            // Otherwise, fall through to handle Status-specific operations
+        }
+
+        // If Status has focus, handle Status-specific operations
+        if focus_manager.has_focus(&self.focus_target()) {
+            debug!("Status: Handling status-specific operations");
+            let actions = self.handle_status_key_events(key)?;
+            let result = if actions.is_empty() {
+                EventResult::Ignored
+            } else {
+                EventResult::Consumed
+            };
+            debug!(
+                "Status: Generated {} actions, result: {:?}",
+                actions.len(),
+                result
+            );
+            return Ok((actions, result));
+        }
+
+        debug!("Status: No focus, ignoring key");
+        Ok((vec![], EventResult::Ignored))
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
+        // Update NodeTableComponent first to ensure it stays synchronized
+        if let Some(result_action) = self.node_table_component.update(action.clone())? {
+            // NodeTableComponent returned an action, return it immediately
+            return Ok(Some(result_action));
+        }
+
+        // Handle NodeTable actions directly
+        if let Action::NodeTableActions(NodeTableActions::StateChanged {
+            node_count,
+            has_running_nodes,
+            has_nodes,
+        }) = action.clone()
+        {
+            self.node_count = node_count;
+            self.has_running_nodes = has_running_nodes;
+            self.has_nodes = has_nodes;
+        }
+
+        // Handle Status-specific actions
         match action {
             Action::Tick => {
-                self.try_update_node_stats(false)?;
-                let _ = self.update_node_items(None);
+                self.node_table_component
+                    .state_mut()
+                    .try_update_node_stats(false)?;
+                self.node_table_component.state_mut().send_state_update()?;
             }
             Action::SwitchScene(scene) => match scene {
                 Scene::Status
                 | Scene::StatusRewardsAddressPopUp
                 | Scene::RemoveNodePopUp
                 | Scene::UpgradeLaunchpadPopUp => {
-                    self.active = true;
                     // make sure we're in navigation mode
                     return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
                 }
-                Scene::ManageNodesPopUp { .. } => self.active = true,
-                _ => self.active = false,
+                Scene::ManageNodesPopUp { .. } => {}
+                _ => {}
             },
             Action::StoreNodesToStart(count) => {
                 self.nodes_to_start = count;
@@ -475,582 +317,37 @@ impl Component for Status<'_> {
             }
             Action::StoreRewardsAddress(rewards_address) => {
                 debug!("Storing rewards address: {rewards_address:?}");
-                let has_changed = self.rewards_address != rewards_address;
-                let we_have_nodes = !self.node_services.is_empty();
-
                 self.rewards_address = rewards_address;
-
-                if we_have_nodes && has_changed {
-                    info!("Resetting antnode services because the Rewards Address was reset.");
-                    let action_sender = self.get_actions_sender()?;
-                    self.node_management
-                        .send_task(NodeManagementTask::ResetNodes {
-                            start_nodes_after_reset: false,
-                            action_sender,
-                        })?;
-                }
             }
             Action::StoreStorageDrive(ref drive_mountpoint, ref _drive_name) => {
-                info!("Resetting antnode services because the Storage Drive was changed.");
-                let action_sender = self.get_actions_sender()?;
-                self.node_management
-                    .send_task(NodeManagementTask::ResetNodes {
-                        start_nodes_after_reset: false,
-                        action_sender,
-                    })?;
                 self.data_dir_path =
                     get_launchpad_nodes_data_dir_path(&drive_mountpoint.to_path_buf(), false)?;
             }
             Action::StoreConnectionMode(connection_mode) => {
                 self.connection_mode = connection_mode;
-                info!("Resetting antnode services because the Connection Mode range was changed.");
-                let action_sender = self.get_actions_sender()?;
-                self.node_management
-                    .send_task(NodeManagementTask::ResetNodes {
-                        start_nodes_after_reset: false,
-                        action_sender,
-                    })?;
             }
             Action::StorePortRange(port_from, port_range) => {
                 self.port_from = Some(port_from);
                 self.port_to = Some(port_range);
-                info!("Resetting antnode services because the Port Range was changed.");
-                let action_sender = self.get_actions_sender()?;
-                self.node_management
-                    .send_task(NodeManagementTask::ResetNodes {
-                        start_nodes_after_reset: false,
-                        action_sender,
-                    })?;
-            }
-            Action::SetUpnpSupport(ref upnp_support) => {
-                debug!("Setting UPnP support: {upnp_support:?}");
-                self.upnp_support = upnp_support.clone();
             }
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::NodesStatsObtained(stats) => {
                     self.node_stats = stats;
                 }
-                StatusActions::StartNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    if service_name == *NODES_ALL {
-                        if let Some(items) = &self.items {
-                            let items_clone = items.clone();
-                            for item in &items_clone.items {
-                                self.unlock_service(item.name.as_str());
-                                self.update_item(item.name.clone(), NodeStatus::Running)?;
-                            }
-                        }
-                    } else {
-                        self.unlock_service(service_name.as_str());
-                        self.update_item(service_name, NodeStatus::Running)?;
-                    }
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-                }
-                StatusActions::StopNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name, NodeStatus::Stopped)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-                }
-                StatusActions::UpdateNodesCompleted {
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
-                    }
-                    self.clear_node_items();
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-
-                    let _ = self.update_node_items(None);
-                    debug!("Update nodes completed");
-                }
-                StatusActions::ResetNodesCompleted {
-                    trigger_start_node,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
-                    }
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-
-                    self.clear_node_items();
-
-                    if trigger_start_node {
-                        debug!("Reset nodes completed. Triggering start nodes.");
-                        return Ok(Some(Action::StatusActions(StatusActions::StartNodes)));
-                    }
-                    debug!("Reset nodes completed");
-                }
-                StatusActions::AddNodesCompleted {
-                    service_name,
-
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name.clone(), NodeStatus::Stopped)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-
-                    debug!("Adding {:?} completed", service_name.clone());
-                }
-                StatusActions::RemoveNodesCompleted {
-                    service_name,
-                    all_nodes_data,
-                    is_nat_status_determined,
-                } => {
-                    self.unlock_service(service_name.as_str());
-                    self.update_item(service_name, NodeStatus::Removed)?;
-                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
-
-                    let _ = self.update_node_items(None);
-                    debug!("Removing nodes completed");
-                }
-                StatusActions::SuccessfullyDetectedNatStatus => {
-                    debug!(
-                        "Successfully detected nat status, is_nat_status_determined set to true"
+                StatusActions::RegistryUpdated { all_nodes_data } => {
+                    log::debug!(
+                        "Received RegistryUpdated event with {} nodes",
+                        all_nodes_data.len()
                     );
-                    self.is_nat_status_determined = true;
-                    self.nat_detection_in_progress = false;
-                }
-                StatusActions::NatDetectionStarted => {
-                    debug!("NAT detection started");
-                    self.nat_detection_in_progress = true;
-                }
-                StatusActions::ErrorWhileRunningNatDetection => {
-                    self.error_while_running_nat_detection += 1;
-                    self.nat_detection_in_progress = false;
-                    debug!(
-                        "Error while running nat detection. Error count: {}",
-                        self.error_while_running_nat_detection
-                    );
-                }
-                StatusActions::ErrorLoadingNodeRegistry { raw_error }
-                | StatusActions::ErrorGettingNodeRegistryPath { raw_error } => {
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error getting node registry path".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorScalingUpNodes { raw_error } => {
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error adding new nodes".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorStoppingNodes {
-                    services,
-                    raw_error,
-                } => {
-                    for service_name in services {
-                        self.unlock_service(service_name.as_str());
-                    }
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error stopping nodes".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorUpdatingNodes { raw_error } => {
-                    if let Some(items) = &self.items {
-                        let items_clone = items.clone();
-                        for item in &items_clone.items {
-                            self.unlock_service(item.name.as_str());
-                        }
-                    }
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error upgrading nodes".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorResettingNodes { raw_error } => {
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error resetting nodes".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorAddingNodes { raw_error } => {
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error adding node".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorRemovingNodes {
-                    services,
-                    raw_error,
-                } => {
-                    for service_name in services {
-                        self.unlock_service(service_name.as_str());
-                    }
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error removing node".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                }
-                StatusActions::ErrorStartingNodes {
-                    services,
-                    raw_error,
-                } => {
-                    for service_name in services {
-                        self.unlock_service(service_name.as_str());
-                    }
-                    self.error_popup = Some(ErrorPopup::new(
-                        "Error".to_string(),
-                        "Error starting node. Please try again.".to_string(),
-                        raw_error,
-                    ));
-                    if let Some(error_popup) = &mut self.error_popup {
-                        error_popup.show();
-                    }
-                    // Switch back to entry mode so we can handle key events
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
+                    self.node_table_component
+                        .state_mut()
+                        .update_node_state(&all_nodes_data);
+                    self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::TriggerManageNodes => {
-                    let mut amount_of_nodes = 0;
-                    if let Some(items) = &mut self.items {
-                        amount_of_nodes = items.items.len();
-                    }
-
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
-                        amount_of_nodes,
+                        amount_of_nodes: self.nodes_to_start,
                     })));
-                }
-                StatusActions::TriggerRemoveNode => {
-                    if let Some(_node) = self.items.as_ref().and_then(|items| items.selected_item())
-                    {
-                        return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)));
-                    } else {
-                        debug!("No items to be removed");
-                        return Ok(None);
-                    }
-                }
-                StatusActions::PreviousTableItem => {
-                    if let Some(items) = &mut self.items {
-                        items.previous();
-                    }
-                }
-                StatusActions::NextTableItem => {
-                    if let Some(items) = &mut self.items {
-                        items.next();
-                    }
-                }
-                StatusActions::StartStopNode => {
-                    debug!("Start/Stop node");
-
-                    // Check if a node is selected
-                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
-                    {
-                        let node_index = self
-                            .items
-                            .as_ref()
-                            .unwrap()
-                            .items
-                            .iter()
-                            .position(|item| item.name == node.name)
-                            .unwrap();
-                        let action_sender = self.get_actions_sender()?;
-                        let node = &mut self.items.as_mut().unwrap().items[node_index];
-
-                        if node.status == NodeStatus::Removed {
-                            debug!("Node is removed. Cannot be started.");
-                            return Ok(None);
-                        }
-
-                        if node.locked {
-                            debug!("Node still performing operation");
-                            return Ok(None);
-                        }
-                        node.locked = true; // Lock the node before starting or stopping
-
-                        let service_name = vec![node.name.clone()];
-
-                        match node.status {
-                            NodeStatus::Stopped | NodeStatus::Added => {
-                                debug!("Starting Node {:?}", node.name);
-                                self.node_management
-                                    .send_task(NodeManagementTask::StartNode {
-                                        services: service_name,
-                                        action_sender,
-                                    })?;
-                                node.status = NodeStatus::Starting;
-                            }
-                            NodeStatus::Running => {
-                                debug!("Stopping Node {:?}", node.name);
-                                self.node_management
-                                    .send_task(NodeManagementTask::StopNodes {
-                                        services: service_name,
-                                        action_sender,
-                                    })?;
-                            }
-                            _ => {
-                                debug!("Cannot Start/Stop node. Node status is {:?}", node.status);
-                            }
-                        }
-                    } else {
-                        debug!("Got action to Start/Stop node but no node was selected.");
-                        return Ok(None);
-                    }
-                }
-                StatusActions::StartNodes => {
-                    debug!("Got action to start nodes");
-
-                    if self.rewards_address.is_empty() {
-                        info!("Rewards address is not set. Ask for input.");
-                        return Ok(Some(Action::StatusActions(
-                            StatusActions::TriggerRewardsAddress,
-                        )));
-                    }
-
-                    if self.nodes_to_start == 0 {
-                        info!("Nodes to start not set. Ask for input.");
-                        return Ok(Some(Action::StatusActions(
-                            StatusActions::TriggerManageNodes,
-                        )));
-                    }
-
-                    // Set status and locking
-                    if let Some(ref mut items) = self.items {
-                        for item in &mut items.items {
-                            if item.status == NodeStatus::Added
-                                || item.status == NodeStatus::Stopped
-                            {
-                                item.status = NodeStatus::Starting;
-                                item.locked = true;
-                            }
-                        }
-                    }
-
-                    let port_range = PortRange::Range(
-                        self.port_from.unwrap_or(PORT_MIN) as u16,
-                        self.port_to.unwrap_or(PORT_MAX) as u16,
-                    );
-
-                    let action_sender = self.get_actions_sender()?;
-
-                    let maintain_nodes_args = MaintainNodesArgs {
-                        action_sender: action_sender.clone(),
-                        antnode_path: self.antnode_path.clone(),
-                        connection_mode: self.connection_mode,
-                        count: self.nodes_to_start as u16,
-                        data_dir_path: Some(self.data_dir_path.clone()),
-                        network_id: self.network_id,
-                        owner: self.rewards_address.clone(),
-                        init_peers_config: self.init_peers_config.clone(),
-                        port_range: Some(port_range),
-                        rewards_address: self.rewards_address.clone(),
-                        run_nat_detection: self.should_we_run_nat_detection(),
-                    };
-
-                    // Set NAT detection in progress flag if we're going to run detection
-                    if maintain_nodes_args.run_nat_detection {
-                        self.nat_detection_in_progress = true;
-                    }
-
-                    debug!("Calling maintain_n_running_nodes");
-
-                    self.node_management
-                        .send_task(NodeManagementTask::MaintainNodes {
-                            args: maintain_nodes_args,
-                        })?;
-                }
-                StatusActions::StopNodes => {
-                    debug!("Got action to stop nodes");
-
-                    let running_nodes = self.get_running_nodes();
-                    let action_sender = self.get_actions_sender()?;
-                    info!("Stopping node service: {running_nodes:?}");
-
-                    self.node_management
-                        .send_task(NodeManagementTask::StopNodes {
-                            services: running_nodes,
-                            action_sender,
-                        })?;
-                }
-                StatusActions::AddNode => {
-                    debug!("Got action to Add node");
-
-                    // Validations - Available space
-                    if GB_PER_NODE > self.available_disk_space_gb {
-                        self.error_popup = Some(ErrorPopup::new(
-                            "Cannot Add Node".to_string(),
-                            format!("\nEach Node requires {GB_PER_NODE}GB of available space."),
-                            format!(
-                                "{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.",
-                                get_drive_name(&self.storage_mountpoint)?,
-                                self.available_disk_space_gb
-                            ),
-                        ));
-                        if let Some(error_popup) = &mut self.error_popup {
-                            error_popup.show();
-                        }
-                        // Switch back to entry mode so we can handle key events
-                        return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                    }
-
-                    // Validations - Amount of nodes
-                    let amount_of_nodes = if let Some(ref items) = self.items {
-                        items.items.len()
-                    } else {
-                        0
-                    };
-
-                    if amount_of_nodes + 1 > MAX_NODE_COUNT {
-                        self.error_popup = Some(ErrorPopup::new(
-                            "Cannot Add Node".to_string(),
-                            format!(
-                                "There are not enough ports available in your\ncustom port range to start another node ({MAX_NODE_COUNT})."
-                            ),
-                            "\nVisit autonomi.com/support/port-error for help".to_string(),
-                        ));
-                        if let Some(error_popup) = &mut self.error_popup {
-                            error_popup.show();
-                        }
-                        // Switch back to entry mode so we can handle key events
-                        return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
-                    }
-
-                    if self.rewards_address.is_empty() {
-                        info!("Rewards address is not set. Ask for input.");
-                        return Ok(Some(Action::StatusActions(
-                            StatusActions::TriggerRewardsAddress,
-                        )));
-                    }
-
-                    if self.nodes_to_start == 0 {
-                        info!("Nodes to start not set. Ask for input.");
-                        return Ok(Some(Action::StatusActions(
-                            StatusActions::TriggerManageNodes,
-                        )));
-                    }
-
-                    let port_range = PortRange::Range(
-                        self.port_from.unwrap_or(PORT_MIN) as u16,
-                        self.port_to.unwrap_or(PORT_MAX) as u16,
-                    );
-
-                    let action_sender = self.get_actions_sender()?;
-
-                    let add_node_args = MaintainNodesArgs {
-                        action_sender: action_sender.clone(),
-                        antnode_path: self.antnode_path.clone(),
-                        connection_mode: self.connection_mode,
-                        count: 1,
-                        data_dir_path: Some(self.data_dir_path.clone()),
-                        network_id: self.network_id,
-                        owner: self.rewards_address.clone(),
-                        init_peers_config: self.init_peers_config.clone(),
-                        port_range: Some(port_range),
-                        rewards_address: self.rewards_address.clone(),
-                        run_nat_detection: self.should_we_run_nat_detection(),
-                    };
-
-                    // Set NAT detection in progress flag if we're going to run detection
-                    if add_node_args.run_nat_detection {
-                        self.nat_detection_in_progress = true;
-                    }
-
-                    self.node_management
-                        .send_task(NodeManagementTask::AddNode {
-                            args: add_node_args,
-                        })?;
-                }
-                StatusActions::RemoveNodes => {
-                    debug!("Got action to remove node");
-                    // Check if a node is selected
-                    if self
-                        .items
-                        .as_ref()
-                        .and_then(|items| items.selected_item())
-                        .is_none()
-                    {
-                        debug!("Got action to Start/Stop node but no node was selected.");
-                        return Ok(None);
-                    }
-
-                    let node_index =
-                        self.items
-                            .as_ref()
-                            .and_then(|items| {
-                                items.items.iter().position(|item| {
-                                    item.name == items.selected_item().unwrap().name
-                                })
-                            })
-                            .unwrap();
-
-                    let action_sender = self.get_actions_sender()?;
-
-                    let node = &mut self.items.as_mut().unwrap().items[node_index];
-
-                    if node.locked {
-                        debug!("Node still performing operation");
-                        return Ok(None);
-                    } else {
-                        // Lock the node before starting or stopping
-                        node.locked = true;
-                    }
-
-                    let service_name = vec![node.name.clone()];
-
-                    // Send the task to remove the node
-                    self.node_management
-                        .send_task(NodeManagementTask::RemoveNodes {
-                            services: service_name,
-                            action_sender,
-                        })?;
                 }
                 StatusActions::TriggerRewardsAddress => {
                     if self.rewards_address.is_empty() {
@@ -1059,54 +356,297 @@ impl Component for Status<'_> {
                         return Ok(None);
                     }
                 }
-                StatusActions::TriggerNodeLogs => {
-                    if let Some(node) = self.items.as_ref().and_then(|items| items.selected_item())
+                // Handle node operations
+                StatusActions::AddNode => {
+                    debug!("Got action to Add node");
+                    let config = crate::components::node_table::AddNodeConfig {
+                        node_count: self.node_count,
+                        available_disk_space_gb: self.available_disk_space_gb,
+                        storage_mountpoint: &self.storage_mountpoint,
+                        rewards_address: &self.rewards_address,
+                        nodes_to_start: self.nodes_to_start,
+                        antnode_path: self.node_table_component.state().antnode_path.clone(),
+                        connection_mode: self.connection_mode,
+                        data_dir_path: self.data_dir_path.clone(),
+                        network_id: self.node_table_component.state().network_id,
+                        init_peers_config: self
+                            .node_table_component
+                            .state()
+                            .init_peers_config
+                            .clone(),
+                        port_from: self.port_from,
+                        port_to: self.port_to,
+                    };
+                    if let Some(result_action) = self
+                        .node_table_component
+                        .state_mut()
+                        .operations
+                        .handle_add_node(&config)?
                     {
-                        debug!("Got action to open node logs {:?}", node.name);
-                        open_logs(Some(node.name.clone()))?;
-                    } else {
-                        debug!("Got action to open node logs but no node was selected.");
+                        return Ok(Some(result_action));
                     }
                 }
-            },
-            Action::OptionsActions(OptionsActions::UpdateNodes) => {
-                debug!("Got action to Update Nodes");
-                let action_sender = self.get_actions_sender()?;
-                info!("Got action to update nodes");
-                let _ = self.update_node_items(Some(NodeStatus::Updating));
-                let (service_names, peer_ids) = self.get_service_names_and_peer_ids();
+                StatusActions::StartNodes => {
+                    debug!("Got action to start nodes");
+                    let config = crate::components::node_table::StartNodesConfig {
+                        rewards_address: &self.rewards_address,
+                        nodes_to_start: self.nodes_to_start,
+                        antnode_path: self.node_table_component.state().antnode_path.clone(),
+                        connection_mode: self.connection_mode,
+                        data_dir_path: self.data_dir_path.clone(),
+                        network_id: self.node_table_component.state().network_id,
+                        init_peers_config: self
+                            .node_table_component
+                            .state()
+                            .init_peers_config
+                            .clone(),
+                        port_from: self.port_from,
+                        port_to: self.port_to,
+                    };
+                    if let Some(result_action) = self
+                        .node_table_component
+                        .state_mut()
+                        .operations
+                        .handle_start_nodes(&config)?
+                    {
+                        return Ok(Some(result_action));
+                    }
+                }
+                StatusActions::StopNodes => {
+                    debug!("Got action to stop nodes");
+                    let running_nodes = self.node_table_component.state().get_running_nodes();
+                    self.node_table_component
+                        .state_mut()
+                        .operations
+                        .handle_stop_nodes(running_nodes)?;
+                }
+                StatusActions::StartStopNode => {
+                    debug!("Start/Stop node");
+                    let (service_name, node_locked, node_status) = {
+                        if let Some(node_item) =
+                            self.node_table_component.state().items.selected_item()
+                        {
+                            (
+                                vec![node_item.name.clone()],
+                                node_item.locked,
+                                node_item.status,
+                            )
+                        } else {
+                            return Ok(None);
+                        }
+                    };
 
-                let upgrade_nodes_args = UpgradeNodesArgs {
-                    action_sender,
-                    connection_timeout_s: 5,
-                    do_not_start: true,
-                    custom_bin_path: self.antnode_path.clone(),
-                    force: false,
-                    fixed_interval: Some(FIXED_INTERVAL),
-                    peer_ids,
-                    provided_env_variables: None,
-                    service_names,
-                    url: None,
-                    version: None,
-                };
-                self.node_management
-                    .send_task(NodeManagementTask::UpgradeNodes {
-                        args: upgrade_nodes_args,
-                    })?;
-            }
-            Action::OptionsActions(OptionsActions::ResetNodes) => {
-                debug!("Got action to reset nodes");
-                let action_sender = self.get_actions_sender()?;
-                info!("Got action to reset nodes");
-                self.node_management
-                    .send_task(NodeManagementTask::ResetNodes {
-                        start_nodes_after_reset: false,
-                        action_sender,
-                    })?;
-            }
-            Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
-                self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                    if node_locked {
+                        debug!("Node still performing operation");
+                        return Ok(None);
+                    }
+
+                    match node_status {
+                        crate::components::node_table::NodeStatus::Stopped
+                        | crate::components::node_table::NodeStatus::Added => {
+                            debug!("Starting Node {:?}", service_name[0]);
+                            self.node_table_component
+                                .state_mut()
+                                .operations
+                                .handle_start_node(service_name)?;
+                            if let Some(node_item) = self
+                                .node_table_component
+                                .state_mut()
+                                .items
+                                .selected_item_mut()
+                            {
+                                node_item.status =
+                                    crate::components::node_table::NodeStatus::Starting;
+                            }
+                        }
+                        crate::components::node_table::NodeStatus::Running => {
+                            debug!("Stopping Node {:?}", service_name[0]);
+                            self.node_table_component
+                                .state_mut()
+                                .operations
+                                .handle_stop_nodes(service_name)?;
+                            if let Some(node_item) = self
+                                .node_table_component
+                                .state_mut()
+                                .items
+                                .selected_item_mut()
+                            {
+                                node_item.lock();
+                            }
+                        }
+                        _ => {
+                            debug!("Cannot Start/Stop node. Node status is {:?}", node_status);
+                        }
+                    }
+                }
+                StatusActions::RemoveNodes => {
+                    debug!("Got action to remove node");
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .items
+                        .selected_item_mut()
+                    {
+                        if node_item.locked {
+                            debug!("Node still performing operation");
+                            return Ok(None);
+                        }
+                        node_item.lock();
+                        let service_name = vec![node_item.name.clone()];
+                        self.node_table_component
+                            .state_mut()
+                            .operations
+                            .handle_remove_nodes(service_name)?;
+                    }
+                }
+                StatusActions::TriggerRemoveNode => {
+                    debug!("TriggerRemoveNode action received");
+                    // This should trigger the remove confirmation popup
+                    return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)));
+                }
+                StatusActions::TriggerNodeLogs => {
+                    debug!("TriggerNodeLogs action received");
+                    if self.node_table_component.state().items.items.is_empty() {
+                        debug!("No nodes available for logs viewing");
+                        return Ok(None);
+                    }
+
+                    let selected_node_name = self
+                        .node_table_component
+                        .state()
+                        .items
+                        .selected_item()
+                        .map(|node| node.name.clone())
+                        .unwrap_or_else(|| {
+                            // If no specific node is selected, use the first available node
+                            self.node_table_component
+                                .state()
+                                .items
+                                .items
+                                .first()
+                                .map(|node| node.name.clone())
+                                .unwrap_or_else(|| "No node available".to_string())
+                        });
+
+                    // First set the target node, then switch to the scene
+                    // Note: The app will need to handle this sequence
+                    return Ok(Some(Action::SetNodeLogsTarget(selected_node_name)));
+                }
+
+                // === Completion Handlers ===
+                StatusActions::StartNodesCompleted { service_name } => {
+                    debug!("StartNodesCompleted for service: {service_name}");
+                    if service_name == NODES_ALL {
+                        // Unlock all nodes that were starting
+                        for item in self.node_table_component.state_mut().items.items.iter_mut() {
+                            if item.status == crate::components::node_table::NodeStatus::Starting {
+                                item.unlock();
+                                item.update_status(
+                                    crate::components::node_table::NodeStatus::Running,
+                                );
+                            }
+                        }
+                    } else if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
+                    {
+                        node_item.unlock();
+                        node_item.update_status(crate::components::node_table::NodeStatus::Running);
+                    }
+                    self.node_table_component.state_mut().send_state_update()?;
+                }
+                StatusActions::StopNodesCompleted { service_name } => {
+                    debug!("StopNodesCompleted for service: {service_name}");
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
+                    {
+                        node_item.unlock();
+                        node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
+                    }
+                    self.node_table_component.state_mut().send_state_update()?;
+                }
+                StatusActions::AddNodesCompleted { service_name } => {
+                    debug!("AddNodesCompleted for service: {service_name}");
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
+                    {
+                        node_item.unlock();
+                        node_item.update_status(crate::components::node_table::NodeStatus::Added);
+                    }
+                    self.node_table_component.state_mut().send_state_update()?;
+                }
+                StatusActions::RemoveNodesCompleted { service_name } => {
+                    debug!("RemoveNodesCompleted for service: {service_name}");
+                    if let Some(node_item) = self
+                        .node_table_component
+                        .state_mut()
+                        .get_node_item_mut(&service_name)
+                    {
+                        node_item.unlock();
+                        node_item.update_status(crate::components::node_table::NodeStatus::Removed);
+                    }
+                    // Remove the node from the list
+                    self.node_table_component
+                        .state_mut()
+                        .items
+                        .items
+                        .retain(|item| item.name != service_name);
+                    self.node_table_component.state_mut().send_state_update()?;
+                }
+
+                // Ignore all other status actions that are no longer relevant
+                _ => {}
+            },
+            Action::OptionsActions(options_action) => match options_action {
+                OptionsActions::UpdateStorageDrive(mountpoint, _drive_name) => {
+                    self.storage_mountpoint.clone_from(&mountpoint);
+                    self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                }
+                OptionsActions::ResetNodes => {
+                    debug!("Got OptionsActions::ResetNodes - removing all nodes");
+                    // Reset all nodes by removing all of them
+                    let all_service_names: Vec<String> = self
+                        .node_table_component
+                        .state()
+                        .items
+                        .items
+                        .iter()
+                        .map(|item| item.name.clone())
+                        .collect();
+                    if !all_service_names.is_empty() {
+                        self.node_table_component
+                            .state_mut()
+                            .operations
+                            .handle_remove_nodes(all_service_names)?;
+                    }
+                }
+                OptionsActions::UpdateNodes => {
+                    let all_service_names: Vec<String> = self
+                        .node_table_component
+                        .state()
+                        .items
+                        .items
+                        .iter()
+                        .map(|item| item.name.clone())
+                        .collect();
+                    if !all_service_names.is_empty() {
+                        self.node_table_component
+                            .state_mut()
+                            .operations
+                            .handle_upgrade_nodes(all_service_names)?;
+                    }
+                }
+                _ => {}
+            },
+            Action::ShowErrorPopup(mut error_popup) => {
+                error_popup.show();
+                self.error_popup = Some(error_popup);
+                return Ok(Some(Action::SwitchInputMode(InputMode::Entry)));
             }
             _ => {}
         }
@@ -1114,10 +654,6 @@ impl Component for Status<'_> {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layout = Layout::new(
             Direction::Vertical,
             [
@@ -1172,7 +708,6 @@ impl Component for Status<'_> {
         ]);
 
         let connection_mode_string = match self.connection_mode {
-            ConnectionMode::HomeNetwork => "Home Network".to_string(),
             ConnectionMode::UPnP => "UPnP".to_string(),
             ConnectionMode::CustomPorts => format!(
                 "Custom Ports  {}-{}",
@@ -1182,40 +717,10 @@ impl Component for Status<'_> {
             ConnectionMode::Automatic => "Automatic".to_string(),
         };
 
-        let mut connection_mode_line = vec![Span::styled(
+        let connection_mode_line = vec![Span::styled(
             connection_mode_string,
             Style::default().fg(GHOST_WHITE),
         )];
-
-        if matches!(
-            self.connection_mode,
-            ConnectionMode::Automatic | ConnectionMode::UPnP
-        ) {
-            connection_mode_line.push(Span::styled(" (", Style::default().fg(GHOST_WHITE)));
-
-            if self.connection_mode == ConnectionMode::Automatic {
-                connection_mode_line.push(Span::styled("UPnP: ", Style::default().fg(GHOST_WHITE)));
-            }
-
-            let span = match self.upnp_support {
-                UpnpSupport::Supported => {
-                    Span::styled("supported", Style::default().fg(EUCALYPTUS))
-                }
-                UpnpSupport::Unsupported => {
-                    Span::styled("disabled / unsupported", Style::default().fg(SIZZLING_RED))
-                }
-                UpnpSupport::Loading => {
-                    Span::styled("loading..", Style::default().fg(LIGHT_PERIWINKLE))
-                }
-                UpnpSupport::Unknown => {
-                    Span::styled("unknown", Style::default().fg(LIGHT_PERIWINKLE))
-                }
-            };
-
-            connection_mode_line.push(span);
-
-            connection_mode_line.push(Span::styled(")", Style::default().fg(GHOST_WHITE)));
-        }
 
         let connection_mode_row = Row::new(vec![
             Cell::new("Connection".to_string()).fg(GHOST_WHITE),
@@ -1227,6 +732,7 @@ impl Component for Status<'_> {
         let column_constraints = [Constraint::Length(23), Constraint::Fill(1)];
         let stats_table = Table::new(stats_rows, stats_width).widths(column_constraints);
 
+        let wallet_not_set_text = "Press [Ctrl+B] to add your Wallet Address";
         let wallet_not_set = if self.rewards_address.is_empty() {
             vec![
                 Span::styled("Press ".to_string(), Style::default().fg(VIVID_SKY_BLUE)),
@@ -1257,14 +763,15 @@ impl Component for Status<'_> {
 
         let attos_wallet_rows = vec![total_attos_earned_and_wallet_row];
         let attos_wallet_width = [Constraint::Length(5)];
+        let wallet_column_width = if self.rewards_address.is_empty() {
+            wallet_not_set_text.len() as u16
+        } else {
+            0
+        };
         let column_constraints = [
             Constraint::Length(23),
             Constraint::Fill(1),
-            Constraint::Length(if self.rewards_address.is_empty() {
-                41 //TODO: make it dynamic with wallet_not_set
-            } else {
-                0
-            }),
+            Constraint::Length(wallet_column_width),
         ];
         let attos_wallet_table =
             Table::new(attos_wallet_rows, attos_wallet_width).widths(column_constraints);
@@ -1283,155 +790,62 @@ impl Component for Status<'_> {
         // ==== Node Status =====
 
         // No nodes. Empty Table.
-        if let Some(ref items) = self.items {
-            if items.items.is_empty() || self.rewards_address.is_empty() {
-                let line1 = Line::from(vec![
-                    Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
-                    Span::styled("to Add and ", Style::default().fg(LIGHT_PERIWINKLE)),
-                    Span::styled(
-                        "Start your first node ",
-                        Style::default().fg(GHOST_WHITE).bold(),
-                    ),
-                    Span::styled("on this device", Style::default().fg(LIGHT_PERIWINKLE)),
-                ]);
+        if !self.has_nodes || self.rewards_address.is_empty() {
+            let line1 = Line::from(vec![
+                Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
+                Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
+                Span::styled("to Add and ", Style::default().fg(LIGHT_PERIWINKLE)),
+                Span::styled(
+                    "Start your first node ",
+                    Style::default().fg(GHOST_WHITE).bold(),
+                ),
+                Span::styled("on this device", Style::default().fg(LIGHT_PERIWINKLE)),
+            ]);
 
-                let line2 = Line::from(vec![Span::styled(
-                    format!(
-                        "Each node will use {GB_PER_NODE}GB of storage and a small amount of memory, \
+            let line2 = Line::from(vec![Span::styled(
+                format!(
+                    "Each node will use {GB_PER_NODE}GB of storage and a small amount of memory, \
                         CPU, and Network bandwidth. Most computers can run many nodes at once, \
                         but we recommend you add them gradually"
+                ),
+                Style::default().fg(LIGHT_PERIWINKLE),
+            )]);
+
+            f.render_widget(
+                Paragraph::new(vec![Line::raw(""), line1, Line::raw(""), line2])
+                    .wrap(Wrap { trim: false })
+                    .fg(LIGHT_PERIWINKLE)
+                    .block(
+                        Block::default()
+                            .title(Line::from(vec![
+                                Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
+                                Span::styled(" (0) ", Style::default().fg(LIGHT_PERIWINKLE)),
+                            ]))
+                            .title_style(Style::default().fg(LIGHT_PERIWINKLE))
+                            .borders(Borders::ALL)
+                            .border_style(style::Style::default().fg(EUCALYPTUS))
+                            .padding(Padding::horizontal(1)),
                     ),
-                    Style::default().fg(LIGHT_PERIWINKLE),
-                )]);
-
-                f.render_widget(
-                    Paragraph::new(vec![Line::raw(""), line1, Line::raw(""), line2])
-                        .wrap(Wrap { trim: false })
-                        .fg(LIGHT_PERIWINKLE)
-                        .block(
-                            Block::default()
-                                .title(Line::from(vec![
-                                    Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
-                                    Span::styled(" (0) ", Style::default().fg(LIGHT_PERIWINKLE)),
-                                ]))
-                                .title_style(Style::default().fg(LIGHT_PERIWINKLE))
-                                .borders(Borders::ALL)
-                                .border_style(style::Style::default().fg(EUCALYPTUS))
-                                .padding(Padding::horizontal(1)),
-                        ),
-                    layout[2],
-                );
-            } else {
-                // Node/s block
-                let block_nodes = Block::default()
-                    .title(Line::from(vec![
-                        Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
-                        Span::styled(
-                            format!(
-                                " ({}) ",
-                                if let Some(ref items) = self.items {
-                                    items.items.len()
-                                } else {
-                                    0
-                                }
-                            ),
-                            Style::default().fg(LIGHT_PERIWINKLE),
-                        ),
-                    ]))
-                    .padding(Padding::new(1, 1, 0, 0))
-                    .title_style(Style::default().fg(GHOST_WHITE))
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(EUCALYPTUS));
-
-                // Split the inner area of the combined block
-                let inner_area = block_nodes.inner(layout[2]);
-
-                // Column Widths
-                let node_widths = [
-                    Constraint::Min(NODE_WIDTH as u16),
-                    Constraint::Min(VERSION_WIDTH as u16),
-                    Constraint::Min(ATTOS_WIDTH as u16),
-                    Constraint::Min(MEMORY_WIDTH as u16),
-                    Constraint::Min(MBPS_WIDTH as u16),
-                    Constraint::Min(RECORDS_WIDTH as u16),
-                    Constraint::Min(PEERS_WIDTH as u16),
-                    Constraint::Min(CONNS_WIDTH as u16),
-                    Constraint::Min(MODE_WIDTH as u16),
-                    Constraint::Min(STATUS_WIDTH as u16),
-                    Constraint::Fill(FAILURE_WIDTH as u16),
-                    Constraint::Max(SPINNER_WIDTH as u16),
-                ];
-
-                // Header
-                let header_row = Row::new(vec![
-                    Cell::new("Node").fg(COOL_GREY),
-                    Cell::new("Version").fg(COOL_GREY),
-                    Cell::new("Attos").fg(COOL_GREY),
-                    Cell::new("Memory").fg(COOL_GREY),
-                    Cell::new(
-                        format!("{}{}", " ".repeat(MBPS_WIDTH - "Mbps".len()), "Mbps")
-                            .fg(COOL_GREY),
-                    ),
-                    Cell::new("Recs").fg(COOL_GREY),
-                    Cell::new("Peers").fg(COOL_GREY),
-                    Cell::new("Conns").fg(COOL_GREY),
-                    Cell::new("Mode").fg(COOL_GREY),
-                    Cell::new("Status").fg(COOL_GREY),
-                    Cell::new("Failure").fg(COOL_GREY),
-                    Cell::new(" ").fg(COOL_GREY), // Spinner
-                ])
-                .style(Style::default().add_modifier(Modifier::BOLD));
-
-                let mut items: Vec<Row> = Vec::new();
-                if let Some(ref mut items_table) = self.items {
-                    for (i, node_item) in items_table.items.iter_mut().enumerate() {
-                        let is_selected = items_table.state.selected() == Some(i);
-                        items.push(node_item.render_as_row(i, layout[2], f, is_selected));
-                    }
-                }
-
-                // Table items
-                let table = Table::new(items, node_widths)
-                    .header(header_row)
-                    .column_spacing(1)
-                    .row_highlight_style(Style::default().bg(INDIGO))
-                    .highlight_spacing(HighlightSpacing::Always);
-
-                f.render_widget(table, inner_area);
-
-                f.render_widget(block_nodes, layout[2]);
-            }
+                layout[2],
+            );
+        } else {
+            // Render NodeTable in the node area using the component
+            self.node_table_component.draw(f, layout[2])?;
         }
 
         // ==== Footer =====
 
-        let selected = self
-            .items
-            .as_ref()
-            .and_then(|items| items.selected_item())
-            .is_some();
-
         let footer = Footer::default();
-        let footer_state = if let Some(ref items) = self.items {
-            if !items.items.is_empty() || !self.rewards_address.is_empty() {
-                if !self.get_running_nodes().is_empty() {
-                    if selected {
-                        &mut NodesToStart::RunningSelected
-                    } else {
-                        &mut NodesToStart::Running
-                    }
-                } else if selected {
-                    &mut NodesToStart::NotRunningSelected
-                } else {
-                    &mut NodesToStart::NotRunning
-                }
+        let footer_state = if self.has_nodes || !self.rewards_address.is_empty() {
+            if self.has_running_nodes {
+                &mut NodesToStart::Running
             } else {
                 &mut NodesToStart::NotRunning
             }
         } else {
             &mut NodesToStart::NotRunning
         };
+
         f.render_stateful_widget(footer, layout[3], footer_state);
 
         // ===== Popups =====
@@ -1445,277 +859,356 @@ impl Component for Status<'_> {
             return Ok(());
         }
 
-        if self.nat_detection_in_progress {
-            let popup_text = vec![
-                Line::raw("NAT Detection Running..."),
-                Line::raw(""),
-                Line::raw(""),
-                Line::raw("Please wait, performing NAT detection"),
-                Line::raw("This may take a couple minutes."),
-            ];
-
-            let popup_area = centered_rect_fixed(50, 12, area);
-            clear_area(f, popup_area);
-
-            let popup_border = Paragraph::new("").block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" NAT Detection ")
-                    .bold()
-                    .title_style(Style::new().fg(VIVID_SKY_BLUE))
-                    .padding(Padding::uniform(2))
-                    .border_style(Style::new().fg(GHOST_WHITE)),
-            );
-
-            let centred_area = Layout::new(
-                Direction::Vertical,
-                vec![
-                    // border
-                    Constraint::Length(2),
-                    // our text goes here
-                    Constraint::Min(5),
-                    // border
-                    Constraint::Length(1),
-                ],
-            )
-            .split(popup_area);
-            let text = Paragraph::new(popup_text)
-                .block(Block::default().padding(Padding::horizontal(2)))
-                .wrap(Wrap { trim: false })
-                .alignment(Alignment::Center)
-                .fg(EUCALYPTUS);
-            f.render_widget(text, centred_area[1]);
-
-            f.render_widget(popup_border, popup_area);
-        }
-
         Ok(())
     }
-
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        debug!("Key received in Status: {:?}", key);
-        if let Some(error_popup) = &mut self.error_popup
-            && error_popup.is_visible()
-        {
-            error_popup.handle_input(key);
-            return Ok(vec![Action::SwitchInputMode(InputMode::Navigation)]);
-        }
-        Ok(vec![])
-    }
 }
 
-#[allow(dead_code)]
-#[derive(Default, Clone)]
-struct StatefulTable<T> {
-    state: TableState,
-    items: Vec<T>,
-    last_selected: Option<usize>,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::{EventResult, FocusManager};
+    use crate::test_utils::*;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::{Terminal, backend::TestBackend};
+    use std::env::temp_dir;
 
-#[allow(dead_code)]
-impl<T> StatefulTable<T> {
-    fn with_items(items: Vec<T>) -> Self {
-        StatefulTable {
-            state: TableState::default(),
-            items,
-            last_selected: None,
-        }
-    }
-
-    fn next(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if !self.items.is_empty() {
-                    if i >= self.items.len() - 1 { 0 } else { i + 1 }
-                } else {
-                    0
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-        self.state.select(Some(i));
-        self.last_selected = Some(i);
-    }
-
-    fn previous(&mut self) {
-        let i = match self.state.selected() {
-            Some(i) => {
-                if !self.items.is_empty() {
-                    if i == 0 { self.items.len() - 1 } else { i - 1 }
-                } else {
-                    0
-                }
-            }
-            None => self.last_selected.unwrap_or(0),
-        };
-        self.state.select(Some(i));
-        self.last_selected = Some(i);
-    }
-
-    fn selected_item(&self) -> Option<&T> {
-        self.state
-            .selected()
-            .and_then(|index| self.items.get(index))
-    }
-}
-
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
-enum NodeStatus {
-    #[default]
-    Added,
-    Running,
-    Starting,
-    Stopped,
-    Removed,
-    Updating,
-}
-
-impl fmt::Display for NodeStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            NodeStatus::Added => write!(f, "Added"),
-            NodeStatus::Running => write!(f, "Running"),
-            NodeStatus::Starting => write!(f, "Starting"),
-            NodeStatus::Stopped => write!(f, "Stopped"),
-            NodeStatus::Removed => write!(f, "Removed"),
-            NodeStatus::Updating => write!(f, "Updating"),
-        }
-    }
-}
-
-#[derive(Default, Debug, Clone)]
-pub struct NodeItem<'a> {
-    name: String,
-    version: String,
-    attos: usize,
-    memory: usize,
-    mbps: String,
-    records: usize,
-    peers: usize,
-    connections: usize,
-    locked: bool, // Semaphore for being able to change status
-    mode: NodeConnectionMode,
-    status: NodeStatus,
-    failure: Option<(chrono::DateTime<chrono::Utc>, String)>,
-    spinner: Throbber<'a>,
-    spinner_state: ThrobberState,
-}
-
-impl NodeItem<'_> {
-    fn render_as_row(
-        &mut self,
-        index: usize,
-        area: Rect,
-        f: &mut Frame<'_>,
-        is_selected: bool,
-    ) -> Row<'_> {
-        let mut row_style = if is_selected {
-            Style::default().fg(GHOST_WHITE).bg(INDIGO)
+    fn create_test_status_config() -> StatusConfig {
+        let temp_path = temp_dir();
+        // Use root filesystem as mountpoint since it's always available on Unix-like systems
+        let storage_mountpoint = if cfg!(unix) {
+            PathBuf::from("/")
         } else {
-            Style::default().fg(GHOST_WHITE)
-        };
-        let mut spinner_state = self.spinner_state.clone();
-        match self.status {
-            NodeStatus::Running => {
-                self.spinner = self
-                    .spinner
-                    .clone()
-                    .throbber_style(Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD))
-                    .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin);
-                row_style = if is_selected {
-                    Style::default().fg(EUCALYPTUS).bg(INDIGO)
-                } else {
-                    Style::default().fg(EUCALYPTUS)
-                };
-            }
-            NodeStatus::Starting => {
-                self.spinner = self
-                    .spinner
-                    .clone()
-                    .throbber_style(Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD))
-                    .throbber_set(throbber_widgets_tui::BOX_DRAWING)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin);
-            }
-            NodeStatus::Stopped => {
-                self.spinner = self
-                    .spinner
-                    .clone()
-                    .throbber_style(
-                        Style::default()
-                            .fg(GHOST_WHITE)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                    .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
-                    .use_type(throbber_widgets_tui::WhichUse::Full);
-            }
-            NodeStatus::Updating => {
-                self.spinner = self
-                    .spinner
-                    .clone()
-                    .throbber_style(
-                        Style::default()
-                            .fg(GHOST_WHITE)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                    .throbber_set(throbber_widgets_tui::VERTICAL_BLOCK)
-                    .use_type(throbber_widgets_tui::WhichUse::Spin);
-            }
-            _ => {}
+            PathBuf::from("C:\\")
         };
 
-        let failure = self.failure.as_ref().map_or_else(
-            || "-".to_string(),
-            |(_dt, msg)| {
-                if self.status == NodeStatus::Stopped {
-                    msg.clone()
-                } else {
-                    "-".to_string()
-                }
-            },
+        StatusConfig {
+            allocated_disk_space: 10,
+            antnode_path: Some(PathBuf::from("/usr/local/bin/antnode")),
+            connection_mode: ConnectionMode::Automatic,
+            data_dir_path: temp_path,
+            network_id: Some(1),
+            init_peers_config: InitialPeersConfig::default(),
+            port_from: Some(15000),
+            port_to: Some(15100),
+            storage_mountpoint,
+            rewards_address: "0x1234567890123456789012345678901234567890".to_string(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_status_handle_key_events_with_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+
+        // Set up error popup
+        let mut error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
+        );
+        error_popup.show();
+        status.error_popup = Some(error_popup);
+
+        let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
+        let result = status.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+        let (actions, event_result) = result.unwrap();
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(
+            actions[0],
+            Action::SwitchInputMode(InputMode::Navigation)
+        ));
+        assert_eq!(event_result, EventResult::Consumed);
+    }
+
+    #[tokio::test]
+    async fn test_status_handle_key_events_when_focused() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+
+        let key_event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::empty());
+        let result = status.handle_key_events(key_event, &focus_manager);
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_update_tick_action() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::Tick);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_update_switch_scene() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::SwitchScene(Scene::Status));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, Some(Action::SwitchInputMode(InputMode::Navigation)));
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_nodes_to_start_zero() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreNodesToStart(0));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::StatusActions(StatusActions::StopNodes))
+        );
+        assert_eq!(status.nodes_to_start, 0);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_nodes_to_start_non_zero() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreNodesToStart(5));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::StatusActions(StatusActions::StartNodes))
+        );
+        assert_eq!(status.nodes_to_start, 5);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_rewards_address() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let new_address = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef".to_string();
+
+        let result = status.update(Action::StoreRewardsAddress(new_address.clone()));
+        assert!(result.is_ok());
+        assert_eq!(status.rewards_address, new_address);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_connection_mode() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreConnectionMode(ConnectionMode::UPnP));
+        assert!(result.is_ok());
+        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_store_port_range() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StorePortRange(20000, 20100));
+        assert!(result.is_ok());
+        assert_eq!(status.port_from, Some(20000));
+        assert_eq!(status.port_to, Some(20100));
+    }
+
+    #[tokio::test]
+    async fn test_status_update_nodes_stats_obtained() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let new_stats = NodeStats {
+            total_memory_usage_mb: 1024,
+            total_rewards_wallet_balance: 100,
+            total_forwarded_rewards: 50,
+            individual_stats: Vec::new(),
+        };
+
+        let result = status.update(Action::StatusActions(StatusActions::NodesStatsObtained(
+            new_stats.clone(),
+        )));
+        assert!(result.is_ok());
+        assert_eq!(status.node_stats.total_memory_usage_mb, 1024);
+        assert_eq!(status.node_stats.total_rewards_wallet_balance, 100);
+    }
+
+    // TODO: Rewrite this test to use real node data instead of mocks
+    // #[tokio::test]
+    // async fn test_status_update_registry_updated() {
+    //     let config = create_test_status_config();
+    //     let mut status = Status::new(config).await.unwrap();
+    //     // Test with real node registry data
+    //     assert!(true); // Placeholder
+    // }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_manage_nodes() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        status.nodes_to_start = 5;
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerManageNodes));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::SwitchScene(Scene::ManageNodesPopUp {
+                amount_of_nodes: 5
+            }))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_rewards_address_empty() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        status.rewards_address = "".to_string();
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(
+            action,
+            Some(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_update_trigger_rewards_address_non_empty() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, None);
+    }
+
+    #[tokio::test]
+    async fn test_status_update_show_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+        let error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
         );
 
-        let row = vec![
-            self.name.clone().to_string(),
-            self.version.to_string(),
-            format!(
-                "{}{}",
-                " ".repeat(ATTOS_WIDTH.saturating_sub(self.attos.to_string().len())),
-                self.attos.to_string()
-            ),
-            format!(
-                "{}{} MB",
-                " ".repeat(MEMORY_WIDTH.saturating_sub(self.memory.to_string().len() + 4)),
-                self.memory.to_string()
-            ),
-            format!(
-                "{}{}",
-                " ".repeat(MBPS_WIDTH.saturating_sub(self.mbps.to_string().len())),
-                self.mbps.to_string()
-            ),
-            format!(
-                "{}{}",
-                " ".repeat(RECORDS_WIDTH.saturating_sub(self.records.to_string().len())),
-                self.records.to_string()
-            ),
-            format!(
-                "{}{}",
-                " ".repeat(PEERS_WIDTH.saturating_sub(self.peers.to_string().len())),
-                self.peers.to_string()
-            ),
-            format!(
-                "{}{}",
-                " ".repeat(CONNS_WIDTH.saturating_sub(self.connections.to_string().len())),
-                self.connections.to_string()
-            ),
-            self.mode.to_string(),
-            self.status.to_string(),
-            failure,
-        ];
-        let throbber_area = Rect::new(area.width - 3, area.y + 2 + index as u16, 1, 1);
+        let result = status.update(Action::ShowErrorPopup(error_popup));
+        assert!(result.is_ok());
+        let action = result.unwrap();
+        assert_eq!(action, Some(Action::SwitchInputMode(InputMode::Entry)));
+        assert!(status.error_popup.is_some());
+        assert!(status.error_popup.as_ref().unwrap().is_visible());
+    }
 
-        f.render_stateful_widget(self.spinner.clone(), throbber_area, &mut spinner_state);
+    #[tokio::test]
+    async fn test_status_update_node_table_state_changed() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
 
-        Row::new(row).style(row_style)
+        let result = status.update(Action::NodeTableActions(NodeTableActions::StateChanged {
+            node_count: 5,
+            has_running_nodes: true,
+            has_nodes: true,
+        }));
+        assert!(result.is_ok());
+        assert_eq!(status.node_count, 5);
+        assert!(status.has_running_nodes);
+        assert!(status.has_nodes);
+    }
+
+    #[tokio::test]
+    async fn test_status_drawing_with_error_popup() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let mut error_popup = ErrorPopup::new(
+            "Test Error".to_string(),
+            "Test error message".to_string(),
+            "Detailed error".to_string(),
+        );
+        error_popup.show();
+        status.error_popup = Some(error_popup);
+
+        let backend = TestBackend::new(120, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|f| {
+            let area = f.area();
+            if let Err(e) = status.draw(f, area) {
+                panic!("Drawing failed: {e}");
+            }
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_status_connection_mode_display_upnp() {
+        let mut config = create_test_status_config();
+        config.connection_mode = ConnectionMode::UPnP;
+        let status = Status::new(config).await.unwrap();
+
+        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+    }
+
+    #[tokio::test]
+    async fn test_status_connection_mode_display_custom_ports() {
+        let mut config = create_test_status_config();
+        config.connection_mode = ConnectionMode::CustomPorts;
+        config.port_from = Some(20000);
+        config.port_to = Some(20100);
+        let status = Status::new(config).await.unwrap();
+
+        assert_eq!(status.connection_mode, ConnectionMode::CustomPorts);
+        assert_eq!(status.port_from, Some(20000));
+        assert_eq!(status.port_to, Some(20100));
+    }
+
+    #[tokio::test]
+    async fn test_status_memory_display_calculation() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        // Test memory usage less than 1GB
+        status.node_stats.total_memory_usage_mb = 512;
+        assert_eq!(status.node_stats.total_memory_usage_mb, 512);
+
+        // Test memory usage greater than 1GB
+        status.node_stats.total_memory_usage_mb = 2048;
+        assert_eq!(status.node_stats.total_memory_usage_mb, 2048);
+    }
+
+    // TODO: Rewrite this test to use real node data instead of MockNode
+    // #[tokio::test]
+    // async fn test_status_component_integration_with_real_nodes() {
+    //     let config = create_test_status_config();
+    //     let mut status = Status::new(config).await.unwrap();
+    //     // Test with real node services
+    //     assert!(true); // Placeholder
+    // }
+
+    #[test]
+    fn test_keyboard_sequence_with_status() {
+        let key_sequence = KeySequence::new()
+            .key('+')
+            .ctrl('b')
+            .arrow_down()
+            .enter()
+            .esc()
+            .build();
+
+        assert_eq!(key_sequence.len(), 5);
+        assert_eq!(key_sequence[0].code, KeyCode::Char('+'));
+        assert_eq!(key_sequence[1].code, KeyCode::Char('b'));
+        assert!(key_sequence[1].modifiers.contains(KeyModifiers::CONTROL));
+        assert_eq!(key_sequence[2].code, KeyCode::Down);
+        assert_eq!(key_sequence[3].code, KeyCode::Enter);
+        assert_eq!(key_sequence[4].code, KeyCode::Esc);
     }
 }

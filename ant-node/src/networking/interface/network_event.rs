@@ -46,6 +46,8 @@ pub(crate) enum NetworkEvent {
     KeysToFetchForReplication(Vec<(PeerId, RecordKey)>),
     /// Started listening on a new address
     NewListenAddr(Multiaddr),
+    /// Stopped listening on an address
+    ExpiredListenAddresses(Vec<Multiaddr>),
     /// Report unverified record
     UnverifiedRecord(Record),
     /// Terminate Node on unrecoverable errors
@@ -110,6 +112,9 @@ impl std::fmt::Debug for NetworkEvent {
             }
             NetworkEvent::NewListenAddr(addr) => {
                 write!(f, "NetworkEvent::NewListenAddr({addr:?})")
+            }
+            NetworkEvent::ExpiredListenAddresses(addrs) => {
+                write!(f, "NetworkEvent::ExpiredListenAddresses({addrs:?})")
             }
             NetworkEvent::UnverifiedRecord(record) => {
                 let pretty_key = PrettyPrintRecordKey::from(&record.key);

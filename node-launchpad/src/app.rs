@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::components::popup::upgrade_launchpad::UpgradeLaunchpadPopup;
-use crate::upnp::{UpnpSupport, get_upnp_support};
 use crate::{
     action::Action,
     components::{
@@ -16,14 +15,15 @@ use crate::{
         options::Options,
         popup::{
             change_drive::ChangeDrivePopup, connection_mode::ChangeConnectionModePopUp,
-            manage_nodes::ManageNodes, port_range::PortRangePopUp, remove_node::RemoveNodePopUp,
-            reset_nodes::ResetNodesPopup, rewards_address::RewardsAddress,
-            upgrade_nodes::UpgradeNodesPopUp,
+            manage_nodes::ManageNodes, node_logs::NodeLogsPopup, port_range::PortRangePopUp,
+            remove_node::RemoveNodePopUp, reset_nodes::ResetNodesPopup,
+            rewards_address::RewardsAddress, upgrade_nodes::UpgradeNodesPopUp,
         },
         status::{Status, StatusConfig},
     },
-    config::{AppData, Config, get_launchpad_nodes_data_dir_path},
+    config::{AppData, KeyBindings, get_keybindings, get_launchpad_nodes_data_dir_path},
     connection_mode::ConnectionMode,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_mgmt::{PORT_MAX, PORT_MIN},
     style::SPACE_CADET,
@@ -35,10 +35,10 @@ use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::{prelude::Rect, style::Style, widgets::Block};
 use std::path::PathBuf;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, UnboundedSender};
 
 pub struct App {
-    pub config: Config,
+    pub keybindings: KeyBindings,
     pub app_data: AppData,
     pub tick_rate: f64,
     pub frame_rate: f64,
@@ -48,6 +48,7 @@ pub struct App {
     pub input_mode: InputMode,
     pub scene: Scene,
     pub last_tick_key_events: Vec<KeyEvent>,
+    pub focus_manager: FocusManager,
 }
 
 impl App {
@@ -61,7 +62,7 @@ impl App {
     ) -> Result<Self> {
         // Configurations
         let app_data = AppData::load(app_data_path)?;
-        let config = Config::new()?;
+        let keybindings = get_keybindings();
 
         // Tries to set the data dir path based on the storage mountpoint set by the user,
         // if not set, it tries to get the default mount point (where the executable is) and
@@ -80,8 +81,6 @@ impl App {
         let connection_mode = app_data
             .connection_mode
             .unwrap_or(ConnectionMode::Automatic);
-
-        let upnp_support = UpnpSupport::Loading;
 
         let port_from = app_data.port_from.unwrap_or(PORT_MIN);
         let port_to = app_data.port_to.unwrap_or(PORT_MAX);
@@ -103,7 +102,6 @@ impl App {
             antnode_path,
             data_dir_path,
             connection_mode,
-            upnp_support,
             port_from: Some(port_from),
             port_to: Some(port_to),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -132,6 +130,7 @@ impl App {
         let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
         let upgrade_launchpad_popup = UpgradeLaunchpadPopup::default();
+        let node_logs = NodeLogsPopup::new("".to_string()); // Will be updated when triggered
 
         let components: Vec<Box<dyn Component>> = vec![
             // Sections
@@ -148,10 +147,11 @@ impl App {
             Box::new(upgrade_nodes),
             Box::new(remove_node),
             Box::new(upgrade_launchpad_popup),
+            Box::new(node_logs),
         ];
 
         Ok(Self {
-            config,
+            keybindings,
             app_data: AppData {
                 discord_username: app_data.discord_username.clone(),
                 nodes_to_start: app_data.nodes_to_start,
@@ -169,18 +169,222 @@ impl App {
             input_mode: InputMode::Navigation,
             scene: Scene::Status,
             last_tick_key_events: Vec::new(),
+            focus_manager: FocusManager::new(FocusTarget::Status), // Start with Status focused
         })
+    }
+
+    fn is_popup_scene(&self, scene: Scene) -> bool {
+        matches!(
+            scene,
+            Scene::ChangeDrivePopUp
+                | Scene::ChangeConnectionModePopUp
+                | Scene::ChangePortsPopUp { .. }
+                | Scene::StatusRewardsAddressPopUp
+                | Scene::OptionsRewardsAddressPopUp
+                | Scene::ManageNodesPopUp { .. }
+                | Scene::ResetNodesPopUp
+                | Scene::UpgradeNodesPopUp
+                | Scene::UpgradeLaunchpadPopUp
+                | Scene::RemoveNodePopUp
+                | Scene::NodeLogsPopUp
+        )
+    }
+
+    /// Handle a single key event and return the actions generated
+    pub async fn handle_key_event(
+        &mut self,
+        key: KeyEvent,
+        action_tx: &UnboundedSender<Action>,
+    ) -> Result<Vec<Action>> {
+        let mut actions = Vec::new();
+
+        if self.input_mode == InputMode::Navigation {
+            let mut key_handled = false;
+            if let Some(keymap) = self.keybindings.get(&self.scene) {
+                if let Some(action) = keymap.get(&vec![key]) {
+                    info!("Got action: {action:?}");
+                    action_tx.send(action.clone())?;
+                    actions.push(action.clone());
+                    key_handled = true;
+                } else {
+                    // If the key was not handled as a single key action,
+                    // then consider it for multi-key combinations.
+                    self.last_tick_key_events.push(key);
+
+                    // Check for multi-key combinations
+                    if let Some(action) = keymap.get(&self.last_tick_key_events) {
+                        info!("Got action: {action:?}");
+                        action_tx.send(action.clone())?;
+                        actions.push(action.clone());
+                        key_handled = true;
+                    }
+                }
+            }
+
+            // If no keybinding handled the key, let components handle it
+            if !key_handled {
+                for component in self.components.iter_mut() {
+                    let (send_back_actions, event_result) =
+                        component.handle_key_events(key, &self.focus_manager)?;
+                    for action in &send_back_actions {
+                        action_tx.send(action.clone())?;
+                    }
+                    actions.extend(send_back_actions);
+                    // If the event was consumed, break to avoid other components handling it
+                    if matches!(event_result, EventResult::Consumed) {
+                        break;
+                    }
+                }
+            }
+        } else if self.input_mode == InputMode::Entry {
+            for component in self.components.iter_mut() {
+                let (send_back_actions, event_result) =
+                    component.handle_key_events(key, &self.focus_manager)?;
+                for action in &send_back_actions {
+                    action_tx.send(action.clone())?;
+                }
+                actions.extend(send_back_actions);
+                // If the event was consumed, break to avoid other components handling it
+                if matches!(event_result, EventResult::Consumed) {
+                    break;
+                }
+            }
+        }
+
+        Ok(actions)
+    }
+
+    /// Process a single action and return any new actions generated
+    pub fn process_action(
+        &mut self,
+        action: Action,
+        action_tx: &UnboundedSender<Action>,
+    ) -> Result<Vec<Action>> {
+        let mut generated_actions = Vec::new();
+
+        match action {
+            Action::Tick => {
+                self.last_tick_key_events.drain(..);
+            }
+            Action::Quit => self.should_quit = true,
+            Action::Suspend => self.should_suspend = true,
+            Action::Resume => self.should_suspend = false,
+            Action::SwitchScene(scene) => {
+                info!("Scene switched to: {scene:?}");
+                let previous_scene = self.scene;
+                self.scene = scene;
+
+                // Handle focus transitions based on scene type
+                match scene {
+                    // Main scenes - set focus directly
+                    Scene::Status => {
+                        self.focus_manager.clear_and_set(FocusTarget::Status);
+                    }
+                    Scene::Options => {
+                        self.focus_manager.clear_and_set(FocusTarget::Options);
+                    }
+                    Scene::Help => {
+                        self.focus_manager.clear_and_set(FocusTarget::Help);
+                    }
+                    // Popup scenes - push focus to maintain stack
+                    Scene::ChangeDrivePopUp => {
+                        self.focus_manager.push_focus(FocusTarget::ChangeDrivePopup);
+                    }
+                    Scene::ChangeConnectionModePopUp => {
+                        self.focus_manager
+                            .push_focus(FocusTarget::ChangeConnectionModePopup);
+                    }
+                    Scene::ChangePortsPopUp { .. } => {
+                        self.focus_manager.push_focus(FocusTarget::PortRangePopup);
+                    }
+                    Scene::StatusRewardsAddressPopUp => {
+                        self.focus_manager
+                            .push_focus(FocusTarget::RewardsAddressPopup);
+                    }
+                    Scene::OptionsRewardsAddressPopUp => {
+                        self.focus_manager
+                            .push_focus(FocusTarget::RewardsAddressPopup);
+                    }
+                    Scene::ManageNodesPopUp { .. } => {
+                        self.focus_manager.push_focus(FocusTarget::ManageNodesPopup);
+                    }
+                    Scene::ResetNodesPopUp => {
+                        self.focus_manager.push_focus(FocusTarget::ResetNodesPopup);
+                    }
+                    Scene::UpgradeNodesPopUp => {
+                        self.focus_manager
+                            .push_focus(FocusTarget::UpgradeNodesPopup);
+                    }
+                    Scene::UpgradeLaunchpadPopUp => {
+                        self.focus_manager
+                            .push_focus(FocusTarget::UpgradeLaunchpadPopup);
+                    }
+                    Scene::RemoveNodePopUp => {
+                        self.focus_manager.push_focus(FocusTarget::RemoveNodePopup);
+                    }
+                    Scene::NodeLogsPopUp => {
+                        self.focus_manager.push_focus(FocusTarget::NodeLogsPopup);
+                    }
+                }
+
+                // If we're closing a popup (going from popup to main scene), pop focus
+                if self.is_popup_scene(previous_scene) && !self.is_popup_scene(scene) {
+                    self.focus_manager.pop_focus();
+                }
+            }
+            Action::SwitchInputMode(mode) => {
+                info!("Input mode switched to: {mode:?}");
+                self.input_mode = mode;
+            }
+            // Storing Application Data
+            Action::StoreStorageDrive(ref drive_mountpoint, ref drive_name) => {
+                debug!("Storing storage drive: {drive_mountpoint:?}, {drive_name:?}");
+                self.app_data.storage_mountpoint = Some(drive_mountpoint.clone());
+                self.app_data.storage_drive = Some(drive_name.as_str().to_string());
+                self.app_data.save(None)?;
+            }
+            Action::StoreConnectionMode(ref mode) => {
+                debug!("Storing connection mode: {mode:?}");
+                self.app_data.connection_mode = Some(*mode);
+                self.app_data.save(None)?;
+            }
+            Action::StorePortRange(ref from, ref to) => {
+                debug!("Storing port range: {from:?}, {to:?}");
+                self.app_data.port_from = Some(*from);
+                self.app_data.port_to = Some(*to);
+                self.app_data.save(None)?;
+            }
+            Action::StoreRewardsAddress(ref rewards_address) => {
+                debug!("Storing rewards address: {rewards_address:?}");
+                self.app_data.discord_username.clone_from(rewards_address);
+                self.app_data.save(None)?;
+            }
+            Action::StoreNodesToStart(ref count) => {
+                debug!("Storing nodes to start: {count:?}");
+                self.app_data.nodes_to_start = *count;
+                self.app_data.save(None)?;
+            }
+            Action::SetNodeLogsTarget(ref _node_name) => {
+                // The action will be forwarded to components below
+                // After components process it, switch to NodeLogs scene
+                generated_actions.push(Action::SwitchScene(Scene::NodeLogsPopUp));
+            }
+            _ => {}
+        }
+
+        // Always forward all actions to components so they can update their internal state
+        for component in self.components.iter_mut() {
+            if let Some(new_action) = component.update(action.clone())? {
+                action_tx.send(new_action.clone())?;
+                generated_actions.push(new_action);
+            }
+        }
+
+        Ok(generated_actions)
     }
 
     pub async fn run(&mut self) -> Result<()> {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
-
-        let action_tx_clone = action_tx.clone();
-
-        tokio::spawn(async move {
-            let upnp_support = get_upnp_support();
-            let _ = action_tx_clone.send(Action::SetUpnpSupport(upnp_support));
-        });
 
         let mut tui = tui::Tui::new()?
             .tick_rate(self.tick_rate)
@@ -190,7 +394,6 @@ impl App {
 
         for component in self.components.iter_mut() {
             component.register_action_handler(action_tx.clone())?;
-            component.register_config_handler(self.config.clone())?;
             let size = tui.size()?;
             let rect = Rect::new(0, 0, size.width, size.height);
             component.init(rect)?;
@@ -204,31 +407,7 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(key) => {
-                        if self.input_mode == InputMode::Navigation {
-                            if let Some(keymap) = self.config.keybindings.get(&self.scene) {
-                                if let Some(action) = keymap.get(&vec![key]) {
-                                    info!("Got action: {action:?}");
-                                    action_tx.send(action.clone())?;
-                                } else {
-                                    // If the key was not handled as a single key action,
-                                    // then consider it for multi-key combinations.
-                                    self.last_tick_key_events.push(key);
-
-                                    // Check for multi-key combinations
-                                    if let Some(action) = keymap.get(&self.last_tick_key_events) {
-                                        info!("Got action: {action:?}");
-                                        action_tx.send(action.clone())?;
-                                    }
-                                }
-                            };
-                        } else if self.input_mode == InputMode::Entry {
-                            for component in self.components.iter_mut() {
-                                let send_back_actions = component.handle_events(Some(e.clone()))?;
-                                for action in send_back_actions {
-                                    action_tx.send(action)?;
-                                }
-                            }
-                        }
+                        self.handle_key_event(key, &action_tx).await?;
                     }
                     _ => {}
                 }
@@ -239,21 +418,23 @@ impl App {
                     debug!("{action:?}");
                 }
                 match action {
-                    Action::Tick => {
-                        self.last_tick_key_events.drain(..);
-                    }
-                    Action::Quit => self.should_quit = true,
-                    Action::Suspend => self.should_suspend = true,
-                    Action::Resume => self.should_suspend = false,
                     Action::Resize(w, h) => {
                         tui.resize(Rect::new(0, 0, w, h))?;
                         tui.draw(|f| {
                             for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.area());
-                                if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                        .unwrap();
+                                // Draw all components that are in the focus stack
+                                let should_draw = self
+                                    .focus_manager
+                                    .get_focus_stack()
+                                    .contains(&component.focus_target());
+
+                                if should_draw {
+                                    let r = component.draw(f, f.area());
+                                    if let Err(e) = r {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
+                                            .unwrap();
+                                    }
                                 }
                             }
                         })?;
@@ -265,57 +446,30 @@ impl App {
                                 f.area(),
                             );
                             for component in self.components.iter_mut() {
-                                let r = component.draw(f, f.area());
-                                if let Err(e) = r {
-                                    action_tx
-                                        .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                        .unwrap();
+                                // Draw all components that are in the focus stack
+                                let should_draw = self
+                                    .focus_manager
+                                    .get_focus_stack()
+                                    .contains(&component.focus_target());
+
+                                if should_draw {
+                                    let r = component.draw(f, f.area());
+                                    if let Err(e) = r {
+                                        action_tx
+                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
+                                            .unwrap();
+                                    }
                                 }
                             }
                         })?;
                     }
-                    Action::SwitchScene(scene) => {
-                        info!("Scene switched to: {scene:?}");
-                        self.scene = scene;
+                    // Use unified action processing for all other actions
+                    _ => {
+                        let generated_actions = self.process_action(action.clone(), &action_tx)?;
+                        for new_action in generated_actions {
+                            action_tx.send(new_action)?;
+                        }
                     }
-                    Action::SwitchInputMode(mode) => {
-                        info!("Input mode switched to: {mode:?}");
-                        self.input_mode = mode;
-                    }
-                    // Storing Application Data
-                    Action::StoreStorageDrive(ref drive_mountpoint, ref drive_name) => {
-                        debug!("Storing storage drive: {drive_mountpoint:?}, {drive_name:?}");
-                        self.app_data.storage_mountpoint = Some(drive_mountpoint.clone());
-                        self.app_data.storage_drive = Some(drive_name.as_str().to_string());
-                        self.app_data.save(None)?;
-                    }
-                    Action::StoreConnectionMode(ref mode) => {
-                        debug!("Storing connection mode: {mode:?}");
-                        self.app_data.connection_mode = Some(*mode);
-                        self.app_data.save(None)?;
-                    }
-                    Action::StorePortRange(ref from, ref to) => {
-                        debug!("Storing port range: {from:?}, {to:?}");
-                        self.app_data.port_from = Some(*from);
-                        self.app_data.port_to = Some(*to);
-                        self.app_data.save(None)?;
-                    }
-                    Action::StoreRewardsAddress(ref rewards_address) => {
-                        debug!("Storing rewards address: {rewards_address:?}");
-                        self.app_data.discord_username.clone_from(rewards_address);
-                        self.app_data.save(None)?;
-                    }
-                    Action::StoreNodesToStart(ref count) => {
-                        debug!("Storing nodes to start: {count:?}");
-                        self.app_data.nodes_to_start = *count;
-                        self.app_data.save(None)?;
-                    }
-                    _ => {}
-                }
-                for component in self.components.iter_mut() {
-                    if let Some(action) = component.update(action.clone())? {
-                        action_tx.send(action)?
-                    };
                 }
             }
             if self.should_suspend {

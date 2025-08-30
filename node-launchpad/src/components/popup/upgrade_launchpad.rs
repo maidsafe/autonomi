@@ -10,6 +10,7 @@ use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, UpgradeLaunchpadActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
@@ -23,42 +24,42 @@ use std::time::Duration;
 
 #[derive(Debug, Default)]
 pub struct UpgradeLaunchpadPopup {
-    active: bool,
     current_version: Option<String>,
     latest_version: Option<String>,
 }
 
 impl Component for UpgradeLaunchpadPopup {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
 
         match key.code {
             KeyCode::Enter | KeyCode::Esc => {
                 info!("User dismissed the LP upgrade notification.");
-                self.active = false;
-                Ok(vec![
+                let actions = vec![
                     Action::SwitchInputMode(InputMode::Navigation),
                     Action::SwitchScene(Scene::Status),
-                ])
+                ];
+                Ok((actions, EventResult::Consumed))
             }
-            _ => Ok(vec![]),
+            _ => Ok((vec![], EventResult::Ignored)),
         }
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::UpgradeLaunchpadPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::UpgradeLaunchpadPopUp => {
-                    self.active = true;
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::UpgradeLaunchpadPopUp) => {
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             Action::UpgradeLaunchpadActions(update_launchpad_actions) => {
                 match update_launchpad_actions {
                     UpgradeLaunchpadActions::UpdateAvailable {
@@ -112,10 +113,6 @@ impl Component for UpgradeLaunchpadPopup {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let Some(current_version) = self.current_version.as_ref() else {
             error!(
                 "Current version is not set, even though the upgrade popup is active. This is unexpected."

@@ -1,0 +1,263 @@
+// Copyright 2024 MaidSafe.net limited.
+//
+// This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
+// Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
+// under the GPL Licence is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied. Please review the Licences for the specific language governing
+// permissions and limitations relating to use of the SAFE Network Software.
+
+use color_eyre::Result;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::layout::Rect;
+use tokio::sync::mpsc::UnboundedSender;
+
+use crate::action::{Action, StatusActions};
+use crate::components::Component;
+use crate::focus::{EventResult, FocusManager, FocusTarget};
+use crate::tui::Frame;
+
+use super::{NodeTableConfig, NodeTableState, NodeTableWidget};
+
+pub struct NodeTableComponent {
+    pub state: NodeTableState,
+    pub config: NodeTableConfig,
+    action_sender: Option<UnboundedSender<Action>>,
+}
+
+impl NodeTableComponent {
+    pub async fn new(config: NodeTableConfig) -> Result<Self> {
+        let state = NodeTableState::new(config.clone()).await?;
+        Ok(Self {
+            state,
+            config,
+            action_sender: None,
+        })
+    }
+
+    pub fn state(&self) -> &NodeTableState {
+        &self.state
+    }
+
+    pub fn state_mut(&mut self) -> &mut NodeTableState {
+        &mut self.state
+    }
+
+    fn handle_table_navigation(&mut self, key: KeyEvent) -> Result<(Vec<Action>, EventResult)> {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => {
+                debug!("NodeTable: Handling Up key - calling previous()");
+                let before_selected = self.state.items.state.selected();
+                self.state.items.previous();
+                let after_selected = self.state.items.state.selected();
+                debug!(
+                    "NodeTable: Selection changed from {:?} to {:?}",
+                    before_selected, after_selected
+                );
+                Ok((vec![], EventResult::Consumed))
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                debug!("NodeTable: Handling Down key - calling next()");
+                let before_selected = self.state.items.state.selected();
+                self.state.items.next();
+                let after_selected = self.state.items.state.selected();
+                debug!(
+                    "NodeTable: Selection changed from {:?} to {:?}",
+                    before_selected, after_selected
+                );
+                Ok((vec![], EventResult::Consumed))
+            }
+            KeyCode::Home | KeyCode::Char('g') => {
+                if !self.state.items.items.is_empty() {
+                    self.state.items.state.select(Some(0));
+                }
+                Ok((vec![], EventResult::Consumed))
+            }
+            KeyCode::End | KeyCode::Char('G') => {
+                if !self.state.items.items.is_empty() {
+                    self.state
+                        .items
+                        .state
+                        .select(Some(self.state.items.items.len() - 1));
+                }
+                Ok((vec![], EventResult::Consumed))
+            }
+            KeyCode::PageUp => {
+                for _ in 0..10 {
+                    self.state.items.previous();
+                }
+                Ok((vec![], EventResult::Consumed))
+            }
+            KeyCode::PageDown => {
+                for _ in 0..10 {
+                    self.state.items.next();
+                }
+                Ok((vec![], EventResult::Consumed))
+            }
+            _ => Ok((vec![], EventResult::Ignored)),
+        }
+    }
+
+    fn handle_node_operations(&mut self, key: KeyEvent) -> Result<(Vec<Action>, EventResult)> {
+        match key.code {
+            KeyCode::Char('+') => Ok((
+                vec![Action::StatusActions(StatusActions::AddNode)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('-') => Ok((
+                vec![Action::StatusActions(StatusActions::TriggerRemoveNode)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
+                vec![Action::StatusActions(StatusActions::StartStopNode)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
+                vec![Action::StatusActions(StatusActions::StartNodes)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
+                vec![Action::StatusActions(StatusActions::StopNodes)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
+                vec![Action::StatusActions(StatusActions::RemoveNodes)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('l') | KeyCode::Char('L') => Ok((
+                vec![Action::StatusActions(StatusActions::TriggerNodeLogs)],
+                EventResult::Consumed,
+            )),
+            KeyCode::Char('m') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let amount_of_nodes = self.state.nodes_to_start;
+                Ok((
+                    vec![Action::SwitchScene(crate::mode::Scene::ManageNodesPopUp {
+                        amount_of_nodes,
+                    })],
+                    EventResult::Consumed,
+                ))
+            }
+            KeyCode::Enter => {
+                if !self.state.items.items.is_empty() && self.state.items.state.selected().is_some()
+                {
+                    Ok((
+                        vec![Action::StatusActions(StatusActions::StartStopNode)],
+                        EventResult::Consumed,
+                    ))
+                } else {
+                    Ok((vec![], EventResult::Ignored))
+                }
+            }
+            _ => Ok((vec![], EventResult::Ignored)),
+        }
+    }
+}
+
+impl Component for NodeTableComponent {
+    fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
+        self.action_sender = Some(tx);
+        Ok(())
+    }
+
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target())
+            && !focus_manager.has_focus(&FocusTarget::Status)
+        {
+            return Ok((vec![], EventResult::Ignored));
+        }
+
+        // Handle error popup first
+        if let Some(error_popup) = &mut self.state.error_popup
+            && error_popup.is_visible()
+        {
+            error_popup.handle_input(key);
+            return Ok((
+                vec![Action::SwitchInputMode(crate::mode::InputMode::Navigation)],
+                EventResult::Consumed,
+            ));
+        }
+
+        debug!("NodeTable handling key: {key:?}");
+        debug!("NodeTable has {} items", self.state.items.items.len());
+
+        if let (actions, EventResult::Consumed) = self.handle_table_navigation(key)? {
+            return Ok((actions, EventResult::Consumed));
+        }
+
+        self.handle_node_operations(key)
+    }
+
+    fn update(&mut self, action: Action) -> Result<Option<Action>> {
+        match action {
+            Action::StatusActions(StatusActions::RegistryUpdated { all_nodes_data }) => {
+                self.state.node_services = all_nodes_data.clone();
+                self.state.update_node_state(&all_nodes_data);
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::NodesStatsObtained(_node_stats)) => {
+                self.state.try_update_node_stats(false)?;
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::StartNodesCompleted { service_name }) => {
+                use crate::node_mgmt::NODES_ALL;
+                if service_name == NODES_ALL {
+                    // Unlock all nodes that were starting
+                    for item in self.state.items.items.iter_mut() {
+                        if item.status == crate::components::node_table::NodeStatus::Starting {
+                            item.unlock();
+                            item.update_status(crate::components::node_table::NodeStatus::Running);
+                        }
+                    }
+                } else if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Running);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::StopNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::AddNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Added);
+                }
+                Ok(None)
+            }
+            Action::StatusActions(StatusActions::RemoveNodesCompleted { service_name }) => {
+                if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
+                    node_item.unlock();
+                    node_item.update_status(crate::components::node_table::NodeStatus::Removed);
+                }
+                // Remove the node from the list
+                self.state
+                    .items
+                    .items
+                    .retain(|item| item.name != service_name);
+                Ok(None)
+            }
+            Action::StoreNodesToStart(count) => {
+                self.state.nodes_to_start = count;
+                Ok(None)
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
+        let widget = NodeTableWidget;
+        widget.render(area, f, &mut self.state);
+        Ok(())
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::NodeTable
+    }
+}

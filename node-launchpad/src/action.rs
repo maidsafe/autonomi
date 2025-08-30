@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::upnp::UpnpSupport;
 use crate::{
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
@@ -21,6 +20,7 @@ use strum::Display;
 pub enum Action {
     StatusActions(StatusActions),
     OptionsActions(OptionsActions),
+    NodeTableActions(NodeTableActions),
 
     SwitchScene(Scene),
     SwitchInputMode(InputMode),
@@ -31,9 +31,10 @@ pub enum Action {
     StoreRewardsAddress(String),
     StoreNodesToStart(usize),
 
-    SetUpnpSupport(UpnpSupport),
-
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
+
+    ShowErrorPopup(crate::error::ErrorPopup),
+    SetNodeLogsTarget(String),
 
     Tick,
     Render,
@@ -56,36 +57,20 @@ pub enum StatusActions {
     StartStopNode,
     StartNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     StopNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     ResetNodesCompleted {
         trigger_start_node: bool,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     RemoveNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
     AddNodesCompleted {
         service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
     },
-    UpdateNodesCompleted {
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    NatDetectionStarted,
-    SuccessfullyDetectedNatStatus,
-    ErrorWhileRunningNatDetection,
+    UpdateNodesCompleted,
     ErrorLoadingNodeRegistry {
         raw_error: String,
     },
@@ -118,13 +103,14 @@ pub enum StatusActions {
     },
     NodesStatsObtained(NodeStats),
 
+    RegistryUpdated {
+        all_nodes_data: Vec<NodeServiceData>,
+    },
+
     TriggerManageNodes,
     TriggerRewardsAddress,
     TriggerNodeLogs,
     TriggerRemoveNode,
-
-    PreviousTableItem,
-    NextTableItem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
@@ -150,5 +136,16 @@ pub enum UpgradeLaunchpadActions {
     UpdateAvailable {
         current_version: String,
         latest_version: String,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NodeTableActions {
+    // State updates FROM NodeTable TO Status (push only)
+    // This is the only NodeTableAction that's actually used
+    StateChanged {
+        node_count: usize,
+        has_running_nodes: bool,
+        has_nodes: bool,
     },
 }

@@ -214,6 +214,12 @@ struct Opt {
     /// The RPC service can be used for querying information about the running node.
     #[clap(long)]
     rpc: Option<SocketAddr>,
+    /// Disable running reachability checks before starting the node.
+    ///
+    /// Reachability check determines the network connectivity and auto configures the node for you. Disable only
+    /// if you are sure about the network configuration.
+    #[clap(long, default_value_t = false)]
+    skip_reachability_check: bool,
 
     /// Print version information.
     #[clap(long)]
@@ -224,9 +230,25 @@ struct Opt {
     write_older_cache_files: bool,
 }
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(err) = run() {
+        error!("Node failed with error: {err}");
+        eprintln!("Node failed with error: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
     color_eyre::install()?;
+
+    // Install panic hook to print panics before exit
+    // We only use eprintln! here to avoid potential issues with logging infrastructure during shutdown
+    std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Node panicked: {panic_info}",);
+    }));
+
     let opt = Opt::parse();
+    info!("Antnode started with opt: {opt:?}");
 
     let network_id = if let Some(network_id) = opt.network_id {
         network_id
@@ -284,6 +306,18 @@ fn main() -> Result<()> {
     }?;
 
     println!("EVM network: {evm_network:?}");
+    let msg = format!(
+        "Running {} v{}",
+        env!("CARGO_BIN_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
+
+    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
+    debug!(
+        "antnode built with git version: {}",
+        ant_build_info::git_info()
+    );
 
     let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
     let (root_dir, keypair) = get_root_dir_and_keypair(&opt.root_dir)?;
@@ -305,19 +339,6 @@ fn main() -> Result<()> {
         rt.block_on(bootstrap_cache.write())?;
     }
 
-    let msg = format!(
-        "Running {} v{}",
-        env!("CARGO_BIN_NAME"),
-        env!("CARGO_PKG_VERSION")
-    );
-    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
-
-    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
-    debug!(
-        "antnode built with git version: {}",
-        ant_build_info::git_info()
-    );
-
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
@@ -332,6 +353,7 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
+        node_builder.with_reachability_check(!opt.skip_reachability_check);
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
         node_builder.bootstrap_cache(bootstrap_cache);
@@ -383,8 +405,7 @@ async fn run_node(
     reset_critical_failure(log_output_dest);
 
     info!("Starting node ...");
-    let running_node = node_builder.build_and_run()?;
-
+    let running_node = node_builder.build_and_run().await?;
     println!(
         "
 Node started

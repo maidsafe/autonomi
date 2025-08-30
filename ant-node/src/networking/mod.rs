@@ -19,6 +19,7 @@ mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
 mod network;
+mod reachability_check;
 mod record_store;
 mod relay_manager;
 mod replication_fetcher;
@@ -26,10 +27,11 @@ mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
 pub use self::interface::SwarmLocalState;
+pub use self::reachability_check::{ReachabilityIssue, ReachabilityStatus};
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue},
-    network::{Network, NetworkConfig},
+    network::{Network, NetworkConfig, init_reachability_check_swarm},
     record_store::NodeRecordStore,
 };
 
@@ -44,6 +46,7 @@ use libp2p::{
     multiaddr::Protocol,
 };
 use std::net::IpAddr;
+use std::net::SocketAddr;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
 /// Return with the closest expected number of entries it has.
@@ -142,4 +145,11 @@ pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
         Protocol::Udp(port) => Some(port),
         _ => None,
     })
+}
+
+/// Get the `SocketAddr` from the `Multiaddr`
+pub(crate) fn multiaddr_get_socket_addr(addr: &Multiaddr) -> Option<SocketAddr> {
+    let ip = multiaddr_get_ip(addr)?;
+    let port = multiaddr_get_port(addr)?;
+    Some(SocketAddr::new(ip, port))
 }

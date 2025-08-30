@@ -88,6 +88,7 @@ impl PyAntNode {
 
             let running_node = node_builder
                 .build_and_run()
+                .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to start node: {e}")))?;
 
             Ok(PyAntNode {

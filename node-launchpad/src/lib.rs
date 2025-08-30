@@ -18,15 +18,17 @@ pub mod components;
 pub mod config;
 pub mod connection_mode;
 pub mod error;
+pub mod focus;
 pub mod mode;
 pub mod node_mgmt;
 pub mod node_stats;
 pub mod style;
 pub mod system;
 pub mod tui;
-mod upnp;
 pub mod utils;
 pub mod widgets;
+
+pub mod test_utils;
 
 #[macro_use]
 extern crate tracing;
