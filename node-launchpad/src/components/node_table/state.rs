@@ -51,14 +51,18 @@ pub struct NodeTableState {
 
 impl NodeTableState {
     pub async fn new(config: NodeTableConfig) -> Result<Self> {
-        let node_registry =
-            NodeRegistryManager::load(&ant_node_manager::config::get_node_registry_path()?).await?;
+        let registry_path = if let Some(override_path) = &config.registry_path_override {
+            override_path.clone()
+        } else {
+            ant_node_manager::config::get_node_registry_path()?
+        };
+        let node_registry = NodeRegistryManager::load(&registry_path).await?;
         let node_services = node_registry.get_node_service_data().await;
         let node_management = crate::node_mgmt::NodeManagement::new(node_registry.clone())?;
 
-        Ok(Self {
+        let mut state = Self {
             items: StatefulTable::with_items(vec![]),
-            node_services,
+            node_services: node_services.clone(),
             node_registry,
             operations: NodeOperations::new(node_management),
             node_stats_last_update: Instant::now(),
@@ -77,7 +81,13 @@ impl NodeTableState {
             )? / crate::components::popup::manage_nodes::GB,
             error_popup: None,
             spinner_states: vec![],
-        })
+        };
+
+        // Populate the UI table items from the loaded node services
+        // This ensures that nodes loaded from the registry are immediately visible in the UI
+        state.update_node_state(&node_services);
+
+        Ok(state)
     }
 
     pub fn get_running_nodes(&self) -> Vec<String> {
@@ -163,13 +173,24 @@ impl NodeTableState {
     pub fn send_state_update(&self) -> Result<()> {
         use crate::action::{Action, NodeTableActions};
         if let Some(action_sender) = &self.operations.action_sender {
+            let node_count = self.items.items.len() as u64;
+            let has_running_nodes = !self.get_running_nodes().is_empty();
+            let has_nodes = !self.items.items.is_empty();
+
+            debug!(
+                "NodeTableState::send_state_update - Sending StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
+            );
+
             let state_action = Action::NodeTableActions(NodeTableActions::StateChanged {
-                node_count: self.items.items.len() as u64,
-                has_running_nodes: !self.get_running_nodes().is_empty(),
-                has_nodes: !self.items.items.is_empty(),
+                node_count,
+                has_running_nodes,
+                has_nodes,
             });
 
             action_sender.send(state_action)?;
+            debug!("NodeTableState::send_state_update - StateChanged action sent successfully");
+        } else {
+            debug!("NodeTableState::send_state_update - No action_sender available");
         }
         Ok(())
     }
@@ -187,4 +208,5 @@ pub struct NodeTableConfig {
     pub rewards_address: String,
     pub nodes_to_start: u64,
     pub storage_mountpoint: PathBuf,
+    pub registry_path_override: Option<PathBuf>,
 }

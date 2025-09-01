@@ -59,7 +59,58 @@ async fn journey_status_screen_renders_correctly() {
         .expect("Failed to create journey")
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
+        .expect_node_count_in_registry(0)
+        .expect_registry_is_empty()
         .expect_screen(expected_status_screen)
+        .run()
+        .await
+        .expect("Status screen rendering journey failed");
+}
+
+#[tokio::test]
+async fn journey_status_screen_with_nodes_renders_correctly() {
+    let expected_status_screen = &[
+        &format!(
+            " Autonomi Node Launchpad (v{TEST_LAUNCHPAD_VERSION})                                                                                                [S]tatus | [O]ptions | [H]elp "
+        ),
+        "┌ Device Status ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+        "│ Storage Allocated       105 GB                                                                                                                               │",
+        "│ Memory Use              0 MB                                                                                                                                 │",
+        "│ Connection              Automatic                                                                                                                            │",
+        "│ Attos Earned            0                                                                                                                                    │",
+        "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘",
+        "┌ Nodes (3) ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+        "│ Node       Version Attos Memory           Mbps Recs Peers Conns Mode    Status   Failure                                                                     │",
+        "│ antnode-1              0    0 MB                  0     0     0 Unknown Running  -                                                                        ⠧  │",
+        "│ antnode-2              0    0 MB                  0     0     0 Unknown Running  -                                                                        ⠧  │",
+        "│ antnode-3              0    0 MB                  0     0     0 Unknown Running  -                                                                        ⠧  │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "│                                                                                                                                                              │",
+        "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘",
+        "┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐",
+        "│ [+] Add [-] Remove [Ctrl+S] Start/Stop Node [L] Open Logs                                                               [Ctrl+G] Start All [Ctrl+X] Stop All │",
+        "└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘",
+    ];
+
+    JourneyBuilder::new_with_nodes("Status Screen Rendering", 3)
+        .await
+        .expect("Failed to create journey")
+        .start_from(Scene::Status)
+        .expect_scene(Scene::Status)
+        .expect_screen(expected_status_screen)
+        .expect_node_count_in_registry(3)
         .run()
         .await
         .expect("Status screen rendering journey failed");
