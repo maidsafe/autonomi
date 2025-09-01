@@ -59,6 +59,7 @@ impl App {
         antnode_path: Option<PathBuf>,
         app_data_path: Option<PathBuf>,
         network_id: Option<u8>,
+        registry_path_override: Option<PathBuf>,
     ) -> Result<Self> {
         // Configurations
         let app_data = AppData::load(app_data_path)?;
@@ -105,6 +106,7 @@ impl App {
             port_from: Some(port_from),
             port_to: Some(port_to),
             storage_mountpoint: storage_mountpoint.clone(),
+            registry_path_override,
         };
 
         let status = Status::new(status_config).await?;
@@ -529,8 +531,16 @@ mod tests {
         let mut output = Cursor::new(Vec::new());
 
         // Create and run the App, capturing its output
-        let app_result =
-            App::new(60.0, 60.0, init_peers_config, None, Some(config_path), None).await;
+        let app_result = App::new(
+            60.0,
+            60.0,
+            init_peers_config,
+            None,
+            Some(config_path),
+            None,
+            None,
+        )
+        .await;
 
         match app_result {
             Ok(app) => {
@@ -597,6 +607,7 @@ mod tests {
             None,
             Some(test_app_data_path),
             None,
+            None,
         )
         .await;
 
@@ -658,6 +669,7 @@ mod tests {
             init_peers_config,
             None,
             Some(non_existent_config_path),
+            None,
             None,
         )
         .await;
@@ -721,8 +733,16 @@ mod tests {
         let init_peers_config = InitialPeersConfig::default();
 
         // Create and run the App, capturing its output
-        let app_result =
-            App::new(60.0, 60.0, init_peers_config, None, Some(config_path), None).await;
+        let app_result = App::new(
+            60.0,
+            60.0,
+            init_peers_config,
+            None,
+            Some(config_path),
+            None,
+            None,
+        )
+        .await;
 
         // Could be that the mountpoint doesn't exists
         // or that the user doesn't have permissions to access it
@@ -768,6 +788,7 @@ mod tests {
             init_peers_config,
             None,
             Some(test_app_data_path),
+            None,
             None,
         )
         .await;
