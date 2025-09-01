@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::mock_registry::MockNodeRegistry;
 use crate::{app::App, config::AppData, connection_mode::ConnectionMode};
 use ant_bootstrap::InitialPeersConfig;
 use color_eyre::eyre::Result;
@@ -18,20 +19,28 @@ use std::{
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 pub struct TestAppBuilder {
-    nodes_to_start: u64,
+    mock_registry: Option<MockNodeRegistry>,
 }
 
 impl TestAppBuilder {
     pub fn new() -> Self {
-        Self { nodes_to_start: 0 }
+        Self {
+            mock_registry: None,
+        }
     }
 
-    pub fn with_nodes(mut self, count: u64) -> Self {
-        self.nodes_to_start = count;
+    pub fn with_mock_registry(mut self, registry: MockNodeRegistry) -> Self {
+        self.mock_registry = Some(registry);
         self
     }
 
-    pub async fn build(self) -> Result<App> {
+    pub async fn build(self) -> Result<(App, MockNodeRegistry)> {
+        let registry = self
+            .mock_registry
+            .unwrap_or_else(|| MockNodeRegistry::empty().expect("Failed to create empty registry"));
+
+        let registry_path = registry.get_registry_path().clone();
+
         let unique_id = TEST_COUNTER.fetch_add(1, Ordering::SeqCst);
         let temp_dir = env::temp_dir().join(format!(
             "launchpad_test_{}_{}",
@@ -44,7 +53,7 @@ impl TestAppBuilder {
 
         let app_data = AppData {
             discord_username: crate::test_utils::TEST_WALLET_ADDRESS.to_string(),
-            nodes_to_start: self.nodes_to_start,
+            nodes_to_start: registry.node_count(),
             storage_mountpoint: None,
             storage_drive: Some(crate::test_utils::TEST_STORAGE_DRIVE.to_string()),
             connection_mode: Some(ConnectionMode::Automatic),
@@ -55,15 +64,18 @@ impl TestAppBuilder {
         let config_path = config_dir.join("app_data.json");
         app_data.save(Some(config_path.clone()))?;
 
-        App::new(
+        let app = App::new(
             1.0,  // tick_rate
             60.0, // frame_rate
             InitialPeersConfig::default(),
             None, // antnode_path
             Some(config_path),
-            Some(1), // network_id
+            Some(1),             // network_id
+            Some(registry_path), // registry_path_override
         )
-        .await
+        .await?;
+
+        Ok((app, registry))
     }
 }
 
