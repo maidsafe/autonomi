@@ -76,6 +76,7 @@ pub struct StatusConfig {
     pub port_to: Option<u32>,
     pub storage_mountpoint: PathBuf,
     pub rewards_address: String,
+    pub registry_path_override: Option<PathBuf>,
 }
 
 impl Status {
@@ -105,6 +106,7 @@ impl Status {
                 rewards_address: config.rewards_address.clone(),
                 nodes_to_start: config.allocated_disk_space,
                 storage_mountpoint: config.storage_mountpoint.clone(),
+                registry_path_override: config.registry_path_override.clone(),
             })
             .await?,
 
@@ -281,9 +283,16 @@ impl Component for Status {
             has_nodes,
         }) = action.clone()
         {
+            debug!(
+                "Status::update - Received StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
+            );
             self.node_count = node_count;
             self.has_running_nodes = has_running_nodes;
             self.has_nodes = has_nodes;
+            debug!(
+                "Status::update - Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
+                self.node_count, self.has_nodes, self.has_running_nodes
+            );
         }
 
         // Handle Status-specific actions
@@ -892,6 +901,7 @@ mod tests {
             port_to: Some(15100),
             storage_mountpoint,
             rewards_address: "0x1234567890123456789012345678901234567890".to_string(),
+            registry_path_override: None,
         }
     }
 

@@ -8,6 +8,7 @@
 
 use super::{
     keyboard::KeySequence,
+    mock_registry::MockNodeRegistry,
     test_helpers::{TestAppBuilder, buffer_to_lines},
 };
 use crate::{
@@ -95,6 +96,13 @@ impl Journey {
     }
 
     pub fn render_screen(&mut self) -> Result<Buffer> {
+        // Process any pending actions before rendering
+        while let Ok(action) = self.action_rx.try_recv() {
+            for component in self.app.components.iter_mut() {
+                component.update(action.clone()).ok();
+            }
+        }
+
         let mut terminal = Terminal::new(TestBackend::new(160, 30))?;
 
         terminal.draw(|f| {
@@ -106,7 +114,7 @@ impl Journey {
                     .contains(&component.focus_target());
 
                 if should_draw && let Err(e) = component.draw(f, f.area()) {
-                    eprintln!("Failed to draw component: {e}");
+                    panic!("Failed to draw component: {e}");
                 }
             }
         })?;
@@ -251,24 +259,53 @@ impl Journey {
 pub struct JourneyBuilder {
     journey: Journey,
     current_step: Option<JourneyStep>,
+    mock_registry: Option<MockNodeRegistry>,
 }
 
 impl JourneyBuilder {
     pub async fn new(name: &str) -> Result<Self> {
-        let app = TestAppBuilder::new().build().await?;
+        let registry = MockNodeRegistry::empty()?;
+        let (app, registry) = TestAppBuilder::new()
+            .with_mock_registry(registry)
+            .build()
+            .await?;
 
         Ok(Self {
             journey: Journey::new(name.to_string(), app),
             current_step: None,
+            mock_registry: Some(registry),
         })
     }
 
     pub async fn new_with_nodes(name: &str, node_count: u64) -> Result<Self> {
-        let app = TestAppBuilder::new().with_nodes(node_count).build().await?;
+        let registry = if node_count > 0 {
+            MockNodeRegistry::with_nodes(node_count)?
+        } else {
+            MockNodeRegistry::empty()?
+        };
+
+        let (app, registry) = TestAppBuilder::new()
+            .with_mock_registry(registry)
+            .build()
+            .await?;
 
         Ok(Self {
             journey: Journey::new(name.to_string(), app),
             current_step: None,
+            mock_registry: Some(registry),
+        })
+    }
+
+    pub async fn new_with_registry(name: &str, registry: MockNodeRegistry) -> Result<Self> {
+        let (app, registry) = TestAppBuilder::new()
+            .with_mock_registry(registry)
+            .build()
+            .await?;
+
+        Ok(Self {
+            journey: Journey::new(name.to_string(), app),
+            current_step: None,
+            mock_registry: Some(registry),
         })
     }
 
@@ -347,6 +384,98 @@ impl JourneyBuilder {
             });
         }
         self
+    }
+
+    // Registry manipulation methods
+    pub fn add_node_to_registry(
+        mut self,
+        node_data: ant_service_management::NodeServiceData,
+    ) -> Self {
+        if let Some(ref mut registry) = self.mock_registry
+            && let Err(e) = registry.add_node(node_data)
+        {
+            panic!("Failed to add node to registry: {e}");
+        }
+        self
+    }
+
+    pub fn remove_node_from_registry(mut self, service_name: &str) -> Self {
+        if let Some(ref mut registry) = self.mock_registry
+            && let Err(e) = registry.remove_node(service_name)
+        {
+            panic!("Failed to remove node from registry: {e}");
+        }
+        self
+    }
+
+    pub fn update_registry_node_status(
+        mut self,
+        service_name: &str,
+        status: ant_service_management::ServiceStatus,
+    ) -> Self {
+        if let Some(ref mut registry) = self.mock_registry
+            && let Err(e) = registry.update_node_status(service_name, status)
+        {
+            panic!("Failed to update node status: {e}");
+        }
+        self
+    }
+
+    pub fn reset_registry(mut self) -> Self {
+        if let Some(ref mut registry) = self.mock_registry
+            && let Err(e) = registry.reset_all()
+        {
+            panic!("Failed to reset registry: {e}");
+        }
+        self
+    }
+
+    // Registry assertions
+    pub fn expect_registry_contains(self, service_name: &str) -> Self {
+        if let Some(ref registry) = self.mock_registry
+            && !registry.contains_node(service_name)
+        {
+            panic!("Registry does not contain expected node: {service_name}");
+        }
+        self
+    }
+
+    pub fn expect_registry_not_contains(self, service_name: &str) -> Self {
+        if let Some(ref registry) = self.mock_registry
+            && registry.contains_node(service_name)
+        {
+            panic!("Registry unexpectedly contains node: {service_name}");
+        }
+        self
+    }
+
+    pub fn expect_registry_node_status(
+        self,
+        service_name: &str,
+        status: ant_service_management::ServiceStatus,
+    ) -> Self {
+        if let Some(ref registry) = self.mock_registry
+            && !registry.verify_node_status(service_name, status.clone())
+        {
+            panic!("Registry node {service_name} does not have expected status: {status:?}");
+        }
+        self
+    }
+
+    pub fn expect_node_count_in_registry(self, count: u64) -> Self {
+        if let Some(ref registry) = self.mock_registry
+            && registry.node_count() != count
+        {
+            panic!(
+                "Registry has {} nodes, expected {count}",
+                registry.node_count()
+            );
+        }
+        self
+    }
+
+    pub fn expect_registry_is_empty(self) -> Self {
+        self.expect_node_count_in_registry(0)
     }
 
     pub fn step(mut self) -> Self {

@@ -8,10 +8,12 @@
 
 pub mod journey;
 pub mod keyboard;
+pub mod mock_registry;
 pub mod test_helpers;
 
 pub use journey::*;
 pub use keyboard::*;
+pub use mock_registry::*;
 pub use test_helpers::*;
 
 pub const TEST_WALLET_ADDRESS: &str = "0x03b770d9cd32077cc0bf330c13c114a87643b124";

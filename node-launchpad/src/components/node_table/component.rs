@@ -154,7 +154,13 @@ impl NodeTableComponent {
 
 impl Component for NodeTableComponent {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
-        self.action_sender = Some(tx);
+        self.action_sender = Some(tx.clone());
+        self.state.operations.action_sender = Some(tx);
+
+        // Send initial state update to synchronize Status component's cached state
+        // This ensures the Status component knows about nodes loaded from registry during initialization
+        self.state.send_state_update()?;
+
         Ok(())
     }
 
