@@ -16,6 +16,6 @@ pub use keyboard::*;
 pub use mock_registry::*;
 pub use test_helpers::*;
 
-pub const TEST_WALLET_ADDRESS: &str = "0x03b770d9cd32077cc0bf330c13c114a87643b124";
+pub const TEST_WALLET_ADDRESS: &str = "0x03B770D9cD32077cC0bF330c13C114a87643B124";
 pub const TEST_STORAGE_DRIVE: &str = "Macintosh HD";
 pub const TEST_LAUNCHPAD_VERSION: &str = env!("CARGO_PKG_VERSION");

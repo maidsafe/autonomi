@@ -15,6 +15,7 @@ use crate::node_mgmt::{
 };
 use crate::system::get_drive_name;
 use ant_bootstrap::InitialPeersConfig;
+use ant_evm::EvmAddress;
 use ant_node_manager::add_services::config::PortRange;
 use color_eyre::eyre::Result;
 use std::path::PathBuf;
@@ -24,7 +25,7 @@ pub struct AddNodeConfig<'a> {
     pub node_count: u64,
     pub available_disk_space_gb: u64,
     pub storage_mountpoint: &'a PathBuf,
-    pub rewards_address: &'a str,
+    pub rewards_address: Option<&'a EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
     pub connection_mode: ConnectionMode,
@@ -36,7 +37,7 @@ pub struct AddNodeConfig<'a> {
 }
 
 pub struct StartNodesConfig<'a> {
-    pub rewards_address: &'a str,
+    pub rewards_address: Option<&'a EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
     pub connection_mode: ConnectionMode,
@@ -97,7 +98,7 @@ impl NodeOperations {
             return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
 
-        if config.rewards_address.is_empty() {
+        if config.rewards_address.is_none() {
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerRewardsAddress,
             )));
@@ -122,10 +123,10 @@ impl NodeOperations {
             count: 1,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,
-            owner: config.rewards_address.to_string(),
+            owner: config.rewards_address.map(|addr| addr.to_string()),
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
-            rewards_address: config.rewards_address.to_string(),
+            rewards_address: config.rewards_address.cloned(),
         };
 
         self.node_management
@@ -137,7 +138,7 @@ impl NodeOperations {
     }
 
     pub fn handle_start_nodes(&mut self, config: &StartNodesConfig) -> Result<Option<Action>> {
-        if config.rewards_address.is_empty() {
+        if config.rewards_address.is_none() {
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerRewardsAddress,
             )));
@@ -162,10 +163,10 @@ impl NodeOperations {
             count: config.nodes_to_start as u16,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,
-            owner: config.rewards_address.to_string(),
+            owner: config.rewards_address.map(|addr| addr.to_string()),
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
-            rewards_address: config.rewards_address.to_string(),
+            rewards_address: config.rewards_address.cloned(),
         };
 
         self.node_management

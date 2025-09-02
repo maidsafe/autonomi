@@ -11,6 +11,7 @@ use crate::{
     mode::{InputMode, Scene},
     node_stats::NodeStats,
 };
+use ant_evm::EvmAddress;
 use ant_service_management::NodeServiceData;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -28,7 +29,7 @@ pub enum Action {
     StoreStorageDrive(PathBuf, String),
     StoreConnectionMode(ConnectionMode),
     StorePortRange(u32, u32),
-    StoreRewardsAddress(String),
+    StoreRewardsAddress(EvmAddress),
     StoreNodesToStart(u64),
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
@@ -50,25 +51,8 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StatusActions {
-    AddNode,
-    StartNodes,
-    StopNodes,
-    RemoveNodes,
-    StartStopNode,
-    StartNodesCompleted {
-        service_name: String,
-    },
-    StopNodesCompleted {
-        service_name: String,
-    },
     ResetNodesCompleted {
         trigger_start_node: bool,
-    },
-    RemoveNodesCompleted {
-        service_name: String,
-    },
-    AddNodesCompleted {
-        service_name: String,
     },
     UpdateNodesCompleted,
     ErrorLoadingNodeRegistry {
@@ -109,8 +93,6 @@ pub enum StatusActions {
 
     TriggerManageNodes,
     TriggerRewardsAddress,
-    TriggerNodeLogs,
-    TriggerRemoveNode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
@@ -127,7 +109,6 @@ pub enum OptionsActions {
     TriggerAccessLogs,
     UpdateConnectionMode(ConnectionMode),
     UpdatePortRange(u32, u32),
-    UpdateRewardsAddress(String),
     UpdateStorageDrive(PathBuf, String),
 }
 
@@ -142,10 +123,31 @@ pub enum UpgradeLaunchpadActions {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeTableActions {
     // State updates FROM NodeTable TO Status (push only)
-    // This is the only NodeTableAction that's actually used
     StateChanged {
         node_count: u64,
         has_running_nodes: bool,
         has_nodes: bool,
+    },
+
+    AddNode,
+    StartNodes,
+    StopNodes,
+    RemoveNodes,
+    StartStopNode,
+    TriggerRemoveNode,
+    TriggerNodeLogs,
+
+    // Completion events
+    StartNodesCompleted {
+        service_name: String,
+    },
+    StopNodesCompleted {
+        service_name: String,
+    },
+    AddNodesCompleted {
+        service_name: String,
+    },
+    RemoveNodesCompleted {
+        service_name: String,
     },
 }
