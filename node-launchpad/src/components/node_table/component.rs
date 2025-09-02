@@ -199,12 +199,8 @@ impl Component for NodeTableComponent {
     fn handle_key_events(
         &mut self,
         key: KeyEvent,
-        focus_manager: &FocusManager,
+        _focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
-        if !focus_manager.has_focus(&self.focus_target()) {
-            return Ok((vec![], EventResult::Ignored));
-        }
-
         // Handle error popup first
         if let Some(error_popup) = &mut self.state.error_popup
             && error_popup.is_visible()
