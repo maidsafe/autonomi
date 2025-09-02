@@ -189,7 +189,7 @@ impl NodeTableState {
         self.spinner_states
             .resize_with(self.items.items.len(), ThrobberState::default);
 
-        log::debug!(
+        debug!(
             "Node state updated. Node count changed from {} to {}",
             self.items.items.len(),
             all_nodes_data.len()

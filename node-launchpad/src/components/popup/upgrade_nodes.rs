@@ -9,7 +9,7 @@
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
-    action::{Action, OptionsActions},
+    action::{Action, NodeTableActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_mgmt,
@@ -47,7 +47,7 @@ impl Component for UpgradeNodesPopUp {
             KeyCode::Enter => {
                 debug!("Got Enter, Upgrading nodes...");
                 vec![
-                    Action::OptionsActions(OptionsActions::UpdateNodes),
+                    Action::NodeTableActions(NodeTableActions::UpgradeNodeVersion),
                     Action::SwitchScene(Scene::Status),
                 ]
             }

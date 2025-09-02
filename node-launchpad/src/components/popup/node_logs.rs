@@ -52,7 +52,7 @@ impl NodeLogsPopup {
         };
         // Load initial logs
         if let Err(e) = instance.load_logs() {
-            log::error!("Failed to load logs for node: {e}");
+            error!("Failed to load logs for node: {e}");
             instance.logs = vec![format!("Error loading logs: {e}")];
         }
         instance
@@ -157,7 +157,7 @@ impl NodeLogsPopup {
             self.node_name = node_name;
             // Reload logs for the new node
             if let Err(e) = self.load_logs() {
-                log::error!("Failed to load logs for node: {e}");
+                error!("Failed to load logs for node: {e}");
                 self.logs = vec![format!("Error loading logs: {e}")];
             }
         }
