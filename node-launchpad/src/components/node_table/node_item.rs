@@ -46,9 +46,9 @@ impl fmt::Display for NodeStatus {
 
 #[derive(Default, Debug, Clone)]
 pub struct NodeItem {
-    pub name: String,
+    pub service_name: String,
     pub version: String,
-    pub attos: usize,
+    pub rewards_wallet_balance: usize,
     pub memory: usize,
     pub mbps: String,
     pub records: usize,

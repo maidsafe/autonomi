@@ -52,7 +52,7 @@ impl TestAppBuilder {
         std::fs::create_dir_all(&config_dir)?;
 
         let app_data = AppData {
-            discord_username: crate::test_utils::TEST_WALLET_ADDRESS.to_string(),
+            rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse().unwrap()),
             nodes_to_start: registry.node_count(),
             storage_mountpoint: None,
             storage_drive: Some(crate::test_utils::TEST_STORAGE_DRIVE.to_string()),
