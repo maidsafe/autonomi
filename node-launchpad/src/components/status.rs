@@ -16,7 +16,7 @@ use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::PORT_MIN;
+use crate::node_management::config::PORT_MIN;
 use crate::system::get_available_space_b;
 use crate::{
     action::{Action, NodeTableActions, StatusActions},

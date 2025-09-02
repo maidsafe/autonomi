@@ -27,7 +27,7 @@ use crate::{
     keybindings::KeyBindings,
     keybindings::get_keybindings,
     mode::{InputMode, Scene},
-    node_mgmt::{PORT_MAX, PORT_MIN},
+    node_management::config::{PORT_MAX, PORT_MIN},
     style::SPACE_CADET,
     system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
     tui,
