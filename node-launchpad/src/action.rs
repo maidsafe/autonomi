@@ -87,19 +87,12 @@ pub enum StatusActions {
     },
     NodesStatsObtained(NodeStats),
 
-    RegistryUpdated {
-        all_nodes_data: Vec<NodeServiceData>,
-    },
-
     TriggerManageNodes,
     TriggerRewardsAddress,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
 pub enum OptionsActions {
-    ResetNodes,
-    UpdateNodes,
-
     TriggerChangeDrive,
     TriggerChangeConnectionMode,
     TriggerChangePortRange,
@@ -128,6 +121,9 @@ pub enum NodeTableActions {
         has_running_nodes: bool,
         has_nodes: bool,
     },
+    RegistryUpdated {
+        all_nodes_data: Vec<NodeServiceData>,
+    },
 
     AddNode,
     StartNodes,
@@ -136,6 +132,8 @@ pub enum NodeTableActions {
     StartStopNode,
     TriggerRemoveNode,
     TriggerNodeLogs,
+    ResetNodes,
+    UpgradeNodeVersion,
 
     // Completion events
     StartNodesCompleted {
