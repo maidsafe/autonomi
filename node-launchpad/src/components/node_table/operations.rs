@@ -10,10 +10,8 @@ use crate::action::{Action, StatusActions};
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::{
-    AddNodesArgs, FIXED_INTERVAL, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN,
-    UpgradeNodesArgs,
-};
+use crate::node_management::config::{FIXED_INTERVAL, PORT_MAX, PORT_MIN};
+use crate::node_management::{AddNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs};
 use crate::system::get_drive_name;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
