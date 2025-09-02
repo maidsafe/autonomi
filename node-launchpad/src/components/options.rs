@@ -429,7 +429,6 @@ impl Component for Options {
                 OptionsActions::TriggerResetNodes => {
                     return Ok(Some(Action::SwitchScene(Scene::ResetNodesPopUp)));
                 }
-                _ => {}
             },
             _ => {}
         }

@@ -13,10 +13,12 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::{Action, NodeTableActions, StatusActions};
 use crate::components::Component;
+use crate::components::node_table::NodeStatus;
 use crate::focus::{EventResult, FocusManager, FocusTarget};
+use crate::mode::Scene;
 use crate::tui::Frame;
 
-use super::{NodeTableConfig, NodeTableState, NodeTableWidget};
+use super::{NodeTableConfig, NodeTableState, NodeTableWidget, operations};
 
 pub struct NodeTableComponent {
     pub state: NodeTableState,
@@ -150,7 +152,42 @@ impl NodeTableComponent {
 impl Component for NodeTableComponent {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.action_sender = Some(tx.clone());
-        self.state.operations.action_sender = Some(tx);
+        self.state.operations.action_sender = Some(tx.clone());
+
+        let node_registry_clone = self.state().node_registry.clone();
+        let action_sender_clone = tx.clone();
+        tokio::spawn(async move {
+            debug!("Refreshing node registry on startup");
+            let services = node_registry_clone.get_node_service_data().await;
+            debug!("Registry refresh complete. Found {} nodes", services.len());
+            if let Err(e) = action_sender_clone.send(Action::NodeTableActions(
+                NodeTableActions::RegistryUpdated {
+                    all_nodes_data: services,
+                },
+            )) {
+                error!("Failed to send initial registry update: {e}");
+            }
+        });
+
+        // Watch for registry file changes
+        let action_sender_clone = tx.clone();
+        let mut node_registry_watcher = self.state.node_registry.watch_registry_file()?;
+        let node_registry_clone = self.state.node_registry.clone();
+        tokio::spawn(async move {
+            while let Some(()) = node_registry_watcher.recv().await {
+                let services = node_registry_clone.get_node_service_data().await;
+                debug!(
+                    "Node registry file has been updated. Sending NodeTableActions::RegistryUpdated event."
+                );
+                if let Err(e) = action_sender_clone.send(Action::NodeTableActions(
+                    NodeTableActions::RegistryUpdated {
+                        all_nodes_data: services,
+                    },
+                )) {
+                    error!("Failed to send NodeTableActions::RegistryUpdated: {e}");
+                }
+            }
+        });
 
         // Send initial state update to synchronize Status component's cached state
         // This ensures the Status component knows about nodes loaded from registry during initialization
@@ -193,9 +230,18 @@ impl Component for NodeTableComponent {
         match action {
             // Handle NodeTableActions directly
             Action::NodeTableActions(node_action) => match node_action {
+                NodeTableActions::RegistryUpdated { all_nodes_data } => {
+                    debug!(
+                        "Received RegistryUpdated event with {} nodes",
+                        all_nodes_data.len()
+                    );
+                    self.state_mut().sync_node_service_data(&all_nodes_data);
+                    self.state_mut().send_state_update()?;
+                    Ok(None)
+                }
                 NodeTableActions::AddNode => {
                     debug!("NodeTable: Handling AddNode action");
-                    let config = super::operations::AddNodeConfig {
+                    let config = operations::AddNodeConfig {
                         node_count: self.state.items.items.len() as u64,
                         available_disk_space_gb: self.state.available_disk_space_gb,
                         storage_mountpoint: &self.state.storage_mountpoint,
@@ -209,22 +255,11 @@ impl Component for NodeTableComponent {
                         port_from: self.state.port_from,
                         port_to: self.state.port_to,
                     };
-                    match self.state.operations.handle_add_node(&config) {
-                        Ok(Some(result_action)) => Ok(Some(result_action)),
-                        Ok(None) => Ok(None),
-                        Err(e) => {
-                            debug!("Failed to add node: {e:?}");
-                            Ok(Some(Action::StatusActions(
-                                StatusActions::ErrorAddingNodes {
-                                    raw_error: e.to_string(),
-                                },
-                            )))
-                        }
-                    }
+                    self.state.operations.handle_add_node(&config)
                 }
                 NodeTableActions::StartNodes => {
                     debug!("NodeTable: Handling StartNodes action");
-                    let config = super::operations::StartNodesConfig {
+                    let config = operations::StartNodesConfig {
                         rewards_address: self.state.rewards_address.as_ref(),
                         nodes_to_start: self.state.nodes_to_start,
                         antnode_path: self.state.antnode_path.clone(),
@@ -235,46 +270,22 @@ impl Component for NodeTableComponent {
                         port_from: self.state.port_from,
                         port_to: self.state.port_to,
                     };
-                    match self.state.operations.handle_start_nodes(&config) {
-                        Ok(Some(result_action)) => Ok(Some(result_action)),
-                        Ok(None) => Ok(None),
-                        Err(e) => {
-                            debug!("Failed to start nodes: {e:?}");
-                            Ok(Some(Action::StatusActions(
-                                StatusActions::ErrorStartingNodes {
-                                    services: vec!["all".to_string()],
-                                    raw_error: e.to_string(),
-                                },
-                            )))
-                        }
-                    }
+                    self.state.operations.handle_start_nodes(&config)
                 }
                 NodeTableActions::StopNodes => {
                     debug!("NodeTable: Handling StopNodes action");
                     let running_nodes = self.state.get_running_nodes();
-                    match self
-                        .state
+                    self.state
                         .operations
-                        .handle_stop_nodes(running_nodes.clone())
-                    {
-                        Ok(()) => Ok(None),
-                        Err(e) => {
-                            debug!("Failed to stop nodes: {e:?}");
-                            Ok(Some(Action::StatusActions(
-                                StatusActions::ErrorStoppingNodes {
-                                    services: running_nodes,
-                                    raw_error: e.to_string(),
-                                },
-                            )))
-                        }
-                    }
+                        .handle_stop_nodes(running_nodes.clone())?;
+                    Ok(None)
                 }
                 NodeTableActions::StartStopNode => {
                     debug!("NodeTable: Handling StartStopNode action");
                     let (service_name, node_locked, node_status) = {
                         if let Some(node_item) = self.state.items.selected_item() {
                             (
-                                vec![node_item.service_name.clone()],
+                                node_item.service_name.clone(),
                                 node_item.locked,
                                 node_item.status,
                             )
@@ -284,53 +295,36 @@ impl Component for NodeTableComponent {
                     };
 
                     if node_locked {
-                        debug!("Node still performing operation");
+                        debug!("Cannot start/stop node {service_name:?} while it is locked");
+                        return Ok(None);
+                    }
+
+                    if node_status == NodeStatus::Removed {
+                        debug!("Node {service_name} is removed. Cannot be started.");
                         return Ok(None);
                     }
 
                     match node_status {
-                        crate::components::node_table::NodeStatus::Stopped
-                        | crate::components::node_table::NodeStatus::Added => {
-                            debug!("Starting Node {:?}", service_name[0]);
-                            if let Err(e) = self
-                                .state
+                        NodeStatus::Stopped | NodeStatus::Added => {
+                            debug!("Starting Node {service_name:?}");
+                            self.state
                                 .operations
-                                .handle_start_node(service_name.clone())
-                            {
-                                debug!("Failed to start node: {e:?}");
-                                return Ok(Some(Action::StatusActions(
-                                    StatusActions::ErrorStartingNodes {
-                                        services: service_name,
-                                        raw_error: e.to_string(),
-                                    },
-                                )));
-                            }
+                                .handle_start_node(vec![service_name.clone()])?;
                             if let Some(node_item) = self.state.items.selected_item_mut() {
-                                node_item.status =
-                                    crate::components::node_table::NodeStatus::Starting;
+                                node_item.status = NodeStatus::Starting;
                             }
                         }
-                        crate::components::node_table::NodeStatus::Running => {
-                            debug!("Stopping Node {:?}", service_name[0]);
-                            if let Err(e) = self
-                                .state
+                        NodeStatus::Running => {
+                            debug!("Stopping Node {service_name:?}");
+                            self.state
                                 .operations
-                                .handle_stop_nodes(service_name.clone())
-                            {
-                                debug!("Failed to stop node: {e:?}");
-                                return Ok(Some(Action::StatusActions(
-                                    StatusActions::ErrorStoppingNodes {
-                                        services: service_name,
-                                        raw_error: e.to_string(),
-                                    },
-                                )));
-                            }
+                                .handle_stop_nodes(vec![service_name.clone()])?;
                             if let Some(node_item) = self.state.items.selected_item_mut() {
                                 node_item.lock();
                             }
                         }
                         _ => {
-                            debug!("Cannot Start/Stop node. Node status is {:?}", node_status);
+                            debug!("Cannot Start/Stop node. Node status is {node_status:?}");
                         }
                     }
                     Ok(None)
@@ -339,33 +333,22 @@ impl Component for NodeTableComponent {
                     debug!("NodeTable: Handling RemoveNodes action");
                     if let Some(node_item) = self.state.items.selected_item_mut() {
                         if node_item.locked {
-                            debug!("Node still performing operation");
+                            debug!(
+                                "Node {} still performing operation. Cannot remove",
+                                node_item.service_name
+                            );
                             return Ok(None);
                         }
                         node_item.lock();
-                        let service_name = vec![node_item.service_name.clone()];
-                        if let Err(e) = self
-                            .state
+                        self.state
                             .operations
-                            .handle_remove_nodes(service_name.clone())
-                        {
-                            debug!("Failed to remove node: {e:?}");
-                            node_item.unlock();
-                            return Ok(Some(Action::StatusActions(
-                                StatusActions::ErrorRemovingNodes {
-                                    services: service_name,
-                                    raw_error: e.to_string(),
-                                },
-                            )));
-                        }
+                            .handle_remove_nodes(vec![node_item.service_name.clone()])?;
                     }
                     Ok(None)
                 }
                 NodeTableActions::TriggerRemoveNode => {
                     debug!("NodeTable: TriggerRemoveNode action received");
-                    Ok(Some(Action::SwitchScene(
-                        crate::mode::Scene::RemoveNodePopUp,
-                    )))
+                    Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
                 }
                 NodeTableActions::TriggerNodeLogs => {
                     debug!("NodeTable: TriggerNodeLogs action received");
@@ -396,16 +379,14 @@ impl Component for NodeTableComponent {
                     use crate::node_mgmt::NODES_ALL;
                     if service_name == NODES_ALL {
                         for item in self.state.items.items.iter_mut() {
-                            if item.status == crate::components::node_table::NodeStatus::Starting {
+                            if item.status == NodeStatus::Starting {
                                 item.unlock();
-                                item.update_status(
-                                    crate::components::node_table::NodeStatus::Running,
-                                );
+                                item.update_status(NodeStatus::Running);
                             }
                         }
                     } else if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
                         node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Running);
+                        node_item.update_status(NodeStatus::Running);
                     }
                     self.state.send_state_update()?;
                     Ok(None)
@@ -414,7 +395,7 @@ impl Component for NodeTableComponent {
                     debug!("NodeTable: StopNodesCompleted for service: {service_name}");
                     if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
                         node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
+                        node_item.update_status(NodeStatus::Stopped);
                     }
                     self.state.send_state_update()?;
                     Ok(None)
@@ -423,7 +404,7 @@ impl Component for NodeTableComponent {
                     debug!("NodeTable: AddNodesCompleted for service: {service_name}");
                     if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
                         node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Added);
+                        node_item.update_status(NodeStatus::Added);
                     }
                     self.state.send_state_update()?;
                     Ok(None)
@@ -432,7 +413,7 @@ impl Component for NodeTableComponent {
                     debug!("NodeTable: RemoveNodesCompleted for service: {service_name}");
                     if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
                         node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Removed);
+                        node_item.update_status(NodeStatus::Removed);
                     }
                     self.state
                         .items
@@ -441,6 +422,40 @@ impl Component for NodeTableComponent {
                     self.state.send_state_update()?;
                     Ok(None)
                 }
+                NodeTableActions::ResetNodes => {
+                    debug!("Got NodeTableActions::ResetNodes - removing all nodes");
+                    // Reset all nodes by removing all of them
+                    let all_service_names: Vec<String> = self
+                        .state()
+                        .items
+                        .items
+                        .iter()
+                        .map(|item| item.service_name.clone())
+                        .collect();
+                    if !all_service_names.is_empty() {
+                        self.state_mut()
+                            .operations
+                            .handle_remove_nodes(all_service_names)?;
+                    }
+                    Ok(None)
+                }
+                NodeTableActions::UpgradeNodeVersion => {
+                    debug!("Got NodeTableActions::UpgradeNodeVersion");
+                    let all_service_names: Vec<String> = self
+                        .state()
+                        .items
+                        .items
+                        .iter()
+                        .map(|item| item.service_name.clone())
+                        .collect();
+                    if !all_service_names.is_empty() {
+                        self.state_mut()
+                            .operations
+                            .handle_upgrade_nodes(all_service_names)?;
+                    }
+                    Ok(None)
+                }
+
                 NodeTableActions::StateChanged { .. } => {
                     // StateChanged is sent by NodeTable, not handled by it
                     Ok(None)
