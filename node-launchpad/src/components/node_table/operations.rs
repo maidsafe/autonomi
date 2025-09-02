@@ -11,7 +11,7 @@ use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
 use crate::node_mgmt::{
-    FIXED_INTERVAL, MaintainNodesArgs, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN,
+    AddNodesArgs, FIXED_INTERVAL, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN,
     UpgradeNodesArgs,
 };
 use crate::system::get_drive_name;
@@ -117,7 +117,7 @@ impl NodeOperations {
         );
 
         let action_sender = self.get_actions_sender()?;
-        let add_node_args = MaintainNodesArgs {
+        let add_node_args = AddNodesArgs {
             action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
@@ -160,7 +160,7 @@ impl NodeOperations {
         );
 
         let action_sender = self.get_actions_sender()?;
-        let maintain_nodes_args = MaintainNodesArgs {
+        let maintain_nodes_args = AddNodesArgs {
             action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
