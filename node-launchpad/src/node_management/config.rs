@@ -191,7 +191,8 @@ pub async fn add_node_with_config(
         port_range,
         node_registry,
         config.init_peers_config.clone(),
-        config.rewards_address
+        config
+            .rewards_address
             .ok_or_else(|| eyre!("rewards_address is required for node operations"))?,
         None, // rpc_address
         None, // rpc_port
