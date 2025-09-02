@@ -9,7 +9,7 @@
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
-    action::{Action, StatusActions},
+    action::{Action, NodeTableActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
@@ -35,7 +35,7 @@ impl Component for RemoveNodePopUp {
             KeyCode::Enter => {
                 debug!("Got Enter, Removing node...");
                 vec![
-                    Action::StatusActions(StatusActions::RemoveNodes),
+                    Action::NodeTableActions(NodeTableActions::RemoveNodes),
                     Action::SwitchScene(Scene::Status),
                 ]
             }

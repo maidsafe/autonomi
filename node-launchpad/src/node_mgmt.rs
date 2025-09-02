@@ -6,15 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::action::{Action, StatusActions};
+use crate::action::{Action, NodeTableActions, StatusActions};
 use crate::connection_mode::ConnectionMode;
 use ant_bootstrap::InitialPeersConfig;
-use ant_evm::{EvmNetwork, RewardsAddress};
+use ant_evm::{EvmAddress, EvmNetwork};
 use ant_node_manager::{VerbosityLevel, add_services::config::PortRange};
 use ant_service_management::NodeRegistryManager;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 use tokio::runtime::Builder;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task::LocalSet;
@@ -165,7 +165,7 @@ async fn stop_nodes(
         for service in services {
             send_action(
                 action_sender.clone(),
-                Action::StatusActions(StatusActions::StopNodesCompleted {
+                Action::NodeTableActions(NodeTableActions::StopNodesCompleted {
                     service_name: service,
                 }),
             );
@@ -181,10 +181,10 @@ pub struct MaintainNodesArgs {
     pub count: u16,
     pub data_dir_path: Option<PathBuf>,
     pub network_id: Option<u8>,
-    pub owner: String,
+    pub owner: Option<String>,
     pub init_peers_config: InitialPeersConfig,
     pub port_range: Option<PortRange>,
-    pub rewards_address: String,
+    pub rewards_address: Option<EvmAddress>,
 }
 
 /// Maintain the specified number of nodes
@@ -219,7 +219,7 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRe
     debug!("Finished maintaining {} nodes", args.count);
     send_action(
         args.action_sender,
-        Action::StatusActions(StatusActions::StartNodesCompleted {
+        Action::NodeTableActions(NodeTableActions::StartNodesCompleted {
             service_name: NODES_ALL.to_string(),
         }),
     );
@@ -366,7 +366,7 @@ async fn remove_nodes(
         for service in services {
             send_action(
                 action_sender.clone(),
-                Action::StatusActions(StatusActions::RemoveNodesCompleted {
+                Action::NodeTableActions(NodeTableActions::RemoveNodesCompleted {
                     service_name: service,
                 }),
             );
@@ -416,7 +416,7 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
         port_range, // node_port
         node_registry.clone(),
         config.init_peers_config.clone(),
-        RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+        config.rewards_address.unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
         false,                       // skip_reachability_check,
@@ -444,7 +444,7 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
             for service in services {
                 send_action(
                     args.action_sender.clone(),
-                    Action::StatusActions(StatusActions::AddNodesCompleted {
+                    Action::NodeTableActions(NodeTableActions::AddNodesCompleted {
                         service_name: service,
                     }),
                 );
@@ -481,7 +481,7 @@ async fn start_nodes(
         for service in services {
             send_action(
                 action_sender.clone(),
-                Action::StatusActions(StatusActions::StartNodesCompleted {
+                Action::NodeTableActions(NodeTableActions::StartNodesCompleted {
                     service_name: service,
                 }),
             );
@@ -505,7 +505,7 @@ struct NodeConfig {
     network_id: Option<u8>,
     owner: Option<String>,
     init_peers_config: InitialPeersConfig,
-    rewards_address: String,
+    rewards_address: Option<EvmAddress>,
     skip_reachability_check: bool,
     upnp: bool,
 }
@@ -520,15 +520,11 @@ fn prepare_node_config(args: &MaintainNodesArgs) -> NodeConfig {
         } else {
             None
         },
-        owner: if args.owner.is_empty() {
-            None
-        } else {
-            Some(args.owner.clone())
-        },
+        owner: args.owner.clone(),
         network_id: args.network_id,
         init_peers_config: args.init_peers_config.clone(),
         skip_reachability_check: false,
-        rewards_address: args.rewards_address.clone(),
+        rewards_address: args.rewards_address,
         upnp: args.connection_mode == ConnectionMode::UPnP,
     }
 }
@@ -591,7 +587,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         None, // We don't care about the port, as we are scaling down
         node_registry,
         config.init_peers_config.clone(),
-        RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+        config.rewards_address.unwrap(),
         None,
         None,
         config.skip_reachability_check,
@@ -664,7 +660,7 @@ async fn add_nodes(
             port_range,
             node_registry.clone(),
             config.init_peers_config.clone(),
-            RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+            config.rewards_address.unwrap(),
             None,
             None,
             config.skip_reachability_check,

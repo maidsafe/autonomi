@@ -56,7 +56,6 @@ open = "5.0.1"
 pretty_assertions = "1.4.0"
 prometheus-parse = "0.2.5"
 ratatui = { version = "0.29.0", features = ["serde", "macros", "unstable-widget-ref"] }
-regex = "1.11.0"
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }

@@ -19,6 +19,7 @@ pub mod config;
 pub mod connection_mode;
 pub mod error;
 pub mod focus;
+pub mod keybindings;
 pub mod mode;
 pub mod node_mgmt;
 pub mod node_stats;

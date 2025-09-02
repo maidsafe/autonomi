@@ -106,9 +106,13 @@ impl NodeTableWidget {
             };
 
             let row_data = vec![
-                node_item.name.clone(),
+                node_item.service_name.clone(),
                 node_item.version.clone(),
-                format!("{:>width$}", node_item.attos, width = ATTOS_WIDTH),
+                format!(
+                    "{:>width$}",
+                    node_item.rewards_wallet_balance,
+                    width = ATTOS_WIDTH
+                ),
                 format!(
                     "{:>width$} MB",
                     node_item.memory,

@@ -9,17 +9,17 @@
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
-    action::{Action, OptionsActions},
+    action::Action,
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
 };
+use ant_evm::EvmAddress;
 use arboard::Clipboard;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
-use regex::Regex;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
@@ -28,10 +28,10 @@ const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 fo
 pub struct RewardsAddress {
     state: RewardsAddressState,
     rewards_address_input_field: Input,
+    rewards_address: Option<EvmAddress>,
     // cache the old value incase user presses Esc.
     old_value: String,
     back_to: Scene,
-    can_save: bool,
 }
 
 enum RewardsAddressState {
@@ -41,54 +41,47 @@ enum RewardsAddressState {
 }
 
 impl RewardsAddress {
-    pub fn new(rewards_address: String) -> Self {
-        let state = if rewards_address.is_empty() {
+    pub fn new(rewards_address: Option<EvmAddress>) -> Self {
+        let state = if rewards_address.is_none() {
             RewardsAddressState::ShowTCs
         } else {
             RewardsAddressState::RewardsAddressAlreadySet
         };
-        let mut instance = Self {
+        let rewards_address_str = match rewards_address {
+            Some(addr) => addr.to_string(),
+            None => "".to_string(),
+        };
+        Self {
             state,
-            rewards_address_input_field: Input::default().with_value(rewards_address),
+            rewards_address_input_field: Input::default().with_value(rewards_address_str),
+            rewards_address,
             old_value: Default::default(),
             back_to: Scene::Status,
-            can_save: false,
-        };
-        // Set initial validation state
-        instance.validate();
-        instance
+        }
     }
 
-    pub fn validate(&mut self) {
-        if self.rewards_address_input_field.value().is_empty() {
-            self.can_save = false;
-        } else {
-            let re = Regex::new(r"^0x[a-fA-F0-9]{40}$").expect("Failed to compile regex");
-            self.can_save = re.is_match(self.rewards_address_input_field.value());
-        }
+    fn validate(&mut self) {
+        self.rewards_address = self
+            .rewards_address_input_field
+            .value()
+            .parse::<EvmAddress>()
+            .ok();
     }
 
     fn capture_inputs(&mut self, key: KeyEvent) -> Vec<Action> {
         match key.code {
             KeyCode::Enter => {
                 self.validate();
-                if self.can_save {
-                    let rewards_address = self
-                        .rewards_address_input_field
-                        .value()
-                        .to_string()
-                        .to_lowercase();
-                    self.rewards_address_input_field = rewards_address.clone().into();
+
+                if let Some(validated_address) = self.rewards_address {
+                    self.rewards_address_input_field = validated_address.to_string().into();
 
                     debug!(
-                        "Got Enter, saving the rewards address {rewards_address:?}  and switching to RewardsAddressAlreadySet, and Home Scene",
+                        "Got Enter, saving the rewards address {validated_address:?}  and switching to RewardsAddressAlreadySet, and Home Scene",
                     );
                     self.state = RewardsAddressState::RewardsAddressAlreadySet;
                     return vec![
-                        Action::StoreRewardsAddress(rewards_address.clone()),
-                        Action::OptionsActions(OptionsActions::UpdateRewardsAddress(
-                            rewards_address,
-                        )),
+                        Action::StoreRewardsAddress(validated_address),
                         Action::SwitchScene(Scene::Status),
                     ];
                 }
@@ -280,14 +273,18 @@ impl Component for RewardsAddress {
                 let input = Paragraph::new(Span::styled(
                     format!("{}{} ", spaces, self.rewards_address_input_field.value()),
                     Style::default()
-                        .fg(if self.can_save { VIVID_SKY_BLUE } else { RED })
+                        .fg(if self.rewards_address.is_some() {
+                            VIVID_SKY_BLUE
+                        } else {
+                            RED
+                        })
                         .bg(INDIGO)
                         .underlined(),
                 ))
                 .alignment(Alignment::Center);
                 f.render_widget(input, layer_two[1]);
 
-                let text = Paragraph::new(Text::from(if self.can_save {
+                let text = Paragraph::new(Text::from(if self.rewards_address.is_some() {
                     vec![
                         Line::raw("Changing your Wallet will reset and restart"),
                         Line::raw("all your nodes."),
@@ -327,7 +324,7 @@ impl Component for RewardsAddress {
 
                 let button_yes = Line::from(vec![Span::styled(
                     "Change Wallet [Enter]",
-                    if self.can_save {
+                    if self.rewards_address.is_some() {
                         Style::default().fg(EUCALYPTUS)
                     } else {
                         Style::default().fg(LIGHT_PERIWINKLE)
@@ -473,7 +470,7 @@ impl Component for RewardsAddress {
                 f.render_widget(button_no, buttons_layer[0]);
                 let button_yes = Paragraph::new(Line::from(vec![Span::styled(
                     "Save Wallet [Enter]  ",
-                    if self.can_save {
+                    if self.rewards_address.is_some() {
                         Style::default().fg(EUCALYPTUS)
                     } else {
                         Style::default().fg(LIGHT_PERIWINKLE)
