@@ -13,7 +13,9 @@ use super::{
 };
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
+use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats};
 use ant_bootstrap::InitialPeersConfig;
+use ant_evm::EvmAddress;
 use ant_service_management::{NodeRegistryManager, NodeServiceData};
 use color_eyre::eyre::Result;
 use std::{collections::HashSet, path::PathBuf, time::Instant};
@@ -37,7 +39,7 @@ pub struct NodeTableState {
     pub connection_mode: ConnectionMode,
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
-    pub rewards_address: String,
+    pub rewards_address: Option<EvmAddress>,
     pub nodes_to_start: u64,
 
     // Storage info (for validation)
@@ -85,7 +87,7 @@ impl NodeTableState {
 
         // Populate the UI table items from the loaded node services
         // This ensures that nodes loaded from the registry are immediately visible in the UI
-        state.update_node_state(&node_services);
+        state.sync_node_service_data(&node_services);
 
         Ok(state)
     }
@@ -107,56 +109,12 @@ impl NodeTableState {
         self.items
             .items
             .iter_mut()
-            .find(|item| item.name == service_name)
-    }
-
-    pub fn update_node_state(&mut self, all_nodes_data: &[NodeServiceData]) {
-        self.node_services = all_nodes_data.to_vec();
-
-        // Filter out removed nodes from node_items
-        let service_names: HashSet<String> = all_nodes_data
-            .iter()
-            .map(|node| node.service_name.clone())
-            .collect();
-
-        self.items
-            .items
-            .retain(|item| service_names.contains(&item.name));
-
-        // Update existing items or add new ones
-        for node_data in all_nodes_data {
-            if let Some(existing_item) = self
-                .items
-                .items
-                .iter_mut()
-                .find(|item| item.name == node_data.service_name)
-            {
-                existing_item.update_status(NodeStatus::from(&node_data.status));
-            } else {
-                let new_item = NodeItem {
-                    name: node_data.service_name.clone(),
-                    status: NodeStatus::from(&node_data.status),
-                    ..Default::default()
-                };
-                self.items.items.push(new_item);
-            }
-        }
-
-        // Ensure spinner states match item count
-        self.spinner_states
-            .resize_with(self.items.items.len(), ThrobberState::default);
-
-        log::debug!(
-            "Node state updated. Node count changed from {} to {}",
-            self.items.items.len(),
-            all_nodes_data.len()
-        );
+            .find(|item| item.service_name == service_name)
     }
 
     /// Tries to trigger the update of node stats if the last update was more than `NODE_STAT_UPDATE_INTERVAL` ago.
     /// The result is sent via the StatusActions::NodesStatsObtained action.
     pub fn try_update_node_stats(&mut self, force_update: bool) -> Result<()> {
-        use crate::components::status::NODE_STAT_UPDATE_INTERVAL;
         if self.node_stats_last_update.elapsed() > NODE_STAT_UPDATE_INTERVAL || force_update {
             self.node_stats_last_update = Instant::now();
 
@@ -194,6 +152,93 @@ impl NodeTableState {
         }
         Ok(())
     }
+
+    pub fn sync_node_service_data(&mut self, all_nodes_data: &[NodeServiceData]) {
+        self.node_services = all_nodes_data.to_vec();
+
+        // Filter out removed nodes from node_items
+        let service_names: HashSet<String> = all_nodes_data
+            .iter()
+            .map(|node| node.service_name.clone())
+            .collect();
+
+        self.items
+            .items
+            .retain(|item| service_names.contains(&item.service_name));
+
+        // Update existing items or add new ones
+        for node_data in all_nodes_data {
+            if let Some(existing_item) = self
+                .items
+                .items
+                .iter_mut()
+                .find(|item| item.service_name == node_data.service_name)
+            {
+                existing_item.update_status(NodeStatus::from(&node_data.status));
+            } else {
+                let new_item = NodeItem {
+                    service_name: node_data.service_name.clone(),
+                    status: NodeStatus::from(&node_data.status),
+                    ..Default::default()
+                };
+                self.items.items.push(new_item);
+            }
+        }
+
+        // Ensure spinner states match item count
+        self.spinner_states
+            .resize_with(self.items.items.len(), ThrobberState::default);
+
+        log::debug!(
+            "Node state updated. Node count changed from {} to {}",
+            self.items.items.len(),
+            all_nodes_data.len()
+        );
+    }
+
+    // update the values inside node items
+    pub fn sync_node_stats(&mut self, node_stats: NodeStats) {
+        for stats in node_stats.individual_stats {
+            if let Some(item) = self
+                .items
+                .items
+                .iter_mut()
+                .find(|item| item.service_name == stats.service_name)
+            {
+                item.rewards_wallet_balance = stats.rewards_wallet_balance;
+                item.memory = stats.memory_usage_mb;
+                item.mbps = format!(
+                    "↓{:0>5.0} ↑{:0>5.0}",
+                    (stats.bandwidth_inbound_rate * 8) as f64 / 1_000_000.0,
+                    (stats.bandwidth_outbound_rate * 8) as f64 / 1_000_000.0,
+                );
+                item.records = stats.max_records;
+                item.connections = stats.connections;
+            }
+        }
+        debug!("NodeTableState: Synced node items with the node stats");
+    }
+
+    pub fn sync_rewards_address(&mut self, rewards_address: Option<EvmAddress>) {
+        self.rewards_address = rewards_address;
+        debug!("NodeTableState: Synced rewards_address to {rewards_address:?}");
+    }
+
+    pub fn sync_nodes_to_start(&mut self, nodes_to_start: u64) {
+        self.nodes_to_start = nodes_to_start;
+        debug!("NodeTableState: Synced nodes_to_start to {nodes_to_start}");
+    }
+
+    pub fn sync_connection_mode(&mut self, connection_mode: ConnectionMode) {
+        self.connection_mode = connection_mode;
+        debug!("NodeTableState: Synced connection_mode to {connection_mode:?}");
+    }
+
+    pub fn sync_port_range(&mut self, port_from: Option<u32>, port_to: Option<u32>) {
+        self.port_from = port_from;
+        self.port_to = port_to;
+        debug!("NodeTableState: Synced port_range to {port_from:?}-{port_to:?}");
+    }
 }
 
 #[derive(Clone)]
@@ -205,7 +250,7 @@ pub struct NodeTableConfig {
     pub connection_mode: ConnectionMode,
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
-    pub rewards_address: String,
+    pub rewards_address: Option<EvmAddress>,
     pub nodes_to_start: u64,
     pub storage_mountpoint: PathBuf,
     pub registry_path_override: Option<PathBuf>,

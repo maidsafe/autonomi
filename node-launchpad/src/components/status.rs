@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::action::{NodeTableActions, OptionsActions};
+use crate::action::OptionsActions;
 use crate::components::Component;
 use crate::components::footer::{Footer, NodesToStart};
 use crate::components::header::{Header, SelectedMenuItem};
@@ -16,16 +16,17 @@ use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_mgmt::{NODES_ALL, PORT_MIN};
+use crate::node_mgmt::PORT_MIN;
 use crate::system::get_available_space_b;
 use crate::{
-    action::{Action, StatusActions},
+    action::{Action, NodeTableActions, StatusActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_stats::NodeStats,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE},
 };
 use ant_bootstrap::InitialPeersConfig;
+use ant_evm::EvmAddress;
 use color_eyre::eyre::{Ok, Result};
 use crossterm::event::KeyEvent;
 use ratatui::text::Span;
@@ -43,7 +44,7 @@ pub struct Status {
     // Amount of nodes
     nodes_to_start: u64,
     // Rewards address
-    rewards_address: String,
+    rewards_address: Option<EvmAddress>,
     // Path where the node data is stored
     data_dir_path: PathBuf,
     // Connection mode
@@ -75,7 +76,7 @@ pub struct StatusConfig {
     pub port_from: Option<u32>,
     pub port_to: Option<u32>,
     pub storage_mountpoint: PathBuf,
-    pub rewards_address: String,
+    pub rewards_address: Option<EvmAddress>,
     pub registry_path_override: Option<PathBuf>,
 }
 
@@ -85,7 +86,7 @@ impl Status {
             action_sender: Default::default(),
             node_stats: NodeStats::default(),
             nodes_to_start: config.allocated_disk_space,
-            rewards_address: config.rewards_address.clone(),
+            rewards_address: config.rewards_address,
             data_dir_path: config.data_dir_path.clone(),
             connection_mode: config.connection_mode,
             port_from: config.port_from,
@@ -103,7 +104,7 @@ impl Status {
                 connection_mode: config.connection_mode,
                 port_from: config.port_from,
                 port_to: config.port_to,
-                rewards_address: config.rewards_address.clone(),
+                rewards_address: config.rewards_address,
                 nodes_to_start: config.allocated_disk_space,
                 storage_mountpoint: config.storage_mountpoint.clone(),
                 registry_path_override: config.registry_path_override.clone(),
@@ -270,29 +271,31 @@ impl Component for Status {
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        // Update NodeTableComponent first to ensure it stays synchronized
-        if let Some(result_action) = self.node_table_component.update(action.clone())? {
-            // NodeTableComponent returned an action, return it immediately
-            return Ok(Some(result_action));
-        }
-
         // Handle NodeTable actions directly
-        if let Action::NodeTableActions(NodeTableActions::StateChanged {
-            node_count,
-            has_running_nodes,
-            has_nodes,
-        }) = action.clone()
-        {
-            debug!(
-                "Status::update - Received StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
-            );
-            self.node_count = node_count;
-            self.has_running_nodes = has_running_nodes;
-            self.has_nodes = has_nodes;
-            debug!(
-                "Status::update - Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
-                self.node_count, self.has_nodes, self.has_running_nodes
-            );
+        if let Action::NodeTableActions(node_table_action) = action.clone() {
+            match node_table_action {
+                NodeTableActions::StateChanged {
+                    node_count,
+                    has_running_nodes,
+                    has_nodes,
+                } => {
+                    debug!(
+                        "Status::update - Received StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
+                    );
+                    self.node_count = node_count;
+                    self.has_running_nodes = has_running_nodes;
+                    self.has_nodes = has_nodes;
+                    debug!(
+                        "Status::update - Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
+                        self.node_count, self.has_nodes, self.has_running_nodes
+                    );
+                    return Ok(None);
+                }
+                _ => {
+                    // Forward all other NodeTableActions to NodeTableComponent
+                    return self.node_table_component.update(action);
+                }
+            }
         }
 
         // Handle Status-specific actions
@@ -301,7 +304,6 @@ impl Component for Status {
                 self.node_table_component
                     .state_mut()
                     .try_update_node_stats(false)?;
-                self.node_table_component.state_mut().send_state_update()?;
             }
             Action::SwitchScene(scene) => match scene {
                 Scene::Status
@@ -316,17 +318,25 @@ impl Component for Status {
             },
             Action::StoreNodesToStart(count) => {
                 self.nodes_to_start = count;
+                // Sync with NodeTableState
+                self.node_table_component
+                    .state_mut()
+                    .sync_nodes_to_start(count);
                 if self.nodes_to_start == 0 {
                     info!("Nodes to start set to 0. Sending command to stop all nodes.");
-                    return Ok(Some(Action::StatusActions(StatusActions::StopNodes)));
+                    return Ok(Some(Action::NodeTableActions(NodeTableActions::StopNodes)));
                 } else {
                     info!("Nodes to start set to: {count}. Sending command to start nodes");
-                    return Ok(Some(Action::StatusActions(StatusActions::StartNodes)));
+                    return Ok(Some(Action::NodeTableActions(NodeTableActions::StartNodes)));
                 }
             }
             Action::StoreRewardsAddress(rewards_address) => {
                 debug!("Storing rewards address: {rewards_address:?}");
-                self.rewards_address = rewards_address;
+                self.rewards_address = Some(rewards_address);
+                // Sync with NodeTableState
+                self.node_table_component
+                    .state_mut()
+                    .sync_rewards_address(Some(rewards_address));
             }
             Action::StoreStorageDrive(ref drive_mountpoint, ref _drive_name) => {
                 self.data_dir_path =
@@ -334,14 +344,23 @@ impl Component for Status {
             }
             Action::StoreConnectionMode(connection_mode) => {
                 self.connection_mode = connection_mode;
+                // Sync with NodeTableState
+                self.node_table_component
+                    .state_mut()
+                    .sync_connection_mode(connection_mode);
             }
             Action::StorePortRange(port_from, port_range) => {
                 self.port_from = Some(port_from);
                 self.port_to = Some(port_range);
+                // Sync with NodeTableState
+                self.node_table_component
+                    .state_mut()
+                    .sync_port_range(Some(port_from), Some(port_range));
             }
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::NodesStatsObtained(stats) => {
-                    self.node_stats = stats;
+                    self.node_stats = stats.clone();
+                    self.node_table_component.state_mut().sync_node_stats(stats);
                 }
                 StatusActions::RegistryUpdated { all_nodes_data } => {
                     log::debug!(
@@ -350,7 +369,7 @@ impl Component for Status {
                     );
                     self.node_table_component
                         .state_mut()
-                        .update_node_state(&all_nodes_data);
+                        .sync_node_service_data(&all_nodes_data);
                     self.node_table_component.state_mut().send_state_update()?;
                 }
                 StatusActions::TriggerManageNodes => {
@@ -359,256 +378,12 @@ impl Component for Status {
                     })));
                 }
                 StatusActions::TriggerRewardsAddress => {
-                    if self.rewards_address.is_empty() {
+                    if self.rewards_address.is_none() {
                         return Ok(Some(Action::SwitchScene(Scene::StatusRewardsAddressPopUp)));
                     } else {
                         return Ok(None);
                     }
                 }
-                // Handle node operations
-                StatusActions::AddNode => {
-                    debug!("Got action to Add node");
-                    let config = crate::components::node_table::AddNodeConfig {
-                        node_count: self.node_count,
-                        available_disk_space_gb: self.available_disk_space_gb,
-                        storage_mountpoint: &self.storage_mountpoint,
-                        rewards_address: &self.rewards_address,
-                        nodes_to_start: self.nodes_to_start,
-                        antnode_path: self.node_table_component.state().antnode_path.clone(),
-                        connection_mode: self.connection_mode,
-                        data_dir_path: self.data_dir_path.clone(),
-                        network_id: self.node_table_component.state().network_id,
-                        init_peers_config: self
-                            .node_table_component
-                            .state()
-                            .init_peers_config
-                            .clone(),
-                        port_from: self.port_from,
-                        port_to: self.port_to,
-                    };
-                    if let Some(result_action) = self
-                        .node_table_component
-                        .state_mut()
-                        .operations
-                        .handle_add_node(&config)?
-                    {
-                        return Ok(Some(result_action));
-                    }
-                }
-                StatusActions::StartNodes => {
-                    debug!("Got action to start nodes");
-                    let config = crate::components::node_table::StartNodesConfig {
-                        rewards_address: &self.rewards_address,
-                        nodes_to_start: self.nodes_to_start,
-                        antnode_path: self.node_table_component.state().antnode_path.clone(),
-                        connection_mode: self.connection_mode,
-                        data_dir_path: self.data_dir_path.clone(),
-                        network_id: self.node_table_component.state().network_id,
-                        init_peers_config: self
-                            .node_table_component
-                            .state()
-                            .init_peers_config
-                            .clone(),
-                        port_from: self.port_from,
-                        port_to: self.port_to,
-                    };
-                    if let Some(result_action) = self
-                        .node_table_component
-                        .state_mut()
-                        .operations
-                        .handle_start_nodes(&config)?
-                    {
-                        return Ok(Some(result_action));
-                    }
-                }
-                StatusActions::StopNodes => {
-                    debug!("Got action to stop nodes");
-                    let running_nodes = self.node_table_component.state().get_running_nodes();
-                    self.node_table_component
-                        .state_mut()
-                        .operations
-                        .handle_stop_nodes(running_nodes)?;
-                }
-                StatusActions::StartStopNode => {
-                    debug!("Start/Stop node");
-                    let (service_name, node_locked, node_status) = {
-                        if let Some(node_item) =
-                            self.node_table_component.state().items.selected_item()
-                        {
-                            (
-                                vec![node_item.name.clone()],
-                                node_item.locked,
-                                node_item.status,
-                            )
-                        } else {
-                            return Ok(None);
-                        }
-                    };
-
-                    if node_locked {
-                        debug!("Node still performing operation");
-                        return Ok(None);
-                    }
-
-                    match node_status {
-                        crate::components::node_table::NodeStatus::Stopped
-                        | crate::components::node_table::NodeStatus::Added => {
-                            debug!("Starting Node {:?}", service_name[0]);
-                            self.node_table_component
-                                .state_mut()
-                                .operations
-                                .handle_start_node(service_name)?;
-                            if let Some(node_item) = self
-                                .node_table_component
-                                .state_mut()
-                                .items
-                                .selected_item_mut()
-                            {
-                                node_item.status =
-                                    crate::components::node_table::NodeStatus::Starting;
-                            }
-                        }
-                        crate::components::node_table::NodeStatus::Running => {
-                            debug!("Stopping Node {:?}", service_name[0]);
-                            self.node_table_component
-                                .state_mut()
-                                .operations
-                                .handle_stop_nodes(service_name)?;
-                            if let Some(node_item) = self
-                                .node_table_component
-                                .state_mut()
-                                .items
-                                .selected_item_mut()
-                            {
-                                node_item.lock();
-                            }
-                        }
-                        _ => {
-                            debug!("Cannot Start/Stop node. Node status is {:?}", node_status);
-                        }
-                    }
-                }
-                StatusActions::RemoveNodes => {
-                    debug!("Got action to remove node");
-                    if let Some(node_item) = self
-                        .node_table_component
-                        .state_mut()
-                        .items
-                        .selected_item_mut()
-                    {
-                        if node_item.locked {
-                            debug!("Node still performing operation");
-                            return Ok(None);
-                        }
-                        node_item.lock();
-                        let service_name = vec![node_item.name.clone()];
-                        self.node_table_component
-                            .state_mut()
-                            .operations
-                            .handle_remove_nodes(service_name)?;
-                    }
-                }
-                StatusActions::TriggerRemoveNode => {
-                    debug!("TriggerRemoveNode action received");
-                    // This should trigger the remove confirmation popup
-                    return Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)));
-                }
-                StatusActions::TriggerNodeLogs => {
-                    debug!("TriggerNodeLogs action received");
-                    if self.node_table_component.state().items.items.is_empty() {
-                        debug!("No nodes available for logs viewing");
-                        return Ok(None);
-                    }
-
-                    let selected_node_name = self
-                        .node_table_component
-                        .state()
-                        .items
-                        .selected_item()
-                        .map(|node| node.name.clone())
-                        .unwrap_or_else(|| {
-                            // If no specific node is selected, use the first available node
-                            self.node_table_component
-                                .state()
-                                .items
-                                .items
-                                .first()
-                                .map(|node| node.name.clone())
-                                .unwrap_or_else(|| "No node available".to_string())
-                        });
-
-                    // First set the target node, then switch to the scene
-                    // Note: The app will need to handle this sequence
-                    return Ok(Some(Action::SetNodeLogsTarget(selected_node_name)));
-                }
-
-                // === Completion Handlers ===
-                StatusActions::StartNodesCompleted { service_name } => {
-                    debug!("StartNodesCompleted for service: {service_name}");
-                    if service_name == NODES_ALL {
-                        // Unlock all nodes that were starting
-                        for item in self.node_table_component.state_mut().items.items.iter_mut() {
-                            if item.status == crate::components::node_table::NodeStatus::Starting {
-                                item.unlock();
-                                item.update_status(
-                                    crate::components::node_table::NodeStatus::Running,
-                                );
-                            }
-                        }
-                    } else if let Some(node_item) = self
-                        .node_table_component
-                        .state_mut()
-                        .get_node_item_mut(&service_name)
-                    {
-                        node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Running);
-                    }
-                    self.node_table_component.state_mut().send_state_update()?;
-                }
-                StatusActions::StopNodesCompleted { service_name } => {
-                    debug!("StopNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self
-                        .node_table_component
-                        .state_mut()
-                        .get_node_item_mut(&service_name)
-                    {
-                        node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Stopped);
-                    }
-                    self.node_table_component.state_mut().send_state_update()?;
-                }
-                StatusActions::AddNodesCompleted { service_name } => {
-                    debug!("AddNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self
-                        .node_table_component
-                        .state_mut()
-                        .get_node_item_mut(&service_name)
-                    {
-                        node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Added);
-                    }
-                    self.node_table_component.state_mut().send_state_update()?;
-                }
-                StatusActions::RemoveNodesCompleted { service_name } => {
-                    debug!("RemoveNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self
-                        .node_table_component
-                        .state_mut()
-                        .get_node_item_mut(&service_name)
-                    {
-                        node_item.unlock();
-                        node_item.update_status(crate::components::node_table::NodeStatus::Removed);
-                    }
-                    // Remove the node from the list
-                    self.node_table_component
-                        .state_mut()
-                        .items
-                        .items
-                        .retain(|item| item.name != service_name);
-                    self.node_table_component.state_mut().send_state_update()?;
-                }
-
-                // Ignore all other status actions that are no longer relevant
                 _ => {}
             },
             Action::OptionsActions(options_action) => match options_action {
@@ -625,7 +400,7 @@ impl Component for Status {
                         .items
                         .items
                         .iter()
-                        .map(|item| item.name.clone())
+                        .map(|item| item.service_name.clone())
                         .collect();
                     if !all_service_names.is_empty() {
                         self.node_table_component
@@ -641,7 +416,7 @@ impl Component for Status {
                         .items
                         .items
                         .iter()
-                        .map(|item| item.name.clone())
+                        .map(|item| item.service_name.clone())
                         .collect();
                     if !all_service_names.is_empty() {
                         self.node_table_component
@@ -742,7 +517,7 @@ impl Component for Status {
         let stats_table = Table::new(stats_rows, stats_width).widths(column_constraints);
 
         let wallet_not_set_text = "Press [Ctrl+B] to add your Wallet Address";
-        let wallet_not_set = if self.rewards_address.is_empty() {
+        let wallet_not_set = if self.rewards_address.is_none() {
             vec![
                 Span::styled("Press ".to_string(), Style::default().fg(VIVID_SKY_BLUE)),
                 Span::styled("[Ctrl+B] ".to_string(), Style::default().fg(GHOST_WHITE)),
@@ -772,7 +547,7 @@ impl Component for Status {
 
         let attos_wallet_rows = vec![total_attos_earned_and_wallet_row];
         let attos_wallet_width = [Constraint::Length(5)];
-        let wallet_column_width = if self.rewards_address.is_empty() {
+        let wallet_column_width = if self.rewards_address.is_none() {
             wallet_not_set_text.len() as u16
         } else {
             0
@@ -799,7 +574,7 @@ impl Component for Status {
         // ==== Node Status =====
 
         // No nodes. Empty Table.
-        if !self.has_nodes || self.rewards_address.is_empty() {
+        if !self.has_nodes || self.rewards_address.is_none() {
             let line1 = Line::from(vec![
                 Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
                 Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
@@ -845,7 +620,7 @@ impl Component for Status {
         // ==== Footer =====
 
         let footer = Footer::default();
-        let footer_state = if self.has_nodes || !self.rewards_address.is_empty() {
+        let footer_state = if self.has_nodes || self.rewards_address.is_some() {
             if self.has_running_nodes {
                 &mut NodesToStart::Running
             } else {
@@ -900,7 +675,9 @@ mod tests {
             port_from: Some(15000),
             port_to: Some(15100),
             storage_mountpoint,
-            rewards_address: "0x1234567890123456789012345678901234567890".to_string(),
+            rewards_address: "0x1234567890123456789012345678901234567890"
+                .parse::<EvmAddress>()
+                .ok(),
             registry_path_override: None,
         }
     }
@@ -975,7 +752,7 @@ mod tests {
         let action = result.unwrap();
         assert_eq!(
             action,
-            Some(Action::StatusActions(StatusActions::StopNodes))
+            Some(Action::NodeTableActions(NodeTableActions::StopNodes))
         );
         assert_eq!(status.nodes_to_start, 0);
     }
@@ -990,7 +767,7 @@ mod tests {
         let action = result.unwrap();
         assert_eq!(
             action,
-            Some(Action::StatusActions(StatusActions::StartNodes))
+            Some(Action::NodeTableActions(NodeTableActions::StartNodes))
         );
         assert_eq!(status.nodes_to_start, 5);
     }
@@ -999,11 +776,13 @@ mod tests {
     async fn test_status_update_store_rewards_address() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
-        let new_address = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdef".to_string();
+        let new_address = "0x1234567890abcdef1234567890abcdef12345678"
+            .parse::<EvmAddress>()
+            .unwrap();
 
-        let result = status.update(Action::StoreRewardsAddress(new_address.clone()));
+        let result = status.update(Action::StoreRewardsAddress(new_address));
         assert!(result.is_ok());
-        assert_eq!(status.rewards_address, new_address);
+        assert_eq!(status.rewards_address, Some(new_address));
     }
 
     #[tokio::test]
@@ -1034,7 +813,6 @@ mod tests {
         let new_stats = NodeStats {
             total_memory_usage_mb: 1024,
             total_rewards_wallet_balance: 100,
-            total_forwarded_rewards: 50,
             individual_stats: Vec::new(),
         };
 
@@ -1076,7 +854,7 @@ mod tests {
     async fn test_status_update_trigger_rewards_address_empty() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
-        status.rewards_address = "".to_string();
+        status.rewards_address = None;
 
         let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
         assert!(result.is_ok());

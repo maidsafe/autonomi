@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_evm::EvmAddress;
 use color_eyre::eyre::Result;
 use ratatui::{
     Frame,
@@ -32,7 +33,7 @@ use crate::{
 pub struct Options {
     pub storage_mountpoint: PathBuf,
     pub storage_drive: String,
-    pub rewards_address: String,
+    pub rewards_address: Option<EvmAddress>,
     pub connection_mode: ConnectionMode,
     pub port_edit: bool,
     pub port_from: Option<u32>,
@@ -44,7 +45,7 @@ impl Options {
     pub async fn new(
         storage_mountpoint: PathBuf,
         storage_drive: String,
-        rewards_address: String,
+        rewards_address: Option<EvmAddress>,
         connection_mode: ConnectionMode,
         port_from: Option<u32>,
         port_to: Option<u32>,
@@ -193,7 +194,7 @@ impl Component for Options {
         .style(Style::default().fg(GHOST_WHITE));
 
         // Beta Rewards Program
-        let beta_legend = if self.rewards_address.is_empty() {
+        let beta_legend = if self.rewards_address.is_none() {
             " Add Wallet "
         } else {
             " Change Wallet "
@@ -205,6 +206,10 @@ impl Component for Options {
             .style(Style::default().fg(GHOST_WHITE))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(VERY_LIGHT_AZURE));
+        let rewards_address_str = match self.rewards_address {
+            Some(ref addr) => addr.to_string(),
+            None => "".to_string(),
+        };
         let beta_rewards = Table::new(
             vec![Row::new(vec![
                 Cell::from(
@@ -216,7 +221,7 @@ impl Component for Options {
                 ),
                 Cell::from(
                     Line::from(vec![Span::styled(
-                        format!(" {} ", self.rewards_address),
+                        format!(" {rewards_address_str} "),
                         Style::default().fg(VIVID_SKY_BLUE),
                     )])
                     .alignment(Alignment::Left),
@@ -386,6 +391,9 @@ impl Component for Options {
                 return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
             }
             Action::SwitchScene(_) => {}
+            Action::StoreRewardsAddress(rewards_address) => {
+                self.rewards_address = Some(rewards_address);
+            }
             Action::OptionsActions(action) => match action {
                 OptionsActions::TriggerChangeDrive => {
                     return Ok(Some(Action::SwitchScene(Scene::ChangeDrivePopUp)));
@@ -411,9 +419,6 @@ impl Component for Options {
                 }
                 OptionsActions::TriggerRewardsAddress => {
                     return Ok(Some(Action::SwitchScene(Scene::OptionsRewardsAddressPopUp)));
-                }
-                OptionsActions::UpdateRewardsAddress(rewards_address) => {
-                    self.rewards_address = rewards_address;
                 }
                 OptionsActions::TriggerAccessLogs => {
                     open_logs(None)?;
