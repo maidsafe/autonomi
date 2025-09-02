@@ -11,7 +11,8 @@ use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
 use crate::node_mgmt::{
-    MaintainNodesArgs, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN, UpgradeNodesArgs,
+    FIXED_INTERVAL, MaintainNodesArgs, NodeManagement, NodeManagementTask, PORT_MAX, PORT_MIN,
+    UpgradeNodesArgs,
 };
 use crate::system::get_drive_name;
 use ant_bootstrap::InitialPeersConfig;
@@ -90,21 +91,21 @@ impl NodeOperations {
         if config.node_count + 1 > MAX_NODE_COUNT {
             let error_popup = ErrorPopup::new(
                 "Cannot Add Node".to_string(),
-                format!(
-                    "There are not enough ports available in your\ncustom port range to start another node ({MAX_NODE_COUNT})."
-                ),
-                "\nVisit autonomi.com/support/port-error for help".to_string(),
+                format!("You have reached the maximum node limit ({MAX_NODE_COUNT})."),
+                "\n Launchpad does not support more than {MAX_NODE_COUNT} nodes.".to_string(),
             );
             return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
 
         if config.rewards_address.is_none() {
+            info!("Rewards address is not set. Ask for input.");
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerRewardsAddress,
             )));
         }
 
         if config.nodes_to_start == 0 {
+            info!("Nodes to start not set. Ask for input.");
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerManageNodes,
             )));
@@ -139,12 +140,15 @@ impl NodeOperations {
 
     pub fn handle_start_nodes(&mut self, config: &StartNodesConfig) -> Result<Option<Action>> {
         if config.rewards_address.is_none() {
+            info!("Rewards address is not set. Ask for input.");
+
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerRewardsAddress,
             )));
         }
 
         if config.nodes_to_start == 0 {
+            info!("Nodes to start not set. Ask for input.");
             return Ok(Some(Action::StatusActions(
                 StatusActions::TriggerManageNodes,
             )));
@@ -215,8 +219,7 @@ impl NodeOperations {
             do_not_start: false,
             custom_bin_path: None,
             force: false,
-            fixed_interval: None,
-            peer_ids: vec![],
+            fixed_interval: Some(FIXED_INTERVAL),
             provided_env_variables: None,
             service_names,
             url: None,

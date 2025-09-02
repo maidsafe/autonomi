@@ -153,46 +153,6 @@ impl Component for Status {
             .state_mut()
             .try_update_node_stats(true)?;
 
-        // Refresh registry on startup
-        let action_sender_startup = tx.clone();
-        let node_registry_clone = self.node_table_component.state().node_registry.clone();
-        tokio::spawn(async move {
-            log::debug!("Refreshing node registry on startup");
-            let services = node_registry_clone.get_node_service_data().await;
-            log::debug!("Registry refresh complete. Found {} nodes", services.len());
-            if let Err(e) =
-                action_sender_startup.send(Action::StatusActions(StatusActions::RegistryUpdated {
-                    all_nodes_data: services,
-                }))
-            {
-                log::error!("Failed to send initial registry update: {e}");
-            }
-        });
-
-        // Watch for registry file changes
-        let action_sender_clone = tx.clone();
-        let mut node_registry_watcher = self
-            .node_table_component
-            .state_mut()
-            .node_registry
-            .watch_registry_file()?;
-        let node_registry_clone = self.node_table_component.state().node_registry.clone();
-        tokio::spawn(async move {
-            while let Some(()) = node_registry_watcher.recv().await {
-                let services = node_registry_clone.get_node_service_data().await;
-                log::debug!(
-                    "Node registry file has been updated. Sending StatusActions::RegistryUpdated event."
-                );
-                if let Err(e) = action_sender_clone.send(Action::StatusActions(
-                    StatusActions::RegistryUpdated {
-                        all_nodes_data: services,
-                    },
-                )) {
-                    log::error!("Failed to send StatusActions::RegistryUpdated: {e}");
-                }
-            }
-        });
-
         Ok(())
     }
 
@@ -362,16 +322,6 @@ impl Component for Status {
                     self.node_stats = stats.clone();
                     self.node_table_component.state_mut().sync_node_stats(stats);
                 }
-                StatusActions::RegistryUpdated { all_nodes_data } => {
-                    log::debug!(
-                        "Received RegistryUpdated event with {} nodes",
-                        all_nodes_data.len()
-                    );
-                    self.node_table_component
-                        .state_mut()
-                        .sync_node_service_data(&all_nodes_data);
-                    self.node_table_component.state_mut().send_state_update()?;
-                }
                 StatusActions::TriggerManageNodes => {
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
                         amount_of_nodes: self.nodes_to_start,
@@ -386,47 +336,10 @@ impl Component for Status {
                 }
                 _ => {}
             },
-            Action::OptionsActions(options_action) => match options_action {
-                OptionsActions::UpdateStorageDrive(mountpoint, _drive_name) => {
-                    self.storage_mountpoint.clone_from(&mountpoint);
-                    self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
-                }
-                OptionsActions::ResetNodes => {
-                    debug!("Got OptionsActions::ResetNodes - removing all nodes");
-                    // Reset all nodes by removing all of them
-                    let all_service_names: Vec<String> = self
-                        .node_table_component
-                        .state()
-                        .items
-                        .items
-                        .iter()
-                        .map(|item| item.service_name.clone())
-                        .collect();
-                    if !all_service_names.is_empty() {
-                        self.node_table_component
-                            .state_mut()
-                            .operations
-                            .handle_remove_nodes(all_service_names)?;
-                    }
-                }
-                OptionsActions::UpdateNodes => {
-                    let all_service_names: Vec<String> = self
-                        .node_table_component
-                        .state()
-                        .items
-                        .items
-                        .iter()
-                        .map(|item| item.service_name.clone())
-                        .collect();
-                    if !all_service_names.is_empty() {
-                        self.node_table_component
-                            .state_mut()
-                            .operations
-                            .handle_upgrade_nodes(all_service_names)?;
-                    }
-                }
-                _ => {}
-            },
+            Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
+                self.storage_mountpoint.clone_from(&mountpoint);
+                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+            }
             Action::ShowErrorPopup(mut error_popup) => {
                 error_popup.show();
                 self.error_popup = Some(error_popup);
