@@ -21,9 +21,11 @@ use crate::{
         },
         status::{Status, StatusConfig},
     },
-    config::{AppData, KeyBindings, get_keybindings, get_launchpad_nodes_data_dir_path},
+    config::{AppData, get_launchpad_nodes_data_dir_path},
     connection_mode::ConnectionMode,
     focus::{EventResult, FocusManager, FocusTarget},
+    keybindings::KeyBindings,
+    keybindings::get_keybindings,
     mode::{InputMode, Scene},
     node_mgmt::{PORT_MAX, PORT_MIN},
     style::SPACE_CADET,
@@ -97,7 +99,7 @@ impl App {
         // Main Screens
         let status_config = StatusConfig {
             allocated_disk_space: app_data.nodes_to_start,
-            rewards_address: app_data.discord_username.clone(),
+            rewards_address: app_data.rewards_address,
             init_peers_config,
             network_id,
             antnode_path,
@@ -113,7 +115,7 @@ impl App {
         let options = Options::new(
             storage_mountpoint.clone(),
             storage_drive.clone(),
-            app_data.discord_username.clone(),
+            app_data.rewards_address,
             connection_mode,
             Some(port_from),
             Some(port_to),
@@ -128,7 +130,7 @@ impl App {
             ChangeDrivePopup::new(storage_mountpoint.clone(), app_data.nodes_to_start)?;
         let change_connection_mode = ChangeConnectionModePopUp::new(connection_mode)?;
         let port_range = PortRangePopUp::new(connection_mode, port_from, port_to);
-        let rewards_address = RewardsAddress::new(app_data.discord_username.clone());
+        let rewards_address = RewardsAddress::new(app_data.rewards_address);
         let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
         let upgrade_launchpad_popup = UpgradeLaunchpadPopup::default();
@@ -155,7 +157,7 @@ impl App {
         Ok(Self {
             keybindings,
             app_data: AppData {
-                discord_username: app_data.discord_username.clone(),
+                rewards_address: app_data.rewards_address,
                 nodes_to_start: app_data.nodes_to_start,
                 storage_mountpoint: Some(storage_mountpoint),
                 storage_drive: Some(storage_drive),
@@ -358,7 +360,7 @@ impl App {
             }
             Action::StoreRewardsAddress(ref rewards_address) => {
                 debug!("Storing rewards address: {rewards_address:?}");
-                self.app_data.discord_username.clone_from(rewards_address);
+                self.app_data.rewards_address = Some(*rewards_address);
                 self.app_data.save(None)?;
             }
             Action::StoreNodesToStart(ref count) => {
@@ -512,7 +514,7 @@ mod tests {
         let mountpoint = get_primary_mount_point();
 
         let config = json!({
-            "discord_username": "happy_user",
+            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
             "nodes_to_start": 5,
             "storage_mountpoint": mountpoint.display().to_string(),
             "storage_drive": "C:",
@@ -545,7 +547,14 @@ mod tests {
         match app_result {
             Ok(app) => {
                 // Check if all fields were correctly loaded
-                assert_eq!(app.app_data.discord_username, "happy_user");
+                assert_eq!(
+                    app.app_data.rewards_address,
+                    Some(
+                        "0x1234567890abcdef1234567890abcdef12345678"
+                            .parse()
+                            .unwrap()
+                    )
+                );
                 assert_eq!(app.app_data.nodes_to_start, 5);
                 assert_eq!(app.app_data.storage_mountpoint, Some(mountpoint));
                 assert_eq!(app.app_data.storage_drive, Some("C:".to_string()));
@@ -584,7 +593,7 @@ mod tests {
         // Create a custom configuration file with only some settings
         let custom_config = r#"
         {
-            "discord_username": "test_user",
+            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
             "nodes_to_start": 3,
             "connection_mode": "Custom Ports",
             "port_from": 12000,
@@ -614,7 +623,14 @@ mod tests {
         match app_result {
             Ok(app) => {
                 // Check if the fields were correctly loaded
-                assert_eq!(app.app_data.discord_username, "test_user");
+                assert_eq!(
+                    app.app_data.rewards_address,
+                    Some(
+                        "0x1234567890abcdef1234567890abcdef12345678"
+                            .parse()
+                            .unwrap()
+                    )
+                );
                 assert_eq!(app.app_data.nodes_to_start, 3);
                 // Check if the storage_mountpoint is Some (automatically set)
                 assert!(app.app_data.storage_mountpoint.is_some());
@@ -676,7 +692,7 @@ mod tests {
 
         match app_result {
             Ok(app) => {
-                assert_eq!(app.app_data.discord_username, "");
+                assert_eq!(app.app_data.rewards_address, None);
                 assert_eq!(app.app_data.nodes_to_start, 1);
                 assert!(app.app_data.storage_mountpoint.is_some());
                 assert!(app.app_data.storage_drive.is_some());
@@ -718,7 +734,7 @@ mod tests {
         // Create a configuration file with an invalid storage_mountpoint
         let invalid_config = r#"
         {
-            "discord_username": "test_user",
+            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
             "nodes_to_start": 5,
             "storage_mountpoint": "/non/existent/path",
             "storage_drive": "Z:",
@@ -772,7 +788,7 @@ mod tests {
         // Create a custom configuration file without connection mode and ports
         let custom_config = r#"
         {
-            "discord_username": "test_user",
+            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
             "nodes_to_start": 3
         }
         "#;
@@ -796,7 +812,14 @@ mod tests {
         match app_result {
             Ok(app) => {
                 // Check if the discord_username and nodes_to_start were correctly loaded
-                assert_eq!(app.app_data.discord_username, "test_user");
+                assert_eq!(
+                    app.app_data.rewards_address,
+                    Some(
+                        "0x1234567890abcdef1234567890abcdef12345678"
+                            .parse()
+                            .unwrap()
+                    )
+                );
                 assert_eq!(app.app_data.nodes_to_start, 3);
 
                 // Check if the connection_mode is set to the default (Automatic)

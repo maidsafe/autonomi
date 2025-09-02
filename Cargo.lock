@@ -6426,7 +6426,6 @@ dependencies = [
  "pretty_assertions",
  "prometheus-parse",
  "ratatui",
- "regex",
  "reqwest 0.12.23",
  "semver 1.0.26",
  "serde",
