@@ -376,7 +376,7 @@ impl Component for NodeTableComponent {
                 // Handle completion events
                 NodeTableActions::StartNodesCompleted { service_name } => {
                     debug!("NodeTable: StartNodesCompleted for service: {service_name}");
-                    use crate::node_mgmt::NODES_ALL;
+                    use crate::node_management::config::NODES_ALL;
                     if service_name == NODES_ALL {
                         for item in self.state.items.items.iter_mut() {
                             if item.status == NodeStatus::Starting {
