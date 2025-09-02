@@ -11,9 +11,9 @@ use super::{
     operations::NodeOperations,
     table_state::StatefulTable,
 };
-use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
 use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats};
+use crate::{connection_mode::ConnectionMode, node_management::NodeManagement};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
 use ant_service_management::{NodeRegistryManager, NodeServiceData};
@@ -60,7 +60,7 @@ impl NodeTableState {
         };
         let node_registry = NodeRegistryManager::load(&registry_path).await?;
         let node_services = node_registry.get_node_service_data().await;
-        let node_management = crate::node_mgmt::NodeManagement::new(node_registry.clone())?;
+        let node_management = NodeManagement::new(node_registry.clone())?;
 
         let mut state = Self {
             items: StatefulTable::with_items(vec![]),

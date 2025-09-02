@@ -8,7 +8,7 @@
 
 use std::rc::Rc;
 
-use super::super::super::node_mgmt::{PORT_MAX, PORT_MIN};
+use super::super::super::node_management::config::{PORT_MAX, PORT_MIN};
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use super::manage_nodes::MAX_NODE_COUNT;

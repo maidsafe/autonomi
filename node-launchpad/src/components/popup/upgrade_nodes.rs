@@ -12,7 +12,7 @@ use crate::{
     action::{Action, NodeTableActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
-    node_mgmt,
+    node_management,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
@@ -137,7 +137,7 @@ impl Component for UpgradeNodesPopUp {
             Line::from(Span::styled(
                 format!(
                     "Upgrade time is {:.1?} seconds per node",
-                    node_mgmt::FIXED_INTERVAL / 1_000,
+                    node_management::config::FIXED_INTERVAL / 1_000,
                 ),
                 Style::default().fg(LIGHT_PERIWINKLE),
             )),
