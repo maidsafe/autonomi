@@ -197,13 +197,8 @@ impl Component for Status {
             let (node_actions, event_result) = self
                 .node_table_component
                 .handle_key_events(key, focus_manager)?;
-            debug!(
-                "Status: NodeTableComponent returned result {:?}",
-                event_result
-            );
             // If the NodeTable component consumed the event, return those actions
             if matches!(event_result, EventResult::Consumed) {
-                debug!("Status: Key was consumed by NodeTableComponent");
                 return Ok((node_actions, event_result));
             }
             // Otherwise, fall through to handle Status-specific operations
@@ -218,15 +213,9 @@ impl Component for Status {
             } else {
                 EventResult::Consumed
             };
-            debug!(
-                "Status: Generated {} actions, result: {:?}",
-                actions.len(),
-                result
-            );
             return Ok((actions, result));
         }
 
-        debug!("Status: No focus, ignoring key");
         Ok((vec![], EventResult::Ignored))
     }
 
