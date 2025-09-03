@@ -11,13 +11,14 @@
 //! Tests that validate exact screen rendering through journey-based interactions.
 //! These tests use isolated test configurations to ensure reproducible results.
 
+use color_eyre::eyre;
 use node_launchpad::{
     mode::Scene,
     test_utils::{JourneyBuilder, TEST_LAUNCHPAD_VERSION, TEST_STORAGE_DRIVE, TEST_WALLET_ADDRESS},
 };
 
 #[tokio::test]
-async fn journey_status_screen_renders_correctly() {
+async fn journey_status_screen_renders_correctly() -> Result<(), eyre::Report> {
     // Create journey that starts at Status and validates the exact screen
     let expected_status_screen = &[
         &format!(
@@ -59,16 +60,18 @@ async fn journey_status_screen_renders_correctly() {
         .expect("Failed to create journey")
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
-        .expect_node_count_in_registry(0)
-        .expect_registry_is_empty()
+        .expect_node_count_in_registry(0)?
+        .expect_registry_is_empty()?
         .expect_screen(expected_status_screen)
         .run()
         .await
         .expect("Status screen rendering journey failed");
+
+    Ok(())
 }
 
 #[tokio::test]
-async fn journey_status_screen_with_nodes_renders_correctly() {
+async fn journey_status_screen_with_nodes_renders_correctly() -> Result<(), eyre::Report> {
     let expected_status_screen = &[
         &format!(
             " Autonomi Node Launchpad (v{TEST_LAUNCHPAD_VERSION})                                                                                                [S]tatus | [O]ptions | [H]elp "
@@ -110,10 +113,12 @@ async fn journey_status_screen_with_nodes_renders_correctly() {
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
         .expect_screen(expected_status_screen)
-        .expect_node_count_in_registry(3)
+        .expect_node_count_in_registry(3)?
         .run()
         .await
         .expect("Status screen rendering journey failed");
+
+    Ok(())
 }
 
 #[tokio::test]
