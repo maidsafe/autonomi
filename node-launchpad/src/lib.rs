@@ -23,6 +23,7 @@ pub mod keybindings;
 pub mod mode;
 pub mod node_management;
 pub mod node_stats;
+pub mod runtime;
 pub mod style;
 pub mod system;
 pub mod tui;
