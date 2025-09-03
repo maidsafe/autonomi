@@ -28,6 +28,7 @@ use crate::{
     keybindings::get_keybindings,
     mode::{InputMode, Scene},
     node_management::config::{PORT_MAX, PORT_MIN},
+    runtime::{ProductionRuntime, Runtime},
     style::SPACE_CADET,
     system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
     tui,
@@ -387,24 +388,49 @@ impl App {
         Ok(generated_actions)
     }
 
-    pub async fn run(&mut self) -> Result<()> {
-        let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+    pub fn render_frame(&mut self, f: &mut ratatui::Frame, action_tx: &UnboundedSender<Action>) {
+        f.render_widget(Block::new().style(Style::new().bg(SPACE_CADET)), f.area());
+        for component in self.components.iter_mut() {
+            let should_draw = self
+                .focus_manager
+                .get_focus_stack()
+                .contains(&component.focus_target());
 
-        let mut tui = tui::Tui::new()?
-            .tick_rate(self.tick_rate)
-            .frame_rate(self.frame_rate);
-        // tui.mouse(true);
-        tui.enter()?;
+            if should_draw && let Err(e) = component.draw(f, f.area()) {
+                action_tx
+                    .send(Action::Error(format!("Failed to draw: {e:?}")))
+                    .unwrap();
+            }
+        }
+    }
 
+    pub fn init_components(
+        &mut self,
+        rect: Rect,
+        action_tx: UnboundedSender<Action>,
+    ) -> Result<()> {
         for component in self.components.iter_mut() {
             component.register_action_handler(action_tx.clone())?;
-            let size = tui.size()?;
-            let rect = Rect::new(0, 0, size.width, size.height);
             component.init(rect)?;
         }
+        Ok(())
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        let mut runtime = ProductionRuntime::new(self.tick_rate, self.frame_rate)?;
+        self.run_with_runtime(&mut runtime).await
+    }
+
+    pub async fn run_with_runtime<R: Runtime>(&mut self, runtime: &mut R) -> Result<()> {
+        let (action_tx, mut action_rx) = mpsc::unbounded_channel();
+
+        runtime.enter()?;
+
+        let size = runtime.size()?;
+        self.init_components(size, action_tx.clone())?;
 
         loop {
-            if let Some(e) = tui.next().await {
+            if let Some(e) = runtime.next_event().await {
                 match e {
                     tui::Event::Quit => action_tx.send(Action::Quit)?,
                     tui::Event::Tick => action_tx.send(Action::Tick)?,
@@ -424,49 +450,24 @@ impl App {
                 }
                 match action {
                     Action::Resize(w, h) => {
-                        tui.resize(Rect::new(0, 0, w, h))?;
-                        tui.draw(|f| {
-                            for component in self.components.iter_mut() {
-                                // Draw all components that are in the focus stack
-                                let should_draw = self
-                                    .focus_manager
-                                    .get_focus_stack()
-                                    .contains(&component.focus_target());
-
-                                if should_draw {
-                                    let r = component.draw(f, f.area());
-                                    if let Err(e) = r {
-                                        action_tx
-                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                            .unwrap();
-                                    }
-                                }
-                            }
-                        })?;
+                        runtime.resize(Rect::new(0, 0, w, h))?;
+                        runtime.draw(Box::new(|f| {
+                            self.render_frame(f, &action_tx);
+                        }))?;
                     }
                     Action::Render => {
-                        tui.draw(|f| {
-                            f.render_widget(
-                                Block::new().style(Style::new().bg(SPACE_CADET)),
-                                f.area(),
-                            );
-                            for component in self.components.iter_mut() {
-                                // Draw all components that are in the focus stack
-                                let should_draw = self
-                                    .focus_manager
-                                    .get_focus_stack()
-                                    .contains(&component.focus_target());
+                        runtime.draw(Box::new(|f| {
+                            self.render_frame(f, &action_tx);
+                        }))?;
 
-                                if should_draw {
-                                    let r = component.draw(f, f.area());
-                                    if let Err(e) = r {
-                                        action_tx
-                                            .send(Action::Error(format!("Failed to draw: {e:?}")))
-                                            .unwrap();
-                                    }
-                                }
-                            }
-                        })?;
+                        // Check for pending test assertions after rendering
+                        #[cfg(test)]
+                        if let Some(test_runtime) = runtime
+                            .as_any_mut()
+                            .downcast_mut::<crate::runtime::TestRuntime>()
+                        {
+                            test_runtime.check_pending_assertion(self)?;
+                        }
                     }
                     // Use unified action processing for all other actions
                     _ => {
@@ -478,19 +479,15 @@ impl App {
                 }
             }
             if self.should_suspend {
-                tui.suspend()?;
+                runtime.suspend()?;
                 action_tx.send(Action::Resume)?;
-                tui = tui::Tui::new()?
-                    .tick_rate(self.tick_rate)
-                    .frame_rate(self.frame_rate);
-                // tui.mouse(true);
-                tui.enter()?;
+                runtime.enter()?;
             } else if self.should_quit {
-                tui.stop()?;
+                runtime.stop()?;
                 break;
             }
         }
-        tui.exit()?;
+        runtime.exit()?;
         info!("Exiting application");
         Ok(())
     }
