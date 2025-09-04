@@ -37,7 +37,7 @@ async fn scratchpad_put_manual() -> Result<()> {
 
     // put the scratchpad
     let payment_option = PaymentOption::from(&wallet);
-    let (cost, addr) = client
+    let (cost, addr, _receipt) = client
         .scratchpad_put(scratchpad.clone(), payment_option)
         .await?;
     assert_eq!(addr, *scratchpad.address());
@@ -59,7 +59,7 @@ async fn scratchpad_put_manual() -> Result<()> {
     let content2 = Bytes::from("Secure Access For Everyone");
     let scratchpad2 = Scratchpad::new(&key, 42, &content2, 1);
     let payment_option = PaymentOption::from(&wallet);
-    let (cost, _) = client
+    let (cost, _addr, _receipt) = client
         .scratchpad_put(scratchpad2.clone(), payment_option)
         .await?;
     assert_eq!(cost, AttoTokens::zero());

@@ -12,7 +12,7 @@ use crate::{
     Amount, AttoTokens, Client,
     client::{
         GetError, PutError,
-        payment::{PayError, PaymentOption},
+        payment::{PayError, PaymentOption, Receipt},
         quote::CostError,
     },
     networking::{NetworkError, PeerInfo},
@@ -157,7 +157,7 @@ impl Client {
         &self,
         scratchpad: Scratchpad,
         payment_option: PaymentOption,
-    ) -> Result<(AttoTokens, ScratchpadAddress), ScratchpadError> {
+    ) -> Result<(AttoTokens, ScratchpadAddress, Receipt), ScratchpadError> {
         let address = scratchpad.address();
         Self::scratchpad_verify(&scratchpad)?;
 
@@ -246,11 +246,11 @@ impl Client {
                 ScratchpadError::PutError(PutError::Network {
                     address: Box::new(NetworkAddress::from(*address)),
                     network_error: err.clone(),
-                    payment: Some(payment_proofs),
+                    payment: Some(payment_proofs.clone()),
                 })
             })?;
 
-        Ok((total_cost, *address))
+        Ok((total_cost, *address, payment_proofs))
     }
 
     /// Create a new scratchpad to the network.
@@ -275,7 +275,8 @@ impl Client {
 
         let counter = 0;
         let scratchpad = Scratchpad::new(owner, content_type, initial_data, counter);
-        self.scratchpad_put(scratchpad, payment_option).await
+        let (cost, addr, _) = self.scratchpad_put(scratchpad, payment_option).await?;
+        Ok((cost, addr))
     }
 
     /// Update an existing scratchpad to the network.

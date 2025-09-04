@@ -359,7 +359,7 @@ impl Client {
         scratchpad: &Scratchpad,
         payment_option: &PaymentOption,
     ) -> Result</* (AttoTokens, ScratchpadAddress) */ tuple_result::ScratchpadPut> {
-        let (cost, addr) = self
+        let (cost, addr, _receipt) = self
             .0
             .scratchpad_put(scratchpad.0.clone(), payment_option.0.clone())
             .await

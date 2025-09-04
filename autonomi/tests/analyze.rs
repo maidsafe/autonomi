@@ -158,7 +158,7 @@ async fn test_analyze_scratchpad() -> Result<()> {
 
     let key = bls::SecretKey::random();
     let scratchpad = Scratchpad::new(&key, 0, &Bytes::from("Scratchpad content example"), 0);
-    let (_cost, addr) = client
+    let (_cost, addr, _receipt) = client
         .scratchpad_put(scratchpad.clone(), payment_option)
         .await?;
     let scratchpad_addr = addr.to_hex();

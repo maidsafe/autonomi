@@ -505,7 +505,7 @@ impl PyClient {
         let payment = payment_option.inner.clone();
 
         future_into_py(py, async move {
-            let (cost, addr) = client
+            let (cost, addr, _receipt) = client
                 .scratchpad_put(scratchpad.inner, payment)
                 .await
                 .map_err(scratchpad_error_to_py_err)?;

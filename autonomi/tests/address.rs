@@ -101,7 +101,7 @@ async fn test_data_addresses_use() -> Result<()> {
     let key = bls::SecretKey::random();
     let scratchpad = Scratchpad::new(&key, 0, &Bytes::from("Scratchpad content example"), 0);
     let payment_option = PaymentOption::from(&wallet);
-    let (_cost, addr) = client.scratchpad_put(scratchpad, payment_option).await?;
+    let (_cost, addr, _receipt) = client.scratchpad_put(scratchpad, payment_option).await?;
     let scratchpad_addr = addr.to_hex();
     println!("Scratchpad: {scratchpad_addr}");
     let scratchpad_bls_pubkey = key.public_key().to_hex();
