@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756984646757,
+  "lastUpdate": 1756984722542,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1876,6 +1876,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 91,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1e2c534c2c25c16a12ee3cc0437990fcfae771a6",
+          "message": "Merge pull request #3174 from maidsafe/dependabot/cargo/tracing-subscriber-0.3.20\n\nchore(deps): bump tracing-subscriber from 0.3.19 to 0.3.20",
+          "timestamp": "2025-09-04T10:23:14Z",
+          "tree_id": "1308062d6e74ca079311be4f20977be6f248d196",
+          "url": "https://github.com/maidsafe/autonomi/commit/1e2c534c2c25c16a12ee3cc0437990fcfae771a6"
+        },
+        "date": 1756984722161,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 90,
             "unit": "MB"
           }
         ]
