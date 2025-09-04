@@ -18,6 +18,7 @@ mod rpc_service;
 mod subcommands;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
+use crate::rpc_service::{NodeCtrl, StopResult};
 use crate::subcommands::EvmNetworkCommand;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
@@ -25,14 +26,12 @@ use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
 use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
-use ant_protocol::{
-    node_rpc::{NodeCtrl, StopResult},
-    version,
-};
+use ant_protocol::version;
 use clap::{Parser, command};
-use color_eyre::{Result, eyre::eyre};
+use color_eyre::Result;
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+use libp2p::identity::Keypair;
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -72,6 +71,11 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
         // because the path doesn't need to exist. We can create it for the user.
         value => Ok(LogOutputDestArg::Path(PathBuf::from(value))),
     }
+}
+
+pub fn parse_rewards_address(val: &str) -> Result<RewardsAddress> {
+    let val = RewardsAddress::from_hex(val)?;
+    Ok(val)
 }
 
 // Please do not remove the blank lines in these doc comments.
@@ -192,8 +196,8 @@ struct Opt {
     /// Specify the rewards address.
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
-    #[clap(long)]
-    rewards_address: Option<String>,
+    #[clap(long, value_parser = parse_rewards_address, verbatim_doc_comment)]
+    rewards_address: RewardsAddress,
 
     /// Enable the mode to run as a relay client if it is behind a NAT and is not externally reachable.
     #[clap(long, default_value_t = false)]
@@ -231,21 +235,13 @@ struct Opt {
 }
 
 fn main() {
-    if let Err(err) = run() {
-        error!("Node failed with error: {err}");
-        eprintln!("Node failed with error: {err}");
-        std::process::exit(1);
-    }
-}
-
-fn run() -> Result<()> {
-    color_eyre::install()?;
-
     // Install panic hook to print panics before exit
     // We only use eprintln! here to avoid potential issues with logging infrastructure during shutdown
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Node panicked: {panic_info}",);
     }));
+
+    color_eyre::install().expect("Failed to install color_eyre");
 
     let opt = Opt::parse();
     info!("Antnode started with opt: {opt:?}");
@@ -271,39 +267,37 @@ fn run() -> Result<()> {
                 Some(&identify_protocol_str)
             )
         );
-        return Ok(());
+        return;
     }
-
-    // evm config
-    let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
-        "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
-    ))?;
 
     if opt.crate_version {
         println!("Crate version: {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+        return;
     }
 
     if opt.protocol_version {
         println!("Network version: {identify_protocol_str}");
-        return Ok(());
+        return;
     }
 
     #[cfg(not(feature = "nightly"))]
     if opt.package_version {
         println!("Package version: {}", ant_build_info::package_version());
-        return Ok(());
+        return;
     }
 
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
-        Some(evm_network) => Ok(evm_network.clone().into()),
+        Some(evm_network) => evm_network.clone().into(),
         None => match get_evm_network(opt.peers.local, Some(network_id)) {
-            Ok(net) => Ok(net),
-            Err(_) => Err(eyre!(
-                "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
-            )),
+            Ok(net) => net,
+            Err(_) => {
+                eprintln!(
+                    "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
+                );
+                return;
+            }
         },
-    }?;
+    };
 
     println!("EVM network: {evm_network:?}");
     let msg = format!(
@@ -320,11 +314,48 @@ fn run() -> Result<()> {
     );
 
     let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
-    let (root_dir, keypair) = get_root_dir_and_keypair(&opt.root_dir)?;
+    let Ok((root_dir, keypair)) = get_root_dir_and_keypair(&opt.root_dir) else {
+        eprintln!("Failed to obtain or create the node's root directory and keypair.");
+        return;
+    };
 
-    let (log_output_dest, log_reload_handle, _log_appender_guard) =
-        init_logging(&opt, keypair.public().to_peer_id())?;
+    let Ok((log_output_dest, log_reload_handle, _log_appender_guard)) =
+        init_logging(&opt, keypair.public().to_peer_id())
+    else {
+        eprintln!("Failed to initialize logging.");
+        return;
+    };
 
+    if let Err(err) = run(
+        &opt,
+        &log_output_dest,
+        log_reload_handle,
+        keypair,
+        opt.rewards_address,
+        evm_network,
+        node_socket_addr,
+        root_dir,
+    ) {
+        error!("Node failed with error: {err}");
+        eprintln!("Node failed with error: {err}");
+
+        set_critical_failure(&log_output_dest, &format!("{err:?}"));
+
+        std::process::exit(1);
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run(
+    opt: &Opt,
+    log_output_dest: &str,
+    log_reload_handle: ReloadHandle,
+    keypair: Keypair,
+    rewards_address: RewardsAddress,
+    evm_network: EvmNetwork,
+    node_socket_addr: SocketAddr,
+    root_dir: PathBuf,
+) -> Result<()> {
     // Create a tokio runtime per `run_node` attempt, this ensures
     // any spawned tasks are closed before we would attempt to run
     // another process with these args.
@@ -369,10 +400,8 @@ fn run() -> Result<()> {
         };
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
-        let restart_options =
-            run_node(node_builder, opt.rpc, &log_output_dest, log_reload_handle).await?;
 
-        Ok::<_, eyre::Report>(restart_options)
+        run_node(node_builder, opt.rpc, log_output_dest, log_reload_handle).await
     })?;
 
     // actively shut down the runtime
@@ -399,7 +428,7 @@ async fn run_node(
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
-) -> Result<Option<(bool, PathBuf, u16)>> {
+) -> Result<Option<(bool, PathBuf, u16)>, ant_node::Error> {
     let started_instant = std::time::Instant::now();
 
     reset_critical_failure(log_output_dest);
@@ -408,20 +437,19 @@ async fn run_node(
     let running_node = node_builder.build_and_run().await?;
     println!(
         "
-Node started
-
-PeerId is {}
-You can check your reward balance by running:
-`safe wallet balance --peer-id={}`
-    ",
+Node started with PeerId: {}",
         running_node.peer_id(),
-        running_node.peer_id()
     );
 
     // write the PID to the root dir
     let pid = std::process::id();
     let pid_file = running_node.root_dir_path().join("antnode.pid");
-    std::fs::write(pid_file, pid.to_string().as_bytes())?;
+    std::fs::write(&pid_file, pid.to_string().as_bytes()).map_err(|e| {
+        ant_node::Error::PidFileWriteFailed {
+            path: pid_file,
+            source: e,
+        }
+    })?;
 
     // Channel to receive node ctrl cmds from RPC service (if enabled), and events monitoring task
     let (ctrl_tx, mut ctrl_rx) = mpsc::channel::<NodeCtrl>(5);
@@ -440,7 +468,7 @@ You can check your reward balance by running:
         if let Err(err) = ctrl_tx_clone
             .send(NodeCtrl::Stop {
                 delay: Duration::from_secs(1),
-                result: StopResult::Error(eyre!("Ctrl-C received!")),
+                result: StopResult::Error(Box::new(ant_node::Error::CtrlCReceived)),
             })
             .await
         {
@@ -469,7 +497,10 @@ You can check your reward balance by running:
                 retain_peer_id,
             }) => {
                 let root_dir = running_node.root_dir_path();
-                let node_port = running_node.get_node_listening_port().await?;
+                let node_port = running_node
+                    .get_node_listening_port()
+                    .await
+                    .map_err(|_| ant_node::Error::FailedToGetNodePort)?;
 
                 let msg = format!("Node is restarting in {delay:?}...");
                 info!("{msg}");
@@ -488,10 +519,9 @@ You can check your reward balance by running:
                         info!("Node stopped successfully: {}", message);
                         return Ok(None);
                     }
-                    StopResult::Error(cause) => {
-                        error!("Node stopped with error: {}", cause);
-                        set_critical_failure(log_output_dest, &cause.to_string());
-                        return Err(cause);
+                    StopResult::Error(error) => {
+                        error!("Node stopped with error: {error:?}");
+                        return Err(*error);
                     }
                 }
             }
@@ -500,8 +530,9 @@ You can check your reward balance by running:
                 println!("No self-update supported yet.");
             }
             None => {
+                let error = ant_node::Error::ControlChannelClosed;
                 info!("Internal node ctrl cmds channel has been closed, restarting node");
-                break Err(eyre!("Internal node ctrl cmds channel has been closed"));
+                break Err(error);
             }
         }
     }
@@ -516,7 +547,9 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
                     if let Err(err) = ctrl_tx
                         .send(NodeCtrl::Stop {
                             delay: Duration::from_secs(1),
-                            result: StopResult::Error(eyre!("Node events channel closed!")),
+                            result: StopResult::Error(Box::new(
+                                ant_node::Error::NodeEventChannelClosed,
+                            )),
                         })
                         .await
                     {
@@ -528,7 +561,9 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
                     if let Err(err) = ctrl_tx
                         .send(NodeCtrl::Stop {
                             delay: Duration::from_secs(1),
-                            result: StopResult::Error(eyre!("Node terminated due to: {reason:?}")),
+                            result: StopResult::Error(Box::new(
+                                ant_node::Error::TerminateSignalReceived(reason),
+                            )),
                         })
                         .await
                     {
