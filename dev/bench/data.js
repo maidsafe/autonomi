@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756985300663,
+  "lastUpdate": 1756985303173,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2927,6 +2927,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Average memory usage w/ upload",
             "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dcdb7046f92cd009631dacc71401ab5d613e358d",
+          "message": "Merge pull request #3140 from b-zee/feat-client-init-timeout\n\nfeat: check for connectivity on client init",
+          "timestamp": "2025-09-04T10:30:24Z",
+          "tree_id": "26cd9fdec748bb3430a892eac25da0538b903f45",
+          "url": "https://github.com/maidsafe/autonomi/commit/dcdb7046f92cd009631dacc71401ab5d613e358d"
+        },
+        "date": 1756985302039,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 19,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
             "unit": "MB"
           }
         ]
