@@ -226,6 +226,7 @@ pub async fn upgrade_nodes(args: UpgradeNodesArgs, node_registry: NodeRegistryMa
         Default::default(),
         config.env_variables,
         config.service_names,
+        false, // Skip performing startup check, as we'll do it manually inside launchpad.
         config.url,
         config.version,
         VerbosityLevel::Minimal,
@@ -405,6 +406,7 @@ pub async fn start_nodes_helper(
         node_registry,
         vec![],
         services,
+        false, // Skip performing startup check, as we'll do it manually inside launchpad.
         VerbosityLevel::Minimal,
     )
     .await

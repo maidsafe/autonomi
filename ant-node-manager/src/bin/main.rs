@@ -368,6 +368,10 @@ pub enum SubCmd {
         /// The argument can be used multiple times to start many services.
         #[clap(long, conflicts_with = "peer_id")]
         service_name: Vec<String>,
+        /// Perform a startup check to ensure that the node has started successfully. This feature is enabled
+        /// by default and is recommended in most scenarios.
+        #[clap(long, default_value_t = true)]
+        startup_check: bool,
     },
     /// Get the status of services.
     #[clap(name = "status")]
@@ -456,6 +460,10 @@ pub enum SubCmd {
         /// The name of the service to upgrade
         #[clap(long, conflicts_with = "peer_id")]
         service_name: Vec<String>,
+        /// Perform a startup check to ensure that the node has started successfully. This feature is enabled
+        /// by default and is recommended in most scenarios.
+        #[clap(long, default_value_t = true)]
+        startup_check: bool,
         /// Provide a binary to upgrade to using a URL.
         ///
         /// The binary must be inside a zip or gzipped tar archive.
@@ -880,13 +888,13 @@ async fn main() -> Result<()> {
         Some(SubCmd::Remove {
             keep_directories,
             peer_id: peer_ids,
-            service_name: service_names,
+            service_name,
         }) => {
             cmd::node::remove(
                 keep_directories,
                 peer_ids,
                 node_registry,
-                service_names,
+                service_name,
                 verbosity,
             )
             .await
@@ -895,8 +903,19 @@ async fn main() -> Result<()> {
         Some(SubCmd::Start {
             interval,
             peer_id: peer_ids,
-            service_name: service_names,
-        }) => cmd::node::start(interval, node_registry, peer_ids, service_names, verbosity).await,
+            service_name,
+            startup_check,
+        }) => {
+            cmd::node::start(
+                interval,
+                node_registry,
+                peer_ids,
+                service_name,
+                startup_check,
+                verbosity,
+            )
+            .await
+        }
         Some(SubCmd::Status {
             details,
             fail,
@@ -905,17 +924,18 @@ async fn main() -> Result<()> {
         Some(SubCmd::Stop {
             interval,
             peer_id: peer_ids,
-            service_name: service_names,
-        }) => cmd::node::stop(interval, node_registry, peer_ids, service_names, verbosity).await,
+            service_name,
+        }) => cmd::node::stop(interval, node_registry, peer_ids, service_name, verbosity).await,
         Some(SubCmd::Upgrade {
             do_not_start,
             force,
             interval,
             path,
             peer_id: peer_ids,
-            service_name: service_names,
+            service_name,
             env_variables: provided_env_variable,
             url,
+            startup_check,
             version,
         }) => {
             cmd::node::upgrade(
@@ -926,7 +946,8 @@ async fn main() -> Result<()> {
                 node_registry,
                 peer_ids,
                 provided_env_variable,
-                service_names,
+                service_name,
+                startup_check,
                 url,
                 version,
                 verbosity,

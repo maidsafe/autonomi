@@ -276,6 +276,7 @@ pub async fn start(
     node_registry: NodeRegistryManager,
     peer_ids: Vec<String>,
     service_names: Vec<String>,
+    startup_check: bool,
     verbosity: VerbosityLevel,
 ) -> Result<()> {
     if verbosity != VerbosityLevel::Minimal {
@@ -303,7 +304,7 @@ pub async fn start(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await?;
-    let batch_result = batch_manager.start_all(fixed_interval).await;
+    let batch_result = batch_manager.start_all(fixed_interval, startup_check).await;
     summarise_batch_result(&batch_result, "start", verbosity)
 }
 
@@ -378,6 +379,7 @@ pub async fn upgrade(
     peer_ids: Vec<String>,
     provided_env_variables: Option<Vec<(String, String)>>,
     service_names: Vec<String>,
+    startup_check: bool,
     url: Option<String>,
     version: Option<String>,
     verbosity: VerbosityLevel,
@@ -460,7 +462,9 @@ pub async fn upgrade(
     let batch_manager =
         get_batch_manager_from_service_data(node_registry.clone(), services_for_ops, verbosity)
             .await?;
-    let (batch_result, upgrade_summary) = batch_manager.upgrade_all(options, fixed_interval).await;
+    let (batch_result, upgrade_summary) = batch_manager
+        .upgrade_all(options, fixed_interval, startup_check)
+        .await;
 
     if verbosity != VerbosityLevel::Minimal {
         print_upgrade_summary(upgrade_summary.clone());
