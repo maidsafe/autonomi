@@ -177,7 +177,8 @@ async fn upgrade_all_should_retain_the_first_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify first flag is retained for all services
     for service in &batch_manager.services {
@@ -219,7 +220,8 @@ async fn upgrade_all_should_retain_the_peers_arg() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify peers are retained for all services
     for service in &batch_manager.services {
@@ -258,7 +260,8 @@ async fn upgrade_all_should_retain_the_network_id_arg() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify network_id is retained for all services
     for service in &batch_manager.services {
@@ -295,7 +298,8 @@ async fn upgrade_all_should_retain_the_local_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify local flag is retained for all services
     for service in &batch_manager.services {
@@ -334,7 +338,8 @@ async fn upgrade_all_should_retain_the_network_contacts_url_arg() -> Result<()> 
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify network_contacts_url is retained for all services
     for service in &batch_manager.services {
@@ -374,7 +379,8 @@ async fn upgrade_all_should_retain_the_ignore_cache_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify ignore_cache flag is retained for all services
     for service in &batch_manager.services {
@@ -413,7 +419,8 @@ async fn upgrade_all_should_retain_the_custom_bootstrap_cache_path() -> Result<(
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify bootstrap_cache_dir is retained for all services
     for service in &batch_manager.services {
@@ -453,7 +460,8 @@ async fn upgrade_all_should_retain_the_no_upnp_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify no_upnp flag is retained for all services
     for service in &batch_manager.services {
@@ -492,7 +500,8 @@ async fn upgrade_all_should_retain_the_log_format_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify log_format is retained for all services
     for service in &batch_manager.services {
@@ -529,7 +538,8 @@ async fn upgrade_all_should_retain_the_skip_reachability_check_flag() -> Result<
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify skip_reachability_check flag is retained for all services
     for service in &batch_manager.services {
@@ -568,7 +578,8 @@ async fn upgrade_all_should_retain_custom_node_ip() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify node_ip is retained for all services
     for service in &batch_manager.services {
@@ -605,7 +616,8 @@ async fn upgrade_all_should_retain_custom_node_ports() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify node_port is retained for all services
     for (idx, service) in batch_manager.services.iter().enumerate() {
@@ -644,7 +656,8 @@ async fn upgrade_all_should_retain_max_archived_log_files() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify max_archived_log_files is retained for all services
     for service in &batch_manager.services {
@@ -683,7 +696,8 @@ async fn upgrade_all_should_retain_max_log_files() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify max_log_files is retained for all services
     for service in &batch_manager.services {
@@ -720,7 +734,8 @@ async fn upgrade_all_should_retain_custom_metrics_ports() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify metrics_port is retained for all services
     for (idx, service) in batch_manager.services.iter().enumerate() {
@@ -760,7 +775,8 @@ async fn upgrade_all_should_retain_custom_rpc_ports() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify rpc_socket_addr is retained for all services
     for (idx, service) in batch_manager.services.iter().enumerate() {
@@ -801,7 +817,8 @@ async fn upgrade_all_should_retain_auto_restart() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify auto_restart is retained for all services
     for service in &batch_manager.services {
@@ -848,7 +865,8 @@ async fn upgrade_all_should_retain_evm_network_settings() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify evm_network is retained for all services
     for service in &batch_manager.services {
@@ -895,7 +913,8 @@ async fn upgrade_all_should_retain_the_rewards_address() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify rewards_address is retained for all services
     for service in &batch_manager.services {
@@ -932,7 +951,8 @@ async fn upgrade_all_should_retain_the_alpha_flag() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify alpha flag is retained for all services
     for service in &batch_manager.services {
@@ -969,7 +989,8 @@ async fn upgrade_should_retain_write_older_cache_files() -> Result<()> {
 
     let upgrade_options = create_upgrade_options();
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify write_older_cache_files flag is retained for all services
     for service in &batch_manager.services {

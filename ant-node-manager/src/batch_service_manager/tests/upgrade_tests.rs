@@ -157,7 +157,8 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services have been upgraded
     for service in &batch_manager.services {
@@ -215,7 +216,8 @@ async fn upgrade_all_should_skip_if_target_version_lower() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services remain at original version
     for service in &batch_manager.services {
@@ -362,7 +364,8 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services have been downgraded
     for service in &batch_manager.services {
@@ -445,7 +448,8 @@ async fn upgrade_all_should_upgrade_and_not_start_services() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services have been upgraded but not started due to start_service: false
     for service in &batch_manager.services {
@@ -574,7 +578,8 @@ async fn upgrade_all_should_handle_start_failures_after_upgrade() -> Result<()> 
     );
 
     // This should complete but with errors in the BatchResult
-    let (batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
     assert!(!batch_result.errors.is_empty());
 
     // Verify services have been upgraded but failed to start
@@ -722,7 +727,8 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services have been upgraded
     for service in &batch_manager.services {
@@ -916,7 +922,8 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let (_batch_result, _upgrade_summary) = batch_manager.upgrade_all(upgrade_options, 1000).await;
+    let (_batch_result, _upgrade_summary) =
+        batch_manager.upgrade_all(upgrade_options, 1000, true).await;
 
     // Verify services have been upgraded and metrics ports are set
     for (i, service) in batch_manager.services.iter().enumerate() {
