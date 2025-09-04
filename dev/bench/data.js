@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756921104567,
+  "lastUpdate": 1756984646757,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1052,6 +1052,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 26.320644869690167,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1e2c534c2c25c16a12ee3cc0437990fcfae771a6",
+          "message": "Merge pull request #3174 from maidsafe/dependabot/cargo/tracing-subscriber-0.3.20\n\nchore(deps): bump tracing-subscriber from 0.3.19 to 0.3.20",
+          "timestamp": "2025-09-04T10:23:14Z",
+          "tree_id": "1308062d6e74ca079311be4f20977be6f248d196",
+          "url": "https://github.com/maidsafe/autonomi/commit/1e2c534c2c25c16a12ee3cc0437990fcfae771a6"
+        },
+        "date": 1756984639766,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.6598777323469656,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.347739490249767,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 26.73578454209633,
             "unit": "MiB/s"
           }
         ]
