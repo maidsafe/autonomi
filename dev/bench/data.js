@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757000949613,
+  "lastUpdate": 1757000951025,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4473,6 +4473,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22435,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cb763314bcc2cf0f68b1627ce09bce7c877c1678",
+          "message": "Merge pull request #3032 from dirvine/fix/auto-46-safenode-manager-tracking\n\nfix: improve node tracking for external USB deployments",
+          "timestamp": "2025-09-04T14:49:12Z",
+          "tree_id": "2990a92c3358c6c8d0a34e1476382ed294a81285",
+          "url": "https://github.com/maidsafe/autonomi/commit/cb763314bcc2cf0f68b1627ce09bce7c877c1678"
+        },
+        "date": 1757000950641,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10656,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21887,
             "unit": "ms"
           },
           {
