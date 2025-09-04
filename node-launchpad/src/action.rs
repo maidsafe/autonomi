@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strum::Display;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Display, Deserialize)]
+#[derive(custom_debug::Debug, Clone, PartialEq, Serialize, Display, Deserialize)]
 pub enum Action {
     StatusActions(StatusActions),
     OptionsActions(OptionsActions),
@@ -36,6 +36,17 @@ pub enum Action {
 
     ShowErrorPopup(crate::error::ErrorPopup),
     SetNodeLogsTarget(String),
+
+    LogsLoaded {
+        node_name: String,
+        #[debug(skip)]
+        logs: Vec<String>,
+        total_lines: usize,
+    },
+    LogsLoadError {
+        node_name: String,
+        error: String,
+    },
 
     Tick,
     Render,
