@@ -16,19 +16,37 @@ use ant_protocol::antnode_proto::{
     ant_node_server::{AntNode, AntNodeServer},
     k_buckets_response,
 };
-use ant_protocol::node_rpc::{NodeCtrl, StopResult};
 use eyre::{ErrReport, Result};
-use std::{
-    collections::HashMap,
-    env,
-    net::SocketAddr,
-    process,
-    time::{Duration, Instant},
-};
+use std::time::Duration;
+use std::{collections::HashMap, env, net::SocketAddr, process, time::Instant};
 use tokio::sync::mpsc::{self, Sender};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Code, Request, Response, Status, transport::Server};
 use tracing::{debug, info};
+
+#[derive(Debug)]
+/// To be sent to the main thread in order to stop/restart the execution of the antnode app.
+pub enum NodeCtrl {
+    /// Request to stop the execution of the antnode app, providing an error as a reason for it.
+    Stop {
+        delay: Duration,
+        result: StopResult,
+    },
+    /// Request to restart the execution of the antnode app, retrying to join the network, after the requested delay.
+    /// Set `retain_peer_id` to `true` if you want to re-use the same root dir/secret keys/PeerId.
+    Restart {
+        delay: Duration,
+        retain_peer_id: bool,
+    },
+    // Request to update the antnode app, and restart it, after the requested delay.
+    Update(Duration),
+}
+
+#[derive(Debug)]
+pub enum StopResult {
+    Success(String),
+    Error(Box<ant_node::Error>),
+}
 
 // Defining a struct to hold information used by our gRPC service backend
 struct SafeNodeRpcService {

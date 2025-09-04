@@ -6,12 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
-    driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
-    error::{NetworkError, Result},
-    interface::{LocalSwarmCmd, NetworkSwarmCmd, TerminateNodeReason},
-    log_markers::Marker,
+use crate::{
+    event::TerminateNodeReason,
+    networking::{
+        Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
+        driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
+        error::{NetworkError, Result},
+        interface::{LocalSwarmCmd, NetworkSwarmCmd},
+        log_markers::Marker,
+    },
 };
 use ant_evm::PaymentQuote;
 use ant_protocol::{

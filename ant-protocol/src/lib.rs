@@ -23,8 +23,6 @@ pub mod constants;
 pub mod error;
 /// Messages types
 pub mod messages;
-/// RPC commands to node
-pub mod node_rpc;
 /// Storage types for GraphEntry and Chunk
 pub mod storage;
 /// Network versioning
