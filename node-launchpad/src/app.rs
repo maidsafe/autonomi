@@ -15,9 +15,9 @@ use crate::{
         options::Options,
         popup::{
             change_drive::ChangeDrivePopup, connection_mode::ChangeConnectionModePopUp,
-            manage_nodes::ManageNodes, node_logs::NodeLogsPopup, port_range::PortRangePopUp,
+            manage_nodes::ManageNodesPopup, node_logs::NodeLogsPopup, port_range::PortRangePopUp,
             remove_node::RemoveNodePopUp, reset_nodes::ResetNodesPopup,
-            rewards_address::RewardsAddress, upgrade_nodes::UpgradeNodesPopUp,
+            rewards_address::RewardsAddressPopup, upgrade_nodes::UpgradeNodesPopUp,
         },
         status::{Status, StatusConfig},
     },
@@ -26,6 +26,7 @@ use crate::{
     focus::{EventResult, FocusManager, FocusTarget},
     keybindings::KeyBindings,
     keybindings::get_keybindings,
+    log_management::LogManagement,
     mode::{InputMode, Scene},
     node_management::config::{PORT_MAX, PORT_MIN},
     runtime::{ProductionRuntime, Runtime},
@@ -126,16 +127,17 @@ impl App {
 
         // Popups
         let reset_nodes = ResetNodesPopup::default();
-        let manage_nodes = ManageNodes::new(app_data.nodes_to_start, storage_mountpoint.clone())?;
+        let manage_nodes =
+            ManageNodesPopup::new(app_data.nodes_to_start, storage_mountpoint.clone())?;
         let change_drive =
             ChangeDrivePopup::new(storage_mountpoint.clone(), app_data.nodes_to_start)?;
         let change_connection_mode = ChangeConnectionModePopUp::new(connection_mode)?;
         let port_range = PortRangePopUp::new(connection_mode, port_from, port_to);
-        let rewards_address = RewardsAddress::new(app_data.rewards_address);
+        let rewards_address = RewardsAddressPopup::new(app_data.rewards_address);
         let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
         let upgrade_launchpad_popup = UpgradeLaunchpadPopup::default();
-        let node_logs = NodeLogsPopup::new("".to_string()); // Will be updated when triggered
+        let node_logs = NodeLogsPopup::new(LogManagement::new()?);
 
         let components: Vec<Box<dyn Component>> = vec![
             // Sections

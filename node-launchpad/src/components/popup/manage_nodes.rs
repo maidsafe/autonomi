@@ -29,7 +29,7 @@ pub const MB: u64 = 1000 * 1000;
 pub const GB: u64 = MB * 1000;
 pub const MAX_NODE_COUNT: u64 = 50;
 
-pub struct ManageNodes {
+pub struct ManageNodesPopup {
     available_disk_space_gb: u64,
     storage_mountpoint: PathBuf,
     nodes_to_start_input: Input,
@@ -37,7 +37,7 @@ pub struct ManageNodes {
     old_value: String,
 }
 
-impl ManageNodes {
+impl ManageNodesPopup {
     pub fn new(nodes_to_start: u64, storage_mountpoint: PathBuf) -> Result<Self> {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
@@ -151,7 +151,7 @@ impl ManageNodes {
     }
 }
 
-impl Component for ManageNodes {
+impl Component for ManageNodesPopup {
     fn handle_key_events(
         &mut self,
         key: KeyEvent,
