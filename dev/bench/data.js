@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756996902066,
+  "lastUpdate": 1757000869520,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1208,6 +1208,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.2463476029266,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cb763314bcc2cf0f68b1627ce09bce7c877c1678",
+          "message": "Merge pull request #3032 from dirvine/fix/auto-46-safenode-manager-tracking\n\nfix: improve node tracking for external USB deployments",
+          "timestamp": "2025-09-04T14:49:12Z",
+          "tree_id": "2990a92c3358c6c8d0a34e1476382ed294a81285",
+          "url": "https://github.com/maidsafe/autonomi/commit/cb763314bcc2cf0f68b1627ce09bce7c877c1678"
+        },
+        "date": 1757000862396,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.2640222376620165,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.754269610707716,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.325074349822533,
             "unit": "MiB/s"
           }
         ]
