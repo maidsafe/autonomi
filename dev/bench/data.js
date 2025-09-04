@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756985305708,
+  "lastUpdate": 1756991265134,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1130,6 +1130,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.376904262419078,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "eeff5f40c84a0586f1b0b92dad85603353567012",
+          "message": "Merge pull request #3144 from vphongph/feat-print-full-error-for-fork-scratchpad\n\nfeat: added full error print for for scratchpad in python",
+          "timestamp": "2025-09-04T12:11:06Z",
+          "tree_id": "a108d85519684327f8d780a97db34706bca54913",
+          "url": "https://github.com/maidsafe/autonomi/commit/eeff5f40c84a0586f1b0b92dad85603353567012"
+        },
+        "date": 1756991257426,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.196642090766754,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.95249889666841,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.12102173941518,
             "unit": "MiB/s"
           }
         ]
