@@ -58,9 +58,13 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     }
 
     /// Starts all the services in the batch with a fixed interval between each start.
-    pub async fn start_all(&self, fixed_interval: u64) -> BatchResult {
+    ///
+    /// If `startup_check` is false, the startup check will be skipped for all services and we'll return immediately
+    /// after starting them. This is useful when the user wants to start the services but doesn't
+    /// want to wait for them to be fully started.
+    pub async fn start_all(&self, fixed_interval: u64, startup_check: bool) -> BatchResult {
         let batch_result = self
-            .start_all_inner(fixed_interval, Default::default())
+            .start_all_inner(fixed_interval, Default::default(), startup_check)
             .await;
 
         if !batch_result.errors.is_empty() {
@@ -117,6 +121,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         &self,
         options: UpgradeOptions,
         fixed_interval: u64,
+        startup_check: bool,
     ) -> (BatchResult, HashMap<String, UpgradeResult>) {
         let mut skip_services = HashSet::new();
         let mut batch_result = BatchResult::default();
@@ -153,7 +158,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 
         if options.start_service {
             let start_batch_result = self
-                .start_all_inner(fixed_interval, skip_services.clone())
+                .start_all_inner(fixed_interval, skip_services.clone(), startup_check)
                 .await;
 
             if !batch_result.errors.is_empty() {
@@ -358,6 +363,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         &self,
         fixed_interval: u64,
         skip_services: HashSet<String>,
+        startup_check: bool,
     ) -> BatchResult {
         let mut batch_result = BatchResult::default();
         let mut skip_services = skip_services;
@@ -451,7 +457,23 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         let progress_start_time = std::time::Instant::now();
         let mut completed_services = HashSet::<String>::new();
 
+        if !startup_check {
+            info!("Skipping startup check as requested.");
+            if self.verbosity != VerbosityLevel::Minimal {
+                println!("Skipping startup check as requested.");
+            }
+        } else {
+            info!("Waiting for all the services to start...");
+            if self.verbosity != VerbosityLevel::Minimal {
+                println!("Waiting for all the services to start...");
+            }
+        }
         loop {
+            if !startup_check {
+                info!("Skipping startup check as requested, breaking out of wait loop.");
+                break;
+            }
+
             if progress_start_time.elapsed() > self.progress_timeout {
                 error!(
                     "Progress monitoring timed out after {:?}. Some services may not have completed their reachability check.",
@@ -532,7 +554,6 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             if all_complete {
                 break;
             }
-
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
@@ -581,11 +602,6 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 continue;
             }
 
-            info!("Waiting for service {service_name} to start...");
-            if self.verbosity != VerbosityLevel::Minimal {
-                println!("Waiting for {service_name} to start...");
-            }
-
             // This is an attempt to see whether the service process has actually launched. You don't
             // always get an error from the service infrastructure.
             //
@@ -603,8 +619,11 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 }
             };
 
-            info!("Service {service_name} has started with PID {pid}, running on_start");
-            match service.on_start(Some(pid), true).await {
+            let full_refresh = startup_check;
+            info!(
+                "Service {service_name} has started with PID {pid}, running on_start with full_refresh={full_refresh}",
+            );
+            match service.on_start(Some(pid), full_refresh).await {
                 Ok(_) => {
                     info!("Service {service_name} has run on_start successfully");
                     if let Err(err) = self.node_registry.save().await {
