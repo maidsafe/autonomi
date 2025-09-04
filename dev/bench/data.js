@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756985303173,
+  "lastUpdate": 1756985305708,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4050,6 +4050,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 25023,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dcdb7046f92cd009631dacc71401ab5d613e358d",
+          "message": "Merge pull request #3140 from b-zee/feat-client-init-timeout\n\nfeat: check for connectivity on client init",
+          "timestamp": "2025-09-04T10:30:24Z",
+          "tree_id": "26cd9fdec748bb3430a892eac25da0538b903f45",
+          "url": "https://github.com/maidsafe/autonomi/commit/dcdb7046f92cd009631dacc71401ab5d613e358d"
+        },
+        "date": 1756985304623,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9965,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20719,
             "unit": "ms"
           },
           {
