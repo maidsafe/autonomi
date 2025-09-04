@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757000869520,
+  "lastUpdate": 1757000948179,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2148,6 +2148,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cb763314bcc2cf0f68b1627ce09bce7c877c1678",
+          "message": "Merge pull request #3032 from dirvine/fix/auto-46-safenode-manager-tracking\n\nfix: improve node tracking for external USB deployments",
+          "timestamp": "2025-09-04T14:49:12Z",
+          "tree_id": "2990a92c3358c6c8d0a34e1476382ed294a81285",
+          "url": "https://github.com/maidsafe/autonomi/commit/cb763314bcc2cf0f68b1627ce09bce7c877c1678"
+        },
+        "date": 1757000947781,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 89,
             "unit": "MB"
           }
         ]
