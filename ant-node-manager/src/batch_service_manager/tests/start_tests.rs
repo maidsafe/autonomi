@@ -94,7 +94,6 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
                 })
             });
 
-        // Create service data using helper (structure is complex with many fields)
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));
 
@@ -113,7 +112,83 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
+    assert!(batch_result.errors.is_empty());
+
+    // Verify services are in running state
+    for service in &batch_manager.services {
+        assert_matches!(service.status().await, ServiceStatus::Running);
+        assert!(service.pid().await.is_some());
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn start_all_should_skip_startup_check_if_disabled() -> Result<()> {
+    let mut mock_service_control = MockServiceControl::new();
+
+    // Set up expectations for 2 services
+    mock_service_control
+        .expect_start()
+        .with(eq("antnode1"), eq(false))
+        .times(1)
+        .returning(|_, _| Ok(()));
+    mock_service_control
+        .expect_start()
+        .with(eq("antnode2"), eq(false))
+        .times(1)
+        .returning(|_, _| Ok(()));
+
+    mock_service_control
+        .expect_wait()
+        .with(eq(1000))
+        .times(2)
+        .returning(|_| ());
+
+    mock_service_control
+        .expect_get_process_pid()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
+        .times(1)
+        .returning(|_| Ok(1001));
+    mock_service_control
+        .expect_get_process_pid()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode2/antnode")))
+        .times(1)
+        .returning(|_| Ok(1002));
+
+    // Create 2 services with basic mock setup for successful startup
+    let mut services = Vec::new();
+    for i in 1..=2 {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        // No calls should be made
+        mock_fs_client.expect_node_info().times(0);
+        mock_metrics_client.expect_get_node_metrics().times(0);
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(0);
+
+        let service_data = create_test_service_data(i as u16);
+        let service_data = Arc::new(RwLock::new(service_data));
+
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        create_test_registry(),
+        VerbosityLevel::Normal,
+    );
+
+    let batch_result = batch_manager.start_all(1000, false).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services are in running state
@@ -172,7 +247,7 @@ async fn start_all_should_start_stopped_services() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services are in running state
@@ -216,7 +291,7 @@ async fn start_all_should_not_attempt_to_start_running_services() -> Result<()> 
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services remain in running state
@@ -300,7 +375,7 @@ async fn start_all_should_start_services_marked_as_running_but_had_since_stopped
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services are in running state
@@ -372,7 +447,7 @@ async fn start_all_should_return_error_if_processes_not_found() -> Result<()> {
     );
 
     // This should return a BatchResult with errors
-    let result = batch_manager.start_all(1000).await;
+    let result = batch_manager.start_all(1000, true).await;
     assert!(!result.errors.is_empty());
 
     Ok(())
@@ -425,7 +500,7 @@ async fn start_all_should_start_user_mode_services() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services are in running state
@@ -460,7 +535,7 @@ async fn start_all_should_monitor_progress_until_all_services_complete() -> Resu
 
     mock_service_control
         .expect_wait()
-        .with(eq(100))
+        .with(eq(1000))
         .times(2)
         .returning(|_| ());
 
@@ -478,7 +553,7 @@ async fn start_all_should_monitor_progress_until_all_services_complete() -> Resu
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(100).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Both services should be running after the progress monitoring completes
@@ -514,7 +589,7 @@ async fn start_all_should_respect_fixed_intervals() -> Result<()> {
     // The wait should be called with the specified interval for each service
     mock_service_control
         .expect_wait()
-        .with(eq(2000)) // 2 second interval
+        .with(eq(1000)) // 1 second interval
         .times(3)
         .returning(|_| ());
 
@@ -534,7 +609,7 @@ async fn start_all_should_respect_fixed_intervals() -> Result<()> {
     );
 
     let start_time = Instant::now();
-    let batch_result = batch_manager.start_all(2000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     let _elapsed = start_time.elapsed();
 
     assert!(batch_result.errors.is_empty());
@@ -572,7 +647,7 @@ async fn start_all_should_handle_services_starting_at_different_rates() -> Resul
 
     mock_service_control
         .expect_wait()
-        .with(eq(100))
+        .with(eq(1000))
         .times(3)
         .returning(|_| ());
 
@@ -591,7 +666,7 @@ async fn start_all_should_handle_services_starting_at_different_rates() -> Resul
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(100).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // All services should eventually reach running state
@@ -655,7 +730,7 @@ async fn start_all_should_continue_with_other_services_when_one_fails() -> Resul
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
 
     // Should have error for first service
     assert_eq!(batch_result.errors.len(), 1);
@@ -767,7 +842,7 @@ async fn start_all_should_handle_mixed_user_and_system_modes() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Both services should be running
@@ -829,7 +904,7 @@ async fn start_all_should_skip_already_running_services_and_start_others() -> Re
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Both services should be running

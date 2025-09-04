@@ -73,7 +73,7 @@ async fn start_all_should_handle_incremental_progress() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify services are in running state
@@ -108,7 +108,7 @@ async fn start_all_should_handle_mixed_progress_rates() -> Result<()> {
 
     mock_service_control
         .expect_wait()
-        .with(eq(500))
+        .with(eq(1000))
         .times(4)
         .returning(|_| ());
 
@@ -134,7 +134,7 @@ async fn start_all_should_handle_mixed_progress_rates() -> Result<()> {
     );
     batch_manager.set_progress_timeout(Duration::from_secs(5));
 
-    let batch_result = batch_manager.start_all(500).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
 
     assert_eq!(batch_result.errors.len(), 1);
     // only the stuck service should have a timeout error
@@ -217,7 +217,7 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
 
     // Should have errors for both services since they fail RPC calls
     assert_eq!(batch_result.errors.len(), 2);
@@ -284,7 +284,7 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
 
     // Should have error for the service that failed progress
     assert_eq!(batch_result.errors.len(), 1);
@@ -329,7 +329,7 @@ async fn start_all_should_handle_staged_progress() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // Verify service reaches running state
@@ -363,7 +363,7 @@ async fn start_all_should_wait_for_all_services_to_complete() -> Result<()> {
 
     mock_service_control
         .expect_wait()
-        .with(eq(100))
+        .with(eq(1000))
         .times(3)
         .returning(|_| ());
 
@@ -382,7 +382,7 @@ async fn start_all_should_wait_for_all_services_to_complete() -> Result<()> {
         VerbosityLevel::Normal,
     );
 
-    let batch_result = batch_manager.start_all(100).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
     assert!(batch_result.errors.is_empty());
 
     // All services should be running
@@ -464,7 +464,7 @@ async fn start_all_should_timeout_stuck_services() -> Result<()> {
     batch_manager.set_progress_timeout(Duration::from_secs(2));
 
     // Use a very short timeout for testing
-    let batch_result = batch_manager.start_all(1000).await;
+    let batch_result = batch_manager.start_all(1000, true).await;
 
     // Should have timeout error
     assert_eq!(batch_result.errors.len(), 1);
