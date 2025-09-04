@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756996820646,
+  "lastUpdate": 1756996897690,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2080,6 +2080,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 88,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c21e60e851da27a08a85c1fc111d0be77816727a",
+          "message": "Merge pull request #2982 from dirvine/add-comprehensive-tests\n\nfeat: add comprehensive tests for cryptography components",
+          "timestamp": "2025-09-04T13:43:41Z",
+          "tree_id": "d40466abe1c04fc3cb34e20119cbe8afdc73f962",
+          "url": "https://github.com/maidsafe/autonomi/commit/c21e60e851da27a08a85c1fc111d0be77816727a"
+        },
+        "date": 1756996896680,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 92,
             "unit": "MB"
           }
         ]
