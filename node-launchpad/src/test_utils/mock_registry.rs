@@ -25,6 +25,11 @@ use tempfile::TempDir;
 
 static MOCK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(not(target_os = "windows"))]
+const ANTNODE_FILE_NAME: &str = "antnode";
+#[cfg(target_os = "windows")]
+const ANTNODE_FILE_NAME: &str = "antnode.exe";
+
 /// Mock node registry for testing that manages temporary registry files
 pub struct MockNodeRegistry {
     _temp_dir: TempDir,
@@ -155,7 +160,7 @@ pub fn create_test_node_service_data(index: u64, status: ServiceStatus) -> NodeS
         service_name,
         version: "0.1.0".to_string(),
         status: status.clone(),
-        antnode_path: PathBuf::from("/usr/local/bin/antnode"),
+        antnode_path: env::temp_dir().join(ANTNODE_FILE_NAME),
         data_dir_path: temp_dir.join("data"),
         log_dir_path: temp_dir.join("logs"),
         number: (index + 1) as u16,
