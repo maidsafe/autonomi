@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1756991343852,
+  "lastUpdate": 1756991346027,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3024,6 +3024,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 19,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "eeff5f40c84a0586f1b0b92dad85603353567012",
+          "message": "Merge pull request #3144 from vphongph/feat-print-full-error-for-fork-scratchpad\n\nfeat: added full error print for for scratchpad in python",
+          "timestamp": "2025-09-04T12:11:06Z",
+          "tree_id": "a108d85519684327f8d780a97db34706bca54913",
+          "url": "https://github.com/maidsafe/autonomi/commit/eeff5f40c84a0586f1b0b92dad85603353567012"
+        },
+        "date": 1756991345101,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
             "unit": "MB"
           },
           {
