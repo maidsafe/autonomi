@@ -25,7 +25,7 @@ use tui_input::{Input, backend::crossterm::EventHandler};
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
 const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 for the padding
 
-pub struct RewardsAddress {
+pub struct RewardsAddressPopup {
     state: RewardsAddressState,
     rewards_address_input_field: Input,
     rewards_address: Option<EvmAddress>,
@@ -40,7 +40,7 @@ enum RewardsAddressState {
     AcceptTCsAndEnterRewardsAddress,
 }
 
-impl RewardsAddress {
+impl RewardsAddressPopup {
     pub fn new(rewards_address: Option<EvmAddress>) -> Self {
         let state = if rewards_address.is_none() {
             RewardsAddressState::ShowTCs
@@ -137,7 +137,7 @@ impl RewardsAddress {
     }
 }
 
-impl Component for RewardsAddress {
+impl Component for RewardsAddressPopup {
     fn handle_key_events(
         &mut self,
         key: KeyEvent,

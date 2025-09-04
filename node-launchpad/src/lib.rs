@@ -20,6 +20,7 @@ pub mod connection_mode;
 pub mod error;
 pub mod focus;
 pub mod keybindings;
+pub mod log_management;
 pub mod mode;
 pub mod node_management;
 pub mod node_stats;

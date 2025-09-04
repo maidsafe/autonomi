@@ -40,6 +40,7 @@ clap = { version = "4.4.5", features = [
 color-eyre = "0.6.3"
 config = "0.14.0"
 crossterm = { version = "0.27.0", features = ["serde", "event-stream"] }
+custom_debug = "~0.6.1"
 derive_deref = "1.1.1"
 directories = "5.0.1"
 dirs-next = "~2.0.0"
@@ -67,6 +68,7 @@ strip-ansi-escapes = "0.2.0"
 strum = { version = "0.26.1", features = ["derive"] }
 sysinfo = "0.30.12"
 tempfile = "3.12.0"
+thiserror = "1.0"
 throbber-widgets-tui = "0.8.0"
 tokio = { version = "1.43.1", features = ["full"] }
 tokio-util = "0.7.9"
