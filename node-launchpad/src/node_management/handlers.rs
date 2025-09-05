@@ -379,7 +379,8 @@ pub async fn stop_nodes_helper(
         services,
         VerbosityLevel::Minimal,
     )
-    .await
+    .await?;
+    Ok(())
 }
 
 pub async fn remove_nodes_helper(
@@ -393,7 +394,8 @@ pub async fn remove_nodes_helper(
         services,
         VerbosityLevel::Minimal,
     )
-    .await
+    .await?;
+    Ok(())
 }
 
 pub async fn start_nodes_helper(
@@ -409,5 +411,6 @@ pub async fn start_nodes_helper(
         false, // Skip performing startup check, as we'll do it manually inside launchpad.
         VerbosityLevel::Minimal,
     )
-    .await
+    .await?;
+    Ok(())
 }
