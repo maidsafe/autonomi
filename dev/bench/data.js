@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757068160315,
+  "lastUpdate": 1757068162450,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4896,6 +4896,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 21320,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79434e91b90a130238ba1179bf3e7763396edc7a",
+          "message": "Merge pull request #3137 from ermineJose/vault_rename_function\n\nfeat: rename vault functions to match the code standard",
+          "timestamp": "2025-09-05T09:05:19Z",
+          "tree_id": "a8ceba6b9f0b078e4f6a6240a5f979b3cbfd49c7",
+          "url": "https://github.com/maidsafe/autonomi/commit/79434e91b90a130238ba1179bf3e7763396edc7a"
+        },
+        "date": 1757068161588,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10920,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22832,
             "unit": "ms"
           },
           {
