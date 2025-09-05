@@ -10,8 +10,10 @@ use crate::action::{Action, StatusActions};
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
 use crate::error::ErrorPopup;
-use crate::node_management::config::{FIXED_INTERVAL, PORT_MAX, PORT_MIN};
-use crate::node_management::{AddNodesArgs, NodeManagement, NodeManagementTask, UpgradeNodesArgs};
+use crate::node_management::config::{PORT_MAX, PORT_MIN};
+use crate::node_management::{
+    AddNodesConfig, NodeManagement, NodeManagementTask, UpgradeNodesConfig,
+};
 use crate::system::get_drive_name;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
@@ -115,14 +117,13 @@ impl NodeOperations {
         );
 
         let action_sender = self.get_actions_sender()?;
-        let add_node_args = AddNodesArgs {
+        let add_node_args = AddNodesConfig {
             action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
             count: 1,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,
-            owner: config.rewards_address.map(|addr| addr.to_string()),
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
             rewards_address: config.rewards_address.cloned(),
@@ -130,7 +131,7 @@ impl NodeOperations {
 
         self.node_management
             .send_task(NodeManagementTask::AddNode {
-                args: add_node_args,
+                config: add_node_args,
             })?;
 
         Ok(None)
@@ -158,14 +159,13 @@ impl NodeOperations {
         );
 
         let action_sender = self.get_actions_sender()?;
-        let maintain_nodes_args = AddNodesArgs {
+        let maintain_nodes_args = AddNodesConfig {
             action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
             count: config.nodes_to_start as u16,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,
-            owner: config.rewards_address.map(|addr| addr.to_string()),
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
             rewards_address: config.rewards_address.cloned(),
@@ -173,7 +173,7 @@ impl NodeOperations {
 
         self.node_management
             .send_task(NodeManagementTask::MaintainNodes {
-                args: maintain_nodes_args,
+                config: maintain_nodes_args,
             })?;
 
         Ok(None)
@@ -211,13 +211,9 @@ impl NodeOperations {
 
     pub fn handle_upgrade_nodes(&mut self, service_names: Vec<String>) -> Result<()> {
         let action_sender = self.get_actions_sender()?;
-        let upgrade_args = UpgradeNodesArgs {
+        let upgrade_args = UpgradeNodesConfig {
             action_sender,
-            connection_timeout_s: 30,
-            do_not_start: false,
             custom_bin_path: None,
-            force: false,
-            fixed_interval: Some(FIXED_INTERVAL),
             provided_env_variables: None,
             service_names,
             url: None,
@@ -225,7 +221,9 @@ impl NodeOperations {
         };
 
         self.node_management
-            .send_task(NodeManagementTask::UpgradeNodes { args: upgrade_args })?;
+            .send_task(NodeManagementTask::UpgradeNodes {
+                config: upgrade_args,
+            })?;
         Ok(())
     }
 }
