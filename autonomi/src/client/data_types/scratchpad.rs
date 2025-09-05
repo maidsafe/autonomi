@@ -381,6 +381,75 @@ impl Client {
         Ok(scratchpad)
     }
 
+    /// Stores the provided, fully-formed `Scratchpad` as an update.
+    /// Requires: (a) address exists, (b) owner signature is valid.
+    /// No counter bump, encryption, or signing is performed; input is stored verbatim.
+    /// Size/signature are checked via `scratchpad_verify`; network enforces versioning.
+    /// Note: For caller-controlled scratchpads, scratchpad_put supports create and update; use scratchpad_put_update when you want an explicit wallet-free update (skips the payment path).
+    /// The owner-key–managed path with enforced encryption/signing remains scratchpad_create / scratchpad_update.
+    pub async fn scratchpad_put_update(
+        &self,
+        scratchpad: Scratchpad,
+    ) -> Result<(), ScratchpadError> {
+        // signature and size verified
+        Self::scratchpad_verify(&scratchpad)?;
+
+        let address = scratchpad.address();
+
+        if !self.scratchpad_check_existence(address).await? {
+            warn!(
+                "Scratchpad at address {address:?} cannot be updated as it does not exist, please create it first or wait for it to be created"
+            );
+            return Err(ScratchpadError::CannotUpdateNewScratchpad);
+        }
+
+        // prepare the record to be stored
+        let net_addr = scratchpad.network_address();
+        let record = Record {
+            key: net_addr.to_record_key(),
+            value: try_serialize_record(&scratchpad, RecordKind::DataOnly(DataTypes::Scratchpad))
+                .map_err(|_| ScratchpadError::Serialization)?
+                .to_vec(),
+            publisher: None,
+            expires: None,
+        };
+
+        debug!("Getting target nodes for scratchpad at address {address:?}");
+
+        // get the closest nodes to the data address
+        let target_nodes = self
+            .network
+            .get_closest_peers_with_retries(net_addr.clone())
+            .await
+            .map_err(|e| PutError::Network {
+                address: Box::new(net_addr.clone()),
+                network_error: e,
+                payment: None,
+            })?;
+
+        debug!(
+            "Updating scratchpad at address {address:?} (counter {}) to the network on nodes {target_nodes:?}",
+            scratchpad.counter()
+        );
+
+        // store the scratchpad to the target nodes
+        self.network
+            .put_record_with_retries(record, target_nodes, &self.config.scratchpad)
+            .await
+            .inspect_err(|err| {
+                error!("Failed to update scratchpad at address {address:?} to the network: {err}")
+            })
+            .map_err(|err| {
+                ScratchpadError::PutError(PutError::Network {
+                    address: Box::new(net_addr),
+                    network_error: err,
+                    payment: None,
+                })
+            })?;
+
+        Ok(())
+    }
+
     /// Get the cost of creating a new Scratchpad
     pub async fn scratchpad_cost(&self, owner: &PublicKey) -> Result<AttoTokens, CostError> {
         info!("Getting cost for scratchpad");
