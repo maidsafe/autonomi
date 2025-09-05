@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757068157953,
+  "lastUpdate": 1757068160315,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3534,6 +3534,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 19,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79434e91b90a130238ba1179bf3e7763396edc7a",
+          "message": "Merge pull request #3137 from ermineJose/vault_rename_function\n\nfeat: rename vault functions to match the code standard",
+          "timestamp": "2025-09-05T09:05:19Z",
+          "tree_id": "a8ceba6b9f0b078e4f6a6240a5f979b3cbfd49c7",
+          "url": "https://github.com/maidsafe/autonomi/commit/79434e91b90a130238ba1179bf3e7763396edc7a"
+        },
+        "date": 1757068159481,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
             "unit": "MB"
           },
           {
