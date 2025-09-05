@@ -243,7 +243,6 @@ fn main() {
     color_eyre::install().expect("Failed to install color_eyre");
 
     let opt = Opt::parse();
-    info!("Antnode started with opt: {opt:?}");
 
     let network_id = if let Some(network_id) = opt.network_id {
         network_id
@@ -303,20 +302,6 @@ fn main() {
         },
     };
 
-    println!("EVM network: {evm_network:?}");
-    let msg = format!(
-        "Running {} v{}",
-        env!("CARGO_BIN_NAME"),
-        env!("CARGO_PKG_VERSION")
-    );
-    info!("\n{}\n{}", msg, "=".repeat(msg.len()));
-
-    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
-    debug!(
-        "antnode built with git version: {}",
-        ant_build_info::git_info()
-    );
-
     let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
     let (root_dir, keypair) = match get_root_dir_and_keypair(&opt.root_dir) {
         Ok((root_dir, keypair)) => (root_dir, keypair),
@@ -336,6 +321,22 @@ fn main() {
                 return;
             }
         };
+
+    info!("Antnode started with opt: {opt:?}");
+    info!("EVM network: {evm_network:?}");
+    println!("EVM network: {evm_network:?}");
+    let cargo_info = format!(
+        "Running {} v{}",
+        env!("CARGO_BIN_NAME"),
+        env!("CARGO_PKG_VERSION")
+    );
+    info!("\n{}\n{}", cargo_info, "=".repeat(cargo_info.len()));
+
+    ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
+    info!(
+        "antnode built with git version: {}",
+        ant_build_info::git_info()
+    );
 
     if let Err(err) = run(
         &opt,
