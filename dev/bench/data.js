@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757068935339,
+  "lastUpdate": 1757069013918,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2488,6 +2488,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 95,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "82e0f25c9abb20bf84eef8b81d46194af5b9d2bc",
+          "message": "Merge pull request #3070 from ermineJose/armv7-storage-size-LP\n\nfeat: change data type from usize to u64 id disk space for nodes",
+          "timestamp": "2025-09-05T09:47:02Z",
+          "tree_id": "bd8f002d606ced62b2fa91c178fb0ce1a4e085e8",
+          "url": "https://github.com/maidsafe/autonomi/commit/82e0f25c9abb20bf84eef8b81d46194af5b9d2bc"
+        },
+        "date": 1757069013261,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 92,
             "unit": "MB"
           }
         ]
