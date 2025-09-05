@@ -27,17 +27,15 @@ async fn test_registry_mixed_node_states() -> Result<(), eyre::Report> {
         ServiceStatus::Running,
         ServiceStatus::Stopped,
     ];
-    let mut registry = MockNodeRegistry::empty().expect("Failed to create empty registry");
+    let mut registry = MockNodeRegistry::empty()?;
     for (i, status) in states.iter().enumerate() {
         let node = create_test_node_service_data(i as u64, status.clone());
-        registry
-            .add_node(node)
-            .expect("Failed to add node to registry");
+        registry.add_node(node)?;
     }
 
-    JourneyBuilder::new_with_registry("Mixed Node States", registry)
-        .await
-        .expect("Failed to create journey")
+    let journey = JourneyBuilder::new_with_registry("Mixed Node States", registry).await?;
+
+    journey
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
         .expect_node_count_in_registry(5)?
@@ -53,19 +51,18 @@ async fn test_registry_mixed_node_states() -> Result<(), eyre::Report> {
         .expect_registry_node_status("antnode-5", ServiceStatus::Stopped)?
         .expect_text("Nodes (5)")
         .run()
-        .await
-        .expect("Mixed states test failed");
+        .await?;
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_node_lifecycle_operations() -> Result<(), eyre::Report> {
-    let registry = MockNodeRegistry::empty().expect("Failed to create empty registry");
+    let registry = MockNodeRegistry::empty()?;
 
-    JourneyBuilder::new_with_registry("Node Lifecycle", registry)
-        .await
-        .expect("Failed to create journey")
+    let journey = JourneyBuilder::new_with_registry("Node Lifecycle", registry).await?;
+
+    journey
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
         .expect_node_count_in_registry(0)?
@@ -93,8 +90,7 @@ async fn test_node_lifecycle_operations() -> Result<(), eyre::Report> {
         .reset_registry()?
         .expect_registry_is_empty()?
         .run()
-        .await
-        .expect("Node lifecycle test failed");
+        .await?;
 
     Ok(())
 }

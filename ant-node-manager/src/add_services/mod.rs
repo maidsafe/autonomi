@@ -13,13 +13,13 @@ use self::config::{AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
 use crate::{
     VerbosityLevel,
     config::{create_owned_dir, get_user_antnode_data_dir},
+    error::{AddNodeError, Result},
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
 };
 use ant_service_management::{
     NodeRegistryManager, NodeServiceData, ReachabilityProgress, ServiceStatus,
     control::ServiceControl, node::NODE_SERVICE_DATA_SCHEMA_LATEST,
 };
-use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
 use std::net::{IpAddr, SocketAddr};
 
@@ -42,7 +42,7 @@ pub async fn add_node(
             && count > 1
         {
             error!("A genesis node can only be added as a single node");
-            return Err(eyre!("A genesis node can only be added as a single node"));
+            return Err(AddNodeError::MultipleGenesisNodesNotAllowed.into());
         }
 
         let mut genesis_node_exists = false;
@@ -55,7 +55,7 @@ pub async fn add_node(
 
         if genesis_node_exists {
             error!("A genesis node already exists");
-            return Err(eyre!("A genesis node already exists"));
+            return Err(AddNodeError::GenesisNodeAlreadyExists.into());
         }
     }
 
@@ -79,7 +79,7 @@ pub async fn add_node(
         .file_name()
         .ok_or_else(|| {
             error!("Could not get filename from the antnode download path");
-            eyre!("Could not get filename from the antnode download path")
+            AddNodeError::FileNameExtractionFailed
         })?
         .to_string_lossy()
         .to_string();
@@ -276,8 +276,7 @@ pub async fn add_node(
                 println!("{} {}: {}", "✕".red(), failed.0, failed.1);
             }
         }
-        return Err(eyre!("Failed to add one or more services")
-            .suggestion("However, any services that were successfully added will be usable."));
+        return Err(AddNodeError::ServiceAdditionFailed.into());
     }
 
     let added_services_names = added_service_data

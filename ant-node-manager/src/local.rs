@@ -11,6 +11,7 @@ use crate::helpers::{
     check_port_availability, get_bin_version, get_start_port_if_applicable, increment_port_option,
 };
 
+use crate::error::{Error, Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -19,8 +20,6 @@ use ant_service_management::metric::{MetricsAction, MetricsClient};
 use ant_service_management::node::NODE_SERVICE_DATA_SCHEMA_LATEST;
 use ant_service_management::{NodeRegistryManager, ReachabilityProgress};
 use ant_service_management::{NodeServiceData, ServiceStatus, control::ServiceControl};
-use color_eyre::eyre::OptionExt;
-use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 #[cfg(test)]
@@ -150,7 +149,7 @@ pub async fn kill_network(
     system.refresh_all();
 
     let genesis_data_path = dirs_next::data_dir()
-        .ok_or_else(|| eyre!("Could not obtain user's data directory"))?
+        .ok_or(Error::UserDataDirNotFound)?
         .join("autonomi")
         .join("test_genesis");
     if genesis_data_path.is_dir() {
@@ -296,9 +295,7 @@ pub async fn run_network(
         )
         .await?;
         node_registry.push_node(node.clone()).await;
-        let bootstrap_peers = node
-            .listen_addr
-            .ok_or_eyre("The listen address was not set")?;
+        let bootstrap_peers = node.listen_addr.ok_or(Error::ListeningAddressNotFound)?;
         node_port = increment_port_option(node_port);
         metrics_port = increment_port_option(metrics_port);
         rpc_port = increment_port_option(rpc_port);
@@ -466,10 +463,9 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
         if let Some(peer_id) = &node.peer_id {
             all_peers.push(*peer_id);
         } else {
-            return Err(eyre!(
-                "The PeerId was not set for node: {}",
-                node.service_name
-            ));
+            return Err(Error::PeerIdNotSet {
+                service_name: node.service_name.clone(),
+            });
         }
     }
 
@@ -492,11 +488,9 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
 
         let node_metrics = metrics_client.get_node_metrics().await?;
         let connected_peers = node_metrics.connected_peers;
-        let peer_id = node
-            .read()
-            .await
-            .peer_id
-            .ok_or_eyre("The PeerId was not set")?;
+        let peer_id = node.read().await.peer_id.ok_or(Error::PeerIdNotSet {
+            service_name: node.read().await.service_name.clone(),
+        })?;
         debug!("Node {peer_id} has {connected_peers} peers");
         println!("Node {peer_id} has {connected_peers} peers");
     }
@@ -543,7 +537,8 @@ mod tests {
         let mut mock_fs_client = MockFileSystemClient::new();
         let rewards_address = dummy_address();
 
-        let peer_id = PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR")?;
+        let peer_id =
+            PeerId::from_str("12D3KooWS2tpXGGTmg2AHFiDh57yPQnat49YHnyqoggzXZWpqkCR").unwrap();
         let metrics_port = 6001;
         mock_launcher
             .expect_launch_node()

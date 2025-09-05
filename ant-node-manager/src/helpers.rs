@@ -9,13 +9,9 @@
 // Allow expect usage - to be refactored
 #![allow(clippy::expect_used)]
 
+use crate::error::{Error, Result};
 use ant_releases::{AntReleaseRepoActions, ArchiveType, ReleaseType, get_running_platform};
 use ant_service_management::NodeServiceData;
-use color_eyre::{
-    Result,
-    eyre::{bail, eyre},
-};
-use colored::Colorize;
 use indicatif::{ProgressBar, ProgressStyle};
 use semver::Version;
 use std::{
@@ -79,7 +75,9 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
         loop {
             if download_attempts > MAX_DOWNLOAD_RETRIES {
                 error!("Failed to download WinSW after {MAX_DOWNLOAD_RETRIES} tries.");
-                bail!("Failed to download WinSW after {MAX_DOWNLOAD_RETRIES} tries.");
+                return Err(Error::DownloadFailure {
+                    release: "WinSW".to_string(),
+                });
             }
             match release_repo.download_winsw(dest_path, &callback).await {
                 Ok(_) => break,
@@ -174,7 +172,9 @@ pub async fn download_and_extract_release(
     let binary_download_path = loop {
         if download_attempts > MAX_DOWNLOAD_RETRIES {
             error!("Failed to download release after {MAX_DOWNLOAD_RETRIES} tries.");
-            bail!("Failed to download release after {MAX_DOWNLOAD_RETRIES} tries.");
+            return Err(Error::DownloadFailure {
+                release: release_type.to_string(),
+            });
         }
 
         if let Some(url) = &url {
@@ -318,7 +318,7 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
         .as_mut()
         .ok_or_else(|| {
             error!("Failed to capture stdout");
-            eyre!("Failed to capture stdout")
+            Error::FailedToGetBinary
         })?
         .read_to_string(&mut output)
         .inspect_err(|err| error!("Output contained non utf8 chars: {err:?}"))?;
@@ -326,7 +326,7 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
     // Extract the first line of the output
     let first_line = output.lines().next().ok_or_else(|| {
         error!("No output received from binary");
-        eyre!("No output received from binary")
+        Error::FailedToGetBinary
     })?;
 
     let version = if let Some(v_pos) = first_line.find('v') {
@@ -341,7 +341,7 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
     }
     .ok_or_else(|| {
         error!("Failed to parse version from output");
-        eyre!("Failed to parse version from output")
+        Error::FailedToGetBinary
     })?;
 
     debug!("Obtained version of binary: {version}");
@@ -411,41 +411,17 @@ pub async fn check_port_availability(
         PortRange::Single(port) => {
             if all_ports.contains(port) {
                 error!("Port {port} is being used by another service");
-                return Err(eyre!("Port {port} is being used by another service"));
+                return Err(Error::PortInUse { port: *port });
             }
         }
         PortRange::Range(start, end) => {
             for i in *start..=*end {
                 if all_ports.contains(&i) {
                     error!("Port {i} is being used by another service");
-                    return Err(eyre!("Port {i} is being used by another service"));
+                    return Err(Error::PortInUse { port: i });
                 }
             }
         }
-    }
-    Ok(())
-}
-
-pub fn summarise_any_failed_ops<T>(
-    failed_services: T,
-    verb: &str,
-    verbosity: VerbosityLevel,
-) -> Result<()>
-where
-    T: IntoIterator<Item = (String, String)>,
-    T::IntoIter: ExactSizeIterator,
-{
-    let failed_services: Vec<_> = failed_services.into_iter().collect();
-    if !failed_services.is_empty() {
-        if verbosity != VerbosityLevel::Minimal {
-            println!("Failed to {verb} {} service(s):", failed_services.len());
-            for failed in failed_services.iter() {
-                println!("{} {}: {}", "✕".red(), failed.0, failed.1);
-            }
-        }
-
-        error!("Failed to {verb} one or more services");
-        return Err(eyre!("Failed to {verb} one or more services"));
     }
     Ok(())
 }

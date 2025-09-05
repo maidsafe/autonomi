@@ -25,10 +25,9 @@ use tempfile::TempDir;
 
 static MOCK_COUNTER: AtomicU64 = AtomicU64::new(0);
 
-#[cfg(not(target_os = "windows"))]
-const ANTNODE_FILE_NAME: &str = "antnode";
-#[cfg(target_os = "windows")]
-const ANTNODE_FILE_NAME: &str = "antnode.exe";
+fn get_antnode_filename() -> String {
+    format!("antnode{}", env::consts::EXE_SUFFIX)
+}
 
 /// Mock node registry for testing that manages temporary registry files
 pub struct MockNodeRegistry {
@@ -153,14 +152,21 @@ impl MockNodeRegistry {
 pub fn create_test_node_service_data(index: u64, status: ServiceStatus) -> NodeServiceData {
     let service_name = format!("antnode-{}", index + 1);
     let unique_id = MOCK_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = env::temp_dir().join(format!("test_node_{index}_{unique_id}"));
+    let temp_dir = env::temp_dir()
+        .join("autonomi_test_nodes")
+        .join(format!("node_{index}_{unique_id}"));
+
+    // Ensure parent directory exists for Windows compatibility
+    if let Some(parent) = temp_dir.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
 
     NodeServiceData {
         schema_version: 3,
         service_name,
         version: "0.1.0".to_string(),
         status: status.clone(),
-        antnode_path: env::temp_dir().join(ANTNODE_FILE_NAME),
+        antnode_path: env::temp_dir().join(get_antnode_filename()),
         data_dir_path: temp_dir.join("data"),
         log_dir_path: temp_dir.join("logs"),
         number: (index + 1) as u16,
