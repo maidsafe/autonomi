@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757069015735,
+  "lastUpdate": 1757069017590,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5178,6 +5178,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22211,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "82e0f25c9abb20bf84eef8b81d46194af5b9d2bc",
+          "message": "Merge pull request #3070 from ermineJose/armv7-storage-size-LP\n\nfeat: change data type from usize to u64 id disk space for nodes",
+          "timestamp": "2025-09-05T09:47:02Z",
+          "tree_id": "bd8f002d606ced62b2fa91c178fb0ce1a4e085e8",
+          "url": "https://github.com/maidsafe/autonomi/commit/82e0f25c9abb20bf84eef8b81d46194af5b9d2bc"
+        },
+        "date": 1757069016922,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10543,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22487,
             "unit": "ms"
           },
           {
