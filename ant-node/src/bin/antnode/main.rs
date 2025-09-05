@@ -196,7 +196,7 @@ struct Opt {
     /// The rewards address is the address that will receive the rewards for the node.
     /// It should be a valid EVM address.
     #[clap(long, value_parser = parse_rewards_address, verbatim_doc_comment)]
-    rewards_address: RewardsAddress,
+    rewards_address: Option<RewardsAddress>,
 
     /// Enable the mode to run as a relay client if it is behind a NAT and is not externally reachable.
     #[clap(long, default_value_t = false)]
@@ -285,6 +285,11 @@ fn main() {
         return;
     }
 
+    let Some(rewards_address) = opt.rewards_address else {
+        eprintln!("Error: --rewards-address is required when running the node");
+        return;
+    };
+
     let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
         Some(evm_network) => evm_network.clone().into(),
         None => match get_evm_network(opt.peers.local, Some(network_id)) {
@@ -337,7 +342,7 @@ fn main() {
         &log_output_dest,
         log_reload_handle,
         keypair,
-        opt.rewards_address,
+        rewards_address,
         evm_network,
         node_socket_addr,
         root_dir,
