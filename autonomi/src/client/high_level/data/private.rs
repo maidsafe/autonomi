@@ -16,6 +16,7 @@ use crate::client::{GetError, PutError};
 
 pub use crate::Bytes;
 pub use crate::client::data_types::chunk::DataMapChunk;
+pub use crate::client::high_level::data::stream::DataStream;
 
 impl Client {
     /// Fetch a blob of (private) data from the network. In-memory only - fails for large files.
@@ -53,6 +54,45 @@ impl Client {
             chunk_count
         );
         Ok(data)
+    }
+
+    /// Stream a blob of (private) data from the network. Returns an Iterator that yields chunks progressively.
+    /// Use this for large files to avoid loading everything into memory.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use autonomi::Client;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::init().await?;
+    /// # let data_map = todo!();
+    /// let stream = client.data_stream(&data_map).await?;
+    /// for chunk_result in stream {
+    ///     let chunk = chunk_result?;
+    ///     // Process chunk...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn data_stream(
+        &self,
+        data_map: &DataMapChunk,
+    ) -> Result<impl Iterator<Item = Result<Bytes, GetError>> + use<>, GetError> {
+        info!(
+            "Starting streaming fetch of private data from datamap {:?}",
+            data_map.0.address()
+        );
+
+        let datamap = self.restore_data_map_from_chunk(data_map).await?;
+        let chunk_count = datamap.infos().len();
+
+        debug!(
+            "Starting streaming fetch of private data ({} chunks)",
+            chunk_count
+        );
+
+        DataStream::new(self.clone(), datamap)
     }
 
     /// Upload a piece of private data to the network. This data will be self-encrypted.
