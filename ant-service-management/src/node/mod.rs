@@ -190,26 +190,24 @@ impl ServiceStateActions for NodeService {
                     error!("Error obtaining metadata_extended via metrics actions: {err:?}")
                 })?;
 
-            let node_info = self
-                .fs_actions
-                .node_info(&node_metadata_extended.root_dir)
-                .inspect_err(|err| {
-                    error!(
-                        "Error obtaining NodeInfo via fs actions on path {:?}: {err:?}",
-                        node_metadata_extended.root_dir
-                    )
-                })?;
+            let root_dir = self.service_data.read().await.data_dir_path.clone();
+
+            let listen_addrs = self.fs_actions.listen_addrs(&root_dir).inspect_err(|err| {
+                error!(
+                    "Error obtaining listen addresses via fs actions on path {:?}: {err:?}",
+                    node_metadata_extended.root_dir
+                )
+            })?;
 
             self.service_data.write().await.listen_addr = Some(
-                node_info
-                    .listeners
+                listen_addrs
                     .iter()
                     .cloned()
                     .map(|addr| addr.with(Protocol::P2p(node_metadata_extended.peer_id)))
                     .collect(),
             );
 
-            for addr in &node_info.listeners {
+            for addr in &listen_addrs {
                 if let Some(port) = get_port_from_multiaddr(addr) {
                     debug!("Found antnode port for {service_name}: {port}");
                     self.service_data.write().await.node_port = Some(port);
@@ -250,20 +248,37 @@ impl ServiceStateActions for NodeService {
 
     async fn startup_status(&self) -> Result<ServiceStartupStatus> {
         let service_name = self.service_data.read().await.service_name.clone();
-        let startup_status = ServiceStartupStatus::from(
-            self.metrics_action
-                .get_node_metrics()
-                .await?
-                .reachability_status
-                .progress,
-        );
 
-        match startup_status {
+        let node_metrics = self.metrics_action.get_node_metrics().await;
+
+        let startup_status = match node_metrics {
+            Ok(node_metrics) => {
+                ServiceStartupStatus::from(node_metrics.reachability_status.progress)
+            }
+            Err(err) => {
+                error!(
+                    "Error obtaining node metrics: {err:?}, check if we could find any critical errors. Waiting a few ms before reading from disk."
+                );
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let root_dir = self.service_data.read().await.data_dir_path.clone();
+                let critical_error = self.fs_actions.critical_failure(&root_dir)?;
+                ServiceStartupStatus::Failed {
+                    reason: critical_error,
+                }
+            }
+        };
+
+        match &startup_status {
             ServiceStartupStatus::InProgress(progress) => {
                 info!("The reachability check progress for {service_name} is {progress}%");
             }
             ServiceStartupStatus::Started => {
                 info!("The reachability check for {service_name} is complete");
+            }
+            ServiceStartupStatus::Failed { reason } => {
+                error!(
+                    "The reachability check / node startup failed for {service_name}: {reason:?}"
+                );
             }
         }
         Ok(startup_status)

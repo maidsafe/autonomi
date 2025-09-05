@@ -12,20 +12,16 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::Path;
 
-#[derive(Debug, Clone)]
-pub struct NodeInfo {
-    pub listeners: Vec<Multiaddr>,
-}
-
 pub trait FileSystemActions: Sync {
-    fn node_info(&self, root_dir: &Path) -> Result<NodeInfo>;
+    fn listen_addrs(&self, root_dir: &Path) -> Result<Vec<Multiaddr>>;
+    fn critical_failure(&self, root_dir: &Path) -> Result<String>;
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemClient;
 
 impl FileSystemActions for FileSystemClient {
-    fn node_info(&self, root_dir: &Path) -> Result<NodeInfo> {
+    fn listen_addrs(&self, root_dir: &Path) -> Result<Vec<Multiaddr>> {
         let listen_addrs_path = root_dir.join("listen_addrs.json");
         let mut listeners = Vec::new();
 
@@ -54,7 +50,25 @@ impl FileSystemActions for FileSystemClient {
                 }
             }
         }
-        let node_info = NodeInfo { listeners };
-        Ok(node_info)
+        Ok(listeners)
+    }
+
+    fn critical_failure(&self, root_dir: &Path) -> Result<String> {
+        let critical_failure_path = root_dir.join("critical_failure.log");
+
+        let mut critical_failure_str = String::new();
+
+        if critical_failure_path.exists() {
+            let mut file = OpenOptions::new().read(true).open(&critical_failure_path)?;
+
+            file.lock_shared()?;
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)?;
+            file.unlock()?;
+
+            critical_failure_str = contents;
+        }
+
+        Ok(critical_failure_str)
     }
 }

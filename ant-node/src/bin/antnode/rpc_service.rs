@@ -124,37 +124,12 @@ impl AntNode for SafeNodeRpcService {
         request: Request<NodeEventsRequest>,
     ) -> Result<Response<Self::NodeEventsStream>, Status> {
         debug!(
-            "RPC request received at {}: {:?}",
+            "RPC request received at {}: {:?}. Ignored currently",
             self.addr,
             request.get_ref()
         );
 
-        let (client_tx, client_rx) = mpsc::channel(4);
-
-        let mut events_rx = self.running_node.node_events_channel().subscribe();
-        let _handle = tokio::spawn(async move {
-            while let Ok(event) = events_rx.recv().await {
-                let event_bytes = match event.to_bytes() {
-                    Ok(bytes) => bytes,
-                    Err(err) => {
-                        debug!(
-                            "Error {err:?} while converting NodeEvent to bytes, ignoring the error"
-                        );
-                        continue;
-                    }
-                };
-
-                let event = NodeEvent { event: event_bytes };
-
-                if let Err(err) = client_tx.send(Ok(event)).await {
-                    debug!(
-                        "Dropping stream sender to RPC client due to failure in \
-                        last attempt to notify an event: {err}"
-                    );
-                    break;
-                }
-            }
-        });
+        let (_client_tx, client_rx) = mpsc::channel(1);
 
         Ok(Response::new(ReceiverStream::new(client_rx)))
     }

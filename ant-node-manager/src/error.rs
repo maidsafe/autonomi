@@ -40,4 +40,9 @@ pub enum Error {
         service_name: String,
         timeout: std::time::Duration,
     },
+    #[error("Service '{service_name}' failed to start: {reason}")]
+    ServiceStartupFailed {
+        service_name: String,
+        reason: String,
+    },
 }

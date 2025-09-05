@@ -6,21 +6,86 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use ant_node::networking::NetworkError;
 use std::path::PathBuf;
 
 const CRITICAL_FAILURE_LOG_FILE: &str = "critical_failure.log";
 
-pub fn set_critical_failure(log_output_dest: &str, reason: &str) {
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CriticalFailureLog {
+    date_time: chrono::DateTime<chrono::Utc>,
+    reason: String,
+}
+
+pub fn set_critical_failure(log_output_dest: &str, error: &ant_node::Error) {
     let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_LOG_FILE);
     let datetime_prefix = chrono::Utc::now();
-    let message = format!("[{datetime_prefix}] {reason}");
-    std::fs::write(log_path, message)
-        .unwrap_or_else(|err| error!("Failed to write to {CRITICAL_FAILURE_LOG_FILE}: {}", err));
+    let reason = node_error_to_reason(error);
+    let log = CriticalFailureLog {
+        date_time: datetime_prefix,
+        reason,
+    };
+    let Ok(log_json) = serde_json::to_string(&log)
+        .inspect_err(|err| error!("Failed to serialize when writing critical failure log: {err}"))
+    else {
+        return;
+    };
+    let _ = std::fs::write(log_path, log_json)
+        .inspect_err(|err| error!("Failed to write to {CRITICAL_FAILURE_LOG_FILE}: {err}"));
 }
 
 pub fn reset_critical_failure(log_output_dest: &str) {
     let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_LOG_FILE);
     if log_path.exists() {
         let _ = std::fs::remove_file(log_path);
+    }
+}
+
+fn node_error_to_reason(error: &ant_node::Error) -> String {
+    match error {
+        ant_node::Error::Network(network_error) => {
+            println!("Network error: {network_error}");
+            let network_err_str = match network_error {
+                NetworkError::DialError(_) => "DialError".to_string(),
+                NetworkError::Io(_) => "IoError".to_string(),
+                NetworkError::KademliaStoreError(_) => "KademliaStoreError".to_string(),
+                NetworkError::TransportError(_) => "TransportError".to_string(),
+                NetworkError::ProtocolError(_) => "ProtocolError".to_string(),
+                NetworkError::EvmPaymemt(_) => "EvmPayment".to_string(),
+                NetworkError::SigningFailed(_) => "SigningFailed".to_string(),
+                NetworkError::NoListenAddressesFound => "NoListenAddressesFound".to_string(),
+                NetworkError::ListenFailed(_) => "ListenFailed".to_string(),
+                NetworkError::InCorrectRecordHeader => "InCorrectRecordHeader".to_string(),
+                NetworkError::FailedToCreateRecordStoreDir { .. } => {
+                    "FailedToCreateRecordStoreDir".to_string()
+                }
+                NetworkError::GetClosestTimedOut => "GetClosestTimedOut".to_string(),
+                NetworkError::NotEnoughPeers { .. } => "NotEnoughPeers".to_string(),
+                NetworkError::NetworkMetricError => "NetworkMetricError".to_string(),
+                NetworkError::OutboundError(_) => "OutboundError".to_string(),
+                NetworkError::ReceivedKademliaEventDropped { .. } => {
+                    "ReceivedKademliaEventDropped".to_string()
+                }
+                NetworkError::SenderDropped(_) => "SenderDropped".to_string(),
+                NetworkError::InternalMsgChannelDropped => "InternalMsgChannelDropped".to_string(),
+                NetworkError::ReceivedResponseDropped(_) => "ReceivedResponseDropped".to_string(),
+                NetworkError::OutgoingResponseDropped(_) => "OutgoingResponseDropped".to_string(),
+            };
+            format!("NetworkError::{network_err_str}")
+        }
+        ant_node::Error::FailedToGetNodePort => "FailedToGetNodePort".to_string(),
+        ant_node::Error::InvalidQuoteContent => "InvalidQuoteContent".to_string(),
+        ant_node::Error::InvalidQuoteSignature => "InvalidQuoteSignature".to_string(),
+        ant_node::Error::UnreachableNode => "UnreachableNode".to_string(),
+        ant_node::Error::PidFileWriteFailed { .. } => "PidFileWriteFailed".to_string(),
+        ant_node::Error::ControlChannelClosed => "ControlChannelClosed".to_string(),
+        ant_node::Error::NodeEventChannelClosed => "NodeEventChannelClosed".to_string(),
+        ant_node::Error::ControlMessageSendFailed(_) => "ControlMessageSendFailed".to_string(),
+        ant_node::Error::CtrlCReceived => "CtrlCReceived".to_string(),
+        ant_node::Error::TerminateSignalReceived(terminate_node_reason) => {
+            format!("TerminateSignalReceived::{terminate_node_reason:?}")
+        }
+        ant_node::Error::Bootstrap(_) => "Bootstrap".to_string(),
+        ant_node::Error::Tokio => "TokioError".to_string(),
     }
 }

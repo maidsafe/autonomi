@@ -29,11 +29,11 @@ mod transport;
 pub use self::interface::SwarmLocalState;
 pub use self::reachability_check::{ReachabilityIssue, ReachabilityStatus};
 pub(crate) use self::{
-    error::NetworkError,
     interface::{NetworkEvent, NodeIssue},
     network::{Network, NetworkConfig, init_reachability_check_swarm},
     record_store::NodeRecordStore,
 };
+pub use error::NetworkError;
 
 #[cfg(feature = "open-metrics")]
 pub(crate) use metrics::service::MetricsRegistries;

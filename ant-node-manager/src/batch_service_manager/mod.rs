@@ -513,6 +513,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                     continue;
                 }
 
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 match service.startup_status().await {
                     Ok(startup_status) => match startup_status {
                         ServiceStartupStatus::InProgress(progress) => {
@@ -534,6 +535,21 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                                         .green()
                                         .to_string(),
                                 );
+                            }
+                        }
+                        ServiceStartupStatus::Failed { reason } => {
+                            error!(
+                                "The reachability check / node startup failed for {service_name}: {reason}"
+                            );
+                            batch_result.insert_error(
+                                service_name.clone(),
+                                Error::ServiceStartupFailed {
+                                    service_name: service_name.clone(),
+                                    reason,
+                                },
+                            );
+                            if let Some(pb) = progress_bars.get(&service_name) {
+                                pb.finish_with_message("Failed ✗".red().to_string());
                             }
                         }
                     },

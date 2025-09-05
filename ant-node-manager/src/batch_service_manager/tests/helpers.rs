@@ -11,7 +11,7 @@ use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
     NodeRegistryManager, ReachabilityProgress, ServiceStatus,
     error::Result as ServiceControlResult,
-    fs::{FileSystemActions, NodeInfo},
+    fs::FileSystemActions,
     metric::{
         MetricsAction, MetricsActionError, NodeMetadataExtended, NodeMetrics,
         ReachabilityStatusValues,
@@ -84,7 +84,8 @@ mock! {
     pub FileSystemClient {}
 
     impl FileSystemActions for FileSystemClient {
-        fn node_info(&self, root_dir: &std::path::Path) -> Result<ant_service_management::fs::NodeInfo, ant_service_management::Error>;
+        fn listen_addrs(&self, root_dir: &std::path::Path) -> Result<Vec<Multiaddr>, ant_service_management::Error>;
+        fn critical_failure(&self, root_dir: &std::path::Path) -> Result<String, ant_service_management::Error>;
     }
 }
 
@@ -185,14 +186,12 @@ pub fn create_test_services_with_mocks(count: usize) -> Result<Vec<NodeService>>
             });
 
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![
-                        Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
-                    ],
-                })
+                Ok(vec![
+                    Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
+                ])
             });
 
         let service_data = create_test_service_data(i as u16);
@@ -267,14 +266,12 @@ pub fn create_test_services_with_progressive_mocks(
 
         // Set up file system mock
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(0..=1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![
-                        Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
-                    ],
-                })
+                Ok(vec![
+                    Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
+                ])
             });
 
         match &scenario {

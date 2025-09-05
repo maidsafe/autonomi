@@ -92,8 +92,8 @@ pub enum Error {
     #[error("Network error {0}")]
     Network(#[from] crate::networking::NetworkError),
 
-    #[error("Failed to parse NodeEvent")]
-    NodeEventParsingFailed,
+    #[error("Bootstrap error: {0}")]
+    Bootstrap(#[from] ant_bootstrap::error::Error),
 
     #[error("Failed to obtain node's current port")]
     FailedToGetNodePort,
@@ -127,9 +127,9 @@ pub enum Error {
     #[error("Node terminated due to Ctrl-C signal")]
     CtrlCReceived,
 
-    #[error("File system operation failed: {0}")]
-    FileSystem(#[from] std::io::Error),
-
     #[error("Terminate signal received: {0}")]
     TerminateSignalReceived(TerminateNodeReason),
+
+    #[error("Tokio Error")]
+    Tokio,
 }

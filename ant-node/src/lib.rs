@@ -33,7 +33,7 @@ mod listen_addr_writer;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
-mod networking;
+pub mod networking;
 mod node;
 mod put_validation;
 #[cfg(feature = "extension-module")]

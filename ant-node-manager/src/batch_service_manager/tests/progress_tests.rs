@@ -184,7 +184,7 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
     // Create services that will fail when metrics are requested during progress monitoring
     let mut services = Vec::new();
     for i in 1..=2 {
-        let mock_fs_client = MockFileSystemClient::new();
+        let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
         // Expect exactly 1 call to get_node_metrics, which will fail
@@ -198,6 +198,14 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
                     ),
                 )
             });
+
+        mock_fs_client
+            .expect_critical_failure()
+            .with(eq(PathBuf::from(format!(
+                "/var/antctl/services/antnode{i}"
+            ))))
+            .times(1)
+            .returning(|_| Ok("Unreachable".to_string()));
 
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));
@@ -223,6 +231,20 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
     assert_eq!(batch_result.errors.len(), 2);
     assert!(batch_result.errors.contains_key("antnode1"));
     assert!(batch_result.errors.contains_key("antnode2"));
+
+    let expected_error = crate::error::Error::ServiceStartupFailed {
+        service_name: "antnode1".to_string(),
+        reason: "Unreachable".to_string(),
+    };
+    let actual_error = batch_result.get_errors("antnode1").unwrap();
+    assert_eq!(format!("{actual_error:?}",), format!("{expected_error:?}",));
+
+    let expected_error = crate::error::Error::ServiceStartupFailed {
+        service_name: "antnode2".to_string(),
+        reason: "Unreachable".to_string(),
+    };
+    let actual_error = batch_result.get_errors("antnode2").unwrap();
+    assert_eq!(format!("{actual_error:?}",), format!("{expected_error:?}",));
 
     Ok(())
 }
@@ -252,7 +274,7 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
 
     // Create single service that fails during progress monitoring
     let mut services = Vec::new();
-    let mock_fs_client = MockFileSystemClient::new();
+    let mut mock_fs_client = MockFileSystemClient::new();
     let mut mock_metrics_client = MockMetricsClient::new();
 
     // Expect exactly 1 call to get_node_metrics, which will fail
@@ -266,6 +288,13 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
                 ),
             )
         });
+
+    // A failure should then trigger us to read the critical failure
+    mock_fs_client
+        .expect_critical_failure()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode1")))
+        .times(1)
+        .returning(|_| Ok("Unreachable".to_string()));
 
     let service_data = create_test_service_data(1);
     let service_data = Arc::new(RwLock::new(service_data));
@@ -289,6 +318,12 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
     // Should have error for the service that failed progress
     assert_eq!(batch_result.errors.len(), 1);
     assert!(batch_result.errors.contains_key("antnode1"));
+    let expected_error = crate::error::Error::ServiceStartupFailed {
+        service_name: "antnode1".to_string(),
+        reason: "Unreachable".to_string(),
+    };
+    let actual_error = batch_result.get_errors("antnode1").unwrap();
+    assert_eq!(format!("{actual_error:?}",), format!("{expected_error:?}",));
 
     Ok(())
 }
@@ -421,7 +456,7 @@ async fn start_all_should_timeout_stuck_services() -> Result<()> {
     let mut mock_metrics_client = MockMetricsClient::new();
 
     // Set up minimal file system mock (won't be reached due to timeout)
-    mock_fs_client.expect_node_info().times(0);
+    mock_fs_client.expect_listen_addrs().times(0);
 
     // Set up minimal metadata mock (won't be reached due to timeout)
     mock_metrics_client
