@@ -9,8 +9,7 @@
 use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{
-    ReachabilityProgress, ServiceStateActions, ServiceStatus, UpgradeOptions, fs::NodeInfo,
-    node::NodeService,
+    ReachabilityProgress, ServiceStateActions, ServiceStatus, UpgradeOptions, node::NodeService,
 };
 use assert_fs::prelude::*;
 use assert_matches::assert_matches;
@@ -106,12 +105,10 @@ async fn upgrade_all_should_upgrade_services_to_new_version() -> Result<()> {
         let mut mock_metrics_client = MockMetricsClient::new();
 
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
-                })
+                Ok(vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()])
             });
 
         mock_metrics_client
@@ -312,12 +309,10 @@ async fn upgrade_all_should_force_downgrade_when_requested() -> Result<()> {
         let mut mock_metrics_client = MockMetricsClient::new();
 
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
-                })
+                Ok(vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()])
             });
 
         // Set up metrics mock expectations for get_node_metrics
@@ -675,12 +670,10 @@ async fn upgrade_all_should_upgrade_user_mode_services() -> Result<()> {
         let mut mock_metrics_client = MockMetricsClient::new();
 
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
-                })
+                Ok(vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()])
             });
 
         // Set up metrics mock expectations for get_node_metrics
@@ -865,12 +858,10 @@ async fn upgrade_all_should_set_metrics_port_if_not_set() -> Result<()> {
         let mut mock_metrics_client = MockMetricsClient::new();
 
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .times(1)
             .returning(move |_root_dir| {
-                Ok(NodeInfo {
-                    listeners: vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()],
-                })
+                Ok(vec![format!("/ip4/127.0.0.1/udp/600{i}").parse().unwrap()])
             });
 
         // Set up metrics mock expectations for get_node_metrics
