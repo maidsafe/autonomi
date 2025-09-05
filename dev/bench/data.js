@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757068677232,
+  "lastUpdate": 1757068754788,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2420,6 +2420,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 88,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a0bc091ca9fe8edb14054a10bb8d3eaff1263e7e",
+          "message": "Merge pull request #3187 from grumbach/bump_self_encryption\n\nchore: bump self encryption and clippy clean",
+          "timestamp": "2025-09-05T09:42:20Z",
+          "tree_id": "67a774cecb518639fd0046e3d17d96d60152b050",
+          "url": "https://github.com/maidsafe/autonomi/commit/a0bc091ca9fe8edb14054a10bb8d3eaff1263e7e"
+        },
+        "date": 1757068753935,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 95,
             "unit": "MB"
           }
         ]
