@@ -9,6 +9,7 @@
 pub mod local;
 pub mod node;
 
+use crate::error::{Error, Result};
 use crate::{
     VerbosityLevel,
     helpers::{download_and_extract_release, get_bin_version},
@@ -16,7 +17,6 @@ use crate::{
 };
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::UpgradeResult;
-use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use semver::Version;
 use std::{
@@ -209,7 +209,7 @@ fn build_binary(bin_type: &ReleaseType) -> Result<PathBuf> {
 
     if !build_result.status.success() {
         error!("Failed to build binaries {bin_name}");
-        return Err(eyre!("Failed to build binaries"));
+        return Err(Error::FailedToBuildBinary { bin_name });
     }
 
     Ok(target_dir)

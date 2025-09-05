@@ -9,6 +9,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use super::download_and_get_upgrade_bin_path;
+use crate::error::{Error, Result};
 use crate::{
     VerbosityLevel,
     add_services::{
@@ -31,7 +32,6 @@ use ant_service_management::{
     fs::FileSystemClient,
     metric::MetricsClient,
 };
-use color_eyre::{Result, Section, eyre::eyre};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
@@ -426,8 +426,7 @@ pub async fn upgrade(
 
         for node in node_registry.nodes.read().await.iter() {
             let node = node.read().await;
-            let version = Version::parse(&node.version)
-                .map_err(|_| eyre!("Failed to parse Version for node {}", node.service_name))?;
+            let version = Version::parse(&node.version)?;
             node_versions.push(version);
         }
 
@@ -481,8 +480,10 @@ pub async fn upgrade(
                 ant_service_management::UpgradeResult::UpgradedButNotStarted(_, _, _)
             )
     }) {
-        return Err(color_eyre::eyre::eyre!("There was a problem upgrading one or more nodes")
-            .suggestion("For any services that were upgraded but did not start, you can attempt to start them again using the 'start' command."));
+        return Err(Error::ServiceOperationFailed {
+            operation: "upgrade".to_string(),
+            suggestion: "For any services that were upgraded but did not start, you can attempt to start them again using the 'start' command.".to_string(),
+        });
     }
 
     Ok(())
@@ -517,14 +518,16 @@ async fn get_services_for_ops(
 
             if !found_service_with_name {
                 error!("No service named '{name}'");
-                return Err(eyre!(format!("No service named '{name}'")));
+                return Err(Error::ServiceNotFound(name.to_string()));
             }
         }
 
         for peer_id_str in &peer_ids {
             let mut found_service_with_peer_id = false;
-            let given_peer_id = PeerId::from_str(peer_id_str)
-                .map_err(|_| eyre!(format!("Error parsing PeerId: '{peer_id_str}'")))?;
+            let given_peer_id = PeerId::from_str(peer_id_str).map_err(|e| {
+                error!("Invalid PeerId '{peer_id_str}': {e}");
+                Error::ServiceNotFound(peer_id_str.to_string())
+            })?;
             for node in node_registry.nodes.read().await.iter() {
                 let node_read = node.read().await;
                 if let Some(peer_id) = node_read.peer_id
@@ -538,9 +541,7 @@ async fn get_services_for_ops(
             }
             if !found_service_with_peer_id {
                 error!("Could not find node with peer id: '{given_peer_id:?}'");
-                return Err(eyre!(format!(
-                    "Could not find node with peer ID '{given_peer_id}'",
-                )));
+                return Err(Error::ServiceNotFound(peer_id_str.to_string()));
             }
         }
     }
