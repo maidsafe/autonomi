@@ -293,6 +293,9 @@ pub enum ScratchpadCmd {
         /// Display the data as a hex string instead of raw bytes
         #[arg(long)]
         hex: bool,
+        /// Print detailed fork error analysis if a fork is detected
+        #[arg(long)]
+        print_fork_error: bool,
     },
 
     /// Edit the contents of an existing scratchpad.
@@ -305,6 +308,9 @@ pub enum ScratchpadCmd {
         secret_key: bool,
         /// The new data to store in the scratchpad (Up to 4MB)
         data: String,
+        /// Print detailed fork error analysis if a fork is detected
+        #[arg(long)]
+        print_fork_error: bool,
     },
 
     /// List owned scratchpads
@@ -312,6 +318,16 @@ pub enum ScratchpadCmd {
         /// Verbose output. Detailed description of the scratchpads.
         #[arg(short, long)]
         verbose: bool,
+    },
+
+    /// Print full fork error information for a scratchpad (for debugging fork conflicts)
+    PrintForkError {
+        /// The name of the scratchpad.
+        name: String,
+        /// Indicate that this is an external scratchpad secret key.
+        /// (Use this when interacting with a scratchpad shared with you by someone else)
+        #[arg(short, long)]
+        secret_key: bool,
     },
 }
 
@@ -575,13 +591,18 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 name,
                 secret_key,
                 hex,
-            } => scratchpad::get(network_context, name, secret_key, hex).await,
+                print_fork_error,
+            } => scratchpad::get(network_context, name, secret_key, hex, print_fork_error).await,
             ScratchpadCmd::Edit {
                 name,
                 secret_key,
                 data,
-            } => scratchpad::edit(network_context, name, secret_key, data).await,
+                print_fork_error,
+            } => scratchpad::edit(network_context, name, secret_key, data, print_fork_error).await,
             ScratchpadCmd::List { verbose } => scratchpad::list(verbose),
+            ScratchpadCmd::PrintForkError { name, secret_key } => {
+                scratchpad::print_fork_error(network_context, name, secret_key).await
+            }
         },
         Some(SubCmd::Pointer { command }) => match command {
             PointerCmd::GenerateKey { overwrite } => pointer::generate_key(overwrite),

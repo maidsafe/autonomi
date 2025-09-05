@@ -59,73 +59,27 @@ use crate::{
 fn scratchpad_error_to_py_err(
     error: crate::client::data_types::scratchpad::ScratchpadError,
 ) -> PyErr {
-    // Use the original Rust error message directly
-    PyRuntimeError::new_err(format!("{error}"))
-}
-
-/// Enhanced helper that can decrypt conflicting data when owner key is available
-fn scratchpad_error_to_py_err_with_owner(
-    error: crate::client::data_types::scratchpad::ScratchpadError,
-    owner_key: Option<&crate::client::data_types::scratchpad::SecretKey>,
-) -> PyErr {
     use crate::client::data_types::scratchpad::ScratchpadError;
 
     match error {
         ScratchpadError::Fork(conflicting_scratchpads) => {
-            let mut message = format!("{}", ScratchpadError::Fork(conflicting_scratchpads.clone()));
-
-            // If we have the owner key, decrypt and show the actual conflicting data
-            if let Some(owner) = owner_key {
-                message.push_str("\n\nConflicting data content:");
-
-                for (i, scratchpad) in conflicting_scratchpads.iter().enumerate() {
-                    match scratchpad.decrypt_data(owner) {
-                        Ok(decrypted_bytes) => match String::from_utf8(decrypted_bytes.to_vec()) {
-                            Ok(decrypted_text) => {
-                                message.push_str(&format!(
-                                    "\n  Conflict {}: \"{}\" (Counter: {}, Hash: {})",
-                                    i + 1,
-                                    decrypted_text,
-                                    scratchpad.counter(),
-                                    hex::encode(scratchpad.encrypted_data_hash())[..16].to_string()
-                                        + "..."
-                                ));
-                            }
-                            Err(_) => {
-                                message.push_str(&format!(
-                                        "\n  Conflict {}: <binary data {} bytes> (Counter: {}, Hash: {})",
-                                        i + 1,
-                                        decrypted_bytes.len(),
-                                        scratchpad.counter(),
-                                        hex::encode(scratchpad.encrypted_data_hash())[..16].to_string() + "..."
-                                    ));
-                            }
-                        },
-                        Err(_) => {
-                            message.push_str(&format!(
-                                "\n  Conflict {}: <decryption failed> (Counter: {}, Hash: {})",
-                                i + 1,
-                                scratchpad.counter(),
-                                hex::encode(scratchpad.encrypted_data_hash())[..16].to_string()
-                                    + "..."
-                            ));
-                        }
-                    }
+            // Convert Rust scratchpads to Python scratchpads
+            let py_scratchpads: Vec<PyScratchpad> = conflicting_scratchpads
+                .iter()
+                .map(|s| PyScratchpad { inner: s.clone() })
+                .collect();
+            
+            // Create the fork error message
+            let message = format!("{}", ScratchpadError::Fork(conflicting_scratchpads.clone()));
+            
+            // Create a runtime error with the conflicting scratchpads attached
+            Python::with_gil(|py| {
+                let exception = PyRuntimeError::new_err(message);
+                if let Ok(exc_value) = exception.value(py).downcast::<pyo3::exceptions::PyRuntimeError>() {
+                    let _ = exc_value.setattr("conflicting_scratchpads", py_scratchpads);
                 }
-
-                let max_counter = conflicting_scratchpads
-                    .iter()
-                    .map(|s| s.counter())
-                    .max()
-                    .unwrap_or(0);
-
-                message.push_str(&format!(
-                    "\n\nChoose which data to keep and update with counter: {}",
-                    max_counter + 1
-                ));
-            }
-
-            PyRuntimeError::new_err(message)
+                exception
+            })
         }
         _ => PyRuntimeError::new_err(format!("{error}")),
     }
@@ -541,7 +495,7 @@ impl PyClient {
                     payment,
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(|e| scratchpad_error_to_py_err(e))?;
 
             Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
@@ -564,7 +518,7 @@ impl PyClient {
             client
                 .scratchpad_update(&owner.inner, content_type, &Bytes::from(data))
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(|e| scratchpad_error_to_py_err(e))?;
 
             Ok(())
         })
@@ -595,7 +549,7 @@ impl PyClient {
                     &Bytes::from(data),
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(|e| scratchpad_error_to_py_err(e))?;
 
             Ok(PyScratchpad {
                 inner: new_scratchpad,
@@ -4026,6 +3980,35 @@ impl PyScratchpad {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(data.to_vec())
     }
+    
+    /// Returns the owner public key
+    pub fn owner(&self) -> PyPublicKey {
+        PyPublicKey {
+            inner: *self.inner.owner(),
+        }
+    }
+    
+    /// Returns the signature
+    pub fn signature(&self) -> PySignature {
+        PySignature {
+            inner: self.inner.signature().clone(),
+        }
+    }
+    
+    /// Returns the scratchpad hash as hex string
+    pub fn scratchpad_hash(&self) -> String {
+        hex::encode(self.inner.scratchpad_hash().0)
+    }
+    
+    /// Returns the encrypted data hash as hex string
+    pub fn encrypted_data_hash(&self) -> String {
+        hex::encode(self.inner.encrypted_data_hash())
+    }
+    
+    /// Returns the encrypted data
+    pub fn encrypted_data(&self) -> Vec<u8> {
+        self.inner.encrypted_data().to_vec()
+    }
 }
 
 /// A handle to the register history
@@ -4312,7 +4295,6 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRetryStrategy>()?;
     m.add_class::<PyScratchpad>()?;
     m.add_class::<PyScratchpadAddress>()?;
-
     m.add_class::<PySecretKey>()?;
     m.add_class::<PySignature>()?;
     m.add_class::<PyStoreQuote>()?;

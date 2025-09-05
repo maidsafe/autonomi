@@ -12,6 +12,7 @@ use crate::NetworkAddress;
 use crate::error::{Error, Result};
 use bls::{Ciphertext, PublicKey, SecretKey, Signature};
 use serde::{Deserialize, Serialize};
+use std::mem::size_of;
 
 use xor_name::XorName;
 
@@ -204,6 +205,22 @@ impl Scratchpad {
     /// Returns true if the scratchpad is too big
     pub fn is_too_big(&self) -> bool {
         self.size() > Self::MAX_SIZE
+    }
+
+    /// Returns the signature of the scratchpad
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    /// Returns the hash of the entire scratchpad (including all fields)
+    pub fn scratchpad_hash(&self) -> XorName {
+        let mut content = Vec::new();
+        content.extend(self.address.to_hex().as_bytes());
+        content.extend(self.data_encoding.to_be_bytes());
+        content.extend(&self.encrypted_data);
+        content.extend(self.counter.to_be_bytes());
+        content.extend(self.signature.to_bytes());
+        XorName::from_content(&content)
     }
 }
 
