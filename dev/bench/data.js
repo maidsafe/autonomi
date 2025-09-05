@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757068162450,
+  "lastUpdate": 1757068677232,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1364,6 +1364,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.15875588822247,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a0bc091ca9fe8edb14054a10bb8d3eaff1263e7e",
+          "message": "Merge pull request #3187 from grumbach/bump_self_encryption\n\nchore: bump self encryption and clippy clean",
+          "timestamp": "2025-09-05T09:42:20Z",
+          "tree_id": "67a774cecb518639fd0046e3d17d96d60152b050",
+          "url": "https://github.com/maidsafe/autonomi/commit/a0bc091ca9fe8edb14054a10bb8d3eaff1263e7e"
+        },
+        "date": 1757068669122,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.3913049121220613,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.562667170380061,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.227136133130863,
             "unit": "MiB/s"
           }
         ]
