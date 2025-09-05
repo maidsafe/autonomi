@@ -12,7 +12,6 @@ use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::{
     ReachabilityProgress, ServiceStatus,
-    fs::NodeInfo,
     node::{NodeService, NodeServiceData},
 };
 use color_eyre::eyre::Result;
@@ -41,18 +40,16 @@ fn create_test_service_with_config(
     let mut mock_fs_client = MockFileSystemClient::new();
     let mut mock_metrics_client = MockMetricsClient::new();
 
-    // Set up filesystem mock expectations for node_info (called during on_start)
+    // Set up filesystem mock expectations for listen_addrs (called during on_start)
     mock_fs_client
-        .expect_node_info()
+        .expect_listen_addrs()
         .times(1) // Called once during service startup after upgrade
         .returning(move |_root_dir| {
-            Ok(NodeInfo {
-                listeners: vec![
-                    format!("/ip4/127.0.0.1/udp/{expected_port}")
-                        .parse()
-                        .unwrap(),
-                ],
-            })
+            Ok(vec![
+                format!("/ip4/127.0.0.1/udp/{expected_port}")
+                    .parse()
+                    .unwrap(),
+            ])
         });
 
     // Set up metrics mock expectations for get_node_metrics

@@ -77,6 +77,8 @@ pub enum ServiceStartupStatus {
     InProgress(u8),
     /// Service has completed startup (reachability check complete)
     Started,
+    /// Service startup has failed
+    Failed { reason: String },
 }
 
 impl From<ReachabilityProgress> for ServiceStartupStatus {

@@ -58,14 +58,14 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
         let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // File system mock for node info retrieval after successful startup
+        // File system mock for listening addresses retrieval after successful startup
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .with(eq(PathBuf::from(format!(
                 "/var/antctl/services/antnode{i}"
             ))))
             .times(1)
-            .returning(|_| Ok(ant_service_management::fs::NodeInfo { listeners: vec![] }));
+            .returning(|_| Ok(vec![]));
 
         mock_metrics_client
             .expect_get_node_metrics()
@@ -164,13 +164,13 @@ async fn start_all_should_skip_startup_check_if_disabled() -> Result<()> {
         let mut mock_metrics_client = MockMetricsClient::new();
 
         // No calls should be made
-        mock_fs_client.expect_node_info().times(0);
+        mock_fs_client.expect_listen_addrs().times(0);
         mock_metrics_client.expect_get_node_metrics().times(0);
         mock_metrics_client
             .expect_get_node_metadata_extended()
             .times(0);
 
-        let service_data = create_test_service_data(i as u16);
+        let service_data = create_test_service_data(i);
         let service_data = Arc::new(RwLock::new(service_data));
 
         let service = NodeService::new(
@@ -787,14 +787,14 @@ async fn start_all_should_handle_mixed_user_and_system_modes() -> Result<()> {
         let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // File system mock for node info retrieval after successful startup
+        // File system mock for listening addresses retrieval after successful startup
         mock_fs_client
-            .expect_node_info()
+            .expect_listen_addrs()
             .with(eq(PathBuf::from(format!(
                 "/var/antctl/services/antnode{i}"
             ))))
             .times(1)
-            .returning(|_| Ok(ant_service_management::fs::NodeInfo { listeners: vec![] }));
+            .returning(|_| Ok(vec![]));
 
         mock_metrics_client
             .expect_get_node_metrics()
