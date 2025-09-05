@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 pub mod config;
+pub mod error;
 pub mod handlers;
 
 use crate::action::Action;
@@ -17,12 +18,12 @@ use tokio::runtime::Builder;
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio::task::LocalSet;
 
-pub use config::{AddNodesArgs, NodeConfig, UpgradeNodesArgs};
+pub use config::{AddNodesConfig, UpgradeNodesConfig};
 
 #[derive(Debug)]
 pub enum NodeManagementTask {
     MaintainNodes {
-        args: AddNodesArgs,
+        config: AddNodesConfig,
     },
     ResetNodes {
         start_nodes_after_reset: bool,
@@ -33,10 +34,10 @@ pub enum NodeManagementTask {
         action_sender: UnboundedSender<Action>,
     },
     UpgradeNodes {
-        args: UpgradeNodesArgs,
+        config: UpgradeNodesConfig,
     },
     AddNode {
-        args: AddNodesArgs,
+        config: AddNodesConfig,
     },
     RemoveNodes {
         services: Vec<String>,
@@ -65,7 +66,7 @@ impl NodeManagement {
             local.spawn_local(async move {
                 while let Some(new_task) = recv.recv().await {
                     match new_task {
-                        NodeManagementTask::MaintainNodes { args } => {
+                        NodeManagementTask::MaintainNodes { config: args } => {
                             handlers::maintain_n_running_nodes(args, node_registry.clone()).await;
                         }
                         NodeManagementTask::ResetNodes {
@@ -86,7 +87,7 @@ impl NodeManagement {
                             handlers::stop_nodes(services, action_sender, node_registry.clone())
                                 .await;
                         }
-                        NodeManagementTask::UpgradeNodes { args } => {
+                        NodeManagementTask::UpgradeNodes { config: args } => {
                             handlers::upgrade_nodes(args, node_registry.clone()).await
                         }
                         NodeManagementTask::RemoveNodes {
@@ -103,7 +104,7 @@ impl NodeManagement {
                             handlers::start_nodes(services, action_sender, node_registry.clone())
                                 .await
                         }
-                        NodeManagementTask::AddNode { args } => {
+                        NodeManagementTask::AddNode { config: args } => {
                             handlers::add_node(args, node_registry.clone()).await
                         }
                     }

@@ -19,7 +19,10 @@ pub mod local;
 
 use std::sync::Arc;
 
-pub use {batch_service_manager::BatchServiceManager, service_manager::ServiceManager};
+pub use {
+    batch_service_manager::BatchServiceManager, error::Error, error::Result,
+    service_manager::ServiceManager,
+};
 
 pub const DEFAULT_NODE_STARTUP_INTERVAL_MS: u64 = 10000;
 
@@ -41,7 +44,6 @@ impl From<u8> for VerbosityLevel {
     }
 }
 
-use crate::error::{Error, Result};
 use ant_service_management::NodeRegistryManager;
 use ant_service_management::fs::FileSystemActions;
 use ant_service_management::fs::FileSystemClient;

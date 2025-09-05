@@ -10,7 +10,7 @@
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-#[derive(Debug, thiserror::Error, Clone)]
+#[derive(Debug, thiserror::Error)]
 pub enum AddNodeError {
     #[error("A genesis node already exists")]
     GenesisNodeAlreadyExists,
