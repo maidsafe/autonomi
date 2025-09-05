@@ -43,6 +43,7 @@ impl From<u8> for VerbosityLevel {
 
 use crate::error::{Error, Result};
 use ant_service_management::NodeRegistryManager;
+use ant_service_management::fs::FileSystemActions;
 use ant_service_management::fs::FileSystemClient;
 use ant_service_management::metric::MetricsClient;
 use ant_service_management::{
@@ -93,13 +94,12 @@ pub async fn status_report(
                 "PID: {}",
                 node.pid.map_or("-".to_string(), |p| p.to_string())
             );
-            if node.status == ServiceStatus::Stopped
-                && let Some(failure_reason) = node.get_critical_failure()
-            {
-                println!(
-                    "Failure reason: [{}] {}",
-                    failure_reason.0, failure_reason.1
-                );
+            if node.status == ServiceStatus::Stopped {
+                let fs_client = FileSystemClient;
+                let critical_failure = fs_client.critical_failure(&node.data_dir_path);
+                if let Ok(reason) = critical_failure {
+                    println!("Failure reason: {reason}");
+                }
             }
             println!("Data path: {}", node.data_dir_path.to_string_lossy());
             println!("Log path: {}", node.log_dir_path.to_string_lossy());
@@ -120,11 +120,12 @@ pub async fn status_report(
             if node.status == ServiceStatus::Removed {
                 continue;
             }
+            let fs_client = FileSystemClient;
+            let critical_failure = fs_client.critical_failure(&node.data_dir_path);
 
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
             let failure_reason = if node.status == ServiceStatus::Stopped {
-                node.get_critical_failure()
-                    .map_or("-".to_string(), |(_time, reason)| reason)
+                critical_failure.unwrap_or("-".to_string())
             } else {
                 "-".to_string()
             };

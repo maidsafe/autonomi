@@ -6,11 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::error::{PortRangeError, Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
-use color_eyre::{Result, eyre::eyre};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{
     ffi::OsString,
@@ -32,12 +32,12 @@ impl PortRange {
         } else {
             let parts: Vec<&str> = s.split('-').collect();
             if parts.len() != 2 {
-                return Err(eyre!("Port range must be in the format 'start-end'"));
+                return Err(PortRangeError::InvalidFormat.into());
             }
-            let start = parts[0].parse::<u16>()?;
-            let end = parts[1].parse::<u16>()?;
+            let start = parts[0].parse::<u16>().map_err(PortRangeError::from)?;
+            let end = parts[1].parse::<u16>().map_err(PortRangeError::from)?;
             if start >= end {
-                return Err(eyre!("End port must be greater than start port"));
+                return Err(PortRangeError::InvalidRange.into());
             }
             Ok(Self::Range(start, end))
         }
@@ -49,18 +49,22 @@ impl PortRange {
             Self::Single(_) => {
                 if count != 1 {
                     error!("The count ({count}) does not match the number of ports (1)");
-                    return Err(eyre!(
-                        "The count ({count}) does not match the number of ports (1)"
-                    ));
+                    return Err(PortRangeError::CountMismatch {
+                        expected: 1,
+                        actual: count,
+                    }
+                    .into());
                 }
             }
             Self::Range(start, end) => {
                 let port_count = end - start + 1;
                 if count != port_count {
                     error!("The count ({count}) does not match the number of ports ({port_count})");
-                    return Err(eyre!(
-                        "The count ({count}) does not match the number of ports ({port_count})"
-                    ));
+                    return Err(PortRangeError::CountMismatch {
+                        expected: port_count,
+                        actual: count,
+                    }
+                    .into());
                 }
             }
         }
