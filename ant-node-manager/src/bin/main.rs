@@ -727,7 +727,7 @@ async fn main() -> Result<()> {
         } else {
             Level::TRACE
         };
-        get_log_builder(level)?.initialize()?.1
+        get_log_builder(level).initialize()?.1
     } else {
         None
     };
@@ -800,7 +800,10 @@ async fn main() -> Result<()> {
         Some(SubCmd::Balance {
             peer_id: peer_ids,
             service_name: service_names,
-        }) => cmd::node::balance(peer_ids, node_registry, service_names, verbosity).await,
+        }) => {
+            cmd::node::balance(peer_ids, node_registry, service_names, verbosity).await?;
+            Ok(())
+        }
         Some(SubCmd::Local(local_command)) => match local_command {
             LocalSubCmd::Join {
                 build,
@@ -897,9 +900,14 @@ async fn main() -> Result<()> {
                 service_name,
                 verbosity,
             )
-            .await
+            .await?;
+
+            Ok(())
         }
-        Some(SubCmd::Reset { force }) => cmd::node::reset(force, node_registry, verbosity).await,
+        Some(SubCmd::Reset { force }) => {
+            cmd::node::reset(force, node_registry, verbosity).await?;
+            Ok(())
+        }
         Some(SubCmd::Start {
             interval,
             peer_id: peer_ids,
@@ -914,18 +922,25 @@ async fn main() -> Result<()> {
                 startup_check,
                 verbosity,
             )
-            .await
+            .await?;
+            Ok(())
         }
         Some(SubCmd::Status {
             details,
             fail,
             json,
-        }) => cmd::node::status(details, fail, json, node_registry).await,
+        }) => {
+            cmd::node::status(details, fail, json, node_registry).await?;
+            Ok(())
+        }
         Some(SubCmd::Stop {
             interval,
             peer_id: peer_ids,
             service_name,
-        }) => cmd::node::stop(interval, node_registry, peer_ids, service_name, verbosity).await,
+        }) => {
+            cmd::node::stop(interval, node_registry, peer_ids, service_name, verbosity).await?;
+            Ok(())
+        }
         Some(SubCmd::Upgrade {
             do_not_start,
             force,
@@ -952,13 +967,14 @@ async fn main() -> Result<()> {
                 version,
                 verbosity,
             )
-            .await
+            .await?;
+            Ok(())
         }
         None => Ok(()),
     }
 }
 
-fn get_log_builder(level: Level) -> Result<LogBuilder> {
+fn get_log_builder(level: Level) -> LogBuilder {
     let logging_targets = vec![
         ("ant_bootstrap".to_string(), level),
         ("evmlib".to_string(), level),
@@ -970,7 +986,7 @@ fn get_log_builder(level: Level) -> Result<LogBuilder> {
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(ant_logging::LogOutputDest::Stderr);
     log_builder.print_updates_to_stdout(false);
-    Ok(log_builder)
+    log_builder
 }
 
 // Since delimiter is on, we get element of the csv and not the entire csv.

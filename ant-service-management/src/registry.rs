@@ -218,6 +218,7 @@ impl NodeRegistry {
                 error!("Error creating node registry parent {parent:?}: {err:?}")
             })?;
         }
+        trace!("Node registry content before save: {self:?}");
 
         let json = serde_json::to_string(self)?;
         let mut file = std::fs::File::create(self.save_path.clone())
@@ -249,6 +250,7 @@ impl NodeRegistry {
         // It's possible for the file to be empty if the user runs a `status` command before any
         // services were added.
         if contents.is_empty() {
+            info!("Node registry file is empty, returning default registry");
             return Ok(NodeRegistry {
                 environment_variables: None,
                 nodes: vec![],
@@ -256,12 +258,10 @@ impl NodeRegistry {
             });
         }
 
-        Self::from_json(&contents)
-    }
-
-    fn from_json(json: &str) -> Result<Self> {
-        let registry = serde_json::from_str(json)
+        let registry = serde_json::from_str(&contents)
             .inspect_err(|err| error!("Error deserializing node registry: {err:?}"))?;
+
+        trace!("Loaded node registry: {registry:?}");
         Ok(registry)
     }
 

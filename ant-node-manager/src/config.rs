@@ -6,8 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::error::{Error, Result};
 use ant_releases::ReleaseType;
-use color_eyre::{Result, eyre::eyre};
 use std::path::PathBuf;
 
 #[cfg(unix)]
@@ -235,7 +235,9 @@ pub fn create_owned_dir(path: PathBuf, owner: &str) -> Result<()> {
 
     let user = get_user_by_name(owner).ok_or_else(|| {
         error!("User '{owner}' does not exist");
-        eyre!("User '{owner}' does not exist")
+        Error::UserNotFound {
+            user: owner.to_string(),
+        }
     })?;
     let uid = Uid::from_raw(user.uid());
     let gid = Gid::from_raw(user.primary_group_id());
@@ -266,7 +268,7 @@ pub fn get_user_antnode_data_dir() -> Result<PathBuf> {
     Ok(dirs_next::data_dir()
         .ok_or_else(|| {
             error!("Failed to get data_dir");
-            eyre!("Could not obtain user data directory")
+            Error::UserDataDirNotFound
         })?
         .join("autonomi")
         .join("node"))

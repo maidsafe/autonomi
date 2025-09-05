@@ -152,7 +152,7 @@ jobs:
 
       - name: Run launchpad tests
         timeout-minutes: 25
-        run: cargo test --release --package node-launchpad
+        run: cargo test --release --package node-launchpad -- --no-capture
 
       - name: Run protocol tests
         timeout-minutes: 25

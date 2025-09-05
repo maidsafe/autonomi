@@ -38,9 +38,9 @@ fn cross_platform_service_install_and_control() {
         .join("release")
         .join(ANTNODE_BIN_NAME);
     let mut cmd = Command::cargo_bin("antctl").unwrap();
-    cmd.arg("--trace")
+    let output = cmd
+        .arg("--trace")
         .arg("add")
-        .arg("--local")
         .arg("--skip-reachability-check")
         .arg("--user")
         .arg(CI_USER)
@@ -51,8 +51,13 @@ fn cross_platform_service_install_and_control() {
         .arg("--rewards-address")
         .arg("0x06C4E523ebf30bc76DE246f10FBcECb4cc39D11a")
         .arg("evm-arbitrum-sepolia-test")
-        .assert()
-        .success();
+        .output()
+        .expect("Failed to add services");
+
+    println!("--- Add Output ---");
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+    assert!(output.status.success());
 
     let registry = get_status();
 
@@ -216,6 +221,11 @@ fn get_status() -> StatusSummary {
         .arg("--json")
         .output()
         .expect("Could not retrieve service status");
+
+    println!("--- Service Status Output ---");
+    println!("{}", String::from_utf8_lossy(&output.stdout));
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+
     let output = String::from_utf8_lossy(&output.stdout).to_string();
     serde_json::from_str(&output).unwrap()
 }

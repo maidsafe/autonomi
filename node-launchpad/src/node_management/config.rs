@@ -174,7 +174,7 @@ pub async fn add_node_with_config(
     count: Option<u16>,
     node_registry: NodeRegistryManager,
 ) -> Result<Vec<String>> {
-    ant_node_manager::cmd::node::add(
+    let services = ant_node_manager::cmd::node::add(
         false, // alpha
         false, // auto_restart
         count,
@@ -205,7 +205,8 @@ pub async fn add_node_with_config(
         VerbosityLevel::Minimal,
         false, // write_older_cache_files
     )
-    .await
+    .await?;
+    Ok(services)
 }
 
 pub async fn add_multiple_nodes(

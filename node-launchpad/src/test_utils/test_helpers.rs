@@ -35,9 +35,10 @@ impl TestAppBuilder {
     }
 
     pub async fn build(self) -> Result<(App, MockNodeRegistry)> {
-        let registry = self
-            .mock_registry
-            .unwrap_or_else(|| MockNodeRegistry::empty().expect("Failed to create empty registry"));
+        let registry = match self.mock_registry {
+            Some(registry) => registry,
+            None => MockNodeRegistry::empty()?,
+        };
 
         let registry_path = registry.get_registry_path().clone();
 

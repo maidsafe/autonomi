@@ -9,12 +9,14 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{VerbosityLevel, error::Error};
+use crate::{
+    VerbosityLevel,
+    error::{Error, Result},
+};
 use ant_service_management::{
     Error as ServiceError, NodeRegistryManager, ServiceStartupStatus, ServiceStateActions,
     ServiceStatus, UpgradeOptions, UpgradeResult, control::ServiceControl,
 };
-use color_eyre::eyre::eyre;
 use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use semver::Version;
@@ -832,26 +834,6 @@ impl BatchResult {
             }
         })
     }
-
-    pub fn into_eyre(self) -> color_eyre::eyre::Result<()> {
-        if self.errors.is_empty() {
-            Ok(())
-        } else {
-            let errors: Vec<String> = self
-                .errors
-                .iter()
-                .flat_map(|(service_name, errors)| {
-                    errors
-                        .iter()
-                        .map(move |error| format!("{service_name}: {error}"))
-                })
-                .collect();
-            Err(eyre!(
-                "Batch operation failed with errors: {}",
-                errors.join(", ")
-            ))
-        }
-    }
 }
 
 /// Summarise the batch result and print errors if any
@@ -859,7 +841,7 @@ pub fn summarise_batch_result(
     batch_result: &BatchResult,
     verb: &str,
     verbosity: VerbosityLevel,
-) -> color_eyre::Result<()> {
+) -> Result<()> {
     let failed_services: Vec<(String, String)> = batch_result
         .errors
         .iter()
@@ -879,7 +861,9 @@ pub fn summarise_batch_result(
         }
 
         error!("Failed to {verb} one or more services");
-        return Err(eyre!("Failed to {verb} one or more services"));
+        return Err(Error::ServiceBatchOperationFailed {
+            verb: verb.to_string(),
+        });
     }
     Ok(())
 }
