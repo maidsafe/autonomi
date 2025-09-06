@@ -820,11 +820,7 @@ impl Client {
         &self,
         secret_key: &VaultSecretKey,
     ) -> Result</* (Bytes, VaultContentType) */ tuple_result::FetchAndDecryptVault> {
-        let (data, content_type) = self
-            .0
-            .vault_get(&secret_key.0)
-            .await
-            .map_err(map_error)?;
+        let (data, content_type) = self.0.vault_get(&secret_key.0).await.map_err(map_error)?;
 
         Ok(tuple_result::FetchAndDecryptVault { data, content_type })
     }
@@ -890,7 +886,8 @@ impl Client {
         payment_option: &PaymentOption,
         user_data: &UserData,
     ) -> Result</* AttoTokens */ String> {
-        self.vault_put_user_data(secret_key, payment_option, user_data).await
+        self.vault_put_user_data(secret_key, payment_option, user_data)
+            .await
     }
 
     /// @deprecated Use `vault_get` instead. This function will be removed in a future version.
@@ -911,7 +908,8 @@ impl Client {
         secret_key: &VaultSecretKey,
         content_type: &VaultContentType,
     ) -> Result</* AttoTokens */ String> {
-        self.vault_put(data, payment_option, secret_key, content_type).await
+        self.vault_put(data, payment_option, secret_key, content_type)
+            .await
     }
 
     // Registers

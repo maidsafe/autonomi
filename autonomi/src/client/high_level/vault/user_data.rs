@@ -233,7 +233,8 @@ impl Client {
         payment_option: PaymentOption,
         user_data: UserData,
     ) -> Result<AttoTokens, UserDataVaultError> {
-        self.vault_put_user_data(secret_key, payment_option, user_data).await
+        self.vault_put_user_data(secret_key, payment_option, user_data)
+            .await
     }
 }
 
