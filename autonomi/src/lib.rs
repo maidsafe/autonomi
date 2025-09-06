@@ -110,6 +110,8 @@ pub use client::{
     config::ClientConfig,
     config::ClientOperatingStrategy,
     config::InitialPeersConfig,
+    // Payment
+    quote::PaymentMode,
 
     // Native data types
     data_types::chunk::Chunk,
