@@ -320,8 +320,12 @@ fn does_the_peer_support_dnd(info: &Info) -> bool {
 }
 
 /// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
-/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
 fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
+    if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
+        debug!("Skipping crafting multiaddr for relay node: {addr:?}");
+        return None;
+    }
+
     let mut new_multiaddr = Multiaddr::empty();
     let ip = addr.iter().find_map(|p| match p {
         Protocol::Ip4(addr) => Some(addr),
@@ -337,29 +341,9 @@ fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
 }
 
 /// Build a `Multiaddr` with the p2p protocol filtered out.
-/// If it is a relayed address, then the relay's P2P address is preserved.
 fn multiaddr_strip_p2p(multiaddr: &Multiaddr) -> Multiaddr {
-    let is_relayed = multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit));
-
-    if is_relayed {
-        // Do not add any PeerId after we've found the P2PCircuit protocol. The prior one is the relay's PeerId which
-        // we should preserve.
-        let mut before_relay_protocol = true;
-        let mut new_multi_addr = Multiaddr::empty();
-        for p in multiaddr.iter() {
-            if matches!(p, Protocol::P2pCircuit) {
-                before_relay_protocol = false;
-            }
-            if matches!(p, Protocol::P2p(_)) && !before_relay_protocol {
-                continue;
-            }
-            new_multi_addr.push(p);
-        }
-        new_multi_addr
-    } else {
-        multiaddr
-            .iter()
-            .filter(|p| !matches!(p, Protocol::P2p(_)))
-            .collect()
-    }
+    multiaddr
+        .iter()
+        .filter(|p| !matches!(p, Protocol::P2p(_)))
+        .collect()
 }

@@ -22,7 +22,6 @@ use ant_protocol::{
     messages::{Query, Request, Response},
     version::REQ_RESPONSE_VERSION_STR,
 };
-use futures::future::Either;
 use libp2p::kad::NoKnownPeers;
 use libp2p::kad::store::MemoryStoreConfig;
 use libp2p::swarm::ConnectionId;
@@ -87,7 +86,6 @@ pub(crate) struct NetworkDriver {
 pub(crate) struct AutonomiClientBehaviour {
     pub kademlia: kad::Behaviour<MemoryStore>,
     pub identify: libp2p::identify::Behaviour,
-    pub relay_client: libp2p::relay::client::Behaviour,
     pub request_response: request_response::cbor::Behaviour<Request, Response>,
     pub blocklist: libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
 }
@@ -109,23 +107,6 @@ impl NetworkDriver {
         let transport_gen = QuicTransport::new(quic_config);
         let trans = transport_gen.map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)));
         let transport = trans.boxed();
-
-        let (relay_transport, relay_client_behaviour) = libp2p::relay::client::new(peer_id);
-        let relay_transport = relay_transport
-            .upgrade(libp2p::core::upgrade::Version::V1Lazy)
-            .authenticate(
-                libp2p::noise::Config::new(&keypair)
-                    .expect("Signing libp2p-noise static DH keypair failed."),
-            )
-            .multiplex(libp2p::yamux::Config::default())
-            .or_transport(transport);
-
-        let transport = relay_transport
-            .map(|either_output, _| match either_output {
-                Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-                Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-            })
-            .boxed();
 
         // identify behaviour
         let identify = {
@@ -184,7 +165,6 @@ impl NetworkDriver {
         // setup kad and autonomi requests as our behaviour
         let behaviour = AutonomiClientBehaviour {
             kademlia: libp2p::kad::Behaviour::with_config(peer_id, store, kad_cfg),
-            relay_client: relay_client_behaviour,
             identify,
             request_response,
             blocklist: libp2p::allow_block_list::Behaviour::default(),
