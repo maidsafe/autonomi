@@ -137,7 +137,7 @@ impl NodeBuilder {
     }
 
     /// Enabling this would run external reachability check before starting the node.
-    /// This would override some of the networking flags, like `upnp` and `is_behind_home_network`, etc.
+    /// This would override some of the networking flags, like `no_upnp` `ip` etc.
     pub fn with_reachability_check(&mut self, enable: bool) {
         self.reachability_check = enable;
     }

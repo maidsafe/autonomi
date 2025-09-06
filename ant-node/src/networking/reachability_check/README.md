@@ -8,7 +8,7 @@ The reachability check module is a critical networking component that determines
 
 In peer-to-peer networks, nodes behind NAT/firewall configurations often cannot receive direct connections, severely limiting their ability to participate as full network members. The reachability check provides:
 
-- **Network Performance**: Eliminates relay overhead for all node operations
+- **Network Performance**: Eliminates unreachable or faulty nodes form the network
 - **DHT Stability**: Ensures predictable routing behavior with consistent addressing  
 - **Zero Configuration**: Automatically detects and configures optimal network settings
 - **Quality Assurance**: Maintains network health by filtering out problematic connectivity
@@ -147,14 +147,12 @@ ReachabilityStatus::NotReachable {
 
 ## Critical Design Decisions
 
-### Termination vs Relay Fallback
+### Termination
 
-The system **terminates unreachable nodes** rather than enabling relay mode:
+The system **terminates unreachable nodes**.
 
 **Benefits of Termination:**
 - **Network Quality**: Only fully capable nodes participate in DHT operations
-- **Performance**: Eliminates relay overhead that impacts all network operations
-- **Simplicity**: Avoids complex relay management and failure scenarios
 - **Predictability**: Ensures consistent node capabilities across the network
 
 ### Bootstrap Peer Filtering
@@ -203,9 +201,8 @@ pub fn is_faulty(&self) -> bool {
 - **Consistent Behavior**: Eliminates NAT traversal complexity from core network operations
 
 ### 2. Performance Optimization  
-- **Zero Relay Overhead**: All network operations use direct connections without relay penalties
 - **Predictable Latency**: Direct connections provide consistent performance characteristics
-- **Resource Efficiency**: Eliminates relay server load and associated bandwidth costs
+- **Resource Efficiency**: Eliminates redundant msg resending
 
 ### 3. Operational Simplicity
 - **Auto-Configuration**: Automatically detects and configures optimal network settings
