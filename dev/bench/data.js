@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757069017590,
+  "lastUpdate": 1757343660834,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1442,6 +1442,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 21.98728339108577,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2f475e2af8935a0b6eb308d62187795f29f8bfac",
+          "message": "Merge pull request #3194 from ermineJose/fix-addNode-LP-windows\n\nfeat: fix adding node in LP for windows",
+          "timestamp": "2025-09-08T13:58:50Z",
+          "tree_id": "b64b5cd92749908f12b575beab31b57319487a2d",
+          "url": "https://github.com/maidsafe/autonomi/commit/2f475e2af8935a0b6eb308d62187795f29f8bfac"
+        },
+        "date": 1757343653760,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.1168893154539408,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.124293083891013,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.220306940185182,
             "unit": "MiB/s"
           }
         ]
