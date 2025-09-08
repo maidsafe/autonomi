@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757343660834,
+  "lastUpdate": 1757343735441,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2556,6 +2556,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 92,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2f475e2af8935a0b6eb308d62187795f29f8bfac",
+          "message": "Merge pull request #3194 from ermineJose/fix-addNode-LP-windows\n\nfeat: fix adding node in LP for windows",
+          "timestamp": "2025-09-08T13:58:50Z",
+          "tree_id": "b64b5cd92749908f12b575beab31b57319487a2d",
+          "url": "https://github.com/maidsafe/autonomi/commit/2f475e2af8935a0b6eb308d62187795f29f8bfac"
+        },
+        "date": 1757343735047,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 87,
             "unit": "MB"
           }
         ]
