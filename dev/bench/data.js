@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757344281101,
+  "lastUpdate": 1757344283608,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3937,6 +3937,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/2f475e2af8935a0b6eb308d62187795f29f8bfac"
         },
         "date": 1757343736443,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "854c83c5d352a0068ba55264fe2dee2935a9bdc1",
+          "message": "Merge pull request #3193 from maqi/streaming_decryptor_check_dest_path\n\nfix(client): error out if imput dest path can not be used for streaming disk flush",
+          "timestamp": "2025-09-08T14:03:23Z",
+          "tree_id": "b68984716a01e00daed041047945dcda0b13f21b",
+          "url": "https://github.com/maidsafe/autonomi/commit/854c83c5d352a0068ba55264fe2dee2935a9bdc1"
+        },
+        "date": 1757344282517,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
