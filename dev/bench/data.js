@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757344283608,
+  "lastUpdate": 1757344286317,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5460,6 +5460,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 21367,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "854c83c5d352a0068ba55264fe2dee2935a9bdc1",
+          "message": "Merge pull request #3193 from maqi/streaming_decryptor_check_dest_path\n\nfix(client): error out if imput dest path can not be used for streaming disk flush",
+          "timestamp": "2025-09-08T14:03:23Z",
+          "tree_id": "b68984716a01e00daed041047945dcda0b13f21b",
+          "url": "https://github.com/maidsafe/autonomi/commit/854c83c5d352a0068ba55264fe2dee2935a9bdc1"
+        },
+        "date": 1757344285145,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10725,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21898,
             "unit": "ms"
           },
           {
