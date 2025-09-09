@@ -6,18 +6,17 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::action::{Action, NodeManagementResponse, NodeTableActions, StatusActions};
+use crate::components::Component;
+use crate::components::node_table::NodeStatus;
+use crate::components::popup::error_popup::ErrorPopup;
+use crate::focus::{EventResult, FocusManager, FocusTarget};
+use crate::mode::Scene;
+use crate::tui::Frame;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
-
-use crate::action::{Action, NodeManagementResponse, NodeTableActions, StatusActions};
-use crate::components::Component;
-use crate::components::node_table::NodeStatus;
-use crate::error::ErrorPopup;
-use crate::focus::{EventResult, FocusManager, FocusTarget};
-use crate::mode::Scene;
-use crate::tui::Frame;
 
 use super::{NodeTableConfig, NodeTableState, NodeTableWidget, operations};
 

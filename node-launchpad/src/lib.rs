@@ -17,7 +17,6 @@ pub mod app;
 pub mod components;
 pub mod config;
 pub mod connection_mode;
-pub mod error;
 pub mod focus;
 pub mod keybindings;
 pub mod log_management;

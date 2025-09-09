@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
+    components::popup::error_popup::ErrorPopup,
     connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
     node_stats::NodeStats,
@@ -34,7 +35,7 @@ pub enum Action {
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
-    ShowErrorPopup(crate::error::ErrorPopup),
+    ShowErrorPopup(ErrorPopup),
     SetNodeLogsTarget(String),
 
     LogsLoaded {
