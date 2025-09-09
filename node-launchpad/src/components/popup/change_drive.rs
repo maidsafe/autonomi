@@ -519,7 +519,7 @@ impl Component for ChangeDrivePopup {
                 None
             }
             // We need to refresh the list of available drives because of the space
-            Action::StoreNodesToStart(ref nodes_to_start) => {
+            Action::StoreRunningNodeCount(ref nodes_to_start) => {
                 self.nodes_to_start = *nodes_to_start;
                 let _ = self.update_drive_items();
                 None
