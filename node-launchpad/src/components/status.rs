@@ -170,19 +170,6 @@ impl Component for Status {
             ));
         }
 
-        // Delegate node table operations to NodeTableComponent when Status has focus
-        if focus_manager.has_focus(&FocusTarget::Status) {
-            let (node_actions, event_result) = self
-                .node_table_component
-                .handle_key_events(key, focus_manager)?;
-            // If the NodeTable component consumed the event, return those actions
-            if matches!(event_result, EventResult::Consumed) {
-                return Ok((node_actions, event_result));
-            }
-            // Otherwise, fall through to handle Status-specific operations
-        }
-
-        // If Status has focus, handle Status-specific operations
         if focus_manager.has_focus(&self.focus_target()) {
             let actions = self.handle_status_key_events(key)?;
             let result = if actions.is_empty() {

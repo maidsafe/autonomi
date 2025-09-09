@@ -124,7 +124,56 @@ pub fn get_keybindings() -> KeyBindings {
             bind("<L>"),
             Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
         ),
-        // Navigation is now handled directly by NodeTableComponent
+        // Missing keybindings from node table component
+        (
+            bind("<Ctrl-d>"),
+            Action::NodeTableActions(NodeTableActions::RemoveNodes),
+        ),
+        (
+            bind("<Enter>"),
+            Action::NodeTableActions(NodeTableActions::StartStopNode),
+        ),
+        // Navigation keybindings
+        (
+            bind("<Up>"),
+            Action::NodeTableActions(NodeTableActions::NavigateUp),
+        ),
+        (
+            bind("<k>"),
+            Action::NodeTableActions(NodeTableActions::NavigateUp),
+        ),
+        (
+            bind("<Down>"),
+            Action::NodeTableActions(NodeTableActions::NavigateDown),
+        ),
+        (
+            bind("<j>"),
+            Action::NodeTableActions(NodeTableActions::NavigateDown),
+        ),
+        (
+            bind("<Home>"),
+            Action::NodeTableActions(NodeTableActions::NavigateHome),
+        ),
+        (
+            bind("<g>"),
+            Action::NodeTableActions(NodeTableActions::NavigateHome),
+        ),
+        (
+            bind("<End>"),
+            Action::NodeTableActions(NodeTableActions::NavigateEnd),
+        ),
+        (
+            bind("<G>"),
+            Action::NodeTableActions(NodeTableActions::NavigateEnd),
+        ),
+        (
+            bind("<PageUp>"),
+            Action::NodeTableActions(NodeTableActions::NavigatePageUp),
+        ),
+        (
+            bind("<PageDown>"),
+            Action::NodeTableActions(NodeTableActions::NavigatePageDown),
+        ),
     ]);
     keybindings.insert(Scene::Status, status);
 
