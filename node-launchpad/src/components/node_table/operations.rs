@@ -37,7 +37,7 @@ pub struct AddNodeConfig<'a> {
     pub port_to: Option<u32>,
 }
 
-pub struct StartNodesConfig<'a> {
+pub struct MaintainNodesConfig<'a> {
     pub rewards_address: Option<&'a EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
@@ -135,7 +135,10 @@ impl NodeOperations {
         Ok(None)
     }
 
-    pub fn handle_start_nodes(&mut self, config: &StartNodesConfig) -> Result<Option<Action>> {
+    pub fn handle_maintain_nodes(
+        &mut self,
+        config: &MaintainNodesConfig,
+    ) -> Result<Option<Action>> {
         if config.rewards_address.is_none() {
             info!("Rewards address is not set. Ask for input.");
 
