@@ -31,7 +31,7 @@ pub enum Action {
     StoreConnectionMode(ConnectionMode),
     StorePortRange(u32, u32),
     StoreRewardsAddress(EvmAddress),
-    StoreNodesToStart(u64),
+    StoreRunningNodeCount(u64),
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
@@ -102,17 +102,10 @@ pub enum NodeTableActions {
         #[debug(skip)]
         all_nodes_data: Vec<NodeServiceData>,
     },
+    NodeManagementCommand(NodeManagementCommand),
     NodeManagementResponse(NodeManagementResponse),
-
-    AddNode,
-    StartNodes,
-    StopNodes,
-    RemoveNodes,
-    StartStopNode,
-    TriggerRemoveNode,
+    TriggerRemoveNodePopup,
     TriggerNodeLogs,
-    ResetNodes,
-    UpgradeNodeVersion,
 
     // Navigation actions
     NavigateUp,
@@ -121,6 +114,17 @@ pub enum NodeTableActions {
     NavigateEnd,
     NavigatePageUp,
     NavigatePageDown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeManagementCommand {
+    MaintainNodes,
+    AddNode,
+    StartNodes,
+    StopNodes,
+    RemoveNodes,
+    UpgradeNodes,
+    ResetNodes,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

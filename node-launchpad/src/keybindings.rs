@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    action::{Action, NodeTableActions},
+    action::{Action, NodeManagementCommand, NodeTableActions},
     mode::Scene,
 };
 use color_eyre::eyre::Result;
@@ -49,47 +49,86 @@ pub fn get_keybindings() -> KeyBindings {
     let mut status = HashMap::new();
     add_common_bindings(&mut status);
     status.extend([
-        // Node control
+        // Node management
         (
-            bind("<Ctrl-s>"),
-            Action::NodeTableActions(NodeTableActions::StartStopNode),
+            bind("<Ctrl-r>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StartNodes,
+            )),
         ),
         (
-            bind("<Ctrl-S>"),
-            Action::NodeTableActions(NodeTableActions::StartStopNode),
+            bind("<Ctrl-R>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StartNodes,
+            )),
         ),
         (
-            bind("<Ctrl-Shift-s>"),
-            Action::NodeTableActions(NodeTableActions::StartNodes),
+            bind("<Ctrl-Shift-r>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StartNodes,
+            )),
+        ),
+        (
+            bind("<Ctrl-Shift-R>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StartNodes,
+            )),
         ),
         (
             bind("<Ctrl-x>"),
-            Action::NodeTableActions(NodeTableActions::StopNodes),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StopNodes,
+            )),
         ),
         (
             bind("<Ctrl-X>"),
-            Action::NodeTableActions(NodeTableActions::StopNodes),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StopNodes,
+            )),
         ),
         (
             bind("<Ctrl-Shift-x>"),
-            Action::NodeTableActions(NodeTableActions::StopNodes),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StopNodes,
+            )),
         ),
-        // Node management
+        (
+            bind("<Ctrl-Shift-X>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::StopNodes,
+            )),
+        ),
         (
             bind("<+>"),
-            Action::NodeTableActions(NodeTableActions::AddNode),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::AddNode,
+            )),
         ),
         (
             bind("<Shift-+>"),
-            Action::NodeTableActions(NodeTableActions::AddNode),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::AddNode,
+            )),
         ),
         (
             bind("<->"),
-            Action::NodeTableActions(NodeTableActions::RemoveNodes),
+            Action::NodeTableActions(NodeTableActions::TriggerRemoveNodePopup),
         ),
         (
             bind("<Delete>"),
-            Action::NodeTableActions(NodeTableActions::TriggerRemoveNode),
+            Action::NodeTableActions(NodeTableActions::TriggerRemoveNodePopup),
+        ),
+        (
+            bind("<Ctrl-d>"),
+            Action::NodeTableActions(NodeTableActions::TriggerRemoveNodePopup),
+        ),
+        (
+            bind("<l>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
+        ),
+        (
+            bind("<L>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
         ),
         (
             bind("<Ctrl-g>"),
@@ -115,23 +154,6 @@ pub fn get_keybindings() -> KeyBindings {
         (
             bind("<Ctrl-Shift-b>"),
             Action::StatusActions(StatusActions::TriggerRewardsAddress),
-        ),
-        (
-            bind("<l>"),
-            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
-        ),
-        (
-            bind("<L>"),
-            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
-        ),
-        // Missing keybindings from node table component
-        (
-            bind("<Ctrl-d>"),
-            Action::NodeTableActions(NodeTableActions::RemoveNodes),
-        ),
-        (
-            bind("<Enter>"),
-            Action::NodeTableActions(NodeTableActions::StartStopNode),
         ),
         // Navigation keybindings
         (

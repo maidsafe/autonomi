@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use crate::action::OptionsActions;
+use crate::action::{NodeManagementCommand, NodeTableActions, OptionsActions};
 use crate::system::get_available_space_b;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
@@ -77,7 +77,11 @@ impl ManageNodesPopup {
                     "Got Enter, value found to be {nodes_to_start} derived from input: {nodes_to_start_str:?} and switching scene",
                 );
                 vec![
-                    Action::StoreNodesToStart(nodes_to_start),
+                    Action::StoreRunningNodeCount(nodes_to_start),
+                    // this has to come after storing the new count
+                    Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                        NodeManagementCommand::StartNodes,
+                    )),
                     Action::SwitchScene(Scene::Status),
                 ]
             }
