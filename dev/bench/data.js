@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757344286317,
+  "lastUpdate": 1757421245908,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1520,6 +1520,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.267715941439644,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5",
+          "message": "Merge pull request #3176 from grumbach/data_stream\n\nfeat: streaming apis for data",
+          "timestamp": "2025-09-09T11:36:48Z",
+          "tree_id": "3031608d3b9e985cc78c0019d1a4985c211a3aed",
+          "url": "https://github.com/maidsafe/autonomi/commit/609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5"
+        },
+        "date": 1757421238472,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.2159060467137315,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.072876456969203,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.24521451736328,
             "unit": "MiB/s"
           }
         ]
