@@ -89,7 +89,7 @@ pub enum UpgradeLaunchpadActions {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(custom_debug::Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeTableActions {
     // State updates FROM NodeTable TO Status (push only)
     StateChanged {
@@ -98,6 +98,7 @@ pub enum NodeTableActions {
         has_nodes: bool,
     },
     RegistryUpdated {
+        #[debug(skip)]
         all_nodes_data: Vec<NodeServiceData>,
     },
     NodeManagementResponse(NodeManagementResponse),

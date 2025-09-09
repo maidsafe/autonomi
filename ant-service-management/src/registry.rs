@@ -118,10 +118,10 @@ impl NodeRegistryManager {
         let mut watcher = RecommendedWatcher::new(
             move |res: notify::Result<Event>| {
                 if let Ok(event) = res {
-                    debug!("File watcher event: {event:?}");
+                    trace!("File watcher event: {event:?}");
                     // Only handle modify and create events
                     match event.kind {
-                        EventKind::Modify(_) | EventKind::Create(_) => {
+                        EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
                             // Check if the event is for our registry file
                             for path in &event.paths {
                                 // Use canonicalized paths for comparison to handle symlinks/different representations
@@ -132,7 +132,7 @@ impl NodeRegistryManager {
                                     .unwrap_or_else(|_| save_path.clone());
 
                                 if path_canonical == save_path_canonical {
-                                    debug!("Registry file change detected for: {path:?}");
+                                    trace!("Registry file change detected for: {path:?}");
                                     if let Err(err) = event_tx.send(event.clone()) {
                                         error!(
                                             "Failed to send registry file change event to internal rx: {err}"
@@ -161,15 +161,11 @@ impl NodeRegistryManager {
             let _watcher = watcher; // Keep watcher alive
 
             while let Some(_event) = event_rx.recv().await {
-                debug!("Processing registry file change event...");
-                // Reload the registry from disk
                 match manager.reload().await {
                     Ok(()) => {
                         info!("Registry reloaded successfully from file change");
                         if let Err(er) = tx.send(()) {
                             error!("Failed to send registry reload notification: {er}");
-                        } else {
-                            debug!("Registry reload notification sent");
                         }
                     }
                     Err(e) => {

@@ -121,7 +121,6 @@ impl Status {
     }
 
     fn handle_status_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        debug!("Key received in Status: {key:?}");
         if let Some(error_popup) = &mut self.error_popup
             && error_popup.is_visible()
         {
@@ -160,12 +159,6 @@ impl Component for Status {
         key: KeyEvent,
         focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
-        debug!("Key received in Status (focused): {:?}", key);
-        debug!(
-            "Status has focus: {}",
-            focus_manager.has_focus(&FocusTarget::Status)
-        );
-
         // Handle error popup first
         if let Some(error_popup) = &mut self.error_popup
             && error_popup.is_visible()
@@ -177,18 +170,8 @@ impl Component for Status {
             ));
         }
 
-        // Check if Status should handle this key directly
-        let status_only_keys = false; // Add any Status-specific keys here if needed
-
-        if status_only_keys && focus_manager.has_focus(&self.focus_target()) {
-            debug!("Status: Handling status-only key");
-            // Handle Status-specific keys here
-            return Ok((vec![], EventResult::Consumed));
-        }
-
         // Delegate node table operations to NodeTableComponent when Status has focus
         if focus_manager.has_focus(&FocusTarget::Status) {
-            debug!("Status: Delegating key {:?} to NodeTableComponent", key);
             let (node_actions, event_result) = self
                 .node_table_component
                 .handle_key_events(key, focus_manager)?;
@@ -201,7 +184,6 @@ impl Component for Status {
 
         // If Status has focus, handle Status-specific operations
         if focus_manager.has_focus(&self.focus_target()) {
-            debug!("Status: Handling status-specific operations");
             let actions = self.handle_status_key_events(key)?;
             let result = if actions.is_empty() {
                 EventResult::Ignored

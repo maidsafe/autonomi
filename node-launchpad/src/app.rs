@@ -439,7 +439,6 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(key) => {
-                        trace!("App received key event: {key:?}");
                         self.handle_key_event(key, &action_tx).await?;
                     }
                     _ => {}

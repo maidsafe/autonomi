@@ -20,9 +20,10 @@ use tokio::task::LocalSet;
 
 pub use config::{AddNodesConfig, UpgradeNodesConfig};
 
-#[derive(Debug)]
+#[derive(custom_debug::Debug)]
 pub enum NodeManagementTask {
     RegisterActionSender {
+        #[debug(skip)]
         action_sender: UnboundedSender<Action>,
     },
     MaintainNodes {
@@ -76,6 +77,7 @@ impl NodeManagement {
     ) {
         let mut action_sender_main = None;
         while let Some(new_task) = task_recv.recv().await {
+            debug!("Received new node management task: {new_task:?}");
             match new_task {
                 NodeManagementTask::RegisterActionSender {
                     action_sender: new_sender,

@@ -202,9 +202,6 @@ impl Component for NodeTableComponent {
         key: KeyEvent,
         _focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
-        debug!("NodeTable handling key: {key:?}");
-        debug!("NodeTable has {} items", self.state.items.items.len());
-
         if let (actions, EventResult::Consumed) = self.handle_table_navigation(key)? {
             return Ok((actions, EventResult::Consumed));
         }
@@ -217,10 +214,6 @@ impl Component for NodeTableComponent {
             // Handle NodeTableActions directly
             Action::NodeTableActions(node_action) => match node_action {
                 NodeTableActions::RegistryUpdated { all_nodes_data } => {
-                    debug!(
-                        "Received RegistryUpdated event with {} nodes",
-                        all_nodes_data.len()
-                    );
                     self.state_mut().sync_node_service_data(&all_nodes_data);
                     self.state_mut().send_state_update()?;
                     Ok(None)
@@ -377,7 +370,6 @@ impl Component for NodeTableComponent {
                                     item.update_status(NodeStatus::Running);
                                 }
                             }
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -390,7 +382,6 @@ impl Component for NodeTableComponent {
                             );
                             Ok(Some(Action::ShowErrorPopup(error_popup)))
                         } else {
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -413,7 +404,6 @@ impl Component for NodeTableComponent {
                                     node_item.update_status(NodeStatus::Running);
                                 }
                             }
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -437,7 +427,6 @@ impl Component for NodeTableComponent {
                                     node_item.update_status(NodeStatus::Stopped);
                                 }
                             }
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -464,7 +453,6 @@ impl Component for NodeTableComponent {
                                 .items
                                 .items
                                 .retain(|item| !service_names.contains(&item.service_name));
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -487,7 +475,6 @@ impl Component for NodeTableComponent {
                                     node_item.update_status(NodeStatus::Running);
                                 }
                             }
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -500,20 +487,6 @@ impl Component for NodeTableComponent {
                             );
                             Ok(Some(Action::ShowErrorPopup(error_popup)))
                         } else {
-                            // Reset all nodes by removing all of them
-                            let all_service_names: Vec<String> = self
-                                .state()
-                                .items
-                                .items
-                                .iter()
-                                .map(|item| item.service_name.clone())
-                                .collect();
-                            if !all_service_names.is_empty() {
-                                self.state_mut()
-                                    .operations
-                                    .handle_remove_nodes(all_service_names)?;
-                            }
-                            self.state.send_state_update()?;
                             Ok(None)
                         }
                     }
@@ -521,19 +494,7 @@ impl Component for NodeTableComponent {
 
                 NodeTableActions::ResetNodes => {
                     debug!("Got NodeTableActions::ResetNodes - removing all nodes");
-                    // Reset all nodes by removing all of them
-                    let all_service_names: Vec<String> = self
-                        .state()
-                        .items
-                        .items
-                        .iter()
-                        .map(|item| item.service_name.clone())
-                        .collect();
-                    if !all_service_names.is_empty() {
-                        self.state_mut()
-                            .operations
-                            .handle_remove_nodes(all_service_names)?;
-                    }
+                    self.state_mut().operations.handle_reset_nodes()?;
                     Ok(None)
                 }
                 NodeTableActions::UpgradeNodeVersion => {
