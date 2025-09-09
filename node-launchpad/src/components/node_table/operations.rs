@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::action::{Action, StatusActions};
+use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::connection_mode::ConnectionMode;
-use crate::error::ErrorPopup;
 use crate::node_management::config::{PORT_MAX, PORT_MIN};
 use crate::node_management::{
     AddNodesConfig, NodeManagement, NodeManagementTask, UpgradeNodesConfig,
