@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757421245908,
+  "lastUpdate": 1757421322710,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2692,6 +2692,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 89,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5",
+          "message": "Merge pull request #3176 from grumbach/data_stream\n\nfeat: streaming apis for data",
+          "timestamp": "2025-09-09T11:36:48Z",
+          "tree_id": "3031608d3b9e985cc78c0019d1a4985c211a3aed",
+          "url": "https://github.com/maidsafe/autonomi/commit/609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5"
+        },
+        "date": 1757421322025,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 92,
             "unit": "MB"
           }
         ]
