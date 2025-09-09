@@ -9,19 +9,21 @@
 use ant_node::networking::NetworkError;
 use std::path::PathBuf;
 
-const CRITICAL_FAILURE_LOG_FILE: &str = "critical_failure.log";
+const CRITICAL_FAILURE_FILE: &str = "critical_failure.json";
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct CriticalFailureLog {
+// This struct is read by ant-service-management/src/fs.rs
+// So any changes here need to be reflected there too.
+struct CriticalFailure {
     date_time: chrono::DateTime<chrono::Utc>,
     reason: String,
 }
 
 pub fn set_critical_failure(log_output_dest: &str, error: &ant_node::Error) {
-    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_LOG_FILE);
+    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_FILE);
     let datetime_prefix = chrono::Utc::now();
     let reason = node_error_to_reason(error);
-    let log = CriticalFailureLog {
+    let log = CriticalFailure {
         date_time: datetime_prefix,
         reason,
     };
@@ -31,11 +33,11 @@ pub fn set_critical_failure(log_output_dest: &str, error: &ant_node::Error) {
         return;
     };
     let _ = std::fs::write(log_path, log_json)
-        .inspect_err(|err| error!("Failed to write to {CRITICAL_FAILURE_LOG_FILE}: {err}"));
+        .inspect_err(|err| error!("Failed to write to {CRITICAL_FAILURE_FILE}: {err}"));
 }
 
 pub fn reset_critical_failure(log_output_dest: &str) {
-    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_LOG_FILE);
+    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_FILE);
     if log_path.exists() {
         let _ = std::fs::remove_file(log_path);
     }

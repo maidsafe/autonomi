@@ -517,54 +517,39 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                 match service.startup_status().await {
-                    Ok(startup_status) => match startup_status {
-                        ServiceStartupStatus::InProgress(progress) => {
-                            info!(
-                                "The reachability check progress for {service_name} is {progress}%"
-                            );
-                            all_complete = false;
-                            if let Some(pb) = progress_bars.get(&service_name) {
-                                pb.set_position(progress as u64);
-                                pb.set_message("◔ Reachability Check".to_string());
-                            }
+                    ServiceStartupStatus::InProgress(progress) => {
+                        info!("The reachability check progress for {service_name} is {progress}%");
+                        all_complete = false;
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.set_position(progress as u64);
+                            pb.set_message("◔ Reachability Check".to_string());
                         }
-                        ServiceStartupStatus::Started => {
-                            info!("The reachability check for {service_name} is complete");
-                            completed_services.insert(service_name.clone());
-                            if let Some(pb) = progress_bars.get(&service_name) {
-                                pb.finish_with_message(
-                                    "Node started, reachability check complete ✓"
-                                        .green()
-                                        .to_string(),
-                                );
-                            }
-                        }
-                        ServiceStartupStatus::Failed { reason } => {
-                            error!(
-                                "The reachability check / node startup failed for {service_name}: {reason}"
+                    }
+                    ServiceStartupStatus::Started => {
+                        info!("The reachability check for {service_name} is complete");
+                        completed_services.insert(service_name.clone());
+                        if let Some(pb) = progress_bars.get(&service_name) {
+                            pb.finish_with_message(
+                                "Node started, reachability check complete ✓"
+                                    .green()
+                                    .to_string(),
                             );
-                            batch_result.insert_error(
-                                service_name.clone(),
-                                Error::ServiceStartupFailed {
-                                    service_name: service_name.clone(),
-                                    reason,
-                                },
-                            );
-                            if let Some(pb) = progress_bars.get(&service_name) {
-                                pb.finish_with_message("Failed ✗".red().to_string());
-                            }
                         }
-                    },
-                    Err(err) => {
+                    }
+                    ServiceStartupStatus::Failed { reason } => {
                         error!(
-                            "Failed to get reachability check progress for {service_name}: {err}"
+                            "The reachability check / node startup failed for {service_name}: {reason}"
                         );
-
+                        batch_result.insert_error(
+                            service_name.clone(),
+                            Error::ServiceStartupFailed {
+                                service_name: service_name.clone(),
+                                reason,
+                            },
+                        );
                         if let Some(pb) = progress_bars.get(&service_name) {
                             pb.finish_with_message("Failed ✗".red().to_string());
                         }
-
-                        batch_result.insert_error(service_name.clone(), err.into());
                     }
                 }
             }
