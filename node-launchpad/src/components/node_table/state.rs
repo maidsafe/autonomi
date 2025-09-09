@@ -11,7 +11,7 @@ use super::{
     operations::NodeOperations,
     table_state::StatefulTable,
 };
-use crate::error::ErrorPopup;
+use crate::action::{Action, NodeTableActions};
 use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats};
 use crate::{connection_mode::ConnectionMode, node_management::NodeManagement};
 use ant_bootstrap::InitialPeersConfig;
@@ -47,7 +47,6 @@ pub struct NodeTableState {
     pub available_disk_space_gb: u64,
 
     // UI state
-    pub error_popup: Option<ErrorPopup>,
     pub spinner_states: Vec<ThrobberState>,
 }
 
@@ -81,7 +80,6 @@ impl NodeTableState {
             available_disk_space_gb: crate::system::get_available_space_b(
                 &config.storage_mountpoint,
             )? / crate::components::popup::manage_nodes::GB,
-            error_popup: None,
             spinner_states: vec![],
         };
 
@@ -129,7 +127,6 @@ impl NodeTableState {
     }
 
     pub fn send_state_update(&self) -> Result<()> {
-        use crate::action::{Action, NodeTableActions};
         if let Some(action_sender) = &self.operations.action_sender {
             let node_count = self.items.items.len() as u64;
             let has_running_nodes = !self.get_running_nodes().is_empty();

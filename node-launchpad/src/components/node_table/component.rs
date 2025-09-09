@@ -11,9 +11,10 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::action::{Action, NodeTableActions, StatusActions};
+use crate::action::{Action, NodeManagementResponse, NodeTableActions, StatusActions};
 use crate::components::Component;
 use crate::components::node_table::NodeStatus;
+use crate::error::ErrorPopup;
 use crate::focus::{EventResult, FocusManager, FocusTarget};
 use crate::mode::Scene;
 use crate::tui::Frame;
@@ -152,7 +153,7 @@ impl NodeTableComponent {
 impl Component for NodeTableComponent {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.action_sender = Some(tx.clone());
-        self.state.operations.action_sender = Some(tx.clone());
+        self.state.operations.register_action_sender(tx.clone())?;
 
         let node_registry_clone = self.state().node_registry.clone();
         let action_sender_clone = tx.clone();
@@ -201,17 +202,6 @@ impl Component for NodeTableComponent {
         key: KeyEvent,
         _focus_manager: &FocusManager,
     ) -> Result<(Vec<Action>, EventResult)> {
-        // Handle error popup first
-        if let Some(error_popup) = &mut self.state.error_popup
-            && error_popup.is_visible()
-        {
-            error_popup.handle_input(key);
-            return Ok((
-                vec![Action::SwitchInputMode(crate::mode::InputMode::Navigation)],
-                EventResult::Consumed,
-            ));
-        }
-
         debug!("NodeTable handling key: {key:?}");
         debug!("NodeTable has {} items", self.state.items.items.len());
 
@@ -369,55 +359,166 @@ impl Component for NodeTableComponent {
 
                     Ok(Some(Action::SetNodeLogsTarget(selected_node_name)))
                 }
-                // Handle completion events
-                NodeTableActions::StartNodesCompleted { service_name } => {
-                    debug!("NodeTable: StartNodesCompleted for service: {service_name}");
-                    use crate::node_management::config::NODES_ALL;
-                    if service_name == NODES_ALL {
-                        for item in self.state.items.items.iter_mut() {
-                            if item.status == NodeStatus::Starting {
-                                item.unlock();
-                                item.update_status(NodeStatus::Running);
+
+                // Handle node management responses
+                NodeTableActions::NodeManagementResponse(response) => match response {
+                    NodeManagementResponse::MaintainNodes { error } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while managing nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            for item in self.state.items.items.iter_mut() {
+                                if item.status == NodeStatus::Starting {
+                                    item.unlock();
+                                    item.update_status(NodeStatus::Running);
+                                }
                             }
+                            self.state.send_state_update()?;
+                            Ok(None)
                         }
-                    } else if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
-                        node_item.unlock();
-                        node_item.update_status(NodeStatus::Running);
                     }
-                    self.state.send_state_update()?;
-                    Ok(None)
-                }
-                NodeTableActions::StopNodesCompleted { service_name } => {
-                    debug!("NodeTable: StopNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
-                        node_item.unlock();
-                        node_item.update_status(NodeStatus::Stopped);
+                    NodeManagementResponse::AddNode { error } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while adding node",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
                     }
-                    self.state.send_state_update()?;
-                    Ok(None)
-                }
-                NodeTableActions::AddNodesCompleted { service_name } => {
-                    debug!("NodeTable: AddNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
-                        node_item.unlock();
-                        node_item.update_status(NodeStatus::Added);
+                    NodeManagementResponse::StartNodes {
+                        service_names,
+                        error,
+                    } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while starting nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            for service_name in service_names {
+                                if let Some(node_item) = self.state.get_node_item_mut(&service_name)
+                                {
+                                    node_item.unlock();
+                                    node_item.update_status(NodeStatus::Running);
+                                }
+                            }
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
                     }
-                    self.state.send_state_update()?;
-                    Ok(None)
-                }
-                NodeTableActions::RemoveNodesCompleted { service_name } => {
-                    debug!("NodeTable: RemoveNodesCompleted for service: {service_name}");
-                    if let Some(node_item) = self.state.get_node_item_mut(&service_name) {
-                        node_item.unlock();
-                        node_item.update_status(NodeStatus::Removed);
+
+                    NodeManagementResponse::StopNodes {
+                        service_names,
+                        error,
+                    } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while stopping nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            for service_name in service_names {
+                                if let Some(node_item) = self.state.get_node_item_mut(&service_name)
+                                {
+                                    node_item.unlock();
+                                    node_item.update_status(NodeStatus::Stopped);
+                                }
+                            }
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
                     }
-                    self.state
-                        .items
-                        .items
-                        .retain(|item| item.service_name != service_name);
-                    self.state.send_state_update()?;
-                    Ok(None)
-                }
+                    NodeManagementResponse::RemoveNodes {
+                        service_names,
+                        error,
+                    } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while removing nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            for service_name in service_names.iter() {
+                                if let Some(node_item) = self.state.get_node_item_mut(service_name)
+                                {
+                                    node_item.unlock();
+                                    node_item.update_status(NodeStatus::Removed);
+                                }
+                            }
+                            self.state
+                                .items
+                                .items
+                                .retain(|item| !service_names.contains(&item.service_name));
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
+                    }
+                    NodeManagementResponse::UpgradeNodes {
+                        service_names,
+                        error,
+                    } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while upgrading nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            for service_name in service_names {
+                                if let Some(node_item) = self.state.get_node_item_mut(&service_name)
+                                {
+                                    node_item.unlock();
+                                    node_item.update_status(NodeStatus::Running);
+                                }
+                            }
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
+                    }
+                    NodeManagementResponse::ResetNodes { error } => {
+                        if let Some(err) = error {
+                            let error_popup = ErrorPopup::new(
+                                "Error while resetting nodes",
+                                "Please try again",
+                                &err,
+                            );
+                            Ok(Some(Action::ShowErrorPopup(error_popup)))
+                        } else {
+                            // Reset all nodes by removing all of them
+                            let all_service_names: Vec<String> = self
+                                .state()
+                                .items
+                                .items
+                                .iter()
+                                .map(|item| item.service_name.clone())
+                                .collect();
+                            if !all_service_names.is_empty() {
+                                self.state_mut()
+                                    .operations
+                                    .handle_remove_nodes(all_service_names)?;
+                            }
+                            self.state.send_state_update()?;
+                            Ok(None)
+                        }
+                    }
+                },
+
                 NodeTableActions::ResetNodes => {
                     debug!("Got NodeTableActions::ResetNodes - removing all nodes");
                     // Reset all nodes by removing all of them

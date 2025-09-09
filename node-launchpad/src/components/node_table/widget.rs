@@ -141,13 +141,6 @@ impl NodeTableWidget {
 
         // Render spinners for each row
         self.render_spinners(inner_area, f, state);
-
-        // Render error popup if visible
-        if let Some(error_popup) = &state.error_popup
-            && error_popup.is_visible()
-        {
-            error_popup.draw_error(f, area);
-        }
     }
 
     fn render_spinners(
