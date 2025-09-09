@@ -132,10 +132,6 @@ impl NodeTableState {
             let has_running_nodes = !self.get_running_nodes().is_empty();
             let has_nodes = !self.items.items.is_empty();
 
-            debug!(
-                "NodeTableState::send_state_update - Sending StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
-            );
-
             let state_action = Action::NodeTableActions(NodeTableActions::StateChanged {
                 node_count,
                 has_running_nodes,
@@ -143,9 +139,8 @@ impl NodeTableState {
             });
 
             action_sender.send(state_action)?;
-            debug!("NodeTableState::send_state_update - StateChanged action sent successfully");
         } else {
-            debug!("NodeTableState::send_state_update - No action_sender available");
+            error!("NodeTableState::send_state_update - No action_sender available");
         }
         Ok(())
     }

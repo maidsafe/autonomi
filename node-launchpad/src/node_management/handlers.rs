@@ -71,8 +71,8 @@ pub async fn maintain_n_running_nodes(
                 .collect::<Vec<_>>();
 
             info!("Stopping {to_stop_count} excess nodes: {services_to_stop:?}");
-
             stop_nodes_helper(node_registry.clone(), services_to_stop).await?;
+            info!("Successfully stopped excess nodes");
         }
         Ordering::Less => {
             // Need to add or start nodes
@@ -81,9 +81,10 @@ pub async fn maintain_n_running_nodes(
             if to_start_count <= inactive_nodes.len() {
                 // Start existing inactive nodes
                 let nodes_to_start = inactive_nodes.into_iter().take(to_start_count).collect();
-                info!("Starting {to_start_count} existing inactive nodes: {nodes_to_start:?}");
 
+                info!("Starting {to_start_count} existing inactive nodes: {nodes_to_start:?}");
                 start_nodes_helper(nodes_to_start, node_registry.clone()).await?;
+                info!("Successfully started existing inactive nodes");
             } else {
                 // Need to add new nodes
                 let to_add_count = to_start_count - inactive_nodes.len();
@@ -92,7 +93,6 @@ pub async fn maintain_n_running_nodes(
                     to_add_count,
                     inactive_nodes.len()
                 );
-
                 let _ = add_multiple_nodes_helper(
                     &config,
                     to_add_count as u16,
@@ -103,6 +103,7 @@ pub async fn maintain_n_running_nodes(
 
                 // Start all inactive nodes if any
                 if !inactive_nodes.is_empty() {
+                    info!("Starting all inactive nodes: {inactive_nodes:?}");
                     start_nodes_helper(inactive_nodes, node_registry.clone()).await?;
                 }
             }
@@ -130,13 +131,14 @@ pub async fn maintain_n_running_nodes(
         );
     }
 
-    debug!("Finished maintaining {} nodes", config.count);
+    info!("Finished maintaining {} nodes", config.count);
     Ok(())
 }
 
 pub async fn reset_nodes(node_registry: NodeRegistryManager) -> Result<(), NodeManagementError> {
     ant_node_manager::cmd::node::reset(true, node_registry.clone(), VerbosityLevel::Minimal)
         .await?;
+    info!("All nodes have been reset");
     Ok(())
 }
 
@@ -144,8 +146,13 @@ pub async fn upgrade_nodes(
     args: UpgradeNodesConfig,
     node_registry: NodeRegistryManager,
 ) -> Result<(), NodeManagementError> {
+    info!("Stopping nodes before upgrade: {:?}", args.service_names);
     stop_nodes_helper(node_registry.clone(), args.service_names.clone()).await?;
 
+    info!(
+        "Stopped nodes, proceeding with upgrade: {:?}",
+        args.service_names
+    );
     ant_node_manager::cmd::node::upgrade(
         false, // do_not_start
         args.custom_bin_path,
@@ -154,7 +161,7 @@ pub async fn upgrade_nodes(
         node_registry.clone(),
         Default::default(),
         args.provided_env_variables,
-        args.service_names,
+        args.service_names.clone(),
         false, // Skip performing startup check, as we'll do it manually inside launchpad.
         args.url,
         args.version,
@@ -165,6 +172,7 @@ pub async fn upgrade_nodes(
         error!("Error while upgrading node services {err:?}");
     })?;
 
+    info!("Successfully upgraded nodes: {:?}", args.service_names);
     Ok(())
 }
 
@@ -172,8 +180,11 @@ pub async fn remove_nodes(
     services: Vec<String>,
     node_registry: NodeRegistryManager,
 ) -> Result<(), NodeManagementError> {
+    info!("Stopping nodes before removal: {:?}", services);
     stop_nodes_helper(node_registry.clone(), services.clone()).await?;
+    info!("Stopped nodes, proceeding with removal: {:?}", services);
     remove_nodes_helper(node_registry, services.clone()).await?;
+    info!("Successfully removed nodes: {:?}", services);
 
     Ok(())
 }
@@ -189,6 +200,7 @@ pub async fn add_nodes(
         false, // Do not start nodes after adding them for individual add operations
     )
     .await?;
+    info!("Successfully added {} nodes", config.count);
     Ok(())
 }
 
@@ -197,6 +209,7 @@ pub async fn start_nodes(
     node_registry: NodeRegistryManager,
 ) -> Result<(), NodeManagementError> {
     start_nodes_helper(services.clone(), node_registry).await?;
+    info!("Successfully started nodes: {services:?}");
     Ok(())
 }
 
@@ -205,6 +218,7 @@ pub async fn stop_nodes(
     node_registry: NodeRegistryManager,
 ) -> Result<(), NodeManagementError> {
     stop_nodes_helper(node_registry, services.clone()).await?;
+    info!("Successfully stopped nodes: {services:?}");
     Ok(())
 }
 
@@ -227,6 +241,7 @@ async fn add_multiple_nodes_helper(
 
     // Find first available port
     if !find_next_available_port(&used_ports, &mut current_port, max_port) {
+        error!("No available ports found in the specified range up to {max_port}");
         return Err(NodeManagementError::NoAvailablePorts { max_port });
     }
 
@@ -255,7 +270,6 @@ async fn add_multiple_nodes_helper(
 
     info!("Using pre-validated port range: {optimal_port_range:?}");
 
-    // Call ant_node_manager with pre-validated ports
     let services =
         add_node_helper(config, count, optimal_port_range, node_registry.clone()).await?;
     info!("Successfully added {count} nodes: {services:?}",);

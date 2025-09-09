@@ -266,6 +266,8 @@ pub async fn reset(
     if node_registry_path.exists() {
         info!("Removing node registry file: {node_registry_path:?}");
         std::fs::remove_file(node_registry_path)?;
+    } else {
+        debug!("Node registry file does not exist, no need to remove it");
     }
 
     Ok(())
