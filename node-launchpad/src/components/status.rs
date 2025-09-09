@@ -11,11 +11,11 @@ use crate::components::Component;
 use crate::components::footer::{Footer, NodesToStart};
 use crate::components::header::{Header, SelectedMenuItem};
 use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
+use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::connection_mode::ConnectionMode;
-use crate::error::ErrorPopup;
 use crate::node_management::config::PORT_MIN;
 use crate::system::get_available_space_b;
 use crate::{
