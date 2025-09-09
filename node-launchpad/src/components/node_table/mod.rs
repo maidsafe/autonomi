@@ -19,14 +19,13 @@ pub use state::NodeTableState;
 pub use table_state::StatefulTable;
 pub use widget::{NodeTableConfig, NodeTableWidget};
 
-use crate::action::{Action, NodeManagementResponse, NodeTableActions, StatusActions};
+use crate::action::{Action, NodeManagementResponse, NodeTableActions};
 use crate::components::Component;
 use crate::components::popup::error_popup::ErrorPopup;
-use crate::focus::{EventResult, FocusManager, FocusTarget};
+use crate::focus::FocusTarget;
 use crate::mode::Scene;
 use crate::tui::Frame;
 use color_eyre::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
@@ -50,112 +49,6 @@ impl NodeTableComponent {
 
     pub fn state_mut(&mut self) -> &mut NodeTableState {
         &mut self.state
-    }
-
-    fn handle_table_navigation(&mut self, key: KeyEvent) -> Result<(Vec<Action>, EventResult)> {
-        match key.code {
-            KeyCode::Up | KeyCode::Char('k') => {
-                debug!("NodeTable: Handling Up key - calling previous()");
-                let before_selected = self.state.items.state.selected();
-                self.state.items.previous();
-                let after_selected = self.state.items.state.selected();
-                debug!(
-                    "NodeTable: Selection changed from {:?} to {:?}",
-                    before_selected, after_selected
-                );
-                Ok((vec![], EventResult::Consumed))
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                debug!("NodeTable: Handling Down key - calling next()");
-                let before_selected = self.state.items.state.selected();
-                self.state.items.next();
-                let after_selected = self.state.items.state.selected();
-                debug!(
-                    "NodeTable: Selection changed from {:?} to {:?}",
-                    before_selected, after_selected
-                );
-                Ok((vec![], EventResult::Consumed))
-            }
-            KeyCode::Home | KeyCode::Char('g') => {
-                if !self.state.items.items.is_empty() {
-                    self.state.items.state.select(Some(0));
-                }
-                Ok((vec![], EventResult::Consumed))
-            }
-            KeyCode::End | KeyCode::Char('G') => {
-                if !self.state.items.items.is_empty() {
-                    self.state
-                        .items
-                        .state
-                        .select(Some(self.state.items.items.len() - 1));
-                }
-                Ok((vec![], EventResult::Consumed))
-            }
-            KeyCode::PageUp => {
-                for _ in 0..10 {
-                    self.state.items.previous();
-                }
-                Ok((vec![], EventResult::Consumed))
-            }
-            KeyCode::PageDown => {
-                for _ in 0..10 {
-                    self.state.items.next();
-                }
-                Ok((vec![], EventResult::Consumed))
-            }
-            _ => Ok((vec![], EventResult::Ignored)),
-        }
-    }
-
-    fn handle_node_operations(&mut self, key: KeyEvent) -> Result<(Vec<Action>, EventResult)> {
-        match key.code {
-            KeyCode::Char('+') => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::AddNode)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('-') => Ok((
-                vec![Action::NodeTableActions(
-                    NodeTableActions::TriggerRemoveNode,
-                )],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::StartStopNode)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::StartNodes)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::StopNodes)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::RemoveNodes)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('l') | KeyCode::Char('L') => Ok((
-                vec![Action::NodeTableActions(NodeTableActions::TriggerNodeLogs)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Char('g') if key.modifiers.contains(KeyModifiers::CONTROL) => Ok((
-                vec![Action::StatusActions(StatusActions::TriggerManageNodes)],
-                EventResult::Consumed,
-            )),
-            KeyCode::Enter => {
-                if !self.state.items.items.is_empty() && self.state.items.state.selected().is_some()
-                {
-                    Ok((
-                        vec![Action::NodeTableActions(NodeTableActions::StartStopNode)],
-                        EventResult::Consumed,
-                    ))
-                } else {
-                    Ok((vec![], EventResult::Ignored))
-                }
-            }
-            _ => Ok((vec![], EventResult::Ignored)),
-        }
     }
 }
 
@@ -204,18 +97,6 @@ impl Component for NodeTableComponent {
         self.state.send_state_update()?;
 
         Ok(())
-    }
-
-    fn handle_key_events(
-        &mut self,
-        key: KeyEvent,
-        _focus_manager: &FocusManager,
-    ) -> Result<(Vec<Action>, EventResult)> {
-        if let (actions, EventResult::Consumed) = self.handle_table_navigation(key)? {
-            return Ok((actions, EventResult::Consumed));
-        }
-
-        self.handle_node_operations(key)
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
@@ -525,6 +406,57 @@ impl Component for NodeTableComponent {
 
                 NodeTableActions::StateChanged { .. } => {
                     // StateChanged is sent by NodeTable, not handled by it
+                    Ok(None)
+                }
+
+                // Navigation actions
+                NodeTableActions::NavigateUp => {
+                    debug!("NodeTable: Handling NavigateUp action - calling previous()");
+                    let before_selected = self.state.items.state.selected();
+                    self.state.items.previous();
+                    let after_selected = self.state.items.state.selected();
+                    debug!(
+                        "NodeTable: Selection changed from {:?} to {:?}",
+                        before_selected, after_selected
+                    );
+                    Ok(None)
+                }
+                NodeTableActions::NavigateDown => {
+                    debug!("NodeTable: Handling NavigateDown action - calling next()");
+                    let before_selected = self.state.items.state.selected();
+                    self.state.items.next();
+                    let after_selected = self.state.items.state.selected();
+                    debug!(
+                        "NodeTable: Selection changed from {:?} to {:?}",
+                        before_selected, after_selected
+                    );
+                    Ok(None)
+                }
+                NodeTableActions::NavigateHome => {
+                    if !self.state.items.items.is_empty() {
+                        self.state.items.state.select(Some(0));
+                    }
+                    Ok(None)
+                }
+                NodeTableActions::NavigateEnd => {
+                    if !self.state.items.items.is_empty() {
+                        self.state
+                            .items
+                            .state
+                            .select(Some(self.state.items.items.len() - 1));
+                    }
+                    Ok(None)
+                }
+                NodeTableActions::NavigatePageUp => {
+                    for _ in 0..10 {
+                        self.state.items.previous();
+                    }
+                    Ok(None)
+                }
+                NodeTableActions::NavigatePageDown => {
+                    for _ in 0..10 {
+                        self.state.items.next();
+                    }
                     Ok(None)
                 }
             },
