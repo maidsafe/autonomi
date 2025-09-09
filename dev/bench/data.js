@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757421324608,
+  "lastUpdate": 1757421326636,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5606,6 +5606,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5",
+          "message": "Merge pull request #3176 from grumbach/data_stream\n\nfeat: streaming apis for data",
+          "timestamp": "2025-09-09T11:36:48Z",
+          "tree_id": "3031608d3b9e985cc78c0019d1a4985c211a3aed",
+          "url": "https://github.com/maidsafe/autonomi/commit/609f6fe0f81ca0da0e0f1e14577e6a625d6b37c5"
+        },
+        "date": 1757421325883,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10306,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20604,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
