@@ -62,27 +62,27 @@ impl NodeOperations {
         }
     }
 
-    pub fn register_action_sender(&mut self, sender: UnboundedSender<Action>) {
-        self.action_sender = Some(sender);
-    }
+    pub fn register_action_sender(&mut self, sender: UnboundedSender<Action>) -> Result<()> {
+        self.node_management
+            .send_task(NodeManagementTask::RegisterActionSender {
+                action_sender: sender.clone(),
+            })?;
 
-    fn get_actions_sender(&self) -> Result<UnboundedSender<Action>> {
-        self.action_sender
-            .clone()
-            .ok_or_else(|| color_eyre::eyre::eyre!("Action sender not registered"))
+        self.action_sender = Some(sender);
+        Ok(())
     }
 
     pub fn handle_add_node(&mut self, config: &AddNodeConfig) -> Result<Option<Action>> {
         // Validation: Available space
         if GB_PER_NODE > config.available_disk_space_gb {
             let error_popup = ErrorPopup::new(
-                "Cannot Add Node".to_string(),
-                format!("\nEach Node requires {GB_PER_NODE}GB of available space."),
+                "Cannot Add Node",
+                format!("\nEach Node requires {GB_PER_NODE}GB of available space.").as_ref(),
                 format!(
                     "{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.",
                     get_drive_name(config.storage_mountpoint)?,
                     config.available_disk_space_gb
-                ),
+                ).as_ref(),
             );
             return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
@@ -90,9 +90,9 @@ impl NodeOperations {
         // Validation: Amount of nodes
         if config.node_count + 1 > MAX_NODE_COUNT {
             let error_popup = ErrorPopup::new(
-                "Cannot Add Node".to_string(),
-                format!("You have reached the maximum node limit ({MAX_NODE_COUNT})."),
-                "\n Launchpad does not support more than {MAX_NODE_COUNT} nodes.".to_string(),
+                "Cannot Add Node",
+                format!("You have reached the maximum node limit ({MAX_NODE_COUNT}).").as_ref(),
+                "\n Launchpad does not support more than {MAX_NODE_COUNT} nodes.",
             );
             return Ok(Some(Action::ShowErrorPopup(error_popup)));
         }
@@ -116,9 +116,7 @@ impl NodeOperations {
             config.port_to.unwrap_or(PORT_MAX) as u16,
         );
 
-        let action_sender = self.get_actions_sender()?;
         let add_node_args = AddNodesConfig {
-            action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
             count: 1,
@@ -158,9 +156,7 @@ impl NodeOperations {
             config.port_to.unwrap_or(PORT_MAX) as u16,
         );
 
-        let action_sender = self.get_actions_sender()?;
         let maintain_nodes_args = AddNodesConfig {
-            action_sender: action_sender.clone(),
             antnode_path: config.antnode_path.clone(),
             connection_mode: config.connection_mode,
             count: config.nodes_to_start as u16,
@@ -180,39 +176,31 @@ impl NodeOperations {
     }
 
     pub fn handle_stop_nodes(&mut self, running_nodes: Vec<String>) -> Result<()> {
-        let action_sender = self.get_actions_sender()?;
         self.node_management
             .send_task(NodeManagementTask::StopNodes {
                 services: running_nodes,
-                action_sender,
             })?;
         Ok(())
     }
 
     pub fn handle_remove_nodes(&mut self, service_names: Vec<String>) -> Result<()> {
-        let action_sender = self.get_actions_sender()?;
         self.node_management
             .send_task(NodeManagementTask::RemoveNodes {
                 services: service_names,
-                action_sender,
             })?;
         Ok(())
     }
 
     pub fn handle_start_node(&mut self, service_names: Vec<String>) -> Result<()> {
-        let action_sender = self.get_actions_sender()?;
         self.node_management
             .send_task(NodeManagementTask::StartNode {
                 services: service_names,
-                action_sender,
             })?;
         Ok(())
     }
 
     pub fn handle_upgrade_nodes(&mut self, service_names: Vec<String>) -> Result<()> {
-        let action_sender = self.get_actions_sender()?;
         let upgrade_args = UpgradeNodesConfig {
-            action_sender,
             custom_bin_path: None,
             provided_env_variables: None,
             service_names,
