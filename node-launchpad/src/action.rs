@@ -113,6 +113,14 @@ pub enum NodeTableActions {
     TriggerNodeLogs,
     ResetNodes,
     UpgradeNodeVersion,
+
+    // Navigation actions
+    NavigateUp,
+    NavigateDown,
+    NavigateHome,
+    NavigateEnd,
+    NavigatePageUp,
+    NavigatePageDown,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
