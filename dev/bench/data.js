@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757421326636,
+  "lastUpdate": 1757423982689,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1559,6 +1559,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.24521451736328,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "anselmega@gmail.com",
+            "name": "Anselme",
+            "username": "grumbach"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b3065c47905b021416e12b8124da11d55e26e671",
+          "message": "Merge pull request #3196 from grumbach/cleanup_fmt2\n\nchore: cleanup fmt",
+          "timestamp": "2025-09-09T12:21:39Z",
+          "tree_id": "a5da1e8411c3f361b938364010ee1d8d186cf53b",
+          "url": "https://github.com/maidsafe/autonomi/commit/b3065c47905b021416e12b8124da11d55e26e671"
+        },
+        "date": 1757423974856,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.182553012417249,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.869963239915087,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.002271800112638,
             "unit": "MiB/s"
           }
         ]
