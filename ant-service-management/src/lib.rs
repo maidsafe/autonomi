@@ -125,7 +125,7 @@ pub trait ServiceStateActions {
     async fn on_remove(&self);
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
     /// Returns the startup status of the service
-    async fn startup_status(&self) -> Result<ServiceStartupStatus>;
+    async fn startup_status(&self) -> ServiceStartupStatus;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;

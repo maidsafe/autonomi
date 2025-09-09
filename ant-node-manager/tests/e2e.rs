@@ -42,6 +42,7 @@ fn cross_platform_service_install_and_control() {
         .arg("--trace")
         .arg("add")
         .arg("--skip-reachability-check")
+        .arg("--no-upnp")
         .arg("--user")
         .arg(CI_USER)
         .arg("--count")

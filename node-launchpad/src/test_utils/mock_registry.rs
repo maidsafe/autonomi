@@ -31,7 +31,7 @@ fn get_antnode_filename() -> String {
 
 /// Mock node registry for testing that manages temporary registry files
 pub struct MockNodeRegistry {
-    _temp_dir: TempDir,
+    temp_dir: TempDir,
     registry_path: PathBuf,
     nodes: Vec<NodeServiceData>,
 }
@@ -51,7 +51,7 @@ impl MockNodeRegistry {
         let registry_path = temp_dir.path().join("node_registry.json");
 
         let registry = Self {
-            _temp_dir: temp_dir,
+            temp_dir,
             registry_path,
             nodes: Vec::new(),
         };
@@ -65,7 +65,7 @@ impl MockNodeRegistry {
         let mut registry = Self::empty()?;
 
         for i in 0..count {
-            let node = create_test_node_service_data(i, ServiceStatus::Running);
+            let node = registry.create_test_node_service_data(i, ServiceStatus::Running);
             registry.nodes.push(node);
         }
 
@@ -146,68 +146,65 @@ impl MockNodeRegistry {
     pub fn get_registry_path(&self) -> &PathBuf {
         &self.registry_path
     }
-}
 
-/// Create a test NodeServiceData with deterministic values using direct struct construction
-pub fn create_test_node_service_data(index: u64, status: ServiceStatus) -> NodeServiceData {
-    let service_name = format!("antnode-{}", index + 1);
-    let unique_id = MOCK_COUNTER.fetch_add(1, Ordering::SeqCst);
-    let temp_dir = env::temp_dir()
-        .join("autonomi_test_nodes")
-        .join(format!("node_{index}_{unique_id}"));
+    /// Create a test NodeServiceData with deterministic values using direct struct construction
+    pub fn create_test_node_service_data(
+        &self,
+        index: u64,
+        status: ServiceStatus,
+    ) -> NodeServiceData {
+        let service_name = format!("antnode-{}", index + 1);
+        let unique_id = MOCK_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let temp_dir = self.temp_dir.path().join(format!("antnode_{unique_id}",));
 
-    // Ensure parent directory exists for Windows compatibility
-    if let Some(parent) = temp_dir.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-
-    NodeServiceData {
-        schema_version: 3,
-        service_name,
-        version: "0.1.0".to_string(),
-        status: status.clone(),
-        antnode_path: env::temp_dir().join(get_antnode_filename()),
-        data_dir_path: temp_dir.join("data"),
-        log_dir_path: temp_dir.join("logs"),
-        number: (index + 1) as u16,
-        metrics_port: (25000 + index) as u16,
-        connected_peers: 5,
-        alpha: false,
-        auto_restart: false,
-        evm_network: EvmNetwork::ArbitrumOne,
-        initial_peers_config: InitialPeersConfig {
-            first: false,
-            local: false,
-            addrs: vec![],
-            network_contacts_url: vec![],
-            ignore_cache: false,
-            bootstrap_cache_dir: None,
-        },
-        listen_addr: None,
-        log_format: None,
-        max_archived_log_files: Some(10),
-        max_log_files: Some(5),
-        network_id: Some(1),
-        node_ip: Some(Ipv4Addr::new(127, 0, 0, 1)),
-        node_port: Some((15000 + index) as u16),
-        no_upnp: false,
-        peer_id: None,
-        pid: if status == ServiceStatus::Running {
-            Some((1000 + index) as u32)
-        } else {
-            None
-        },
-        rewards_address: RewardsAddress::from_str("0x1234567890123456789012345678901234567890")
-            .unwrap_or_default(),
-        reachability_progress: ReachabilityProgress::NotRun,
-        rpc_socket_addr: Some(
-            SocketAddr::from_str(&format!("127.0.0.1:{}", 35000 + index))
-                .expect("Invalid socket address"),
-        ),
-        skip_reachability_check: false,
-        user: None,
-        user_mode: false,
-        write_older_cache_files: false,
+        NodeServiceData {
+            schema_version: 3,
+            service_name,
+            version: "0.1.0".to_string(),
+            status: status.clone(),
+            antnode_path: temp_dir.join(get_antnode_filename()),
+            data_dir_path: temp_dir.join("data"),
+            log_dir_path: temp_dir.join("logs"),
+            number: (index + 1) as u16,
+            metrics_port: (25000 + index) as u16,
+            connected_peers: 5,
+            alpha: false,
+            auto_restart: false,
+            evm_network: EvmNetwork::ArbitrumOne,
+            initial_peers_config: InitialPeersConfig {
+                first: false,
+                local: false,
+                addrs: vec![],
+                network_contacts_url: vec![],
+                ignore_cache: false,
+                bootstrap_cache_dir: None,
+            },
+            listen_addr: None,
+            log_format: None,
+            max_archived_log_files: Some(10),
+            max_log_files: Some(5),
+            network_id: Some(1),
+            node_ip: Some(Ipv4Addr::new(127, 0, 0, 1)),
+            node_port: Some((15000 + index) as u16),
+            no_upnp: false,
+            peer_id: None,
+            pid: if status == ServiceStatus::Running {
+                Some((1000 + index) as u32)
+            } else {
+                None
+            },
+            rewards_address: RewardsAddress::from_str("0x1234567890123456789012345678901234567890")
+                .unwrap_or_default(),
+            reachability_progress: ReachabilityProgress::NotRun,
+            rpc_socket_addr: Some(
+                SocketAddr::from_str(&format!("127.0.0.1:{}", 35000 + index))
+                    .expect("Invalid socket address"),
+            ),
+            skip_reachability_check: false,
+            user: None,
+            user_mode: false,
+            write_older_cache_files: false,
+        }
     }
 }
 
@@ -238,7 +235,7 @@ mod tests {
         let mut registry = MockNodeRegistry::empty()?;
 
         // Add a node
-        let node = create_test_node_service_data(0, ServiceStatus::Added);
+        let node = registry.create_test_node_service_data(0, ServiceStatus::Added);
         registry.add_node(node)?;
         assert_eq!(registry.node_count(), 1);
         assert!(registry.contains_node("antnode-1"));

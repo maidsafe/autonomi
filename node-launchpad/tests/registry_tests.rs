@@ -15,7 +15,7 @@ use ant_service_management::ServiceStatus;
 use color_eyre::eyre;
 use node_launchpad::{
     mode::Scene,
-    test_utils::{JourneyBuilder, MockNodeRegistry, create_test_node_service_data},
+    test_utils::{JourneyBuilder, MockNodeRegistry},
 };
 
 #[tokio::test]
@@ -29,7 +29,7 @@ async fn test_registry_mixed_node_states() -> Result<(), eyre::Report> {
     ];
     let mut registry = MockNodeRegistry::empty()?;
     for (i, status) in states.iter().enumerate() {
-        let node = create_test_node_service_data(i as u64, status.clone());
+        let node = registry.create_test_node_service_data(i as u64, status.clone());
         registry.add_node(node)?;
     }
 
@@ -60,6 +60,8 @@ async fn test_registry_mixed_node_states() -> Result<(), eyre::Report> {
 async fn test_node_lifecycle_operations() -> Result<(), eyre::Report> {
     let registry = MockNodeRegistry::empty()?;
 
+    let node = registry.create_test_node_service_data(0, ServiceStatus::Added);
+
     let journey = JourneyBuilder::new_with_registry("Node Lifecycle", registry).await?;
 
     journey
@@ -68,7 +70,7 @@ async fn test_node_lifecycle_operations() -> Result<(), eyre::Report> {
         .expect_node_count_in_registry(0)?
         .step()
         // Add a node via registry
-        .add_node_to_registry(create_test_node_service_data(0, ServiceStatus::Added))?
+        .add_node_to_registry(node)?
         .expect_node_count_in_registry(1)?
         .expect_registry_contains("antnode-1")?
         .expect_registry_node_status("antnode-1", ServiceStatus::Added)?

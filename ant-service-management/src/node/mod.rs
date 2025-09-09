@@ -246,7 +246,7 @@ impl ServiceStateActions for NodeService {
         Ok(())
     }
 
-    async fn startup_status(&self) -> Result<ServiceStartupStatus> {
+    async fn startup_status(&self) -> ServiceStartupStatus {
         let service_name = self.service_data.read().await.service_name.clone();
 
         let node_metrics = self.metrics_action.get_node_metrics().await;
@@ -261,10 +261,18 @@ impl ServiceStateActions for NodeService {
                 );
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 let root_dir = self.service_data.read().await.data_dir_path.clone();
-                let critical_error = self.fs_actions.critical_failure(&root_dir)?;
-                ServiceStartupStatus::Failed {
-                    reason: critical_error,
-                }
+                let critical_error = self.fs_actions.critical_failure(&root_dir);
+                let reason = match critical_error {
+                    Ok(err_str) => err_str,
+                    Err(err) => {
+                        error!(
+                            "Error obtaining critical error via fs actions on path {root_dir:?}: {err:?}"
+                        );
+                        "ErrorObtainingNodeCriticalError".to_string()
+                    }
+                };
+
+                ServiceStartupStatus::Failed { reason }
             }
         };
 
@@ -281,7 +289,7 @@ impl ServiceStateActions for NodeService {
                 );
             }
         }
-        Ok(startup_status)
+        startup_status
     }
 
     async fn on_stop(&self) -> Result<()> {

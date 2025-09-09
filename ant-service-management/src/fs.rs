@@ -12,6 +12,14 @@ use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::Path;
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+// This struct is defined in ant-node
+// So any changes here need to be reflected there too.
+struct CriticalFailure {
+    date_time: chrono::DateTime<chrono::Utc>,
+    reason: String,
+}
+
 pub trait FileSystemActions: Sync {
     fn listen_addrs(&self, root_dir: &Path) -> Result<Vec<Multiaddr>>;
     fn critical_failure(&self, root_dir: &Path) -> Result<String>;
@@ -54,11 +62,9 @@ impl FileSystemActions for FileSystemClient {
     }
 
     fn critical_failure(&self, root_dir: &Path) -> Result<String> {
-        let critical_failure_path = root_dir.join("critical_failure.log");
+        let critical_failure_path = root_dir.join("critical_failure.json");
 
-        let mut critical_failure_str = String::new();
-
-        if critical_failure_path.exists() {
+        let critical_failure_reason = if critical_failure_path.exists() {
             let mut file = OpenOptions::new().read(true).open(&critical_failure_path)?;
 
             file.lock_shared()?;
@@ -66,9 +72,13 @@ impl FileSystemActions for FileSystemClient {
             file.read_to_string(&mut contents)?;
             file.unlock()?;
 
-            critical_failure_str = contents;
-        }
+            let log: CriticalFailure = serde_json::from_str(&contents)?;
+            info!("Critical failure found: {log:?}");
+            log.reason
+        } else {
+            "NoCriticalFailureFound".to_string()
+        };
 
-        Ok(critical_failure_str)
+        Ok(critical_failure_reason)
     }
 }
