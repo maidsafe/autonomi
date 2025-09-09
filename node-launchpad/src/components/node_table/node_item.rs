@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::connection_mode::NodeConnectionMode;
+use ant_service_management::ServiceStatus;
 use std::fmt;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
@@ -20,13 +21,13 @@ pub enum NodeStatus {
     Updating,
 }
 
-impl From<&ant_service_management::ServiceStatus> for NodeStatus {
-    fn from(status: &ant_service_management::ServiceStatus) -> Self {
+impl From<&ServiceStatus> for NodeStatus {
+    fn from(status: &ServiceStatus) -> Self {
         match status {
-            ant_service_management::ServiceStatus::Added => NodeStatus::Added,
-            ant_service_management::ServiceStatus::Running => NodeStatus::Running,
-            ant_service_management::ServiceStatus::Stopped => NodeStatus::Stopped,
-            ant_service_management::ServiceStatus::Removed => NodeStatus::Removed,
+            ServiceStatus::Added => NodeStatus::Added,
+            ServiceStatus::Running => NodeStatus::Running,
+            ServiceStatus::Stopped => NodeStatus::Stopped,
+            ServiceStatus::Removed => NodeStatus::Removed,
         }
     }
 }

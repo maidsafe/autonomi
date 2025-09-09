@@ -8,7 +8,7 @@
 
 use super::super::{Component, utils::centered_rect_fixed};
 use crate::{
-    action::{Action, NodeTableActions},
+    action::{Action, NodeManagementCommand, NodeTableActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
@@ -41,7 +41,9 @@ impl Component for ResetNodesPopup {
                 if self.can_reset {
                     debug!("Got reset, sending Reset action and switching to Options");
                     vec![
-                        Action::NodeTableActions(NodeTableActions::ResetNodes),
+                        Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                            NodeManagementCommand::ResetNodes,
+                        )),
                         Action::SwitchScene(Scene::Options),
                     ]
                 } else {

@@ -218,6 +218,7 @@ impl Component for Status {
                     .state_mut()
                     .try_update_node_stats(false)?;
             }
+            // todo move this to app.rs
             Action::SwitchScene(scene) => match scene {
                 Scene::Status
                 | Scene::StatusRewardsAddressPopUp
@@ -229,19 +230,11 @@ impl Component for Status {
                 Scene::ManageNodesPopUp { .. } => {}
                 _ => {}
             },
-            Action::StoreNodesToStart(count) => {
+            Action::StoreRunningNodeCount(count) => {
                 self.nodes_to_start = count;
-                // Sync with NodeTableState
                 self.node_table_component
                     .state_mut()
                     .sync_nodes_to_start(count);
-                if self.nodes_to_start == 0 {
-                    info!("Nodes to start set to 0. Sending command to stop all nodes.");
-                    return Ok(Some(Action::NodeTableActions(NodeTableActions::StopNodes)));
-                } else {
-                    info!("Nodes to start set to: {count}. Sending command to start nodes");
-                    return Ok(Some(Action::NodeTableActions(NodeTableActions::StartNodes)));
-                }
             }
             Action::StoreRewardsAddress(rewards_address) => {
                 debug!("Storing rewards address: {rewards_address:?}");
@@ -601,36 +594,6 @@ mod tests {
         assert!(result.is_ok());
         let action = result.unwrap();
         assert_eq!(action, Some(Action::SwitchInputMode(InputMode::Navigation)));
-    }
-
-    #[tokio::test]
-    async fn test_status_update_store_nodes_to_start_zero() {
-        let config = create_test_status_config();
-        let mut status = Status::new(config).await.unwrap();
-
-        let result = status.update(Action::StoreNodesToStart(0));
-        assert!(result.is_ok());
-        let action = result.unwrap();
-        assert_eq!(
-            action,
-            Some(Action::NodeTableActions(NodeTableActions::StopNodes))
-        );
-        assert_eq!(status.nodes_to_start, 0);
-    }
-
-    #[tokio::test]
-    async fn test_status_update_store_nodes_to_start_non_zero() {
-        let config = create_test_status_config();
-        let mut status = Status::new(config).await.unwrap();
-
-        let result = status.update(Action::StoreNodesToStart(5));
-        assert!(result.is_ok());
-        let action = result.unwrap();
-        assert_eq!(
-            action,
-            Some(Action::NodeTableActions(NodeTableActions::StartNodes))
-        );
-        assert_eq!(status.nodes_to_start, 5);
     }
 
     #[tokio::test]

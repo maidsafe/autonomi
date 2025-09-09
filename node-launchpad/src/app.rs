@@ -366,7 +366,7 @@ impl App {
                 self.app_data.rewards_address = Some(*rewards_address);
                 self.app_data.save(None)?;
             }
-            Action::StoreNodesToStart(ref count) => {
+            Action::StoreRunningNodeCount(ref count) => {
                 debug!("Storing nodes to start: {count:?}");
                 self.app_data.nodes_to_start = *count;
                 self.app_data.save(None)?;

@@ -12,22 +12,23 @@ pub mod state;
 pub mod table_state;
 pub mod widget;
 
-// Re-exports for convenience
-pub use node_item::{NodeItem, NodeStatus};
-pub use operations::{AddNodeConfig, NodeOperations, StartNodesConfig};
-pub use state::NodeTableState;
-pub use table_state::StatefulTable;
-pub use widget::{NodeTableConfig, NodeTableWidget};
-
-use crate::action::{Action, NodeManagementResponse, NodeTableActions};
+use crate::action::{Action, NodeManagementCommand, NodeManagementResponse, NodeTableActions};
 use crate::components::Component;
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::focus::FocusTarget;
 use crate::mode::Scene;
 use crate::tui::Frame;
+use ant_service_management::ServiceStatus;
 use color_eyre::Result;
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
+
+// Re-exports for convenience
+pub use node_item::{NodeItem, NodeStatus};
+pub use operations::{AddNodeConfig, MaintainNodesConfig, NodeOperations};
+pub use state::NodeTableState;
+pub use table_state::StatefulTable;
+pub use widget::{NodeTableConfig, NodeTableWidget};
 
 pub struct NodeTableComponent {
     pub state: NodeTableState,
@@ -103,121 +104,14 @@ impl Component for NodeTableComponent {
         match action {
             // Handle NodeTableActions directly
             Action::NodeTableActions(node_action) => match node_action {
+                NodeTableActions::StateChanged { .. } => {
+                    // StateChanged is sent by NodeTable, not handled by it
+                    Ok(None)
+                }
                 NodeTableActions::RegistryUpdated { all_nodes_data } => {
                     self.state_mut().sync_node_service_data(&all_nodes_data);
                     self.state_mut().send_state_update()?;
                     Ok(None)
-                }
-                NodeTableActions::AddNode => {
-                    debug!("NodeTable: Handling AddNode action");
-                    let config = operations::AddNodeConfig {
-                        node_count: self.state.items.items.len() as u64,
-                        available_disk_space_gb: self.state.available_disk_space_gb,
-                        storage_mountpoint: &self.state.storage_mountpoint,
-                        rewards_address: self.state.rewards_address.as_ref(),
-                        nodes_to_start: self.state.nodes_to_start,
-                        antnode_path: self.state.antnode_path.clone(),
-                        connection_mode: self.state.connection_mode,
-                        data_dir_path: self.state.data_dir_path.clone(),
-                        network_id: self.state.network_id,
-                        init_peers_config: self.state.init_peers_config.clone(),
-                        port_from: self.state.port_from,
-                        port_to: self.state.port_to,
-                    };
-                    self.state.operations.handle_add_node(&config)
-                }
-                NodeTableActions::StartNodes => {
-                    debug!("NodeTable: Handling StartNodes action");
-                    let config = operations::StartNodesConfig {
-                        rewards_address: self.state.rewards_address.as_ref(),
-                        nodes_to_start: self.state.nodes_to_start,
-                        antnode_path: self.state.antnode_path.clone(),
-                        connection_mode: self.state.connection_mode,
-                        data_dir_path: self.state.data_dir_path.clone(),
-                        network_id: self.state.network_id,
-                        init_peers_config: self.state.init_peers_config.clone(),
-                        port_from: self.state.port_from,
-                        port_to: self.state.port_to,
-                    };
-                    self.state.operations.handle_start_nodes(&config)
-                }
-                NodeTableActions::StopNodes => {
-                    debug!("NodeTable: Handling StopNodes action");
-                    let running_nodes = self.state.get_running_nodes();
-                    self.state
-                        .operations
-                        .handle_stop_nodes(running_nodes.clone())?;
-                    Ok(None)
-                }
-                NodeTableActions::StartStopNode => {
-                    debug!("NodeTable: Handling StartStopNode action");
-                    let (service_name, node_locked, node_status) = {
-                        if let Some(node_item) = self.state.items.selected_item() {
-                            (
-                                node_item.service_name.clone(),
-                                node_item.locked,
-                                node_item.status,
-                            )
-                        } else {
-                            return Ok(None);
-                        }
-                    };
-
-                    if node_locked {
-                        debug!("Cannot start/stop node {service_name:?} while it is locked");
-                        return Ok(None);
-                    }
-
-                    if node_status == NodeStatus::Removed {
-                        debug!("Node {service_name} is removed. Cannot be started.");
-                        return Ok(None);
-                    }
-
-                    match node_status {
-                        NodeStatus::Stopped | NodeStatus::Added => {
-                            debug!("Starting Node {service_name:?}");
-                            self.state
-                                .operations
-                                .handle_start_node(vec![service_name.clone()])?;
-                            if let Some(node_item) = self.state.items.selected_item_mut() {
-                                node_item.status = NodeStatus::Starting;
-                            }
-                        }
-                        NodeStatus::Running => {
-                            debug!("Stopping Node {service_name:?}");
-                            self.state
-                                .operations
-                                .handle_stop_nodes(vec![service_name.clone()])?;
-                            if let Some(node_item) = self.state.items.selected_item_mut() {
-                                node_item.lock();
-                            }
-                        }
-                        _ => {
-                            debug!("Cannot Start/Stop node. Node status is {node_status:?}");
-                        }
-                    }
-                    Ok(None)
-                }
-                NodeTableActions::RemoveNodes => {
-                    debug!("NodeTable: Handling RemoveNodes action");
-                    if let Some(node_item) = self.state.items.selected_item_mut() {
-                        if node_item.locked {
-                            debug!(
-                                "Node {} still performing operation. Cannot remove",
-                                node_item.service_name
-                            );
-                            return Ok(None);
-                        }
-                        node_item.lock();
-                        self.state
-                            .operations
-                            .handle_remove_nodes(vec![node_item.service_name.clone()])?;
-                    }
-                    Ok(None)
-                }
-                NodeTableActions::TriggerRemoveNode => {
-                    debug!("NodeTable: TriggerRemoveNode action received");
-                    Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
                 }
                 NodeTableActions::TriggerNodeLogs => {
                     debug!("NodeTable: TriggerNodeLogs action received");
@@ -242,7 +136,107 @@ impl Component for NodeTableComponent {
 
                     Ok(Some(Action::SetNodeLogsTarget(selected_node_name)))
                 }
-
+                NodeTableActions::TriggerRemoveNodePopup => {
+                    debug!(
+                        "NodeTable: TriggerRemoveNodePopup action received, showing RemoveNodePopUp"
+                    );
+                    Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
+                }
+                NodeTableActions::NodeManagementCommand(command) => {
+                    debug!("NodeTable: Handling NodeManagementCommand: {:?}", command);
+                    match command {
+                        NodeManagementCommand::MaintainNodes => {
+                            // todo how should we lock nodes here?
+                            let config = operations::MaintainNodesConfig {
+                                rewards_address: self.state.rewards_address.as_ref(),
+                                nodes_to_start: self.state.nodes_to_start,
+                                antnode_path: self.state.antnode_path.clone(),
+                                connection_mode: self.state.connection_mode,
+                                data_dir_path: self.state.data_dir_path.clone(),
+                                network_id: self.state.network_id,
+                                init_peers_config: self.state.init_peers_config.clone(),
+                                port_from: self.state.port_from,
+                                port_to: self.state.port_to,
+                            };
+                            self.state.operations.handle_maintain_nodes(&config)
+                        }
+                        NodeManagementCommand::AddNode => {
+                            // todo how should we lock nodes here?
+                            let config = operations::AddNodeConfig {
+                                node_count: self.state.items.items.len() as u64,
+                                available_disk_space_gb: self.state.available_disk_space_gb,
+                                storage_mountpoint: &self.state.storage_mountpoint,
+                                rewards_address: self.state.rewards_address.as_ref(),
+                                nodes_to_start: self.state.nodes_to_start,
+                                antnode_path: self.state.antnode_path.clone(),
+                                connection_mode: self.state.connection_mode,
+                                data_dir_path: self.state.data_dir_path.clone(),
+                                network_id: self.state.network_id,
+                                init_peers_config: self.state.init_peers_config.clone(),
+                                port_from: self.state.port_from,
+                                port_to: self.state.port_to,
+                            };
+                            self.state.operations.handle_add_node(&config)
+                        }
+                        NodeManagementCommand::StartNodes => {
+                            let stopped_nodes: Vec<String> = self
+                                .state
+                                .node_services
+                                .iter()
+                                .filter_map(|node| {
+                                    if node.status == ServiceStatus::Stopped
+                                        || node.status == ServiceStatus::Added
+                                    {
+                                        Some(node.service_name.clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            self.state.operations.handle_start_node(stopped_nodes)?;
+                            Ok(None)
+                        }
+                        NodeManagementCommand::StopNodes => {
+                            let running_nodes = self.state.get_running_nodes();
+                            self.state
+                                .operations
+                                .handle_stop_nodes(running_nodes.clone())?;
+                            Ok(None)
+                        }
+                        NodeManagementCommand::RemoveNodes => {
+                            let selected_node = self
+                                .state
+                                .items
+                                .selected_item()
+                                .map(|node| node.service_name.clone());
+                            if let Some(service_name) = selected_node {
+                                self.state
+                                    .operations
+                                    .handle_remove_nodes(vec![service_name])?;
+                            }
+                            Ok(None)
+                        }
+                        NodeManagementCommand::UpgradeNodes => {
+                            let all_service_names: Vec<String> = self
+                                .state()
+                                .items
+                                .items
+                                .iter()
+                                .map(|item| item.service_name.clone())
+                                .collect();
+                            if !all_service_names.is_empty() {
+                                self.state_mut()
+                                    .operations
+                                    .handle_upgrade_nodes(all_service_names)?;
+                            }
+                            Ok(None)
+                        }
+                        NodeManagementCommand::ResetNodes => {
+                            self.state_mut().operations.handle_reset_nodes()?;
+                            Ok(None)
+                        }
+                    }
+                }
                 // Handle node management responses
                 NodeTableActions::NodeManagementResponse(response) => match response {
                     NodeManagementResponse::MaintainNodes { error } => {
@@ -381,34 +375,6 @@ impl Component for NodeTableComponent {
                         }
                     }
                 },
-
-                NodeTableActions::ResetNodes => {
-                    debug!("Got NodeTableActions::ResetNodes - removing all nodes");
-                    self.state_mut().operations.handle_reset_nodes()?;
-                    Ok(None)
-                }
-                NodeTableActions::UpgradeNodeVersion => {
-                    debug!("Got NodeTableActions::UpgradeNodeVersion");
-                    let all_service_names: Vec<String> = self
-                        .state()
-                        .items
-                        .items
-                        .iter()
-                        .map(|item| item.service_name.clone())
-                        .collect();
-                    if !all_service_names.is_empty() {
-                        self.state_mut()
-                            .operations
-                            .handle_upgrade_nodes(all_service_names)?;
-                    }
-                    Ok(None)
-                }
-
-                NodeTableActions::StateChanged { .. } => {
-                    // StateChanged is sent by NodeTable, not handled by it
-                    Ok(None)
-                }
-
                 // Navigation actions
                 NodeTableActions::NavigateUp => {
                     debug!("NodeTable: Handling NavigateUp action - calling previous()");
