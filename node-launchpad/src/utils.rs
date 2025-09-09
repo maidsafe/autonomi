@@ -89,7 +89,7 @@ pub fn initialize_logging() -> Result<()> {
             "RUST_LOG",
             std::env::var("RUST_LOG").unwrap_or_else(|_| {
                 format!(
-                    "{}=trace,ant_node_manager=trace,ant_service_management=trace,ant_bootstrap=debug",
+                    "{}=trace,ant_node_manager=debug,ant_service_management=debug,ant_bootstrap=debug",
                     env!("CARGO_CRATE_NAME")
                 )
             }),

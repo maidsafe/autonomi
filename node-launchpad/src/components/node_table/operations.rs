@@ -191,6 +191,12 @@ impl NodeOperations {
         Ok(())
     }
 
+    pub fn handle_reset_nodes(&mut self) -> Result<()> {
+        self.node_management
+            .send_task(NodeManagementTask::ResetNodes)?;
+        Ok(())
+    }
+
     pub fn handle_start_node(&mut self, service_names: Vec<String>) -> Result<()> {
         self.node_management
             .send_task(NodeManagementTask::StartNode {
