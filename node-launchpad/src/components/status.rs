@@ -121,7 +121,7 @@ impl Status {
     }
 
     fn handle_status_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        debug!("Key received in Status: {:?}", key);
+        debug!("Key received in Status: {key:?}");
         if let Some(error_popup) = &mut self.error_popup
             && error_popup.is_visible()
         {
@@ -138,11 +138,6 @@ impl Status {
 impl Component for Status {
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
         self.action_sender = Some(tx.clone());
-        // Register action sender with NodeTable operations
-        self.node_table_component
-            .state_mut()
-            .operations
-            .register_action_sender(tx.clone());
 
         // Register action sender with NodeTableComponent
         self.node_table_component
@@ -323,7 +318,6 @@ impl Component for Status {
                         return Ok(None);
                     }
                 }
-                _ => {}
             },
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
@@ -591,11 +585,7 @@ mod tests {
         let focus_manager = FocusManager::new(FocusTarget::Status);
 
         // Set up error popup
-        let mut error_popup = ErrorPopup::new(
-            "Test Error".to_string(),
-            "Test error message".to_string(),
-            "Detailed error".to_string(),
-        );
+        let mut error_popup = ErrorPopup::new("Test Error", "Test error message", "Detailed error");
         error_popup.show();
         status.error_popup = Some(error_popup);
 
@@ -782,11 +772,7 @@ mod tests {
     async fn test_status_update_show_error_popup() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
-        let error_popup = ErrorPopup::new(
-            "Test Error".to_string(),
-            "Test error message".to_string(),
-            "Detailed error".to_string(),
-        );
+        let error_popup = ErrorPopup::new("Test Error", "Test error message", "Detailed error");
 
         let result = status.update(Action::ShowErrorPopup(error_popup));
         assert!(result.is_ok());
@@ -817,11 +803,7 @@ mod tests {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
-        let mut error_popup = ErrorPopup::new(
-            "Test Error".to_string(),
-            "Test error message".to_string(),
-            "Detailed error".to_string(),
-        );
+        let mut error_popup = ErrorPopup::new("Test Error", "Test error message", "Detailed error");
         error_popup.show();
         status.error_popup = Some(error_popup);
 

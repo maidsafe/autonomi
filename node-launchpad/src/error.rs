@@ -32,47 +32,6 @@ use ratatui::{
 /// 5. Draw the error popup by calling the `draw_error` method in your `draw` function.
 /// 6. Handle the input for the error popup by calling the `handle_input` method.
 ///
-/// Example:
-/// ```ignore
-///     use crate::error::ErrorPopup;
-///
-///     pub struct MyComponent {
-///         error_popup: Option<ErrorPopup>,
-///     }
-///
-///     impl MyComponent {
-///         pub fn new() -> Self {
-///             Self {
-///                 error_popup: None,
-///             }
-///         }
-///     }
-///
-///     impl Component for MyComponent {
-///         fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-///             if let Some(error_popup) = &mut self.error_popup {
-///                 if error_popup.is_visible() {
-///                     error_popup.handle_input(key);
-///                    return Ok(vec![Action::SwitchInputMode(InputMode::Navigation)]);
-///                }
-///            }
-///            // ... Your keys being handled here ...
-///         }
-///         fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-///             // ... Your drawing code here ...
-///             // Be sure to include the background elements here
-///             if let Some(error_popup) = &self.error_popup {
-///                 if error_popup.is_visible() {
-///                     error_popup.draw_error(f, area);
-///                     return Ok(());
-///                 }
-///             }
-///             // Be sure to include your popups here
-///             // ... Your drawing code here ...
-///         }
-///     }
-/// ```
-///
 /// How to trigger the error
 ///
 /// ```ignore
@@ -95,12 +54,12 @@ pub struct ErrorPopup {
 }
 
 impl ErrorPopup {
-    pub fn new(title: String, message: String, error_message: String) -> Self {
+    pub fn new(title: &str, message: &str, error_message: &str) -> Self {
         Self {
             visible: false,
-            title,
-            message,
-            error_message,
+            title: title.to_string(),
+            message: message.to_string(),
+            error_message: error_message.to_string(),
         }
     }
 
@@ -218,11 +177,7 @@ mod tests {
 
     #[test]
     fn test_error_popup_handle_input_enter_key() {
-        let mut error_popup = ErrorPopup::new(
-            "Error".to_string(),
-            "Message".to_string(),
-            "Details".to_string(),
-        );
+        let mut error_popup = ErrorPopup::new("Error", "Message", "Details");
         error_popup.show();
 
         let key_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::empty());
@@ -234,11 +189,7 @@ mod tests {
 
     #[test]
     fn test_error_popup_handle_input_esc_key() {
-        let mut error_popup = ErrorPopup::new(
-            "Error".to_string(),
-            "Message".to_string(),
-            "Details".to_string(),
-        );
+        let mut error_popup = ErrorPopup::new("Error", "Message", "Details");
         error_popup.show();
 
         let key_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::empty());
@@ -251,9 +202,9 @@ mod tests {
     #[test]
     fn test_error_popup_lifecycle_simulation() {
         let mut error_popup = ErrorPopup::new(
-            "Lifecycle Test".to_string(),
-            "Testing full lifecycle".to_string(),
-            "Complete error lifecycle test".to_string(),
+            "Lifecycle Test",
+            "Testing full lifecycle",
+            "Complete error lifecycle test",
         );
 
         // 1. Created - not visible

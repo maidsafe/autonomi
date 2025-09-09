@@ -10,7 +10,7 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 
-use crate::action::Action;
+use crate::action::{Action, NodeManagementResponse, NodeTableActions};
 use ant_service_management::NodeRegistryManager;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
@@ -22,16 +22,15 @@ pub use config::{AddNodesConfig, UpgradeNodesConfig};
 
 #[derive(Debug)]
 pub enum NodeManagementTask {
+    RegisterActionSender {
+        action_sender: UnboundedSender<Action>,
+    },
     MaintainNodes {
         config: AddNodesConfig,
     },
-    ResetNodes {
-        start_nodes_after_reset: bool,
-        action_sender: UnboundedSender<Action>,
-    },
+    ResetNodes,
     StopNodes {
         services: Vec<String>,
-        action_sender: UnboundedSender<Action>,
     },
     UpgradeNodes {
         config: UpgradeNodesConfig,
@@ -41,84 +40,213 @@ pub enum NodeManagementTask {
     },
     RemoveNodes {
         services: Vec<String>,
-        action_sender: UnboundedSender<Action>,
     },
     StartNode {
         services: Vec<String>,
-        action_sender: UnboundedSender<Action>,
     },
 }
 
 #[derive(Clone)]
 pub struct NodeManagement {
-    task_sender: mpsc::UnboundedSender<NodeManagementTask>,
+    task_sender: UnboundedSender<NodeManagementTask>,
 }
 
 impl NodeManagement {
     pub fn new(node_registry: NodeRegistryManager) -> Result<Self> {
-        let (send, mut recv) = mpsc::unbounded_channel();
+        let (task_sender, task_recv) = mpsc::unbounded_channel();
 
         let rt = Builder::new_current_thread().enable_all().build()?;
 
         std::thread::spawn(move || {
             let local = LocalSet::new();
 
-            local.spawn_local(async move {
-                while let Some(new_task) = recv.recv().await {
-                    match new_task {
-                        NodeManagementTask::MaintainNodes { config: args } => {
-                            handlers::maintain_n_running_nodes(args, node_registry.clone()).await;
-                        }
-                        NodeManagementTask::ResetNodes {
-                            start_nodes_after_reset,
-                            action_sender,
-                        } => {
-                            handlers::reset_nodes(
-                                action_sender,
-                                node_registry.clone(),
-                                start_nodes_after_reset,
-                            )
-                            .await;
-                        }
-                        NodeManagementTask::StopNodes {
-                            services,
-                            action_sender,
-                        } => {
-                            handlers::stop_nodes(services, action_sender, node_registry.clone())
-                                .await;
-                        }
-                        NodeManagementTask::UpgradeNodes { config: args } => {
-                            handlers::upgrade_nodes(args, node_registry.clone()).await
-                        }
-                        NodeManagementTask::RemoveNodes {
-                            services,
-                            action_sender,
-                        } => {
-                            handlers::remove_nodes(services, action_sender, node_registry.clone())
-                                .await
-                        }
-                        NodeManagementTask::StartNode {
-                            services,
-                            action_sender,
-                        } => {
-                            handlers::start_nodes(services, action_sender, node_registry.clone())
-                                .await
-                        }
-                        NodeManagementTask::AddNode { config: args } => {
-                            handlers::add_node(args, node_registry.clone()).await
-                        }
-                    }
-                }
-                // If the while loop returns, then all the LocalSpawner
-                // objects have been dropped.
-            });
+            local.spawn_local(async move { Self::handle_actions(task_recv, node_registry).await });
 
             // This will return once all senders are dropped and all
             // spawned tasks have returned.
             rt.block_on(local);
         });
 
-        Ok(Self { task_sender: send })
+        Ok(Self { task_sender })
+    }
+
+    async fn handle_actions(
+        mut task_recv: mpsc::UnboundedReceiver<NodeManagementTask>,
+        node_registry: NodeRegistryManager,
+    ) {
+        let mut action_sender_main = None;
+        while let Some(new_task) = task_recv.recv().await {
+            match new_task {
+                NodeManagementTask::RegisterActionSender {
+                    action_sender: new_sender,
+                } => {
+                    action_sender_main = Some(new_sender);
+                }
+                NodeManagementTask::MaintainNodes { config } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!(
+                            "No action sender registered, cannot proceed with maintaining nodes"
+                        );
+                        continue;
+                    };
+
+                    let error = if let Err(err) =
+                        handlers::maintain_n_running_nodes(config, node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::MaintainNodes { error },
+                        ),
+                    )) {
+                        error!("Failed to send MaintainNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::ResetNodes => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with resetting nodes");
+                        continue;
+                    };
+
+                    let error = if let Err(err) = handlers::reset_nodes(node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::ResetNodes { error },
+                        ),
+                    )) {
+                        error!("Failed to send ResetNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::StopNodes { services } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with stopping nodes");
+                        continue;
+                    };
+
+                    let error = if let Err(err) =
+                        handlers::stop_nodes(services.clone(), node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::StopNodes {
+                                service_names: services,
+                                error,
+                            },
+                        ),
+                    )) {
+                        error!("Failed to send StopNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::UpgradeNodes { config } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with upgrading nodes");
+                        continue;
+                    };
+                    let service_names = config.service_names.clone();
+
+                    let error = if let Err(err) =
+                        handlers::upgrade_nodes(config, node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::UpgradeNodes {
+                                service_names,
+                                error,
+                            },
+                        ),
+                    )) {
+                        error!("Failed to send UpgradeNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::RemoveNodes { services } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with removing nodes");
+                        continue;
+                    };
+                    let error = if let Err(err) =
+                        handlers::remove_nodes(services.clone(), node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::RemoveNodes {
+                                service_names: services,
+                                error,
+                            },
+                        ),
+                    )) {
+                        error!("Failed to send RemoveNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::StartNode { services } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with starting nodes");
+                        continue;
+                    };
+                    let error = if let Err(err) =
+                        handlers::start_nodes(services.clone(), node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::StartNodes {
+                                service_names: services,
+                                error,
+                            },
+                        ),
+                    )) {
+                        error!("Failed to send StartNodesResult action: {err:?}");
+                    }
+                }
+                NodeManagementTask::AddNode { config } => {
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!("No action sender registered, cannot proceed with adding nodes");
+                        continue;
+                    };
+                    let error = if let Err(err) =
+                        handlers::add_nodes(config, node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(NodeManagementResponse::AddNode {
+                            error,
+                        }),
+                    )) {
+                        error!("Failed to send AddNodeResult action: {err:?}");
+                    }
+                }
+            }
+        }
+        // If the while loop returns, then all the LocalSpawner
+        // objects have been dropped.
     }
 
     /// Send a task to the NodeManagement local set

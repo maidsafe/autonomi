@@ -62,42 +62,7 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StatusActions {
-    ResetNodesCompleted {
-        trigger_start_node: bool,
-    },
-    UpdateNodesCompleted,
-    ErrorLoadingNodeRegistry {
-        raw_error: String,
-    },
-    ErrorGettingNodeRegistryPath {
-        raw_error: String,
-    },
-    ErrorScalingUpNodes {
-        raw_error: String,
-    },
-    ErrorResettingNodes {
-        raw_error: String,
-    },
-    ErrorUpdatingNodes {
-        raw_error: String,
-    },
-    ErrorAddingNodes {
-        raw_error: String,
-    },
-    ErrorStartingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
-    ErrorStoppingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
-    ErrorRemovingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
     NodesStatsObtained(NodeStats),
-
     TriggerManageNodes,
     TriggerRewardsAddress,
 }
@@ -135,6 +100,7 @@ pub enum NodeTableActions {
     RegistryUpdated {
         all_nodes_data: Vec<NodeServiceData>,
     },
+    NodeManagementResponse(NodeManagementResponse),
 
     AddNode,
     StartNodes,
@@ -145,18 +111,33 @@ pub enum NodeTableActions {
     TriggerNodeLogs,
     ResetNodes,
     UpgradeNodeVersion,
+}
 
-    // Completion events
-    StartNodesCompleted {
-        service_name: String,
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NodeManagementResponse {
+    MaintainNodes {
+        error: Option<String>,
     },
-    StopNodesCompleted {
-        service_name: String,
+    AddNode {
+        error: Option<String>,
     },
-    AddNodesCompleted {
-        service_name: String,
+    StartNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
     },
-    RemoveNodesCompleted {
-        service_name: String,
+    StopNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    RemoveNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    UpgradeNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    ResetNodes {
+        error: Option<String>,
     },
 }
