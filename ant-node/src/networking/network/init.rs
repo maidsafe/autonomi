@@ -418,9 +418,16 @@ pub(crate) async fn init_reachability_check_swarm(
 
     // ==== Transport ====
     #[cfg(feature = "open-metrics")]
-    let transport = transport::build_transport(&config.keypair, &mut metrics_registries);
+    let main_transport = transport::build_transport(&config.keypair, &mut metrics_registries);
     #[cfg(not(feature = "open-metrics"))]
-    let transport = transport::build_transport(&config.keypair);
+    let main_transport = transport::build_transport(&config.keypair);
+    let transport = if !config.local {
+        debug!("Preventing non-global dials");
+        // Wrap upper in a transport that prevents dialing local addresses.
+        libp2p::core::transport::global_only::Transport::new(main_transport).boxed()
+    } else {
+        main_transport
+    };
 
     #[cfg(feature = "open-metrics")]
     let (metrics_recorder, metrics_shutdown_tx) = if let Some(port) = config.metrics_server_port {
