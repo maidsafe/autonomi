@@ -218,18 +218,6 @@ impl Component for Status {
                     .state_mut()
                     .try_update_node_stats(false)?;
             }
-            // todo move this to app.rs
-            Action::SwitchScene(scene) => match scene {
-                Scene::Status
-                | Scene::StatusRewardsAddressPopUp
-                | Scene::RemoveNodePopUp
-                | Scene::UpgradeLaunchpadPopUp => {
-                    // make sure we're in navigation mode
-                    return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
-                }
-                Scene::ManageNodesPopUp { .. } => {}
-                _ => {}
-            },
             Action::StoreRunningNodeCount(count) => {
                 self.nodes_to_start = count;
                 self.node_table_component
