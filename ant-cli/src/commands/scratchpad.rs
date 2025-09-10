@@ -13,46 +13,63 @@ use crate::wallet::load_wallet;
 use autonomi::Bytes;
 use autonomi::ScratchpadAddress;
 use autonomi::TransactionConfig;
-use autonomi::client::scratchpad::SecretKey as ScratchpadSecretKey;
 use autonomi::client::data_types::scratchpad::ScratchpadError;
+use autonomi::client::scratchpad::SecretKey as ScratchpadSecretKey;
 use color_eyre::Section;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::eyre;
+use color_eyre::owo_colors::OwoColorize;
 
 /// Print detailed fork analysis for conflicting scratchpads
-fn print_fork_analysis(conflicting_scratchpads: &[autonomi::client::data_types::scratchpad::Scratchpad], scratchpad_key: &ScratchpadSecretKey) {
-    println!("Fork detected!");
-    println!();
+fn print_fork_analysis(
+    conflicting_scratchpads: &[autonomi::client::data_types::scratchpad::Scratchpad],
+    scratchpad_key: &ScratchpadSecretKey,
+) {
     println!("FORK ANALYSIS:");
-    println!("{}", "=".repeat(60));
-    println!("Retrieved {} conflicting scratchpad(s):", conflicting_scratchpads.len());
-    
+    println!("{}", "=".repeat(80));
+    println!(
+        "Retrieved {} conflicting scratchpad(s):",
+        conflicting_scratchpads.len()
+    );
+
     // Sort by signature to ensure consistent ordering
     let mut sorted_scratchpads = conflicting_scratchpads.to_vec();
-    sorted_scratchpads.sort_by(|a, b| hex::encode(a.signature().to_bytes()).cmp(&hex::encode(b.signature().to_bytes())));
-    
+    sorted_scratchpads.sort_by(|a, b| {
+        hex::encode(a.signature().to_bytes()).cmp(&hex::encode(b.signature().to_bytes()))
+    });
+
     // Show each conflicting scratchpad
     for (i, scratchpad) in sorted_scratchpads.iter().enumerate() {
         println!();
-        println!("CONFLICTING SCRATCHPAD #{} OF {}:", i + 1, sorted_scratchpads.len());
+        println!("#{} OF {}:", i + 1, sorted_scratchpads.len());
         println!("  Counter: {}", scratchpad.counter());
         println!("  Data type encoding: {}", scratchpad.data_encoding());
-        println!("  PublicKey/Address: {}", hex::encode(scratchpad.owner().to_bytes()));
-        println!("  Signature: {}", hex::encode(scratchpad.signature().to_bytes()));
-        println!("  Scratchpad hash: {}", hex::encode(scratchpad.scratchpad_hash().0));
-        println!("  Encrypted data hash: {}", hex::encode(scratchpad.encrypted_data_hash()));
-        println!("  Encrypted data size: {} bytes", scratchpad.encrypted_data().len());
-        
+        println!(
+            "  PublicKey/Address: {}",
+            hex::encode(scratchpad.owner().to_bytes())
+        );
+        println!(
+            "  Signature: {}",
+            hex::encode(scratchpad.signature().to_bytes())
+        );
+        println!(
+            "  Scratchpad hash: {}",
+            hex::encode(scratchpad.scratchpad_hash().0)
+        );
+        println!(
+            "  Encrypted data hash: {}",
+            hex::encode(scratchpad.encrypted_data_hash())
+        );
+
         // Decrypt and show data
         match scratchpad.decrypt_data(scratchpad_key) {
             Ok(decrypted_data) => {
                 let data_str = String::from_utf8_lossy(&decrypted_data);
-                println!("  Decrypted data: \"{}\"", data_str);
-                println!("  Decrypted data size: {} bytes", decrypted_data.len());
+                println!("  Decrypted data: \"{data_str}\"");
             }
             Err(decrypt_err) => {
-                println!("  Decryption failed: {}", decrypt_err);
+                println!("  Decryption failed: {decrypt_err}");
             }
         }
     }
@@ -172,7 +189,7 @@ pub fn share(name: String) -> Result<()> {
 /// * `context` - Network context for the operation
 /// * `name` - Name of the scratchpad to load
 /// * `secret_key` - Whether this is an imported secret_key
-pub async fn get(context: NetworkContext, name: String, secret_key: bool, hex: bool, print_fork_error: bool) -> Result<()> {
+pub async fn get(context: NetworkContext, name: String, secret_key: bool, hex: bool) -> Result<()> {
     let client = crate::actions::connect_to_network(context)
         .await
         .map_err(|(err, _)| err)?;
@@ -187,32 +204,22 @@ pub async fn get(context: NetworkContext, name: String, secret_key: bool, hex: b
 
     println!("Retrieving scratchpad from network...");
     let address = ScratchpadAddress::new(scratchpad_key.public_key());
-    let mut detected_fork: Option<Vec<autonomi::client::data_types::scratchpad::Scratchpad>> = None;
-    
     let scratchpad_result = client.scratchpad_get(&address).await;
-    
-    let scratchpad = if print_fork_error {
-        if let Err(ScratchpadError::Fork(ref conflicting_scratchpads)) = scratchpad_result {
-            detected_fork = Some(conflicting_scratchpads.clone());
+
+    let scratchpad = match scratchpad_result {
+        Ok(scratchpad) => scratchpad,
+        Err(ScratchpadError::Fork(conflicting_scratchpads)) => {
+            let error =
+                color_eyre::Report::new(ScratchpadError::Fork(conflicting_scratchpads.clone()))
+                    .wrap_err("Failed to retrieve scratchpad from network");
+            eprintln!("{error:?}");
+            print_fork_analysis(&conflicting_scratchpads, &scratchpad_key);
+            std::process::exit(1);
         }
-        match scratchpad_result.wrap_err("Failed to retrieve scratchpad from network") {
-            Ok(scratchpad) => scratchpad,
-            Err(error) => {
-                // Print the error with full formatting like the original ? operator would
-                let report = color_eyre::Report::from(error);
-                eprintln!("{:?}", report);
-                
-                // If it was a fork error, print detailed analysis
-                if let Some(conflicting_scratchpads) = detected_fork {
-                    print_fork_analysis(&conflicting_scratchpads, &scratchpad_key);
-                }
-                
-                // Exit with error code - we've already printed everything
-                std::process::exit(1);
-            }
+        Err(other_error) => {
+            return Err(color_eyre::Report::new(other_error)
+                .wrap_err("Failed to retrieve scratchpad from network"));
         }
-    } else {
-        scratchpad_result.wrap_err("Failed to retrieve scratchpad from network")?
     };
 
     let data = scratchpad
@@ -243,7 +250,6 @@ pub async fn edit(
     name: String,
     secret_key: bool,
     data: String,
-    print_fork_error: bool,
 ) -> Result<()> {
     let client = crate::actions::connect_to_network(context)
         .await
@@ -262,32 +268,22 @@ pub async fn edit(
     // get network current scratchpad
     println!("Retrieving scratchpad from network...");
     let address = ScratchpadAddress::new(scratchpad_key.public_key());
-    let mut detected_fork: Option<Vec<autonomi::client::data_types::scratchpad::Scratchpad>> = None;
-    
     let scratchpad_result = client.scratchpad_get(&address).await;
-    
-    let net_scratchpad = if print_fork_error {
-        if let Err(ScratchpadError::Fork(ref conflicting_scratchpads)) = scratchpad_result {
-            detected_fork = Some(conflicting_scratchpads.clone());
+
+    let net_scratchpad = match scratchpad_result {
+        Ok(scratchpad) => scratchpad,
+        Err(ScratchpadError::Fork(conflicting_scratchpads)) => {
+            eprintln!("{}", "⚠️  Fork detected, forcing update...".yellow());
+            // Continue with the first conflicting scratchpad - scratchpad_update_from will handle the fork.
+            conflicting_scratchpads
+                .first()
+                .ok_or_else(|| eyre!("Fork error contains no conflicting scratchpads"))?
+                .clone()
         }
-        match scratchpad_result.wrap_err("Failed to retrieve scratchpad from network") {
-            Ok(scratchpad) => scratchpad,
-            Err(error) => {
-                // Print the error with full formatting like the original ? operator would
-                let report = color_eyre::Report::from(error);
-                eprintln!("{:?}", report);
-                
-                // If it was a fork error, print detailed analysis
-                if let Some(conflicting_scratchpads) = detected_fork {
-                    print_fork_analysis(&conflicting_scratchpads, &scratchpad_key);
-                }
-                
-                // Exit with error code - we've already printed everything
-                std::process::exit(1);
-            }
+        Err(other_error) => {
+            return Err(color_eyre::Report::new(other_error)
+                .wrap_err("Failed to retrieve scratchpad from network"));
         }
-    } else {
-        scratchpad_result.wrap_err("Failed to retrieve scratchpad from network")?
     };
     println!(
         "Got current scratchpad at address {address:?} with counter: {}",
@@ -369,102 +365,5 @@ pub fn list(verbose: bool) -> Result<()> {
             }
         }
     }
-    Ok(())
-}
-
-/// Prints the full fork error information with decrypted content from all conflicting scratchpads
-///
-/// This function accesses the raw ScratchpadError::Fork data to decrypt and display
-/// the actual content of each conflicting scratchpad, allowing users to see what data conflicts
-/// and make informed decisions about which version to keep.
-///
-/// # Arguments
-/// * `context` - Network context for the operation
-/// * `name` - Name of the scratchpad to check for fork errors
-/// * `secret_key` - Whether this is an imported secret_key instead of a named scratchpad
-pub async fn print_fork_error(
-    context: NetworkContext,
-    name: String,
-    secret_key: bool,
-) -> Result<()> {
-    use autonomi::client::data_types::scratchpad::ScratchpadError;
-
-    let client = crate::actions::connect_to_network(context)
-        .await
-        .map_err(|(err, _)| err)?;
-
-    let scratchpad_key = if secret_key {
-        ScratchpadSecretKey::from_hex(&name).wrap_err("Failed to parse secret key from hex")?
-    } else {
-        crate::keys::get_scratchpad_signing_key(&name)
-            .wrap_err("The scratchpad key is required to perform this action")?
-    };
-
-    println!("🔍 Checking scratchpad for fork conditions...");
-    println!("Scratchpad key: {}", scratchpad_key.to_hex());
-    let address = ScratchpadAddress::new(scratchpad_key.public_key());
-    println!("Address: {}", address.to_hex());
-
-    match client.scratchpad_get(&address).await {
-        Ok(scratchpad) => {
-            println!("✅ No fork detected - scratchpad retrieved successfully:");
-            println!("Counter: {}", scratchpad.counter());
-            
-            match scratchpad.decrypt_data(&scratchpad_key) {
-                Ok(data) => {
-                    println!("Data: {}", String::from_utf8_lossy(&data));
-                }
-                Err(e) => {
-                    println!("⚠️  Could not decrypt data: {}", e);
-                }
-            }
-        }
-        Err(scratchpad_error) => {
-            // Direct access to ScratchpadError - no need to unwrap from eyre!
-            match scratchpad_error {
-                ScratchpadError::Fork(conflicting_scratchpads) => {
-                    println!("Fork detected!");
-                    println!();
-                    println!("FORK ANALYSIS:");
-                    println!("{}", "=".repeat(60));
-                    println!("Retrieved {} conflicting scratchpad(s):", conflicting_scratchpads.len());
-                    
-                    // Sort by signature to ensure consistent ordering with Python test
-                    let mut sorted_scratchpads = conflicting_scratchpads.clone();
-                    sorted_scratchpads.sort_by(|a, b| hex::encode(a.signature().to_bytes()).cmp(&hex::encode(b.signature().to_bytes())));
-                    
-                    // Show each conflicting scratchpad in simple format
-                    for (i, scratchpad) in sorted_scratchpads.iter().enumerate() {
-                        println!();
-                        println!("CONFLICTING SCRATCHPAD #{} OF {}:", i + 1, sorted_scratchpads.len());
-                        println!("  Counter: {}", scratchpad.counter());
-                        println!("  Data type encoding: {}", scratchpad.data_encoding());
-                        println!("  PublicKey/Address: {}", hex::encode(scratchpad.owner().to_bytes()));
-                        println!("  Signature: {}", hex::encode(scratchpad.signature().to_bytes()));
-                        println!("  Scratchpad hash: {}", hex::encode(scratchpad.scratchpad_hash().0));
-                        println!("  Encrypted data hash: {}", hex::encode(scratchpad.encrypted_data_hash()));
-                        println!("  Encrypted data size: {} bytes", scratchpad.encrypted_data().len());
-                        
-                        // Decrypt and show data
-                        match scratchpad.decrypt_data(&scratchpad_key) {
-                            Ok(decrypted_data) => {
-                                let data_str = String::from_utf8_lossy(&decrypted_data);
-                                println!("  Decrypted data: \"{}\"", data_str);
-                                println!("  Decrypted data size: {} bytes", decrypted_data.len());
-                            }
-                            Err(decrypt_err) => {
-                                println!("  Decryption failed: {}", decrypt_err);
-                            }
-                        }
-                    }
-                }
-                other_err => {
-                    println!("❌ Non-fork scratchpad error:");
-                    println!("{}", other_err);
-                }
-            }
-        }
-    }
-
     Ok(())
 }

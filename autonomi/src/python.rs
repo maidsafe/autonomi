@@ -68,14 +68,17 @@ fn scratchpad_error_to_py_err(
                 .iter()
                 .map(|s| PyScratchpad { inner: s.clone() })
                 .collect();
-            
+
             // Create the fork error message
             let message = format!("{}", ScratchpadError::Fork(conflicting_scratchpads.clone()));
-            
+
             // Create a runtime error with the conflicting scratchpads attached
             Python::with_gil(|py| {
                 let exception = PyRuntimeError::new_err(message);
-                if let Ok(exc_value) = exception.value(py).downcast::<pyo3::exceptions::PyRuntimeError>() {
+                if let Ok(exc_value) = exception
+                    .value(py)
+                    .downcast::<pyo3::exceptions::PyRuntimeError>()
+                {
                     let _ = exc_value.setattr("conflicting_scratchpads", py_scratchpads);
                 }
                 exception
@@ -468,6 +471,29 @@ impl PyClient {
         })
     }
 
+    /// Update an existing scratchpad from a specific scratchpad
+    ///
+    /// This will increment the counter of the scratchpad and update the content
+    /// This function is used internally by `Client.scratchpad_update` after the scratchpad has been retrieved from the network.
+    /// To skip the retrieval step if you already have the scratchpad, use this function directly
+    /// This function will return the new scratchpad after it has been updated
+    fn scratchpad_put_update<'a>(
+        &self,
+        py: Python<'a>,
+        scratchpad: PyScratchpad,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            client
+                .scratchpad_put_update(scratchpad.inner)
+                .await
+                .map_err(scratchpad_error_to_py_err)?;
+
+            Ok(())
+        })
+    }
+
     /// Create a new scratchpad to the network.
     ///
     /// Make sure that the owner key is not already used for another scratchpad as each key is associated with one scratchpad.
@@ -495,7 +521,7 @@ impl PyClient {
                     payment,
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err(e))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
@@ -518,7 +544,7 @@ impl PyClient {
             client
                 .scratchpad_update(&owner.inner, content_type, &Bytes::from(data))
                 .await
-                .map_err(|e| scratchpad_error_to_py_err(e))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(())
         })
@@ -549,7 +575,7 @@ impl PyClient {
                     &Bytes::from(data),
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err(e))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(PyScratchpad {
                 inner: new_scratchpad,
@@ -3980,31 +4006,31 @@ impl PyScratchpad {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(data.to_vec())
     }
-    
+
     /// Returns the owner public key
     pub fn owner(&self) -> PyPublicKey {
         PyPublicKey {
             inner: *self.inner.owner(),
         }
     }
-    
+
     /// Returns the signature
     pub fn signature(&self) -> PySignature {
         PySignature {
             inner: self.inner.signature().clone(),
         }
     }
-    
+
     /// Returns the scratchpad hash as hex string
     pub fn scratchpad_hash(&self) -> String {
         hex::encode(self.inner.scratchpad_hash().0)
     }
-    
+
     /// Returns the encrypted data hash as hex string
     pub fn encrypted_data_hash(&self) -> String {
         hex::encode(self.inner.encrypted_data_hash())
     }
-    
+
     /// Returns the encrypted data
     pub fn encrypted_data(&self) -> Vec<u8> {
         self.inner.encrypted_data().to_vec()

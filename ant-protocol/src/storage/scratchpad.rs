@@ -254,4 +254,34 @@ mod tests {
         let decrypted_data = scratchpad.decrypt_data(&sk).unwrap();
         assert_eq!(decrypted_data, raw_data);
     }
+
+    #[test]
+    fn test_bls_determinism() {
+        let secret_key = SecretKey::random();
+        let public_key = secret_key.public_key();
+        let message = b"test message";
+
+        let mut ciphertexts = Vec::new();
+        for _ in 0..5 {
+            let ciphertext = public_key.encrypt(message);
+            ciphertexts.push(ciphertext.to_bytes());
+        }
+        let encryption_deterministic = ciphertexts.iter().all(|c| c == &ciphertexts[0]);
+
+        let mut signatures = Vec::new();
+        for _ in 0..5 {
+            let signature = secret_key.sign(message);
+            signatures.push(signature.to_bytes());
+        }
+        let signature_deterministic = signatures.iter().all(|s| s == &signatures[0]);
+
+        assert!(
+            !encryption_deterministic,
+            "BLS encryption should be non-deterministic"
+        );
+        assert!(
+            signature_deterministic,
+            "BLS signatures should be deterministic"
+        );
+    }
 }
