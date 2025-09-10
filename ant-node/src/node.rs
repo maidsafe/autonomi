@@ -251,7 +251,7 @@ impl NodeBuilder {
                     }
                 }
                 Ok(ReachabilityStatus::NotReachable { upnp: _, reason }) => {
-                    info!("We are not routable, reason: {reason:?}. Terminating the node.");
+                    info!("We are not routable, reasons: {reason:?}. Terminating the node.");
                     println!("Terminating the node: {reason:?}");
                     return Err(Error::UnreachableNode);
                 }

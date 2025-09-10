@@ -206,8 +206,19 @@ impl DialManager {
         }
     }
 
-    pub(crate) fn reattempt_workflow(&mut self) {
+    /// Re attempt the dialer workflow by resetting the dialer and initial contacts manager.
+    /// This increments the current_workflow_attempt counter.
+    pub(crate) fn increment_workflow(&mut self) {
         self.current_workflow_attempt += 1;
+        self.dialer = Dialer::default();
+        self.initial_contacts_manager.reset();
+    }
+
+    /// Reset the dialer and initial contacts manager and the current workflow attempt counter.
+    ///
+    /// This is used to start a new reachability check attempt with a new listener.
+    pub(crate) fn reset_workflow_for_new_listener(&mut self) {
+        self.current_workflow_attempt = 1;
         self.dialer = Dialer::default();
         self.initial_contacts_manager.reset();
     }
