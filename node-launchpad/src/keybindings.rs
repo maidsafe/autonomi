@@ -99,6 +99,22 @@ pub fn get_keybindings() -> KeyBindings {
             )),
         ),
         (
+            bind("<Ctrl-t>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
+        ),
+        (
+            bind("<Ctrl-T>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
+        ),
+        (
+            bind("<Ctrl-Shift-t>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
+        ),
+        (
+            bind("<Ctrl-Shift-T>"),
+            Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
+        ),
+        (
             bind("<+>"),
             Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
                 NodeManagementCommand::AddNode,
