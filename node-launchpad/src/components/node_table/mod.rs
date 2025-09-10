@@ -203,6 +203,41 @@ impl Component for NodeTableComponent {
                                 .handle_stop_nodes(running_nodes.clone())?;
                             Ok(None)
                         }
+                        NodeManagementCommand::ToggleNode => {
+                            // toggle the selected node from running to stopped or vice versa
+                            let selected_node = self
+                                .state
+                                .items
+                                .selected_item()
+                                .map(|node| node.service_name.clone());
+
+                            if let Some(service_name) = selected_node {
+                                if let Some(node_item) = self.state.get_node_item_mut(&service_name)
+                                {
+                                    match node_item.status {
+                                        NodeStatus::Running => {
+                                            debug!("Toggling node {}: Stopping it", service_name);
+                                            self.state
+                                                .operations
+                                                .handle_stop_nodes(vec![service_name])?;
+                                        }
+                                        NodeStatus::Stopped => {
+                                            debug!("Toggling node {}: Starting it", service_name);
+                                            self.state
+                                                .operations
+                                                .handle_start_node(vec![service_name])?;
+                                        }
+                                        _ => {
+                                            debug!(
+                                                "Toggling node {}: No action for status {:?}",
+                                                service_name, node_item.status
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(None)
+                        }
                         NodeManagementCommand::RemoveNodes => {
                             let selected_node = self
                                 .state

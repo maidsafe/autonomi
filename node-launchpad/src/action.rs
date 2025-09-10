@@ -123,6 +123,7 @@ pub enum NodeManagementCommand {
     StartNodes,
     StopNodes,
     RemoveNodes,
+    ToggleNode,
     UpgradeNodes,
     ResetNodes,
 }
