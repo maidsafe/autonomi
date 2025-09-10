@@ -56,6 +56,7 @@ fn node_error_to_reason(error: &ant_node::Error) -> String {
                 NetworkError::EvmPaymemt(_) => "EvmPayment".to_string(),
                 NetworkError::SigningFailed(_) => "SigningFailed".to_string(),
                 NetworkError::NoListenAddressesFound => "NoListenAddressesFound".to_string(),
+                NetworkError::ListenerCleanupFailed => "ListenerCleanupFailed".to_string(),
                 NetworkError::ListenFailed(_) => "ListenFailed".to_string(),
                 NetworkError::InCorrectRecordHeader => "InCorrectRecordHeader".to_string(),
                 NetworkError::FailedToCreateRecordStoreDir { .. } => {
