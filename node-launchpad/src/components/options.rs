@@ -23,7 +23,7 @@ use crate::{
     action::{Action, OptionsActions},
     components::header::Header,
     connection_mode::ConnectionMode,
-    mode::Scene,
+    mode::{InputMode, Scene},
     style::{
         COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE,
     },
@@ -378,6 +378,9 @@ impl Component for Options {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         match action {
+            Action::SwitchScene(Scene::Options) => {
+                return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
+            }
             Action::StoreRewardsAddress(rewards_address) => {
                 self.rewards_address = Some(rewards_address);
             }
