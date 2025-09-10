@@ -177,9 +177,15 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_reachable_without_upnp() {
+        let mut reason_map = std::collections::HashMap::new();
+        let _ = reason_map.insert(
+            "127.0.0.1:8080".parse().unwrap(),
+            ReachabilityIssue::NoDialBacks,
+        );
+
         let status = ReachabilityStatus::NotReachable {
             upnp: false,
-            reason: ReachabilityIssue::NoDialBacks,
+            reason: reason_map,
         };
         let family = get_reachability_adapter_metric(&Some(status));
 
@@ -189,9 +195,15 @@ mod tests {
 
     #[test]
     fn test_reachability_status_not_reachable_with_upnp() {
+        let mut reason_map = std::collections::HashMap::new();
+        let _ = reason_map.insert(
+            "127.0.0.1:8080".parse().unwrap(),
+            ReachabilityIssue::NoDialBacks,
+        );
+
         let status = ReachabilityStatus::NotReachable {
             upnp: true,
-            reason: ReachabilityIssue::NoDialBacks,
+            reason: reason_map,
         };
         let family = get_reachability_adapter_metric(&Some(status));
 
@@ -225,11 +237,22 @@ mod tests {
         let local_addr: SocketAddr = "192.168.1.100:1234".parse().unwrap();
         let external_addr: SocketAddr = "203.0.113.1:1234".parse().unwrap();
 
+        let mut reason_map1 = std::collections::HashMap::new();
+        let _ = reason_map1.insert(
+            "127.0.0.1:8080".parse().unwrap(),
+            ReachabilityIssue::NoDialBacks,
+        );
+        let mut reason_map2 = std::collections::HashMap::new();
+        let _ = reason_map2.insert(
+            "127.0.0.1:8080".parse().unwrap(),
+            ReachabilityIssue::NoDialBacks,
+        );
+
         let test_cases = vec![
             (
                 ReachabilityStatus::NotReachable {
                     upnp: true,
-                    reason: ReachabilityIssue::NoDialBacks,
+                    reason: reason_map1,
                 },
                 "NotReachable with UPnP",
                 false, // public
@@ -239,7 +262,7 @@ mod tests {
             (
                 ReachabilityStatus::NotReachable {
                     upnp: false,
-                    reason: ReachabilityIssue::NoDialBacks,
+                    reason: reason_map2,
                 },
                 "NotReachable without UPnP",
                 false, // public

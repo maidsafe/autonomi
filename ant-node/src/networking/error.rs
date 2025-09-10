@@ -50,6 +50,9 @@ pub enum NetworkError {
     #[error("No listen addresses found")]
     NoListenAddressesFound,
 
+    #[error("Failed to cleanup listener resources")]
+    ListenerCleanupFailed,
+
     #[error("Failed to listen on address: {0}")]
     ListenFailed(libp2p::core::multiaddr::Multiaddr),
 
