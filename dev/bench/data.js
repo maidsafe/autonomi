@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757505212370,
+  "lastUpdate": 1757505214884,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5883,6 +5883,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22931,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5fea083e140e8c10d48db6a83c46e98b41a9404a",
+          "message": "Merge pull request #3198 from grumbach/various_scratchpad_improvements\n\nVarious scratchpad improvements",
+          "timestamp": "2025-09-10T11:00:42Z",
+          "tree_id": "5cd96dc7dda0ba7ceaeca374da9b30db7f0abd41",
+          "url": "https://github.com/maidsafe/autonomi/commit/5fea083e140e8c10d48db6a83c46e98b41a9404a"
+        },
+        "date": 1757505213989,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11211,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23720,
             "unit": "ms"
           },
           {
