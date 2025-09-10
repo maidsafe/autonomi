@@ -213,6 +213,9 @@ impl Component for Status {
 
         // Handle Status-specific actions
         match action {
+            Action::SwitchScene(Scene::Status) => {
+                return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
+            }
             Action::Tick => {
                 self.node_table_component
                     .state_mut()
