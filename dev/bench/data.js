@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757505209945,
+  "lastUpdate": 1757505212370,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4243,6 +4243,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/b3065c47905b021416e12b8124da11d55e26e671"
         },
         "date": 1757424063695,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 17,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5fea083e140e8c10d48db6a83c46e98b41a9404a",
+          "message": "Merge pull request #3198 from grumbach/various_scratchpad_improvements\n\nVarious scratchpad improvements",
+          "timestamp": "2025-09-10T11:00:42Z",
+          "tree_id": "5cd96dc7dda0ba7ceaeca374da9b30db7f0abd41",
+          "url": "https://github.com/maidsafe/autonomi/commit/5fea083e140e8c10d48db6a83c46e98b41a9404a"
+        },
+        "date": 1757505211305,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
