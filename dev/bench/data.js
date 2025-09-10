@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757524413113,
+  "lastUpdate": 1757538406879,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1715,6 +1715,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.021276331949306,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9e3af21db96ff5f45275f8c729322b3352fb99e0",
+          "message": "Merge pull request #3199 from mickvandijke/dave\n\nfeat(autonomi): make vault constants and functions public",
+          "timestamp": "2025-09-10T20:08:40Z",
+          "tree_id": "3736bfb108e5181a75d0e9db11103dfb6f84ac45",
+          "url": "https://github.com/maidsafe/autonomi/commit/9e3af21db96ff5f45275f8c729322b3352fb99e0"
+        },
+        "date": 1757538399870,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.110454839700826,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.780439710426435,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.05491839962549,
             "unit": "MiB/s"
           }
         ]
