@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757505214884,
+  "lastUpdate": 1757524075914,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1637,6 +1637,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.08596676808539,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79979b11c89930ef7589452b410617eb6e566fd5",
+          "message": "Merge pull request #3192 from maqi/scratchpad_CI_test\n\ntest(CI): scratchpad CI test",
+          "timestamp": "2025-09-10T16:07:57Z",
+          "tree_id": "3162f156cb70d4c80f3a8393f40776bc9973047d",
+          "url": "https://github.com/maidsafe/autonomi/commit/79979b11c89930ef7589452b410617eb6e566fd5"
+        },
+        "date": 1757524068076,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.272294750717225,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.910779158870934,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.38725372372591,
             "unit": "MiB/s"
           }
         ]
