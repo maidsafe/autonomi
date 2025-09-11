@@ -11,10 +11,10 @@
 //! This module contains the production implementation of the Runtime trait,
 //! which integrates with actual terminal I/O and user input.
 
-use super::Runtime;
+use super::{RenderFn, Runtime};
 use crate::tui;
 use color_eyre::eyre::Result;
-use ratatui::{Frame, prelude::Rect};
+use ratatui::prelude::Rect;
 
 /// Production runtime that interfaces with the actual terminal.
 ///
@@ -47,9 +47,14 @@ impl Runtime for ProductionRuntime {
         self.tui.next().await
     }
 
-    fn draw(&mut self, render_fn: Box<dyn FnOnce(&mut Frame) + '_>) -> Result<()> {
-        self.tui.draw(|frame| render_fn(frame))?;
-        Ok(())
+    fn draw(&mut self, render_fn: RenderFn<'_>) -> Result<()> {
+        let mut result = Ok(());
+        self.tui.draw(|frame| {
+            if let Err(e) = render_fn(frame) {
+                result = Err(e);
+            }
+        })?;
+        result
     }
 
     fn enter(&mut self) -> Result<()> {

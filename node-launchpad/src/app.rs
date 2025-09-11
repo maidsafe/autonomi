@@ -40,6 +40,7 @@ use crossterm::event::KeyEvent;
 use ratatui::{prelude::Rect, style::Style, widgets::Block};
 use std::path::PathBuf;
 use tokio::sync::mpsc::{self, UnboundedSender};
+use tracing::{debug, info};
 
 pub struct App {
     pub keybindings: KeyBindings,
@@ -121,9 +122,8 @@ impl App {
             connection_mode,
             Some(port_from),
             Some(port_to),
-        )
-        .await?;
-        let help = Help::new().await?;
+        );
+        let help = Help::new()?;
 
         // Popups
         let reset_nodes = ResetNodesPopup::default();
@@ -198,7 +198,7 @@ impl App {
     }
 
     /// Handle a single key event and return the actions generated
-    pub async fn handle_key_event(
+    pub fn handle_key_event(
         &mut self,
         key: KeyEvent,
         action_tx: &UnboundedSender<Action>,
@@ -390,7 +390,11 @@ impl App {
         Ok(generated_actions)
     }
 
-    pub fn render_frame(&mut self, f: &mut ratatui::Frame, action_tx: &UnboundedSender<Action>) {
+    pub fn render_frame(
+        &mut self,
+        f: &mut ratatui::Frame,
+        action_tx: &UnboundedSender<Action>,
+    ) -> Result<()> {
         f.render_widget(Block::new().style(Style::new().bg(SPACE_CADET)), f.area());
         for component in self.components.iter_mut() {
             let should_draw = self
@@ -399,11 +403,10 @@ impl App {
                 .contains(&component.focus_target());
 
             if should_draw && let Err(e) = component.draw(f, f.area()) {
-                action_tx
-                    .send(Action::Error(format!("Failed to draw: {e:?}")))
-                    .unwrap();
+                action_tx.send(Action::Error(format!("Failed to draw: {e:?}")))?;
             }
         }
+        Ok(())
     }
 
     pub fn init_components(
@@ -439,7 +442,7 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(key) => {
-                        self.handle_key_event(key, &action_tx).await?;
+                        self.handle_key_event(key, &action_tx)?;
                     }
                     _ => {}
                 }
@@ -452,14 +455,10 @@ impl App {
                 match action {
                     Action::Resize(w, h) => {
                         runtime.resize(Rect::new(0, 0, w, h))?;
-                        runtime.draw(Box::new(|f| {
-                            self.render_frame(f, &action_tx);
-                        }))?;
+                        runtime.draw(Box::new(|f| self.render_frame(f, &action_tx)))?;
                     }
                     Action::Render => {
-                        runtime.draw(Box::new(|f| {
-                            self.render_frame(f, &action_tx);
-                        }))?;
+                        runtime.draw(Box::new(|f| self.render_frame(f, &action_tx)))?;
 
                         // Check for pending test assertions after rendering
                         #[cfg(test)]
