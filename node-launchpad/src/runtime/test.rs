@@ -11,14 +11,15 @@
 //! This module provides test infrastructure for running automated UI tests
 //! with event scripting, frame capture, and assertion checking capabilities.
 
-use super::Runtime;
+use super::{RenderFn, Runtime};
 use crate::{app::App, mode::Scene, tui};
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
-use ratatui::{Frame, Terminal, backend::TestBackend, buffer::Buffer, prelude::Rect};
+use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, prelude::Rect};
 use std::collections::VecDeque;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tracing::error;
 
 /// Maximum number of frames to keep in the capture buffer.
 const MAX_CAPTURED_FRAMES: usize = 100;
@@ -251,8 +252,14 @@ impl Runtime for TestRuntime {
         self.event_receiver.recv().await
     }
 
-    fn draw(&mut self, render_fn: Box<dyn FnOnce(&mut Frame) + '_>) -> Result<()> {
-        self.terminal.draw(|frame| render_fn(frame))?;
+    fn draw(&mut self, render_fn: RenderFn<'_>) -> Result<()> {
+        let mut result = Ok(());
+        self.terminal.draw(|frame| {
+            if let Err(e) = render_fn(frame) {
+                result = Err(e);
+            }
+        })?;
+
         let buffer = self.terminal.backend().buffer().clone();
 
         // Implement circular buffer: remove oldest frame if at capacity
@@ -261,7 +268,7 @@ impl Runtime for TestRuntime {
             self.captured_frames.pop_front();
         }
         self.captured_frames.push_back(buffer);
-        Ok(())
+        result
     }
 
     fn enter(&mut self) -> Result<()> {

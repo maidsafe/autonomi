@@ -53,7 +53,7 @@ impl TestAppBuilder {
         std::fs::create_dir_all(&config_dir)?;
 
         let app_data = AppData {
-            rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse().unwrap()),
+            rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse()?),
             nodes_to_start: registry.node_count(),
             storage_mountpoint: None,
             storage_drive: Some(crate::test_utils::TEST_STORAGE_DRIVE.to_string()),
@@ -86,8 +86,8 @@ impl Default for TestAppBuilder {
     }
 }
 
-pub async fn render_status_component(app: &mut App) -> Result<Buffer> {
-    let mut terminal = Terminal::new(TestBackend::new(160, 30)).unwrap();
+pub fn render_status_component(app: &mut App) -> Result<Buffer> {
+    let mut terminal = Terminal::new(TestBackend::new(160, 30))?;
 
     terminal.draw(|f| {
         if let Some(status) = app.components.get_mut(0)

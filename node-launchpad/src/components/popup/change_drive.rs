@@ -10,7 +10,7 @@ use std::{default::Default, path::PathBuf, rc::Rc};
 
 use super::super::utils::centered_rect_fixed;
 
-use color_eyre::Result;
+use color_eyre::{Result, eyre::OptionExt};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -165,7 +165,12 @@ impl ChangeDrivePopup {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph<'_> {
+    ) -> Result<Paragraph<'_>> {
+        if self.items.is_none() {
+            error!("Drive items not initialized, not drawing the popup");
+            return Ok(Paragraph::new("Drive items not initialized"));
+        }
+
         let pop_up_border = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
@@ -194,7 +199,7 @@ impl ChangeDrivePopup {
         let items: Vec<ListItem> = self
             .items
             .as_ref()
-            .unwrap()
+            .ok_or_eyre("Drive items not initialized")?
             .items
             .iter()
             .enumerate()
@@ -206,7 +211,15 @@ impl ChangeDrivePopup {
             .highlight_style(Style::default().bg(INDIGO))
             .highlight_spacing(HighlightSpacing::Always);
 
-        f.render_stateful_widget(items, layer_two[0], &mut self.items.clone().unwrap().state);
+        f.render_stateful_widget(
+            items,
+            layer_two[0],
+            &mut self
+                .items
+                .clone()
+                .ok_or_eyre("Drive items not initialized")?
+                .state,
+        );
 
         // Dash
         let dash = Block::new()
@@ -251,7 +264,7 @@ impl ChangeDrivePopup {
             buttons_layer[1],
         );
 
-        pop_up_border
+        Ok(pop_up_border)
     }
 
     // Draws the Confirmation screen
@@ -553,7 +566,7 @@ impl Component for ChangeDrivePopup {
         .split(layer_zero);
 
         let pop_up_border: Paragraph = match self.state {
-            ChangeDriveState::Selection => self.draw_selection_state(f, layer_zero, layer_one),
+            ChangeDriveState::Selection => self.draw_selection_state(f, layer_zero, layer_one)?,
             ChangeDriveState::ConfirmChange => {
                 self.draw_confirm_change_state(f, layer_zero, layer_one)
             }
