@@ -209,7 +209,7 @@ impl App {
             let mut key_handled = false;
             if let Some(keymap) = self.keybindings.get(&self.scene) {
                 if let Some(action) = keymap.get(&vec![key]) {
-                    info!("Got action: {action:?}");
+                    info!("Got action from keybindings {action:?}");
                     action_tx.send(action.clone())?;
                     actions.push(action.clone());
                     key_handled = true;
@@ -220,7 +220,7 @@ impl App {
 
                     // Check for multi-key combinations
                     if let Some(action) = keymap.get(&self.last_tick_key_events) {
-                        info!("Got action: {action:?}");
+                        info!("Got action from keybindings: {action:?}");
                         action_tx.send(action.clone())?;
                         actions.push(action.clone());
                         key_handled = true;
@@ -261,14 +261,12 @@ impl App {
         Ok(actions)
     }
 
-    /// Process a single action and return any new actions generated
+    /// Process a single action and sends the newly generated actions back through the channel.
     pub fn process_action(
         &mut self,
         action: Action,
         action_tx: &UnboundedSender<Action>,
-    ) -> Result<Vec<Action>> {
-        let mut generated_actions = Vec::new();
-
+    ) -> Result<()> {
         match action {
             Action::Tick => {
                 self.last_tick_key_events.drain(..);
@@ -371,11 +369,6 @@ impl App {
                 self.app_data.nodes_to_start = *count;
                 self.app_data.save(None)?;
             }
-            Action::SetNodeLogsTarget(ref _node_name) => {
-                // The action will be forwarded to components below
-                // After components process it, switch to NodeLogs scene
-                generated_actions.push(Action::SwitchScene(Scene::NodeLogsPopUp));
-            }
             _ => {}
         }
 
@@ -383,11 +376,10 @@ impl App {
         for component in self.components.iter_mut() {
             if let Some(new_action) = component.update(action.clone())? {
                 action_tx.send(new_action.clone())?;
-                generated_actions.push(new_action);
             }
         }
 
-        Ok(generated_actions)
+        Ok(())
     }
 
     pub fn render_frame(
@@ -471,10 +463,7 @@ impl App {
                     }
                     // Use unified action processing for all other actions
                     _ => {
-                        let generated_actions = self.process_action(action.clone(), &action_tx)?;
-                        for new_action in generated_actions {
-                            action_tx.send(new_action)?;
-                        }
+                        self.process_action(action.clone(), &action_tx)?;
                     }
                 }
             }
