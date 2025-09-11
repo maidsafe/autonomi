@@ -10,7 +10,10 @@ mod commands;
 
 use crate::commands::*;
 use ant_logging::{LogBuilder, LogOutputDest};
-use ant_node_manager::{VerbosityLevel, cmd, config};
+use ant_node_manager::{
+    VerbosityLevel, cmd,
+    config::{self, get_node_manager_path},
+};
 use ant_service_management::NodeRegistryManager;
 use clap::Parser;
 use color_eyre::eyre::{Result, eyre};
@@ -78,17 +81,13 @@ async fn main() -> Result<()> {
             LogOutputDestArg::StdErr => LogOutputDest::Stderr,
             LogOutputDestArg::DataDir => {
                 let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-                let dir = dirs_next::data_dir()
-                    .ok_or_else(|| eyre!("could not obtain data dir"))?
-                    .join("autonomi")
-                    .join("antctl")
-                    .join(format!(
-                        "logs_{}_{timestamp}",
-                        args.cmd
-                            .as_ref()
-                            .map(|c| c.to_string())
-                            .unwrap_or_else(|| "no_command".to_string())
-                    ));
+                let dir = get_node_manager_path()?.join("logs").join(format!(
+                    "antctl_{}_{timestamp}.log",
+                    args.cmd
+                        .as_ref()
+                        .map(|c| c.to_string())
+                        .unwrap_or_else(|| "no_command".to_string())
+                ));
                 LogOutputDest::Path(dir)
             }
         };
