@@ -22,7 +22,7 @@ use tokio::sync::mpsc;
 use tracing::error;
 
 /// Maximum number of frames to keep in the capture buffer.
-const MAX_CAPTURED_FRAMES: usize = 100;
+const MAX_CAPTURED_FRAMES: usize = 20;
 
 /// A step in a test script that defines an action or assertion.
 #[derive(Debug, Clone)]
@@ -57,7 +57,7 @@ pub enum TestStep {
 pub struct TestRuntime {
     event_receiver: mpsc::UnboundedReceiver<tui::Event>,
     terminal: Terminal<TestBackend>,
-    captured_frames: VecDeque<Buffer>,
+    captured_frames: VecDeque<Box<Buffer>>,
     size: Rect,
     test_script: Vec<TestStep>,
     current_step: usize,
@@ -213,12 +213,12 @@ impl TestRuntime {
 
     /// Gets references to all captured frames.
     pub fn get_captured_frames(&self) -> Vec<&Buffer> {
-        self.captured_frames.iter().collect()
+        self.captured_frames.iter().map(|b| b.as_ref()).collect()
     }
 
     /// Gets a reference to the most recently captured frame.
     pub fn get_last_frame(&self) -> Option<&Buffer> {
-        self.captured_frames.back()
+        self.captured_frames.back().map(|b| b.as_ref())
     }
 
     /// Clears all captured frames from the buffer.
@@ -260,14 +260,27 @@ impl Runtime for TestRuntime {
             }
         })?;
 
-        let buffer = self.terminal.backend().buffer().clone();
+        // Safer buffer handling to prevent Windows memory issues
+        let buffer = match std::panic::catch_unwind(|| self.terminal.backend().buffer().clone()) {
+            Ok(buf) => buf,
+            Err(_) => {
+                error!("Buffer clone failed, skipping frame capture");
+                println!("Buffer clone failed, skipping frame capture");
+                return result;
+            }
+        };
 
-        // Implement circular buffer: remove oldest frame if at capacity
-        if self.captured_frames.len() >= MAX_CAPTURED_FRAMES {
-            error!("Max captured frames reached, removing oldest frame");
-            self.captured_frames.pop_front();
+        // Implement circular buffer with bounds checking
+        while self.captured_frames.len() >= MAX_CAPTURED_FRAMES {
+            if self.captured_frames.pop_front().is_none() {
+                error!("Failed to remove oldest frame from buffer");
+                println!("Failed to remove oldest frame from buffer");
+                break;
+            }
         }
-        self.captured_frames.push_back(buffer);
+
+        // Box the buffer to reduce stack pressure
+        self.captured_frames.push_back(Box::new(buffer));
         result
     }
 

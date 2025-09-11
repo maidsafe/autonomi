@@ -105,7 +105,8 @@ pub async fn configure_winsw() -> Result<()> {
 }
 
 #[cfg(not(windows))]
-pub fn configure_winsw() -> Result<()> {
+#[allow(clippy::unused_async)]
+pub async fn configure_winsw() -> Result<()> {
     Ok(())
 }
 
