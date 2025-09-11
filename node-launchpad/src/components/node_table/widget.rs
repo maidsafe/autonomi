@@ -20,7 +20,7 @@ pub const FAILURE_WIDTH: usize = 64;
 pub const SPINNER_WIDTH: usize = 1;
 
 use super::state::NodeTableState;
-use crate::style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE};
+use crate::style::{COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE};
 use ratatui::{prelude::*, widgets::*};
 use throbber_widgets_tui::{Throbber, WhichUse};
 
@@ -91,7 +91,8 @@ impl NodeTableWidget {
             let failure = node_item.failure.as_ref().map_or_else(
                 || "-".to_string(),
                 |(_dt, msg)| {
-                    if node_item.status == super::node_item::NodeStatus::Stopped {
+                    if node_item.node_display_status == super::node_item::NodeDisplayStatus::Stopped
+                    {
                         msg.clone()
                     } else {
                         "-".to_string()
@@ -99,7 +100,14 @@ impl NodeTableWidget {
                 },
             );
 
-            let row_style = if is_selected {
+            let row_style = if node_item.is_locked() {
+                // Locked nodes: dimmed appearance, not fully interactive
+                if is_selected {
+                    Style::default().fg(COOL_GREY).bg(DARK_GUNMETAL)
+                } else {
+                    Style::default().fg(COOL_GREY)
+                }
+            } else if is_selected {
                 Style::default().fg(GHOST_WHITE).bg(INDIGO)
             } else {
                 Style::default().fg(GHOST_WHITE)
@@ -123,7 +131,7 @@ impl NodeTableWidget {
                 format!("{:>width$}", node_item.peers, width = PEERS_WIDTH),
                 format!("{:>width$}", node_item.connections, width = CONNS_WIDTH),
                 node_item.mode.to_string(),
-                node_item.status.to_string(),
+                node_item.node_display_status.to_string(),
                 failure,
             ];
 
@@ -149,7 +157,7 @@ impl NodeTableWidget {
         f: &mut crate::tui::Frame<'_>,
         state: &mut NodeTableState,
     ) {
-        use super::node_item::NodeStatus;
+        use super::node_item::NodeDisplayStatus;
 
         // Calculate the spinner column position (rightmost column)
         let spinner_x = table_area.right().saturating_sub(2);
@@ -164,33 +172,61 @@ impl NodeTableWidget {
 
             let spinner_area = Rect::new(spinner_x, start_y + i as u16, 1, 1);
 
-            let spinner = match node_item.status {
-                NodeStatus::Running => Throbber::default()
-                    .throbber_style(Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD))
+            let spinner = match node_item.node_display_status {
+                NodeDisplayStatus::Running => Throbber::default()
+                    .throbber_style(if node_item.is_locked() {
+                        Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
+                    })
                     .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
                     .use_type(WhichUse::Spin),
-                NodeStatus::Starting => Throbber::default()
-                    .throbber_style(Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD))
+                NodeDisplayStatus::Starting => Throbber::default()
+                    .throbber_style(if node_item.is_locked() {
+                        Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
+                    })
                     .throbber_set(throbber_widgets_tui::BOX_DRAWING)
                     .use_type(WhichUse::Spin),
-                NodeStatus::Stopped => Throbber::default()
+                NodeDisplayStatus::Stopping => Throbber::default()
+                    .throbber_style(if node_item.is_locked() {
+                        Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
+                    })
+                    .throbber_set(throbber_widgets_tui::CLOCK)
+                    .use_type(WhichUse::Spin),
+                NodeDisplayStatus::Stopped => Throbber::default()
                     .throbber_style(
                         Style::default()
-                            .fg(GHOST_WHITE)
+                            .fg(if node_item.is_locked() {
+                                COOL_GREY
+                            } else {
+                                GHOST_WHITE
+                            })
                             .add_modifier(Modifier::BOLD),
                     )
                     .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
                     .use_type(WhichUse::Full),
-                NodeStatus::Updating => Throbber::default()
+                NodeDisplayStatus::Updating => Throbber::default()
                     .throbber_style(
                         Style::default()
-                            .fg(GHOST_WHITE)
+                            .fg(if node_item.is_locked() {
+                                COOL_GREY
+                            } else {
+                                GHOST_WHITE
+                            })
                             .add_modifier(Modifier::BOLD),
                     )
                     .throbber_set(throbber_widgets_tui::VERTICAL_BLOCK)
                     .use_type(WhichUse::Spin),
                 _ => Throbber::default()
-                    .throbber_style(Style::default().fg(GHOST_WHITE))
+                    .throbber_style(Style::default().fg(if node_item.is_locked() {
+                        COOL_GREY
+                    } else {
+                        GHOST_WHITE
+                    }))
                     .use_type(WhichUse::Full),
             };
 
