@@ -91,7 +91,7 @@ where
         }
         _multi => {
             warn!("Multiple conflicting records found at latest version for {key:?}");
-            Err(fork_error(latest))
+            Err(fork_error(dedup_latest))
         }
     }
 }
