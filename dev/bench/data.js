@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757538489137,
+  "lastUpdate": 1757612693254,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1754,6 +1754,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.05491839962549,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "80608fae96e7d9465de352addb76eb5d0efd10ee",
+          "message": "Merge pull request #3200 from grumbach/python_streaming\n\nfeat: python bindings for data stream",
+          "timestamp": "2025-09-11T16:42:21Z",
+          "tree_id": "2bad566299f577b285343daf624f27ffb207f035",
+          "url": "https://github.com/maidsafe/autonomi/commit/80608fae96e7d9465de352addb76eb5d0efd10ee"
+        },
+        "date": 1757612685527,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.1338980927372915,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.47413629112887,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.308464066225337,
             "unit": "MiB/s"
           }
         ]
