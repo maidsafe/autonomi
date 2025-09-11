@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757612769447,
+  "lastUpdate": 1757612771631,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4656,6 +4656,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 20,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "80608fae96e7d9465de352addb76eb5d0efd10ee",
+          "message": "Merge pull request #3200 from grumbach/python_streaming\n\nfeat: python bindings for data stream",
+          "timestamp": "2025-09-11T16:42:21Z",
+          "tree_id": "2bad566299f577b285343daf624f27ffb207f035",
+          "url": "https://github.com/maidsafe/autonomi/commit/80608fae96e7d9465de352addb76eb5d0efd10ee"
+        },
+        "date": 1757612770771,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
             "unit": "MB"
           },
           {
