@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::{
-    node_item::{NodeItem, NodeStatus},
+    node_item::{NodeDisplayStatus, NodeItem},
     operations::NodeOperations,
     table_state::StatefulTable,
 };
@@ -16,10 +16,11 @@ use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats
 use crate::{connection_mode::ConnectionMode, node_management::NodeManagement};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
-use ant_service_management::{NodeRegistryManager, NodeServiceData};
+use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
 use color_eyre::eyre::Result;
-use std::{collections::HashSet, path::PathBuf, time::Instant};
+use std::{path::PathBuf, time::Instant};
 use throbber_widgets_tui::ThrobberState;
+use tracing::debug;
 
 pub struct NodeTableState {
     // Node data
@@ -94,7 +95,7 @@ impl NodeTableState {
         self.node_services
             .iter()
             .filter_map(|node| {
-                if node.status == ant_service_management::ServiceStatus::Running {
+                if node.status == ServiceStatus::Running {
                     Some(node.service_name.clone())
                 } else {
                     None
@@ -147,16 +148,7 @@ impl NodeTableState {
 
     pub fn sync_node_service_data(&mut self, all_nodes_data: &[NodeServiceData]) {
         self.node_services = all_nodes_data.to_vec();
-
-        // Filter out removed nodes from node_items
-        let service_names: HashSet<String> = all_nodes_data
-            .iter()
-            .map(|node| node.service_name.clone())
-            .collect();
-
-        self.items
-            .items
-            .retain(|item| service_names.contains(&item.service_name));
+        let mut removed_nodes = vec![];
 
         // Update existing items or add new ones
         for node_data in all_nodes_data {
@@ -166,14 +158,63 @@ impl NodeTableState {
                 .iter_mut()
                 .find(|item| item.service_name == node_data.service_name)
             {
-                existing_item.update_status(NodeStatus::from(&node_data.status));
+                if node_data.status == ServiceStatus::Removed {
+                    removed_nodes.push(existing_item.service_name.clone());
+                    continue;
+                }
+
+                // if no status change, then the sync node service data is for a different node, so skip here.
+                if node_data.status == existing_item.service_status {
+                    continue;
+                }
+
+                // Even if the node item is locked, we can still update its display status to the latest one obtained
+                // from the registry, so that the UI reflects the true state of the node.
+                // NodeManagementResponse will do the unlocking later.
+                let node_display_status = NodeDisplayStatus::from(&node_data.status);
+                existing_item.service_status = node_data.status.clone();
+                existing_item.version = node_data.version.clone();
+                existing_item.node_display_status = node_display_status;
             } else {
+                if node_data.status == ServiceStatus::Removed {
+                    continue;
+                }
                 let new_item = NodeItem {
                     service_name: node_data.service_name.clone(),
-                    status: NodeStatus::from(&node_data.status),
-                    ..Default::default()
+                    service_status: node_data.status.clone(),
+                    node_display_status: NodeDisplayStatus::from(&node_data.status),
+                    version: node_data.version.clone(),
+                    rewards_wallet_balance: 0,
+                    memory: 0,
+                    mbps: 0.to_string(),
+                    records: 0,
+                    peers: 0,
+                    connections: 0,
+                    locked: false,
+                    // todo remove this field completely
+                    mode: crate::connection_mode::NodeConnectionMode::Manual,
+                    failure: None,
                 };
+                debug!(
+                    "Registry sync: Adding new node {} with status {:?}",
+                    new_item.service_name, new_item.node_display_status
+                );
                 self.items.items.push(new_item);
+            }
+        }
+
+        // Remove nodes that are no longer present in the registry or marked as Removed
+        for service_name in removed_nodes {
+            if let Some(pos) = self
+                .items
+                .items
+                .iter()
+                .position(|item| item.service_name == service_name)
+            {
+                debug!(
+                    "Registry sync: Removing node {service_name} as it has ServiceStatus::Removed ",
+                );
+                self.items.items.remove(pos);
             }
         }
 
@@ -230,6 +271,95 @@ impl NodeTableState {
         self.port_from = port_from;
         self.port_to = port_to;
         debug!("NodeTableState: Synced port_range to {port_from:?}-{port_to:?}");
+    }
+
+    /// Navigate to the next unlocked node, wrapping around if needed
+    pub fn navigate_next_unlocked(&mut self) {
+        if self.items.items.is_empty() {
+            return;
+        }
+
+        let current = self.items.state.selected().unwrap_or(0);
+        let total_items = self.items.items.len();
+
+        // Try to find the next unlocked node
+        for i in 1..=total_items {
+            let next_index = (current + i) % total_items;
+            if !self.items.items[next_index].is_locked() {
+                self.items.state.select(Some(next_index));
+                self.items.last_selected = Some(next_index);
+                return;
+            }
+        }
+
+        // If all nodes are locked, clear selection
+        self.clear_selection();
+    }
+
+    /// Navigate to the previous unlocked node, wrapping around if needed
+    pub fn navigate_previous_unlocked(&mut self) {
+        if self.items.items.is_empty() {
+            return;
+        }
+
+        let current = self.items.state.selected().unwrap_or(0);
+        let total_items = self.items.items.len();
+
+        // Try to find the previous unlocked node
+        for i in 1..=total_items {
+            let prev_index = (current + total_items - i) % total_items;
+            if !self.items.items[prev_index].is_locked() {
+                self.items.state.select(Some(prev_index));
+                self.items.last_selected = Some(prev_index);
+                return;
+            }
+        }
+
+        // If all nodes are locked, clear selection
+        self.clear_selection();
+    }
+
+    /// Navigate to the first unlocked node
+    pub fn navigate_first_unlocked(&mut self) {
+        if self.items.items.is_empty() {
+            return;
+        }
+
+        for (index, item) in self.items.items.iter().enumerate() {
+            if !item.is_locked() {
+                self.items.state.select(Some(index));
+                self.items.last_selected = Some(index);
+                debug!("Navigate: Selected first unlocked node at index {index}",);
+                return;
+            }
+        }
+
+        // If all nodes are locked, clear selection
+        self.clear_selection();
+    }
+
+    /// Navigate to the last unlocked node
+    pub fn navigate_last_unlocked(&mut self) {
+        if self.items.items.is_empty() {
+            return;
+        }
+
+        for (index, item) in self.items.items.iter().enumerate().rev() {
+            if !item.is_locked() {
+                self.items.state.select(Some(index));
+                self.items.last_selected = Some(index);
+                debug!("Navigate: Selected last unlocked node at index {index}",);
+                return;
+            }
+        }
+
+        // If all nodes are locked, clear selection
+        self.clear_selection();
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.items.state.select(None);
+        self.items.last_selected = None;
     }
 }
 
