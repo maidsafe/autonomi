@@ -144,9 +144,9 @@ impl TestRuntime {
                 Some(tui::Event::Tick)
             }
             TestStep::ExpectScene(_) | TestStep::ExpectText(_) | TestStep::ExactScreen(_) => {
-                // Store assertion for later execution and inject a tick to trigger processing
+                // Store assertion for later execution and inject a render to trigger assertion check
                 self.pending_assertion = Some(step);
-                Some(tui::Event::Tick)
+                Some(tui::Event::Render)
             }
             TestStep::Exit => Some(tui::Event::Quit),
         }
@@ -195,14 +195,46 @@ impl TestRuntime {
                     if let Some(buffer) = self.get_last_frame() {
                         let screen_lines = crate::test_utils::test_helpers::buffer_to_lines(buffer);
                         if screen_lines != expected_lines {
-                            return Err(color_eyre::eyre::eyre!(
-                                "Screen content mismatch. Expected {} lines, got {}. Expected: {:?}, Actual: {:?}",
-                                expected_lines.len(),
-                                screen_lines.len(),
-                                expected_lines,
-                                screen_lines
-                            ));
+                            // Find the first differing line for a helpful error message
+                            let mut first_diff_line = None;
+                            let max_lines = screen_lines.len().max(expected_lines.len());
+
+                            for i in 0..max_lines {
+                                let actual_line = screen_lines
+                                    .get(i)
+                                    .map(|s| s.as_str())
+                                    .unwrap_or("[MISSING]");
+                                let expected_line = expected_lines
+                                    .get(i)
+                                    .map(|s| s.as_str())
+                                    .unwrap_or("[MISSING]");
+
+                                if actual_line != expected_line {
+                                    first_diff_line = Some((i + 1, actual_line, expected_line));
+                                    break;
+                                }
+                            }
+
+                            let error_msg = if let Some((line_num, actual, expected)) =
+                                first_diff_line
+                            {
+                                format!(
+                                    "Screen content mismatch at line {line_num}:\n  Expected: '{expected}'\n  Actual:   '{actual}'"
+                                )
+                            } else {
+                                format!(
+                                    "Screen content mismatch. Expected {} lines, got {} lines",
+                                    expected_lines.len(),
+                                    screen_lines.len()
+                                )
+                            };
+
+                            return Err(color_eyre::eyre::eyre!("{}", error_msg));
                         }
+                    } else {
+                        return Err(color_eyre::eyre::eyre!(
+                            "No frame was captured for screen assertion"
+                        ));
                     }
                 }
                 _ => {}
@@ -311,7 +343,6 @@ impl Runtime for TestRuntime {
         Ok(self.size)
     }
 
-    #[cfg(test)]
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
