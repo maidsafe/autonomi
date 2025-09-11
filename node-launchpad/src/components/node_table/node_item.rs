@@ -6,46 +6,55 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::connection_mode::NodeConnectionMode;
 use ant_service_management::ServiceStatus;
+
+use crate::connection_mode::NodeConnectionMode;
 use std::fmt;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
-pub enum NodeStatus {
+pub enum NodeDisplayStatus {
     #[default]
     Added,
+    Adding,
+    Maintaining,
     Running,
     Starting,
+    Stopping,
     Stopped,
+    Removing,
     Removed,
     Updating,
 }
 
-impl From<&ServiceStatus> for NodeStatus {
+impl From<&ServiceStatus> for NodeDisplayStatus {
     fn from(status: &ServiceStatus) -> Self {
         match status {
-            ServiceStatus::Added => NodeStatus::Added,
-            ServiceStatus::Running => NodeStatus::Running,
-            ServiceStatus::Stopped => NodeStatus::Stopped,
-            ServiceStatus::Removed => NodeStatus::Removed,
+            ServiceStatus::Added => NodeDisplayStatus::Added,
+            ServiceStatus::Running => NodeDisplayStatus::Running,
+            ServiceStatus::Stopped => NodeDisplayStatus::Stopped,
+            ServiceStatus::Removed => NodeDisplayStatus::Removed,
         }
     }
 }
 
-impl fmt::Display for NodeStatus {
+impl fmt::Display for NodeDisplayStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            NodeStatus::Added => write!(f, "Added"),
-            NodeStatus::Running => write!(f, "Running"),
-            NodeStatus::Starting => write!(f, "Starting"),
-            NodeStatus::Stopped => write!(f, "Stopped"),
-            NodeStatus::Removed => write!(f, "Removed"),
-            NodeStatus::Updating => write!(f, "Updating"),
+            NodeDisplayStatus::Adding => write!(f, "Adding"),
+            NodeDisplayStatus::Added => write!(f, "Added"),
+            NodeDisplayStatus::Maintaining => write!(f, "Maintaining"),
+            NodeDisplayStatus::Running => write!(f, "Running"),
+            NodeDisplayStatus::Starting => write!(f, "Starting"),
+            NodeDisplayStatus::Stopping => write!(f, "Stopping"),
+            NodeDisplayStatus::Stopped => write!(f, "Stopped"),
+            NodeDisplayStatus::Removing => write!(f, "Removing"),
+            NodeDisplayStatus::Removed => write!(f, "Removed"),
+            NodeDisplayStatus::Updating => write!(f, "Updating"),
         }
     }
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct NodeItem {
     pub service_name: String,
     pub version: String,
@@ -57,7 +66,8 @@ pub struct NodeItem {
     pub connections: usize,
     pub locked: bool,
     pub mode: NodeConnectionMode,
-    pub status: NodeStatus,
+    pub node_display_status: NodeDisplayStatus,
+    pub service_status: ServiceStatus,
     pub failure: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
@@ -70,7 +80,36 @@ impl NodeItem {
         self.locked = false;
     }
 
-    pub fn update_status(&mut self, status: NodeStatus) {
-        self.status = status;
+    pub fn is_locked(&self) -> bool {
+        self.locked
+    }
+
+    /// Update the display status of the node item.
+    ///
+    /// Note: The node display status will be overriden by `sync_node_service_data`
+    /// method in `NodeTableState` when new data is fetched from the registry.
+    pub fn update_node_display_status(&mut self, status: NodeDisplayStatus) {
+        self.node_display_status = status;
+    }
+
+    pub fn can_start(&self) -> bool {
+        !self.locked
+            && matches!(
+                self.node_display_status,
+                NodeDisplayStatus::Stopped | NodeDisplayStatus::Added
+            )
+    }
+
+    pub fn can_stop(&self) -> bool {
+        !self.locked && matches!(self.node_display_status, NodeDisplayStatus::Running)
+    }
+
+    pub fn can_upgrade(&self) -> bool {
+        !self.locked && !matches!(self.node_display_status, NodeDisplayStatus::Removed)
+    }
+
+    pub fn lock_for_operation(&mut self, operation_status: NodeDisplayStatus) {
+        self.lock();
+        self.update_node_display_status(operation_status);
     }
 }
