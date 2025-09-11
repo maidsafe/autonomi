@@ -6,21 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{
-    keyboard::KeySequence,
-    mock_registry::MockNodeRegistry,
-    test_helpers::{TestAppBuilder, buffer_to_lines},
-};
-use crate::{
-    app::App,
-    focus::FocusTarget,
-    mode::{InputMode, Scene},
-    runtime::TestRuntime,
-};
-use color_eyre::{Result, eyre::eyre};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use ratatui::buffer::Buffer;
-use std::time::{Duration, Instant};
+use super::{keyboard::KeySequence, mock_registry::MockNodeRegistry, test_helpers::TestAppBuilder};
+use crate::{app::App, mode::Scene, runtime::TestRuntime};
+use color_eyre::Result;
+use crossterm::event::KeyEvent;
+use std::time::Duration;
 
 pub struct Journey {
     pub name: String,
@@ -40,7 +30,6 @@ pub struct JourneyStep {
 pub enum ScreenAssertion {
     ExactScreen(Vec<String>),
     ContainsText(String),
-    SceneIs(Scene),
 }
 
 impl Journey {
@@ -83,8 +72,6 @@ impl Journey {
     }
 
     pub async fn run(&mut self) -> Result<()> {
-        println!("Journey '{}': Starting execution", self.name);
-
         // Convert journey steps to test script
         let script = self.build_test_script();
         self.test_runtime.set_script(script);
@@ -93,16 +80,13 @@ impl Journey {
         // This is the key: we use the SAME App::run_with_runtime as production
         self.app.run_with_runtime(&mut self.test_runtime).await?;
 
-        println!("Journey '{}': Completed successfully", self.name);
         Ok(())
     }
 
     fn build_test_script(&self) -> Vec<crate::runtime::TestStep> {
         let mut script = Vec::new();
 
-        for (step_index, step) in self.steps.iter().enumerate() {
-            println!("Journey '{}': Building step {}", self.name, step_index + 1);
-
+        for step in self.steps.iter() {
             // Add key events
             for key in &step.keys {
                 script.push(crate::runtime::TestStep::InjectKey(*key));
@@ -122,9 +106,6 @@ impl Journey {
                     ScreenAssertion::ContainsText(text) => {
                         script.push(crate::runtime::TestStep::ExpectText(text.clone()));
                     }
-                    ScreenAssertion::SceneIs(scene) => {
-                        script.push(crate::runtime::TestStep::ExpectScene(*scene));
-                    }
                 }
             }
 
@@ -136,120 +117,6 @@ impl Journey {
         script.push(crate::runtime::TestStep::Exit);
 
         script
-    }
-
-    pub fn render_screen(&mut self) -> Result<Buffer> {
-        // Simply return the last captured frame from the runtime
-        if let Some(buffer) = self.test_runtime.get_last_frame() {
-            Ok(buffer.clone())
-        } else {
-            Err(eyre!("No frames captured yet"))
-        }
-    }
-
-    pub fn assert_current_screen(&mut self, assertion: &ScreenAssertion) -> Result<()> {
-        let buffer = self.render_screen()?;
-        let screen_lines = buffer_to_lines(&buffer);
-
-        match assertion {
-            ScreenAssertion::ExactScreen(expected_lines) => {
-                if screen_lines.len() != expected_lines.len() {
-                    return Err(eyre!(
-                        "Screen has {} lines, expected {}",
-                        screen_lines.len(),
-                        expected_lines.len()
-                    ));
-                }
-
-                for (i, (actual, expected)) in
-                    screen_lines.iter().zip(expected_lines.iter()).enumerate()
-                {
-                    if actual != expected {
-                        return Err(eyre!(
-                            "Line {} mismatch:\n  Actual:   '{}'\n  Expected: '{}'",
-                            i + 1,
-                            actual,
-                            expected
-                        ));
-                    }
-                }
-            }
-            ScreenAssertion::ContainsText(text) => {
-                let found = screen_lines.iter().any(|line| line.contains(text));
-                if !found {
-                    return Err(eyre!("Screen does not contain text: '{}'", text));
-                }
-            }
-            ScreenAssertion::SceneIs(expected_scene) => {
-                if self.app.scene != *expected_scene {
-                    return Err(eyre!(
-                        "Expected scene {:?}, got {:?}",
-                        expected_scene,
-                        self.app.scene
-                    ));
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn switch_to_input_mode(&mut self) {
-        self.app.input_mode = InputMode::Entry;
-    }
-
-    pub fn switch_to_navigation_mode(&mut self) {
-        self.app.input_mode = InputMode::Navigation;
-    }
-
-    pub fn focus_component(&mut self, target: FocusTarget) -> Result<()> {
-        self.app.focus_manager.set_focus(target)?;
-        Ok(())
-    }
-
-    pub fn enter_text(&mut self, text: &str) {
-        if self.app.input_mode != InputMode::Entry {
-            self.switch_to_input_mode();
-        }
-
-        // Queue character events instead of running a new loop
-        for c in text.chars() {
-            let key = KeyEvent::new(KeyCode::Char(c), KeyModifiers::empty());
-            self.test_runtime.queue_event(crate::tui::Event::Key(key));
-        }
-    }
-
-    pub fn press_and_process(&mut self, key: KeyEvent) {
-        // Queue single key event instead of running a new loop
-        self.test_runtime.queue_event(crate::tui::Event::Key(key));
-    }
-
-    pub fn stop_test(&mut self) {
-        // Queue quit event to stop the single event loop
-        self.test_runtime.queue_event(crate::tui::Event::Quit);
-    }
-
-    pub async fn wait_for_scene(&mut self, scene: Scene, timeout_ms: u64) -> Result<()> {
-        if self.app.scene != scene {
-            let start = Instant::now();
-            let timeout_duration = Duration::from_millis(timeout_ms);
-
-            loop {
-                if self.app.scene == scene {
-                    break;
-                }
-                if start.elapsed() > timeout_duration {
-                    return Err(eyre!(
-                        "Timeout waiting for scene {:?}, current scene is {:?}",
-                        scene,
-                        self.app.scene
-                    ));
-                }
-                tokio::time::sleep(Duration::from_millis(10)).await;
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -508,27 +375,5 @@ impl JourneyBuilder {
 impl From<char> for KeySequence {
     fn from(c: char) -> Self {
         KeySequence::new().key(c)
-    }
-}
-
-impl From<KeyEvent> for KeySequence {
-    fn from(key: KeyEvent) -> Self {
-        KeySequence::new().push_event(key)
-    }
-}
-
-impl From<&str> for KeySequence {
-    fn from(s: &str) -> Self {
-        KeySequence::new().string(s)
-    }
-}
-
-impl From<Vec<KeyEvent>> for KeySequence {
-    fn from(events: Vec<KeyEvent>) -> Self {
-        let mut seq = KeySequence::new();
-        for event in events {
-            seq = seq.push_event(event);
-        }
-        seq
     }
 }

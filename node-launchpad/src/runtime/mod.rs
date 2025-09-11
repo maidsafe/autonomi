@@ -98,8 +98,7 @@ pub trait Runtime {
 
     /// Provides access to the concrete runtime type for test-specific operations.
     ///
-    /// This method is only available in test builds and should be used sparingly.
-    /// It enables test-specific functionality like assertion checking.
-    #[cfg(test)]
+    /// This method enables test-specific functionality like assertion checking.
+    /// It is primarily used by TestRuntime for screen content validation.
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }

@@ -422,14 +422,19 @@ impl App {
         let (action_tx, mut action_rx) = mpsc::unbounded_channel();
 
         runtime.enter()?;
-
+        let is_test_runtime = runtime
+            .as_any_mut()
+            .downcast_mut::<crate::runtime::TestRuntime>()
+            .is_some();
         let size = runtime.size()?;
         self.init_components(size, action_tx.clone())?;
 
         loop {
             if let Some(e) = runtime.next_event().await {
                 match e {
-                    tui::Event::Quit => action_tx.send(Action::Quit)?,
+                    tui::Event::Quit => {
+                        action_tx.send(Action::Quit)?;
+                    }
                     tui::Event::Tick => action_tx.send(Action::Tick)?,
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
@@ -453,12 +458,15 @@ impl App {
                         runtime.draw(Box::new(|f| self.render_frame(f, &action_tx)))?;
 
                         // Check for pending test assertions after rendering
-                        #[cfg(test)]
-                        if let Some(test_runtime) = runtime
-                            .as_any_mut()
-                            .downcast_mut::<crate::runtime::TestRuntime>()
-                        {
-                            test_runtime.check_pending_assertion(self)?;
+                        if is_test_runtime {
+                            if let Some(test_runtime) = runtime
+                                .as_any_mut()
+                                .downcast_mut::<crate::runtime::TestRuntime>(
+                            ) {
+                                test_runtime.check_pending_assertion(self)?;
+                            } else {
+                                error!("Runtime is marked as test, but downcast failed");
+                            }
                         }
                     }
                     // Use unified action processing for all other actions
@@ -467,11 +475,42 @@ impl App {
                     }
                 }
             }
+
             if self.should_suspend {
                 runtime.suspend()?;
                 action_tx.send(Action::Resume)?;
                 runtime.enter()?;
             } else if self.should_quit {
+                // In test mode, ensure all pending actions are processed before quitting
+                if is_test_runtime {
+                    debug!("Processing pending actions before quit");
+                    let mut pending_actions = Vec::new();
+                    while let Ok(action) = action_rx.try_recv() {
+                        pending_actions.push(action);
+                    }
+
+                    // Process any remaining actions, especially render actions for assertions
+                    for action in pending_actions {
+                        if action != Action::Tick {
+                            debug!("Processing final action before quit: {action:?}");
+                        }
+                        match action {
+                            Action::Render => {
+                                runtime.draw(Box::new(|f| self.render_frame(f, &action_tx)))?;
+                                if let Some(test_runtime) = runtime
+                                    .as_any_mut()
+                                    .downcast_mut::<crate::runtime::TestRuntime>(
+                                ) {
+                                    test_runtime.check_pending_assertion(self)?;
+                                }
+                            }
+                            _ => {
+                                self.process_action(action, &action_tx)?;
+                            }
+                        }
+                    }
+                }
+
                 runtime.stop()?;
                 break;
             }
