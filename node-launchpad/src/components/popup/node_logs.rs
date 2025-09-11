@@ -218,11 +218,15 @@ impl NodeLogsPopup {
         log_management: &LogManagement,
         action_sender: UnboundedSender<Action>,
     ) {
-        if self.node_name != node_name {
-            self.node_name = node_name.clone();
+        if self.node_name == node_name {
+            if self.logs.is_empty() {
+                self.loading_state = LogLoadingState::Loading;
+            } else {
+                info!("Fetching logs for the same node again, do not change state");
+            }
+            self.loading_state = LogLoadingState::Loaded;
         }
-
-        self.loading_state = LogLoadingState::Loading;
+        self.node_name = node_name.clone();
 
         // Request logs for the new node via LogManagement
         if let Err(e) = log_management.load_logs(node_name, self.log_dir.clone(), action_sender) {
@@ -783,7 +787,7 @@ impl Component for NodeLogsPopup {
                 } else {
                     error!("LogManagement or action_sender not available for SetNodeLogsTarget");
                 }
-                Ok(None)
+                Ok(Some(Action::SwitchScene(Scene::NodeLogsPopUp)))
             }
             Action::LogsLoaded {
                 node_name,
