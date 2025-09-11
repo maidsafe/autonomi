@@ -15,16 +15,17 @@ mod terminal;
 extern crate tracing;
 
 use ant_bootstrap::InitialPeersConfig;
+use ant_logging::LogBuilder;
 #[cfg(target_os = "windows")]
 use ant_node_manager::config::is_running_as_root;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use node_launchpad::{
     app::App,
-    config::configure_winsw,
-    utils::{initialize_logging, initialize_panic_handler},
+    config::{configure_winsw, get_launchpad_data_dir_path},
 };
 use std::{env, path::PathBuf, time::Duration};
+use tracing::{Level, error};
 
 #[derive(Parser, Debug)]
 #[command(disable_version_flag = true)]
@@ -78,8 +79,8 @@ fn is_running_in_terminal() -> bool {
 
 fn main() -> Result<()> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    let _log_handle = get_log_builder()?.initialize()?;
     let result: Result<()> = rt.block_on(async {
-        initialize_logging()?;
         configure_winsw().await?;
 
         if !is_running_in_terminal() {
@@ -152,4 +153,76 @@ fn main() -> Result<()> {
     rt.shutdown_timeout(Duration::from_millis(100));
 
     Ok(())
+}
+
+pub fn initialize_panic_handler() -> Result<()> {
+    let (panic_hook, eyre_hook) = color_eyre::config::HookBuilder::default()
+        .panic_section(format!(
+            "This is a bug. Consider reporting it at {}",
+            env!("CARGO_PKG_REPOSITORY")
+        ))
+        .capture_span_trace_by_default(false)
+        .display_location_section(false)
+        .display_env_section(false)
+        .into_hooks();
+    eyre_hook.install()?;
+    std::panic::set_hook(Box::new(move |panic_info| {
+        if let Ok(mut t) = node_launchpad::tui::Tui::new()
+            && let Err(r) = t.exit()
+        {
+            error!("Unable to exit Terminal: {:?}", r);
+        }
+
+        #[cfg(not(debug_assertions))]
+        {
+            use human_panic::{Metadata, handle_dump, print_msg};
+            let meta = Metadata {
+                version: env!("CARGO_PKG_VERSION").into(),
+                name: env!("CARGO_PKG_NAME").into(),
+                authors: env!("CARGO_PKG_AUTHORS").replace(':', ", ").into(),
+                homepage: "https://autonomi.com/".into(),
+            };
+
+            let file_path = handle_dump(&meta, panic_info);
+            // prints human-panic message
+            print_msg(file_path, &meta)
+                .expect("human-panic: printing error message to console failed");
+            eprintln!("{}", panic_hook.panic_report(panic_info)); // prints color-eyre stack trace to stderr
+        }
+        let msg = format!("{}", panic_hook.panic_report(panic_info));
+        error!("Error: {}", strip_ansi_escapes::strip_str(msg));
+
+        #[cfg(debug_assertions)]
+        {
+            // Better Panic stacktrace that is only enabled when debugging.
+            better_panic::Settings::auto()
+                .most_recent_first(false)
+                .lineno_suffix(true)
+                .verbosity(better_panic::Verbosity::Full)
+                .create_panic_handler()(panic_info);
+        }
+
+        std::process::exit(libc::EXIT_FAILURE);
+    }));
+    Ok(())
+}
+
+pub fn get_log_builder() -> Result<LogBuilder> {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let log_path = get_launchpad_data_dir_path()?
+        .join("logs")
+        .join(format!("launchpad_{timestamp}.log"));
+
+    let logging_targets = vec![
+        ("ant_bootstrap".to_string(), Level::DEBUG),
+        ("evmlib".to_string(), Level::DEBUG),
+        ("ant_node_manager".to_string(), Level::DEBUG),
+        ("ant_service_management".to_string(), Level::DEBUG),
+        ("service-manager".to_string(), Level::DEBUG),
+        ("node_launchpad".to_string(), Level::DEBUG),
+    ];
+    let mut log_builder = LogBuilder::new(logging_targets);
+    log_builder.output_dest(ant_logging::LogOutputDest::Path(log_path));
+    log_builder.print_updates_to_stdout(false);
+    Ok(log_builder)
 }

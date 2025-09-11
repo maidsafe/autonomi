@@ -124,40 +124,70 @@ impl TracingLayers {
                 .with_writer(std::io::stderr)
                 .boxed(),
             LogOutputDest::Path(path) => {
-                std::fs::create_dir_all(path)?;
-                if print_updates_to_stdout {
-                    println!("Logging to directory: {path:?}");
-                }
+                // Check if path ends with .log extension
+                if path.extension() == Some(std::ffi::OsStr::new("log")) {
+                    // Direct file logging without rotation
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+                    if print_updates_to_stdout {
+                        println!("Logging to file: {path:?}");
+                    }
 
-                // the number of normal files
-                let max_uncompressed_log_files =
-                    max_uncompressed_log_files.unwrap_or(MAX_UNCOMPRESSED_LOG_FILES);
-                // the total number of files; should be greater than uncompressed
-                let max_log_files = if let Some(max_compressed_log_files) = max_compressed_log_files
-                {
-                    max_compressed_log_files + max_uncompressed_log_files
+                    let file = std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(path)?;
+
+                    match format {
+                        LogFormat::Json => tracing_fmt::layer()
+                            .json()
+                            .flatten_event(true)
+                            .with_writer(file)
+                            .boxed(),
+                        LogFormat::Default => tracing_fmt::layer()
+                            .with_ansi(false)
+                            .with_writer(file)
+                            .event_format(LogFormatter)
+                            .boxed(),
+                    }
                 } else {
-                    std::cmp::max(max_uncompressed_log_files, MAX_LOG_FILES)
-                };
-                let (file_rotation, worker_guard) = appender::file_rotater(
-                    path,
-                    MAX_LOG_SIZE,
-                    max_uncompressed_log_files,
-                    max_log_files,
-                );
-                self.log_appender_guard = Some(worker_guard);
+                    // Directory logging with rotation
+                    std::fs::create_dir_all(path)?;
+                    if print_updates_to_stdout {
+                        println!("Logging to directory: {path:?}");
+                    }
 
-                match format {
-                    LogFormat::Json => tracing_fmt::layer()
-                        .json()
-                        .flatten_event(true)
-                        .with_writer(file_rotation)
-                        .boxed(),
-                    LogFormat::Default => tracing_fmt::layer()
-                        .with_ansi(false)
-                        .with_writer(file_rotation)
-                        .event_format(LogFormatter)
-                        .boxed(),
+                    // the number of normal files
+                    let max_uncompressed_log_files =
+                        max_uncompressed_log_files.unwrap_or(MAX_UNCOMPRESSED_LOG_FILES);
+                    // the total number of files; should be greater than uncompressed
+                    let max_log_files =
+                        if let Some(max_compressed_log_files) = max_compressed_log_files {
+                            max_compressed_log_files + max_uncompressed_log_files
+                        } else {
+                            std::cmp::max(max_uncompressed_log_files, MAX_LOG_FILES)
+                        };
+                    let (file_rotation, worker_guard) = appender::file_rotater(
+                        path,
+                        MAX_LOG_SIZE,
+                        max_uncompressed_log_files,
+                        max_log_files,
+                    );
+                    self.log_appender_guard = Some(worker_guard);
+
+                    match format {
+                        LogFormat::Json => tracing_fmt::layer()
+                            .json()
+                            .flatten_event(true)
+                            .with_writer(file_rotation)
+                            .boxed(),
+                        LogFormat::Default => tracing_fmt::layer()
+                            .with_ansi(false)
+                            .with_writer(file_rotation)
+                            .event_format(LogFormatter)
+                            .boxed(),
+                    }
                 }
             }
         };

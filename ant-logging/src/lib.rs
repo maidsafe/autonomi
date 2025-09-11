@@ -34,8 +34,15 @@ pub use tracing_core::Level;
 
 #[derive(Debug, Clone)]
 pub enum LogOutputDest {
+    /// Log to standard error
     Stderr,
+    /// Log to standard output
     Stdout,
+    /// If a path with .log extension is provided, log to that file.
+    ///
+    /// If a directory path is provided, log with file rotation enabled in that directory.
+    ///
+    /// If the directory does not exist, it will be created.
     Path(PathBuf),
 }
 

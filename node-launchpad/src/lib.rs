@@ -27,7 +27,6 @@ pub mod runtime;
 pub mod style;
 pub mod system;
 pub mod tui;
-pub mod utils;
 pub mod widgets;
 
 pub mod test_utils;

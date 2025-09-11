@@ -245,6 +245,7 @@ pub async fn reset(
     info!("Resetting all antnode services, with force={force}");
 
     if !force {
+        info!("Prompting user for confirmation before reset");
         println!("WARNING: all antnode services, data, and logs will be removed.");
         println!("Do you wish to proceed? [y/n]");
         std::io::stdout().flush()?;
@@ -252,6 +253,7 @@ pub async fn reset(
         std::io::stdin().read_line(&mut input)?;
         if input.trim().to_lowercase() != "y" {
             println!("Reset aborted");
+            info!("User aborted reset operation");
             return Ok(());
         }
     }
