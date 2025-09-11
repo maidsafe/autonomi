@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1757612771631,
+  "lastUpdate": 1757612774041,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6447,6 +6447,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23828,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "80608fae96e7d9465de352addb76eb5d0efd10ee",
+          "message": "Merge pull request #3200 from grumbach/python_streaming\n\nfeat: python bindings for data stream",
+          "timestamp": "2025-09-11T16:42:21Z",
+          "tree_id": "2bad566299f577b285343daf624f27ffb207f035",
+          "url": "https://github.com/maidsafe/autonomi/commit/80608fae96e7d9465de352addb76eb5d0efd10ee"
+        },
+        "date": 1757612773026,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10297,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22303,
             "unit": "ms"
           },
           {
