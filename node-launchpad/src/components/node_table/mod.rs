@@ -155,11 +155,17 @@ impl Component for NodeTableComponent {
                 }
                 NodeTableActions::NodeManagementCommand(command) => {
                     debug!("NodeTable: Handling NodeManagementCommand: {command:?}");
-                    self.handle_node_management_command(command)
+                    let result = self.handle_node_management_command(command);
+                    // Try to update the table selection if the selected node got locked
+                    self.state.try_clear_selection_if_locked();
+                    result
                 }
                 NodeTableActions::NodeManagementResponse(response) => {
                     debug!("NodeTable: Handling NodeManagementResponse: {response:?}");
-                    self.handle_node_management_response(response)
+                    let result = self.handle_node_management_response(response);
+                    // Try to update the table selection if the selected node got locked
+                    self.state.try_clear_selection_if_locked();
+                    result
                 }
                 NodeTableActions::NavigateUp => {
                     let before_selected = self.state.items.state.selected();
