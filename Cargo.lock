@@ -6428,6 +6428,7 @@ dependencies = [
  "ant-bootstrap",
  "ant-build-info",
  "ant-evm",
+ "ant-logging",
  "ant-node-manager",
  "ant-protocol",
  "ant-releases",
