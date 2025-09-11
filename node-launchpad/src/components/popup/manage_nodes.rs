@@ -80,7 +80,7 @@ impl ManageNodesPopup {
                     Action::StoreRunningNodeCount(nodes_to_start),
                     // this has to come after storing the new count
                     Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
-                        NodeManagementCommand::StartNodes,
+                        NodeManagementCommand::MaintainNodes,
                     )),
                     Action::SwitchScene(Scene::Status),
                 ]

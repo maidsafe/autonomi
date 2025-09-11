@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter, Result};
 use strum::{Display, EnumIter};
 
+// todo remove this struct
+
 #[derive(Clone, Copy, Debug, Default, EnumIter, Eq, Hash, PartialEq)]
 pub enum ConnectionMode {
     #[default]
