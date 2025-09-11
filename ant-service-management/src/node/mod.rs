@@ -22,7 +22,6 @@ use crate::{
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
-use libp2p::multiaddr::Protocol;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{ffi::OsString, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
@@ -199,13 +198,7 @@ impl ServiceStateActions for NodeService {
                 )
             })?;
 
-            self.service_data.write().await.listen_addr = Some(
-                listen_addrs
-                    .iter()
-                    .cloned()
-                    .map(|addr| addr.with(Protocol::P2p(node_metadata_extended.peer_id)))
-                    .collect(),
-            );
+            self.service_data.write().await.listen_addr = Some(listen_addrs.clone());
 
             for addr in &listen_addrs {
                 if let Some(port) = get_port_from_multiaddr(addr) {
