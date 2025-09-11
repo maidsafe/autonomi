@@ -329,7 +329,6 @@ impl NodeTableState {
             if !item.is_locked() {
                 self.items.state.select(Some(index));
                 self.items.last_selected = Some(index);
-                debug!("Navigate: Selected first unlocked node at index {index}",);
                 return;
             }
         }
@@ -348,7 +347,6 @@ impl NodeTableState {
             if !item.is_locked() {
                 self.items.state.select(Some(index));
                 self.items.last_selected = Some(index);
-                debug!("Navigate: Selected last unlocked node at index {index}",);
                 return;
             }
         }
@@ -360,6 +358,14 @@ impl NodeTableState {
     pub fn clear_selection(&mut self) {
         self.items.state.select(None);
         self.items.last_selected = None;
+    }
+
+    pub fn try_clear_selection_if_locked(&mut self) {
+        if let Some(selected) = self.items.state.selected()
+            && self.items.items[selected].is_locked()
+        {
+            self.clear_selection();
+        }
     }
 }
 
