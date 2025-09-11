@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::action::{OptionsActions, StatusActions};
 use crate::{
     action::{Action, NodeManagementCommand, NodeTableActions},
     mode::Scene,
@@ -13,17 +14,12 @@ use crate::{
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use derive_deref::{Deref, DerefMut};
-use serde::{Deserialize, Serialize, de::Deserializer};
+use serde::Serialize;
 use std::collections::HashMap;
 
 pub fn get_keybindings() -> KeyBindings {
-    use crate::{
-        action::{Action, OptionsActions, StatusActions},
-        mode::Scene,
-    };
-    use std::collections::HashMap;
-
-    let bind = |key: &str| parse_key_sequence(key).unwrap();
+    #[allow(clippy::expect_used)]
+    let bind = |key: &str| parse_key_sequence(key).expect("Failed to parse key sequence");
 
     let add_common_bindings = |scene_map: &mut HashMap<_, _>| {
         scene_map.extend([
@@ -316,28 +312,6 @@ pub fn get_keybindings() -> KeyBindings {
 #[derive(Clone, Debug, Default, Deref, DerefMut, Serialize)]
 pub struct KeyBindings(pub HashMap<Scene, HashMap<Vec<KeyEvent>, Action>>);
 
-impl<'de> Deserialize<'de> for KeyBindings {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed_map = HashMap::<Scene, HashMap<String, Action>>::deserialize(deserializer)?;
-
-        let keybindings = parsed_map
-            .into_iter()
-            .map(|(mode, inner_map)| {
-                let converted_inner_map = inner_map
-                    .into_iter()
-                    .map(|(key_str, cmd)| (parse_key_sequence(&key_str).unwrap(), cmd))
-                    .collect();
-                (mode, converted_inner_map)
-            })
-            .collect();
-
-        Ok(KeyBindings(keybindings))
-    }
-}
-
 fn parse_key_event(raw: &str) -> Result<KeyEvent, String> {
     let raw_lower = raw.to_ascii_lowercase();
     let (remaining, modifiers) = extract_modifiers(&raw_lower);
@@ -408,7 +382,11 @@ fn parse_key_code_with_modifiers(
         "minus" => KeyCode::Char('-'),
         "tab" => KeyCode::Tab,
         c if c.len() == 1 => {
-            let mut c = c.chars().next().unwrap();
+            #[allow(clippy::expect_used)]
+            let mut c = c
+                .chars()
+                .next()
+                .expect("Single character string should have a character");
             if modifiers.contains(KeyModifiers::SHIFT) {
                 c = c.to_ascii_uppercase();
             }

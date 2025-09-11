@@ -32,7 +32,7 @@ pub struct Help {
 }
 
 impl Help {
-    pub async fn new() -> Result<Self> {
+    pub fn new() -> Result<Self> {
         Ok(Self { action_tx: None })
     }
 }

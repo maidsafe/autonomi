@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use color_eyre::eyre::{OptionExt, Result};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,12 +65,17 @@ impl FocusManager {
         }
     }
 
-    pub fn set_focus(&mut self, target: FocusTarget) {
+    pub fn set_focus(&mut self, target: FocusTarget) -> Result<()> {
         if self.focus_stack.is_empty() {
             self.focus_stack.push(target);
         } else {
-            *self.focus_stack.last_mut().unwrap() = target;
+            let last = self
+                .focus_stack
+                .last_mut()
+                .ok_or_eyre("Focus stack is not empty")?;
+            *last = target;
         }
+        Ok(())
     }
 
     pub fn is_empty(&self) -> bool {

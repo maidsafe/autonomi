@@ -81,7 +81,7 @@ fn main() -> Result<()> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
     let _log_handle = get_log_builder()?.initialize()?;
     let result: Result<()> = rt.block_on(async {
-        configure_winsw().await?;
+        configure_winsw()?;
 
         if !is_running_in_terminal() {
             info!("Running in non-terminal mode. Launching terminal.");

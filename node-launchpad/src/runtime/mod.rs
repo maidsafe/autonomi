@@ -14,13 +14,15 @@
 
 use crate::tui;
 use color_eyre::eyre::Result;
+pub use production::ProductionRuntime;
 use ratatui::{Frame, prelude::Rect};
+pub use test::{TestRuntime, TestStep};
+
+/// Type alias for the render function to reduce complexity
+pub type RenderFn<'a> = Box<dyn FnOnce(&mut Frame) -> Result<()> + 'a>;
 
 pub mod production;
 pub mod test;
-
-pub use production::ProductionRuntime;
-pub use test::{TestRuntime, TestStep};
 
 /// Runtime abstraction for the node launchpad TUI application.
 ///
@@ -64,7 +66,7 @@ pub trait Runtime {
     ///
     /// The render function receives a mutable reference to a Frame
     /// and should perform all drawing operations within that closure.
-    fn draw(&mut self, render_fn: Box<dyn FnOnce(&mut Frame) + '_>) -> Result<()>;
+    fn draw(&mut self, render_fn: RenderFn<'_>) -> Result<()>;
 
     /// Initializes the runtime for execution.
     ///

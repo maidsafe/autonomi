@@ -42,15 +42,15 @@ pub struct Options {
 }
 
 impl Options {
-    pub async fn new(
+    pub fn new(
         storage_mountpoint: PathBuf,
         storage_drive: String,
         rewards_address: Option<EvmAddress>,
         connection_mode: ConnectionMode,
         port_from: Option<u32>,
         port_to: Option<u32>,
-    ) -> Result<Self> {
-        Ok(Self {
+    ) -> Self {
+        Self {
             storage_mountpoint,
             storage_drive,
             rewards_address,
@@ -59,7 +59,7 @@ impl Options {
             port_from,
             port_to,
             action_tx: None,
-        })
+        }
     }
 }
 

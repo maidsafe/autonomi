@@ -147,7 +147,7 @@ impl Journey {
         }
     }
 
-    pub async fn assert_current_screen(&mut self, assertion: &ScreenAssertion) -> Result<()> {
+    pub fn assert_current_screen(&mut self, assertion: &ScreenAssertion) -> Result<()> {
         let buffer = self.render_screen()?;
         let screen_lines = buffer_to_lines(&buffer);
 
@@ -202,8 +202,9 @@ impl Journey {
         self.app.input_mode = InputMode::Navigation;
     }
 
-    pub fn focus_component(&mut self, target: FocusTarget) {
-        self.app.focus_manager.set_focus(target);
+    pub fn focus_component(&mut self, target: FocusTarget) -> Result<()> {
+        self.app.focus_manager.set_focus(target)?;
+        Ok(())
     }
 
     pub fn enter_text(&mut self, text: &str) {
@@ -495,7 +496,7 @@ impl JourneyBuilder {
         self.journey.run().await
     }
 
-    pub async fn build(mut self) -> Result<Journey> {
+    pub fn build(mut self) -> Result<Journey> {
         if let Some(step) = self.current_step.take() {
             self.journey.add_step(step);
         }

@@ -105,7 +105,7 @@ pub async fn configure_winsw() -> Result<()> {
 }
 
 #[cfg(not(windows))]
-pub async fn configure_winsw() -> Result<()> {
+pub fn configure_winsw() -> Result<()> {
     Ok(())
 }
 

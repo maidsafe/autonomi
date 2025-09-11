@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use color_eyre::eyre::Result;
+use color_eyre::Result;
 use crossterm::{
     cursor,
     event::{
@@ -52,7 +52,7 @@ pub enum Event {
 
 pub struct Tui {
     pub terminal: ratatui::Terminal<Backend<IO>>,
-    pub task: JoinHandle<()>,
+    pub task: JoinHandle<Result<()>>,
     pub cancellation_token: CancellationToken,
     pub event_rx: UnboundedReceiver<Event>,
     pub event_tx: UnboundedSender<Event>,
@@ -69,7 +69,7 @@ impl Tui {
         let terminal = ratatui::Terminal::new(Backend::new(io()))?;
         let (event_tx, event_rx) = mpsc::unbounded_channel();
         let cancellation_token = CancellationToken::new();
-        let task = tokio::spawn(async {});
+        let task = tokio::spawn(async { Ok(()) });
         let mouse = false;
         let paste = false;
         Ok(Self {
@@ -105,9 +105,9 @@ impl Tui {
         self
     }
 
-    pub fn start(&mut self) {
-        let tick_delay = std::time::Duration::from_secs_f64(1.0 / self.tick_rate);
-        let render_delay = std::time::Duration::from_secs_f64(1.0 / self.frame_rate);
+    pub fn start(&mut self) -> Result<()> {
+        let tick_delay = Duration::from_secs_f64(1.0 / self.tick_rate);
+        let render_delay = Duration::from_secs_f64(1.0 / self.frame_rate);
         self.cancel();
         self.cancellation_token = CancellationToken::new();
         let _cancellation_token = self.cancellation_token.clone();
@@ -116,7 +116,7 @@ impl Tui {
             let mut reader = crossterm::event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_delay);
             let mut render_interval = tokio::time::interval(render_delay);
-            event_tx.send(Event::Init).unwrap();
+            event_tx.send(Event::Init)?;
             loop {
                 let tick_delay = tick_interval.tick();
                 let render_delay = render_interval.tick();
@@ -131,41 +131,44 @@ impl Tui {
                         match evt {
                           CrosstermEvent::Key(key) => {
                             if key.kind == KeyEventKind::Press {
-                              event_tx.send(Event::Key(key)).unwrap();
+                              event_tx.send(Event::Key(key))?;
                             }
                           },
                           CrosstermEvent::Mouse(mouse) => {
-                            event_tx.send(Event::Mouse(mouse)).unwrap();
+                            event_tx.send(Event::Mouse(mouse))?;
                           },
                           CrosstermEvent::Resize(x, y) => {
-                            event_tx.send(Event::Resize(x, y)).unwrap();
+                            event_tx.send(Event::Resize(x, y))?;
                           },
                           CrosstermEvent::FocusLost => {
-                            event_tx.send(Event::FocusLost).unwrap();
+                            event_tx.send(Event::FocusLost)?;
                           },
                           CrosstermEvent::FocusGained => {
-                            event_tx.send(Event::FocusGained).unwrap();
+                            event_tx.send(Event::FocusGained)?;
                           },
                           CrosstermEvent::Paste(s) => {
-                            event_tx.send(Event::Paste(s)).unwrap();
+                            event_tx.send(Event::Paste(s))?;
                           },
                         }
                       }
                       Some(Err(_)) => {
-                        event_tx.send(Event::Error).unwrap();
+                        event_tx.send(Event::Error)?;
                       }
                       None => {},
                     }
                   },
                   _ = tick_delay => {
-                      event_tx.send(Event::Tick).unwrap();
+                      event_tx.send(Event::Tick)?;
                   },
                   _ = render_delay => {
-                      event_tx.send(Event::Render).unwrap();
+                      event_tx.send(Event::Render)?;
                   },
                 }
             }
+            Ok(())
         });
+
+        Ok(())
     }
 
     pub fn stop(&self) -> Result<()> {
@@ -195,7 +198,7 @@ impl Tui {
         if self.paste {
             crossterm::execute!(io(), EnableBracketedPaste)?;
         }
-        self.start();
+        self.start()?;
         Ok(())
     }
 
@@ -252,6 +255,7 @@ impl DerefMut for Tui {
 
 impl Drop for Tui {
     fn drop(&mut self) {
+        #[allow(clippy::unwrap_used)]
         self.exit().unwrap();
     }
 }

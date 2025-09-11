@@ -196,10 +196,11 @@ impl MockNodeRegistry {
             rewards_address: RewardsAddress::from_str("0x1234567890123456789012345678901234567890")
                 .unwrap_or_default(),
             reachability_progress: ReachabilityProgress::NotRun,
-            rpc_socket_addr: Some(
+            rpc_socket_addr: Some({
+                #[allow(clippy::expect_used)]
                 SocketAddr::from_str(&format!("127.0.0.1:{}", 35000 + index))
-                    .expect("Invalid socket address"),
-            ),
+                    .expect("Invalid socket address")
+            }),
             skip_reachability_check: false,
             user: None,
             user_mode: false,
