@@ -8,7 +8,6 @@
 
 use ant_service_management::ServiceStatus;
 
-use crate::connection_mode::NodeConnectionMode;
 use std::fmt;
 
 #[derive(Default, Debug, Copy, Clone, PartialEq)]
@@ -65,7 +64,6 @@ pub struct NodeItem {
     pub peers: usize,
     pub connections: usize,
     pub locked: bool,
-    pub mode: NodeConnectionMode,
     pub node_display_status: NodeDisplayStatus,
     pub service_status: ServiceStatus,
     pub failure: Option<(chrono::DateTime<chrono::Utc>, String)>,
