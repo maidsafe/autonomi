@@ -107,6 +107,7 @@ impl Component for NodeTableComponent {
         // Send initial state update to synchronize Status component's cached state
         // This ensures the Status component knows about nodes loaded from registry during initialization
         self.state.send_state_update()?;
+        self.state.send_selection_update()?;
 
         Ok(())
     }
@@ -117,6 +118,10 @@ impl Component for NodeTableComponent {
             Action::NodeTableActions(node_action) => match node_action {
                 NodeTableActions::StateChanged { .. } => {
                     // StateChanged is sent by NodeTable, not handled by it
+                    Ok(None)
+                }
+                NodeTableActions::SelectionChanged { .. } => {
+                    // SelectionChanged is sent by NodeTable, not handled by it
                     Ok(None)
                 }
                 NodeTableActions::RegistryUpdated { all_nodes_data } => {
@@ -168,25 +173,11 @@ impl Component for NodeTableComponent {
                     result
                 }
                 NodeTableActions::NavigateUp => {
-                    let before_selected = self.state.items.state.selected();
                     self.state.navigate_previous_unlocked();
-                    let after_selected = self.state.items.state.selected();
-                    if before_selected != after_selected {
-                        debug!(
-                            "NodeTable: Selection changed from {before_selected:?} to {after_selected:?}",
-                        );
-                    }
                     Ok(None)
                 }
                 NodeTableActions::NavigateDown => {
-                    let before_selected = self.state.items.state.selected();
                     self.state.navigate_next_unlocked();
-                    let after_selected = self.state.items.state.selected();
-                    if before_selected != after_selected {
-                        debug!(
-                            "NodeTable: Selection changed from {before_selected:?} to {after_selected:?}",
-                        );
-                    }
                     Ok(None)
                 }
                 NodeTableActions::NavigateHome => {
@@ -357,7 +348,7 @@ impl NodeTableComponent {
                                 );
                             }
                         }
-                        NodeDisplayStatus::Stopped => {
+                        NodeDisplayStatus::Stopped | NodeDisplayStatus::Added => {
                             if node_item.can_start() {
                                 debug!("Toggling node {}: Starting it", service_name);
                                 node_item.lock_for_operation(NodeDisplayStatus::Starting);
