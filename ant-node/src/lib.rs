@@ -29,10 +29,11 @@ extern crate tracing;
 
 mod error;
 mod event;
+mod listen_addr_writer;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
-mod networking;
+pub mod networking;
 mod node;
 mod put_validation;
 #[cfg(feature = "extension-module")]
@@ -49,6 +50,7 @@ pub use self::{
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
     networking::sort_peers_by_key,
+    networking::{ReachabilityIssue, ReachabilityStatus},
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
 
@@ -70,6 +72,9 @@ use tokio::sync::watch;
 #[derive(Clone)]
 pub struct RunningNode {
     shutdown_sender: watch::Sender<bool>,
+    #[allow(dead_code)]
+    /// This has to be kept for the lifetime of the node, so that the metrics server can be kept running.
+    metrics_server_shutdown_sender: Option<watch::Sender<bool>>,
     network: Network,
     node_events_channel: NodeEventsChannel,
     root_dir_path: PathBuf,

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_service_management::{NodeServiceData, ServiceStatus};
+use ant_service_management::{NodeServiceData, ServiceStatus, metric::ReachabilityStatusValues};
 use color_eyre::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,6 @@ use crate::action::{Action, StatusActions};
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndividualNodeStats {
     pub service_name: String,
-    pub forwarded_rewards: usize,
     pub rewards_wallet_balance: usize,
     pub memory_usage_mb: usize,
     pub bandwidth_inbound: usize,
@@ -29,12 +28,12 @@ pub struct IndividualNodeStats {
     pub bandwidth_outbound_rate: usize,
     pub max_records: usize,
     pub peers: usize,
+    pub reachability_status: ReachabilityStatusValues,
     pub connections: usize,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NodeStats {
-    pub total_forwarded_rewards: usize,
     pub total_rewards_wallet_balance: usize,
     pub total_memory_usage_mb: usize,
     pub individual_stats: Vec<IndividualNodeStats>,
@@ -42,7 +41,6 @@ pub struct NodeStats {
 
 impl NodeStats {
     fn merge(&mut self, other: &IndividualNodeStats) {
-        self.total_forwarded_rewards += other.forwarded_rewards;
         self.total_rewards_wallet_balance += other.rewards_wallet_balance;
         self.total_memory_usage_mb += other.memory_usage_mb;
         self.individual_stats.push(other.clone()); // Store individual stats
@@ -70,20 +68,12 @@ impl NodeStats {
         let node_details = nodes
             .iter()
             .filter_map(|node| {
-                if node.status == ServiceStatus::Running {
-                    if let Some(metrics_port) = node.metrics_port {
-                        Some((
-                            node.service_name.clone(),
-                            metrics_port,
-                            node.data_dir_path.clone(),
-                        ))
-                    } else {
-                        error!(
-                            "No metrics port found for {:?}. Skipping stat fetch.",
-                            node.service_name
-                        );
-                        None
-                    }
+                if node.status == ServiceStatus::Running || node.status == ServiceStatus::Added {
+                    Some((
+                        node.service_name.clone(),
+                        node.metrics_port,
+                        node.data_dir_path.clone(),
+                    ))
                 } else {
                     None
                 }
@@ -124,7 +114,7 @@ impl NodeStats {
         let mut stream = futures::stream::iter(node_details)
             .map(|(service_name, metrics_port, data_dir)| async move {
                 (
-                    Self::fetch_stat_per_node(metrics_port, data_dir).await,
+                    Self::fetch_stat_per_node(service_name.clone(), metrics_port, data_dir).await,
                     service_name,
                 )
             })
@@ -134,20 +124,7 @@ impl NodeStats {
 
         while let Some((result, service_name)) = stream.next().await {
             match result {
-                Ok(stats) => {
-                    let individual_stats = IndividualNodeStats {
-                        service_name: service_name.clone(),
-                        forwarded_rewards: stats.forwarded_rewards,
-                        rewards_wallet_balance: stats.rewards_wallet_balance,
-                        memory_usage_mb: stats.memory_usage_mb,
-                        bandwidth_inbound: stats.bandwidth_inbound,
-                        bandwidth_outbound: stats.bandwidth_outbound,
-                        max_records: stats.max_records,
-                        peers: stats.peers,
-                        connections: stats.connections,
-                        bandwidth_inbound_rate: stats.bandwidth_inbound_rate,
-                        bandwidth_outbound_rate: stats.bandwidth_outbound_rate,
-                    };
+                Ok(individual_stats) => {
                     all_node_stats.merge(&individual_stats);
                 }
                 Err(err) => {
@@ -164,6 +141,7 @@ impl NodeStats {
     }
 
     async fn fetch_stat_per_node(
+        service_name: String,
         metrics_port: u16,
         _data_dir: PathBuf,
     ) -> Result<IndividualNodeStats> {
@@ -176,20 +154,14 @@ impl NodeStats {
         let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
         let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
 
-        let mut stats = IndividualNodeStats::default();
+        let mut stats = IndividualNodeStats {
+            service_name,
+            reachability_status: ReachabilityStatusValues::from(&all_metrics.samples),
+            ..Default::default()
+        };
 
         for sample in all_metrics.samples.iter() {
-            if sample.metric == "ant_node_total_forwarded_rewards" {
-                // Nanos
-                match sample.value {
-                    prometheus_parse::Value::Counter(val)
-                    | prometheus_parse::Value::Gauge(val)
-                    | prometheus_parse::Value::Untyped(val) => {
-                        stats.forwarded_rewards = val as usize;
-                    }
-                    _ => {}
-                }
-            } else if sample.metric == "ant_node_current_reward_wallet_balance" {
+            if sample.metric == "ant_node_current_reward_wallet_balance" {
                 // Attos
                 match sample.value {
                     prometheus_parse::Value::Counter(val)

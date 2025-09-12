@@ -24,9 +24,16 @@ pub enum Error {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
     #[error(transparent)]
+    MetricsError(#[from] crate::metric::MetricsActionError),
+    #[error(transparent)]
     MultiAddrParseError(#[from] libp2p::multiaddr::Error),
-    #[error("The registry does not contain a service named '{0}'")]
-    NodeNotFound(String),
+    #[error(
+        "Could not connect to the network using rpc endpoint '{rpc_endpoint}' within {timeout:?}"
+    )]
+    NodeConnectionTimedOut {
+        rpc_endpoint: String,
+        timeout: std::time::Duration,
+    },
     #[error(transparent)]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error(transparent)]
@@ -35,8 +42,6 @@ pub enum Error {
     RpcConnectionError(String),
     #[error("Could not obtain node info through RPC: {0}")]
     RpcNodeInfoError(String),
-    #[error("Could not obtain network info through RPC: {0}")]
-    RpcNetworkInfoError(String),
     #[error("Could not restart node through RPC: {0}")]
     RpcNodeRestartError(String),
     #[error("Could not stop node through RPC: {0}")]
@@ -57,4 +62,12 @@ pub enum Error {
     UserDataDirectoryNotObtainable,
     #[error(transparent)]
     Utf8Error(#[from] std::str::Utf8Error),
+    #[error("File watcher error: {0}")]
+    WatcherError(String),
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        Error::WatcherError(err.to_string())
+    }
 }
