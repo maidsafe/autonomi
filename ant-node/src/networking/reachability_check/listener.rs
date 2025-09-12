@@ -35,24 +35,20 @@ const COLLECTION_TIMEOUT: Duration = Duration::from_secs(10);
 /// Manages the state of listeners for reachability checks.
 pub(crate) struct ListenerManager {
     pub(crate) available_listeners: Vec<SocketAddr>,
+    pub(crate) upnp_supported: HashSet<SocketAddr>,
     pub(crate) current_listener_index: usize,
     pub(crate) current_listener_id: Option<ListenerId>,
     pub(crate) listener_failures: HashMap<SocketAddr, ReachabilityIssue>,
 }
 
 impl ListenerManager {
-    /// Run the swarm to collect all listen addresses.
-    /// If UPnP is supported, we just return that single address. This also creates/renews the mapping for that address and
-    /// hence we would not need to support the upnp behaviour inside the actual ReachabilityCheckBehaviour.
-    ///
-    /// This is used to determine the addresses the node is listening on, which is useful for
-    /// reachability checks and other network operations.
+    /// Initialize the ListenerManager by discovering available listen addresses.
     pub(crate) async fn new(
         keypair: &Keypair,
         local: bool,
         listen_addr: SocketAddr,
         no_upnp: bool,
-    ) -> Result<(Self, bool), NetworkError> {
+    ) -> Result<Self, NetworkError> {
         let peer_id = PeerId::from(keypair.public());
 
         #[cfg(feature = "open-metrics")]
@@ -84,16 +80,10 @@ impl ListenerManager {
         let listener_id = listen_on_with_retry(&mut swarm, addr_quic.clone())?;
         let _ = listener_ids.insert(listener_id);
 
-        let mut manager = Self {
-            available_listeners: Vec::new(),
-            current_listener_index: 0,
-            current_listener_id: None,
-            listener_failures: HashMap::new(),
-        };
-
         info!("Starting listener swarm to collect all listen addresses.");
 
         let mut addresses = HashSet::new();
+        let mut upnp_supported = HashSet::new();
         let mut last_address_time = Instant::now();
         let mut upnp_result_found = false; // Either GatewayNotFound or NonRoutableGateway or NewExternalAddr (which we return anyway)
 
@@ -127,11 +117,11 @@ impl ListenerManager {
                             local_addr,
                         }) => {
                             info!(
-                                "UPnP mapped external address: {addr} for local address {local_addr}. Returning the local address as the only listen address."
+                                "UPnP mapped external address: {addr} for local address {local_addr}."
                             );
                             if let Some(socket_addr) = multiaddr_get_socket_addr(&local_addr) {
-                                manager.available_listeners.push(socket_addr);
-                                return Ok((manager, true));
+                                let _ = addresses.insert(socket_addr);
+                                let _ = upnp_supported.insert(socket_addr);
                             } else {
                                 error!("Failed to parse socket address from UPnP address {addr:?}");
                             }
@@ -200,9 +190,34 @@ impl ListenerManager {
             addresses
         );
 
-        manager.available_listeners = addresses.into_iter().collect();
+        // move listeners with upnp support to the front
+        let mut addresses: Vec<SocketAddr> = addresses.into_iter().collect();
 
-        Ok((manager, false))
+        // Log before and after state if UPnP addresses are found
+        if !upnp_supported.is_empty() {
+            info!("Before sorting - addresses: {addresses:?}");
+            info!("UPnP supported addresses: {upnp_supported:?}");
+        }
+
+        addresses.sort_by_key(|addr| {
+            if upnp_supported.contains(addr) {
+                1 // UPnP addresses first (priority 1)
+            } else {
+                2 // Non-UPnP addresses second (priority 2)
+            }
+        });
+
+        if !upnp_supported.is_empty() {
+            info!("After sorting - UPnP addresses moved to front: {addresses:?}");
+        }
+
+        Ok(Self {
+            available_listeners: addresses.into_iter().collect(),
+            upnp_supported,
+            current_listener_index: 0,
+            current_listener_id: None,
+            listener_failures: HashMap::new(),
+        })
     }
 
     /// Bind to the current index. Returns Ok if successful, Err if no more listeners.
@@ -263,6 +278,12 @@ impl ListenerManager {
         self.current_listener_index
     }
 
+    pub(crate) fn current_listener_addr(&self) -> Option<SocketAddr> {
+        self.available_listeners
+            .get(self.current_listener_index)
+            .cloned()
+    }
+
     pub(crate) fn total_listeners(&self) -> usize {
         self.available_listeners.len()
     }
@@ -273,5 +294,9 @@ impl ListenerManager {
 
     pub(crate) fn has_more_listeners(&self) -> bool {
         self.current_listener_index + 1 < self.available_listeners.len()
+    }
+
+    pub(crate) fn upnp_supported(&self, addr: &SocketAddr) -> bool {
+        self.upnp_supported.contains(addr)
     }
 }
