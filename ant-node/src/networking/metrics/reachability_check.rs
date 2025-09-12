@@ -179,13 +179,12 @@ mod tests {
     fn test_reachability_status_not_reachable_without_upnp() {
         let mut reason_map = std::collections::HashMap::new();
         let _ = reason_map.insert(
-            "127.0.0.1:8080".parse().unwrap(),
+            ("127.0.0.1:8080".parse().unwrap(), false),
             ReachabilityIssue::NoDialBacks,
         );
 
         let status = ReachabilityStatus::NotReachable {
-            upnp: false,
-            reason: reason_map,
+            reasons: reason_map,
         };
         let family = get_reachability_adapter_metric(&Some(status));
 
@@ -197,17 +196,16 @@ mod tests {
     fn test_reachability_status_not_reachable_with_upnp() {
         let mut reason_map = std::collections::HashMap::new();
         let _ = reason_map.insert(
-            "127.0.0.1:8080".parse().unwrap(),
+            ("127.0.0.1:8080".parse().unwrap(), true),
             ReachabilityIssue::NoDialBacks,
         );
 
         let status = ReachabilityStatus::NotReachable {
-            upnp: true,
-            reason: reason_map,
+            reasons: reason_map,
         };
         let family = get_reachability_adapter_metric(&Some(status));
 
-        // All should be 0 when not reachable (upnp doesn't matter if not reachable)
+        // All should be 0 when not reachable
         verify_metric(&family, false, false, false);
     }
 
@@ -239,20 +237,19 @@ mod tests {
 
         let mut reason_map1 = std::collections::HashMap::new();
         let _ = reason_map1.insert(
-            "127.0.0.1:8080".parse().unwrap(),
+            ("127.0.0.1:8080".parse().unwrap(), true),
             ReachabilityIssue::NoDialBacks,
         );
         let mut reason_map2 = std::collections::HashMap::new();
         let _ = reason_map2.insert(
-            "127.0.0.1:8080".parse().unwrap(),
+            ("127.0.0.1:8080".parse().unwrap(), false),
             ReachabilityIssue::NoDialBacks,
         );
 
         let test_cases = vec![
             (
                 ReachabilityStatus::NotReachable {
-                    upnp: true,
-                    reason: reason_map1,
+                    reasons: reason_map1,
                 },
                 "NotReachable with UPnP",
                 false, // public
@@ -261,8 +258,7 @@ mod tests {
             ),
             (
                 ReachabilityStatus::NotReachable {
-                    upnp: false,
-                    reason: reason_map2,
+                    reasons: reason_map2,
                 },
                 "NotReachable without UPnP",
                 false, // public
