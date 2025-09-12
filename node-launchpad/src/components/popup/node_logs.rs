@@ -16,6 +16,7 @@ use crate::{
     tui::Frame,
 };
 use arboard::Clipboard;
+use chrono;
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -28,6 +29,7 @@ use ratatui::{
     },
 };
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info};
 
@@ -143,9 +145,40 @@ pub struct NodeLogsPopup {
     total_lines: usize,
     log_management: Option<LogManagement>,
     action_sender: Option<UnboundedSender<Action>>,
+    file_path: Option<String>,
+    last_modified: Option<std::time::SystemTime>,
 }
 
 impl NodeLogsPopup {
+    /// Format time difference in human-readable format
+    fn format_time_ago(modified_time: SystemTime) -> String {
+        let now = SystemTime::now();
+        match now.duration_since(modified_time) {
+            Ok(duration) => {
+                let seconds = duration.as_secs();
+                if seconds < 60 {
+                    format!("{}s ago", seconds)
+                } else if seconds < 3600 {
+                    format!("{}min ago", seconds / 60)
+                } else if seconds < 86400 {
+                    format!("{} hours ago", seconds / 3600)
+                } else {
+                    // More than 24 hours, show exact time
+                    if let Ok(duration_since_epoch) = modified_time.duration_since(UNIX_EPOCH) {
+                        let timestamp = duration_since_epoch.as_secs();
+                        // Simple timestamp format - could be enhanced with proper date formatting
+                        chrono::DateTime::from_timestamp(timestamp as i64, 0)
+                            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+                            .unwrap_or_else(|| "Unknown time".to_string())
+                    } else {
+                        "Unknown time".to_string()
+                    }
+                }
+            }
+            Err(_) => "Future time".to_string(),
+        }
+    }
+
     /// Create a new NodeLogsPopup with LogManagement
     pub fn new(log_management: LogManagement) -> Self {
         Self {
@@ -162,14 +195,24 @@ impl NodeLogsPopup {
             total_lines: 1,
             log_management: Some(log_management),
             action_sender: None,
+            file_path: None,
+            last_modified: None,
         }
     }
 
     /// Handle logs loaded from LogManagement system
-    pub fn handle_logs_loaded(&mut self, logs: Vec<String>, total_lines: usize) {
+    pub fn handle_logs_loaded(
+        &mut self,
+        logs: Vec<String>,
+        total_lines: usize,
+        file_path: Option<String>,
+        last_modified: Option<std::time::SystemTime>,
+    ) {
         self.loading_state = LogLoadingState::Loaded;
         self.logs = logs;
         self.total_lines = total_lines;
+        self.file_path = file_path;
+        self.last_modified = last_modified;
 
         if !self.logs.is_empty() {
             let last_index = self.logs.len() - 1;
@@ -545,6 +588,44 @@ impl NodeLogsPopup {
         f.render_widget(block, popup_area);
     }
 
+    fn render_file_info(&self, f: &mut Frame<'_>, area: Rect) {
+        if matches!(self.loading_state, LogLoadingState::Loaded) {
+            // Build the single line format: ../filename.log (modified: x unit ago)
+            let mut line_parts = Vec::new();
+
+            if let Some(ref file_path) = self.file_path {
+                // Add the file path with "../" prefix for relative display
+                let display_path = format!("../{file_path}");
+                line_parts.push(Span::styled(display_path, Style::default().fg(GHOST_WHITE)));
+
+                // Add modification time in parentheses if available
+                if let Some(last_modified) = self.last_modified {
+                    let time_str = Self::format_time_ago(last_modified);
+                    line_parts.push(Span::styled(
+                        " (modified: ",
+                        Style::default().fg(LIGHT_PERIWINKLE),
+                    ));
+                    line_parts.push(Span::styled(time_str, Style::default().fg(GHOST_WHITE)));
+                    line_parts.push(Span::styled(")", Style::default().fg(LIGHT_PERIWINKLE)));
+                }
+            }
+
+            if !line_parts.is_empty() {
+                let inner_area = Rect {
+                    x: area.x + 2,
+                    y: area.y + 2,
+                    width: area.width.saturating_sub(4),
+                    height: area.height.saturating_sub(2),
+                };
+
+                let file_info_line = Line::from(line_parts);
+                let file_info_paragraph =
+                    Paragraph::new(vec![file_info_line]).style(Style::default().fg(GHOST_WHITE));
+                f.render_widget(file_info_paragraph, inner_area);
+            }
+        }
+    }
+
     fn render_loading(&self, f: &mut Frame<'_>, area: Rect) {
         let loading_text = vec![
             Line::from(Span::styled(
@@ -793,10 +874,12 @@ impl Component for NodeLogsPopup {
                 node_name,
                 logs,
                 total_lines,
+                file_path,
+                last_modified,
             } => {
                 info!("Logs loaded for node: {node_name}, total lines: {total_lines}");
                 if node_name == self.node_name {
-                    self.handle_logs_loaded(logs, total_lines);
+                    self.handle_logs_loaded(logs, total_lines, file_path, last_modified);
                 }
                 Ok(None)
             }
@@ -818,24 +901,33 @@ impl Component for NodeLogsPopup {
         let main_layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // Title
+                Constraint::Length(4), // Title and file info
                 Constraint::Min(1),    // Logs
                 Constraint::Length(5), // Instructions (2 lines + padding + border)
             ])
             .split(popup_area);
 
         self.render_title(f, popup_area);
+        self.render_file_info(f, main_layout[0]);
 
         let logs_area = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Min(1), Constraint::Length(1)])
-            .margin(1)
             .split(main_layout[1]);
 
+        // Create inner areas with minimal spacing for the logs content
+        let logs_content_area = Rect {
+            x: logs_area[0].x + 1,
+            y: logs_area[0].y,
+            width: logs_area[0].width.saturating_sub(1),
+            height: logs_area[0].height,
+        };
+        let scrollbar_area = logs_area[1];
+
         if matches!(self.loading_state, LogLoadingState::Loading) {
-            self.render_loading(f, logs_area[0]);
+            self.render_loading(f, logs_content_area);
         } else {
-            self.render_logs_content(f, [logs_area[0], logs_area[1]]);
+            self.render_logs_content(f, [logs_content_area, scrollbar_area]);
         }
 
         self.render_instructions(f, main_layout[2]);
