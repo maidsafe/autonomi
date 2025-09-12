@@ -9,7 +9,6 @@
 use crate::action::{Action, StatusActions};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
-use crate::connection_mode::ConnectionMode;
 use crate::node_management::config::{PORT_MAX, PORT_MIN};
 use crate::node_management::{
     AddNodesConfig, NodeManagement, NodeManagementTask, UpgradeNodesConfig,
@@ -29,24 +28,22 @@ pub struct AddNodeConfig<'a> {
     pub rewards_address: Option<&'a EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
-    pub connection_mode: ConnectionMode,
+    pub upnp_enabled: bool,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub init_peers_config: InitialPeersConfig,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub port_range: Option<(u32, u32)>,
 }
 
 pub struct MaintainNodesConfig<'a> {
     pub rewards_address: Option<&'a EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
-    pub connection_mode: ConnectionMode,
+    pub upnp_enabled: bool,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub init_peers_config: InitialPeersConfig,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub port_range: Option<(u32, u32)>,
 }
 
 pub struct NodeOperations {
@@ -111,14 +108,15 @@ impl NodeOperations {
             )));
         }
 
-        let port_range = PortRange::Range(
-            config.port_from.unwrap_or(PORT_MIN) as u16,
-            config.port_to.unwrap_or(PORT_MAX) as u16,
-        );
+        let port_range = if let Some((from, to)) = config.port_range {
+            PortRange::Range(from as u16, to as u16)
+        } else {
+            PortRange::Range(PORT_MIN as u16, PORT_MAX as u16)
+        };
 
         let add_node_args = AddNodesConfig {
             antnode_path: config.antnode_path.clone(),
-            connection_mode: config.connection_mode,
+            upnp_enabled: config.upnp_enabled,
             count: 1,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,
@@ -154,14 +152,15 @@ impl NodeOperations {
             )));
         }
 
-        let port_range = PortRange::Range(
-            config.port_from.unwrap_or(PORT_MIN) as u16,
-            config.port_to.unwrap_or(PORT_MAX) as u16,
-        );
+        let port_range = if let Some((from, to)) = config.port_range {
+            PortRange::Range(from as u16, to as u16)
+        } else {
+            PortRange::Range(PORT_MIN as u16, PORT_MAX as u16)
+        };
 
         let maintain_nodes_args = AddNodesConfig {
             antnode_path: config.antnode_path.clone(),
-            connection_mode: config.connection_mode,
+            upnp_enabled: config.upnp_enabled,
             count: config.nodes_to_start as u16,
             data_dir_path: Some(config.data_dir_path.clone()),
             network_id: config.network_id,

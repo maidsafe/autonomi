@@ -12,8 +12,8 @@ use super::{
     table_state::StatefulTable,
 };
 use crate::action::{Action, NodeTableActions};
+use crate::node_management::NodeManagement;
 use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats};
-use crate::{connection_mode::ConnectionMode, node_management::NodeManagement};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
 use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
@@ -37,9 +37,8 @@ pub struct NodeTableState {
     pub init_peers_config: InitialPeersConfig,
     pub antnode_path: Option<PathBuf>,
     pub data_dir_path: PathBuf,
-    pub connection_mode: ConnectionMode,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
     pub rewards_address: Option<EvmAddress>,
     pub nodes_to_start: u64,
 
@@ -72,9 +71,8 @@ impl NodeTableState {
             init_peers_config: config.init_peers_config,
             antnode_path: config.antnode_path,
             data_dir_path: config.data_dir_path,
-            connection_mode: config.connection_mode,
-            port_from: config.port_from,
-            port_to: config.port_to,
+            upnp_enabled: config.upnp_enabled,
+            port_range: config.port_range,
             rewards_address: config.rewards_address,
             nodes_to_start: config.nodes_to_start,
             storage_mountpoint: config.storage_mountpoint.clone(),
@@ -191,8 +189,6 @@ impl NodeTableState {
                     peers: 0,
                     connections: 0,
                     locked: false,
-                    // todo remove this field completely
-                    mode: crate::connection_mode::NodeConnectionMode::Manual,
                     failure: None,
                 };
                 debug!(
@@ -262,15 +258,14 @@ impl NodeTableState {
         debug!("NodeTableState: Synced nodes_to_start to {nodes_to_start}");
     }
 
-    pub fn sync_connection_mode(&mut self, connection_mode: ConnectionMode) {
-        self.connection_mode = connection_mode;
-        debug!("NodeTableState: Synced connection_mode to {connection_mode:?}");
+    pub fn sync_upnp_setting(&mut self, upnp_enabled: bool) {
+        self.upnp_enabled = upnp_enabled;
+        debug!("NodeTableState: Synced upnp_enabled to {upnp_enabled:?}");
     }
 
-    pub fn sync_port_range(&mut self, port_from: Option<u32>, port_to: Option<u32>) {
-        self.port_from = port_from;
-        self.port_to = port_to;
-        debug!("NodeTableState: Synced port_range to {port_from:?}-{port_to:?}");
+    pub fn sync_port_range(&mut self, port_range: Option<(u32, u32)>) {
+        self.port_range = port_range;
+        debug!("NodeTableState: Synced port_range to {port_range:?}");
     }
 
     /// Navigate to the next unlocked node, wrapping around if needed
@@ -375,9 +370,8 @@ pub struct NodeTableConfig {
     pub init_peers_config: InitialPeersConfig,
     pub antnode_path: Option<PathBuf>,
     pub data_dir_path: PathBuf,
-    pub connection_mode: ConnectionMode,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
     pub rewards_address: Option<EvmAddress>,
     pub nodes_to_start: u64,
     pub storage_mountpoint: PathBuf,
