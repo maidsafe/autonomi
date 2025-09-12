@@ -145,13 +145,6 @@ impl NodeOperations {
             )));
         }
 
-        if config.nodes_to_start == 0 {
-            info!("Nodes to start not set. Ask for input.");
-            return Ok(Some(Action::StatusActions(
-                StatusActions::TriggerManageNodes,
-            )));
-        }
-
         let port_range = if let Some((from, to)) = config.port_range {
             PortRange::Range(from as u16, to as u16)
         } else {
