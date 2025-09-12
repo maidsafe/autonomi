@@ -6,21 +6,135 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE};
+use crate::{
+    components::node_table::NodeDisplayStatus,
+    style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE},
+};
 use ratatui::{prelude::*, widgets::*};
 
-pub enum NodesToStart {
-    Running,
-    NotRunning,
-    RunningSelected,
-    NotRunningSelected,
+#[derive(Debug, Clone)]
+pub struct FooterState {
+    pub has_nodes: bool,
+    pub has_running_nodes: bool,
+    pub selected_node_status: Option<NodeDisplayStatus>,
+    pub rewards_address_set: bool,
 }
 
 #[derive(Default)]
 pub struct Footer {}
 
+impl Footer {
+    /// Get command bracket style - always white when enabled, grey when disabled
+    fn command_style(enabled: bool) -> Style {
+        if enabled {
+            Style::default().fg(GHOST_WHITE)
+        } else {
+            Style::default().fg(LIGHT_PERIWINKLE)
+        }
+    }
+
+    /// Get disabled text style
+    fn disabled_text_style() -> Style {
+        Style::default().fg(COOL_GREY)
+    }
+
+    /// Add command - always green when rewards address is set
+    fn add_styles(state: &FooterState) -> (Style, Style) {
+        let enabled = state.rewards_address_set;
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(EUCALYPTUS)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+
+    /// Remove command - enabled when a node is selected
+    fn remove_styles(state: &FooterState) -> (Style, Style) {
+        let enabled = state.selected_node_status.is_some();
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(LIGHT_PERIWINKLE)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+
+    /// Toggle command - enabled when a node is selected, style depends on selected node status
+    fn toggle_styles(state: &FooterState) -> (Style, Style) {
+        match &state.selected_node_status {
+            Some(NodeDisplayStatus::Running) => (
+                Self::command_style(true),
+                Style::default().fg(GHOST_WHITE), // White for stopping
+            ),
+            Some(NodeDisplayStatus::Stopped | NodeDisplayStatus::Added) => (
+                Self::command_style(true),
+                Style::default().fg(EUCALYPTUS), // Green for starting
+            ),
+            _ => (Self::command_style(false), Self::disabled_text_style()),
+        }
+    }
+
+    /// Open Logs command - enabled when a node is selected
+    fn logs_styles(state: &FooterState) -> (Style, Style) {
+        let enabled = state.selected_node_status.is_some();
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(LIGHT_PERIWINKLE)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+
+    /// Manage command - enabled when nodes exist and rewards address is set
+    fn manage_styles(state: &FooterState) -> (Style, Style) {
+        let enabled = state.has_nodes && state.rewards_address_set;
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(EUCALYPTUS)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+
+    /// Run All command - enabled when nodes exist but not all are running
+    fn run_all_styles(state: &FooterState) -> (Style, Style) {
+        // Enable if we have nodes and either no nodes are running OR there are some nodes not running
+        let enabled = state.has_nodes && !state.has_running_nodes;
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(EUCALYPTUS)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+
+    /// Stop All command - enabled when there are running nodes
+    fn stop_all_styles(state: &FooterState) -> (Style, Style) {
+        let enabled = state.has_running_nodes;
+        (
+            Self::command_style(enabled),
+            if enabled {
+                Style::default().fg(LIGHT_PERIWINKLE)
+            } else {
+                Self::disabled_text_style()
+            },
+        )
+    }
+}
+
 impl StatefulWidget for Footer {
-    type State = NodesToStart;
+    type State = FooterState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let layout = Layout::default()
@@ -28,67 +142,37 @@ impl StatefulWidget for Footer {
             .constraints(vec![Constraint::Length(3)])
             .split(area);
 
-        let command_enabled = Style::default().fg(GHOST_WHITE);
-        let text_enabled = Style::default().fg(EUCALYPTUS);
-        let command_disabled = Style::default().fg(LIGHT_PERIWINKLE);
-        let text_disabled = Style::default().fg(COOL_GREY);
-
-        let mut remove_command_style = command_disabled;
-        let mut remove_text_style = text_disabled;
-        let mut start_stop_command_style = command_disabled;
-        let mut start_stop_text_style = text_disabled;
-        let mut open_logs_command_style = command_disabled;
-        let mut open_logs_text_style = text_disabled;
-        let mut stop_all_command_style = command_disabled;
-        let mut stop_all_text_style = text_disabled;
-        let start_all_command_style = command_disabled;
-        let start_all_text_style = text_disabled;
-
-        match state {
-            NodesToStart::Running => {
-                stop_all_command_style = command_enabled;
-                stop_all_text_style = text_enabled;
-            }
-            NodesToStart::RunningSelected => {
-                remove_command_style = command_enabled;
-                remove_text_style = text_enabled;
-                start_stop_command_style = command_enabled;
-                start_stop_text_style = text_enabled;
-                open_logs_command_style = command_enabled;
-                open_logs_text_style = text_enabled;
-                stop_all_command_style = command_enabled;
-                stop_all_text_style = text_enabled;
-            }
-            NodesToStart::NotRunning => {}
-            NodesToStart::NotRunningSelected => {
-                remove_command_style = command_enabled;
-                remove_text_style = text_enabled;
-                start_stop_command_style = command_enabled;
-                start_stop_text_style = text_enabled;
-                open_logs_command_style = command_enabled;
-                open_logs_text_style = text_enabled;
-            }
-        }
+        // Get styles for each command
+        let (add_cmd_style, add_text_style) = Footer::add_styles(state);
+        let (remove_cmd_style, remove_text_style) = Footer::remove_styles(state);
+        let (toggle_cmd_style, toggle_text_style) = Footer::toggle_styles(state);
+        let (logs_cmd_style, logs_text_style) = Footer::logs_styles(state);
+        let (manage_cmd_style, manage_text_style) = Footer::manage_styles(state);
+        let (run_all_cmd_style, run_all_text_style) = Footer::run_all_styles(state);
+        let (stop_all_cmd_style, stop_all_text_style) = Footer::stop_all_styles(state);
 
         let commands = vec![
-            Span::styled("[+] ", command_enabled),
-            Span::styled("Add", text_enabled),
+            Span::styled("[+] ", add_cmd_style),
+            Span::styled("Add", add_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[-] ", remove_command_style),
+            Span::styled("[-] ", remove_cmd_style),
             Span::styled("Remove", remove_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[Ctrl+S] ", start_stop_command_style),
-            Span::styled("Start/Stop Node", start_stop_text_style),
+            Span::styled("[Ctrl+S] ", toggle_cmd_style),
+            Span::styled("Toggle Node", toggle_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[L] ", open_logs_command_style),
-            Span::styled("Open Logs", open_logs_text_style),
+            Span::styled("[L] ", logs_cmd_style),
+            Span::styled("Open Logs", logs_text_style),
         ];
 
         let stop_all = vec![
-            Span::styled("[Ctrl+G] ", start_all_command_style),
-            Span::styled("Start All", start_all_text_style),
+            Span::styled("[Ctrl+G] ", manage_cmd_style),
+            Span::styled("Manage", manage_text_style),
             Span::styled(" ", Style::default()),
-            Span::styled("[Ctrl+X] ", stop_all_command_style),
+            Span::styled("[Ctrl+R] ", run_all_cmd_style),
+            Span::styled("Run All", run_all_text_style),
+            Span::styled(" ", Style::default()),
+            Span::styled("[Ctrl+X] ", stop_all_cmd_style),
             Span::styled("Stop All", stop_all_text_style),
         ];
 
