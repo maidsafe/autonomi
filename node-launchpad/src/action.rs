@@ -42,6 +42,8 @@ pub enum Action {
         #[debug(skip)]
         logs: Vec<String>,
         total_lines: usize,
+        file_path: Option<String>,
+        last_modified: Option<std::time::SystemTime>,
     },
     LogsLoadError {
         node_name: String,
