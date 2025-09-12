@@ -13,6 +13,7 @@ mod driver;
 mod interface;
 mod retries;
 mod utils;
+pub mod version;
 
 use crate::client::CONNECT_TIMEOUT_SECS;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore};
@@ -30,6 +31,7 @@ pub use libp2p::{
 };
 
 // internal needs
+use crate::networking::version::PackageVersion;
 use ant_protocol::{CLOSE_GROUP_SIZE, PrettyPrintRecordKey};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -540,6 +542,26 @@ impl Network {
             errors_len,
             errors,
         })
+    }
+
+    /// Request the node version of a peer on the network.
+    /// Requires the node address(es) to be passed if the node is not in the local routing table.
+    pub async fn get_node_version(&self, peer: PeerInfo) -> Result<PackageVersion, String> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetVersion { peer, resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| "Network driver offline".to_string())?;
+
+        let version_string = rx
+            .await
+            .map_err(|e| format!("Failed to receive version: {e}"))?;
+
+        match version_string {
+            Ok(version_str) => PackageVersion::try_from(version_str),
+            Err(e) => Err(format!("Network error: {e}")),
+        }
     }
 
     /// Get information about the routing table
