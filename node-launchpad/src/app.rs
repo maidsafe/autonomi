@@ -14,21 +14,18 @@ use crate::{
         help::Help,
         options::Options,
         popup::{
-            change_drive::ChangeDrivePopup, connection_mode::ChangeConnectionModePopUp,
-            manage_nodes::ManageNodesPopup, node_logs::NodeLogsPopup, port_range::PortRangePopUp,
-            remove_node::RemoveNodePopUp, reset_nodes::ResetNodesPopup,
+            change_drive::ChangeDrivePopup, manage_nodes::ManageNodesPopup,
+            node_logs::NodeLogsPopup, remove_node::RemoveNodePopUp, reset_nodes::ResetNodesPopup,
             rewards_address::RewardsAddressPopup, upgrade_nodes::UpgradeNodesPopUp,
         },
         status::{Status, StatusConfig},
     },
     config::{AppData, get_launchpad_nodes_data_dir_path},
-    connection_mode::ConnectionMode,
     focus::{EventResult, FocusManager, FocusTarget},
     keybindings::KeyBindings,
     keybindings::get_keybindings,
     log_management::LogManagement,
     mode::{InputMode, Scene},
-    node_management::config::{PORT_MAX, PORT_MIN},
     runtime::{ProductionRuntime, Runtime},
     style::SPACE_CADET,
     system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
@@ -84,12 +81,8 @@ impl App {
         debug!("Data dir path for nodes: {data_dir_path:?}");
 
         // App data default values
-        let connection_mode = app_data
-            .connection_mode
-            .unwrap_or(ConnectionMode::Automatic);
-
-        let port_from = app_data.port_from.unwrap_or(PORT_MIN);
-        let port_to = app_data.port_to.unwrap_or(PORT_MAX);
+        let upnp_enabled = app_data.upnp_enabled;
+        let port_range = app_data.port_range;
         let storage_mountpoint = app_data
             .storage_mountpoint
             .clone()
@@ -107,9 +100,8 @@ impl App {
             network_id,
             antnode_path,
             data_dir_path,
-            connection_mode,
-            port_from: Some(port_from),
-            port_to: Some(port_to),
+            upnp_enabled,
+            port_range,
             storage_mountpoint: storage_mountpoint.clone(),
             registry_path_override,
         };
@@ -119,9 +111,8 @@ impl App {
             storage_mountpoint.clone(),
             storage_drive.clone(),
             app_data.rewards_address,
-            connection_mode,
-            Some(port_from),
-            Some(port_to),
+            upnp_enabled,
+            port_range,
         );
         let help = Help::new()?;
 
@@ -131,8 +122,6 @@ impl App {
             ManageNodesPopup::new(app_data.nodes_to_start, storage_mountpoint.clone())?;
         let change_drive =
             ChangeDrivePopup::new(storage_mountpoint.clone(), app_data.nodes_to_start)?;
-        let change_connection_mode = ChangeConnectionModePopUp::new(connection_mode)?;
-        let port_range = PortRangePopUp::new(connection_mode, port_from, port_to);
         let rewards_address = RewardsAddressPopup::new(app_data.rewards_address);
         let upgrade_nodes = UpgradeNodesPopUp::new();
         let remove_node = RemoveNodePopUp::default();
@@ -146,8 +135,6 @@ impl App {
             Box::new(help),
             // Popups
             Box::new(change_drive),
-            Box::new(change_connection_mode),
-            Box::new(port_range),
             Box::new(rewards_address),
             Box::new(reset_nodes),
             Box::new(manage_nodes),
@@ -164,9 +151,8 @@ impl App {
                 nodes_to_start: app_data.nodes_to_start,
                 storage_mountpoint: Some(storage_mountpoint),
                 storage_drive: Some(storage_drive),
-                connection_mode: Some(connection_mode),
-                port_from: Some(port_from),
-                port_to: Some(port_to),
+                upnp_enabled,
+                port_range,
             },
             tick_rate,
             frame_rate,
@@ -184,8 +170,6 @@ impl App {
         matches!(
             scene,
             Scene::ChangeDrivePopUp
-                | Scene::ChangeConnectionModePopUp
-                | Scene::ChangePortsPopUp { .. }
                 | Scene::StatusRewardsAddressPopUp
                 | Scene::OptionsRewardsAddressPopUp
                 | Scene::ManageNodesPopUp { .. }
@@ -295,13 +279,6 @@ impl App {
                     Scene::ChangeDrivePopUp => {
                         self.focus_manager.push_focus(FocusTarget::ChangeDrivePopup);
                     }
-                    Scene::ChangeConnectionModePopUp => {
-                        self.focus_manager
-                            .push_focus(FocusTarget::ChangeConnectionModePopup);
-                    }
-                    Scene::ChangePortsPopUp { .. } => {
-                        self.focus_manager.push_focus(FocusTarget::PortRangePopup);
-                    }
                     Scene::StatusRewardsAddressPopUp => {
                         self.focus_manager
                             .push_focus(FocusTarget::RewardsAddressPopup);
@@ -348,15 +325,14 @@ impl App {
                 self.app_data.storage_drive = Some(drive_name.as_str().to_string());
                 self.app_data.save(None)?;
             }
-            Action::StoreConnectionMode(ref mode) => {
-                debug!("Storing connection mode: {mode:?}");
-                self.app_data.connection_mode = Some(*mode);
+            Action::StoreUpnpSetting(ref enabled) => {
+                debug!("Storing UPnP setting: {enabled:?}");
+                self.app_data.upnp_enabled = *enabled;
                 self.app_data.save(None)?;
             }
-            Action::StorePortRange(ref from, ref to) => {
-                debug!("Storing port range: {from:?}, {to:?}");
-                self.app_data.port_from = Some(*from);
-                self.app_data.port_to = Some(*to);
+            Action::StorePortRange(ref range) => {
+                debug!("Storing port range: {range:?}");
+                self.app_data.port_range = *range;
                 self.app_data.save(None)?;
             }
             Action::StoreRewardsAddress(ref rewards_address) => {
@@ -526,171 +502,9 @@ mod tests {
     use super::*;
     use ant_bootstrap::InitialPeersConfig;
     use color_eyre::eyre::Result;
-    use serde_json::json;
     use std::io::Cursor;
     use std::io::Write;
     use tempfile::tempdir;
-
-    #[tokio::test]
-    async fn test_app_creation_with_valid_config() -> Result<()> {
-        // Create a temporary directory for our test
-        let temp_dir = tempdir()?;
-        let config_path = temp_dir.path().join("valid_config.json");
-
-        let mountpoint = get_primary_mount_point();
-
-        let config = json!({
-            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
-            "nodes_to_start": 5,
-            "storage_mountpoint": mountpoint.display().to_string(),
-            "storage_drive": "C:",
-            "connection_mode": "Automatic",
-            "port_from": 12000,
-            "port_to": 13000
-        });
-
-        let valid_config = serde_json::to_string_pretty(&config)?;
-        std::fs::write(&config_path, valid_config)?;
-
-        // Create default PeersArgs
-        let init_peers_config = InitialPeersConfig::default();
-
-        // Create a buffer to capture output
-        let mut output = Cursor::new(Vec::new());
-
-        // Create and run the App, capturing its output
-        let app_result = App::new(
-            60.0,
-            60.0,
-            init_peers_config,
-            None,
-            Some(config_path),
-            None,
-            None,
-        )
-        .await;
-
-        match app_result {
-            Ok(app) => {
-                // Check if all fields were correctly loaded
-                assert_eq!(
-                    app.app_data.rewards_address,
-                    Some(
-                        "0x1234567890abcdef1234567890abcdef12345678"
-                            .parse()
-                            .unwrap()
-                    )
-                );
-                assert_eq!(app.app_data.nodes_to_start, 5);
-                assert_eq!(app.app_data.storage_mountpoint, Some(mountpoint));
-                assert_eq!(app.app_data.storage_drive, Some("C:".to_string()));
-                assert_eq!(
-                    app.app_data.connection_mode,
-                    Some(ConnectionMode::Automatic)
-                );
-                assert_eq!(app.app_data.port_from, Some(12000));
-                assert_eq!(app.app_data.port_to, Some(13000));
-
-                write!(output, "App created successfully with valid configuration")?;
-            }
-            Err(e) => {
-                write!(output, "App creation failed: {e}")?;
-            }
-        }
-
-        // Convert captured output to string
-        let output_str = String::from_utf8(output.into_inner())?;
-
-        // Check if the success message is in the output
-        assert!(
-            output_str.contains("App created successfully with valid configuration"),
-            "Unexpected output: {output_str}"
-        );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_app_should_run_when_storage_mountpoint_not_set() -> Result<()> {
-        // Create a temporary directory for our test
-        let temp_dir = tempdir()?;
-        let test_app_data_path = temp_dir.path().join("test_app_data.json");
-
-        // Create a custom configuration file with only some settings
-        let custom_config = r#"
-        {
-            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
-            "nodes_to_start": 3,
-            "connection_mode": "Custom Ports",
-            "port_from": 12000,
-            "port_to": 13000
-        }
-        "#;
-        std::fs::write(&test_app_data_path, custom_config)?;
-
-        // Create default PeersArgs
-        let init_peers_config = InitialPeersConfig::default();
-
-        // Create a buffer to capture output
-        let mut output = Cursor::new(Vec::new());
-
-        // Create and run the App, capturing its output
-        let app_result = App::new(
-            60.0,
-            60.0,
-            init_peers_config,
-            None,
-            Some(test_app_data_path),
-            None,
-            None,
-        )
-        .await;
-
-        match app_result {
-            Ok(app) => {
-                // Check if the fields were correctly loaded
-                assert_eq!(
-                    app.app_data.rewards_address,
-                    Some(
-                        "0x1234567890abcdef1234567890abcdef12345678"
-                            .parse()
-                            .unwrap()
-                    )
-                );
-                assert_eq!(app.app_data.nodes_to_start, 3);
-                // Check if the storage_mountpoint is Some (automatically set)
-                assert!(app.app_data.storage_mountpoint.is_some());
-                // Check if the storage_drive is Some (automatically set)
-                assert!(app.app_data.storage_drive.is_some());
-                // Check the new fields
-                assert_eq!(
-                    app.app_data.connection_mode,
-                    Some(ConnectionMode::CustomPorts)
-                );
-                assert_eq!(app.app_data.port_from, Some(12000));
-                assert_eq!(app.app_data.port_to, Some(13000));
-
-                write!(
-                    output,
-                    "App created successfully with partial configuration"
-                )?;
-            }
-            Err(e) => {
-                write!(output, "App creation failed: {e}")?;
-            }
-        }
-
-        // Convert captured output to string
-        let output_str = String::from_utf8(output.into_inner())?;
-
-        // Check if the success message is in the output
-        assert!(
-            output_str.contains("App created successfully with partial configuration"),
-            "Unexpected output: {output_str}"
-        );
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_app_creation_when_config_file_doesnt_exist() -> Result<()> {
@@ -722,12 +536,8 @@ mod tests {
                 assert_eq!(app.app_data.nodes_to_start, 1);
                 assert!(app.app_data.storage_mountpoint.is_some());
                 assert!(app.app_data.storage_drive.is_some());
-                assert_eq!(
-                    app.app_data.connection_mode,
-                    Some(ConnectionMode::Automatic)
-                );
-                assert_eq!(app.app_data.port_from, Some(PORT_MIN));
-                assert_eq!(app.app_data.port_to, Some(PORT_MAX));
+                assert!(app.app_data.upnp_enabled);
+                assert_eq!(app.app_data.port_range, None);
 
                 write!(
                     output,
@@ -747,123 +557,6 @@ mod tests {
             output_str.contains("App created successfully with default configuration"),
             "Unexpected output: {output_str}"
         );
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_app_creation_with_invalid_storage_mountpoint() -> Result<()> {
-        // Create a temporary directory for our test
-        let temp_dir = tempdir()?;
-        let config_path = temp_dir.path().join("invalid_config.json");
-
-        // Create a configuration file with an invalid storage_mountpoint
-        let invalid_config = r#"
-        {
-            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
-            "nodes_to_start": 5,
-            "storage_mountpoint": "/non/existent/path",
-            "storage_drive": "Z:",
-            "connection_mode": "Custom Ports",
-            "port_from": 12000,
-            "port_to": 13000
-        }
-        "#;
-        std::fs::write(&config_path, invalid_config)?;
-
-        // Create default PeersArgs
-        let init_peers_config = InitialPeersConfig::default();
-
-        // Create and run the App, capturing its output
-        let app_result = App::new(
-            60.0,
-            60.0,
-            init_peers_config,
-            None,
-            Some(config_path),
-            None,
-            None,
-        )
-        .await;
-
-        // Could be that the mountpoint doesn't exists
-        // or that the user doesn't have permissions to access it
-        match app_result {
-            Ok(_) => {
-                panic!("App creation should have failed due to invalid storage_mountpoint");
-            }
-            Err(e) => {
-                assert!(
-                    e.to_string().contains(
-                        "Cannot find the primary disk. Configuration file might be wrong."
-                    ) || e.to_string().contains("Failed to create nodes data dir in"),
-                    "Unexpected error message: {e}"
-                );
-            }
-        }
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_app_default_connection_mode_and_ports() -> Result<()> {
-        // Create a temporary directory for our test
-        let temp_dir = tempdir()?;
-        let test_app_data_path = temp_dir.path().join("test_app_data.json");
-
-        // Create a custom configuration file without connection mode and ports
-        let custom_config = r#"
-        {
-            "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
-            "nodes_to_start": 3
-        }
-        "#;
-        std::fs::write(&test_app_data_path, custom_config)?;
-
-        // Create default PeersArgs
-        let init_peers_config = InitialPeersConfig::default();
-
-        // Create and run the App
-        let app_result = App::new(
-            60.0,
-            60.0,
-            init_peers_config,
-            None,
-            Some(test_app_data_path),
-            None,
-            None,
-        )
-        .await;
-
-        match app_result {
-            Ok(app) => {
-                // Check if the discord_username and nodes_to_start were correctly loaded
-                assert_eq!(
-                    app.app_data.rewards_address,
-                    Some(
-                        "0x1234567890abcdef1234567890abcdef12345678"
-                            .parse()
-                            .unwrap()
-                    )
-                );
-                assert_eq!(app.app_data.nodes_to_start, 3);
-
-                // Check if the connection_mode is set to the default (Automatic)
-                assert_eq!(
-                    app.app_data.connection_mode,
-                    Some(ConnectionMode::Automatic)
-                );
-
-                // Check if the port range is set to the default values
-                assert_eq!(app.app_data.port_from, Some(PORT_MIN));
-                assert_eq!(app.app_data.port_to, Some(PORT_MAX));
-
-                println!("App created successfully with default connection mode and ports");
-            }
-            Err(e) => {
-                panic!("App creation failed: {e}");
-            }
-        }
 
         Ok(())
     }

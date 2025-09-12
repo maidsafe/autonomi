@@ -56,7 +56,6 @@ impl NodeTableWidget {
             Constraint::Min(RECORDS_WIDTH as u16),
             Constraint::Min(PEERS_WIDTH as u16),
             Constraint::Min(CONNS_WIDTH as u16),
-            Constraint::Min(MODE_WIDTH as u16),
             Constraint::Min(STATUS_WIDTH as u16),
             Constraint::Fill(FAILURE_WIDTH as u16),
             Constraint::Max(SPINNER_WIDTH as u16),
@@ -76,7 +75,6 @@ impl NodeTableWidget {
             Cell::new("Recs").fg(COOL_GREY),
             Cell::new("Peers").fg(COOL_GREY),
             Cell::new("Conns").fg(COOL_GREY),
-            Cell::new("Mode").fg(COOL_GREY),
             Cell::new("Status").fg(COOL_GREY),
             Cell::new("Failure").fg(COOL_GREY),
             Cell::new(" ").fg(COOL_GREY),
@@ -130,7 +128,6 @@ impl NodeTableWidget {
                 format!("{:>width$}", node_item.records, width = RECORDS_WIDTH),
                 format!("{:>width$}", node_item.peers, width = PEERS_WIDTH),
                 format!("{:>width$}", node_item.connections, width = CONNS_WIDTH),
-                node_item.mode.to_string(),
                 node_item.node_display_status.to_string(),
                 failure,
             ];

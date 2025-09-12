@@ -8,7 +8,6 @@
 
 use crate::{
     components::popup::error_popup::ErrorPopup,
-    connection_mode::ConnectionMode,
     mode::{InputMode, Scene},
     node_stats::NodeStats,
 };
@@ -28,8 +27,8 @@ pub enum Action {
     SwitchInputMode(InputMode),
 
     StoreStorageDrive(PathBuf, String),
-    StoreConnectionMode(ConnectionMode),
-    StorePortRange(u32, u32),
+    StoreUpnpSetting(bool),
+    StorePortRange(Option<(u32, u32)>),
     StoreRewardsAddress(EvmAddress),
     StoreRunningNodeCount(u64),
 
@@ -71,14 +70,12 @@ pub enum StatusActions {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
 pub enum OptionsActions {
     TriggerChangeDrive,
-    TriggerChangeConnectionMode,
-    TriggerChangePortRange,
+    TriggerPortRangeEdit,
     TriggerRewardsAddress,
     TriggerUpdateNodes,
     TriggerResetNodes,
     TriggerAccessLogs,
-    UpdateConnectionMode(ConnectionMode),
-    UpdatePortRange(u32, u32),
+    ToggleUpnpSetting,
     UpdateStorageDrive(PathBuf, String),
 }
 

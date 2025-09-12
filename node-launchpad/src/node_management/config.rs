@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::action::Action;
-use crate::connection_mode::ConnectionMode;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
 use ant_node_manager::add_services::config::PortRange;
@@ -34,7 +33,7 @@ pub struct UpgradeNodesConfig {
 #[derive(Debug)]
 pub struct AddNodesConfig {
     pub antnode_path: Option<PathBuf>,
-    pub connection_mode: ConnectionMode,
+    pub upnp_enabled: bool,
     pub count: u16,
     pub data_dir_path: Option<PathBuf>,
     pub network_id: Option<u8>,

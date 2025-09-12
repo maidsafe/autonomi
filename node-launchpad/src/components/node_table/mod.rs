@@ -241,12 +241,11 @@ impl NodeTableComponent {
                     rewards_address: self.state.rewards_address.as_ref(),
                     nodes_to_start: self.state.nodes_to_start,
                     antnode_path: self.state.antnode_path.clone(),
-                    connection_mode: self.state.connection_mode,
+                    upnp_enabled: self.state.upnp_enabled,
                     data_dir_path: self.state.data_dir_path.clone(),
                     network_id: self.state.network_id,
                     init_peers_config: self.state.init_peers_config.clone(),
-                    port_from: self.state.port_from,
-                    port_to: self.state.port_to,
+                    port_range: self.state.port_range,
                 };
                 self.state.operations.handle_maintain_nodes(&config)
             }
@@ -263,12 +262,11 @@ impl NodeTableComponent {
                     rewards_address: self.state.rewards_address.as_ref(),
                     nodes_to_start: self.state.nodes_to_start,
                     antnode_path: self.state.antnode_path.clone(),
-                    connection_mode: self.state.connection_mode,
+                    upnp_enabled: self.state.upnp_enabled,
                     data_dir_path: self.state.data_dir_path.clone(),
                     network_id: self.state.network_id,
                     init_peers_config: self.state.init_peers_config.clone(),
-                    port_from: self.state.port_from,
-                    port_to: self.state.port_to,
+                    port_range: self.state.port_range,
                 };
                 self.state.operations.handle_add_node(&config)
             }

@@ -6,7 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::connection_mode::ConnectionMode;
 use crate::system::get_primary_mount_point;
 use ant_evm::EvmAddress;
 use ant_node_manager::config::is_running_as_root;
@@ -117,9 +116,8 @@ pub struct AppData {
     pub nodes_to_start: u64,
     pub storage_mountpoint: Option<PathBuf>,
     pub storage_drive: Option<String>,
-    pub connection_mode: Option<ConnectionMode>,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
 }
 
 impl Default for AppData {
@@ -129,9 +127,8 @@ impl Default for AppData {
             nodes_to_start: 1,
             storage_mountpoint: None,
             storage_drive: None,
-            connection_mode: None,
-            port_from: None,
-            port_to: None,
+            upnp_enabled: true,
+            port_range: None,
         }
     }
 }

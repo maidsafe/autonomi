@@ -7,11 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 pub mod change_drive;
-pub mod connection_mode;
 pub mod error_popup;
 pub mod manage_nodes;
 pub mod node_logs;
-pub mod port_range;
 pub mod remove_node;
 pub mod reset_nodes;
 pub mod rewards_address;

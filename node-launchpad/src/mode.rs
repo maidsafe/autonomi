@@ -8,8 +8,6 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::connection_mode::ConnectionMode;
-
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Scene {
     #[default]
@@ -17,10 +15,6 @@ pub enum Scene {
     Options,
     Help,
     ChangeDrivePopUp,
-    ChangeConnectionModePopUp,
-    ChangePortsPopUp {
-        connection_mode_old_value: Option<ConnectionMode>,
-    },
     StatusRewardsAddressPopUp,
     OptionsRewardsAddressPopUp,
     ManageNodesPopUp {

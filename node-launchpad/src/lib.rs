@@ -10,7 +10,6 @@ pub mod action;
 pub mod app;
 pub mod components;
 pub mod config;
-pub mod connection_mode;
 pub mod focus;
 pub mod keybindings;
 pub mod log_management;

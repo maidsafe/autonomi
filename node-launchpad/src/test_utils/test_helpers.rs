@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::mock_registry::MockNodeRegistry;
-use crate::{app::App, config::AppData, connection_mode::ConnectionMode};
+use crate::{app::App, config::AppData};
 use ant_bootstrap::InitialPeersConfig;
 use color_eyre::eyre::Result;
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
@@ -57,9 +57,8 @@ impl TestAppBuilder {
             nodes_to_start: registry.node_count(),
             storage_mountpoint: None,
             storage_drive: Some(crate::test_utils::TEST_STORAGE_DRIVE.to_string()),
-            connection_mode: Some(ConnectionMode::Automatic),
-            port_from: None,
-            port_to: None,
+            upnp_enabled: true,
+            port_range: None,
         };
 
         let config_path = config_dir.join("app_data.json");

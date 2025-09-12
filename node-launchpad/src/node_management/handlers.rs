@@ -7,7 +7,6 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::config::{AddNodesConfig, FIXED_INTERVAL, UpgradeNodesConfig};
-use crate::connection_mode::ConnectionMode;
 use crate::node_management::config::{find_next_available_port, get_port_range, get_used_ports};
 use crate::node_management::error::NodeManagementError;
 use ant_node_manager::VerbosityLevel;
@@ -24,12 +23,12 @@ pub async fn maintain_n_running_nodes(
         config.count
     );
     debug!(
-        " init_peers_config: {:?}, antnode_path: {:?}, network_id: {:?}, data_dir_path: {:?}, connection_mode: {:?}",
+        " init_peers_config: {:?}, antnode_path: {:?}, network_id: {:?}, data_dir_path: {:?}, upnp_enabled: {:?}",
         config.init_peers_config,
         config.antnode_path,
         config.network_id,
         config.data_dir_path,
-        config.connection_mode
+        config.upnp_enabled
     );
 
     // Count running nodes and categorize all nodes by status
@@ -368,7 +367,7 @@ async fn add_node_helper(
         None,  // rpc_port
         false, // skip_reachability_check
         config.antnode_path.clone(),
-        config.connection_mode != ConnectionMode::UPnP,
+        !config.upnp_enabled,
         None, // url
         None, // user
         None, // version
