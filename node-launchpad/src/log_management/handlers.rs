@@ -14,11 +14,11 @@ use ant_node_manager::config::get_service_log_dir_path;
 use ant_releases::ReleaseType;
 use color_eyre::eyre::Context;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info, warn};
-
 /// Load logs for a specific node
 pub async fn load_logs(
     node_name: String,
@@ -30,12 +30,14 @@ pub async fn load_logs(
     let result = load_logs_internal(node_name.clone(), log_dir).await;
 
     let action = match result {
-        Ok((logs, total_lines)) => {
+        Ok((logs, total_lines, file_path, last_modified)) => {
             info!("Successfully loaded {total_lines} log lines for {node_name}");
             Action::LogsLoaded {
                 node_name,
                 logs,
                 total_lines,
+                file_path,
+                last_modified,
             }
         }
         Err(error) => {
@@ -56,7 +58,7 @@ pub async fn load_logs(
 async fn load_logs_internal(
     node_name: String,
     log_dir: Option<PathBuf>,
-) -> Result<(Vec<String>, usize), LogError> {
+) -> Result<(Vec<String>, usize, Option<String>, Option<SystemTime>), LogError> {
     // Validate node name
     if node_name.is_empty() || node_name == "No node available" {
         return Ok((
@@ -69,6 +71,8 @@ async fn load_logs_internal(
                 "3. Select a node and press [L] to view its logs".to_string(),
             ],
             6,
+            None,
+            None,
         ));
     }
 
@@ -95,6 +99,8 @@ async fn load_logs_internal(
                 "- Logs are stored in a different location".to_string(),
             ],
             7,
+            None,
+            None,
         ));
     }
 
@@ -113,6 +119,15 @@ async fn load_logs_internal(
         });
     }
 
+    // Extract file information
+    let relative_file_path = latest_log_file
+        .strip_prefix(&log_dir)
+        .ok()
+        .and_then(|p| p.to_str())
+        .map(|s| s.to_string());
+
+    let modification_time = metadata.modified().ok();
+
     // Load and process the log file
     let logs = load_log_file_with_limits(&latest_log_file).await?;
 
@@ -123,6 +138,8 @@ async fn load_logs_internal(
                 format!("File: {}", latest_log_file.display()),
             ],
             2,
+            relative_file_path,
+            modification_time,
         ));
     }
 
@@ -141,7 +158,12 @@ async fn load_logs_internal(
     result_logs.extend(logs);
     let total_lines = result_logs.len();
 
-    Ok((result_logs, total_lines))
+    Ok((
+        result_logs,
+        total_lines,
+        relative_file_path,
+        modification_time,
+    ))
 }
 
 /// Find the most recent log file in the directory
