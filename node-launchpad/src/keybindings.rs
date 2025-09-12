@@ -228,29 +228,23 @@ pub fn get_keybindings() -> KeyBindings {
             bind("<Ctrl-Shift-d>"),
             Action::OptionsActions(OptionsActions::TriggerChangeDrive),
         ),
+        // UPnP toggle
         (
-            bind("<Ctrl-k>"),
-            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
+            bind("<Ctrl-u>"),
+            Action::OptionsActions(OptionsActions::ToggleUpnpSetting),
         ),
         (
-            bind("<Ctrl-K>"),
-            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
+            bind("<Ctrl-U>"),
+            Action::OptionsActions(OptionsActions::ToggleUpnpSetting),
         ),
-        (
-            bind("<Ctrl-Shift-k>"),
-            Action::OptionsActions(OptionsActions::TriggerChangeConnectionMode),
-        ),
+        // Port range editing
         (
             bind("<Ctrl-p>"),
-            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
+            Action::OptionsActions(OptionsActions::TriggerPortRangeEdit),
         ),
         (
             bind("<Ctrl-P>"),
-            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
-        ),
-        (
-            bind("<Ctrl-Shift-p>"),
-            Action::OptionsActions(OptionsActions::TriggerChangePortRange),
+            Action::OptionsActions(OptionsActions::TriggerPortRangeEdit),
         ),
         // Settings
         (
@@ -279,11 +273,11 @@ pub fn get_keybindings() -> KeyBindings {
         ),
         // Node operations
         (
-            bind("<Ctrl-u>"),
+            bind("<Ctrl-g>"),
             Action::OptionsActions(OptionsActions::TriggerUpdateNodes),
         ),
         (
-            bind("<Ctrl-U>"),
+            bind("<Ctrl-G>"),
             Action::OptionsActions(OptionsActions::TriggerUpdateNodes),
         ),
         (

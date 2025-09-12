@@ -13,10 +13,7 @@ use crate::components::header::{Header, SelectedMenuItem};
 use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
-use crate::components::popup::port_range::PORT_ALLOCATION;
 use crate::config::get_launchpad_nodes_data_dir_path;
-use crate::connection_mode::ConnectionMode;
-use crate::node_management::config::PORT_MIN;
 use crate::system::get_available_space_b;
 use crate::{
     action::{Action, NodeTableActions, StatusActions},
@@ -47,12 +44,10 @@ pub struct Status {
     rewards_address: Option<EvmAddress>,
     // Path where the node data is stored
     data_dir_path: PathBuf,
-    // Connection mode
-    connection_mode: ConnectionMode,
-    // Port from
-    port_from: Option<u32>,
-    // Port to
-    port_to: Option<u32>,
+    // UPnP enabled
+    upnp_enabled: bool,
+    // Port range
+    port_range: Option<(u32, u32)>,
     storage_mountpoint: PathBuf,
     available_disk_space_gb: u64,
     error_popup: Option<ErrorPopup>,
@@ -69,12 +64,11 @@ pub struct Status {
 pub struct StatusConfig {
     pub allocated_disk_space: u64,
     pub antnode_path: Option<PathBuf>,
-    pub connection_mode: ConnectionMode,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
     pub data_dir_path: PathBuf,
     pub network_id: Option<u8>,
     pub init_peers_config: InitialPeersConfig,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
     pub storage_mountpoint: PathBuf,
     pub rewards_address: Option<EvmAddress>,
     pub registry_path_override: Option<PathBuf>,
@@ -88,9 +82,8 @@ impl Status {
             nodes_to_start: config.allocated_disk_space,
             rewards_address: config.rewards_address,
             data_dir_path: config.data_dir_path.clone(),
-            connection_mode: config.connection_mode,
-            port_from: config.port_from,
-            port_to: config.port_to,
+            upnp_enabled: config.upnp_enabled,
+            port_range: config.port_range,
             error_popup: None,
             storage_mountpoint: config.storage_mountpoint.clone(),
             available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
@@ -101,9 +94,8 @@ impl Status {
                 init_peers_config: config.init_peers_config.clone(),
                 antnode_path: config.antnode_path.clone(),
                 data_dir_path: config.data_dir_path.clone(),
-                connection_mode: config.connection_mode,
-                port_from: config.port_from,
-                port_to: config.port_to,
+                upnp_enabled: config.upnp_enabled,
+                port_range: config.port_range,
                 rewards_address: config.rewards_address,
                 nodes_to_start: config.allocated_disk_space,
                 storage_mountpoint: config.storage_mountpoint.clone(),
@@ -239,20 +231,19 @@ impl Component for Status {
                 self.data_dir_path =
                     get_launchpad_nodes_data_dir_path(&drive_mountpoint.to_path_buf(), false)?;
             }
-            Action::StoreConnectionMode(connection_mode) => {
-                self.connection_mode = connection_mode;
+            Action::StoreUpnpSetting(upnp_enabled) => {
+                self.upnp_enabled = upnp_enabled;
                 // Sync with NodeTableState
                 self.node_table_component
                     .state_mut()
-                    .sync_connection_mode(connection_mode);
+                    .sync_upnp_setting(upnp_enabled);
             }
-            Action::StorePortRange(port_from, port_range) => {
-                self.port_from = Some(port_from);
-                self.port_to = Some(port_range);
+            Action::StorePortRange(port_range) => {
+                self.port_range = port_range;
                 // Sync with NodeTableState
                 self.node_table_component
                     .state_mut()
-                    .sync_port_range(Some(port_from), Some(port_range));
+                    .sync_port_range(port_range);
             }
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::NodesStatsObtained(stats) => {
@@ -340,18 +331,30 @@ impl Component for Status {
             Cell::new(memory_use_val).fg(GHOST_WHITE),
         ]);
 
-        let connection_mode_string = match self.connection_mode {
-            ConnectionMode::UPnP => "UPnP".to_string(),
-            ConnectionMode::CustomPorts => format!(
-                "Custom Ports  {}-{}",
-                self.port_from.unwrap_or(PORT_MIN),
-                self.port_to.unwrap_or(PORT_MIN + PORT_ALLOCATION)
-            ),
-            ConnectionMode::Automatic => "Automatic".to_string(),
+        let connection_info = if let Some((from, to)) = self.port_range {
+            format!(
+                "Ports: {}-{} {}",
+                from,
+                to,
+                if self.upnp_enabled {
+                    "(UPnP)"
+                } else {
+                    "(Upnp Disabled)"
+                }
+            )
+        } else {
+            format!(
+                "Automatic {}",
+                if self.upnp_enabled {
+                    "(UPnP)"
+                } else {
+                    "(Upnp Disabled)"
+                }
+            )
         };
 
         let connection_mode_line = vec![Span::styled(
-            connection_mode_string,
+            connection_info,
             Style::default().fg(GHOST_WHITE),
         )];
 
@@ -517,12 +520,11 @@ mod tests {
         StatusConfig {
             allocated_disk_space: 10,
             antnode_path: Some(PathBuf::from("/usr/local/bin/antnode")),
-            connection_mode: ConnectionMode::Automatic,
+            upnp_enabled: true,
+            port_range: Some((15000, 15100)),
             data_dir_path: temp_path,
             network_id: Some(1),
             init_peers_config: InitialPeersConfig::default(),
-            port_from: Some(15000),
-            port_to: Some(15100),
             storage_mountpoint,
             rewards_address: "0x1234567890123456789012345678901234567890"
                 .parse::<EvmAddress>()
@@ -601,13 +603,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_status_update_store_connection_mode() {
+    async fn test_status_update_store_upnp_setting() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
-        let result = status.update(Action::StoreConnectionMode(ConnectionMode::UPnP));
+        let result = status.update(Action::StoreUpnpSetting(false));
         assert!(result.is_ok());
-        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+        assert!(!status.upnp_enabled);
     }
 
     #[tokio::test]
@@ -615,10 +617,9 @@ mod tests {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
-        let result = status.update(Action::StorePortRange(20000, 20100));
+        let result = status.update(Action::StorePortRange(Some((20000, 20100))));
         assert!(result.is_ok());
-        assert_eq!(status.port_from, Some(20000));
-        assert_eq!(status.port_to, Some(20100));
+        assert_eq!(status.port_range, Some((20000, 20100)));
     }
 
     #[tokio::test]
@@ -744,25 +745,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_status_connection_mode_display_upnp() {
+    async fn test_status_upnp_enabled() {
         let mut config = create_test_status_config();
-        config.connection_mode = ConnectionMode::UPnP;
+        config.upnp_enabled = true;
         let status = Status::new(config).await.unwrap();
 
-        assert_eq!(status.connection_mode, ConnectionMode::UPnP);
+        assert!(status.upnp_enabled);
     }
 
     #[tokio::test]
-    async fn test_status_connection_mode_display_custom_ports() {
+    async fn test_status_custom_port_range() {
         let mut config = create_test_status_config();
-        config.connection_mode = ConnectionMode::CustomPorts;
-        config.port_from = Some(20000);
-        config.port_to = Some(20100);
+        config.port_range = Some((20000, 20100));
         let status = Status::new(config).await.unwrap();
 
-        assert_eq!(status.connection_mode, ConnectionMode::CustomPorts);
-        assert_eq!(status.port_from, Some(20000));
-        assert_eq!(status.port_to, Some(20100));
+        assert_eq!(status.port_range, Some((20000, 20100)));
     }
 
     #[tokio::test]
