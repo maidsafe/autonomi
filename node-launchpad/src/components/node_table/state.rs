@@ -144,6 +144,25 @@ impl NodeTableState {
         Ok(())
     }
 
+    pub fn send_selection_update(&self) -> Result<()> {
+        if let Some(action_sender) = &self.operations.action_sender {
+            let selected_node_status = self
+                .items
+                .selected_item()
+                .map(|node| node.node_display_status);
+
+            let selection_action = Action::NodeTableActions(NodeTableActions::SelectionChanged {
+                selected_node_status,
+            });
+
+            debug!("Sending selected_node_status={selected_node_status:?}");
+            action_sender.send(selection_action)?;
+        } else {
+            error!("No action_sender available to send SelectionChanged");
+        }
+        Ok(())
+    }
+
     pub fn sync_node_service_data(&mut self, all_nodes_data: &[NodeServiceData]) {
         self.node_services = all_nodes_data.to_vec();
         let mut removed_nodes = vec![];
@@ -210,13 +229,36 @@ impl NodeTableState {
                 debug!(
                     "Registry sync: Removing node {service_name} as it has ServiceStatus::Removed ",
                 );
+
+                // Handle selection before removing the node
+                let was_selected = self.items.state.selected() == Some(pos);
                 self.items.items.remove(pos);
+
+                // Update selection if the removed node was selected
+                if was_selected {
+                    if self.items.items.is_empty() {
+                        // No nodes left, clear selection
+                        if let Err(e) = self.clear_selection() {
+                            error!("Failed to clear selection after node removal: {e}");
+                        }
+                    } else {
+                        // Select the first available unlocked node
+                        debug!("Re-selecting first unlocked node after removing selected node");
+                        self.navigate_first_unlocked();
+                    }
+                }
             }
         }
 
         // Ensure spinner states match item count
         self.spinner_states
             .resize_with(self.items.items.len(), ThrobberState::default);
+
+        // If no item is selected but we have items, select the first unlocked one
+        if self.items.state.selected().is_none() && !self.items.items.is_empty() {
+            debug!("Auto-selecting first unlocked node since no selection exists");
+            self.navigate_first_unlocked();
+        }
 
         debug!(
             "Node state updated. Node count changed from {} to {}",
@@ -268,10 +310,10 @@ impl NodeTableState {
         debug!("NodeTableState: Synced port_range to {port_range:?}");
     }
 
-    /// Navigate to the next unlocked node, wrapping around if needed
-    pub fn navigate_next_unlocked(&mut self) {
+    /// Find the index of the next unlocked node, wrapping around if needed
+    fn find_next_unlocked_index(&self) -> Option<usize> {
         if self.items.items.is_empty() {
-            return;
+            return None;
         }
 
         let current = self.items.state.selected().unwrap_or(0);
@@ -281,20 +323,16 @@ impl NodeTableState {
         for i in 1..=total_items {
             let next_index = (current + i) % total_items;
             if !self.items.items[next_index].is_locked() {
-                self.items.state.select(Some(next_index));
-                self.items.last_selected = Some(next_index);
-                return;
+                return Some(next_index);
             }
         }
-
-        // If all nodes are locked, clear selection
-        self.clear_selection();
+        None // All nodes are locked
     }
 
-    /// Navigate to the previous unlocked node, wrapping around if needed
-    pub fn navigate_previous_unlocked(&mut self) {
+    /// Find the index of the previous unlocked node, wrapping around if needed
+    fn find_previous_unlocked_index(&self) -> Option<usize> {
         if self.items.items.is_empty() {
-            return;
+            return None;
         }
 
         let current = self.items.state.selected().unwrap_or(0);
@@ -304,62 +342,105 @@ impl NodeTableState {
         for i in 1..=total_items {
             let prev_index = (current + total_items - i) % total_items;
             if !self.items.items[prev_index].is_locked() {
-                self.items.state.select(Some(prev_index));
-                self.items.last_selected = Some(prev_index);
-                return;
+                return Some(prev_index);
             }
         }
+        None // All nodes are locked
+    }
 
-        // If all nodes are locked, clear selection
-        self.clear_selection();
+    /// Find the index of the first unlocked node
+    fn find_first_unlocked_index(&self) -> Option<usize> {
+        self.items
+            .items
+            .iter()
+            .enumerate()
+            .find(|(_, item)| !item.is_locked())
+            .map(|(index, _)| index)
+    }
+
+    /// Find the index of the last unlocked node  
+    fn find_last_unlocked_index(&self) -> Option<usize> {
+        self.items
+            .items
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, item)| !item.is_locked())
+            .map(|(index, _)| index)
+    }
+
+    /// Navigate to the next unlocked node, wrapping around if needed
+    pub fn navigate_next_unlocked(&mut self) {
+        let next_index = self.find_next_unlocked_index();
+        if let Err(e) = self.select_node_if_unlocked(next_index) {
+            error!("Failed to navigate to next unlocked node: {e}");
+        }
+    }
+
+    /// Navigate to the previous unlocked node, wrapping around if needed
+    pub fn navigate_previous_unlocked(&mut self) {
+        let prev_index = self.find_previous_unlocked_index();
+        if let Err(e) = self.select_node_if_unlocked(prev_index) {
+            error!("Failed to navigate to previous unlocked node: {e}");
+        }
     }
 
     /// Navigate to the first unlocked node
     pub fn navigate_first_unlocked(&mut self) {
-        if self.items.items.is_empty() {
-            return;
+        let first_index = self.find_first_unlocked_index();
+        if let Err(e) = self.select_node_if_unlocked(first_index) {
+            error!("Failed to navigate to first unlocked node: {e}");
         }
-
-        for (index, item) in self.items.items.iter().enumerate() {
-            if !item.is_locked() {
-                self.items.state.select(Some(index));
-                self.items.last_selected = Some(index);
-                return;
-            }
-        }
-
-        // If all nodes are locked, clear selection
-        self.clear_selection();
     }
 
     /// Navigate to the last unlocked node
     pub fn navigate_last_unlocked(&mut self) {
-        if self.items.items.is_empty() {
-            return;
+        let last_index = self.find_last_unlocked_index();
+        if let Err(e) = self.select_node_if_unlocked(last_index) {
+            error!("Failed to navigate to last unlocked node: {e}");
         }
-
-        for (index, item) in self.items.items.iter().enumerate().rev() {
-            if !item.is_locked() {
-                self.items.state.select(Some(index));
-                self.items.last_selected = Some(index);
-                return;
-            }
-        }
-
-        // If all nodes are locked, clear selection
-        self.clear_selection();
     }
 
-    pub fn clear_selection(&mut self) {
-        self.items.state.select(None);
-        self.items.last_selected = None;
+    /// Core selection method - handles notification automatically
+    fn set_selection(&mut self, index: Option<usize>) -> Result<()> {
+        let old_selection = self.items.state.selected();
+        self.items.state.select(index);
+        self.items.last_selected = index;
+
+        // Only send notification if selection actually changed
+        if old_selection != index {
+            self.send_selection_update()?;
+        }
+        Ok(())
+    }
+
+    /// Lock-aware selection - only selects if node is unlocked or clears if locked
+    pub fn select_node_if_unlocked(&mut self, index: Option<usize>) -> Result<()> {
+        match index {
+            Some(idx) if idx < self.items.items.len() => {
+                if !self.items.items[idx].is_locked() {
+                    self.set_selection(Some(idx))
+                } else {
+                    // Node is locked, clear selection
+                    self.set_selection(None)
+                }
+            }
+            None => self.set_selection(None),
+            _ => Ok(()), // Invalid index, do nothing
+        }
+    }
+
+    pub fn clear_selection(&mut self) -> Result<()> {
+        self.set_selection(None)
     }
 
     pub fn try_clear_selection_if_locked(&mut self) {
         if let Some(selected) = self.items.state.selected()
             && self.items.items[selected].is_locked()
         {
-            self.clear_selection();
+            if let Err(e) = self.clear_selection() {
+                error!("Failed to clear selection for locked node: {e}");
+            }
         }
     }
 }

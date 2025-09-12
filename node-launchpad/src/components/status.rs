@@ -8,9 +8,9 @@
 
 use crate::action::OptionsActions;
 use crate::components::Component;
-use crate::components::footer::{Footer, NodesToStart};
+use crate::components::footer::{Footer, FooterState};
 use crate::components::header::{Header, SelectedMenuItem};
-use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
+use crate::components::node_table::{NodeDisplayStatus, NodeTableComponent, NodeTableConfig};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::config::get_launchpad_nodes_data_dir_path;
@@ -59,6 +59,7 @@ pub struct Status {
     node_count: u64,
     has_running_nodes: bool,
     has_nodes: bool,
+    selected_node_status: Option<NodeDisplayStatus>,
 }
 
 pub struct StatusConfig {
@@ -107,6 +108,7 @@ impl Status {
             node_count: 0,
             has_running_nodes: false,
             has_nodes: false,
+            selected_node_status: None,
         };
 
         Ok(status)
@@ -184,15 +186,22 @@ impl Component for Status {
                     has_running_nodes,
                     has_nodes,
                 } => {
-                    debug!(
-                        "Status::update - Received StateChanged: node_count={node_count}, has_nodes={has_nodes}, has_running_nodes={has_running_nodes}"
-                    );
                     self.node_count = node_count;
                     self.has_running_nodes = has_running_nodes;
                     self.has_nodes = has_nodes;
                     debug!(
-                        "Status::update - Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
+                        "Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
                         self.node_count, self.has_nodes, self.has_running_nodes
+                    );
+                    return Ok(None);
+                }
+                NodeTableActions::SelectionChanged {
+                    selected_node_status,
+                } => {
+                    self.selected_node_status = selected_node_status;
+                    debug!(
+                        "Updated selection: selected_node_status={:?}",
+                        self.selected_node_status
                     );
                     return Ok(None);
                 }
@@ -472,17 +481,14 @@ impl Component for Status {
         // ==== Footer =====
 
         let footer = Footer::default();
-        let footer_state = if self.has_nodes || self.rewards_address.is_some() {
-            if self.has_running_nodes {
-                &mut NodesToStart::Running
-            } else {
-                &mut NodesToStart::NotRunning
-            }
-        } else {
-            &mut NodesToStart::NotRunning
+        let mut footer_state = FooterState {
+            has_nodes: self.has_nodes,
+            has_running_nodes: self.has_running_nodes,
+            selected_node_status: self.selected_node_status,
+            rewards_address_set: self.rewards_address.is_some(),
         };
 
-        f.render_stateful_widget(footer, layout[3], footer_state);
+        f.render_stateful_widget(footer, layout[3], &mut footer_state);
 
         // ===== Popups =====
 
