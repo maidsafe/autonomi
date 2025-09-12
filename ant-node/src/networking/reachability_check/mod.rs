@@ -52,10 +52,10 @@ pub enum ReachabilityStatus {
     },
     /// We are not externally reachable.
     NotReachable {
-        /// Whether UPnP is supported or not.
-        upnp: bool,
         /// The reasons for not being reachable, mapped by listener address.
-        reason: HashMap<SocketAddr, ReachabilityIssue>,
+        ///
+        /// Key: (SocketAddr, bool) - The SocketAddr is the listener address, and the bool indicates if UPnP is supported for that address.
+        reasons: HashMap<(SocketAddr, bool), ReachabilityIssue>,
     },
 }
 
@@ -119,7 +119,6 @@ impl From<libp2p::identify::Event> for ReachabilityCheckEvent {
 
 pub(crate) struct ReachabilityCheckSwarmDriver {
     pub(crate) swarm: Swarm<ReachabilityCheckBehaviour>,
-    pub(crate) upnp_supported: bool,
     pub(crate) dial_manager: DialManager,
     pub(crate) listener_manager: ListenerManager,
     pub(crate) progress_calculator: ProgressCalculator,
@@ -145,15 +144,11 @@ impl ReachabilityCheckSwarmDriver {
 
         println!("Obtaining valid listeners for the reachability check workflow..");
 
-        let (listener_manager, upnp_supported) =
-            ListenerManager::new(keypair, local, listen_addr, no_upnp).await?;
-
         Ok(Self {
             swarm,
             dial_manager: DialManager::new(initial_contacts),
-            upnp_supported,
             progress_calculator: ProgressCalculator::new(),
-            listener_manager,
+            listener_manager: ListenerManager::new(keypair, local, listen_addr, no_upnp).await?,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
         })
@@ -358,7 +353,13 @@ impl ReachabilityCheckSwarmDriver {
                             self.dial_manager.on_successful_dial_back_identify(&peer_id);
                         }
                         if self.dial_manager.has_dialing_completed() {
-                            info!("Dialing completed. Checking the reachability status now.");
+                            info!(
+                                "Dialing completed with listener {}. Checking the reachability status now.",
+                                self.listener_manager
+                                    .current_listener_addr()
+                                    .map(|addr| addr.to_string())
+                                    .unwrap_or_else(|| "unknown".to_string())
+                            );
                             return self.get_reachability_status();
                         }
                     }
@@ -518,15 +519,13 @@ impl ReachabilityCheckSwarmDriver {
 
         match reachable_addrs {
             Ok((external_addr, local_adapter)) => {
+                let upnp_supported = self.listener_manager.upnp_supported(&local_adapter);
                 info!("Node is reachable via local adapter: {local_adapter}");
-                println!(
-                    "Reachability status: Reachable with UPnP status: {}\n",
-                    self.upnp_supported
-                );
+                println!("Reachability status: Reachable with UPnP status: {upnp_supported}\n");
                 Some(ReachabilityStatus::Reachable {
                     local_addr: local_adapter,
                     external_addr,
-                    upnp: self.upnp_supported,
+                    upnp: upnp_supported,
                 })
             }
             Err(reason) => {
@@ -578,26 +577,18 @@ impl ReachabilityCheckSwarmDriver {
                         Err(err) => {
                             error!("Failed to bind to next listener: {err:?}");
                             return Some(ReachabilityStatus::NotReachable {
-                                upnp: self.upnp_supported,
-                                reason: self.listener_manager.listener_failures().clone(),
+                                reasons: self.failure_reasons(),
                             });
                         }
                     }
                 } else {
                     error!(
-                        "All listeners exhausted. Max reachability check workflow attempts reached. Not retrying. Failed with reason: {reason:?}"
+                        "All listeners exhausted. Max reachability check workflow attempts reached. Cannot determine reachability status."
                     );
                 }
                 println!("We are not reachable. Terminating the reachability check workflow.\n");
-                error!(
-                    "Reachability status: NotReachable with UPnP status: {} due to failures: {:?}",
-                    self.upnp_supported,
-                    self.listener_manager.listener_failures()
-                );
-                Some(ReachabilityStatus::NotReachable {
-                    upnp: self.upnp_supported,
-                    reason: self.listener_manager.listener_failures().clone(),
-                })
+                let reasons = self.failure_reasons();
+                Some(ReachabilityStatus::NotReachable { reasons })
             }
         }
     }
@@ -653,18 +644,18 @@ impl ReachabilityCheckSwarmDriver {
             info!("No observed addresses found. Check if we made any successful dials.");
             if self.dial_manager.is_faulty() {
                 error!(
-                    "We have not made any outbound connections. Terminating the node immediately."
+                    "We have not made any outbound connections. Terminating the workflow for the listener."
                 );
                 return Err(ReachabilityIssue::NoOutboundConnection);
             } else {
                 info!(
-                    "We made outbound connections, but did not receive any inbounds. Retrying again, else terminating."
+                    "We made outbound connections, but did not receive any inbounds. Retrying the workflow with the listener if possible."
                 );
                 return Err(ReachabilityIssue::NoDialBacks);
             }
         } else if external_addr_local_adapter_map.len() < get_majority(MAX_CONCURRENT_DIALS) {
             info!(
-                "We have observed less than {} addresses. Trying again or terminating.",
+                "We have observed less than {} addresses. Retrying the workflow with the listener if possible.",
                 get_majority(MAX_CONCURRENT_DIALS)
             );
             return Err(ReachabilityIssue::NotEnoughDialBacks {
@@ -735,6 +726,17 @@ impl ReachabilityCheckSwarmDriver {
         let within_listener_progress = workflow_progress / total_listeners;
 
         ((listener_progress + within_listener_progress) * 100.0).min(100.0)
+    }
+
+    fn failure_reasons(&self) -> HashMap<(SocketAddr, bool), ReachabilityIssue> {
+        self.listener_manager
+            .listener_failures()
+            .iter()
+            .map(|(addr, reason)| {
+                let is_upnp = self.listener_manager.upnp_supported(addr);
+                ((*addr, is_upnp), reason.clone())
+            })
+            .collect()
     }
 }
 

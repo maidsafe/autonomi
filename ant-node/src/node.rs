@@ -250,9 +250,8 @@ impl NodeBuilder {
                         no_upnp = !upnp;
                     }
                 }
-                Ok(ReachabilityStatus::NotReachable { upnp: _, reason }) => {
-                    info!("We are not routable, reasons: {reason:?}. Terminating the node.");
-                    println!("Terminating the node: {reason:?}");
+                Ok(ReachabilityStatus::NotReachable { reasons }) => {
+                    println!("Terminating the node: {reasons:?}");
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {
