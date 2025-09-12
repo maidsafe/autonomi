@@ -143,6 +143,18 @@ pub fn get_keybindings() -> KeyBindings {
             Action::NodeTableActions(NodeTableActions::TriggerNodeLogs),
         ),
         (
+            bind("<Ctrl-s>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::ToggleNode,
+            )),
+        ),
+        (
+            bind("<Ctrl-S>"),
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::ToggleNode,
+            )),
+        ),
+        (
             bind("<Ctrl-g>"),
             Action::StatusActions(StatusActions::TriggerManageNodes),
         ),

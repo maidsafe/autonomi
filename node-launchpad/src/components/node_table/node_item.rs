@@ -7,10 +7,10 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_service_management::ServiceStatus;
-
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Default, Debug, Copy, Clone, PartialEq)]
+#[derive(Default, Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeDisplayStatus {
     #[default]
     Added,
