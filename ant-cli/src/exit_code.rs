@@ -114,6 +114,7 @@ pub(crate) fn connect_error_exit_code(err: &ConnectError) -> i32 {
         ConnectError::TimedOut => 59,
         ConnectError::TimedOutWithIncompatibleProtocol(_, _) => 60,
         ConnectError::NoKnownPeers(_) => 51, // todo: uses duplicate exit code from `BootstrapError::NoBootstrapPeersFound`
+        ConnectError::NativeWalletSetupError(_) => 62,
     }
 }
 

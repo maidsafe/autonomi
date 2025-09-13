@@ -198,10 +198,61 @@ pub fn try_serialize_record<T: serde::Serialize>(
     Ok(bytes.freeze())
 }
 
+/// Utility to serialize a record with PaymentProofType (supports both EVM and native token payments)
+/// Returns Bytes to avoid accidental clone allocations
+pub fn try_serialize_record_with_payment<T: serde::Serialize>(
+    payment_proof: crate::storage::PaymentProofType,
+    data: &T,
+    record_kind: RecordKind,
+) -> Result<Bytes, Error> {
+    let combined_data = (payment_proof, data);
+    try_serialize_record(&combined_data, record_kind)
+}
+
+/// Utility to deserialize a record with backward compatible payment proof parsing
+/// This function first tries to parse as PaymentProofType (new format), then falls back to ProofOfPayment (old format)
+#[cfg(feature = "evm-integration")]
+pub fn try_deserialize_record_with_payment<T: serde::de::DeserializeOwned>(
+    record: &Record,
+) -> Result<(crate::storage::PaymentProofType, T), Error> {
+    use crate::storage::PaymentProofType;
+    
+    // First try new format with PaymentProofType
+    if let Ok((proof_type, data)) = try_deserialize_record::<(PaymentProofType, T)>(record) {
+        return Ok((proof_type, data));
+    }
+
+    // Fallback to old format for backward compatibility
+    if let Ok((old_proof, data)) = try_deserialize_record::<(ant_evm::ProofOfPayment, T)>(record) {
+        return Ok((PaymentProofType::Evm(old_proof), data));
+    }
+
+    // If both formats fail, return the original error
+    Err(Error::RecordParsingFailed)
+}
+
+/// Utility to deserialize a record with native token payment (native-only version)
+/// This function works without the evm-integration feature
+#[cfg(not(feature = "evm-integration"))]
+pub fn try_deserialize_record_with_payment<T: serde::de::DeserializeOwned>(
+    record: &Record,
+) -> Result<(crate::storage::PaymentProofType, T), Error> {
+    use crate::storage::PaymentProofType;
+    
+    // Only try PaymentProofType format (which only supports Native when evm-integration is disabled)
+    if let Ok((proof_type, data)) = try_deserialize_record::<(PaymentProofType, T)>(record) {
+        return Ok((proof_type, data));
+    }
+
+    // If parsing fails, return error
+    Err(Error::RecordParsingFailed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::Result;
+    use crate::RecordKey;
 
     #[test]
     fn verify_record_header_encoded_size() -> Result<()> {
@@ -273,5 +324,146 @@ mod tests {
         }
 
         Ok(())
+    }
+
+    #[test]
+    fn test_payment_proof_type_serialization() -> Result<()> {
+        use crate::storage::{NativePaymentProof, NativeTokens, PaymentProofType};
+        use bls::SecretKey;
+
+        // Create a test native payment proof
+        let native_proof = NativePaymentProof::new(
+            SecretKey::random().public_key(),
+            [0x11; 16],
+            NativeTokens::from_u64(1000),
+            [0x12, 0x34, 0x56, 0x78],
+        );
+
+        let payment_proof = PaymentProofType::Native(native_proof.clone());
+        let test_data = "test_data_content";
+
+        // Test serialization with PaymentProofType
+        let serialized = try_serialize_record_with_payment(
+            payment_proof,
+            &test_data,
+            RecordKind::DataWithPayment(DataTypes::GraphEntry),
+        )?;
+
+        // Create a record for deserialization testing
+        let record = Record {
+            key: RecordKey::new(b"test_key"),
+            value: serialized.to_vec(),
+            publisher: None,
+            expires: None,
+        };
+
+        // Test deserialization with PaymentProofType
+        let (deserialized_proof, deserialized_data) = 
+            try_deserialize_record_with_payment::<String>(&record)?;
+
+        // Verify the data round-tripped correctly
+        assert_eq!(deserialized_data, test_data);
+        
+        // Verify the payment proof round-tripped correctly
+        match deserialized_proof {
+            PaymentProofType::Native(proof) => {
+                assert_eq!(proof.payment_transaction, native_proof.payment_transaction);
+                assert_eq!(proof.expected_amount, native_proof.expected_amount);
+                assert_eq!(proof.recipient_derivation_index, native_proof.recipient_derivation_index);
+                assert_eq!(proof.record_key_hash, native_proof.record_key_hash);
+            },
+            #[cfg(feature = "evm-integration")]
+            PaymentProofType::Evm(_) => {
+                panic!("Expected native payment proof, got EVM proof");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "evm-integration")]
+    fn test_backward_compatible_deserialization() -> Result<()> {
+        use crate::storage::PaymentProofType;
+        use ant_evm::ProofOfPayment;
+
+        // Create a mock EVM ProofOfPayment (simplified for testing)
+        let evm_proof = ProofOfPayment {
+            peer_quotes: Vec::new(),
+        }; // Empty proof for testing
+        let test_data = "legacy_test_data";
+
+        // Serialize using the old format (ProofOfPayment directly)
+        let serialized = try_serialize_record(
+            &(evm_proof.clone(), test_data),
+            RecordKind::DataWithPayment(DataTypes::Chunk),
+        )?;
+
+        // Create a record for deserialization testing
+        let record = Record {
+            key: RecordKey::new(b"legacy_test_key"),
+            value: serialized.to_vec(),
+            publisher: None,
+            expires: None,
+        };
+
+        // Test that the new deserialization function can handle old format
+        let (deserialized_proof, deserialized_data) = 
+            try_deserialize_record_with_payment::<String>(&record)?;
+
+        // Verify the data round-tripped correctly
+        assert_eq!(deserialized_data, test_data);
+        
+        // Verify the payment proof was converted to PaymentProofType::Evm
+        match deserialized_proof {
+            PaymentProofType::Evm(_proof) => {
+                // Basic verification that we got an EVM proof
+                // In a real test, we'd verify the proof contents
+                // Test passed - EVM proof was correctly deserialized
+            },
+            PaymentProofType::Native(_) => {
+                panic!("Expected EVM payment proof, got native proof");
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_payment_proof_type_methods() {
+        use crate::storage::{NativePaymentProof, NativeTokens, PaymentProofType};
+        use bls::SecretKey;
+
+        // Test native payment proof
+        let native_proof = NativePaymentProof::new(
+            SecretKey::random().public_key(),
+            [0x22; 16],
+            NativeTokens::from_u64(2000),
+            [0xAB, 0xCD, 0xEF, 0x12],
+        );
+
+        let payment_proof = PaymentProofType::Native(native_proof.clone());
+
+        // Test type checking methods
+        assert!(payment_proof.is_native());
+        
+        #[cfg(feature = "evm-integration")]
+        assert!(!payment_proof.is_evm());
+
+        // Test getter methods
+        assert_eq!(payment_proof.as_native(), Some(&native_proof));
+        
+        #[cfg(feature = "evm-integration")]
+        assert_eq!(payment_proof.as_evm(), None);
+
+        // Test conversion methods
+        let converted_native = payment_proof.clone().into_native();
+        assert_eq!(converted_native, Some(native_proof));
+
+        #[cfg(feature = "evm-integration")]
+        {
+            let converted_evm = payment_proof.into_evm();
+            assert_eq!(converted_evm, None);
+        }
     }
 }

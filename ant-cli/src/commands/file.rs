@@ -42,6 +42,7 @@ pub async fn cost(file: &str, network_context: NetworkContext) -> Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn upload(
     file: &str,
     public: bool,
@@ -49,6 +50,9 @@ pub async fn upload(
     network_context: NetworkContext,
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     retry_failed: u64,
+    payment_method: crate::commands::PaymentMethod,
+    native_wallet_key: Option<String>,
+    genesis_tokens: Option<u64>,
 ) -> Result<(), ExitCodeError> {
     let config = ClientOperatingStrategy::new();
 
@@ -62,6 +66,50 @@ pub async fn upload(
             "🔄 Retry mode enabled - will retry failed chunks until successful or exceeds the limit."
         );
     }
+
+    // Configure native wallet if using native payments
+    if matches!(payment_method, crate::commands::PaymentMethod::Native) {
+        use autonomi::client::native_wallet::NativeWalletConfig;
+        use bls::SecretKey;
+        use ant_protocol::storage::NativeTokens;
+
+        // Parse native wallet key if provided
+        let master_key = if let Some(key_hex) = native_wallet_key {
+            let key_bytes = hex::decode(key_hex.strip_prefix("0x").unwrap_or(&key_hex))
+                .map_err(|e| (eyre!("Invalid hex key: {}", e), IO_ERROR))?;
+            if key_bytes.len() != 32 {
+                return Err((eyre!("Native wallet key must be 32 bytes (64 hex chars)"), IO_ERROR));
+            }
+            let mut key_array = [0u8; 32];
+            key_array.copy_from_slice(&key_bytes);
+            SecretKey::from_bytes(key_array)
+                .map_err(|e| (eyre!("Invalid secret key: {}", e), IO_ERROR))?
+        } else {
+            println!("🔑 Generating random native wallet key for testing...");
+            SecretKey::random()
+        };
+
+        // Configure native wallet
+        let mut config = NativeWalletConfig::new()
+            .with_native_payments(true)
+            .with_master_key(master_key);
+
+        // Add genesis tokens if specified
+        if let Some(genesis_amount) = genesis_tokens {
+            config = config.with_genesis_tokens(NativeTokens::from_u64(genesis_amount))
+                .as_default_payment(true);
+            println!("💰 Native wallet configured with {genesis_amount} genesis tokens");
+        }
+
+        // Configure client with native wallet
+        client = client.with_native_wallet(config)
+            .map_err(|e| (eyre!("Failed to configure native wallet: {}", e), IO_ERROR))?;
+
+        println!("🔗 Native token payment method enabled");
+    }
+
+    // Set payment choice on client based on method selected
+    client = client.with_payment_choice(payment_method.to_payment_choice());
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;
 

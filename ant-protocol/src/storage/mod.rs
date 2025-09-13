@@ -10,6 +10,7 @@ mod address;
 mod chunks;
 mod graph;
 mod header;
+mod native_tokens;
 mod pointer;
 mod scratchpad;
 
@@ -17,11 +18,12 @@ pub use self::{
     address::AddressParseError,
     address::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadAddress},
     chunks::Chunk,
-    graph::{GraphContent, GraphEntry},
+    graph::{GraphContent, GraphEntry, PaymentDetails},
     header::{
         DataTypes, RecordHeader, RecordKind, ValidationType, try_deserialize_record,
-        try_serialize_record,
+        try_serialize_record, try_serialize_record_with_payment, try_deserialize_record_with_payment,
     },
+    native_tokens::{AmountConversion, NativePaymentProof, NativeTokens, PaymentProofType},
     pointer::{Pointer, PointerTarget},
     scratchpad::Scratchpad,
 };

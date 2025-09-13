@@ -12,6 +12,7 @@ version = "1.0.8"
 [features]
 default = []
 rpc = ["tonic", "prost"]
+evm-integration = []
 
 [dependencies]
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }

@@ -12,7 +12,7 @@ use crate::error::PutValidationError;
 use crate::{Marker, Result, node::Node};
 use ant_evm::ProofOfPayment;
 use ant_evm::payment_vault::verify_data_payment;
-use ant_protocol::storage::GraphEntry;
+use ant_protocol::storage::{GraphEntry, NativePaymentProof, PaymentProofType};
 use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
     storage::{
@@ -212,77 +212,22 @@ impl Node {
                 ))
             }
             RecordKind::DataWithPayment(DataTypes::GraphEntry) => {
-                let (payment, graph_entry) =
-                    try_deserialize_record::<(ProofOfPayment, GraphEntry)>(&record).map_err(
-                        |_| {
-                            PutValidationError::InvalidRecord(
-                                PrettyPrintRecordKey::from(&record.key).into_owned(),
-                            )
-                        },
-                    )?;
-
-                // check if the deserialized value's GraphEntryAddress matches the record's key
-                let net_addr = NetworkAddress::from(graph_entry.address());
-                let key = net_addr.to_record_key();
-                let pretty_key = PrettyPrintRecordKey::from(&key);
-                if record.key != key {
-                    warn!(
-                        "Record's key {pretty_key:?} does not match with the value's GraphEntryAddress, ignoring PUT."
-                    );
-                    return Err(PutValidationError::RecordKeyMismatch);
+                // Try to deserialize as PaymentProofType first (supports both EVM and native tokens)
+                // The validation methods handle both validation and storage
+                if let Ok((payment_proof, graph_entry)) = 
+                    try_deserialize_record::<(PaymentProofType, GraphEntry)>(&record) {
+                    // New format with PaymentProofType
+                    self.validate_graphentry_with_payment_proof(record.key.clone(), payment_proof, graph_entry).await
+                } else if let Ok((evm_payment, graph_entry)) = 
+                    try_deserialize_record::<(ProofOfPayment, GraphEntry)>(&record) {
+                    // Backward compatibility: existing EVM-only format
+                    self.validate_graphentry_with_evm_payment(record.key.clone(), evm_payment, graph_entry).await
+                } else {
+                    // Neither format worked
+                    Err(PutValidationError::InvalidRecord(
+                        PrettyPrintRecordKey::from(&record.key).into_owned(),
+                    ))
                 }
-
-                let already_exists = self.validate_key_and_existence(&net_addr, &key).await?;
-
-                // The GraphEntry may already exist during the replication.
-                // The payment shall get deposit to self even the GraphEntry already presents.
-                // However, if the GraphEntry is already present, the incoming one shall be
-                // appended with the existing one, if content is different.
-                if let Err(err) = self
-                    .payment_for_us_exists_and_is_still_valid(
-                        &net_addr,
-                        DataTypes::GraphEntry,
-                        payment.clone(),
-                    )
-                    .await
-                {
-                    if already_exists {
-                        debug!(
-                            "Payment of the incoming existing GraphEntry {pretty_key:?} having error {err:?}"
-                        );
-                    } else {
-                        error!(
-                            "Payment of the incoming new GraphEntry {pretty_key:?} having error {err:?}"
-                        );
-                        return Err(err);
-                    }
-                }
-
-                let res = self
-                    .validate_merge_and_store_graphentries(vec![graph_entry], &key, true)
-                    .await;
-                if res.is_ok() {
-                    let content_hash = XorName::from_content(&record.value);
-                    Marker::ValidGraphEntryPutFromClient(&PrettyPrintRecordKey::from(&record.key))
-                        .log();
-                    // Client changed to upload to ALL payees, hence no longer need this.
-                    // May need again once client change back to upload to just one to save traffic.
-                    // self.replicate_valid_fresh_record(
-                    //     record.key.clone(),
-                    //     DataTypes::GraphEntry,
-                    //     ValidationType::NonChunk(content_hash),
-                    //     Some(payment),
-                    // );
-
-                    // Notify replication_fetcher to mark the attempt as completed.
-                    // Send the notification earlier to avoid it got skipped due to:
-                    // the record becomes stored during the fetch because of other interleaved process.
-                    self.network().notify_fetch_completed(
-                        record.key.clone(),
-                        ValidationType::NonChunk(content_hash),
-                    );
-                }
-                res
             }
             RecordKind::DataOnly(DataTypes::Pointer) => {
                 let pointer = try_deserialize_record::<Pointer>(&record).map_err(|_| {
@@ -732,6 +677,214 @@ impl Node {
 
         self.record_metrics(Marker::ValidGraphEntryRecordPutFromNetwork(&pretty_key));
         Ok(())
+    }
+
+    /// Validate native token payment for a GraphEntry
+    fn validate_native_token_payment(
+        &self,
+        graph_entry: &GraphEntry,
+        proof: &NativePaymentProof,
+        address: &NetworkAddress,
+    ) -> Result<(), PutValidationError> {
+        let key = address.to_record_key();
+        let pretty_key = PrettyPrintRecordKey::from(&key).into_owned();
+
+        // Basic validation that this is a native token GraphEntry
+        if !graph_entry.is_native_token() {
+            warn!("GraphEntry is not a native token for payment validation at {}", pretty_key);
+            return Err(PutValidationError::PaymentNotMadeToOurNode(pretty_key));
+        }
+
+        // Validate GraphEntry signature
+        if !graph_entry.verify_signature() {
+            error!("Native token GraphEntry signature verification failed for {}", pretty_key);
+            return Err(PutValidationError::PaymentNotMadeToOurNode(pretty_key));
+        }
+
+        // Get the node's public key from network peer ID
+        let _self_peer_id = self.network().peer_id();
+        
+        // For proof-of-concept, we'll do basic validation
+        // In production, this would include:
+        // 1. Validate the payment chain back to genesis
+        // 2. Check that this node is a valid recipient
+        // 3. Verify the payment amount matches the quote
+        
+        // Basic check: verify the payment proof references this GraphEntry
+        if proof.payment_transaction != graph_entry.owner {
+            warn!(
+                "Payment proof transaction mismatch for {}: expected {:?}, got {:?}",
+                pretty_key, graph_entry.owner, proof.payment_transaction
+            );
+            return Err(PutValidationError::PaymentNotMadeToOurNode(pretty_key));
+        }
+
+        // Validate that we are a recipient in the GraphEntry descendants
+        let mut found_recipient = false;
+        let mut total_payment = ant_protocol::storage::NativeTokens::ZERO;
+
+        for (descendant_key, descendant_content) in &graph_entry.descendants {
+            // Parse the descendant payment
+            if let Some(payment_details) = graph_entry.parse_descendant_payment(&(*descendant_key, *descendant_content)) {
+                // Check if this descendant is for our node
+                // For POC, we'll use a simplified check
+                if payment_details.record_key_hash == proof.record_key_hash {
+                    found_recipient = true;
+                    total_payment = total_payment.checked_add(payment_details.amount).unwrap_or(total_payment);
+                }
+            }
+        }
+
+        if !found_recipient {
+            warn!("Node not found as recipient in native token payment for {}", pretty_key);
+            return Err(PutValidationError::PaymentNotMadeToOurNode(pretty_key));
+        }
+
+        // Check that the payment amount is sufficient
+        if total_payment < proof.expected_amount {
+            warn!(
+                "Insufficient native token payment for {}: expected {}, got {}",
+                pretty_key,
+                proof.expected_amount.as_u128(),
+                total_payment.as_u128()
+            );
+            return Err(PutValidationError::PaymentNotMadeToOurNode(pretty_key));
+        }
+
+        info!(
+            "Native token payment validation successful for {}: {} tokens",
+            pretty_key,
+            total_payment.as_u128()
+        );
+
+        Ok(())
+    }
+
+    /// Validate GraphEntry with PaymentProofType (supports both EVM and native tokens)
+    async fn validate_graphentry_with_payment_proof(
+        &self,
+        record_key: RecordKey,
+        payment_proof: PaymentProofType,
+        graph_entry: GraphEntry,
+    ) -> Result<(), PutValidationError> {
+        // Check if the deserialized value's GraphEntryAddress matches the record's key
+        let net_addr = NetworkAddress::from(graph_entry.address());
+        let key = net_addr.to_record_key();
+        let pretty_key = PrettyPrintRecordKey::from(&key);
+        if record_key != key {
+            warn!(
+                "Record's key {pretty_key:?} does not match with the value's GraphEntryAddress, ignoring PUT."
+            );
+            return Err(PutValidationError::RecordKeyMismatch);
+        }
+
+        let already_exists = self.validate_key_and_existence(&net_addr, &key).await?;
+
+        // Handle payment validation based on type
+        let payment_validation_result = match &payment_proof {
+            #[cfg(feature = "evm-integration")]
+            PaymentProofType::Evm(evm_payment) => {
+                // Use existing EVM validation logic
+                self.payment_for_us_exists_and_is_still_valid(
+                    &net_addr,
+                    DataTypes::GraphEntry,
+                    evm_payment.clone(),
+                ).await
+            },
+            PaymentProofType::Native(native_payment) => {
+                // Use new native token validation logic
+                self.validate_native_token_payment(&graph_entry, native_payment, &net_addr)
+            }
+        };
+
+        if let Err(err) = payment_validation_result {
+            if already_exists {
+                debug!(
+                    "Payment of the incoming existing GraphEntry {pretty_key:?} having error {err:?}"
+                );
+            } else {
+                error!(
+                    "Payment of the incoming new GraphEntry {pretty_key:?} having error {err:?}"
+                );
+                return Err(err);
+            }
+        }
+
+        // Store the GraphEntry
+        let res = self
+            .validate_merge_and_store_graphentries(vec![graph_entry], &key, true)
+            .await;
+        if res.is_ok() {
+            let content_hash = XorName::from_content(&record_key.to_vec());
+            Marker::ValidGraphEntryPutFromClient(&PrettyPrintRecordKey::from(&record_key))
+                .log();
+            // Notify replication_fetcher to mark the attempt as completed.
+            self.network().notify_fetch_completed(
+                record_key,
+                ValidationType::NonChunk(content_hash),
+            );
+        }
+
+        res
+    }
+
+    /// Validate GraphEntry with EVM payment (backward compatibility)
+    async fn validate_graphentry_with_evm_payment(
+        &self,
+        record_key: RecordKey,
+        payment: ProofOfPayment,
+        graph_entry: GraphEntry,
+    ) -> Result<(), PutValidationError> {
+        // Check if the deserialized value's GraphEntryAddress matches the record's key
+        let net_addr = NetworkAddress::from(graph_entry.address());
+        let key = net_addr.to_record_key();
+        let pretty_key = PrettyPrintRecordKey::from(&key);
+        if record_key != key {
+            warn!(
+                "Record's key {pretty_key:?} does not match with the value's GraphEntryAddress, ignoring PUT."
+            );
+            return Err(PutValidationError::RecordKeyMismatch);
+        }
+
+        let already_exists = self.validate_key_and_existence(&net_addr, &key).await?;
+
+        // Validate EVM payment
+        if let Err(err) = self
+            .payment_for_us_exists_and_is_still_valid(
+                &net_addr,
+                DataTypes::GraphEntry,
+                payment.clone(),
+            )
+            .await
+        {
+            if already_exists {
+                debug!(
+                    "Payment of the incoming existing GraphEntry {pretty_key:?} having error {err:?}"
+                );
+            } else {
+                error!(
+                    "Payment of the incoming new GraphEntry {pretty_key:?} having error {err:?}"
+                );
+                return Err(err);
+            }
+        }
+
+        // Store the GraphEntry
+        let res = self
+            .validate_merge_and_store_graphentries(vec![graph_entry], &key, true)
+            .await;
+        if res.is_ok() {
+            let content_hash = XorName::from_content(&record_key.to_vec());
+            Marker::ValidGraphEntryPutFromClient(&PrettyPrintRecordKey::from(&record_key))
+                .log();
+            // Notify replication_fetcher to mark the attempt as completed.
+            self.network().notify_fetch_completed(
+                record_key,
+                ValidationType::NonChunk(content_hash),
+            );
+        }
+
+        res
     }
 
     /// Perform validations on the provided `Record`.

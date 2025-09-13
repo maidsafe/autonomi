@@ -1595,6 +1595,7 @@ dependencies = [
  "ant-evm",
  "ant-logging",
  "ant-protocol",
+ "async-trait",
  "bip39",
  "blst",
  "blstrs 0.7.1",

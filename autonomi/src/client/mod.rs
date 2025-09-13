@@ -31,7 +31,9 @@ pub use high_level::vault;
 pub mod analyze;
 pub mod config;
 pub mod key_derivation;
+pub mod native_wallet;
 pub mod payment;
+pub mod payment_providers;
 pub mod quote;
 
 #[cfg(feature = "external-signer")]
@@ -47,6 +49,9 @@ mod put_error_state;
 mod utils;
 
 use payment::Receipt;
+use crate::client::quote::PaymentType;
+use payment_providers::{PaymentRouter, PaymentChoice, PaymentStatus};
+use native_wallet::{NativeWalletConfig, NativeWalletBuilder};
 pub use put_error_state::ChunkBatchUploadState;
 
 use ant_bootstrap::{InitialPeersConfig, contacts::ALPHANET_CONTACTS};
@@ -96,6 +101,8 @@ pub struct Client {
     /// Max times of total chunks to carry out retry on upload failure.
     /// Default to be `0` to indicate not carry out retry.
     retry_failed: u64,
+    /// Payment router for managing different payment methods
+    payment_router: PaymentRouter,
 }
 
 /// Error returned by [`Client::init`].
@@ -120,6 +127,10 @@ pub enum ConnectError {
     /// An error occurred while initializing the EVM network.
     #[error("Failed to initialize the EVM network: {0}")]
     EvmNetworkError(String),
+    
+    /// An error occurred while setting up the native wallet.
+    #[error("Failed to set up native wallet: {0}")]
+    NativeWalletSetupError(String),
 }
 
 /// Errors that can occur during the put operation.
@@ -316,6 +327,7 @@ impl Client {
             evm_network: config.evm_network,
             config: config.strategy,
             retry_failed: 0,
+            payment_router: PaymentRouter::new(),
         })
     }
 
@@ -344,6 +356,107 @@ impl Client {
     /// Get the evm network.
     pub fn evm_network(&self) -> &EvmNetwork {
         &self.evm_network
+    }
+
+    /// Set the default payment choice for this client
+    /// 
+    /// # Arguments
+    /// * `choice` - The payment choice to use as default
+    /// 
+    /// # Returns
+    /// The client with the updated payment choice
+    pub fn with_payment_choice(mut self, choice: PaymentChoice) -> Self {
+        self.payment_router.set_default_choice(choice);
+        self
+    }
+
+    /// Configure the client with native wallet support
+    /// 
+    /// # Arguments
+    /// * `config` - The native wallet configuration
+    /// 
+    /// # Returns
+    /// The client with native wallet support configured
+    /// 
+    /// # Errors
+    /// Returns a ConnectError if the native wallet setup fails
+    pub fn with_native_wallet(mut self, config: NativeWalletConfig) -> Result<Self, ConnectError> {
+        if config.enable_native_payments {
+            let builder = NativeWalletBuilder::new(
+                config,
+                std::sync::Arc::new(self.network.clone())
+            );
+            
+            // Configure the payment router with native wallet support
+            builder.configure_payment_router(&mut self.payment_router)
+                .map_err(|e| ConnectError::NativeWalletSetupError(e.to_string()))?;
+                
+            info!("Native wallet support enabled");
+        } else {
+            debug!("Native wallet support disabled in configuration");
+        }
+        
+        Ok(self)
+    }
+
+    /// Get the current payment router status
+    /// 
+    /// # Returns
+    /// Information about available payment methods and current configuration
+    pub fn payment_status(&self) -> PaymentStatus {
+        self.payment_router.get_payment_status()
+    }
+
+    /// Check if a specific payment type is available
+    /// 
+    /// # Arguments
+    /// * `payment_type` - The payment type to check
+    /// 
+    /// # Returns
+    /// True if the payment type is available, false otherwise
+    pub fn is_payment_type_available(&self, payment_type: PaymentType) -> bool {
+        self.payment_router.is_payment_type_available(payment_type)
+    }
+
+    /// Compare costs between different payment methods
+    /// 
+    /// # Arguments
+    /// * `data_type` - The type of data being stored
+    /// * `content_addrs` - Vector of (address, size) tuples
+    /// 
+    /// # Returns
+    /// Map of payment types to their estimated costs
+    pub async fn compare_payment_costs(
+        &self,
+        data_type: quote::DataTypes,
+        content_addrs: Vec<(xor_name::XorName, usize)>,
+    ) -> Result<std::collections::HashMap<PaymentType, u128>, CostError> {
+        self.payment_router.compare_costs(data_type, content_addrs).await
+            .map_err(|_e| CostError::InvalidCost) // Convert payment error to cost error
+    }
+
+    /// Get the most economical payment option for given content
+    /// 
+    /// # Arguments
+    /// * `data_type` - The type of data being stored
+    /// * `content_addrs` - Vector of (address, size) tuples
+    /// 
+    /// # Returns
+    /// The cheapest available payment type, if any
+    pub async fn get_cheapest_payment_option(
+        &self,
+        data_type: quote::DataTypes,
+        content_addrs: Vec<(xor_name::XorName, usize)>,
+    ) -> Result<Option<PaymentType>, CostError> {
+        // First compare costs to find the cheapest option
+        let cost_comparison = self.compare_payment_costs(data_type, content_addrs).await?;
+        
+        let cheapest = cost_comparison
+            .into_iter()
+            .min_by_key(|(_, cost)| *cost)
+            .map(|(payment_type, _)| payment_type);
+        
+        Ok(cheapest)
     }
 }
 

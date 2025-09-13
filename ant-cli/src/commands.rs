@@ -24,6 +24,29 @@ use pointer::TargetDataType;
 use pointer::parse_target_data_type;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
+use clap::ValueEnum;
+
+/// Payment method for upload operations
+#[derive(Debug, Clone, ValueEnum)]
+pub enum PaymentMethod {
+    /// Use EVM-based payments (traditional method)
+    Evm,
+    /// Use native token payments (new method)
+    Native,
+    /// Automatically select the best payment method
+    Auto,
+}
+
+impl PaymentMethod {
+    /// Convert to the internal PaymentChoice enum
+    pub fn to_payment_choice(&self) -> autonomi::client::payment_providers::PaymentChoice {
+        match self {
+            PaymentMethod::Evm => autonomi::client::payment_providers::PaymentChoice::UseEvm,
+            PaymentMethod::Native => autonomi::client::payment_providers::PaymentChoice::UseNativeToken,
+            PaymentMethod::Auto => autonomi::client::payment_providers::PaymentChoice::Automatic,
+        }
+    }
+}
 
 #[derive(Subcommand, Debug)]
 pub enum SubCmd {
@@ -99,6 +122,18 @@ pub enum FileCmd {
         #[arg(long)]
         #[clap(default_value = "0")]
         retry_failed: u64,
+        /// Payment method to use for uploads.
+        /// 'evm' uses traditional EVM payments, 'native' uses native tokens, 'auto' selects the best option.
+        #[arg(long, value_enum, default_value = "evm")]
+        payment_method: PaymentMethod,
+        /// Native wallet private key (hex-encoded). Required when using native payment method.
+        /// For testing purposes only - use with caution in production.
+        #[arg(long)]
+        native_wallet_key: Option<String>,
+        /// Genesis token amount for testing native wallet (in native tokens).
+        /// Only used when creating a new native wallet for testing.
+        #[arg(long)]
+        genesis_tokens: Option<u64>,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
     },
@@ -448,6 +483,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 public,
                 no_archive,
                 retry_failed,
+                payment_method,
+                native_wallet_key,
+                genesis_tokens,
                 transaction_opt,
             } => {
                 if let Err((err, exit_code)) = file::upload(
@@ -457,6 +495,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     network_context,
                     transaction_opt.max_fee_per_gas,
                     retry_failed,
+                    payment_method,
+                    native_wallet_key,
+                    genesis_tokens,
                 )
                 .await
                 {

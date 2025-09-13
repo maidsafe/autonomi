@@ -7,14 +7,17 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
-use crate::client::quote::{DataTypes, StoreQuote};
+use crate::client::quote::{DataTypes, StoreQuote, PaymentType};
 use ant_evm::{ClientProofOfPayment, EncodedPeerId, EvmWallet, EvmWalletError};
 use std::collections::HashMap;
 use xor_name::XorName;
+use tracing::{debug, info};
 
 use super::quote::CostError;
 
 pub use crate::{Amount, AttoTokens};
+
+// Types are already imported above, so these re-exports are duplicates and should be removed
 
 /// Contains the proof of payments for each XOR address and the amount paid
 pub type Receipt = HashMap<XorName, (ClientProofOfPayment, AttoTokens)>;
@@ -70,6 +73,13 @@ pub enum PaymentOption {
     Wallet(EvmWallet),
     /// When data was already paid for, use the receipt
     Receipt(Receipt),
+    /// Use enhanced payment with specific payment type preference
+    Enhanced {
+        wallet: EvmWallet,
+        preferred_type: PaymentType,
+    },
+    /// Use automatic payment method selection (chooses cheapest)
+    Automatic(EvmWallet),
 }
 
 impl From<EvmWallet> for PaymentOption {
@@ -103,6 +113,12 @@ impl Client {
                 Ok((receipt, skipped))
             }
             PaymentOption::Receipt(receipt) => Ok((receipt, 0)),
+            PaymentOption::Enhanced { wallet, preferred_type } => {
+                self.pay_with_enhanced_quotes(data_type, content_addrs, &wallet, Some(preferred_type)).await
+            }
+            PaymentOption::Automatic(wallet) => {
+                self.pay_with_enhanced_quotes(data_type, content_addrs, &wallet, None).await
+            }
         }
     }
 
@@ -161,4 +177,91 @@ impl Client {
 
         Ok((receipt, skipped_chunks))
     }
+
+    /// Pay for content using enhanced quotes with payment type selection
+    async fn pay_with_enhanced_quotes(
+        &self,
+        data_type: DataTypes,
+        content_addrs: impl Iterator<Item = (XorName, usize)> + Clone,
+        wallet: &EvmWallet,
+        preferred_type: Option<PaymentType>,
+    ) -> Result<(Receipt, AlreadyPaidAddressesCount), PayError> {
+        // Check if the wallet uses the same network as the client
+        if wallet.network() != self.evm_network() {
+            return Err(PayError::EvmWalletNetworkMismatch);
+        }
+
+        let number_of_content_addrs = content_addrs.clone().count();
+        
+        // Get enhanced quotes that include both EVM and native pricing
+        let enhanced_quote = self.get_enhanced_quotes(data_type, content_addrs).await?;
+        
+        // Determine which payment method to use
+        let payment_type = match preferred_type {
+            Some(ptype) => {
+                if enhanced_quote.supports_payment_type(&ptype) {
+                    ptype
+                } else {
+                    info!("Preferred payment type {:?} not available, falling back to EVM", ptype);
+                    PaymentType::Evm
+                }
+            }
+            None => {
+                // Automatic selection - choose the cheapest option
+                enhanced_quote.get_cheapest_payment_type().unwrap_or(PaymentType::Evm)
+            }
+        };
+
+        info!("Using payment type: {:?}", payment_type);
+
+        // For POC, we only support EVM payments for now
+        // TODO: Add native token payment implementation
+        match payment_type {
+            PaymentType::Evm => {
+                info!("Paying for {} addresses using EVM..", enhanced_quote.store_quote.len());
+                
+                if !enhanced_quote.store_quote.is_empty() {
+                    let lock_guard = wallet.lock().await;
+                    debug!("Locked wallet for EVM payment");
+
+                    let _payments = wallet
+                        .pay_for_quotes(enhanced_quote.store_quote.payments())
+                        .await
+                        .map_err(|err| PayError::from(err.0))?;
+
+                    drop(lock_guard);
+                    debug!("Unlocked wallet");
+                }
+
+                let skipped_chunks = number_of_content_addrs - enhanced_quote.store_quote.len();
+                let receipt = receipt_from_store_quotes(enhanced_quote.store_quote);
+                
+                Ok((receipt, skipped_chunks))
+            }
+            PaymentType::NativeToken => {
+                // TODO: Implement native token payment
+                info!("Native token payment requested but not yet implemented, falling back to EVM");
+                
+                if !enhanced_quote.store_quote.is_empty() {
+                    let lock_guard = wallet.lock().await;
+                    debug!("Locked wallet for fallback EVM payment");
+
+                    let _payments = wallet
+                        .pay_for_quotes(enhanced_quote.store_quote.payments())
+                        .await
+                        .map_err(|err| PayError::from(err.0))?;
+
+                    drop(lock_guard);
+                    debug!("Unlocked wallet");
+                }
+
+                let skipped_chunks = number_of_content_addrs - enhanced_quote.store_quote.len();
+                let receipt = receipt_from_store_quotes(enhanced_quote.store_quote);
+                
+                Ok((receipt, skipped_chunks))
+            }
+        }
+    }
+
+    // Note: compare_payment_costs and get_cheapest_payment_option methods are implemented in quote.rs
 }

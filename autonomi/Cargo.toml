@@ -24,11 +24,13 @@ default = []
 external-signer = ["ant-evm/external-signer"]
 extension-module = ["pyo3/extension-module", "pyo3-async-runtimes"]
 loud = []
+evm-integration = ["ant-protocol/evm-integration"]
 
 [dependencies]
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.7" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.8" }
+async-trait = "0.1.74"
 bip39 = "2.0.0"
 blst = "0.3.13"
 blstrs = "0.7.1"
@@ -78,6 +80,7 @@ xor_name = "5.0.0"
 [dev-dependencies]
 alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
+color-eyre = "0.6.3"
 evmlib = { path = "../evmlib", version = "0.4.3" }
 eyre = "0.6.5"
 serial_test = "3.2.0"
