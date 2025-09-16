@@ -18,18 +18,43 @@ use std::path::PathBuf;
 use std::process::Command;
 use sysinfo::Disks;
 
+#[cfg(windows)]
+/// Normalises Windows paths so comparisons ignore UNC prefixes, slashes, and casing.
+fn sanitized_path(path: &Path) -> PathBuf {
+    let mut normalized = path
+        .to_string_lossy()
+        .replace("\\\\?\\", "")
+        .replace('/', "\\");
+
+    while normalized.ends_with('\\') && normalized.len() > 3 {
+        normalized.pop();
+    }
+
+    if normalized.len() == 2 && normalized.ends_with(':') {
+        normalized.push('\\');
+    }
+
+    PathBuf::from(normalized.to_uppercase())
+}
+
+#[cfg(not(windows))]
+/// Non-Windows platforms can compare paths directly.
+fn sanitized_path(path: &Path) -> PathBuf {
+    path.to_path_buf()
+}
+
 // Tries to get the default (drive name, mount point) of the current executable
 // to be used as the default drive
 pub fn get_default_mount_point() -> Result<(String, PathBuf)> {
     // Create a new System instance
     let disks = Disks::new_with_refreshed_list();
 
-    // Get the current executable path
-    let exe_path = env::current_exe()?;
+    // Get the current executable path and normalise it for comparisons
+    let exe_path = sanitized_path(&env::current_exe()?);
 
     // Iterate over the disks and find the one that matches the executable path
     for disk in disks.list() {
-        if exe_path.starts_with(disk.mount_point()) {
+        if exe_path.starts_with(sanitized_path(disk.mount_point())) {
             return Ok((
                 disk.name().to_string_lossy().into(),
                 disk.mount_point().to_path_buf(),
@@ -68,8 +93,8 @@ pub fn get_list_of_available_drives_and_available_space()
     let mut drives: Vec<(String, PathBuf, u64, bool)> = Vec::new();
 
     let default_mountpoint = match get_default_mount_point() {
-        Ok((_name, mountpoint)) => mountpoint,
-        Err(_) => PathBuf::new(),
+        Ok((_name, mountpoint)) => Some(sanitized_path(mountpoint.as_path())),
+        Err(_) => None,
     };
 
     for disk in disks.list() {
@@ -82,7 +107,10 @@ pub fn get_list_of_available_drives_and_available_space()
             disk.mount_point().to_path_buf(),
             disk.available_space(),
             has_read_write_access(disk.mount_point().to_path_buf())
-                || default_mountpoint == disk.mount_point().to_path_buf(),
+                || default_mountpoint
+                    .as_ref()
+                    .map(|default| default == &sanitized_path(disk.mount_point()))
+                    .unwrap_or(false),
         );
 
         // We avoid adding the same disk multiple times if it's mounted in multiple places
@@ -128,12 +156,12 @@ pub fn get_primary_mount_point() -> PathBuf {
 
 /// Gets the name of the primary mount point.
 pub fn get_primary_mount_point_name() -> Result<String> {
-    let primary_mount_point = get_primary_mount_point();
+    let primary_mount_point = sanitized_path(&get_primary_mount_point());
     let available_drives = get_list_of_available_drives_and_available_space()?;
 
     available_drives
         .iter()
-        .find(|(_, mount_point, _, _)| mount_point == &primary_mount_point)
+        .find(|(_, mount_point, _, _)| sanitized_path(mount_point) == primary_mount_point)
         .map(|(name, _, _, _)| name.clone())
         .ok_or_else(|| eyre!("Unable to find the name of the primary mount point"))
 }
@@ -144,10 +172,12 @@ pub fn get_available_space_b(storage_mountpoint: &Path) -> Result<u64> {
     let target = storage_mountpoint
         .canonicalize()
         .unwrap_or_else(|_| storage_mountpoint.to_path_buf());
+    let target = sanitized_path(&target);
 
     if tracing::level_enabled!(tracing::Level::DEBUG) {
         for disk in disks.list() {
-            let res = target.starts_with(disk.mount_point());
+            let disk_mount = sanitized_path(disk.mount_point());
+            let res = target.starts_with(&disk_mount);
             debug!("Disk: {disk:?} is prefix of '{target:?}': {res:?}",);
         }
     }
@@ -155,8 +185,11 @@ pub fn get_available_space_b(storage_mountpoint: &Path) -> Result<u64> {
     let available_space_b = disks
         .list()
         .iter()
-        .filter(|disk| target.starts_with(disk.mount_point()))
-        .max_by_key(|disk| disk.mount_point().as_os_str().len())
+        .filter(|disk| {
+            let disk_mount = sanitized_path(disk.mount_point());
+            target.starts_with(&disk_mount)
+        })
+        .max_by_key(|disk| sanitized_path(disk.mount_point()).as_os_str().len())
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
         .available_space();
 
@@ -169,11 +202,15 @@ pub fn get_drive_name(storage_mountpoint: &Path) -> Result<String> {
     let target = storage_mountpoint
         .canonicalize()
         .unwrap_or_else(|_| storage_mountpoint.to_path_buf());
+    let target = sanitized_path(&target);
     let name = disks
         .list()
         .iter()
-        .filter(|disk| target.starts_with(disk.mount_point()))
-        .max_by_key(|disk| disk.mount_point().as_os_str().len())
+        .filter(|disk| {
+            let disk_mount = sanitized_path(disk.mount_point());
+            target.starts_with(&disk_mount)
+        })
+        .max_by_key(|disk| sanitized_path(disk.mount_point()).as_os_str().len())
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
         .name()
         .to_str()
