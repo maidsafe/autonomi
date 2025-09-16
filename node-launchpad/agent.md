@@ -82,3 +82,4 @@ Useful flags:
 
 Launchpad requires ~35 GB of free space per node, a valid rewards wallet, and platform-specific permissions to manage services.
 
+All build and test commands respect any pre-set `CARGO_TARGET_DIR`; avoid overwriting the variable so outputs remain in your chosen location.
