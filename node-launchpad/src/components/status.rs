@@ -19,7 +19,7 @@ use crate::{
     action::{Action, NodeTableActions, StatusActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
-    node_stats::NodeStats,
+    node_stats::AggregatedNodeStats,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VERY_LIGHT_AZURE, VIVID_SKY_BLUE},
 };
 use ant_bootstrap::InitialPeersConfig;
@@ -37,7 +37,7 @@ pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
 pub struct Status {
     action_sender: Option<UnboundedSender<Action>>,
     // Device Stats Section
-    node_stats: NodeStats,
+    node_stats: AggregatedNodeStats,
     // Amount of nodes
     nodes_to_start: u64,
     // Rewards address
@@ -79,7 +79,7 @@ impl Status {
     pub async fn new(config: StatusConfig) -> Result<Self> {
         let status = Self {
             action_sender: Default::default(),
-            node_stats: NodeStats::default(),
+            node_stats: AggregatedNodeStats::default(),
             nodes_to_start: config.allocated_disk_space,
             rewards_address: config.rewards_address,
             data_dir_path: config.data_dir_path.clone(),
@@ -255,11 +255,13 @@ impl Component for Status {
                     .state_mut()
                     .sync_port_range(port_range);
             }
+            Action::StoreAggregatedNodeStats(stats) => {
+                self.node_stats = stats.clone();
+                self.node_table_component
+                    .state_mut()
+                    .sync_aggregated_node_stats(stats);
+            }
             Action::StatusActions(status_action) => match status_action {
-                StatusActions::NodesStatsObtained(stats) => {
-                    self.node_stats = stats.clone();
-                    self.node_table_component.state_mut().sync_node_stats(stats);
-                }
                 StatusActions::TriggerManageNodes => {
                     return Ok(Some(Action::SwitchScene(Scene::ManageNodesPopUp {
                         amount_of_nodes: self.nodes_to_start,
@@ -665,7 +667,7 @@ mod tests {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let node = sync_single_node(&mut status, ServiceStatus::Running);
-        let new_stats = NodeStats {
+        let new_stats = AggregatedNodeStats {
             total_memory_usage_mb: 1024,
             total_rewards_wallet_balance: 100,
             individual_stats: vec![IndividualNodeStats {
@@ -681,9 +683,7 @@ mod tests {
             }],
         };
 
-        let result = status.update(Action::StatusActions(StatusActions::NodesStatsObtained(
-            new_stats.clone(),
-        )));
+        let result = status.update(Action::StoreAggregatedNodeStats(new_stats.clone()));
         assert!(result.is_ok());
         assert_eq!(status.node_stats.total_memory_usage_mb, 1024);
         assert_eq!(status.node_stats.total_rewards_wallet_balance, 100);

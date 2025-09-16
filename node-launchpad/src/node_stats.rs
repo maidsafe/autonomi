@@ -6,16 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::components::status::NODE_STAT_UPDATE_INTERVAL;
+use crate::action::{Action, NodeManagementCommand, NodeTableActions};
 use ant_service_management::{NodeServiceData, ServiceStatus, metric::ReachabilityStatusValues};
-use color_eyre::Result;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, time::Instant};
+use std::{collections::HashSet, path::PathBuf, time::Instant};
 use tokio::sync::mpsc::UnboundedSender;
-
-use super::components::status::NODE_STAT_UPDATE_INTERVAL;
-
-use crate::action::{Action, StatusActions};
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IndividualNodeStats {
@@ -33,13 +30,20 @@ pub struct IndividualNodeStats {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct NodeStats {
+pub struct AggregatedNodeStats {
     pub total_rewards_wallet_balance: usize,
     pub total_memory_usage_mb: usize,
     pub individual_stats: Vec<IndividualNodeStats>,
 }
 
-impl NodeStats {
+/// Result of fetching stats from an individual node.
+enum IndividualNodeStatsResult {
+    Success(IndividualNodeStats),
+    FailedToConnectToNode { service_name: String },
+    OtherFailure { service_name: String },
+}
+
+impl AggregatedNodeStats {
     fn merge(&mut self, other: &IndividualNodeStats) {
         self.total_rewards_wallet_balance += other.rewards_wallet_balance;
         self.total_memory_usage_mb += other.memory_usage_mb;
@@ -47,28 +51,15 @@ impl NodeStats {
     }
 
     /// Fetches statistics from all running nodes and sends the aggregated stats via the action sender.
-    ///
-    /// This method iterates over the provided list of `NodeServiceData` instances, filters out nodes that are not running,
-    /// and for each running node, it checks if a metrics port is available. If a metrics port is found, the node's details
-    /// (service name, metrics port, and data directory path) are collected. If no metrics port is found, a debug message
-    /// is logged indicating that the node's stats will not be fetched.
-    ///
-    /// If there are any nodes with available metrics ports, this method spawns a local task to asynchronously fetch
-    /// statistics from these nodes using `fetch_all_node_stats_inner`. The aggregated statistics are then sent via the
-    /// provided `action_sender`.
-    ///
-    /// If no running nodes with metrics ports are found, a debug message is logged indicating that there are no running nodes
-    /// to fetch stats from.
-    ///
-    /// # Parameters
-    ///
-    /// * `nodes`: A slice of `NodeServiceData` instances representing the nodes to fetch statistics from.
-    /// * `action_sender`: An unbounded sender of `Action` instances used to send the aggregated node statistics.
-    pub fn fetch_all_node_stats(nodes: &[NodeServiceData], action_sender: UnboundedSender<Action>) {
+    pub fn fetch_aggregated_node_stats(
+        nodes: &[NodeServiceData],
+        action_sender: UnboundedSender<Action>,
+    ) {
         let node_details = nodes
             .iter()
             .filter_map(|node| {
-                if node.status == ServiceStatus::Running || node.status == ServiceStatus::Added {
+                // Only consider running nodes, the status is saved as Running while reachability is running.
+                if node.status == ServiceStatus::Running {
                     Some((
                         node.service_name.clone(),
                         node.metrics_port,
@@ -82,61 +73,53 @@ impl NodeStats {
         if !node_details.is_empty() {
             debug!("Fetching stats from {} nodes", node_details.len());
             tokio::spawn(async move {
-                Self::fetch_all_node_stats_inner(node_details, action_sender).await;
+                Self::fetch_aggregated_node_stats_inner(node_details, action_sender).await;
             });
-        } else {
-            debug!("No running nodes to fetch stats from.");
         }
     }
 
-    /// This method is an inner function used to fetch statistics from all nodes.
-    /// It takes a vector of node details (service name, metrics port, and data directory path) and an unbounded sender of `Action` instances.
-    /// The method iterates over the provided list of `NodeServiceData` instances, filters out nodes that are not running,
-    /// and for each running node, it checks if a metrics port is available. If a metrics port is found, the node's details
-    /// (service name, metrics port, and data directory path) are collected. If no metrics port is found, a debug message
-    /// is logged indicating that the node's stats will not be fetched.
-    ///
-    /// If there are any nodes with available metrics ports, this method spawns a local task to asynchronously fetch
-    /// statistics from these nodes using `fetch_all_node_stats_inner`. The aggregated statistics are then sent via the
-    /// provided `action_sender`.
-    ///
-    /// If no running nodes with metrics ports are found, a debug message is logged indicating that there are no running nodes
-    /// to fetch stats from.
-    ///
-    /// # Parameters
-    ///
-    /// * `node_details`: A vector of tuples, each containing the service name, metrics port, and data directory path of a node.
-    /// * `action_sender`: An unbounded sender of `Action` instances used to send the aggregated node statistics.
-    async fn fetch_all_node_stats_inner(
+    async fn fetch_aggregated_node_stats_inner(
         node_details: Vec<(String, u16, PathBuf)>,
         action_sender: UnboundedSender<Action>,
     ) {
         let mut stream = futures::stream::iter(node_details)
             .map(|(service_name, metrics_port, data_dir)| async move {
-                (
-                    Self::fetch_stat_per_node(service_name.clone(), metrics_port, data_dir).await,
-                    service_name,
-                )
+                Self::fetch_stat_per_node(service_name.clone(), metrics_port, data_dir).await
             })
             .buffer_unordered(5);
 
-        let mut all_node_stats = NodeStats::default();
+        let mut aggregated_node_stats = AggregatedNodeStats::default();
 
-        while let Some((result, service_name)) = stream.next().await {
+        let mut connection_failures = HashSet::new();
+        while let Some(result) = stream.next().await {
             match result {
-                Ok(individual_stats) => {
-                    all_node_stats.merge(&individual_stats);
+                IndividualNodeStatsResult::Success(individual_stats) => {
+                    aggregated_node_stats.merge(&individual_stats);
                 }
-                Err(err) => {
-                    error!("Error while fetching stats from {service_name:?}: {err:?}");
+                IndividualNodeStatsResult::FailedToConnectToNode { service_name } => {
+                    connection_failures.insert(service_name.clone());
+                }
+                IndividualNodeStatsResult::OtherFailure { service_name } => {
+                    error!("Other failure while fetching stats from {service_name:?}");
                 }
             }
         }
 
-        if let Err(err) = action_sender.send(Action::StatusActions(
-            StatusActions::NodesStatsObtained(all_node_stats),
-        )) {
-            error!("Error while sending action: {err:?}");
+        if let Err(err) =
+            action_sender.send(Action::StoreAggregatedNodeStats(aggregated_node_stats))
+        {
+            error!("Failed to send aggregated node stats action: {err:?}");
+        }
+
+        if !connection_failures.is_empty() {
+            warn!(
+                "Failed to connect to nodes: {connection_failures:?}, trying to refresh registry to update the service status."
+            );
+            if let Err(err) = action_sender.send(Action::NodeTableActions(
+                NodeTableActions::NodeManagementCommand(NodeManagementCommand::RefreshRegistry),
+            )) {
+                error!("Failed to send refresh registry action: {err:?}");
+            }
         }
     }
 
@@ -144,15 +127,22 @@ impl NodeStats {
         service_name: String,
         metrics_port: u16,
         _data_dir: PathBuf,
-    ) -> Result<IndividualNodeStats> {
+    ) -> IndividualNodeStatsResult {
         let now = Instant::now();
 
-        let body = reqwest::get(&format!("http://localhost:{metrics_port}/metrics"))
-            .await?
-            .text()
-            .await?;
+        let Ok(response) = reqwest::get(&format!("http://localhost:{metrics_port}/metrics")).await
+        else {
+            return IndividualNodeStatsResult::FailedToConnectToNode { service_name };
+        };
+
+        let Ok(body) = response.text().await else {
+            return IndividualNodeStatsResult::OtherFailure { service_name };
+        };
+
         let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
-        let all_metrics = prometheus_parse::Scrape::parse(lines.into_iter())?;
+        let Ok(all_metrics) = prometheus_parse::Scrape::parse(lines.into_iter()) else {
+            return IndividualNodeStatsResult::OtherFailure { service_name };
+        };
 
         let mut stats = IndividualNodeStats {
             service_name,
@@ -243,6 +233,6 @@ impl NodeStats {
             "Fetched stats from metrics_port {metrics_port:?} in {:?}",
             now.elapsed()
         );
-        Ok(stats)
+        IndividualNodeStatsResult::Success(stats)
     }
 }
