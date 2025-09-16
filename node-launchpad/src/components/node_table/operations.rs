@@ -69,6 +69,12 @@ impl NodeOperations {
         Ok(())
     }
 
+    pub fn handle_refresh_registry(&mut self) -> Result<()> {
+        self.node_management
+            .send_task(NodeManagementTask::RefreshNodeRegistry { force: true })?;
+        Ok(())
+    }
+
     pub fn handle_add_node(&mut self, config: &AddNodeConfig) -> Result<Option<Action>> {
         // Validation: Available space
         if GB_PER_NODE > config.available_disk_space_gb {

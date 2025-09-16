@@ -9,7 +9,7 @@
 use crate::{
     components::{node_table::NodeDisplayStatus, popup::error_popup::ErrorPopup},
     mode::{InputMode, Scene},
-    node_stats::NodeStats,
+    node_stats::AggregatedNodeStats,
 };
 use ant_evm::EvmAddress;
 use ant_service_management::NodeServiceData;
@@ -31,6 +31,7 @@ pub enum Action {
     StorePortRange(Option<(u32, u32)>),
     StoreRewardsAddress(EvmAddress),
     StoreRunningNodeCount(u64),
+    StoreAggregatedNodeStats(AggregatedNodeStats),
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
@@ -64,7 +65,6 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StatusActions {
-    NodesStatsObtained(NodeStats),
     TriggerManageNodes,
     TriggerRewardsAddress,
 }
@@ -128,6 +128,7 @@ pub enum NodeManagementCommand {
     ToggleNode,
     UpgradeNodes,
     ResetNodes,
+    RefreshRegistry,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -155,6 +156,9 @@ pub enum NodeManagementResponse {
         error: Option<String>,
     },
     ResetNodes {
+        error: Option<String>,
+    },
+    RefreshRegistry {
         error: Option<String>,
     },
 }

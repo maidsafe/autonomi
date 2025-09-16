@@ -13,7 +13,7 @@ use super::{
 };
 use crate::action::{Action, NodeTableActions};
 use crate::node_management::NodeManagement;
-use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::NodeStats};
+use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::AggregatedNodeStats};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
 use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
@@ -116,7 +116,7 @@ impl NodeTableState {
             self.node_stats_last_update = Instant::now();
 
             if let Some(action_sender) = &self.operations.action_sender {
-                crate::node_stats::NodeStats::fetch_all_node_stats(
+                crate::node_stats::AggregatedNodeStats::fetch_aggregated_node_stats(
                     &self.node_services,
                     action_sender.clone(),
                 );
@@ -139,7 +139,7 @@ impl NodeTableState {
 
             action_sender.send(state_action)?;
         } else {
-            error!("NodeTableState::send_state_update - No action_sender available");
+            error!("Could not send StateChanged action - no action_sender available");
         }
         Ok(())
     }
@@ -294,7 +294,7 @@ impl NodeTableState {
     }
 
     // update the values inside node items
-    pub fn sync_node_stats(&mut self, node_stats: NodeStats) {
+    pub fn sync_aggregated_node_stats(&mut self, node_stats: AggregatedNodeStats) {
         for stats in node_stats.individual_stats {
             if let Some(item) = self
                 .items
@@ -313,27 +313,27 @@ impl NodeTableState {
                 item.connections = stats.connections;
             }
         }
-        debug!("NodeTableState: Synced node items with the node stats");
+        debug!("Synced node items with the node stats");
     }
 
     pub fn sync_rewards_address(&mut self, rewards_address: Option<EvmAddress>) {
         self.rewards_address = rewards_address;
-        debug!("NodeTableState: Synced rewards_address to {rewards_address:?}");
+        debug!("Synced rewards_address to {rewards_address:?}");
     }
 
     pub fn sync_nodes_to_start(&mut self, nodes_to_start: u64) {
         self.nodes_to_start = nodes_to_start;
-        debug!("NodeTableState: Synced nodes_to_start to {nodes_to_start}");
+        debug!("Synced nodes_to_start to {nodes_to_start}");
     }
 
     pub fn sync_upnp_setting(&mut self, upnp_enabled: bool) {
         self.upnp_enabled = upnp_enabled;
-        debug!("NodeTableState: Synced upnp_enabled to {upnp_enabled:?}");
+        debug!("Synced upnp_enabled to {upnp_enabled:?}");
     }
 
     pub fn sync_port_range(&mut self, port_range: Option<(u32, u32)>) {
         self.port_range = port_range;
-        debug!("NodeTableState: Synced port_range to {port_range:?}");
+        debug!("Synced port_range to {port_range:?}");
     }
 
     /// Find the index of the next unlocked node, wrapping around if needed

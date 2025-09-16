@@ -222,6 +222,14 @@ impl NodeTableComponent {
         command: NodeManagementCommand,
     ) -> Result<Option<Action>> {
         match command {
+            NodeManagementCommand::RefreshRegistry => {
+                for item in self.state.items.items.iter_mut() {
+                    item.lock_for_operation(NodeDisplayStatus::Refreshing);
+                }
+
+                self.state_mut().operations.handle_refresh_registry()?;
+                Ok(None)
+            }
             NodeManagementCommand::MaintainNodes => {
                 // lock all for now
                 // todo move to lock only if stopping.
@@ -441,6 +449,24 @@ impl NodeTableComponent {
         response: NodeManagementResponse,
     ) -> Result<Option<Action>> {
         match response {
+            NodeManagementResponse::RefreshRegistry { error } => {
+                // unlock all nodes that were locked for refreshing operations
+                for item in self.state.items.items.iter_mut() {
+                    if item.is_locked() {
+                        item.unlock();
+                        // Update status based on actual service status after refresh
+                        // the item.service_status will be updated from the registry data automatically
+                        item.update_node_display_status(NodeDisplayStatus::from(
+                            &item.service_status,
+                        ));
+                    }
+                }
+
+                if let Some(err) = error {
+                    error!("RefreshRegistry operation failed: {err}");
+                }
+                Ok(None)
+            }
             NodeManagementResponse::MaintainNodes { error } => {
                 // unlock all nodes that were locked for maintenance operations
                 for item in self.state.items.items.iter_mut() {
