@@ -107,19 +107,17 @@ impl RewardsAddressPopup {
                 self.validate();
                 vec![]
             }
-            KeyCode::Char('v') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    let mut clipboard = match Clipboard::new() {
-                        Ok(clipboard) => clipboard,
-                        Err(e) => {
-                            error!("Error reading Clipboard : {:?}", e);
-                            return vec![];
-                        }
-                    };
-                    if let Ok(content) = clipboard.get_text() {
-                        self.rewards_address_input_field =
-                            self.rewards_address_input_field.clone().with_value(content);
+            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let mut clipboard = match Clipboard::new() {
+                    Ok(clipboard) => clipboard,
+                    Err(e) => {
+                        error!("Error reading Clipboard : {:?}", e);
+                        return vec![];
                     }
+                };
+                if let Ok(content) = clipboard.get_text() {
+                    self.rewards_address_input_field =
+                        self.rewards_address_input_field.clone().with_value(content);
                 }
                 vec![]
             }
@@ -484,5 +482,132 @@ impl Component for RewardsAddressPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    fn sample_address() -> &'static str {
+        "0x1234567890123456789012345678901234567890"
+    }
+
+    #[tokio::test]
+    async fn accept_terms_and_store_address() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+            .expect("update")
+            .expect("action");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+
+        // Accept terms
+        let _ = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("terms handled");
+
+        // Type address and submit
+        for ch in sample_address().chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::StoreRewardsAddress(address) if address == &sample_address().parse::<EvmAddress>().unwrap()
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[tokio::test]
+    async fn escape_returns_to_previous_scene() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::OptionsRewardsAddressPopUp))
+            .expect("update")
+            .expect("entry mode");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.contains(&Action::SwitchScene(Scene::Options)));
+    }
+
+    #[tokio::test]
+    async fn typed_address_must_be_valid() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+            .expect("update")
+            .expect("entry");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+        let _ = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("accepted");
+
+        for ch in "invalid".chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+        let (actions, _) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+
+        // Comprehensive error state validation
+        assert!(
+            actions.is_empty(),
+            "invalid address should not store or switch scenes"
+        );
+        assert!(
+            popup.rewards_address.is_none(),
+            "rewards_address should remain None for invalid input"
+        );
+        assert_eq!(
+            popup.rewards_address_input_field.value(),
+            "invalid",
+            "input field should retain invalid value"
+        );
+        assert!(
+            matches!(
+                popup.state,
+                RewardsAddressState::AcceptTCsAndEnterRewardsAddress
+            ),
+            "state should remain in address entry mode after invalid input"
+        );
     }
 }

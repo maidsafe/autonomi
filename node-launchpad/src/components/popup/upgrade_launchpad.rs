@@ -247,3 +247,66 @@ pub async fn check_for_update() -> Result<Option<(Version, Version)>> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn handle_key_events_returns_to_status() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeLaunchpadPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.contains(&Action::SwitchScene(Scene::Status)));
+        assert!(actions.contains(&Action::SwitchInputMode(InputMode::Navigation)));
+    }
+
+    #[test]
+    fn update_available_switches_scene_and_stores_versions() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let action = popup
+            .update(Action::UpgradeLaunchpadActions(
+                UpgradeLaunchpadActions::UpdateAvailable {
+                    current_version: "0.1.0".into(),
+                    latest_version: "0.2.0".into(),
+                },
+            ))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchScene(Scene::UpgradeLaunchpadPopUp));
+        assert_eq!(popup.current_version.as_deref(), Some("0.1.0"));
+        assert_eq!(popup.latest_version.as_deref(), Some("0.2.0"));
+    }
+
+    #[test]
+    fn switch_scene_enters_entry_mode() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let action = popup
+            .update(Action::SwitchScene(Scene::UpgradeLaunchpadPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+    }
+}

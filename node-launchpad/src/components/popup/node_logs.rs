@@ -157,11 +157,13 @@ impl NodeLogsPopup {
             Ok(duration) => {
                 let seconds = duration.as_secs();
                 if seconds < 60 {
-                    format!("{}s ago", seconds)
+                    format!("{seconds}s ago")
                 } else if seconds < 3600 {
-                    format!("{}min ago", seconds / 60)
+                    let minutes = seconds / 60;
+                    format!("{minutes}min ago")
                 } else if seconds < 86400 {
-                    format!("{} hours ago", seconds / 3600)
+                    let hours = seconds / 3600;
+                    format!("{hours} hours ago")
                 } else {
                     // More than 24 hours, show exact time
                     if let Ok(duration_since_epoch) = modified_time.duration_since(UNIX_EPOCH) {
@@ -927,5 +929,199 @@ impl Component for NodeLogsPopup {
         self.render_word_wrap_indicator(f, popup_area);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crate::log_management::LogManagement;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn build_popup() -> NodeLogsPopup {
+        NodeLogsPopup::new(LogManagement::new().expect("log management"))
+    }
+
+    #[test]
+    fn handle_logs_loaded_updates_selection_and_state() {
+        let mut popup = build_popup();
+        let logs = vec!["line1".into(), "line2".into(), "line3".into()];
+        popup.handle_logs_loaded(logs.clone(), logs.len(), Some("path/to/log".into()), None);
+        assert_eq!(popup.loading_state, LogLoadingState::Loaded);
+        assert_eq!(popup.logs, logs);
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(list_state.selected(), Some(2));
+            }
+            _ => panic!("expected list view"),
+        }
+    }
+
+    #[test]
+    fn handle_logs_error_sets_error_state_and_messages() {
+        let mut popup = build_popup();
+        popup.handle_logs_error("boom".into());
+        assert!(matches!(popup.loading_state, LogLoadingState::Error(_)));
+        assert!(!popup.logs.is_empty());
+        assert!(popup.logs.iter().any(|line| line.contains("boom")));
+    }
+
+    #[test]
+    fn toggle_word_wrap_round_trips_view_mode() {
+        let mut popup = build_popup();
+        popup.handle_logs_loaded(vec!["one".into(), "two".into()], 2, None, None);
+        popup.toggle_word_wrap();
+        assert!(matches!(popup.view_mode, ViewMode::WordWrap { .. }));
+        popup.toggle_word_wrap();
+        assert!(matches!(popup.view_mode, ViewMode::List { .. }));
+    }
+
+    #[test]
+    fn handle_scroll_moves_selection_in_list_view() {
+        let mut popup = build_popup();
+        popup.handle_logs_loaded(
+            vec!["one".into(), "two".into(), "three".into()],
+            3,
+            None,
+            None,
+        );
+        popup.handle_scroll(ScrollDirection::Up, false);
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => assert_eq!(list_state.selected(), Some(1)),
+            _ => panic!("expected list view"),
+        }
+    }
+
+    #[test]
+    fn update_logs_loaded_only_for_current_node() {
+        let mut popup = build_popup();
+        popup.node_name = "node-a".into();
+        let other_update = popup
+            .update(Action::LogsLoaded {
+                node_name: "node-b".into(),
+                logs: vec!["ignored".into()],
+                total_lines: 1,
+                file_path: None,
+                last_modified: None,
+            })
+            .expect("update");
+        assert!(other_update.is_none());
+        assert_eq!(popup.logs, vec!["Initializing logs...".to_string()]);
+
+        let current_update = popup
+            .update(Action::LogsLoaded {
+                node_name: "node-a".into(),
+                logs: vec!["kept".to_string()],
+                total_lines: 1,
+                file_path: None,
+                last_modified: None,
+            })
+            .expect("update");
+        assert!(current_update.is_none());
+        assert_eq!(popup.logs, vec!["kept".to_string()]);
+    }
+
+    #[test]
+    fn handle_key_events_scroll_and_escape() {
+        let mut popup = build_popup();
+        popup.handle_logs_loaded(vec!["one".into(), "two".into()], 2, None, None);
+        let focus_manager = FocusManager::new(FocusTarget::NodeLogsPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Consumed);
+
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(actions, vec![Action::SwitchScene(Scene::Status)]);
+    }
+
+    #[test]
+    fn edge_cases_empty_logs_and_boundary_scrolling() {
+        let mut popup = build_popup();
+
+        // Test empty logs
+        popup.handle_logs_loaded(vec![], 0, None, None);
+        assert_eq!(popup.logs.len(), 0);
+        assert_eq!(popup.loading_state, LogLoadingState::Loaded);
+
+        // Test scrolling with empty logs should not panic
+        popup.handle_scroll(ScrollDirection::Up, false);
+        popup.handle_scroll(ScrollDirection::Down, false);
+
+        // Test single log line
+        popup.handle_logs_loaded(vec!["single".into()], 1, None, None);
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(list_state.selected(), Some(0));
+            }
+            _ => panic!("expected list view"),
+        }
+
+        // Test scrolling at boundaries
+        popup.handle_scroll(ScrollDirection::Up, false);
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(
+                    list_state.selected(),
+                    Some(0),
+                    "should stay at top boundary"
+                );
+            }
+            _ => panic!("expected list view"),
+        }
+
+        popup.handle_scroll(ScrollDirection::Down, false);
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(
+                    list_state.selected(),
+                    Some(0),
+                    "should stay at bottom boundary"
+                );
+            }
+            _ => panic!("expected list view"),
+        }
+    }
+
+    #[test]
+    fn large_log_file_handling() {
+        let mut popup = build_popup();
+
+        // Test with very large log file (1000 lines)
+        let large_logs: Vec<String> = (0..1000).map(|i| format!("Log line {i}")).collect();
+        popup.handle_logs_loaded(large_logs.clone(), 1000, Some("large.log".into()), None);
+
+        assert_eq!(popup.logs.len(), 1000);
+        assert_eq!(popup.loading_state, LogLoadingState::Loaded);
+
+        // Test selection starts at bottom (most recent)
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(list_state.selected(), Some(999));
+            }
+            _ => panic!("expected list view"),
+        }
+
+        // Test scrolling to top
+        for _ in 0..1000 {
+            popup.handle_scroll(ScrollDirection::Up, false);
+        }
+        match &popup.view_mode {
+            ViewMode::List { list_state, .. } => {
+                assert_eq!(list_state.selected(), Some(0), "should reach top");
+            }
+            _ => panic!("expected list view"),
+        }
     }
 }

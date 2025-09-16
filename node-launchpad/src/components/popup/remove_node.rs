@@ -157,3 +157,72 @@ impl Component for RemoveNodePopUp {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = RemoveNodePopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn enter_confirms_removal() {
+        let mut popup = RemoveNodePopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::RemoveNodePopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::RemoveNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[test]
+    fn esc_returns_to_status() {
+        let mut popup = RemoveNodePopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::RemoveNodePopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(actions, vec![Action::SwitchScene(Scene::Status)]);
+    }
+
+    #[test]
+    fn update_switch_scene_requests_entry_mode() {
+        let mut popup = RemoveNodePopUp::default();
+        let action = popup
+            .update(Action::SwitchScene(Scene::RemoveNodePopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+    }
+}

@@ -193,3 +193,72 @@ impl Component for UpgradeNodesPopUp {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn enter_triggers_upgrade_command() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeNodesPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::UpgradeNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[test]
+    fn esc_returns_to_options() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeNodesPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(actions, vec![Action::SwitchScene(Scene::Options)]);
+    }
+
+    #[test]
+    fn update_switch_scene_requests_entry_mode() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let action = popup
+            .update(Action::SwitchScene(Scene::UpgradeNodesPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+    }
+}

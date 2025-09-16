@@ -102,3 +102,49 @@ impl StatefulWidget for Header {
         paragraph.render(layout[0], buf);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    fn render_header(state: &mut SelectedMenuItem) -> ratatui::buffer::Buffer {
+        let backend = TestBackend::new(80, 1);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|f| {
+                let header = Header::new();
+                header.render(f.area(), f.buffer_mut(), state);
+            })
+            .expect("draw");
+        terminal.backend().buffer().clone()
+    }
+
+    #[test]
+    fn status_menu_is_highlighted_when_selected() {
+        let mut state = SelectedMenuItem::Status;
+        let buffer = render_header(&mut state);
+        let mut status_color: Option<Color> = None;
+        for cell in buffer.content() {
+            if cell.symbol().starts_with("[") {
+                status_color = Some(cell.fg);
+                break;
+            }
+        }
+        assert_eq!(status_color, Some(VIVID_SKY_BLUE));
+    }
+
+    #[test]
+    fn options_menu_highlight_switches_with_state() {
+        let mut state = SelectedMenuItem::Options;
+        let buffer = render_header(&mut state);
+        let mut found_options = false;
+        for cell in buffer.content() {
+            if cell.symbol() == "O" {
+                found_options = cell.fg == VIVID_SKY_BLUE;
+                break;
+            }
+        }
+        assert!(found_options, "options label should be highlighted");
+    }
+}

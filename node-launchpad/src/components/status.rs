@@ -87,7 +87,8 @@ impl Status {
             port_range: config.port_range,
             error_popup: None,
             storage_mountpoint: config.storage_mountpoint.clone(),
-            available_disk_space_gb: get_available_space_b(&config.storage_mountpoint)? / GB,
+            available_disk_space_gb: get_available_space_b(config.storage_mountpoint.as_path())?
+                / GB,
 
             // Initialize NodeTable component
             node_table_component: NodeTableComponent::new(NodeTableConfig {
@@ -274,7 +275,7 @@ impl Component for Status {
             },
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                self.available_disk_space_gb = get_available_space_b(mountpoint.as_path())? / GB;
             }
             Action::ShowErrorPopup(mut error_popup) => {
                 error_popup.show();
@@ -509,34 +510,43 @@ impl Component for Status {
 mod tests {
     use super::*;
     use crate::focus::{EventResult, FocusManager};
+    use crate::node_stats::IndividualNodeStats;
     use crate::test_utils::*;
+    use ant_service_management::{NodeServiceData, ServiceStatus};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
     use std::env::temp_dir;
+    use std::time::Duration;
 
     fn create_test_status_config() -> StatusConfig {
-        let temp_path = temp_dir();
-        // Use root filesystem as mountpoint since it's always available on Unix-like systems
-        let storage_mountpoint = if cfg!(unix) {
-            PathBuf::from("/")
-        } else {
-            PathBuf::from("C:\\")
-        };
+        let temp_path = temp_dir().join("node-launchpad-test-data");
+        std::fs::create_dir_all(&temp_path).expect("failed to create temp directory");
+        let storage_mountpoint = temp_path.clone();
 
         StatusConfig {
             allocated_disk_space: 10,
-            antnode_path: Some(PathBuf::from("/usr/local/bin/antnode")),
+            antnode_path: Some(temp_path.join("antnode")),
             upnp_enabled: true,
             port_range: Some((15000, 15100)),
-            data_dir_path: temp_path,
+            data_dir_path: temp_path.clone(),
             network_id: Some(1),
             init_peers_config: InitialPeersConfig::default(),
             storage_mountpoint,
             rewards_address: "0x1234567890123456789012345678901234567890"
                 .parse::<EvmAddress>()
                 .ok(),
-            registry_path_override: None,
+            registry_path_override: Some(temp_path.join("registry")),
         }
+    }
+
+    fn sync_single_node(status: &mut Status, service_status: ServiceStatus) -> NodeServiceData {
+        let registry = MockNodeRegistry::empty().expect("failed to create mock registry");
+        let node = registry.create_test_node_service_data(0, service_status);
+        status
+            .node_table_component
+            .state_mut()
+            .sync_node_service_data(std::slice::from_ref(&node));
+        node
     }
 
     #[tokio::test]
@@ -570,18 +580,31 @@ mod tests {
         let focus_manager = FocusManager::new(FocusTarget::Status);
 
         let key_event = KeyEvent::new(KeyCode::Char('j'), KeyModifiers::empty());
-        let result = status.handle_key_events(key_event, &focus_manager);
+        let (actions, event_result) = status
+            .handle_key_events(key_event, &focus_manager)
+            .expect("handled");
 
-        assert!(result.is_ok());
+        assert!(actions.is_empty(), "unexpected actions were emitted");
+        assert_eq!(event_result, EventResult::Ignored);
     }
 
     #[tokio::test]
-    async fn test_status_update_tick_action() {
+    async fn test_status_update_tick_action_updates_last_refresh_time() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
-        let result = status.update(Action::Tick);
-        assert!(result.is_ok());
+        let table_state = status.node_table_component.state_mut();
+        table_state.node_stats_last_update =
+            std::time::Instant::now() - NODE_STAT_UPDATE_INTERVAL - Duration::from_secs(1);
+        let before = table_state.node_stats_last_update;
+
+        status.update(Action::Tick).expect("tick handled");
+
+        let after = status.node_table_component.state().node_stats_last_update;
+        assert!(
+            after > before,
+            "tick should refresh last stats update instant"
+        );
     }
 
     #[tokio::test]
@@ -606,6 +629,10 @@ mod tests {
         let result = status.update(Action::StoreRewardsAddress(new_address));
         assert!(result.is_ok());
         assert_eq!(status.rewards_address, Some(new_address));
+        assert_eq!(
+            status.node_table_component.state().rewards_address,
+            Some(new_address)
+        );
     }
 
     #[tokio::test]
@@ -616,6 +643,7 @@ mod tests {
         let result = status.update(Action::StoreUpnpSetting(false));
         assert!(result.is_ok());
         assert!(!status.upnp_enabled);
+        assert!(!status.node_table_component.state().upnp_enabled);
     }
 
     #[tokio::test]
@@ -626,16 +654,31 @@ mod tests {
         let result = status.update(Action::StorePortRange(Some((20000, 20100))));
         assert!(result.is_ok());
         assert_eq!(status.port_range, Some((20000, 20100)));
+        assert_eq!(
+            status.node_table_component.state().port_range,
+            Some((20000, 20100))
+        );
     }
 
     #[tokio::test]
     async fn test_status_update_nodes_stats_obtained() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
+        let node = sync_single_node(&mut status, ServiceStatus::Running);
         let new_stats = NodeStats {
             total_memory_usage_mb: 1024,
             total_rewards_wallet_balance: 100,
-            individual_stats: Vec::new(),
+            individual_stats: vec![IndividualNodeStats {
+                service_name: node.service_name.clone(),
+                rewards_wallet_balance: 55,
+                memory_usage_mb: 777,
+                bandwidth_inbound_rate: 11,
+                bandwidth_outbound_rate: 22,
+                max_records: 33,
+                peers: 44,
+                connections: 5,
+                ..Default::default()
+            }],
         };
 
         let result = status.update(Action::StatusActions(StatusActions::NodesStatsObtained(
@@ -644,16 +687,20 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(status.node_stats.total_memory_usage_mb, 1024);
         assert_eq!(status.node_stats.total_rewards_wallet_balance, 100);
-    }
 
-    // TODO: Rewrite this test to use real node data instead of mocks
-    // #[tokio::test]
-    // async fn test_status_update_registry_updated() {
-    //     let config = create_test_status_config();
-    //     let mut status = Status::new(config).await.unwrap();
-    //     // Test with real node registry data
-    //     assert!(true); // Placeholder
-    // }
+        let node_item = status
+            .node_table_component
+            .state()
+            .items
+            .items
+            .iter()
+            .find(|item| item.service_name == node.service_name)
+            .expect("node item updated");
+        assert_eq!(node_item.rewards_wallet_balance, 55);
+        assert_eq!(node_item.memory, 777);
+        assert_eq!(node_item.records, 33);
+        assert_eq!(node_item.connections, 5);
+    }
 
     #[tokio::test]
     async fn test_status_update_trigger_manage_nodes() {
@@ -729,6 +776,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_status_update_node_table_selection_changed() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::NodeTableActions(
+            NodeTableActions::SelectionChanged {
+                selected_node_status: Some(NodeDisplayStatus::Running),
+            },
+        ));
+        assert!(result.is_ok());
+        assert_eq!(
+            status.selected_node_status,
+            Some(NodeDisplayStatus::Running)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_status_store_running_node_count_syncs_table() {
+        let config = create_test_status_config();
+        let mut status = Status::new(config).await.unwrap();
+
+        let result = status.update(Action::StoreRunningNodeCount(7));
+        assert!(result.is_ok());
+        assert_eq!(status.nodes_to_start, 7);
+        assert_eq!(status.node_table_component.state().nodes_to_start, 7);
+    }
+
+    #[tokio::test]
     async fn test_status_drawing_with_error_popup() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
@@ -748,38 +823,6 @@ mod tests {
         });
 
         assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_status_upnp_enabled() {
-        let mut config = create_test_status_config();
-        config.upnp_enabled = true;
-        let status = Status::new(config).await.unwrap();
-
-        assert!(status.upnp_enabled);
-    }
-
-    #[tokio::test]
-    async fn test_status_custom_port_range() {
-        let mut config = create_test_status_config();
-        config.port_range = Some((20000, 20100));
-        let status = Status::new(config).await.unwrap();
-
-        assert_eq!(status.port_range, Some((20000, 20100)));
-    }
-
-    #[tokio::test]
-    async fn test_status_memory_display_calculation() {
-        let config = create_test_status_config();
-        let mut status = Status::new(config).await.unwrap();
-
-        // Test memory usage less than 1GB
-        status.node_stats.total_memory_usage_mb = 512;
-        assert_eq!(status.node_stats.total_memory_usage_mb, 512);
-
-        // Test memory usage greater than 1GB
-        status.node_stats.total_memory_usage_mb = 2048;
-        assert_eq!(status.node_stats.total_memory_usage_mb, 2048);
     }
 
     // TODO: Rewrite this test to use real node data instead of MockNode

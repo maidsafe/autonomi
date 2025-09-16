@@ -41,7 +41,7 @@ impl ManageNodesPopup {
     pub fn new(nodes_to_start: u64, storage_mountpoint: PathBuf) -> Result<Self> {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
-            available_disk_space_gb: get_available_space_b(&storage_mountpoint)? / GB,
+            available_disk_space_gb: get_available_space_b(storage_mountpoint.as_path())? / GB,
             nodes_to_start_input: Input::default().with_value(nodes_to_start.to_string()),
             old_value: Default::default(),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -64,14 +64,33 @@ impl ManageNodesPopup {
         let send_back = match key.code {
             KeyCode::Enter => {
                 let nodes_to_start_str = self.nodes_to_start_input.value().to_string();
-                let nodes_to_start =
-                    std::cmp::min(self.get_nodes_to_start_val(), self.max_nodes_to_start());
+                let requested_nodes = self.get_nodes_to_start_val();
+                let nodes_to_start = std::cmp::min(requested_nodes, self.max_nodes_to_start());
 
                 // set the new value
                 self.nodes_to_start_input = self
                     .nodes_to_start_input
                     .clone()
                     .with_value(nodes_to_start.to_string());
+
+                if requested_nodes > self.max_nodes_to_start() {
+                    debug!(
+                        "Requested {requested_nodes} node(s) but the limit is {limit}. Rejecting action.",
+                        limit = self.max_nodes_to_start()
+                    );
+                    return Ok(vec![]);
+                }
+
+                if nodes_to_start == 0
+                    && requested_nodes > 0
+                    && self.available_disk_space_gb < GB_PER_NODE
+                {
+                    debug!(
+                        "Requested {requested_nodes} node(s) but only {available}GB available. Rejecting action.",
+                        available = self.available_disk_space_gb
+                    );
+                    return Ok(vec![]);
+                }
 
                 debug!(
                     "Got Enter, value found to be {nodes_to_start} derived from input: {nodes_to_start_str:?} and switching scene",
@@ -192,7 +211,7 @@ impl Component for ManageNodesPopup {
             }
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                self.available_disk_space_gb = get_available_space_b(mountpoint.as_path())? / GB;
                 None
             }
             _ => None,
@@ -327,5 +346,141 @@ impl Component for ManageNodesPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    fn build_popup(initial: u64) -> ManageNodesPopup {
+        let mount = std::env::temp_dir().join("test-manage-nodes");
+        std::fs::create_dir_all(&mount).expect("failed to create temp directory");
+        ManageNodesPopup::new(initial, mount).expect("popup initialised")
+    }
+
+    #[test]
+    fn numeric_input_clamps_to_max_node_count() {
+        let mut popup = build_popup(0);
+        popup.available_disk_space_gb = GB_PER_NODE * (MAX_NODE_COUNT + 5);
+        popup.nodes_to_start_input = Input::default();
+
+        let _ = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Char('5'), KeyModifiers::empty()))
+            .expect("first digit");
+        let _ = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Char('9'), KeyModifiers::empty()))
+            .expect("second digit");
+
+        assert_eq!(
+            popup.nodes_to_start_input.value(),
+            MAX_NODE_COUNT.to_string()
+        );
+    }
+
+    #[test]
+    fn enter_confirms_value_and_dispatches_actions() {
+        let mut popup = build_popup(2);
+        popup.available_disk_space_gb = GB_PER_NODE * 5;
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("enter handled");
+
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::StoreRunningNodeCount(2)))
+        );
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::MaintainNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[test]
+    fn update_switch_scene_enters_entry_mode() {
+        let mut popup = build_popup(3);
+        let action = popup
+            .update(Action::SwitchScene(Scene::ManageNodesPopUp {
+                amount_of_nodes: 8,
+            }))
+            .expect("update processed")
+            .expect("action produced");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+        assert_eq!(popup.nodes_to_start_input.value(), "8");
+        assert_eq!(popup.old_value, "8");
+    }
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = build_popup(1);
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('1'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn boundary_conditions_disk_space_and_node_limits() {
+        let mut popup = build_popup(0);
+
+        // Test with exact maximum nodes allowed by disk space
+        popup.available_disk_space_gb = GB_PER_NODE * MAX_NODE_COUNT;
+        popup.nodes_to_start_input = Input::default().with_value(MAX_NODE_COUNT.to_string());
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("max nodes accepted");
+        assert!(!actions.is_empty(), "should accept maximum allowable nodes");
+
+        // Test insufficient disk space for single node
+        popup.available_disk_space_gb = GB_PER_NODE / 2;
+        popup.nodes_to_start_input = Input::default().with_value("1".to_string());
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("insufficient space handled");
+        assert!(
+            actions.is_empty(),
+            "should reject nodes when insufficient disk space"
+        );
+
+        // Test zero nodes
+        popup.available_disk_space_gb = GB_PER_NODE * 10;
+        popup.nodes_to_start_input = Input::default().with_value("0".to_string());
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("zero nodes handled");
+        assert!(!actions.is_empty(), "should accept zero nodes (removal)");
+
+        // Test exactly at disk space boundary
+        popup.available_disk_space_gb = GB_PER_NODE * 3;
+        popup.nodes_to_start_input = Input::default().with_value("3".to_string());
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("boundary case handled");
+        assert!(
+            !actions.is_empty(),
+            "should accept nodes at exact disk boundary"
+        );
+
+        // Test one over disk space boundary
+        popup.nodes_to_start_input = Input::default().with_value("4".to_string());
+        let actions = popup
+            .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .expect("over boundary handled");
+        assert!(actions.is_empty(), "should reject nodes over disk boundary");
     }
 }

@@ -209,3 +209,72 @@ impl StatefulWidget for Footer {
         StatefulWidget::render(table, area, buf, &mut TableState::default());
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base_state() -> FooterState {
+        FooterState {
+            has_nodes: false,
+            has_running_nodes: false,
+            selected_node_status: None,
+            rewards_address_set: false,
+        }
+    }
+
+    #[test]
+    fn add_styles_reflect_rewards_address_presence() {
+        let mut state = base_state();
+        let (bracket_style, text_style) = Footer::add_styles(&state);
+        assert_eq!(bracket_style.fg, Some(LIGHT_PERIWINKLE));
+        assert_eq!(text_style.fg, Some(COOL_GREY));
+
+        state.rewards_address_set = true;
+        let (enabled_bracket, enabled_text) = Footer::add_styles(&state);
+        assert_eq!(enabled_bracket.fg, Some(GHOST_WHITE));
+        assert_eq!(enabled_text.fg, Some(EUCALYPTUS));
+    }
+
+    #[test]
+    fn remove_toggle_and_logs_require_selection() {
+        let state = base_state();
+        let (_, remove_text) = Footer::remove_styles(&state);
+        assert_eq!(remove_text.fg, Some(COOL_GREY));
+
+        let mut selected = state;
+        selected.selected_node_status = Some(NodeDisplayStatus::Running);
+        let (_, remove_enabled) = Footer::remove_styles(&selected);
+        assert_eq!(remove_enabled.fg, Some(LIGHT_PERIWINKLE));
+
+        let (toggle_bracket, toggle_text) = Footer::toggle_styles(&selected);
+        assert_eq!(toggle_bracket.fg, Some(GHOST_WHITE));
+        assert_eq!(toggle_text.fg, Some(GHOST_WHITE));
+
+        let (logs_bracket, logs_text) = Footer::logs_styles(&selected);
+        assert_eq!(logs_bracket.fg, Some(GHOST_WHITE));
+        assert_eq!(logs_text.fg, Some(LIGHT_PERIWINKLE));
+    }
+
+    #[test]
+    fn manage_run_and_stop_all_follow_node_state() {
+        let mut state = base_state();
+        let (_, manage_style) = Footer::manage_styles(&state);
+        assert_eq!(manage_style.fg, Some(COOL_GREY));
+
+        state.has_nodes = true;
+        state.rewards_address_set = true;
+        let (_, manage_enabled) = Footer::manage_styles(&state);
+        assert_eq!(manage_enabled.fg, Some(EUCALYPTUS));
+
+        let (_, run_enabled) = Footer::run_all_styles(&state);
+        assert_eq!(run_enabled.fg, Some(EUCALYPTUS));
+
+        state.has_running_nodes = true;
+        let (_, run_disabled) = Footer::run_all_styles(&state);
+        assert_eq!(run_disabled.fg, Some(COOL_GREY));
+
+        let (_, stop_enabled) = Footer::stop_all_styles(&state);
+        assert_eq!(stop_enabled.fg, Some(LIGHT_PERIWINKLE));
+    }
+}

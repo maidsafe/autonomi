@@ -97,3 +97,41 @@ impl Default for FocusManager {
         Self::new(FocusTarget::Status)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_and_current_focus() {
+        let mut manager = FocusManager::new(FocusTarget::Status);
+        assert_eq!(manager.current_focus(), Some(&FocusTarget::Status));
+        manager.push_focus(FocusTarget::Options);
+        assert_eq!(manager.current_focus(), Some(&FocusTarget::Options));
+    }
+
+    #[test]
+    fn pop_focus_preserves_root() {
+        let mut manager = FocusManager::new(FocusTarget::Status);
+        assert!(manager.pop_focus().is_none());
+        manager.push_focus(FocusTarget::Help);
+        assert_eq!(manager.pop_focus(), Some(FocusTarget::Help));
+        assert_eq!(manager.current_focus(), Some(&FocusTarget::Status));
+    }
+
+    #[test]
+    fn set_focus_replaces_top() {
+        let mut manager = FocusManager::new(FocusTarget::Status);
+        manager.push_focus(FocusTarget::Options);
+        manager.set_focus(FocusTarget::Help).unwrap();
+        assert_eq!(manager.current_focus(), Some(&FocusTarget::Help));
+    }
+
+    #[test]
+    fn clear_and_set_resets_stack() {
+        let mut manager = FocusManager::new(FocusTarget::Status);
+        manager.push_focus(FocusTarget::Options);
+        manager.clear_and_set(FocusTarget::NodeTable);
+        assert_eq!(manager.get_focus_stack(), &[FocusTarget::NodeTable]);
+    }
+}

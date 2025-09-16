@@ -70,3 +70,28 @@ pub fn open_logs(node_name: Option<String>) -> Result<(), eyre::Report> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn centered_rect_produces_expected_size() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rect = centered_rect(50, 40, area);
+        assert_eq!(rect.width, 50);
+        assert_eq!(rect.height, 20);
+        assert_eq!(rect.x, 25);
+        assert_eq!(rect.y, 15);
+    }
+
+    #[test]
+    fn centered_rect_fixed_produces_expected_size() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rect = centered_rect_fixed(40, 10, area);
+        assert_eq!(rect.width, 40);
+        assert_eq!(rect.height, 10);
+        assert_eq!(rect.x, 30);
+        assert_eq!(rect.y, 20);
+    }
+}

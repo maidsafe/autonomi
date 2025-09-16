@@ -176,3 +176,40 @@ impl Component for Help {
         crate::focus::FocusTarget::Help
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[tokio::test]
+    async fn update_switch_scene_returns_navigation_mode() {
+        let mut help = Help::new().unwrap();
+        let action = help
+            .update(Action::SwitchScene(Scene::Help))
+            .expect("update processed")
+            .expect("action produced");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Navigation));
+    }
+
+    #[test]
+    fn draw_contains_expected_hyperlinks() {
+        let mut help = Help::new().unwrap();
+        let backend = TestBackend::new(120, 12);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|f| {
+                help.draw(f, f.area()).expect("draw help");
+            })
+            .expect("draw");
+        let content: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(content.contains("autonomi.com/getstarted"));
+        assert!(content.contains("autonomi.com/support"));
+    }
+}

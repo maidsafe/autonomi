@@ -511,3 +511,155 @@ impl Component for Options {
         Ok(None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::{KeyEvent, KeyModifiers};
+
+    fn build_options() -> Options {
+        Options::new(
+            PathBuf::from("/tmp"),
+            "drive".into(),
+            None,
+            true,
+            Some((PORT_MIN, PORT_MIN + PORT_ALLOCATION)),
+        )
+    }
+
+    #[tokio::test]
+    async fn handle_key_events_applies_valid_port() {
+        let mut options = build_options();
+        options.port_edit_mode = true;
+        options.port_input = Input::default().with_value((PORT_MIN + 5).to_string());
+        let focus_manager = FocusManager::new(FocusTarget::Options);
+
+        let (actions, result) = options
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(
+            options.port_range,
+            Some((PORT_MIN + 5, PORT_MIN + 5 + PORT_ALLOCATION))
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::StorePortRange(_)))
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_key_events_escape_resets_input() {
+        let mut options = build_options();
+        options.port_edit_mode = true;
+        options.port_range = Some((21000, 21000 + PORT_ALLOCATION));
+        options.port_input = Input::default().with_value("99999".into());
+        let focus_manager = FocusManager::new(FocusTarget::Options);
+
+        let (actions, _) = options
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(options.port_input.value(), "21000");
+        assert!(actions.contains(&Action::SwitchInputMode(InputMode::Navigation)));
+    }
+
+    #[tokio::test]
+    async fn update_toggle_upnp_returns_store_action() {
+        let mut options = build_options();
+        options.upnp_enabled = true;
+        let action = options
+            .update(Action::OptionsActions(OptionsActions::ToggleUpnpSetting))
+            .expect("update")
+            .expect("action");
+        assert!(!options.upnp_enabled);
+        assert_eq!(action, Action::StoreUpnpSetting(false));
+    }
+
+    #[tokio::test]
+    async fn update_trigger_port_range_edit_enters_entry_mode() {
+        let mut options = build_options();
+        let action = options
+            .update(Action::OptionsActions(OptionsActions::TriggerPortRangeEdit))
+            .expect("update")
+            .expect("action");
+        assert!(options.port_edit_mode);
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+        assert_eq!(options.port_input.value(), PORT_MIN.to_string());
+    }
+
+    #[test]
+    fn port_validation_edge_cases_and_boundaries() {
+        let mut options = build_options();
+
+        // Test exact minimum port
+        options.port_input = Input::default().with_value(PORT_MIN.to_string());
+        assert_eq!(options.validate_port_input(), Some(PORT_MIN));
+
+        // Test one below minimum
+        options.port_input = Input::default().with_value((PORT_MIN - 1).to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        // Test exact maximum allowed (considering allocation)
+        let max_allowed = PORT_MAX - PORT_ALLOCATION;
+        options.port_input = Input::default().with_value(max_allowed.to_string());
+        assert_eq!(options.validate_port_input(), Some(max_allowed));
+
+        // Test one over maximum allowed
+        options.port_input = Input::default().with_value((max_allowed + 1).to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        // Test at absolute PORT_MAX (should fail due to allocation)
+        options.port_input = Input::default().with_value(PORT_MAX.to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        // Test invalid input formats
+        options.port_input = Input::default().with_value("abc".to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        options.port_input = Input::default().with_value("".to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        options.port_input = Input::default().with_value("0".to_string());
+        assert_eq!(options.validate_port_input(), None);
+
+        // Test very large numbers
+        options.port_input = Input::default().with_value("999999".to_string());
+        assert_eq!(options.validate_port_input(), None);
+    }
+
+    #[test]
+    fn port_range_calculation_comprehensive() {
+        let options = build_options();
+
+        // Test basic allocation expansion
+        let (from, to) = options.calculate_port_range(20000);
+        assert_eq!(from, 20000);
+        assert_eq!(to, 20000 + PORT_ALLOCATION);
+
+        // Test minimum port range
+        let (from, to) = options.calculate_port_range(PORT_MIN);
+        assert_eq!(from, PORT_MIN);
+        assert_eq!(to, PORT_MIN + PORT_ALLOCATION);
+        assert!(
+            to <= PORT_MAX,
+            "calculated range should not exceed PORT_MAX"
+        );
+
+        // Test maximum valid starting port
+        let max_start = PORT_MAX - PORT_ALLOCATION;
+        let (from, to) = options.calculate_port_range(max_start);
+        assert_eq!(from, max_start);
+        assert_eq!(to, PORT_MAX);
+
+        // Test port allocation size consistency
+        assert_eq!(to - from, PORT_ALLOCATION);
+    }
+}

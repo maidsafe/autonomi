@@ -139,22 +139,24 @@ pub fn get_primary_mount_point_name() -> Result<String> {
 }
 
 // Gets available disk space in bytes for the given mountpoint
-pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<u64> {
+pub fn get_available_space_b(storage_mountpoint: &Path) -> Result<u64> {
     let disks = Disks::new_with_refreshed_list();
+    let target = storage_mountpoint
+        .canonicalize()
+        .unwrap_or_else(|_| storage_mountpoint.to_path_buf());
+
     if tracing::level_enabled!(tracing::Level::DEBUG) {
         for disk in disks.list() {
-            let res = disk.mount_point() == storage_mountpoint;
-            debug!(
-                "Disk: {disk:?} is equal to '{:?}': {res:?}",
-                storage_mountpoint,
-            );
+            let res = target.starts_with(disk.mount_point());
+            debug!("Disk: {disk:?} is prefix of '{target:?}': {res:?}",);
         }
     }
 
     let available_space_b = disks
         .list()
         .iter()
-        .find(|disk| disk.mount_point() == storage_mountpoint)
+        .filter(|disk| target.starts_with(disk.mount_point()))
+        .max_by_key(|disk| disk.mount_point().as_os_str().len())
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
         .available_space();
 
@@ -162,12 +164,16 @@ pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<u64> {
 }
 
 // Gets the name of the drive given a mountpoint
-pub fn get_drive_name(storage_mountpoint: &PathBuf) -> Result<String> {
+pub fn get_drive_name(storage_mountpoint: &Path) -> Result<String> {
     let disks = Disks::new_with_refreshed_list();
+    let target = storage_mountpoint
+        .canonicalize()
+        .unwrap_or_else(|_| storage_mountpoint.to_path_buf());
     let name = disks
         .list()
         .iter()
-        .find(|disk| disk.mount_point() == storage_mountpoint)
+        .filter(|disk| target.starts_with(disk.mount_point()))
+        .max_by_key(|disk| disk.mount_point().as_os_str().len())
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
         .name()
         .to_str()

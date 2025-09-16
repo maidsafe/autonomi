@@ -213,3 +213,130 @@ impl Component for ResetNodesPopup {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    fn build_popup() -> ResetNodesPopup {
+        ResetNodesPopup::default()
+    }
+
+    #[test]
+    fn typing_reset_enables_confirmation() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default();
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+        for ch in ['r', 'e', 's', 'e', 't'] {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("handled");
+        }
+        assert!(popup.can_reset);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::ResetNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Options)))
+        );
+    }
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = build_popup();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn escape_returns_to_options_without_modifying_input() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default().with_value("reset".into());
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+        let (actions, _) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.contains(&Action::SwitchScene(Scene::Options)));
+        assert_eq!(popup.confirmation_input_field.value(), "reset");
+    }
+
+    #[test]
+    fn update_switch_scene_prepares_entry_mode() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default().with_value("something".into());
+        let action = popup
+            .update(Action::SwitchScene(Scene::ResetNodesPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+        assert!(popup.confirmation_input_field.value().is_empty());
+    }
+
+    #[test]
+    fn wrong_confirmation_text_prevents_reset() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default();
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+
+        // Type wrong confirmation
+        for ch in "wrong".chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+
+        // Try to confirm with Enter
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+
+        // Validate error state - Enter should be ignored when no actions are emitted
+        assert_eq!(result, EventResult::Ignored);
+        assert!(
+            !popup.can_reset,
+            "reset should not be enabled with wrong confirmation"
+        );
+        assert_eq!(
+            popup.confirmation_input_field.value(),
+            "wrong",
+            "input should retain wrong confirmation text"
+        );
+        assert!(
+            actions.is_empty(),
+            "no actions should be emitted when confirmation is wrong"
+        );
+    }
+}

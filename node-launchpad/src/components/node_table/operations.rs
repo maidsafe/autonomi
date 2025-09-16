@@ -77,7 +77,7 @@ impl NodeOperations {
                 format!("\nEach Node requires {GB_PER_NODE}GB of available space.").as_ref(),
                 format!(
                     "{} has only {}GB remaining.\n\nYou can free up some space or change to different drive in the options.",
-                    get_drive_name(config.storage_mountpoint)?,
+                    get_drive_name(config.storage_mountpoint.as_path())?,
                     config.available_disk_space_gb
                 ).as_ref(),
             );
