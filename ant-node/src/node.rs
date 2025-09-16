@@ -251,12 +251,16 @@ impl NodeBuilder {
                     }
                 }
                 Ok(ReachabilityStatus::NotReachable { reasons }) => {
-                    println!("Terminating the node: {reasons:?}");
+                    println!("Terminating the node in 120 seconds: {reasons:?}");
+                    tokio::time::sleep(Duration::from_secs(120)).await;
                     return Err(Error::UnreachableNode);
                 }
                 Err(err) => {
-                    info!("Reachability check error: {err:?}. Terminating the node.");
-                    println!("Terminating the node: {err:?}");
+                    info!(
+                        "Reachability check error: {err:?}. Terminating the node in 120 seconds."
+                    );
+                    println!("Terminating the node in 120 seconds: {err:?}");
+                    tokio::time::sleep(Duration::from_secs(120)).await;
                     return Err(err);
                 }
             }
