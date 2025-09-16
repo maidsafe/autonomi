@@ -31,6 +31,7 @@ use std::net::{IpAddr, SocketAddr};
 /// but they enable more controlled unit testing.
 ///
 /// Returns the service names of the added services.
+#[tracing::instrument(skip(options, node_registry, service_control), err)]
 pub async fn add_node(
     options: AddNodeServiceOptions,
     node_registry: NodeRegistryManager,

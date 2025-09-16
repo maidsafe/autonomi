@@ -64,6 +64,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     /// If `startup_check` is false, the startup check will be skipped for all services and we'll return immediately
     /// after starting them. This is useful when the user wants to start the services but doesn't
     /// want to wait for them to be fully started.
+    #[tracing::instrument(skip(self))]
     pub async fn start_all(&self, fixed_interval: u64, startup_check: bool) -> BatchResult {
         let batch_result = self
             .start_all_inner(fixed_interval, Default::default(), startup_check)
@@ -76,6 +77,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         batch_result
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn stop_all(&self, interval: Option<u64>) -> BatchResult {
         let mut batch_result = BatchResult::default();
 
@@ -119,6 +121,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         batch_result
     }
 
+    #[tracing::instrument(skip(self, options))]
     pub async fn upgrade_all(
         &self,
         options: UpgradeOptions,
@@ -235,6 +238,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         (batch_result, upgrade_summary)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn remove_all(&self, keep_directories: bool) -> BatchResult {
         let mut batch_result = BatchResult::default();
 
@@ -361,6 +365,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         batch_result
     }
 
+    #[tracing::instrument(skip(self, skip_services))]
     async fn start_all_inner(
         &self,
         fixed_interval: u64,
@@ -677,6 +682,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         batch_result
     }
 
+    #[tracing::instrument(skip(service, service_control), err)]
     async fn stop(
         service: &T,
         service_control: &dyn ServiceControl,
@@ -738,6 +744,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 
     /// Reinstall the service with the new binary.
     /// Returns `false` if the service is already at the target version or if the target version is lower than the current version.
+    #[tracing::instrument(skip(service, service_control, options), err)]
     async fn reinstall_service(
         service: &T,
         service_control: &dyn ServiceControl,

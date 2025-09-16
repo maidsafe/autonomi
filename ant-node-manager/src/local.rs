@@ -141,6 +141,7 @@ fn kill_evm_testnet_processes(system: &mut System) {
     }
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn kill_network(
     node_registry: NodeRegistryManager,
     keep_directories: bool,
@@ -214,6 +215,7 @@ pub struct LocalNetworkOptions {
     pub evm_network: EvmNetwork,
 }
 
+#[tracing::instrument(skip(options, node_registry, service_control), err)]
 pub async fn run_network(
     options: LocalNetworkOptions,
     node_registry: NodeRegistryManager,
@@ -373,6 +375,7 @@ pub struct RunNodeOptions {
     pub version: String,
 }
 
+#[tracing::instrument(skip(run_options, launcher, metrics_actions, fs_actions), err)]
 pub async fn run_node(
     run_options: RunNodeOptions,
     launcher: &dyn Launcher,
@@ -456,6 +459,7 @@ pub async fn run_node(
 // Private Helpers
 //
 
+#[tracing::instrument(skip(node_registry, peers), err)]
 async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiaddr>) -> Result<()> {
     let mut all_peers = Vec::new();
     for node in node_registry.nodes.read().await.iter() {
