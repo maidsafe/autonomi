@@ -20,7 +20,7 @@ use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus
 use color_eyre::eyre::Result;
 use std::{path::PathBuf, time::Instant};
 use throbber_widgets_tui::ThrobberState;
-use tracing::debug;
+use tracing::{debug, error};
 
 pub struct NodeTableState {
     // Node data
@@ -260,6 +260,32 @@ impl NodeTableState {
             self.navigate_first_unlocked();
         }
 
+        let running_nodes = self
+            .node_services
+            .iter()
+            .filter(|node| node.status == ServiceStatus::Running)
+            .count() as u64;
+
+        if running_nodes != self.nodes_to_start {
+            debug!(
+                "Sync detected running node count change: {} -> {running_nodes}",
+                self.nodes_to_start
+            );
+            self.nodes_to_start = running_nodes;
+
+            if let Some(action_sender) = &self.operations.action_sender {
+                if let Err(err) = action_sender.send(Action::StoreRunningNodeCount(running_nodes)) {
+                    error!(
+                        "Failed to propagate updated running node count ({running_nodes}): {err}"
+                    );
+                }
+            } else {
+                debug!(
+                    "Action sender not registered yet; skipping propagation of running node count"
+                );
+            }
+        }
+
         debug!(
             "Node state updated. Node count changed from {} to {}",
             self.items.items.len(),
@@ -457,4 +483,73 @@ pub struct NodeTableConfig {
     pub nodes_to_start: u64,
     pub storage_mountpoint: PathBuf,
     pub registry_path_override: Option<PathBuf>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::MockNodeRegistry;
+    use color_eyre::Result;
+    use std::fs;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn sync_updates_running_node_count_from_registry() -> Result<()> {
+        let mut mock_registry = MockNodeRegistry::empty()?;
+
+        let running_node = mock_registry.create_test_node_service_data(0, ServiceStatus::Running);
+        let stopped_node = mock_registry.create_test_node_service_data(1, ServiceStatus::Stopped);
+        mock_registry.add_node(running_node.clone())?;
+        mock_registry.add_node(stopped_node.clone())?;
+
+        let temp_dir = tempfile::tempdir()?;
+        let data_dir = temp_dir.path().join("data");
+        fs::create_dir_all(&data_dir)?;
+
+        let config = NodeTableConfig {
+            network_id: Some(1),
+            init_peers_config: InitialPeersConfig::default(),
+            antnode_path: None,
+            data_dir_path: data_dir,
+            upnp_enabled: true,
+            port_range: None,
+            rewards_address: None,
+            nodes_to_start: 0,
+            storage_mountpoint: crate::system::get_primary_mount_point(),
+            registry_path_override: Some(mock_registry.get_registry_path().clone()),
+        };
+
+        let mut state = NodeTableState::new(config).await?;
+        assert_eq!(state.nodes_to_start, 1);
+
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        state.operations.action_sender = Some(tx);
+
+        let mut updated_services = state.node_services.clone();
+        if let Some(node) = updated_services
+            .iter_mut()
+            .find(|node| node.service_name == stopped_node.service_name)
+        {
+            node.status = ServiceStatus::Running;
+        } else {
+            panic!(
+                "Expected to find service {} in state",
+                stopped_node.service_name
+            );
+        }
+
+        state.sync_node_service_data(&updated_services);
+        assert_eq!(state.nodes_to_start, 2);
+
+        match rx.try_recv() {
+            Ok(Action::StoreRunningNodeCount(count)) => assert_eq!(count, 2),
+            Ok(other) => panic!("Unexpected action received: {other:?}"),
+            Err(err) => panic!("No action received for updated running count: {err:?}"),
+        }
+
+        state.sync_node_service_data(&updated_services);
+        assert!(rx.try_recv().is_err(), "Did not expect duplicate action");
+
+        Ok(())
+    }
 }
