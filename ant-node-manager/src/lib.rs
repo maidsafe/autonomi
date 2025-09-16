@@ -55,6 +55,7 @@ use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 use tracing::debug;
 
+#[tracing::instrument(skip(node_registry, service_control), err)]
 pub async fn status_report(
     node_registry: &NodeRegistryManager,
     service_control: Arc<dyn ServiceControl + Send + Sync>,
@@ -180,6 +181,7 @@ pub async fn status_report(
 ///
 /// For a local network, the node paths are not unique, so we can't use that. We consider the node
 /// running if we can connect to its metrics service; otherwise it is considered stopped.
+#[tracing::instrument(skip(node_registry, service_control), err)]
 pub async fn refresh_node_registry(
     node_registry: NodeRegistryManager,
     service_control: Arc<dyn ServiceControl + Send + Sync>,

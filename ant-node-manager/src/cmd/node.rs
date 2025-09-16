@@ -40,6 +40,24 @@ use tokio::sync::RwLock;
 use tracing::debug;
 
 /// Returns the added service names
+#[tracing::instrument(
+    skip(
+        data_dir_path,
+        env_variables,
+        log_dir_path,
+        metrics_port,
+        node_port,
+        node_registry,
+        init_peers_config,
+        rewards_address,
+        rpc_address,
+        rpc_port,
+        src_path,
+        url,
+        version
+    ),
+    err
+)]
 pub async fn add(
     alpha: bool,
     auto_restart: bool,
@@ -158,6 +176,7 @@ pub async fn add(
     Ok(added_services_names)
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn balance(
     peer_ids: Vec<String>,
     node_registry: NodeRegistryManager,
@@ -195,6 +214,7 @@ pub async fn balance(
     Ok(())
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn remove(
     keep_directories: bool,
     peer_ids: Vec<String>,
@@ -236,6 +256,7 @@ pub async fn remove(
     summarise_batch_result(&batch_result, "remove", verbosity)
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn reset(
     force: bool,
     node_registry: NodeRegistryManager,
@@ -277,6 +298,7 @@ pub async fn reset(
     Ok(())
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn start(
     fixed_interval: u64,
     node_registry: NodeRegistryManager,
@@ -315,6 +337,7 @@ pub async fn start(
     summarise_batch_result(&batch_result, "start", verbosity)
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn status(
     details: bool,
     fail: bool,
@@ -339,6 +362,7 @@ pub async fn status(
     Ok(())
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 pub async fn stop(
     interval: Option<u64>,
     node_registry: NodeRegistryManager,
@@ -378,6 +402,7 @@ pub async fn stop(
     summarise_batch_result(&batch_result, "stop", verbosity)
 }
 
+#[tracing::instrument(skip(node_registry, provided_env_variables), err)]
 pub async fn upgrade(
     do_not_start: bool,
     custom_bin_path: Option<PathBuf>,
@@ -498,6 +523,7 @@ pub async fn upgrade(
     Ok(())
 }
 
+#[tracing::instrument(skip(node_registry), err)]
 async fn get_services_for_ops(
     node_registry: &NodeRegistryManager,
     peer_ids: Vec<String>,
@@ -558,6 +584,7 @@ async fn get_services_for_ops(
     Ok(services)
 }
 
+#[tracing::instrument(skip(node_registry, service_data), err)]
 async fn get_batch_manager_from_service_data(
     node_registry: NodeRegistryManager,
     service_data: Vec<Arc<RwLock<NodeServiceData>>>,

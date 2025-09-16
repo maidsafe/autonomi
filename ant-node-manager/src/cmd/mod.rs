@@ -25,6 +25,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[tracing::instrument(skip(custom_bin_path, url), fields(release_type = ?release_type, verbosity = ?verbosity, has_custom_bin = custom_bin_path.is_some()), err)]
 pub async fn download_and_get_upgrade_bin_path(
     custom_bin_path: Option<PathBuf>,
     release_type: ReleaseType,
@@ -131,6 +132,7 @@ pub fn print_upgrade_summary(upgrade_summary: HashMap<String, UpgradeResult>) {
     }
 }
 
+#[tracing::instrument(skip(path, release_repo, version), fields(release_type = ?release_type, build = build, verbosity = ?verbosity), err)]
 pub async fn get_bin_path(
     build: bool,
     path: Option<PathBuf>,

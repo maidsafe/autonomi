@@ -38,6 +38,7 @@ pub fn get_faucet_data_dir() -> PathBuf {
 }
 
 #[cfg(windows)]
+#[tracing::instrument(err)]
 pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Result<()> {
     if which::which("winsw.exe").is_ok() {
         debug!("WinSW already installed, which returned Ok");
@@ -116,6 +117,7 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
 
 #[cfg(not(windows))]
 #[allow(clippy::unused_async)]
+#[tracing::instrument(skip(_dest_path, _verbosity), err)]
 pub async fn configure_winsw(_dest_path: &Path, _verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
@@ -125,6 +127,7 @@ pub async fn configure_winsw(_dest_path: &Path, _verbosity: VerbosityLevel) -> R
 /// If the URL is supplied, that will be downloaded and extracted, and the binary inside the
 /// archive will be used; if the version is supplied, a specific version will be downloaded and
 /// used; otherwise the latest version will be downloaded and used.
+#[tracing::instrument(skip(url, release_repo, download_dir_path), err)]
 pub async fn download_and_extract_release(
     release_type: ReleaseType,
     url: Option<String>,
@@ -391,6 +394,7 @@ pub fn increment_port_option(port: Option<u16>) -> Option<u16> {
 }
 
 /// Make sure the port is not already in use by another node.
+#[tracing::instrument(skip(nodes), err)]
 pub async fn check_port_availability(
     port_option: &PortRange,
     nodes: &Arc<RwLock<Vec<Arc<RwLock<NodeServiceData>>>>>,

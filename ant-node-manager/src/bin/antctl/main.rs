@@ -45,6 +45,7 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
     }
 }
 
+#[tracing::instrument(err)]
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     color_eyre::install()?;
@@ -374,6 +375,7 @@ fn parse_environment_variables(env_var: &str) -> Result<(String, String)> {
 }
 
 #[cfg(windows)]
+#[tracing::instrument(fields(verbosity = ?verbosity), err)]
 async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
     use ant_node_manager::config::get_node_manager_path;
 
@@ -401,6 +403,7 @@ async fn configure_winsw(verbosity: VerbosityLevel) -> Result<()> {
 
 #[cfg(not(windows))]
 #[allow(clippy::unused_async)]
+#[tracing::instrument(skip(_verbosity), err)]
 async fn configure_winsw(_verbosity: VerbosityLevel) -> Result<()> {
     Ok(())
 }
