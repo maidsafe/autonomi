@@ -24,7 +24,7 @@ use sysinfo::System;
 /// need assert that the service manager is used. Testing code that used the real service manager
 /// would result in real services on the machines we are testing on; that can leave a bit of a mess
 /// to clean up, especially if the tests fail.
-pub trait ServiceControl: Sync {
+pub trait ServiceControl: Sync + Send {
     fn create_service_user(&self, username: &str) -> Result<()>;
     fn get_available_port(&self) -> Result<u16>;
     fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> Result<()>;

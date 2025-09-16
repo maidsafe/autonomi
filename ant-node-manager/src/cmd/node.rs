@@ -170,10 +170,11 @@ pub async fn balance(
 
     refresh_node_registry(
         node_registry.clone(),
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         verbosity,
+        false,
     )
     .await?;
 
@@ -210,10 +211,11 @@ pub async fn remove(
 
     refresh_node_registry(
         node_registry.clone(),
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         verbosity,
+        false,
     )
     .await?;
 
@@ -290,10 +292,11 @@ pub async fn start(
 
     refresh_node_registry(
         node_registry.clone(),
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         verbosity,
+        false,
     )
     .await?;
 
@@ -324,14 +327,14 @@ pub async fn status(
         }
         status_report(
             &node_registry,
-            &ServiceController {},
+            Arc::new(ServiceController {}),
             details,
             json,
             fail,
             false,
+            true,
         )
         .await?;
-        node_registry.save().await?;
     }
     Ok(())
 }
@@ -350,10 +353,11 @@ pub async fn stop(
 
     refresh_node_registry(
         node_registry.clone(),
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         verbosity,
+        false,
     )
     .await?;
 
@@ -411,10 +415,11 @@ pub async fn upgrade(
 
     refresh_node_registry(
         node_registry.clone(),
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         verbosity != VerbosityLevel::Minimal,
         false,
         verbosity,
+        false,
     )
     .await?;
 

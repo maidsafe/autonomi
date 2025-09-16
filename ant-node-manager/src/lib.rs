@@ -45,8 +45,7 @@ impl From<u8> for VerbosityLevel {
 }
 
 use ant_service_management::NodeRegistryManager;
-use ant_service_management::fs::FileSystemActions;
-use ant_service_management::fs::FileSystemClient;
+use ant_service_management::fs::{FileSystemActions, FileSystemClient};
 use ant_service_management::metric::MetricsClient;
 use ant_service_management::{
     NodeService, ServiceStateActions, ServiceStatus, control::ServiceControl,
@@ -58,18 +57,20 @@ use tracing::debug;
 
 pub async fn status_report(
     node_registry: &NodeRegistryManager,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     detailed_view: bool,
     output_json: bool,
     fail: bool,
     is_local_network: bool,
+    save_registry: bool,
 ) -> Result<()> {
     refresh_node_registry(
         node_registry.clone(),
-        service_control,
+        Arc::clone(&service_control),
         !output_json,
         is_local_network,
         VerbosityLevel::Normal,
+        save_registry,
     )
     .await?;
 
@@ -181,10 +182,11 @@ pub async fn status_report(
 /// running if we can connect to its metrics service; otherwise it is considered stopped.
 pub async fn refresh_node_registry(
     node_registry: NodeRegistryManager,
-    service_control: &dyn ServiceControl,
+    service_control: Arc<dyn ServiceControl + Send + Sync>,
     full_refresh: bool,
     is_local_network: bool,
     verbosity: VerbosityLevel,
+    save_registry: bool,
 ) -> Result<()> {
     // This message is useful for users, but needs to be suppressed when a JSON output is
     // requested.
@@ -208,67 +210,101 @@ pub async fn refresh_node_registry(
         None
     };
 
-    // Main processing loop
-    for node in node_registry.nodes.read().await.iter() {
-        let service_name = node.read().await.service_name.clone();
-        let metrics_client = MetricsClient::new(node.read().await.metrics_port);
+    let nodes = {
+        let nodes_guard = node_registry.nodes.read().await;
+        nodes_guard.clone()
+    };
 
-        let service = NodeService::new(
-            Arc::clone(node),
-            Box::new(FileSystemClient),
-            Box::new(metrics_client),
-        );
+    let mut join_set = tokio::task::JoinSet::new();
 
-        if is_local_network {
-            // For a local network, retrieving the process by its path does not work, because the
-            // paths are not unique: they are all launched from the same binary. Instead we will
-            // just determine whether the node is running by connecting to its metrics endpoint. We
-            // only need to distinguish between `RUNNING` and `STOPPED` for a local network.
-            match service.metrics_action.get_node_metrics().await {
-                Ok(_) => {
-                    debug!("Local node {service_name} is running",);
-                    service.on_start(None, full_refresh).await?;
-                }
-                Err(_) => {
-                    debug!("Failed to retrieve PID for local node {service_name}",);
-                    service.on_stop().await?;
-                }
-            }
-        } else {
-            match service_control.get_process_pid(&service.bin_path().await) {
-                Ok(pid) => {
-                    debug!("{service_name} is running with PID {pid}",);
-                    service.on_start(Some(pid), full_refresh).await?;
-                }
-                Err(_) => {
-                    match service.status().await {
-                        ServiceStatus::Added => {
-                            // If the service is still at `Added` status, there hasn't been an attempt
-                            // to start it since it was installed. It's useful to keep this status
-                            // rather than setting it to `STOPPED`, so that the user can differentiate.
-                            debug!("{service_name} has not been started since it was installed");
+    for node in nodes {
+        let service_control = Arc::clone(&service_control);
+        let pb = pb.clone();
+        join_set.spawn(async move {
+            let result = async {
+                let (service_name, metrics_port) = {
+                    let node_guard = node.read().await;
+                    (node_guard.service_name.clone(), node_guard.metrics_port)
+                };
+
+                let metrics_client = MetricsClient::new(metrics_port);
+                let service = NodeService::new(
+                    Arc::clone(&node),
+                    Box::new(FileSystemClient),
+                    Box::new(metrics_client),
+                );
+
+                if is_local_network {
+                    match service.metrics_action.get_node_metrics().await {
+                        Ok(_) => {
+                            debug!("Local node {service_name} is running",);
+                            service.on_start(None, full_refresh).await?;
                         }
-                        ServiceStatus::Removed => {
-                            // In the case of the service being removed, we want to retain that state
-                            // and not have it marked `STOPPED`.
-                            debug!("{service_name} has been removed");
-                        }
-                        _ => {
-                            debug!("Failed to retrieve PID for {service_name}");
+                        Err(_) => {
+                            debug!("Failed to retrieve PID for local node {service_name}",);
                             service.on_stop().await?;
                         }
                     }
+                } else {
+                    match service_control.get_process_pid(&service.bin_path().await) {
+                        Ok(pid) => {
+                            debug!("{service_name} is running with PID {pid}",);
+                            service.on_start(Some(pid), full_refresh).await?;
+                        }
+                        Err(_) => match service.status().await {
+                            ServiceStatus::Added => {
+                                debug!(
+                                    "{service_name} has not been started since it was installed"
+                                );
+                            }
+                            ServiceStatus::Removed => {
+                                debug!("{service_name} has been removed");
+                            }
+                            _ => {
+                                debug!("Failed to retrieve PID for {service_name}");
+                                service.on_stop().await?;
+                            }
+                        },
+                    }
                 }
-            }
-        }
 
-        if let Some(ref pb) = pb {
-            pb.inc(1);
+                Result::<()>::Ok(())
+            }
+            .await;
+
+            if let Some(pb) = pb {
+                pb.inc(1);
+            }
+
+            result
+        });
+    }
+
+    let mut task_error = None;
+    while let Some(join_result) = join_set.join_next().await {
+        match join_result {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                task_error.get_or_insert(err);
+            }
+            Err(join_err) => {
+                task_error.get_or_insert_with(|| Error::BatchOperationFailed {
+                    details: format!("Failed to refresh node registry task: {join_err}"),
+                });
+            }
         }
     }
 
     if let Some(pb) = pb {
         pb.finish_and_clear();
+    }
+
+    if let Some(err) = task_error {
+        return Err(err);
+    }
+
+    if save_registry {
+        node_registry.save().await?;
     }
 
     info!("Node registry refresh complete!");
