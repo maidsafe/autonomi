@@ -2,12 +2,15 @@
 
 A terminal user interface (TUI) for managing Autonomi network nodes. This tool provides an easy way to set up, monitor, and maintain nodes on the Autonomi decentralized network.
 
+For a deeper technical tour see [agent.md](./agent.md).
+
 ## Features
 
-- **Simple node management**: Start, stop, and monitor multiple nodes from a single interface
-- **Resource monitoring**: Track memory usage, bandwidth, and rewards earned by your nodes
-- **Configuration options**: Customize connection modes, port settings, and storage locations
-- **Wallet integration**: Link your wallet address to collect node rewards
+- **Registry-backed node management**: Start, stop, maintain, upgrade, remove, or reset services with the node registry acting as the source of truth.
+- **Live resource telemetry**: View per-node rewards, memory, bandwidth, peers, and connection counts in the Status scene.
+- **Configurable deployment**: Pick storage mountpoints, port ranges, UPnP behaviour, network ID, and custom `antnode` binaries.
+- **Wallet integration & persistence**: Store the rewards wallet and other preferences in `app_data.json` for reuse across sessions.
+- **Keyboard-first workflows**: Rich shortcuts for operations, logs, manage-nodes popup, and table navigation.
 
 ## Installation
 
@@ -28,7 +31,29 @@ cargo run --release --bin node-launchpad
 
 ## Usage
 
-The usage guides can be found here [docs.autonomi.com/node/guides/how-to-guides](https://docs.autonomi.com/node/guides/how-to-guides)
+Launchpad provides three primary scenes that you can switch between at any time:
+
+| Scene | Purpose | Default Keys |
+|-------|---------|--------------|
+| **Status** | Real-time node overview, device stats, and quick actions | `s`, `S` |
+| **Options** | Configure storage drive, port range, UPnP, rewards wallet | `o`, `O` |
+| **Help** | Display keybindings and workflow tips | `h`, `H` |
+
+Popups (Manage Nodes, Change Drive, Rewards Address, Remove Node, Upgrade Nodes, Logs, etc.) capture focus until dismissed, making it easy to complete multi-step flows without stray input.
+
+Essential keybindings inside the Status scene:
+
+- `Ctrl+G`: Open **Manage Nodes** to adjust `nodes_to_start` (enforces 35 GB per node and a 50-node cap).
+- `Ctrl+R`: Start all eligible nodes; `Ctrl+X` stops any running nodes.
+- `+`: Add a new node (validates wallet, disk space, and node limit).
+- `-`, `Delete`, or `Ctrl+D`: Trigger the **Remove Node** confirmation popup.
+- `Ctrl+S`: Toggle the selected node between start/stop.
+- `Ctrl+T`: Open the **Logs** popup for the highlighted node.
+
+- Logs: `Ctrl+T` opens the real-time log viewer popup. Use `Esc` to close it and return to the Status scene.
+- Arrow/Page/Home/End keys navigate the table while skipping locked rows.
+
+Further operator guides live at [docs.autonomi.com/node/guides/how-to-guides](https://docs.autonomi.com/node/guides/how-to-guides).
 
 ## Developer Notes
 
@@ -52,77 +77,22 @@ pre-built node binary and connect it to a network with a custom network ID.
 
 ## Testing
 
-The node-launchpad includes comprehensive testing for its TUI components using ratatui's testing framework.
-
-### Running Tests
+Launchpad favours deterministic UI tests built on `ratatui::Terminal<TestBackend>` alongside registry fakes.
 
 ```bash
-# Run all tests
-cargo test
+# Run the full suite
+cargo test --workspace --all-features
 
-# Run specific test file
-cargo test --test header_test
+# Target a specific scenario (example: registry-driven node count sync)
+cargo test -p node-launchpad sync_updates_running_node_count_from_registry
 
-# Run with verbose output
-cargo test -- --nocapture
-
-# Run tests with clippy and formatting
-cgc
+# Lint and format helper (defined in the Justfile)
+cargo fmt --all && cargo clippy --all-features --all-targets
 ```
 
-### Test Structure
+Testing tips:
 
-Tests are organized into:
-- **Unit Tests**: Individual component logic in `src/` modules with `#[cfg(test)]`
-- **Integration Tests**: Full component rendering and user interactions in `tests/` directory
-
-### Example Test Pattern
-
-```rust
-use node_launchpad::components::header::{Header, SelectedMenuItem};
-use ratatui::{backend::TestBackend, Terminal, widgets::StatefulWidget};
-
-#[test]
-fn test_header_renders_correctly() {
-    // Create test backend with specific dimensions
-    let backend = TestBackend::new(80, 1);
-    let mut terminal = Terminal::new(backend).unwrap();
-    
-    // Set up component state
-    let mut state = SelectedMenuItem::Status;
-    
-    // Render the component
-    terminal.draw(|f| {
-        let header = Header::new();
-        header.render(f.area(), f.buffer_mut(), &mut state);
-    }).unwrap();
-    
-    // Verify output
-    let buffer = terminal.backend().buffer();
-    let content = buffer.content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect::<String>();
-    
-    assert!(content.contains("Autonomi Node Launchpad"));
-    assert!(content.contains("[S]tatus"));
-}
-```
-
-### Testing Best Practices
-
-1. **Use TestBackend**: Create deterministic tests with `TestBackend::new(width, height)`
-2. **Test All States**: Verify component behavior in different states
-3. **Verify Content**: Check both text content and styling/colors
-4. **Mock Dependencies**: Use mock implementations for external services
-5. **Test Edge Cases**: Handle empty data, overflow, and error conditions
-
-### Working Example
-
-See `tests/header_test.rs` for a complete working example that tests:
-- Basic component rendering
-- State-dependent menu highlighting
-- Version display formatting
-- Content verification
-
-This testing approach ensures the TUI interface is reliable and maintains visual consistency across different scenarios.
+- Use `test_utils::MockNodeRegistry` to emulate node lifecycle changes without touching real services.
+- Prefer focused `#[tokio::test]` async unit tests inside modules for state machines (e.g. `NodeTableState`).
+- Keep integration tests in `tests/` for cross-component rendering and journey coverage.
+- When asserting buffers, convert `Terminal` output to strings with helpers from `test_utils::test_helpers`.
