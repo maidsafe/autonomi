@@ -208,6 +208,9 @@ impl DialManager {
 
     /// Re attempt the dialer workflow by resetting the dialer and initial contacts manager.
     /// This increments the current_workflow_attempt counter.
+    ///
+    /// This does not reset the `all_dial_attempts` field. This field is later used to tell if a Listener is faulty
+    /// across all the attempts.
     pub(crate) fn increment_workflow(&mut self) {
         self.current_workflow_attempt += 1;
         self.dialer = Dialer::default();
@@ -215,12 +218,14 @@ impl DialManager {
     }
 
     /// Reset the dialer and initial contacts manager and the current workflow attempt counter.
-    ///
     /// This is used to start a new reachability check attempt with a new listener.
+    ///
+    /// This resets the `all_dial_attempts` field as well, since we're starting a new attempt with a new listener.
     pub(crate) fn reset_workflow_for_new_listener(&mut self) {
         self.current_workflow_attempt = 1;
         self.dialer = Dialer::default();
         self.initial_contacts_manager.reset();
+        self.all_dial_attempts.clear();
     }
 
     pub(crate) fn get_next_contact(&mut self) -> Option<Multiaddr> {
