@@ -13,7 +13,7 @@ use crate::action::Action;
 use ant_node_manager::config::get_service_log_dir_path;
 use ant_releases::ReleaseType;
 use color_eyre::eyre::Context;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs;
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -167,7 +167,7 @@ async fn load_logs_internal(
 }
 
 /// Find the most recent log file in the directory
-async fn find_latest_log_file(log_dir: &PathBuf) -> Result<PathBuf, LogError> {
+async fn find_latest_log_file(log_dir: &Path) -> Result<PathBuf, LogError> {
     let mut entries = fs::read_dir(log_dir)
         .await
         .with_context(|| format!("Failed to read log directory: {}", log_dir.display()))?;
@@ -199,7 +199,7 @@ async fn find_latest_log_file(log_dir: &PathBuf) -> Result<PathBuf, LogError> {
 
     if log_files.is_empty() {
         return Err(LogError::NoLogFiles {
-            dir: log_dir.clone(),
+            dir: log_dir.to_path_buf(),
         });
     }
 
@@ -210,7 +210,7 @@ async fn find_latest_log_file(log_dir: &PathBuf) -> Result<PathBuf, LogError> {
 }
 
 /// Load a log file with memory and line limits
-async fn load_log_file_with_limits(file_path: &PathBuf) -> Result<Vec<String>, LogError> {
+async fn load_log_file_with_limits(file_path: &Path) -> Result<Vec<String>, LogError> {
     let file = fs::File::open(file_path)
         .await
         .with_context(|| format!("Failed to open log file: {}", file_path.display()))?;
@@ -251,4 +251,41 @@ async fn load_log_file_with_limits(file_path: &PathBuf) -> Result<Vec<String>, L
     }
 
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::action::Action;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    #[tokio::test]
+    async fn load_logs_reports_missing_directory_with_guidance() {
+        let (tx, mut rx) = unbounded_channel();
+        let missing_node = "non-existent".to_string();
+
+        load_logs(missing_node.clone(), None, tx).await;
+
+        let action = rx.recv().await.expect("action");
+        match action {
+            Action::LogsLoaded {
+                node_name,
+                logs,
+                total_lines,
+                file_path,
+                last_modified,
+            } => {
+                assert_eq!(node_name, missing_node);
+                assert_eq!(total_lines, logs.len());
+                assert!(file_path.is_none(), "unexpected file path for missing logs");
+                assert!(
+                    logs.first()
+                        .is_some_and(|line| line.contains("Log directory not found")),
+                    "missing helpful guidance: {logs:?}"
+                );
+                assert!(last_modified.is_none());
+            }
+            other => panic!("expected LogsLoaded guidance, got {other:?}"),
+        }
+    }
 }

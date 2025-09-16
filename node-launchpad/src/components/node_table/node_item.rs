@@ -111,3 +111,51 @@ impl NodeItem {
         self.update_node_display_status(operation_status);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ant_service_management::ServiceStatus;
+
+    fn build_item(status: ServiceStatus) -> NodeItem {
+        NodeItem {
+            service_name: "antnode-1".to_string(),
+            version: "0.1.0".to_string(),
+            rewards_wallet_balance: 0,
+            memory: 0,
+            mbps: String::new(),
+            records: 0,
+            peers: 0,
+            connections: 0,
+            locked: false,
+            node_display_status: NodeDisplayStatus::from(&status),
+            service_status: status,
+            failure: None,
+        }
+    }
+
+    #[test]
+    fn can_start_and_stop_respect_status_and_lock() {
+        let mut added = build_item(ServiceStatus::Added);
+        assert!(added.can_start());
+        added.lock();
+        assert!(!added.can_start());
+
+        let mut running = build_item(ServiceStatus::Running);
+        assert!(running.can_stop());
+        running.lock();
+        assert!(!running.can_stop());
+
+        let stopped = build_item(ServiceStatus::Stopped);
+        assert!(stopped.can_start());
+    }
+
+    #[test]
+    fn lock_for_operation_sets_display_status() {
+        let mut node = build_item(ServiceStatus::Running);
+        assert!(!node.is_locked());
+        node.lock_for_operation(NodeDisplayStatus::Stopping);
+        assert!(node.is_locked());
+        assert_eq!(node.node_display_status, NodeDisplayStatus::Stopping);
+    }
+}

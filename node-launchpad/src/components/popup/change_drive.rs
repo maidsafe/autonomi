@@ -678,3 +678,114 @@ impl DriveItem {
         ListItem::new(line)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn build_popup() -> ChangeDrivePopup {
+        let temp_path = std::env::temp_dir().join("test-drive-selection");
+        ChangeDrivePopup::new(temp_path, 1).expect("popup created")
+    }
+
+    fn drive(name: &str, mount: &str, status: DriveStatus) -> DriveItem {
+        let temp_base = std::env::temp_dir();
+        let mount_path = if mount == "/" {
+            temp_base.join("test-primary")
+        } else {
+            temp_base.join(mount.trim_start_matches('/'))
+        };
+        DriveItem {
+            name: name.into(),
+            mountpoint: mount_path,
+            size: "100 GB".into(),
+            status,
+        }
+    }
+
+    #[test]
+    fn assign_drive_selection_marks_item_selected() {
+        let mut popup = build_popup();
+        let selected = drive("Primary", "/", DriveStatus::Selected);
+        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = selected.clone();
+        popup.items = Some(StatefulList::with_items(vec![
+            selected.clone(),
+            other.clone(),
+        ]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(1));
+        }
+
+        popup.assign_drive_selection();
+
+        assert_eq!(popup.drive_selection.mountpoint, other.mountpoint);
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.items[0].status, DriveStatus::NotSelected);
+        assert_eq!(items.items[1].status, DriveStatus::Selected);
+    }
+
+    #[test]
+    fn select_drive_highlights_current_selection() {
+        let mut popup = build_popup();
+        let current = drive("Primary", "/", DriveStatus::Selected);
+        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = other.clone();
+        popup.items = Some(StatefulList::with_items(vec![
+            current.clone(),
+            other.clone(),
+        ]));
+        popup.select_drive();
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.state.selected(), Some(1));
+        assert_eq!(items.items[1].status, DriveStatus::Selected);
+    }
+
+    #[test]
+    fn handle_key_events_updates_selection_and_can_select() {
+        let mut popup = build_popup();
+        let current = drive("Primary", "/", DriveStatus::Selected);
+        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = current.clone();
+        popup.items = Some(StatefulList::with_items(vec![current, other]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(0));
+        }
+
+        let focus_manager = FocusManager::new(FocusTarget::ChangeDrivePopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Down, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.state.selected(), Some(1));
+        assert!(popup.can_select);
+    }
+
+    #[test]
+    fn can_select_prevents_unavailable_drive_selection() {
+        let mut popup = build_popup();
+        let current = drive("Primary", "/", DriveStatus::Selected);
+        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotEnoughSpace);
+        popup.drive_selection = current.clone();
+        popup.items = Some(StatefulList::with_items(vec![current, other]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(1));
+        }
+
+        let focus_manager = FocusManager::new(FocusTarget::ChangeDrivePopup);
+        popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Down, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(!popup.can_select);
+    }
+}
