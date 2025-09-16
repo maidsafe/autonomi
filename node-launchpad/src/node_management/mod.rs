@@ -10,6 +10,8 @@ pub mod config;
 pub mod error;
 pub mod handlers;
 
+use std::time::Instant;
+
 use crate::action::{Action, NodeManagementResponse, NodeTableActions};
 use ant_service_management::NodeRegistryManager;
 use color_eyre::Result;
@@ -20,11 +22,17 @@ use tokio::task::LocalSet;
 
 pub use config::{AddNodesConfig, UpgradeNodesConfig};
 
+// Refresh the node registry no more frequently than this interval unless forced.
+const MIN_REFRESH_INTERVAL_SECS: u64 = 30;
+
 #[derive(custom_debug::Debug)]
 pub enum NodeManagementTask {
     RegisterActionSender {
         #[debug(skip)]
         action_sender: UnboundedSender<Action>,
+    },
+    RefreshNodeRegistry {
+        force: bool,
     },
     MaintainNodes {
         config: AddNodesConfig,
@@ -76,6 +84,8 @@ impl NodeManagement {
         node_registry: NodeRegistryManager,
     ) {
         let mut action_sender_main = None;
+        let mut last_refresh =
+            Instant::now() - std::time::Duration::from_secs(MIN_REFRESH_INTERVAL_SECS);
         while let Some(new_task) = task_recv.recv().await {
             debug!("Received new node management task: {new_task:?}");
             match new_task {
@@ -83,6 +93,36 @@ impl NodeManagement {
                     action_sender: new_sender,
                 } => {
                     action_sender_main = Some(new_sender);
+                }
+                NodeManagementTask::RefreshNodeRegistry { force } => {
+                    if !force && last_refresh.elapsed().as_secs() < MIN_REFRESH_INTERVAL_SECS {
+                        warn!("RefreshNodeRegistry called too soon after last refresh, ignoring");
+                        continue;
+                    }
+                    last_refresh = Instant::now();
+
+                    let Some(action_sender) = action_sender_main.as_ref() else {
+                        error!(
+                            "No action sender registered, cannot proceed with refreshing registry"
+                        );
+                        continue;
+                    };
+
+                    let error = if let Err(err) =
+                        handlers::refresh_node_registry(force, node_registry.clone()).await
+                    {
+                        Some(err.to_string())
+                    } else {
+                        None
+                    };
+
+                    if let Err(err) = action_sender.send(Action::NodeTableActions(
+                        NodeTableActions::NodeManagementResponse(
+                            NodeManagementResponse::RefreshRegistry { error },
+                        ),
+                    )) {
+                        error!("Failed to send RefreshRegistry action: {err:?}");
+                    }
                 }
                 NodeManagementTask::MaintainNodes { config } => {
                     let Some(action_sender) = action_sender_main.as_ref() else {

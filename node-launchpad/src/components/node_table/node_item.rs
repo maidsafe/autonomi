@@ -22,6 +22,7 @@ pub enum NodeDisplayStatus {
     Stopped,
     Removing,
     Removed,
+    Refreshing,
     Updating,
 }
 
@@ -47,6 +48,7 @@ impl fmt::Display for NodeDisplayStatus {
             NodeDisplayStatus::Stopping => write!(f, "Stopping"),
             NodeDisplayStatus::Stopped => write!(f, "Stopped"),
             NodeDisplayStatus::Removing => write!(f, "Removing"),
+            NodeDisplayStatus::Refreshing => write!(f, "Refreshing"),
             NodeDisplayStatus::Removed => write!(f, "Removed"),
             NodeDisplayStatus::Updating => write!(f, "Updating"),
         }

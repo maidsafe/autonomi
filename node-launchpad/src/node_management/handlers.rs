@@ -11,8 +11,28 @@ use crate::node_management::config::{find_next_available_port, get_port_range, g
 use crate::node_management::error::NodeManagementError;
 use ant_node_manager::VerbosityLevel;
 use ant_node_manager::add_services::config::PortRange;
+use ant_service_management::control::ServiceController;
 use ant_service_management::{NodeRegistryManager, ServiceStatus};
 use std::cmp::Ordering;
+
+pub async fn refresh_node_registry(
+    force: bool,
+    node_registry: NodeRegistryManager,
+) -> Result<(), NodeManagementError> {
+    ant_node_manager::refresh_node_registry(
+        node_registry,
+        &ServiceController {},
+        force,
+        false, // todo should be from --local flag
+        VerbosityLevel::Minimal,
+    )
+    .await
+    .inspect_err(|err| {
+        error!("Error while refreshing node registry: {err:?}");
+    })?;
+    info!("Node registry successfully refreshed");
+    Ok(())
+}
 
 pub async fn maintain_n_running_nodes(
     config: AddNodesConfig,

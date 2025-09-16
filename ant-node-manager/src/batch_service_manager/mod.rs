@@ -412,9 +412,7 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                     );
                     self.service_control.wait(fixed_interval);
 
-                    debug!(
-                        "Setting service {service_name} status to Running. This is done to ensure that the service is marked as running even if it fails to start."
-                    );
+                    // setting the status to Running here, the node could error out due to status failure though.
                     service.set_status(ServiceStatus::Running).await;
                 }
                 Err(err) => {
