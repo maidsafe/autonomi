@@ -13,7 +13,7 @@ use ant_node_manager::VerbosityLevel;
 use ant_node_manager::add_services::config::PortRange;
 use ant_service_management::control::ServiceController;
 use ant_service_management::{NodeRegistryManager, ServiceStatus};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, sync::Arc};
 
 pub async fn refresh_node_registry(
     force: bool,
@@ -21,10 +21,11 @@ pub async fn refresh_node_registry(
 ) -> Result<(), NodeManagementError> {
     ant_node_manager::refresh_node_registry(
         node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         force,
         false, // todo should be from --local flag
         VerbosityLevel::Minimal,
+        false,
     )
     .await
     .inspect_err(|err| {

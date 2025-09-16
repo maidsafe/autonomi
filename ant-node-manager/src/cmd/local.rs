@@ -26,6 +26,7 @@ use color_eyre::{Help, Report, Result, eyre::eyre};
 use std::{
     path::PathBuf,
     process::{Command, Stdio},
+    sync::Arc,
 };
 use sysinfo::System;
 use tokio::time::{Duration, sleep};
@@ -352,13 +353,13 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
     }
     status_report(
         &local_node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         details,
         json,
         fail,
         true,
+        true,
     )
     .await?;
-    local_node_registry.save().await?;
     Ok(())
 }
