@@ -46,6 +46,7 @@ mod put_error_state;
 
 use payment::Receipt;
 pub use put_error_state::ChunkBatchUploadState;
+use quote::PaymentMode;
 
 use ant_bootstrap::{InitialPeersConfig, contacts::ALPHANET_CONTACTS};
 pub use ant_evm::Amount;
@@ -94,6 +95,8 @@ pub struct Client {
     /// Max times of total chunks to carry out retry on upload failure.
     /// Default to be `0` to indicate not carry out retry.
     retry_failed: u64,
+    /// Payment mode to use for uploads
+    payment_mode: PaymentMode,
 }
 
 /// Error returned by [`Client::init`].
@@ -314,6 +317,7 @@ impl Client {
             evm_network: config.evm_network,
             config: config.strategy,
             retry_failed: 0,
+            payment_mode: PaymentMode::Standard,
         })
     }
 
@@ -326,6 +330,12 @@ impl Client {
     /// Set whether to retry failed uploads automatically.
     pub fn with_retry_failed(mut self, retry_failed: u64) -> Self {
         self.retry_failed = retry_failed;
+        self
+    }
+
+    /// Set the payment mode for uploads.
+    pub fn with_payment_mode(mut self, payment_mode: PaymentMode) -> Self {
+        self.payment_mode = payment_mode;
         self
     }
 
