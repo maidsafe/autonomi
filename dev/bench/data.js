@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758023122203,
+  "lastUpdate": 1758121643068,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1832,6 +1832,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.163585365832624,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc838b59b9534c2309579457c5eaf44c744895f2",
+          "message": "Merge pull request #3203 from grumbach/make_missing_file_upload_api_stream\n\nMake missing file upload api stream",
+          "timestamp": "2025-09-17T14:04:39Z",
+          "tree_id": "05176ae8e004dcc09a1b9504ce1422bd0028aa2a",
+          "url": "https://github.com/maidsafe/autonomi/commit/cc838b59b9534c2309579457c5eaf44c744895f2"
+        },
+        "date": 1758121635887,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.370427475267595,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.3753635114089,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.09029518790578,
             "unit": "MiB/s"
           }
         ]
