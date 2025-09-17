@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758121722332,
+  "lastUpdate": 1758121723900,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6729,6 +6729,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22856,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc838b59b9534c2309579457c5eaf44c744895f2",
+          "message": "Merge pull request #3203 from grumbach/make_missing_file_upload_api_stream\n\nMake missing file upload api stream",
+          "timestamp": "2025-09-17T14:04:39Z",
+          "tree_id": "05176ae8e004dcc09a1b9504ce1422bd0028aa2a",
+          "url": "https://github.com/maidsafe/autonomi/commit/cc838b59b9534c2309579457c5eaf44c744895f2"
+        },
+        "date": 1758121723518,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11057,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23711,
             "unit": "ms"
           },
           {
