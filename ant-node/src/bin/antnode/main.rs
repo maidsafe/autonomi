@@ -22,6 +22,7 @@ use crate::rpc_service::{NodeCtrl, StopResult};
 use crate::subcommands::EvmNetworkCommand;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
+#[cfg(feature = "open-metrics")]
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
@@ -386,6 +387,7 @@ fn run(
         rt.block_on(bootstrap_cache.write())?;
     }
 
+    #[cfg(feature = "open-metrics")]
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }

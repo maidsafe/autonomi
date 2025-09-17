@@ -27,6 +27,7 @@ pub use access::user_data;
 use clap::Parser;
 use color_eyre::Result;
 
+#[cfg(feature = "metrics")]
 use ant_logging::metrics::init_metrics;
 use ant_logging::{LogBuilder, LogFormat, ReloadHandle, WorkerGuard};
 use autonomi::version;
@@ -73,6 +74,7 @@ async fn main() -> Result<()> {
 
     let _log_guards = init_logging_and_metrics(&opt)?;
     if opt.peers.local {
+        #[cfg(feature = "metrics")]
         tokio::spawn(init_metrics(std::process::id()));
         opt.network_id = NetworkId::local();
     }

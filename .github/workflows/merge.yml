@@ -66,6 +66,10 @@ jobs:
       - shell: bash
         run: cargo clippy --all-targets --all-features -- -Dwarnings
 
+      - name: Check clippy with no default features
+        shell: bash
+        run: cargo clippy --all-targets --no-default-features -- -Dwarnings
+
       - name: Check documentation
         # Deny certain `rustdoc` lints that are unwanted with `RUSTDOCFLAGS`. See
         # https://doc.rust-lang.org/rustdoc/lints.html for lints that are 'warning' by default.
@@ -87,6 +91,15 @@ jobs:
             cargo build -p "$package" --all-targets --all-features
           done
           echo "All packages built successfully. Cleaning up..."
+          cargo clean
+
+      - name: Check the whole workspace can build with no default features
+        shell: bash
+        run: |
+          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[].name'); do
+            cargo build -p "$package" --all-targets --no-default-features
+          done
+          echo "All packages built successfully with no default features. Cleaning up..."
           cargo clean
 
   unit:
