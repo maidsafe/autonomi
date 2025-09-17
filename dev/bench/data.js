@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758132807336,
+  "lastUpdate": 1758132809489,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4962,6 +4962,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 20,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a4d7e9f68f592a1c64220dd451658e02fc4eb539",
+          "message": "Merge pull request #3205 from oetyng/chore-update-alloy\n\nchore(evmlib): update alloy from `0.15.6` to `1.0.32`",
+          "timestamp": "2025-09-17T17:09:26Z",
+          "tree_id": "5e1c6edefd870f8aa5ef41bea71814a295fa0641",
+          "url": "https://github.com/maidsafe/autonomi/commit/a4d7e9f68f592a1c64220dd451658e02fc4eb539"
+        },
+        "date": 1758132808622,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 18,
             "unit": "MB"
           },
           {
