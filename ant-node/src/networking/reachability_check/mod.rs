@@ -134,7 +134,6 @@ impl ReachabilityCheckSwarmDriver {
     pub(crate) async fn new(
         swarm: Swarm<ReachabilityCheckBehaviour>,
         keypair: &Keypair,
-        local: bool,
         listen_addr: SocketAddr,
         initial_contacts: Vec<Multiaddr>,
         no_upnp: bool,
@@ -148,7 +147,7 @@ impl ReachabilityCheckSwarmDriver {
             swarm,
             dial_manager: DialManager::new(initial_contacts),
             progress_calculator: ProgressCalculator::new(),
-            listener_manager: ListenerManager::new(keypair, local, listen_addr, no_upnp).await?,
+            listener_manager: ListenerManager::new(keypair, listen_addr, no_upnp).await?,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
         })
