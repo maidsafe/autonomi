@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758121723900,
+  "lastUpdate": 1758132729771,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1871,6 +1871,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.09029518790578,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a4d7e9f68f592a1c64220dd451658e02fc4eb539",
+          "message": "Merge pull request #3205 from oetyng/chore-update-alloy\n\nchore(evmlib): update alloy from `0.15.6` to `1.0.32`",
+          "timestamp": "2025-09-17T17:09:26Z",
+          "tree_id": "5e1c6edefd870f8aa5ef41bea71814a295fa0641",
+          "url": "https://github.com/maidsafe/autonomi/commit/a4d7e9f68f592a1c64220dd451658e02fc4eb539"
+        },
+        "date": 1758132721756,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.2707422641551496,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.383502255919776,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.27721337947644,
             "unit": "MiB/s"
           }
         ]
