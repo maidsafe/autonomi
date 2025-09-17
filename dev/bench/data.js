@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758145864140,
+  "lastUpdate": 1758145865841,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7011,6 +7011,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 21683,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5513a4f127b6de1101c37e68c4db9da8627e294e",
+          "message": "Merge pull request #3189 from vphongph/fix-scratchpad-print-resolve-fork-error\n\ntest: fork test, BLS test, CLI and Python API update",
+          "timestamp": "2025-09-17T20:53:41Z",
+          "tree_id": "671c8c7dc7b03b7e15c96c28257ea01e0436d6fe",
+          "url": "https://github.com/maidsafe/autonomi/commit/5513a4f127b6de1101c37e68c4db9da8627e294e"
+        },
+        "date": 1758145865298,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10598,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22187,
             "unit": "ms"
           },
           {
