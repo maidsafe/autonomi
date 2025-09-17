@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758132811844,
+  "lastUpdate": 1758145784655,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -1910,6 +1910,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.27721337947644,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5513a4f127b6de1101c37e68c4db9da8627e294e",
+          "message": "Merge pull request #3189 from vphongph/fix-scratchpad-print-resolve-fork-error\n\ntest: fork test, BLS test, CLI and Python API update",
+          "timestamp": "2025-09-17T20:53:41Z",
+          "tree_id": "671c8c7dc7b03b7e15c96c28257ea01e0436d6fe",
+          "url": "https://github.com/maidsafe/autonomi/commit/5513a4f127b6de1101c37e68c4db9da8627e294e"
+        },
+        "date": 1758145777374,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.1507077477599066,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.878891834009075,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.23418174395341,
             "unit": "MiB/s"
           }
         ]
