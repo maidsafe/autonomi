@@ -64,6 +64,7 @@ fn node_error_to_reason(error: &ant_node::Error) -> String {
                 }
                 NetworkError::GetClosestTimedOut => "GetClosestTimedOut".to_string(),
                 NetworkError::NotEnoughPeers { .. } => "NotEnoughPeers".to_string(),
+                #[cfg(feature = "open-metrics")]
                 NetworkError::NetworkMetricError => "NetworkMetricError".to_string(),
                 NetworkError::OutboundError(_) => "OutboundError".to_string(),
                 NetworkError::ReceivedKademliaEventDropped { .. } => {

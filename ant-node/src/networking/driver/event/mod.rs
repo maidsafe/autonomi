@@ -16,16 +16,16 @@ pub(crate) use identify::DIAL_BACK_DELAY;
 use crate::networking::NetworkEvent;
 use crate::networking::driver::behaviour::upnp;
 use crate::networking::{Addresses, driver::SwarmDriver, error::Result};
-use ant_protocol::messages::ConnectionInfo;
-use custom_debug::Debug as CustomDebug;
-use libp2p::kad::K_VALUE;
-use libp2p::{PeerId, request_response::ResponseChannel as PeerResponseChannel};
-
+#[cfg(feature = "open-metrics")]
 use ant_protocol::CLOSE_GROUP_SIZE;
+use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
     NetworkAddress,
     messages::{Request, Response},
 };
+use custom_debug::Debug as CustomDebug;
+use libp2p::kad::K_VALUE;
+use libp2p::{PeerId, request_response::ResponseChannel as PeerResponseChannel};
 #[cfg(feature = "open-metrics")]
 use std::collections::HashSet;
 use tokio::sync::oneshot;

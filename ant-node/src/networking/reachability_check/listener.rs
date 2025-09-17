@@ -14,7 +14,6 @@ use crate::networking::driver::behaviour::upnp;
 use crate::networking::multiaddr_get_socket_addr;
 use crate::networking::network::listen_on_with_retry;
 use crate::networking::reachability_check::ReachabilityCheckBehaviour;
-#[cfg(feature = "open-metrics")]
 use crate::networking::transport;
 use futures::StreamExt;
 use libp2p::core::transport::ListenerId;
