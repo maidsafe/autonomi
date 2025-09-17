@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758145784655,
+  "lastUpdate": 1758145862509,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3372,6 +3372,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 87,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5513a4f127b6de1101c37e68c4db9da8627e294e",
+          "message": "Merge pull request #3189 from vphongph/fix-scratchpad-print-resolve-fork-error\n\ntest: fork test, BLS test, CLI and Python API update",
+          "timestamp": "2025-09-17T20:53:41Z",
+          "tree_id": "671c8c7dc7b03b7e15c96c28257ea01e0436d6fe",
+          "url": "https://github.com/maidsafe/autonomi/commit/5513a4f127b6de1101c37e68c4db9da8627e294e"
+        },
+        "date": 1758145861961,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 92,
             "unit": "MB"
           }
         ]
