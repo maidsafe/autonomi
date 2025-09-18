@@ -273,8 +273,10 @@ impl Network {
 
         // Try to get record using the request response protocol
         let mut tasks = FuturesUnordered::new();
+        // The input addr could be from non-record_key, hence have to carry out a conversion.
+        let record_key_addr = NetworkAddress::from(&addr.to_record_key());
         for peer in closest_peers {
-            let addr_clone = addr.clone();
+            let addr_clone = record_key_addr.clone();
             tasks.push(async move {
                 let res = self.get_record_req(addr_clone, peer.clone()).await;
                 (res, peer)
