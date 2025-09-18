@@ -102,6 +102,7 @@ impl From<NodeServiceDataV2> for NodeServiceDataV3 {
             pid: v2.pid,
             // Default to NotRun for upgraded instances
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             // Removed relay field in V3
             rewards_address: v2.rewards_address,
             // Removed reward_balance field in V3

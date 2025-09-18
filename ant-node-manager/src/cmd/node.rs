@@ -362,7 +362,7 @@ pub async fn status(
     Ok(())
 }
 
-#[tracing::instrument(skip(node_registry), err)]
+#[tracing::instrument(skip(node_registry, interval), err)]
 pub async fn stop(
     interval: Option<u64>,
     node_registry: NodeRegistryManager,

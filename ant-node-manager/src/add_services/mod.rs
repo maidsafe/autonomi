@@ -216,6 +216,7 @@ pub async fn add_node(
                         node_port,
                         number: node_number,
                         reachability_progress: ReachabilityProgress::NotRun,
+                        last_critical_failure: None,
                         rewards_address: options.rewards_address,
                         rpc_socket_addr,
                         peer_id: None,

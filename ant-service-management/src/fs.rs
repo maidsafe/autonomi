@@ -7,22 +7,22 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::Result;
+use chrono::{DateTime, Utc};
 use libp2p::Multiaddr;
 use std::fs::OpenOptions;
 use std::io::Read;
 use std::path::Path;
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
-// This struct is defined in ant-node
-// So any changes here need to be reflected there too.
-struct CriticalFailure {
-    date_time: chrono::DateTime<chrono::Utc>,
-    reason: String,
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+// This struct is defined in ant-node. Keep the schema in sync.
+pub struct CriticalFailure {
+    pub date_time: DateTime<Utc>,
+    pub reason: String,
 }
 
 pub trait FileSystemActions: Sync {
     fn listen_addrs(&self, root_dir: &Path) -> Result<Vec<Multiaddr>>;
-    fn critical_failure(&self, root_dir: &Path) -> Result<String>;
+    fn critical_failure(&self, root_dir: &Path) -> Result<Option<CriticalFailure>>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -61,10 +61,10 @@ impl FileSystemActions for FileSystemClient {
         Ok(listeners)
     }
 
-    fn critical_failure(&self, root_dir: &Path) -> Result<String> {
+    fn critical_failure(&self, root_dir: &Path) -> Result<Option<CriticalFailure>> {
         let critical_failure_path = root_dir.join("critical_failure.json");
 
-        let critical_failure_reason = if critical_failure_path.exists() {
+        let critical_failure = if critical_failure_path.exists() {
             let mut file = OpenOptions::new().read(true).open(&critical_failure_path)?;
 
             file.lock_shared()?;
@@ -72,13 +72,17 @@ impl FileSystemActions for FileSystemClient {
             file.read_to_string(&mut contents)?;
             file.unlock()?;
 
-            let log: CriticalFailure = serde_json::from_str(&contents)?;
-            info!("Critical failure found: {log:?}");
-            log.reason
+            if contents.trim().is_empty() {
+                None
+            } else {
+                let failure: CriticalFailure = serde_json::from_str(&contents)?;
+                info!("Critical failure found: {failure:?}");
+                Some(failure)
+            }
         } else {
-            "NoCriticalFailureFound".to_string()
+            None
         };
 
-        Ok(critical_failure_reason)
+        Ok(critical_failure)
     }
 }

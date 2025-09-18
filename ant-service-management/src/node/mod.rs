@@ -15,15 +15,21 @@ mod node_service_data_v3;
 // Re-export types
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
+const CRITICAL_FAILURE_POLL_ATTEMPTS: usize = 4;
+const CRITICAL_FAILURE_POLL_DELAY_MS: u64 = 250;
+
 use crate::{
-    ServiceStartupStatus, ServiceStateActions, ServiceStatus, UpgradeOptions,
-    control::ServiceControl, error::Result, fs::FileSystemActions, metric::MetricsAction,
+    ReachabilityProgress, ServiceStartupStatus, ServiceStateActions, ServiceStatus, UpgradeOptions,
+    control::ServiceControl,
+    error::Result,
+    fs::{CriticalFailure, FileSystemActions},
+    metric::MetricsAction,
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
 use ant_protocol::get_port_from_multiaddr;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
-use std::{ffi::OsString, path::PathBuf, sync::Arc};
+use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 use tonic::async_trait;
 
@@ -44,6 +50,30 @@ impl NodeService {
             metrics_action,
             service_data,
         }
+    }
+
+    async fn read_critical_failure_with_retry(&self) -> Option<CriticalFailure> {
+        let root_dir = { self.service_data.read().await.data_dir_path.clone() };
+
+        for attempt in 0..CRITICAL_FAILURE_POLL_ATTEMPTS {
+            match self.fs_actions.critical_failure(&root_dir) {
+                Ok(Some(failure)) => return Some(failure),
+                Ok(None) => {
+                    if attempt + 1 < CRITICAL_FAILURE_POLL_ATTEMPTS {
+                        tokio::time::sleep(Duration::from_millis(CRITICAL_FAILURE_POLL_DELAY_MS))
+                            .await;
+                    }
+                }
+                Err(err) => {
+                    error!(
+                        "Error obtaining critical error via fs actions on path {root_dir:?}: {err:?}"
+                    );
+                    return None;
+                }
+            }
+        }
+
+        None
     }
 }
 
@@ -172,69 +202,82 @@ impl ServiceStateActions for NodeService {
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
-        let (reachability_progress, connected_peers, pid, peer_id) = if full_refresh {
-            let node_metrics = self
-                .metrics_action
-                .get_node_metrics()
-                .await
-                .inspect_err(|err| {
-                    error!("Error obtaining node_metrics via metrics actions: {err:?}")
+        let (reachability_progress, connected_peers, pid, peer_id, last_critical_failure) =
+            if full_refresh {
+                let node_metrics =
+                    self.metrics_action
+                        .get_node_metrics()
+                        .await
+                        .inspect_err(|err| {
+                            error!("Error obtaining node_metrics via metrics actions: {err:?}")
+                        })?;
+
+                let node_metadata_extended = self
+                    .metrics_action
+                    .get_node_metadata_extended()
+                    .await
+                    .inspect_err(|err| {
+                        error!("Error obtaining metadata_extended via metrics actions: {err:?}")
+                    })?;
+
+                let root_dir = self.service_data.read().await.data_dir_path.clone();
+
+                let listen_addrs = self.fs_actions.listen_addrs(&root_dir).inspect_err(|err| {
+                    error!(
+                        "Error obtaining listen addresses via fs actions on path {:?}: {err:?}",
+                        node_metadata_extended.root_dir
+                    )
                 })?;
 
-            let node_metadata_extended = self
-                .metrics_action
-                .get_node_metadata_extended()
-                .await
-                .inspect_err(|err| {
-                    error!("Error obtaining metadata_extended via metrics actions: {err:?}")
-                })?;
+                self.service_data.write().await.listen_addr = Some(listen_addrs.clone());
 
-            let root_dir = self.service_data.read().await.data_dir_path.clone();
-
-            let listen_addrs = self.fs_actions.listen_addrs(&root_dir).inspect_err(|err| {
-                error!(
-                    "Error obtaining listen addresses via fs actions on path {:?}: {err:?}",
-                    node_metadata_extended.root_dir
-                )
-            })?;
-
-            self.service_data.write().await.listen_addr = Some(listen_addrs.clone());
-
-            for addr in &listen_addrs {
-                if let Some(port) = get_port_from_multiaddr(addr) {
-                    debug!("Found antnode port for {service_name}: {port}");
-                    self.service_data.write().await.node_port = Some(port);
-                    break;
+                for addr in &listen_addrs {
+                    if let Some(port) = get_port_from_multiaddr(addr) {
+                        debug!("Found antnode port for {service_name}: {port}");
+                        self.service_data.write().await.node_port = Some(port);
+                        break;
+                    }
                 }
-            }
 
-            if self.service_data.read().await.node_port.is_none() {
-                error!("Could not find antnode port");
-                error!("This will cause the node to have a different port during upgrade");
-            }
+                if self.service_data.read().await.node_port.is_none() {
+                    error!("Could not find antnode port");
+                    error!("This will cause the node to have a different port during upgrade");
+                }
 
-            (
-                node_metrics.reachability_status.progress,
-                node_metrics.connected_peers,
-                Some(node_metadata_extended.pid),
-                Some(node_metadata_extended.peer_id),
-            )
-        } else {
-            debug!("Performing partial refresh for {service_name}");
-            debug!("Previously assigned data will be used");
-            (
-                self.service_data.read().await.reachability_progress.clone(),
-                self.service_data.read().await.connected_peers,
-                pid,
-                self.service_data.read().await.peer_id,
-            )
-        };
+                let reachability_status = node_metrics.reachability_status.clone();
+                let failure_log = if reachability_status.indicates_unreachable() {
+                    self.read_critical_failure_with_retry().await
+                } else {
+                    None
+                };
 
-        self.service_data.write().await.connected_peers = connected_peers;
-        self.service_data.write().await.peer_id = peer_id;
-        self.service_data.write().await.pid = pid;
-        self.service_data.write().await.status = ServiceStatus::Running;
-        self.service_data.write().await.reachability_progress = reachability_progress;
+                (
+                    reachability_status.progress,
+                    node_metrics.connected_peers,
+                    Some(node_metadata_extended.pid),
+                    Some(node_metadata_extended.peer_id),
+                    failure_log,
+                )
+            } else {
+                debug!("Performing partial refresh for {service_name}");
+                debug!("Previously assigned data will be used");
+                let service_data = self.service_data.read().await;
+                (
+                    service_data.reachability_progress.clone(),
+                    service_data.connected_peers,
+                    pid,
+                    service_data.peer_id,
+                    service_data.last_critical_failure.clone(),
+                )
+            };
+
+        let mut service_data = self.service_data.write().await;
+        service_data.connected_peers = connected_peers;
+        service_data.peer_id = peer_id;
+        service_data.pid = pid;
+        service_data.status = ServiceStatus::Running;
+        service_data.reachability_progress = reachability_progress;
+        service_data.last_critical_failure = last_critical_failure;
 
         Ok(())
     }
@@ -246,24 +289,34 @@ impl ServiceStateActions for NodeService {
 
         let startup_status = match node_metrics {
             Ok(node_metrics) => {
-                ServiceStartupStatus::from(node_metrics.reachability_status.progress)
+                if node_metrics.reachability_status.indicates_unreachable() {
+                    let failure_log = self.read_critical_failure_with_retry().await;
+                    let reason = failure_log
+                        .as_ref()
+                        .map(|log| log.reason.clone())
+                        .unwrap_or_else(|| "ReachabilityCheckFailed".to_string());
+                    self.service_data.write().await.last_critical_failure = failure_log;
+                    ServiceStartupStatus::Failed { reason }
+                } else {
+                    if let ReachabilityProgress::Complete =
+                        node_metrics.reachability_status.progress
+                    {
+                        self.service_data.write().await.last_critical_failure = None;
+                    }
+                    ServiceStartupStatus::from(node_metrics.reachability_status.progress)
+                }
             }
             Err(err) => {
                 error!(
                     "Error obtaining node metrics: {err:?}, check if we could find any critical errors. Waiting a few ms before reading from disk."
                 );
-                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-                let root_dir = self.service_data.read().await.data_dir_path.clone();
-                let critical_error = self.fs_actions.critical_failure(&root_dir);
-                let reason = match critical_error {
-                    Ok(err_str) => err_str,
-                    Err(err) => {
-                        error!(
-                            "Error obtaining critical error via fs actions on path {root_dir:?}: {err:?}"
-                        );
-                        "ErrorObtainingNodeCriticalError".to_string()
-                    }
-                };
+                let failure_log = self.read_critical_failure_with_retry().await;
+                let reason = failure_log
+                    .as_ref()
+                    .map(|log| log.reason.clone())
+                    .unwrap_or_else(|| "NoCriticalFailureFound".to_string());
+
+                self.service_data.write().await.last_critical_failure = failure_log;
 
                 ServiceStartupStatus::Failed { reason }
             }

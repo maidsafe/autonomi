@@ -98,12 +98,19 @@ pub async fn status_report(
                 "PID: {}",
                 node.pid.map_or("-".to_string(), |p| p.to_string())
             );
-            if node.status == ServiceStatus::Stopped {
+            let critical_failure = if let Some(failure) = &node.last_critical_failure {
+                Some(failure.clone())
+            } else if node.status == ServiceStatus::Stopped {
                 let fs_client = FileSystemClient;
-                let critical_failure = fs_client.critical_failure(&node.data_dir_path);
-                if let Ok(reason) = critical_failure {
-                    println!("Failure reason: {reason}");
-                }
+                fs_client
+                    .critical_failure(&node.data_dir_path)
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            };
+            if let Some(failure) = critical_failure {
+                println!("Failure reason: {} ({})", failure.reason, failure.date_time);
             }
             println!("Data path: {}", node.data_dir_path.to_string_lossy());
             println!("Log path: {}", node.log_dir_path.to_string_lossy());
@@ -118,18 +125,23 @@ pub async fn status_report(
             "Service Name", "Peer ID", "Status", "Connected Peers", "Failure"
         );
 
+        let fs_client = FileSystemClient;
         for node in node_registry.nodes.read().await.iter() {
             let node = node.read().await;
 
             if node.status == ServiceStatus::Removed {
                 continue;
             }
-            let fs_client = FileSystemClient;
-            let critical_failure = fs_client.critical_failure(&node.data_dir_path);
-
             let peer_id = node.peer_id.map_or("-".to_string(), |p| p.to_string());
-            let failure_reason = if node.status == ServiceStatus::Stopped {
-                critical_failure.unwrap_or("-".to_string())
+            let critical_failure = if let Some(failure) = &node.last_critical_failure {
+                failure.reason.clone()
+            } else if node.status == ServiceStatus::Stopped {
+                fs_client
+                    .critical_failure(&node.data_dir_path)
+                    .ok()
+                    .flatten()
+                    .map(|failure| failure.reason)
+                    .unwrap_or_else(|| "-".to_string())
             } else {
                 "-".to_string()
             };
@@ -139,7 +151,7 @@ pub async fn status_report(
                 peer_id,
                 format_status(&node.status),
                 node.connected_peers,
-                failure_reason
+                critical_failure
             );
         }
     }

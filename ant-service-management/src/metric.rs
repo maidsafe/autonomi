@@ -67,6 +67,20 @@ pub struct NodeMetadataExtended {
     pub log_dir: PathBuf,
 }
 
+impl ReachabilityStatusValues {
+    /// Is the node unreachable.
+    pub fn indicates_unreachable(&self) -> bool {
+        matches!(self.progress, ReachabilityProgress::Complete)
+            && !self.public
+            && !self.private
+            && !self.upnp
+    }
+
+    pub fn indicates_reachable(&self) -> bool {
+        !self.indicates_unreachable()
+    }
+}
+
 #[async_trait]
 pub trait MetricsAction: Sync + Send {
     async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
