@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758191162206,
+  "lastUpdate": 1758191164388,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7152,6 +7152,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22187,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "05cd4b037e9decd4ca2b1152500be7800dc5b98d",
+          "message": "Merge pull request #3204 from maqi/avoid_get_record_early_return\n\nfix(client): only early return during get when got unique content from enough peers",
+          "timestamp": "2025-09-18T09:26:57Z",
+          "tree_id": "d2f20101ebe92ec94d43128aa40f21d409f09efd",
+          "url": "https://github.com/maidsafe/autonomi/commit/05cd4b037e9decd4ca2b1152500be7800dc5b98d"
+        },
+        "date": 1758191163541,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9781,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20222,
             "unit": "ms"
           },
           {
