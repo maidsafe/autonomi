@@ -259,8 +259,8 @@ impl Network {
         addr: NetworkAddress,
         quorum: Quorum,
     ) -> Result<(Option<Record>, Vec<PeerId>), NetworkError> {
-        // Get closest peers to the address
-        let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?;
+        // Get closest peers to the address, note the returned list is `CLOSE_GROUP_SIZE + 2`.
+        let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?.into_iter().take(CLOSE_GROUP_SIZE);
         let total = NonZeroUsize::new(closest_peers.len()).ok_or(NetworkError::GetRecordError(
             "No peers available, please check your network connection".to_string(),
         ))?;
@@ -284,7 +284,7 @@ impl Network {
         // Collect results
         let mut got_unique_records = HashSet::new();
         let mut successful_responses = HashMap::new();
-        let mut err_res = vec![];
+        let mut err_res: Vec<_> = vec![];
 
         while let Some((res, peer)) = tasks.next().await {
             match res {
@@ -295,21 +295,10 @@ impl Network {
                 // accumulate successful responses
                 Ok(Some(record_data)) => {
                     successful_responses.insert(peer.peer_id, record_data.clone());
-                    let is_new = got_unique_records.insert(record_data.clone());
-
-                    // check for forks
-                    if is_new && successful_responses.len() > 1 {
-                        let record_per_peer = successful_responses
-                            .iter()
-                            .map(|(peer_id, record)| {
-                                (*peer_id, record_from_value(record.clone(), &addr))
-                            })
-                            .collect::<HashMap<_, _>>();
-                        return Err(NetworkError::SplitRecord(record_per_peer));
-                    }
+                    let _ = got_unique_records.insert(record_data.clone());
 
                     // Check if we have enough responses to meet quorum
-                    if successful_responses.len() >= expected_holders.get() {
+                    if got_unique_records.len() == 1 && successful_responses.len() >= expected_holders.get() {
                         let record = record_from_value(record_data, &addr);
                         let holders = successful_responses.keys().cloned().collect();
                         return Ok((Some(record), holders));
@@ -325,6 +314,17 @@ impl Network {
             } else {
                 return Ok((None, vec![]));
             }
+        }
+
+        // check for forks
+        if got_unique_records.len() > 1 {
+            let record_per_peer = successful_responses
+                .iter()
+                .map(|(peer_id, record)| {
+                    (*peer_id, record_from_value(record.clone(), &addr))
+                })
+                .collect::<HashMap<_, _>>();
+            return Err(NetworkError::SplitRecord(record_per_peer));
         }
 
         Err(NetworkError::GetRecordQuorumFailed {
