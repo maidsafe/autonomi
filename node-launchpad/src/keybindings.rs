@@ -34,7 +34,6 @@ pub fn get_keybindings() -> KeyBindings {
             (bind("<q>"), Action::Quit),
             (bind("<Q>"), Action::Quit),
             (bind("<Shift-q>"), Action::Quit),
-            (bind("<Ctrl-c>"), Action::Quit),
             (bind("<Ctrl-z>"), Action::Suspend),
         ]);
     };
