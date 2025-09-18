@@ -10,6 +10,7 @@ use super::{
     Marker, NodeEvent, error::Error, error::Result, event::NodeEventsChannel,
     quote::quotes_verification,
 };
+use crate::critical_failure::set_critical_failure;
 use crate::listen_addr_writer::ListenAddrWriter;
 #[cfg(feature = "open-metrics")]
 use crate::metrics::NodeMetricsRecorder;
@@ -164,7 +165,9 @@ impl NodeBuilder {
     }
 
     /// Check if the node is publicly reachable.
-    pub async fn run_reachability_check(&self) -> Result<ReachabilityStatus> {
+    pub async fn run_reachability_check(
+        &self,
+    ) -> Result<(ReachabilityStatus, Option<watch::Sender<bool>>)> {
         #[cfg(feature = "open-metrics")]
         let (_metrics_recorder, metrics_registries) = if self.metrics_server_port.is_some() {
             // metadata registry
@@ -201,12 +204,7 @@ impl NodeBuilder {
             init_reachability_check_swarm(network_config).await?;
         let status = swarm_driver.detect().await?;
 
-        // Shutdown the metrics server if it was started
-        if let Some(shutdown_tx) = metrics_shutdown_tx {
-            let _ = shutdown_tx.send(true);
-        }
-
-        Ok(status)
+        Ok((status, metrics_shutdown_tx))
     }
 
     /// Asynchronously runs a new node instance, setting up the swarm driver,
@@ -230,15 +228,18 @@ impl NodeBuilder {
             info!("Running reachability check ... This might take a few minutes to complete.");
             let status = self.run_reachability_check().await;
 
-            if let Ok(s) = &status {
+            if let Ok((s, _)) = &status {
                 reachability_status = Some(s.clone());
             }
             match status {
-                Ok(ReachabilityStatus::Reachable {
-                    local_addr,
-                    upnp,
-                    external_addr: _,
-                }) => {
+                Ok((
+                    ReachabilityStatus::Reachable {
+                        local_addr,
+                        upnp,
+                        external_addr: _,
+                    },
+                    metrics_shutdown_tx,
+                )) => {
                     info!(
                         "We are reachable. Starting node with socket addr: {local_addr} and UPnP: {upnp:?}",
                     );
@@ -249,17 +250,26 @@ impl NodeBuilder {
                     } else {
                         no_upnp = !upnp;
                     }
+                    if let Some(tx) = metrics_shutdown_tx {
+                        let _ = tx.send(true);
+                    }
                 }
-                Ok(ReachabilityStatus::NotReachable { reasons }) => {
+                Ok((ReachabilityStatus::NotReachable { reasons }, _metrics_shutdown_tx)) => {
+                    info!(
+                        "We are NOT reachable due to: {reasons:?}. Terminating the node in 120 seconds."
+                    );
                     println!("Terminating the node in 120 seconds: {reasons:?}");
+                    let failure_error = Error::UnreachableNode;
+                    set_critical_failure(&self.root_dir, &failure_error);
                     tokio::time::sleep(Duration::from_secs(120)).await;
-                    return Err(Error::UnreachableNode);
+                    return Err(failure_error);
                 }
                 Err(err) => {
                     info!(
                         "Reachability check error: {err:?}. Terminating the node in 120 seconds."
                     );
                     println!("Terminating the node in 120 seconds: {err:?}");
+                    set_critical_failure(&self.root_dir, &err);
                     tokio::time::sleep(Duration::from_secs(120)).await;
                     return Err(err);
                 }
