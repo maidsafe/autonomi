@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::NodeServiceData;
-use crate::{ReachabilityProgress, ServiceStatus, error::Result};
+use crate::{ReachabilityProgress, ServiceStatus, error::Result, fs::CriticalFailure};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -59,6 +59,8 @@ pub struct NodeServiceDataV3 {
     pub rewards_address: RewardsAddress,
     /// Added a mandatory Reachability progress enum in V3
     pub reachability_progress: ReachabilityProgress,
+    #[serde(default)]
+    pub last_critical_failure: Option<CriticalFailure>,
     /// Removed reward_balance field in V3
     /// Updated rpc_socket_addr to be optional
     pub rpc_socket_addr: Option<SocketAddr>,
@@ -113,6 +115,8 @@ impl NodeServiceDataV3 {
             #[serde(default)]
             rewards_address: RewardsAddress,
             reachability_progress: ReachabilityProgress,
+            #[serde(default)]
+            last_critical_failure: Option<CriticalFailure>,
             rpc_socket_addr: Option<SocketAddr>,
             #[serde(default = "schema_v3_value")]
             schema_version: u32,
@@ -149,6 +153,7 @@ impl NodeServiceDataV3 {
             pid: helper.pid,
             rewards_address: helper.rewards_address,
             reachability_progress: helper.reachability_progress,
+            last_critical_failure: helper.last_critical_failure,
             rpc_socket_addr: helper.rpc_socket_addr,
             service_name: helper.service_name,
             schema_version: helper.schema_version,
@@ -214,6 +219,7 @@ mod tests {
             pid: None,
             rewards_address: Default::default(),
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             skip_reachability_check: true,
             user: None,
             write_older_cache_files: false,

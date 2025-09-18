@@ -275,6 +275,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -897,6 +898,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -2627,6 +2629,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -2746,6 +2749,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             peer_id: None,
             pid: None,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -3640,6 +3644,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -3760,6 +3765,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -4154,6 +4160,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
@@ -4274,6 +4281,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             pid: None,
             skip_reachability_check: false,
             reachability_progress: ReachabilityProgress::NotRun,
+            last_critical_failure: None,
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             )?,
