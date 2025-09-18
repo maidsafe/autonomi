@@ -11,7 +11,7 @@ use ant_evm::{CustomNetwork, EvmNetwork, RewardsAddress};
 use ant_service_management::{
     NodeRegistryManager, ReachabilityProgress, ServiceStatus,
     error::Result as ServiceControlResult,
-    fs::FileSystemActions,
+    fs::{CriticalFailure, FileSystemActions},
     metric::{
         MetricsAction, MetricsActionError, NodeMetadataExtended, NodeMetrics,
         ReachabilityStatusValues,
@@ -85,7 +85,10 @@ mock! {
 
     impl FileSystemActions for FileSystemClient {
         fn listen_addrs(&self, root_dir: &std::path::Path) -> Result<Vec<Multiaddr>, ant_service_management::Error>;
-        fn critical_failure(&self, root_dir: &std::path::Path) -> Result<String, ant_service_management::Error>;
+        fn critical_failure(
+            &self,
+            root_dir: &std::path::Path,
+        ) -> Result<Option<CriticalFailure>, ant_service_management::Error>;
     }
 }
 
@@ -128,6 +131,7 @@ pub fn create_test_service_data(number: u16) -> NodeServiceData {
         peer_id: None,
         pid: None,
         reachability_progress: ReachabilityProgress::NotRun,
+        last_critical_failure: None,
         rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
             .unwrap(),
         rpc_socket_addr: None,

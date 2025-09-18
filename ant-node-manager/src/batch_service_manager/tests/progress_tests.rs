@@ -10,9 +10,11 @@ use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::{
     NodeService, ReachabilityProgress, ServiceStateActions, ServiceStatus,
+    fs::CriticalFailure,
     metric::{NodeMetrics, ReachabilityStatusValues},
 };
 use assert_matches::assert_matches;
+use chrono::Utc;
 use color_eyre::eyre::Result;
 use mockall::predicate::*;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -205,7 +207,12 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
                 "/var/antctl/services/antnode{i}"
             ))))
             .times(1)
-            .returning(|_| Ok("Unreachable".to_string()));
+            .returning(|_| {
+                Ok(Some(CriticalFailure {
+                    date_time: Utc::now(),
+                    reason: "Unreachable".to_string(),
+                }))
+            });
 
         let service_data = create_test_service_data(i as u16);
         let service_data = Arc::new(RwLock::new(service_data));
@@ -245,6 +252,13 @@ async fn start_all_should_handle_progress_failures() -> Result<()> {
     };
     let actual_error = batch_result.get_errors("antnode2").unwrap();
     assert_eq!(format!("{actual_error:?}",), format!("{expected_error:?}",));
+
+    for service in &batch_manager.services {
+        let service_data = service.service_data.read().await;
+        assert!(service_data.last_critical_failure.is_some());
+        let critical_failure = service_data.last_critical_failure.as_ref().unwrap();
+        assert_eq!(critical_failure.reason, "Unreachable");
+    }
 
     Ok(())
 }
@@ -294,7 +308,12 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
         .expect_critical_failure()
         .with(eq(PathBuf::from("/var/antctl/services/antnode1")))
         .times(1)
-        .returning(|_| Ok("Unreachable".to_string()));
+        .returning(|_| {
+            Ok(Some(CriticalFailure {
+                date_time: Utc::now(),
+                reason: "Unreachable".to_string(),
+            }))
+        });
 
     let service_data = create_test_service_data(1);
     let service_data = Arc::new(RwLock::new(service_data));
@@ -324,6 +343,11 @@ async fn start_all_should_handle_intermittent_progress_failures() -> Result<()> 
     };
     let actual_error = batch_result.get_errors("antnode1").unwrap();
     assert_eq!(format!("{actual_error:?}",), format!("{expected_error:?}",));
+
+    let service1_data = batch_manager.services[0].service_data.read().await;
+    assert!(service1_data.last_critical_failure.is_some());
+    let critical_failure = service1_data.last_critical_failure.as_ref().unwrap();
+    assert_eq!(critical_failure.reason, "Unreachable");
 
     Ok(())
 }

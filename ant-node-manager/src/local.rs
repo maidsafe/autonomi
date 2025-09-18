@@ -441,6 +441,7 @@ pub async fn run_node(
         peer_id: Some(peer_id),
         pid: Some(node_metadata_extended.pid),
         reachability_progress: ReachabilityProgress::NotRun,
+        last_critical_failure: None,
         rewards_address: run_options.rewards_address,
         rpc_socket_addr: run_options.rpc_socket_addr,
         schema_version: NODE_SERVICE_DATA_SCHEMA_LATEST,
@@ -505,11 +506,11 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
 mod tests {
     use super::*;
     use ant_evm::utils::dummy_address;
-    use ant_service_management::ReachabilityProgress;
     use ant_service_management::metric::MetricsAction;
     use ant_service_management::metric::NodeMetadataExtended;
     use ant_service_management::metric::NodeMetrics;
     use ant_service_management::metric::ReachabilityStatusValues;
+    use ant_service_management::{ReachabilityProgress, fs::CriticalFailure};
     use async_trait::async_trait;
     use evmlib::CustomNetwork;
     use libp2p_identity::PeerId;
@@ -530,7 +531,7 @@ mod tests {
         pub FileSystemClient {}
         impl FileSystemActions for FileSystemClient {
             fn listen_addrs(&self, root_dir: &std::path::Path) -> Result<Vec<Multiaddr>, ant_service_management::Error>;
-            fn critical_failure(&self, root_dir: &std::path::Path) -> Result<String, ant_service_management::Error>;
+            fn critical_failure(&self, root_dir: &std::path::Path) -> Result<Option<CriticalFailure>, ant_service_management::Error>;
         }
     }
 

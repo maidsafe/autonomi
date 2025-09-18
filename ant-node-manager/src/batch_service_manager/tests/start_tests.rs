@@ -915,3 +915,420 @@ async fn start_all_should_skip_already_running_services_and_start_others() -> Re
 
     Ok(())
 }
+
+#[tokio::test]
+async fn start_all_should_record_critical_failure_in_registry() -> Result<()> {
+    let mut mock_service_control = MockServiceControl::new();
+
+    mock_service_control
+        .expect_start()
+        .with(eq("antnode1"), eq(false))
+        .times(1)
+        .returning(|_, _| Ok(()));
+    mock_service_control
+        .expect_start()
+        .with(eq("antnode2"), eq(false))
+        .times(1)
+        .returning(|_, _| Ok(()));
+
+    mock_service_control
+        .expect_wait()
+        .with(eq(1000))
+        .times(2)
+        .returning(|_| ());
+
+    mock_service_control
+        .expect_get_process_pid()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
+        .times(1)
+        .returning(|_| Ok(1001));
+
+    mock_service_control
+        .expect_get_process_pid()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode2/antnode")))
+        .times(0..=1)
+        .returning(|_| Ok(1002));
+
+    let mut services = Vec::new();
+
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1..)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
+                    pid: 1001,
+                    peer_id: get_test_peer_id(0),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode1"),
+                })
+            });
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let service_data = create_test_service_data(1);
+        let service_data = Arc::new(RwLock::new(service_data));
+
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: false,
+                        private: false,
+                    },
+                    connected_peers: 0,
+                })
+            });
+
+        mock_fs_client
+            .expect_critical_failure()
+            .with(eq(PathBuf::from("/var/antctl/services/antnode2")))
+            .times(1)
+            .returning(|_| {
+                Ok(Some(ant_service_management::fs::CriticalFailure {
+                    date_time: chrono::Utc::now(),
+                    reason: "Unreachable".to_string(),
+                }))
+            });
+
+        let mut service_data = create_test_service_data(2);
+        service_data.last_critical_failure = None;
+        let service_data = Arc::new(RwLock::new(service_data));
+
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    let registry = create_test_registry();
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        registry.clone(),
+        VerbosityLevel::Normal,
+    );
+
+    let batch_result = batch_manager.start_all(1000, true).await;
+
+    assert_eq!(batch_result.errors.len(), 1);
+    assert!(batch_result.errors.contains_key("antnode2"));
+
+    {
+        let service1_data = batch_manager.services[0].service_data.read().await;
+        assert!(service1_data.last_critical_failure.is_none());
+        assert_eq!(service1_data.status, ServiceStatus::Running);
+    }
+
+    {
+        let service2_data = batch_manager.services[1].service_data.read().await;
+        assert!(service2_data.last_critical_failure.is_some());
+        let critical_failure = service2_data.last_critical_failure.as_ref().unwrap();
+        assert_eq!(critical_failure.reason, "Unreachable");
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn start_all_should_clear_critical_failure_on_success() -> Result<()> {
+    let mut mock_service_control = MockServiceControl::new();
+
+    mock_service_control
+        .expect_start()
+        .with(eq("antnode1"), eq(false))
+        .times(1)
+        .returning(|_, _| Ok(()));
+
+    mock_service_control
+        .expect_wait()
+        .with(eq(1000))
+        .times(1)
+        .returning(|_| ());
+
+    mock_service_control
+        .expect_get_process_pid()
+        .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
+        .times(1)
+        .returning(|_| Ok(1001));
+
+    let mut mock_fs_client = MockFileSystemClient::new();
+    let mut mock_metrics_client = MockMetricsClient::new();
+
+    mock_metrics_client
+        .expect_get_node_metrics()
+        .times(1..)
+        .returning(|| {
+            Ok(ant_service_management::metric::NodeMetrics {
+                reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                    progress: ReachabilityProgress::Complete,
+                    upnp: false,
+                    public: true,
+                    private: false,
+                },
+                connected_peers: 10,
+            })
+        });
+
+    mock_metrics_client
+        .expect_get_node_metadata_extended()
+        .times(1)
+        .returning(|| {
+            Ok(ant_service_management::metric::NodeMetadataExtended {
+                pid: 1001,
+                peer_id: get_test_peer_id(0),
+                root_dir: PathBuf::from("/var/antctl/services/antnode1"),
+                log_dir: PathBuf::from("/var/log/antnode/antnode1"),
+            })
+        });
+
+    mock_fs_client
+        .expect_listen_addrs()
+        .times(1)
+        .returning(|_| Ok(vec![]));
+
+    let mut service_data = create_test_service_data(1);
+    service_data.last_critical_failure = Some(ant_service_management::fs::CriticalFailure {
+        date_time: chrono::Utc::now(),
+        reason: "PreviousStartupFailure".to_string(),
+    });
+    let service_data = Arc::new(RwLock::new(service_data));
+
+    {
+        let data = service_data.read().await;
+        assert!(data.last_critical_failure.is_some());
+        assert_eq!(
+            data.last_critical_failure.as_ref().unwrap().reason,
+            "PreviousStartupFailure"
+        );
+    }
+
+    let service = NodeService::new(
+        Arc::clone(&service_data),
+        Box::new(mock_fs_client),
+        Box::new(mock_metrics_client),
+    );
+
+    let services = vec![service];
+
+    let registry = create_test_registry();
+    let batch_manager = BatchServiceManager::new(
+        services,
+        Box::new(mock_service_control),
+        registry,
+        VerbosityLevel::Normal,
+    );
+
+    let batch_result = batch_manager.start_all(1000, true).await;
+
+    assert!(batch_result.errors.is_empty());
+
+    {
+        let data = service_data.read().await;
+        assert!(data.last_critical_failure.is_none());
+        assert_eq!(data.status, ServiceStatus::Running);
+        assert_eq!(data.reachability_progress, ReachabilityProgress::Complete);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn start_all_should_preserve_critical_failure_when_not_full_refresh() -> Result<()> {
+    let mock_fs_client = MockFileSystemClient::new();
+    let mock_metrics_client = MockMetricsClient::new();
+
+    let mut service_data = create_test_service_data(1);
+    service_data.last_critical_failure = Some(ant_service_management::fs::CriticalFailure {
+        date_time: chrono::Utc::now(),
+        reason: "ExistingFailure".to_string(),
+    });
+
+    let service_data = Arc::new(RwLock::new(service_data));
+
+    let service = NodeService::new(
+        Arc::clone(&service_data),
+        Box::new(mock_fs_client),
+        Box::new(mock_metrics_client),
+    );
+
+    service.on_start(Some(1234), false).await?;
+
+    let data = service_data.read().await;
+    assert!(data.last_critical_failure.is_some());
+    assert_eq!(
+        data.last_critical_failure.as_ref().unwrap().reason,
+        "ExistingFailure"
+    );
+    assert_eq!(data.pid, Some(1234));
+    assert_eq!(data.status, ServiceStatus::Running);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn start_all_should_update_critical_failure_during_full_refresh() -> Result<()> {
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: false,
+                        private: false,
+                    },
+                    connected_peers: 0,
+                })
+            });
+
+        mock_fs_client
+            .expect_critical_failure()
+            .with(eq(PathBuf::from("/var/antctl/services/antnode1")))
+            .times(1)
+            .returning(|_| {
+                Ok(Some(ant_service_management::fs::CriticalFailure {
+                    date_time: chrono::Utc::now(),
+                    reason: "NetworkUnreachable".to_string(),
+                }))
+            });
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
+                    pid: 1234,
+                    peer_id: get_test_peer_id(0),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode1"),
+                })
+            });
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let mut service_data = create_test_service_data(1);
+        service_data.last_critical_failure = None;
+        let service_data = Arc::new(RwLock::new(service_data));
+
+        let service = NodeService::new(
+            Arc::clone(&service_data),
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+
+        service.on_start(Some(1234), true).await?;
+
+        let data = service_data.read().await;
+        assert!(data.last_critical_failure.is_some());
+        assert_eq!(
+            data.last_critical_failure.as_ref().unwrap().reason,
+            "NetworkUnreachable"
+        );
+    }
+
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetrics {
+                    reachability_status: ant_service_management::metric::ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1)
+            .returning(|| {
+                Ok(ant_service_management::metric::NodeMetadataExtended {
+                    pid: 1235,
+                    peer_id: get_test_peer_id(1),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode2"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode2"),
+                })
+            });
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1)
+            .returning(|_| Ok(vec![]));
+
+        let mut service_data = create_test_service_data(2);
+        service_data.last_critical_failure = Some(ant_service_management::fs::CriticalFailure {
+            date_time: chrono::Utc::now(),
+            reason: "PreviousFailure".to_string(),
+        });
+        let service_data = Arc::new(RwLock::new(service_data));
+
+        let service = NodeService::new(
+            Arc::clone(&service_data),
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+
+        service.on_start(Some(1235), true).await?;
+
+        let data = service_data.read().await;
+        assert!(data.last_critical_failure.is_none());
+        assert_eq!(data.reachability_progress, ReachabilityProgress::Complete);
+    }
+
+    Ok(())
+}
