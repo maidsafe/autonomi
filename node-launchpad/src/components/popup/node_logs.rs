@@ -532,6 +532,7 @@ impl NodeLogsPopup {
         if !text.is_empty()
             && let Some(ref mut clipboard) = self.clipboard
         {
+            info!("Copying {} characters to clipboard", text.len());
             clipboard.set_text(text)?;
         }
         Ok(())
@@ -748,7 +749,7 @@ impl NodeLogsPopup {
                 Span::styled(" Scroll  ", Style::default().fg(GHOST_WHITE)),
                 Span::styled("Shift+↑/↓", Style::default().fg(EUCALYPTUS).bold()),
                 Span::styled(" Select  ", Style::default().fg(GHOST_WHITE)),
-                Span::styled("Ctrl+C", Style::default().fg(EUCALYPTUS).bold()),
+                Span::styled("Ctrl+Shift+C", Style::default().fg(EUCALYPTUS).bold()),
                 Span::styled(" Copy", Style::default().fg(GHOST_WHITE)),
             ]),
             Line::from(vec![
@@ -833,7 +834,7 @@ impl Component for NodeLogsPopup {
                 self.handle_scroll(ScrollDirection::End, shift_pressed);
                 return Ok((vec![], EventResult::Consumed));
             }
-            KeyCode::Char('c') if ctrl_pressed => {
+            KeyCode::Char('c') | KeyCode::Char('C') if ctrl_pressed && shift_pressed => {
                 if let Err(e) = self.copy_to_clipboard() {
                     error!("Failed to copy to clipboard: {e}");
                 }
@@ -1044,6 +1045,27 @@ mod tests {
             .expect("handled");
         assert_eq!(result, EventResult::Consumed);
         assert_eq!(actions, vec![Action::SwitchScene(Scene::Status)]);
+    }
+
+    #[test]
+    fn copy_shortcut_uses_ctrl_shift_c() {
+        let mut popup = build_popup();
+        popup.handle_logs_loaded(vec!["copy me".into()], 1, None, None);
+        popup.selection.start_selection(0);
+        popup.clipboard = None; // avoid platform clipboard dependency during tests
+
+        let focus_manager = FocusManager::new(FocusTarget::NodeLogsPopup);
+        let (_actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(
+                    KeyCode::Char('c'),
+                    KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+                ),
+                &focus_manager,
+            )
+            .expect("handled");
+
+        assert_eq!(result, EventResult::Consumed);
     }
 
     #[test]

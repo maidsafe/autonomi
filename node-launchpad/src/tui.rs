@@ -11,7 +11,7 @@ use crossterm::{
     cursor,
     event::{
         DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
-        Event as CrosstermEvent, KeyEvent, KeyEventKind, MouseEvent,
+        Event as CrosstermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent,
     },
     terminal::{EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -20,7 +20,7 @@ use ratatui::backend::CrosstermBackend as Backend;
 use serde::{Deserialize, Serialize};
 use std::{
     ops::{Deref, DerefMut},
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::{
     sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
@@ -117,6 +117,9 @@ impl Tui {
             let mut tick_interval = tokio::time::interval(tick_delay);
             let mut render_interval = tokio::time::interval(render_delay);
             event_tx.send(Event::Init)?;
+            let mut last_ctrl_c_press: Option<Instant> = None;
+            // Allow a short window for a second Ctrl+C press to request an immediate shutdown.
+            const DOUBLE_CTRL_C_WINDOW: Duration = Duration::from_millis(1500);
             loop {
                 let tick_delay = tick_interval.tick();
                 let render_delay = render_interval.tick();
@@ -131,6 +134,25 @@ impl Tui {
                         match evt {
                           CrosstermEvent::Key(key) => {
                             if key.kind == KeyEventKind::Press {
+                              let is_ctrl_c = key.modifiers.contains(KeyModifiers::CONTROL)
+                                && !key.modifiers.contains(KeyModifiers::SHIFT)
+                                && matches!(key.code, KeyCode::Char('c'));
+
+                              if is_ctrl_c {
+                                let now = Instant::now();
+                                if last_ctrl_c_press
+                                  .map(|previous| now.duration_since(previous) <= DOUBLE_CTRL_C_WINDOW)
+                                  .unwrap_or(false)
+                                {
+                                  event_tx.send(Event::Quit)?;
+                                  break;
+                                } else {
+                                  last_ctrl_c_press = Some(now);
+                                }
+                              } else {
+                                last_ctrl_c_press = None;
+                              }
+
                               event_tx.send(Event::Key(key))?;
                             }
                           },
