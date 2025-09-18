@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_service_management::ServiceStatus;
+use ant_service_management::{
+    ReachabilityProgress, ServiceStatus, fs::CriticalFailure, metric::ReachabilityStatusValues,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -18,12 +20,14 @@ pub enum NodeDisplayStatus {
     Maintaining,
     Running,
     Starting,
+    ReachabilityCheck,
     Stopping,
     Stopped,
     Removing,
     Removed,
     Refreshing,
     Updating,
+    Unreachable,
 }
 
 impl From<&ServiceStatus> for NodeDisplayStatus {
@@ -45,12 +49,14 @@ impl fmt::Display for NodeDisplayStatus {
             NodeDisplayStatus::Maintaining => write!(f, "Maintaining"),
             NodeDisplayStatus::Running => write!(f, "Running"),
             NodeDisplayStatus::Starting => write!(f, "Starting"),
+            NodeDisplayStatus::ReachabilityCheck => write!(f, "ReachabilityCheck"),
             NodeDisplayStatus::Stopping => write!(f, "Stopping"),
             NodeDisplayStatus::Stopped => write!(f, "Stopped"),
             NodeDisplayStatus::Removing => write!(f, "Removing"),
             NodeDisplayStatus::Refreshing => write!(f, "Refreshing"),
             NodeDisplayStatus::Removed => write!(f, "Removed"),
             NodeDisplayStatus::Updating => write!(f, "Updating"),
+            NodeDisplayStatus::Unreachable => write!(f, "Unreachable"),
         }
     }
 }
@@ -65,10 +71,12 @@ pub struct NodeItem {
     pub records: usize,
     pub peers: usize,
     pub connections: usize,
+    pub reachability_progress: ReachabilityProgress,
+    pub reachability_status: ReachabilityStatusValues,
+    pub last_critical_failure: Option<CriticalFailure>,
     pub locked: bool,
     pub node_display_status: NodeDisplayStatus,
     pub service_status: ServiceStatus,
-    pub failure: Option<(chrono::DateTime<chrono::Utc>, String)>,
 }
 
 impl NodeItem {
@@ -96,12 +104,19 @@ impl NodeItem {
         !self.locked
             && matches!(
                 self.node_display_status,
-                NodeDisplayStatus::Stopped | NodeDisplayStatus::Added
+                NodeDisplayStatus::Stopped
+                    | NodeDisplayStatus::Added
+                    | NodeDisplayStatus::Unreachable
             )
     }
 
+    /// We can safely stop a node if it is `Running` or if it is performing `ReachabilityCheck`
     pub fn can_stop(&self) -> bool {
-        !self.locked && matches!(self.node_display_status, NodeDisplayStatus::Running)
+        !self.locked
+            && matches!(
+                self.node_display_status,
+                NodeDisplayStatus::Running | NodeDisplayStatus::ReachabilityCheck
+            )
     }
 
     pub fn can_upgrade(&self) -> bool {
@@ -129,10 +144,12 @@ mod tests {
             records: 0,
             peers: 0,
             connections: 0,
+            reachability_progress: ReachabilityProgress::NotRun,
+            reachability_status: ReachabilityStatusValues::default(),
+            last_critical_failure: None,
             locked: false,
             node_display_status: NodeDisplayStatus::from(&status),
             service_status: status,
-            failure: None,
         }
     }
 

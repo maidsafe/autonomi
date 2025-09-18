@@ -71,7 +71,6 @@ impl AggregatedNodeStats {
             })
             .collect::<Vec<_>>();
         if !node_details.is_empty() {
-            debug!("Fetching stats from {} nodes", node_details.len());
             tokio::spawn(async move {
                 Self::fetch_aggregated_node_stats_inner(node_details, action_sender).await;
             });
@@ -90,14 +89,21 @@ impl AggregatedNodeStats {
 
         let mut aggregated_node_stats = AggregatedNodeStats::default();
 
-        let mut connection_failures = HashSet::new();
+        let mut probably_failed = HashSet::new();
         while let Some(result) = stream.next().await {
             match result {
                 IndividualNodeStatsResult::Success(individual_stats) => {
+                    if individual_stats.reachability_status.indicates_unreachable() {
+                        warn!(
+                            "Node {} is unreachable according to its metrics",
+                            individual_stats.service_name
+                        );
+                        probably_failed.insert(individual_stats.service_name.clone());
+                    }
                     aggregated_node_stats.merge(&individual_stats);
                 }
                 IndividualNodeStatsResult::FailedToConnectToNode { service_name } => {
-                    connection_failures.insert(service_name.clone());
+                    probably_failed.insert(service_name.clone());
                 }
                 IndividualNodeStatsResult::OtherFailure { service_name } => {
                     error!("Other failure while fetching stats from {service_name:?}");
@@ -111,9 +117,9 @@ impl AggregatedNodeStats {
             error!("Failed to send aggregated node stats action: {err:?}");
         }
 
-        if !connection_failures.is_empty() {
+        if !probably_failed.is_empty() {
             warn!(
-                "Failed to connect to nodes: {connection_failures:?}, trying to refresh registry to update the service status."
+                "These nodes have probably failed: {probably_failed:?}, trying to refresh registry to update the service status."
             );
             if let Err(err) = action_sender.send(Action::NodeTableActions(
                 NodeTableActions::NodeManagementCommand(NodeManagementCommand::RefreshRegistry),
