@@ -17,7 +17,7 @@ use tokio::sync::mpsc::UnboundedSender;
 pub const PORT_MAX: u32 = 65535;
 pub const PORT_MIN: u32 = 1024;
 
-pub const FIXED_INTERVAL: u64 = 60_000;
+pub const FIXED_INTERVAL: u64 = 10_000;
 
 pub const NODES_ALL: &str = "NODES_ALL";
 

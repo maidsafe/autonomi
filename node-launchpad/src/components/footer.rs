@@ -67,11 +67,15 @@ impl Footer {
     /// Toggle command - enabled when a node is selected, style depends on selected node status
     fn toggle_styles(state: &FooterState) -> (Style, Style) {
         match &state.selected_node_status {
-            Some(NodeDisplayStatus::Running) => (
+            Some(NodeDisplayStatus::Running | NodeDisplayStatus::ReachabilityCheck) => (
                 Self::command_style(true),
                 Style::default().fg(GHOST_WHITE), // White for stopping
             ),
-            Some(NodeDisplayStatus::Stopped | NodeDisplayStatus::Added) => (
+            Some(
+                NodeDisplayStatus::Stopped
+                | NodeDisplayStatus::Added
+                | NodeDisplayStatus::Unreachable,
+            ) => (
                 Self::command_style(true),
                 Style::default().fg(EUCALYPTUS), // Green for starting
             ),

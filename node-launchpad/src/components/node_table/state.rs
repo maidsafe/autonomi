@@ -16,7 +16,10 @@ use crate::node_management::NodeManagement;
 use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::AggregatedNodeStats};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
-use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
+use ant_service_management::{
+    NodeRegistryManager, NodeServiceData, ReachabilityProgress, ServiceStatus, fs::CriticalFailure,
+    metric::ReachabilityStatusValues,
+};
 use color_eyre::eyre::Result;
 use std::{path::PathBuf, time::Instant};
 use throbber_widgets_tui::ThrobberState;
@@ -51,6 +54,39 @@ pub struct NodeTableState {
 }
 
 impl NodeTableState {
+    fn compute_display_status_for(
+        service_status: &ServiceStatus,
+        reachability_progress: &ReachabilityProgress,
+        last_failure: &Option<CriticalFailure>,
+    ) -> NodeDisplayStatus {
+        match service_status {
+            ServiceStatus::Running => {
+                if last_failure
+                    .as_ref()
+                    .is_some_and(|failure| failure.reason.contains("Unreachable"))
+                {
+                    return NodeDisplayStatus::Unreachable;
+                }
+                match reachability_progress {
+                    ReachabilityProgress::InProgress(_) => NodeDisplayStatus::ReachabilityCheck,
+                    ReachabilityProgress::NotRun => NodeDisplayStatus::Running,
+                    ReachabilityProgress::Complete => NodeDisplayStatus::Running,
+                }
+            }
+            ServiceStatus::Stopped => {
+                if last_failure
+                    .as_ref()
+                    .is_some_and(|failure| failure.reason.contains("Unreachable"))
+                {
+                    NodeDisplayStatus::Unreachable
+                } else {
+                    NodeDisplayStatus::Stopped
+                }
+            }
+            _ => NodeDisplayStatus::from(service_status),
+        }
+    }
+
     pub async fn new(config: NodeTableConfig) -> Result<Self> {
         let registry_path = if let Some(override_path) = &config.registry_path_override {
             override_path.clone()
@@ -180,18 +216,19 @@ impl NodeTableState {
                     continue;
                 }
 
-                // if no status change, then the sync node service data is for a different node, so skip here.
+                // if no status change, then the registry was updated because some other node was refreshed, so skip here.
                 if node_data.status == existing_item.service_status {
                     continue;
                 }
 
-                // Even if the node item is locked, we can still update its display status to the latest one obtained
-                // from the registry, so that the UI reflects the true state of the node.
-                // NodeManagementResponse will do the unlocking later.
-                let node_display_status = NodeDisplayStatus::from(&node_data.status);
+                existing_item.last_critical_failure = node_data.last_critical_failure.clone();
                 existing_item.service_status = node_data.status.clone();
                 existing_item.version = node_data.version.clone();
-                existing_item.node_display_status = node_display_status;
+                existing_item.node_display_status = Self::compute_display_status_for(
+                    &existing_item.service_status,
+                    &existing_item.reachability_progress,
+                    &existing_item.last_critical_failure,
+                );
             } else {
                 if node_data.status == ServiceStatus::Removed {
                     continue;
@@ -199,16 +236,22 @@ impl NodeTableState {
                 let new_item = NodeItem {
                     service_name: node_data.service_name.clone(),
                     service_status: node_data.status.clone(),
-                    node_display_status: NodeDisplayStatus::from(&node_data.status),
-                    version: node_data.version.clone(),
                     rewards_wallet_balance: 0,
                     memory: 0,
                     mbps: 0.to_string(),
                     records: 0,
                     peers: 0,
                     connections: 0,
+                    reachability_progress: node_data.reachability_progress.clone(),
+                    reachability_status: ReachabilityStatusValues::default(),
+                    last_critical_failure: node_data.last_critical_failure.clone(),
                     locked: false,
-                    failure: None,
+                    node_display_status: Self::compute_display_status_for(
+                        &node_data.status,
+                        &node_data.reachability_progress,
+                        &node_data.last_critical_failure,
+                    ),
+                    version: node_data.version.clone(),
                 };
                 debug!(
                     "Registry sync: Adding new node {} with status {:?}",
@@ -311,6 +354,18 @@ impl NodeTableState {
                 );
                 item.records = stats.max_records;
                 item.connections = stats.connections;
+                item.reachability_status = stats.reachability_status.clone();
+                item.reachability_progress = stats.reachability_status.progress.clone();
+                if stats.reachability_status.indicates_reachable()
+                    && matches!(item.reachability_progress, ReachabilityProgress::Complete)
+                {
+                    item.last_critical_failure = None;
+                }
+                item.node_display_status = Self::compute_display_status_for(
+                    &item.service_status,
+                    &item.reachability_progress,
+                    &item.last_critical_failure,
+                );
             }
         }
         debug!("Synced node items with the node stats");
