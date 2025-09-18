@@ -13,11 +13,9 @@
 #[macro_use]
 extern crate tracing;
 
-mod criticial_failure;
 mod rpc_service;
 mod subcommands;
 
-use crate::criticial_failure::{reset_critical_failure, set_critical_failure};
 use crate::rpc_service::{NodeCtrl, StopResult};
 use crate::subcommands::EvmNetworkCommand;
 use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
@@ -26,12 +24,16 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
+use ant_node::{
+    Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, reset_critical_failure,
+    set_critical_failure,
+};
 use ant_protocol::version;
 use clap::{Parser, command};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
 use libp2p::identity::Keypair;
+use std::path::Path;
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -347,12 +349,12 @@ fn main() {
         rewards_address,
         evm_network,
         node_socket_addr,
-        root_dir,
+        root_dir.clone(),
     ) {
         error!("Node failed with error: {err}");
         eprintln!("Node failed with error: {err}");
 
-        set_critical_failure(&log_output_dest, &err);
+        set_critical_failure(&root_dir, &err);
 
         std::process::exit(1);
     }
@@ -400,7 +402,7 @@ fn run(
             rewards_address,
             evm_network,
             node_socket_addr,
-            root_dir,
+            root_dir.clone(),
         );
         node_builder.with_reachability_check(!opt.skip_reachability_check);
         node_builder.local(opt.peers.local);
@@ -418,7 +420,14 @@ fn run(
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
 
-        run_node(node_builder, opt.rpc, log_output_dest, log_reload_handle).await
+        run_node(
+            node_builder,
+            opt.rpc,
+            &root_dir,
+            log_output_dest,
+            log_reload_handle,
+        )
+        .await
     })?;
 
     // actively shut down the runtime
@@ -443,12 +452,13 @@ fn run(
 async fn run_node(
     node_builder: NodeBuilder,
     rpc: Option<SocketAddr>,
+    root_dir: &Path,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
 ) -> Result<Option<(bool, PathBuf, u16)>, ant_node::Error> {
     let started_instant = std::time::Instant::now();
 
-    reset_critical_failure(log_output_dest);
+    reset_critical_failure(root_dir);
 
     info!("Starting node ...");
     let running_node = node_builder.build_and_run().await?;

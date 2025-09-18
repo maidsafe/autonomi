@@ -27,6 +27,7 @@
 #[macro_use]
 extern crate tracing;
 
+mod critical_failure;
 mod error;
 mod event;
 mod listen_addr_writer;
@@ -46,6 +47,7 @@ pub mod spawn;
 pub mod utils;
 
 pub use self::{
+    critical_failure::{reset_critical_failure, set_critical_failure},
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},
     log_markers::Marker,
