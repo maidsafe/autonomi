@@ -55,7 +55,8 @@ impl LogManagement {
             let local = LocalSet::new();
 
             local.spawn_local(async move {
-                let mut last_loaded_instant = std::time::Instant::now();
+                let mut last_loaded_instant =
+                    std::time::Instant::now() - std::time::Duration::from_secs(1);
                 while let Some(task) = recv.recv().await {
                     match task {
                         LogManagementTask::LoadLogs {
@@ -68,10 +69,10 @@ impl LogManagement {
                                     "Log load requests are too frequent, throttling to 1 per second"
                                 );
                                 tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-                            } else {
-                                last_loaded_instant = std::time::Instant::now();
-                                handlers::load_logs(node_name, log_dir, action_sender).await;
                             }
+
+                            last_loaded_instant = std::time::Instant::now();
+                            handlers::load_logs(node_name, log_dir, action_sender).await;
                         }
                     }
                 }

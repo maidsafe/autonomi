@@ -25,7 +25,7 @@ pub async fn refresh_node_registry(
         force,
         false, // todo should be from --local flag
         VerbosityLevel::Minimal,
-        false,
+        true,
     )
     .await
     .inspect_err(|err| {

@@ -30,6 +30,7 @@ use crate::components::popup::error_popup::ErrorPopup;
 use crate::focus::FocusTarget;
 use crate::mode::Scene;
 use crate::tui::Frame;
+use ant_service_management::ServiceStatus;
 use color_eyre::Result;
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
@@ -337,28 +338,27 @@ impl NodeTableComponent {
                 {
                     // Check if node is locked before attempting operation
                     if node_item.is_locked() {
-                        debug!("Cannot toggle node {}: Node is locked", service_name);
+                        debug!("Cannot toggle node {service_name}: Node is locked");
                         return Ok(None);
                     }
 
-                    match node_item.node_display_status {
-                        NodeDisplayStatus::Running => {
+                    match node_item.service_status {
+                        ServiceStatus::Running => {
                             if node_item.can_stop() {
-                                debug!("Toggling node {}: Stopping it", service_name);
+                                debug!("Toggling node {service_name}: Stopping it");
                                 node_item.lock_for_operation(NodeDisplayStatus::Stopping);
                                 self.state
                                     .operations
                                     .handle_stop_nodes(vec![service_name])?;
                             } else {
                                 debug!(
-                                    "Cannot stop node {}: Node cannot accept stop operation",
-                                    service_name
+                                    "Cannot stop node {service_name}: Node cannot accept stop operation"
                                 );
                             }
                         }
-                        NodeDisplayStatus::Stopped | NodeDisplayStatus::Added => {
+                        ServiceStatus::Stopped | ServiceStatus::Added => {
                             if node_item.can_start() {
-                                debug!("Toggling node {}: Starting it", service_name);
+                                debug!("Toggling node {service_name}: Starting it");
                                 node_item.lock_for_operation(NodeDisplayStatus::Starting);
                                 self.state
                                     .operations
@@ -372,8 +372,8 @@ impl NodeTableComponent {
                         }
                         _ => {
                             debug!(
-                                "Toggling node {}: No action for status {:?}",
-                                service_name, node_item.node_display_status
+                                "Toggling node {service_name}: No action for status {:?}",
+                                node_item.node_display_status
                             );
                         }
                     }
@@ -390,10 +390,10 @@ impl NodeTableComponent {
                     && let Some(node_item) = self.state.get_node_item_mut(service_name)
                 {
                     if node_item.is_locked() {
-                        debug!("Cannot remove node {}: Node is locked", service_name);
+                        debug!("Cannot remove node {service_name}: Node is locked",);
                         return Ok(None);
                     }
-                    debug!("RemoveNodes: Locking node for removal {}", service_name);
+                    debug!("RemoveNodes: Locking node for removal {service_name}");
                     node_item.lock();
                     self.state
                         .operations

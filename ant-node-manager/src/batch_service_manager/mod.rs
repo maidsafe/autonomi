@@ -415,10 +415,12 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                     info!(
                         "Started service {service_name}, waiting for fixed interval of {fixed_interval} ms before checking if it has started"
                     );
-                    self.service_control.wait(fixed_interval);
-
                     // setting the status to Running here, the node could error out due to status failure though.
                     service.set_status(ServiceStatus::Running).await;
+                    if let Err(err) = self.node_registry.save().await {
+                        error!("Failed to save node registry after starting services: {err}");
+                    }
+                    self.service_control.wait(fixed_interval);
                 }
                 Err(err) => {
                     error!("Failed to start service {service_name}: {err}");
