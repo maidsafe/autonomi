@@ -6,46 +6,53 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use ant_node::networking::NetworkError;
-use std::path::PathBuf;
+use crate::Error;
+use crate::networking::NetworkError;
+use std::path::Path;
 
-const CRITICAL_FAILURE_FILE: &str = "critical_failure.json";
+pub(crate) const CRITICAL_FAILURE_FILE: &str = "critical_failure.json";
 
 #[derive(serde::Serialize, serde::Deserialize)]
 // This struct is read by ant-service-management/src/fs.rs
 // So any changes here need to be reflected there too.
-struct CriticalFailure {
-    date_time: chrono::DateTime<chrono::Utc>,
-    reason: String,
+#[derive(Clone, Debug)]
+pub(crate) struct CriticalFailure {
+    pub date_time: chrono::DateTime<chrono::Utc>,
+    pub reason: String,
 }
 
-pub fn set_critical_failure(log_output_dest: &str, error: &ant_node::Error) {
-    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_FILE);
+pub fn set_critical_failure(root_dir: &Path, error: &Error) {
+    let file_path = root_dir.join(CRITICAL_FAILURE_FILE);
     let datetime_prefix = chrono::Utc::now();
     let reason = node_error_to_reason(error);
-    let log = CriticalFailure {
+    let failure = CriticalFailure {
         date_time: datetime_prefix,
         reason,
     };
-    let Ok(log_json) = serde_json::to_string(&log)
-        .inspect_err(|err| error!("Failed to serialize when writing critical failure log: {err}"))
+    let Ok(failure_json) = serde_json::to_string(&failure)
+        .inspect_err(|err| error!("Failed to serialize when writing critical failure: {err}"))
     else {
         return;
     };
-    let _ = std::fs::write(log_path, log_json)
+    let _ = std::fs::write(file_path, failure_json)
         .inspect_err(|err| error!("Failed to write to {CRITICAL_FAILURE_FILE}: {err}"));
+    info!("Critical failure recorded: {failure:?}");
 }
 
-pub fn reset_critical_failure(log_output_dest: &str) {
-    let log_path = PathBuf::from(log_output_dest).join(CRITICAL_FAILURE_FILE);
-    if log_path.exists() {
-        let _ = std::fs::remove_file(log_path);
+pub fn reset_critical_failure(root_dir: &Path) {
+    let failure_path = root_dir.join(CRITICAL_FAILURE_FILE);
+    if failure_path.exists() {
+        if std::fs::remove_file(failure_path).is_ok() {
+            info!("Critical failure file removed");
+        } else {
+            error!("Failed to remove critical failure file");
+        }
     }
 }
 
-fn node_error_to_reason(error: &ant_node::Error) -> String {
+fn node_error_to_reason(error: &Error) -> String {
     match error {
-        ant_node::Error::Network(network_error) => {
+        Error::Network(network_error) => {
             println!("Network error: {network_error}");
             let network_err_str = match network_error {
                 NetworkError::DialError(_) => "DialError".to_string(),
@@ -77,19 +84,19 @@ fn node_error_to_reason(error: &ant_node::Error) -> String {
             };
             format!("NetworkError::{network_err_str}")
         }
-        ant_node::Error::FailedToGetNodePort => "FailedToGetNodePort".to_string(),
-        ant_node::Error::InvalidQuoteContent => "InvalidQuoteContent".to_string(),
-        ant_node::Error::InvalidQuoteSignature => "InvalidQuoteSignature".to_string(),
-        ant_node::Error::UnreachableNode => "UnreachableNode".to_string(),
-        ant_node::Error::PidFileWriteFailed { .. } => "PidFileWriteFailed".to_string(),
-        ant_node::Error::ControlChannelClosed => "ControlChannelClosed".to_string(),
-        ant_node::Error::NodeEventChannelClosed => "NodeEventChannelClosed".to_string(),
-        ant_node::Error::ControlMessageSendFailed(_) => "ControlMessageSendFailed".to_string(),
-        ant_node::Error::CtrlCReceived => "CtrlCReceived".to_string(),
-        ant_node::Error::TerminateSignalReceived(terminate_node_reason) => {
+        Error::FailedToGetNodePort => "FailedToGetNodePort".to_string(),
+        Error::InvalidQuoteContent => "InvalidQuoteContent".to_string(),
+        Error::InvalidQuoteSignature => "InvalidQuoteSignature".to_string(),
+        Error::UnreachableNode => "UnreachableNode".to_string(),
+        Error::PidFileWriteFailed { .. } => "PidFileWriteFailed".to_string(),
+        Error::ControlChannelClosed => "ControlChannelClosed".to_string(),
+        Error::NodeEventChannelClosed => "NodeEventChannelClosed".to_string(),
+        Error::ControlMessageSendFailed(_) => "ControlMessageSendFailed".to_string(),
+        Error::CtrlCReceived => "CtrlCReceived".to_string(),
+        Error::TerminateSignalReceived(terminate_node_reason) => {
             format!("TerminateSignalReceived::{terminate_node_reason:?}")
         }
-        ant_node::Error::Bootstrap(_) => "Bootstrap".to_string(),
-        ant_node::Error::Tokio => "TokioError".to_string(),
+        Error::Bootstrap(_) => "Bootstrap".to_string(),
+        Error::Tokio => "TokioError".to_string(),
     }
 }
