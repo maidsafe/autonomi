@@ -10,6 +10,7 @@
 #![allow(clippy::expect_used)]
 
 use crate::error::{Error, Result};
+use crate::{VerbosityLevel, add_services::config::PortRange, config};
 use ant_releases::{AntReleaseRepoActions, ArchiveType, ReleaseType, get_running_platform};
 use ant_service_management::NodeServiceData;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -21,8 +22,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::RwLock;
-
-use crate::{VerbosityLevel, add_services::config::PortRange, config};
 
 const MAX_DOWNLOAD_RETRIES: u8 = 3;
 
@@ -57,8 +56,10 @@ pub async fn configure_winsw(dest_path: &Path, verbosity: VerbosityLevel) -> Res
         let callback = if verbosity != VerbosityLevel::Minimal {
             let progress_bar = Arc::new(ProgressBar::new(0));
             progress_bar.set_style(ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")?
-                .progress_chars("#>-"));
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                .map_err(|err| Error::TemplateError {
+                    reason: format!("Failed to create progress bar template: {err}"),
+                })?.progress_chars("#>-"));
             pb = Some(Arc::clone(&progress_bar));
             let pb_clone = Arc::clone(&progress_bar);
             let callback: Box<dyn Fn(u64, u64) + Send + Sync> =
@@ -143,7 +144,9 @@ pub async fn download_and_extract_release(
     let callback = if verbosity != VerbosityLevel::Minimal {
         let progress_bar = Arc::new(ProgressBar::new(0));
         progress_bar.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")?
+            .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})").map_err(|err| Error::TemplateError {
+                reason: format!("Failed to create progress bar template: {err}"),
+            })?
             .progress_chars("#>-"));
         pb = Some(Arc::clone(&progress_bar));
         let pb_clone = Arc::clone(&progress_bar);
@@ -158,7 +161,10 @@ pub async fn download_and_extract_release(
     };
 
     let download_dir_path = if let Some(path) = download_dir_path {
-        std::fs::create_dir_all(&path)?;
+        std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: err.to_string(),
+        })?;
         path
     } else if url.is_some() {
         create_temp_dir()?
@@ -166,7 +172,10 @@ pub async fn download_and_extract_release(
         // The node manager path can require root access, or can only be accessed by the service
         // user, which is why we have an optional path for the whole function.
         let path = config::get_node_manager_path()?.join("downloads");
-        std::fs::create_dir_all(&path)?;
+        std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: err.to_string(),
+        })?;
         path
     };
     debug!("Download directory: {download_dir_path:?}");
@@ -192,7 +201,10 @@ pub async fn download_and_extract_release(
                 Ok(archive_path) => {
                     let binary_download_path = release_repo
                         .extract_release_archive(&archive_path, &download_dir_path)
-                        .inspect_err(|err| error!("Error while extracting archive {err:?}"))?;
+                        .inspect_err(|err| error!("Error while extracting archive {err:?}"))
+                        .map_err(|err| Error::AntReleasesError {
+                            reason: format!("Failed to extract release archive: {err}"),
+                        })?;
                     break binary_download_path;
                 }
                 Err(err) => {
@@ -209,7 +221,12 @@ pub async fn download_and_extract_release(
             }
         } else {
             let version = if let Some(version) = version.clone() {
-                let version = Version::parse(&version)?;
+                let version =
+                    Version::parse(&version).map_err(|err| Error::VersionParsingFailed {
+                        version: version.clone(),
+                        context: "provided version string".to_string(),
+                        reason: err.to_string(),
+                    })?;
                 info!("Downloading release from S3 for version {version}");
                 version
             } else {
@@ -219,7 +236,10 @@ pub async fn download_and_extract_release(
                 let version = release_repo
                     .get_latest_version(&release_type)
                     .await
-                    .inspect_err(|err| error!("Error obtaining latest version {err:?}"))?;
+                    .inspect_err(|err| error!("Error obtaining latest version {err:?}"))
+                    .map_err(|err| Error::AntReleasesError {
+                        reason: format!("Failed to get latest version: {err}"),
+                    })?;
                 info!("Downloading latest version from S3: {version}");
                 version
             };
@@ -228,7 +248,9 @@ pub async fn download_and_extract_release(
                 "{}-{}-{}.{}",
                 release_type.to_string().to_lowercase(),
                 version,
-                &get_running_platform()?,
+                &get_running_platform().map_err(|err| crate::error::Error::AntReleasesError {
+                    reason: format!("Failed to get running platform: {err}"),
+                })?,
                 &ArchiveType::TarGz
             );
             let archive_path = download_dir_path.join(&archive_name);
@@ -262,7 +284,9 @@ pub async fn download_and_extract_release(
                 .download_release_from_s3(
                     &release_type,
                     &version,
-                    &get_running_platform()?,
+                    &get_running_platform().map_err(|err| Error::AntReleasesError {
+                        reason: format!("Failed to get running platform: {err}"),
+                    })?,
                     &ArchiveType::TarGz,
                     &download_dir_path,
                     &callback,
@@ -270,8 +294,11 @@ pub async fn download_and_extract_release(
                 .await
             {
                 Ok(archive_path) => {
-                    let binary_download_path =
-                        release_repo.extract_release_archive(&archive_path, &download_dir_path)?;
+                    let binary_download_path = release_repo
+                        .extract_release_archive(&archive_path, &download_dir_path)
+                        .map_err(|err| Error::AntReleasesError {
+                            reason: format!("Failed to extract release archive: {err}"),
+                        })?;
                     break binary_download_path;
                 }
                 Err(err) => {
@@ -314,22 +341,37 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
         .arg("--version")
         .stdout(Stdio::piped())
         .spawn()
-        .inspect_err(|err| error!("The program {bin_path:?} failed to start: {err:?}"))?;
+        .map_err(|err| {
+            error!("The program {bin_path:?} failed to start: {err:?}");
+            Error::FailedToGetBinaryVersion {
+                bin_path: bin_path.clone(),
+                reason: err.to_string(),
+            }
+        })?;
 
     let mut output = String::new();
     cmd.stdout
         .as_mut()
         .ok_or_else(|| {
-            error!("Failed to capture stdout");
-            Error::FailedToGetBinary
+            error!("Failed to capture stdout of the binary");
+            Error::FailedToGetBinaryVersion {
+                bin_path: bin_path.clone(),
+                reason: "Failed to capture stdout".to_string(),
+            }
         })?
         .read_to_string(&mut output)
-        .inspect_err(|err| error!("Output contained non utf8 chars: {err:?}"))?;
+        .inspect_err(|err| error!("Output contained non utf8 chars: {err:?}"))
+        .map_err(|err| Error::IoError {
+            reason: format!("Failed to read binary output to string: {err}"),
+        })?;
 
     // Extract the first line of the output
     let first_line = output.lines().next().ok_or_else(|| {
         error!("No output received from binary");
-        Error::FailedToGetBinary
+        Error::FailedToGetBinaryVersion {
+            bin_path: bin_path.clone(),
+            reason: "No output received from binary".to_string(),
+        }
     })?;
 
     let version = if let Some(v_pos) = first_line.find('v') {
@@ -344,7 +386,10 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
     }
     .ok_or_else(|| {
         error!("Failed to parse version from output");
-        Error::FailedToGetBinary
+        Error::FailedToGetBinaryVersion {
+            bin_path: bin_path.clone(),
+            reason: "Failed to parse version from output".to_string(),
+        }
     })?;
 
     debug!("Obtained version of binary: {version}");
@@ -354,12 +399,18 @@ pub fn get_bin_version(bin_path: &PathBuf) -> Result<String> {
 
 #[cfg(target_os = "windows")]
 pub fn get_username() -> Result<String> {
-    Ok(std::env::var("USERNAME")?)
+    std::env::var("USERNAME").map_err(|err| Error::EnvironmentVariableAccessFailed {
+        var_name: "USERNAME".to_string(),
+        reason: err.to_string(),
+    })
 }
 
 #[cfg(not(target_os = "windows"))]
 pub fn get_username() -> Result<String> {
-    Ok(std::env::var("USER")?)
+    std::env::var("USER").map_err(|err| Error::EnvironmentVariableAccessFailed {
+        var_name: "USER".to_string(),
+        reason: err.to_string(),
+    })
 }
 
 /// There is a `tempdir` crate that provides the same kind of functionality, but it was flagged for
@@ -368,8 +419,13 @@ pub fn create_temp_dir() -> Result<PathBuf> {
     let temp_dir = std::env::temp_dir();
     let unique_dir_name = uuid::Uuid::new_v4().to_string();
     let new_temp_dir = temp_dir.join(unique_dir_name);
-    std::fs::create_dir_all(&new_temp_dir)
-        .inspect_err(|err| error!("Failed to crete temp dir: {err:?}"))?;
+    std::fs::create_dir_all(&new_temp_dir).map_err(|err| {
+        error!("Failed to create temp dir: {err:?}");
+        Error::DirectoryCreationFailed {
+            path: new_temp_dir.clone(),
+            reason: err.to_string(),
+        }
+    })?;
     Ok(new_temp_dir)
 }
 

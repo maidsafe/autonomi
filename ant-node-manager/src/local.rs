@@ -115,7 +115,13 @@ impl Launcher for LocalSafeLauncher {
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .spawn()
-            .inspect_err(|err| error!("Error while spawning node process: {err:?}"))?;
+            .map_err(|err| {
+                error!("Error while spawning node process: {err:?}");
+                Error::ProcessSpawnFailed {
+                    binary_path: self.antnode_bin_path.clone(),
+                    reason: err.to_string(),
+                }
+            })?;
 
         Ok(())
     }
@@ -155,7 +161,12 @@ pub async fn kill_network(
         .join("test_genesis");
     if genesis_data_path.is_dir() {
         debug!("Removed genesis data directory");
-        std::fs::remove_dir_all(genesis_data_path)?;
+        std::fs::remove_dir_all(&genesis_data_path).map_err(|err| {
+            Error::DirectoryRemovalFailed {
+                path: genesis_data_path.clone(),
+                reason: err.to_string(),
+            }
+        })?;
     }
 
     kill_evm_testnet_processes(&mut system);
@@ -403,9 +414,31 @@ pub async fn run_node(
     )?;
     launcher.wait(run_options.interval);
 
-    let node_metrics = metrics_actions.get_node_metrics().await?;
-    let node_metadata_extended = metrics_actions.get_node_metadata_extended().await?;
-    let listeners = fs_actions.listen_addrs(&node_metadata_extended.root_dir)?;
+    let node_metrics =
+        metrics_actions
+            .get_node_metrics()
+            .await
+            .map_err(|err| Error::NetworkOperationFailed {
+                node_name: format!("antnode-local{}", run_options.number),
+                operation: "get node metrics".to_string(),
+                reason: err.to_string(),
+            })?;
+    let node_metadata_extended =
+        metrics_actions
+            .get_node_metadata_extended()
+            .await
+            .map_err(|err| Error::NetworkOperationFailed {
+                node_name: format!("antnode-local{}", run_options.number),
+                operation: "get node metadata".to_string(),
+                reason: err.to_string(),
+            })?;
+    let listeners = fs_actions
+        .listen_addrs(&node_metadata_extended.root_dir)
+        .map_err(|err| Error::NetworkOperationFailed {
+            node_name: format!("antnode-local{}", run_options.number),
+            operation: "get listening addresses".to_string(),
+            reason: err.to_string(),
+        })?;
 
     let peer_id = node_metadata_extended.peer_id;
     let listen_addrs = listeners
@@ -489,13 +522,24 @@ async fn validate_network(node_registry: NodeRegistryManager, peers: Vec<Multiad
     all_peers.extend(additional_peers);
 
     for node in node_registry.nodes.read().await.iter() {
-        let metrics_client = MetricsClient::new(node.read().await.metrics_port);
+        let node_guard = node.read().await;
+        let service_name = node_guard.service_name.clone();
+        let metrics_client = MetricsClient::new(node_guard.metrics_port);
+        drop(node_guard);
 
-        let node_metrics = metrics_client.get_node_metrics().await?;
-        let connected_peers = node_metrics.connected_peers;
-        let peer_id = node.read().await.peer_id.ok_or(Error::PeerIdNotSet {
-            service_name: node.read().await.service_name.clone(),
+        let node_metrics = metrics_client.get_node_metrics().await.map_err(|err| {
+            Error::NetworkOperationFailed {
+                node_name: service_name.clone(),
+                operation: "get node metrics".to_string(),
+                reason: err.to_string(),
+            }
         })?;
+        let connected_peers = node_metrics.connected_peers;
+        let node_guard = node.read().await;
+        let peer_id = node_guard.peer_id.ok_or(Error::PeerIdNotSet {
+            service_name: service_name.clone(),
+        })?;
+        drop(node_guard);
         debug!("Node {peer_id} has {connected_peers} peers");
         println!("Node {peer_id} has {connected_peers} peers");
     }

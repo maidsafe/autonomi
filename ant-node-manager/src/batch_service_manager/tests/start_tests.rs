@@ -8,6 +8,7 @@
 
 use super::helpers::*;
 use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
+use ant_service_management::error::Error;
 use ant_service_management::{
     NodeService, ReachabilityProgress, ServiceStateActions, ServiceStatus,
 };
@@ -311,24 +312,12 @@ async fn start_all_should_start_services_marked_as_running_but_had_since_stopped
         .expect_get_process_pid()
         .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
         .times(1)
-        .returning(|_| {
-            Err(
-                ant_service_management::error::Error::ServiceProcessNotFound(
-                    "antnode1".to_string(),
-                ),
-            )
-        });
+        .returning(|_| Err(Error::ServiceProcessNotFound("antnode1".to_string())));
     mock_service_control
         .expect_get_process_pid()
         .with(eq(PathBuf::from("/var/antctl/services/antnode2/antnode")))
         .times(1)
-        .returning(|_| {
-            Err(
-                ant_service_management::error::Error::ServiceProcessNotFound(
-                    "antnode2".to_string(),
-                ),
-            )
-        });
+        .returning(|_| Err(Error::ServiceProcessNotFound("antnode2".to_string())));
 
     // Then start the services
     mock_service_control
@@ -414,24 +403,12 @@ async fn start_all_should_return_error_if_processes_not_found() -> Result<()> {
         .expect_get_process_pid()
         .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
         .times(1)
-        .returning(|_| {
-            Err(
-                ant_service_management::error::Error::ServiceProcessNotFound(
-                    "antnode1".to_string(),
-                ),
-            )
-        });
+        .returning(|_| Err(Error::ServiceProcessNotFound("antnode1".to_string())));
     mock_service_control
         .expect_get_process_pid()
         .with(eq(PathBuf::from("/var/antctl/services/antnode2/antnode")))
         .times(1)
-        .returning(|_| {
-            Err(
-                ant_service_management::error::Error::ServiceProcessNotFound(
-                    "antnode2".to_string(),
-                ),
-            )
-        });
+        .returning(|_| Err(Error::ServiceProcessNotFound("antnode2".to_string())));
 
     let scenarios = vec![
         MockMetricsProgressScenario::Immediate,
@@ -688,9 +665,9 @@ async fn start_all_should_continue_with_other_services_when_one_fails() -> Resul
         .with(eq("antnode1"), eq(false))
         .times(1)
         .returning(|_, _| {
-            Err(ant_service_management::error::Error::Io(
-                std::io::Error::new(std::io::ErrorKind::PermissionDenied, "Service start failed"),
-            ))
+            Err(Error::FileOperationFailed {
+                reason: "Service start failed".to_string(),
+            })
         });
 
     // Second and third services start successfully

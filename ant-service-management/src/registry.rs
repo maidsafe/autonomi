@@ -210,17 +210,24 @@ impl NodeRegistry {
         );
         let path = Path::new(&self.save_path);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).inspect_err(|err| {
-                error!("Error creating node registry parent {parent:?}: {err:?}")
+            std::fs::create_dir_all(parent).map_err(|err| Error::FileOperationFailed {
+                reason: format!("Error creating node registry parent {parent:?}: {err:?}"),
             })?;
         }
         trace!("Node registry content before save: {self:?}");
 
-        let json = serde_json::to_string(self)?;
-        let mut file = std::fs::File::create(self.save_path.clone())
-            .inspect_err(|err| error!("Error creating node registry file: {err:?}"))?;
+        let json = serde_json::to_string(self).map_err(|err| Error::JsonOperationFailed {
+            reason: format!("Error serializing node registry: {err:?}"),
+        })?;
+        let mut file = std::fs::File::create(self.save_path.clone()).map_err(|err| {
+            Error::FileOperationFailed {
+                reason: format!("Error creating node registry file: {err:?}"),
+            }
+        })?;
         file.write_all(json.as_bytes())
-            .inspect_err(|err| error!("Error writing to node registry: {err:?}"))?;
+            .map_err(|err| Error::FileOperationFailed {
+                reason: format!("Error writing to node registry: {err:?}"),
+            })?;
 
         Ok(())
     }
@@ -236,12 +243,15 @@ impl NodeRegistry {
         }
         debug!("Loading node registry from {}", path.to_string_lossy());
 
-        let mut file = std::fs::File::open(path)
-            .inspect_err(|err| error!("Error opening node registry: {err:?}"))?;
+        let mut file = std::fs::File::open(path).map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error opening node registry: {err:?}"),
+        })?;
 
         let mut contents = String::new();
         file.read_to_string(&mut contents)
-            .inspect_err(|err| error!("Error reading node registry: {err:?}"))?;
+            .map_err(|err| Error::FileOperationFailed {
+                reason: format!("Error reading node registry: {err:?}"),
+            })?;
 
         // It's possible for the file to be empty if the user runs a `status` command before any
         // services were added.
@@ -254,8 +264,10 @@ impl NodeRegistry {
             });
         }
 
-        let registry = serde_json::from_str(&contents)
-            .inspect_err(|err| error!("Error deserializing node registry: {err:?}"))?;
+        let registry =
+            serde_json::from_str(&contents).map_err(|err| Error::JsonOperationFailed {
+                reason: format!("Error deserializing node registry: {err:?}"),
+            })?;
 
         trace!("Loaded node registry: {registry:?}");
         Ok(registry)
@@ -277,8 +289,9 @@ pub fn get_local_node_registry_path() -> Result<PathBuf> {
         .join("autonomi")
         .join("local_node_registry.json");
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .inspect_err(|err| error!("Error creating node registry parent {parent:?}: {err:?}"))?;
+        std::fs::create_dir_all(parent).map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error creating node registry parent {parent:?}: {err:?}"),
+        })?;
     }
     Ok(path)
 }
