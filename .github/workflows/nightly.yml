@@ -252,9 +252,34 @@ jobs:
         timeout-minutes: 25
         run: cargo test --release --package ant-bootstrap
 
-      - name: Run launchpad tests
+      - name: Run launchpad tests (unit tests first)
+        timeout-minutes: 15
+        run: cargo test --release --package node-launchpad --lib -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
+
+      - name: Run launchpad tests (integration tests individually on Windows)
+        if: matrix.os == 'windows-latest'
         timeout-minutes: 25
-        run: cargo test --release --package node-launchpad
+        run: |
+          echo "Running registry_tests..."
+          cargo test --release --package node-launchpad --test registry_tests -- --no-capture
+          echo "Running screen_content_tests..."
+          cargo test --release --package node-launchpad --test screen_content_tests -- --no-capture
+          echo "Running scene_navigation_tests..."
+          cargo test --release --package node-launchpad --test scene_navigation_tests -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
+
+      - name: Run launchpad tests (all integration tests on non-Windows)
+        if: matrix.os != 'windows-latest'
+        timeout-minutes: 25
+        run: cargo test --release --package node-launchpad --tests -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
 
       - name: Run node tests (except can_store_after_restart)
         timeout-minutes: 25
