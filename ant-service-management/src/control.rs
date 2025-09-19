@@ -238,8 +238,8 @@ impl ServiceControl for ServiceController {
                     });
             }
         }
-        error!(
-            "No process was located with a path at {}",
+        warn!(
+            "No process found at {}, the service might not be running",
             bin_path.to_string_lossy()
         );
         Err(Error::ServiceProcessNotFound(

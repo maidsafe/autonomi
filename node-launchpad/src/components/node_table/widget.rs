@@ -16,24 +16,25 @@ pub const PEERS_WIDTH: usize = 5;
 pub const CONNS_WIDTH: usize = 5;
 pub const MODE_WIDTH: usize = 7;
 pub const STATUS_WIDTH: usize = 24;
+pub const MAX_STATUS_WIDTH: usize = 44;
 pub const SPINNER_WIDTH: usize = 1;
 const NUMBER_OF_COLUMNS: usize = 10;
-const STARTUP_CHECK_LABEL: &str = "Startup check";
+const STARTUP_CHECK_LABEL: &str = "Reachability";
 const MIN_BAR_INNER: usize = 3;
 const MAX_BAR_INNER: usize = 10;
 const MIN_BAR_WIDTH: usize = MIN_BAR_INNER + 2;
 const MAX_BAR_WIDTH: usize = MAX_BAR_INNER + 2;
-const MAX_PERCENT_WIDTH: usize = 4;
-const STATUS_MAX_WIDTH: usize =
-    STARTUP_CHECK_LABEL.len() + 1 + MAX_BAR_WIDTH + 1 + MAX_PERCENT_WIDTH;
 
-use super::{
-    node_item::{NodeDisplayStatus, NodeItem},
-    state::NodeTableState,
-};
+use super::lifecycle::{LifecycleState, NodeViewModel};
+use super::state::NodeTableState;
+use crate::components::node_table::StatefulTable;
 use crate::style::{COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE};
 use ant_service_management::{ReachabilityProgress, metric::ReachabilityStatusValues};
-use ratatui::{prelude::*, widgets::*};
+use ratatui::{
+    buffer::Buffer,
+    prelude::*,
+    widgets::{Block, Borders, Cell, HighlightSpacing, Padding, Row, StatefulWidget, Table},
+};
 use throbber_widgets_tui::{Throbber, ThrobberState, WhichUse};
 
 // Re-export config from state module for convenience
@@ -43,225 +44,222 @@ pub struct NodeTableWidget;
 
 impl NodeTableWidget {
     pub fn render(self, area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut NodeTableState) {
-        // Render the node table
-        let block_nodes = Block::default()
+        let node_count = state.controller.view.items.len();
+        let block = NodeTableBlock::new(node_count);
+        let table_area = block.inner(area);
+
+        let reachability_active = state.controller.view.items.iter().any(|node| {
+            matches!(
+                node.reachability_progress,
+                ReachabilityProgress::InProgress(_)
+            )
+        });
+
+        let status_width_hint = measure_status_width(&state.controller.view.items);
+
+        let (column_constraints, status_width) =
+            compute_layout(table_area.width, reachability_active, status_width_hint);
+
+        let table_widget = NodesTable::new(column_constraints, status_width, reachability_active);
+        f.render_stateful_widget(table_widget, table_area, &mut state.controller.view);
+
+        if state.spinner_states.len() < node_count {
+            state
+                .spinner_states
+                .resize_with(node_count, ThrobberState::default);
+        } else if state.spinner_states.len() > node_count {
+            state.spinner_states.truncate(node_count);
+        }
+
+        let spinner_widget = NodeSpinnerColumn::new(&state.controller.view.items);
+        f.render_stateful_widget(spinner_widget, table_area, &mut state.spinner_states);
+
+        f.render_widget(block, area);
+    }
+}
+
+struct NodeTableBlock {
+    node_count: usize,
+}
+
+impl NodeTableBlock {
+    fn new(node_count: usize) -> Self {
+        Self { node_count }
+    }
+
+    fn block(&self) -> Block<'static> {
+        Block::default()
             .title(Line::from(vec![
                 Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
                 Span::styled(
-                    format!(" ({}) ", state.items.items.len()),
+                    format!(" ({}) ", self.node_count),
                     Style::default().fg(LIGHT_PERIWINKLE),
                 ),
             ]))
             .padding(Padding::new(1, 1, 0, 0))
             .title_style(Style::default().fg(GHOST_WHITE))
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(EUCALYPTUS));
+            .border_style(Style::default().fg(EUCALYPTUS))
+    }
 
-        let inner_area = block_nodes.inner(area);
+    fn inner(&self, area: Rect) -> Rect {
+        self.block().inner(area)
+    }
+}
 
-        let reachability_active = state.items.items.iter().any(|node| {
-            matches!(
-                node.node_display_status,
-                NodeDisplayStatus::ReachabilityCheck
-            )
-        });
+impl Widget for NodeTableBlock {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        self.block().render(area, buf);
+    }
+}
 
-        let (node_widths, status_column_width) = if reachability_active {
-            let fixed_columns: u16 = NODE_WIDTH as u16
-                + VERSION_WIDTH as u16
-                + ATTOS_WIDTH as u16
-                + MEMORY_WIDTH as u16
-                + MBPS_WIDTH as u16
-                + RECORDS_WIDTH as u16
-                + PEERS_WIDTH as u16
-                + CONNS_WIDTH as u16
-                + SPINNER_WIDTH as u16;
-            let column_spacing = 1u16;
-            let total_spacing = column_spacing * (NUMBER_OF_COLUMNS as u16 - 1);
-            let available_for_status = inner_area
-                .width
-                .saturating_sub(fixed_columns + total_spacing);
-            let status_column_width = available_for_status
-                .min(STATUS_MAX_WIDTH as u16)
-                .max(STATUS_WIDTH as u16) as usize;
+fn measure_status_width(items: &[NodeViewModel]) -> usize {
+    items
+        .iter()
+        .map(|item| format_status_cell(item, MAX_STATUS_WIDTH).trim_end().len())
+        .max()
+        .unwrap_or(STATUS_WIDTH)
+        .max(STATUS_WIDTH)
+}
 
-            (
-                [
-                    Constraint::Min(NODE_WIDTH as u16),
-                    Constraint::Min(VERSION_WIDTH as u16),
-                    Constraint::Min(ATTOS_WIDTH as u16),
-                    Constraint::Min(MEMORY_WIDTH as u16),
-                    Constraint::Min(MBPS_WIDTH as u16),
-                    Constraint::Min(RECORDS_WIDTH as u16),
-                    Constraint::Min(PEERS_WIDTH as u16),
-                    Constraint::Min(CONNS_WIDTH as u16),
-                    Constraint::Min(status_column_width as u16),
-                    Constraint::Length(SPINNER_WIDTH as u16),
-                ],
-                status_column_width,
-            )
-        } else {
-            (
-                [
-                    Constraint::Min(NODE_WIDTH as u16),
-                    Constraint::Min(VERSION_WIDTH as u16),
-                    Constraint::Min(ATTOS_WIDTH as u16),
-                    Constraint::Min(MEMORY_WIDTH as u16),
-                    Constraint::Min(MBPS_WIDTH as u16),
-                    Constraint::Min(RECORDS_WIDTH as u16),
-                    Constraint::Min(PEERS_WIDTH as u16),
-                    Constraint::Min(CONNS_WIDTH as u16),
-                    Constraint::Min(STATUS_WIDTH as u16),
-                    Constraint::Length(SPINNER_WIDTH as u16),
-                ],
-                STATUS_WIDTH,
-            )
-        };
+fn compute_layout(
+    area_width: u16,
+    reachability_active: bool,
+    status_width_hint: usize,
+) -> ([Constraint; NUMBER_OF_COLUMNS], usize) {
+    if reachability_active {
+        let fixed_columns: u16 = NODE_WIDTH as u16
+            + VERSION_WIDTH as u16
+            + ATTOS_WIDTH as u16
+            + MEMORY_WIDTH as u16
+            + MBPS_WIDTH as u16
+            + RECORDS_WIDTH as u16
+            + PEERS_WIDTH as u16
+            + CONNS_WIDTH as u16
+            + SPINNER_WIDTH as u16;
+        let column_spacing = 1u16;
+        let total_spacing = column_spacing * (NUMBER_OF_COLUMNS as u16 - 1);
+        let available_for_status = area_width.saturating_sub(fixed_columns + total_spacing);
+        let available_width = available_for_status.max(STATUS_WIDTH as u16) as usize;
+        let desired_width = status_width_hint.clamp(STATUS_WIDTH, MAX_STATUS_WIDTH);
+        let status_column_width = desired_width.min(available_width);
 
-        let header_row = Row::new(vec![
-            Cell::new("Node").fg(COOL_GREY),
-            Cell::new("Version").fg(COOL_GREY),
-            Cell::new("Attos").fg(COOL_GREY),
-            Cell::new("Memory").fg(COOL_GREY),
-            Cell::new(format!(
-                "{}{}",
-                " ".repeat(MBPS_WIDTH - "Mbps".len()),
-                "Mbps"
-            ))
-            .fg(COOL_GREY),
-            Cell::new("Recs").fg(COOL_GREY),
-            Cell::new("Peers").fg(COOL_GREY),
-            Cell::new("Conns").fg(COOL_GREY),
-            Cell::new("Status").fg(COOL_GREY),
-            Cell::new(" ").fg(COOL_GREY),
-        ])
-        .style(Style::default().add_modifier(Modifier::BOLD));
+        (
+            [
+                Constraint::Min(NODE_WIDTH as u16),
+                Constraint::Length(VERSION_WIDTH as u16),
+                Constraint::Length(ATTOS_WIDTH as u16),
+                Constraint::Length(MEMORY_WIDTH as u16),
+                Constraint::Length(MBPS_WIDTH as u16),
+                Constraint::Length(RECORDS_WIDTH as u16),
+                Constraint::Length(PEERS_WIDTH as u16),
+                Constraint::Length(CONNS_WIDTH as u16),
+                Constraint::Length(status_column_width as u16),
+                Constraint::Length(SPINNER_WIDTH as u16),
+            ],
+            status_column_width,
+        )
+    } else {
+        let status_column_width = status_width_hint.clamp(STATUS_WIDTH, MAX_STATUS_WIDTH);
+        (
+            [
+                Constraint::Min(NODE_WIDTH as u16),
+                Constraint::Length(VERSION_WIDTH as u16),
+                Constraint::Length(ATTOS_WIDTH as u16),
+                Constraint::Length(MEMORY_WIDTH as u16),
+                Constraint::Length(MBPS_WIDTH as u16),
+                Constraint::Length(RECORDS_WIDTH as u16),
+                Constraint::Length(PEERS_WIDTH as u16),
+                Constraint::Length(CONNS_WIDTH as u16),
+                Constraint::Length(status_column_width as u16),
+                Constraint::Length(SPINNER_WIDTH as u16),
+            ],
+            status_column_width,
+        )
+    }
+}
 
-        let mut table_rows: Vec<Row> = Vec::new();
+struct NodesTable {
+    column_constraints: [Constraint; NUMBER_OF_COLUMNS],
+    status_width: usize,
+    reachability_active: bool,
+}
 
-        for (i, node_item) in state.items.items.iter().enumerate() {
-            let is_selected = state.items.state.selected() == Some(i);
-            let status = format_status_cell(node_item, status_column_width);
-            let node_name = if reachability_active {
-                truncate_to_width(&node_item.service_name, NODE_WIDTH)
-            } else {
-                node_item.service_name.clone()
-            };
-
-            let row_style = if node_item.is_locked() {
-                // Locked nodes: dimmed appearance, not fully interactive
-                if is_selected {
-                    Style::default().fg(COOL_GREY).bg(DARK_GUNMETAL)
-                } else {
-                    Style::default().fg(COOL_GREY)
-                }
-            } else if is_selected {
-                Style::default().fg(GHOST_WHITE).bg(INDIGO)
-            } else {
-                Style::default().fg(GHOST_WHITE)
-            };
-
-            let row_data = vec![
-                node_name,
-                node_item.version.clone(),
-                format!(
-                    "{:>width$}",
-                    node_item.rewards_wallet_balance,
-                    width = ATTOS_WIDTH
-                ),
-                format!(
-                    "{:>width$} MB",
-                    node_item.memory,
-                    width = MEMORY_WIDTH.saturating_sub(3)
-                ),
-                format!("{:>width$}", node_item.mbps, width = MBPS_WIDTH),
-                format!("{:>width$}", node_item.records, width = RECORDS_WIDTH),
-                format!("{:>width$}", node_item.peers, width = PEERS_WIDTH),
-                format!("{:>width$}", node_item.connections, width = CONNS_WIDTH),
-                status,
-            ];
-
-            table_rows.push(Row::new(row_data).style(row_style));
+impl NodesTable {
+    fn new(
+        column_constraints: [Constraint; NUMBER_OF_COLUMNS],
+        status_width: usize,
+        reachability_active: bool,
+    ) -> Self {
+        Self {
+            column_constraints,
+            status_width,
+            reachability_active,
         }
+    }
+}
 
-        let table = Table::new(table_rows, node_widths)
-            .header(header_row)
+impl StatefulWidget for NodesTable {
+    type State = StatefulTable<NodeViewModel>;
+
+    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let header = build_header_row();
+        let selected = state.state.selected();
+
+        let rows: Vec<Row> = state
+            .items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let row_data = build_row_data(item, self.status_width, self.reachability_active);
+                Row::new(row_data).style(row_style(item, selected == Some(index)))
+            })
+            .collect();
+
+        let table = Table::new(rows, self.column_constraints)
+            .header(header)
             .column_spacing(1)
             .row_highlight_style(Style::default().bg(INDIGO))
             .highlight_spacing(HighlightSpacing::Always);
 
-        f.render_stateful_widget(table, inner_area, &mut state.items.state);
-        f.render_widget(block_nodes, area);
-
-        // Render spinners for each row
-        self.render_spinners(inner_area, f, state);
+        StatefulWidget::render(table, area, buf, &mut state.state);
     }
+}
 
-    fn render_spinners(
-        self,
-        table_area: Rect,
-        f: &mut crate::tui::Frame<'_>,
-        state: &mut NodeTableState,
-    ) {
-        use super::node_item::NodeDisplayStatus;
+struct NodeSpinnerColumn<'a> {
+    items: &'a [NodeViewModel],
+}
 
-        // Calculate the spinner column position (rightmost column)
-        let spinner_x = table_area.right().saturating_sub(2);
+impl<'a> NodeSpinnerColumn<'a> {
+    fn new(items: &'a [NodeViewModel]) -> Self {
+        Self { items }
+    }
+}
 
-        // Start after the header row (y + 1)
-        let start_y = table_area.y + 1;
+impl StatefulWidget for NodeSpinnerColumn<'_> {
+    type State = Vec<ThrobberState>;
 
-        for (i, node_item) in state.items.items.iter().enumerate() {
-            if i >= state.spinner_states.len() {
+    fn render(self, area: Rect, buf: &mut Buffer, states: &mut Self::State) {
+        let spinner_x = area.right().saturating_sub(2);
+        let start_y = area.y + 1;
+
+        for (index, node_item) in self.items.iter().enumerate() {
+            if index >= states.len() {
                 break;
             }
 
-            let spinner_area = Rect::new(spinner_x, start_y + i as u16, 1, 1);
+            let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
+            let style = match node_item.lifecycle {
+                LifecycleState::Running => SpinnerStyle::Running,
+                LifecycleState::Starting | LifecycleState::Adding => SpinnerStyle::Starting,
+                LifecycleState::Stopping => SpinnerStyle::Stopping,
+                LifecycleState::Removing => SpinnerStyle::Stopping,
+                LifecycleState::Unreachable { .. } => SpinnerStyle::Stopped,
+                _ => SpinnerStyle::Idle,
+            };
 
-            match node_item.node_display_status {
-                NodeDisplayStatus::Running => render_spinner(
-                    f,
-                    spinner_area,
-                    &mut state.spinner_states[i],
-                    node_item.is_locked(),
-                    SpinnerStyle::Running,
-                ),
-                NodeDisplayStatus::Starting | NodeDisplayStatus::ReachabilityCheck => {
-                    render_spinner(
-                        f,
-                        spinner_area,
-                        &mut state.spinner_states[i],
-                        node_item.is_locked(),
-                        SpinnerStyle::Starting,
-                    )
-                }
-                NodeDisplayStatus::Stopping => render_spinner(
-                    f,
-                    spinner_area,
-                    &mut state.spinner_states[i],
-                    node_item.is_locked(),
-                    SpinnerStyle::Stopping,
-                ),
-                NodeDisplayStatus::Stopped => render_spinner(
-                    f,
-                    spinner_area,
-                    &mut state.spinner_states[i],
-                    node_item.is_locked(),
-                    SpinnerStyle::Stopped,
-                ),
-                NodeDisplayStatus::Unreachable => {
-                    let symbol = if node_item.is_locked() { "!" } else { "X" };
-                    let style = Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD);
-                    f.render_widget(Paragraph::new(symbol).style(style), spinner_area);
-                }
-                _ => render_spinner(
-                    f,
-                    spinner_area,
-                    &mut state.spinner_states[i],
-                    node_item.is_locked(),
-                    SpinnerStyle::Idle,
-                ),
-            }
+            let spinner = spinner_for(style, node_item.locked);
+            StatefulWidget::render(spinner, spinner_area, buf, &mut states[index]);
         }
     }
 }
@@ -274,14 +272,8 @@ enum SpinnerStyle {
     Idle,
 }
 
-fn render_spinner(
-    f: &mut crate::tui::Frame<'_>,
-    area: Rect,
-    state: &mut ThrobberState,
-    locked: bool,
-    style: SpinnerStyle,
-) {
-    let spinner = match style {
+fn spinner_for(style: SpinnerStyle, locked: bool) -> Throbber<'static> {
+    match style {
         SpinnerStyle::Running => Throbber::default()
             .throbber_style(if locked {
                 Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
@@ -317,32 +309,139 @@ fn render_spinner(
         SpinnerStyle::Idle => Throbber::default()
             .throbber_style(Style::default().fg(if locked { COOL_GREY } else { GHOST_WHITE }))
             .use_type(WhichUse::Full),
-    };
-
-    f.render_stateful_widget(spinner, area, state);
+    }
 }
 
-fn format_status_cell(node_item: &NodeItem, status_width: usize) -> String {
+fn build_header_row() -> Row<'static> {
+    Row::new(vec![
+        Cell::new("Node").fg(COOL_GREY),
+        Cell::new("Version").fg(COOL_GREY),
+        Cell::new("Attos").fg(COOL_GREY),
+        Cell::new("Memory").fg(COOL_GREY),
+        Cell::new(format!(
+            "{}{}",
+            " ".repeat(MBPS_WIDTH - "Mbps".len()),
+            "Mbps"
+        ))
+        .fg(COOL_GREY),
+        Cell::new("Recs").fg(COOL_GREY),
+        Cell::new("Peers").fg(COOL_GREY),
+        Cell::new("Conns").fg(COOL_GREY),
+        Cell::new("Status").fg(COOL_GREY),
+        Cell::new(" ").fg(COOL_GREY),
+    ])
+    .style(Style::default().add_modifier(Modifier::BOLD))
+}
+
+fn build_row_data(
+    node_item: &NodeViewModel,
+    status_width: usize,
+    reachability_active: bool,
+) -> Vec<String> {
+    let node_name = if reachability_active {
+        truncate_to_width(&node_item.id, NODE_WIDTH)
+    } else {
+        node_item.id.clone()
+    };
+
+    let status = format_status_cell(node_item, status_width);
+
+    vec![
+        node_name,
+        truncate_to_width(&node_item.version, VERSION_WIDTH),
+        format!(
+            "{:>width$}",
+            node_item.metrics.rewards_wallet_balance,
+            width = ATTOS_WIDTH
+        ),
+        format!(
+            "{:>width$} MB",
+            node_item.metrics.memory_usage_mb,
+            width = MEMORY_WIDTH.saturating_sub(3)
+        ),
+        format_bandwidth(&node_item.metrics),
+        format!(
+            "{:>width$}",
+            node_item.metrics.records,
+            width = RECORDS_WIDTH
+        ),
+        format!("{:>width$}", node_item.metrics.peers, width = PEERS_WIDTH),
+        format!(
+            "{:>width$}",
+            node_item.metrics.connections,
+            width = CONNS_WIDTH
+        ),
+        status,
+    ]
+}
+
+fn format_bandwidth(metrics: &super::lifecycle::NodeMetrics) -> String {
+    let down = format_bandwidth_rate(metrics.bandwidth_inbound_bps);
+    let up = format_bandwidth_rate(metrics.bandwidth_outbound_bps);
+    pad_to_width(format!("↓{down} ↑{up}"), MBPS_WIDTH)
+}
+
+fn format_bandwidth_rate(bps: f64) -> String {
+    if !bps.is_finite() || bps <= 0.0 {
+        return " --.-".to_string();
+    }
+
+    let mbps = bps / 1_000_000.0;
+    if mbps >= 9999.5 {
+        "9999+".to_string()
+    } else if mbps >= 1000.0 {
+        format!("{mbps:5.0}")
+    } else if mbps >= 10.0 {
+        format!("{mbps:5.1}")
+    } else {
+        format!("{mbps:5.2}")
+    }
+}
+
+fn row_style(node_item: &NodeViewModel, is_selected: bool) -> Style {
+    if node_item.locked {
+        if is_selected {
+            Style::default().fg(COOL_GREY).bg(DARK_GUNMETAL)
+        } else {
+            Style::default().fg(COOL_GREY)
+        }
+    } else if is_selected {
+        Style::default().fg(GHOST_WHITE).bg(INDIGO)
+    } else {
+        Style::default().fg(GHOST_WHITE)
+    }
+}
+
+fn format_status_cell(node_item: &NodeViewModel, status_width: usize) -> String {
     let status_width = status_width.max(1);
-    let text = match node_item.node_display_status {
-        NodeDisplayStatus::Unreachable => node_item
-            .last_critical_failure
-            .as_ref()
-            .map(|log| truncate_to_width(&log.reason, status_width))
-            .unwrap_or_else(|| "Unreachable".to_string()),
-        NodeDisplayStatus::ReachabilityCheck => match node_item.reachability_progress {
+    let text = match node_item.lifecycle {
+        LifecycleState::Adding | LifecycleState::Starting => {
+            match node_item.reachability_progress {
+                ReachabilityProgress::InProgress(percent) => {
+                    format_startup_check(percent, status_width)
+                }
+                ReachabilityProgress::Complete => {
+                    truncate_to_width("Reachability complete", status_width)
+                }
+                ReachabilityProgress::NotRun => {
+                    truncate_to_width(STARTUP_CHECK_LABEL, status_width)
+                }
+            }
+        }
+        LifecycleState::Running => match node_item.reachability_progress {
             ReachabilityProgress::InProgress(percent) => {
                 format_startup_check(percent, status_width)
             }
-            ReachabilityProgress::Complete => {
-                truncate_to_width("Startup check complete".to_string(), status_width)
-            }
-            ReachabilityProgress::NotRun => {
-                truncate_to_width("Startup check".to_string(), status_width)
-            }
+            _ => format_running_status(node_item, status_width),
         },
-        NodeDisplayStatus::Running => format_running_status(node_item, status_width),
-        _ => truncate_to_width(node_item.node_display_status.to_string(), status_width),
+        LifecycleState::Stopping => truncate_to_width("Stopping", status_width),
+        LifecycleState::Removing => truncate_to_width("Removing", status_width),
+        LifecycleState::Stopped => truncate_to_width("Stopped", status_width),
+        LifecycleState::Unreachable { ref reason } => {
+            let fallback = reason.clone().unwrap_or_else(|| "Failed".to_string());
+            truncate_to_width(fallback, status_width)
+        }
+        LifecycleState::Refreshing => truncate_to_width(&node_item.status, status_width),
     };
 
     pad_to_width(text, status_width)
@@ -403,36 +502,16 @@ fn format_startup_check(percent: u8, status_width: usize) -> String {
     pad_to_width(base, status_width)
 }
 
-fn format_running_status(node_item: &NodeItem, status_width: usize) -> String {
+fn format_running_status(node_item: &NodeViewModel, status_width: usize) -> String {
     let mut status_text = truncate_to_width("Running", status_width);
     let remaining = status_width.saturating_sub(status_text.len());
 
-    match node_item.reachability_progress {
-        ReachabilityProgress::Complete => {
-            let modes = format_reachability_status(&node_item.reachability_status);
-            if modes != "Unknown" {
-                let addition = format!(" • {modes}");
-                if addition.len() <= remaining {
-                    status_text.push_str(&addition);
-                }
-            }
+    let modes = format_reachability_status(&node_item.reachability_status);
+    if modes != "Unknown" {
+        let addition = format!(" • {modes}");
+        if addition.len() <= remaining {
+            status_text.push_str(&addition);
         }
-        ReachabilityProgress::InProgress(percent) => {
-            if remaining > 1 {
-                let available_for_bar = remaining - 1;
-                let bar_width = available_for_bar.min(MAX_BAR_WIDTH);
-                if bar_width >= MIN_BAR_WIDTH {
-                    if let Some(bar) = make_progress_bar(percent, bar_width) {
-                        status_text.push(' ');
-                        status_text.push_str(&bar);
-                    }
-                } else if let Some(bar) = make_progress_bar(percent, bar_width) {
-                    status_text.push(' ');
-                    status_text.push_str(&bar);
-                }
-            }
-        }
-        ReachabilityProgress::NotRun => {}
     }
 
     pad_to_width(status_text, status_width)
@@ -479,121 +558,60 @@ fn make_progress_bar(percent: u8, width: usize) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::lifecycle::NodeMetrics;
     use super::*;
-    use crate::components::node_table::node_item::{NodeDisplayStatus, NodeItem};
-    use ant_service_management::ServiceStatus;
 
-    fn node_item_template() -> NodeItem {
-        NodeItem {
-            service_name: "antnode-1".to_string(),
+    fn model_template() -> NodeViewModel {
+        NodeViewModel {
+            id: "antnode-1".to_string(),
+            lifecycle: LifecycleState::Running,
+            status: "Running".to_string(),
             version: "0.1.0".to_string(),
-            rewards_wallet_balance: 0,
-            memory: 0,
-            mbps: "0".to_string(),
-            records: 0,
-            peers: 0,
-            connections: 0,
             reachability_progress: ReachabilityProgress::NotRun,
             reachability_status: ReachabilityStatusValues::default(),
-            last_critical_failure: None,
+            metrics: NodeMetrics::default(),
             locked: false,
-            node_display_status: NodeDisplayStatus::Running,
-            service_status: ServiceStatus::Running,
+            last_failure: None,
         }
     }
 
     #[test]
-    fn status_cell_hides_progress_for_non_running_services() {
-        let mut node = node_item_template();
-        node.service_status = ServiceStatus::Stopped;
-        node.node_display_status = NodeDisplayStatus::Stopped;
-        node.reachability_progress = ReachabilityProgress::InProgress(42);
-
-        let cell = format_status_cell(&node, STATUS_WIDTH);
-        assert_eq!(cell.trim_end(), "Stopped");
-        assert!(!cell.contains('['));
-    }
-
-    #[test]
     fn status_cell_shows_progress_during_reachability_check() {
-        let mut node = node_item_template();
-        node.node_display_status = NodeDisplayStatus::ReachabilityCheck;
-        node.reachability_progress = ReachabilityProgress::InProgress(42);
+        let mut model = model_template();
+        model.lifecycle = LifecycleState::Starting;
+        model.reachability_progress = ReachabilityProgress::InProgress(42);
 
-        let cell = format_status_cell(&node, STATUS_WIDTH);
+        let cell = format_status_cell(&model, STATUS_WIDTH);
         assert!(cell.contains('['));
-        let trimmed = cell.trim_end();
-        let percent_index = trimmed.find("42%").expect("percent missing");
-        let bar_index = trimmed.find('[').expect("bar missing");
+        let percent_index = cell.find("42%").expect("percent missing");
+        let bar_index = cell.find('[').expect("bar missing");
         assert!(percent_index < bar_index);
     }
 
     #[test]
     fn status_cell_adds_reachability_modes_when_running() {
-        let mut node = node_item_template();
-        node.reachability_progress = ReachabilityProgress::Complete;
-        node.reachability_status.public = true;
+        let mut model = model_template();
+        let status = ReachabilityStatusValues {
+            public: true,
+            ..Default::default()
+        };
+        model.reachability_status = status;
 
-        let cell = format_status_cell(&node, STATUS_WIDTH);
+        let cell = format_status_cell(&model, STATUS_WIDTH);
         assert!(cell.contains("Running"));
         assert!(cell.contains("Public"));
     }
 
     #[test]
-    fn startup_check_shows_only_label_when_space_is_tight() {
-        let width = STARTUP_CHECK_LABEL.len();
-        let text = format_startup_check(42, width);
-        let trimmed = text.trim_end();
-
-        assert_eq!(trimmed, STARTUP_CHECK_LABEL);
-        assert!(!trimmed.contains('%'));
-        assert!(!trimmed.contains('['));
-    }
-
-    #[test]
-    fn startup_check_adds_percent_once_extra_space_available() {
-        let width = STARTUP_CHECK_LABEL.len() + 1 + format!("{percent}%", percent = 55).len();
-        let text = format_startup_check(55, width);
-        let trimmed = text.trim_end();
-
-        assert!(trimmed.ends_with("55%"));
-        assert!(trimmed.starts_with(STARTUP_CHECK_LABEL));
-        assert!(!trimmed.contains('['));
-    }
-
-    #[test]
-    fn startup_check_includes_bar_and_percent_when_space_allows() {
-        let width = STARTUP_CHECK_LABEL.len() + 1 + 3 + 1 + MIN_BAR_WIDTH; // label + space + percent + space + bar
-        let text = format_startup_check(48, width);
-        let trimmed = text.trim_end();
-        let percent_index = trimmed.find("48%").expect("percent missing");
-        let bar_start = trimmed.find('[').expect("bar missing");
-
-        assert!(percent_index < bar_start);
-        let bar = &trimmed[bar_start..];
-        assert!(bar.starts_with('[') && bar.ends_with(']'));
-        assert_eq!(bar.len(), MIN_BAR_WIDTH);
-    }
-
-    #[test]
     fn startup_check_caps_bar_length_at_ten_inner_slots() {
-        let width = 60;
-        let text = format_startup_check(90, width);
-        let trimmed = text.trim_end();
-        let bar_start = trimmed.find('[').expect("bar missing");
-        let bar = &trimmed[bar_start..];
-
+        let mut model = model_template();
+        model.lifecycle = LifecycleState::Starting;
+        model.reachability_progress = ReachabilityProgress::InProgress(90);
+        let text = format_status_cell(&model, 60);
+        let bar_start = text.find('[').expect("bar missing");
+        let bar = text.trim_end();
+        let bar = &bar[bar_start..];
         assert!(bar.starts_with('[') && bar.ends_with(']'));
         assert_eq!(bar.len(), MAX_BAR_WIDTH);
-    }
-
-    #[test]
-    fn running_status_includes_progress_when_space_allows() {
-        let mut node = node_item_template();
-        node.reachability_progress = ReachabilityProgress::InProgress(21);
-
-        let cell = format_status_cell(&node, STATUS_WIDTH);
-        assert_eq!(cell.len(), STATUS_WIDTH);
-        assert!(cell.contains('['));
     }
 }

@@ -34,6 +34,8 @@ pub struct AggregatedNodeStats {
     pub total_rewards_wallet_balance: usize,
     pub total_memory_usage_mb: usize,
     pub individual_stats: Vec<IndividualNodeStats>,
+    /// Nodes whose metrics endpoint could not be reached during the last poll.
+    pub failed_to_connect: Vec<String>,
 }
 
 /// Result of fetching stats from an individual node.
@@ -90,6 +92,7 @@ impl AggregatedNodeStats {
         let mut aggregated_node_stats = AggregatedNodeStats::default();
 
         let mut probably_failed = HashSet::new();
+        let mut failed_to_connect = HashSet::new();
         while let Some(result) = stream.next().await {
             match result {
                 IndividualNodeStatsResult::Success(individual_stats) => {
@@ -103,6 +106,7 @@ impl AggregatedNodeStats {
                     aggregated_node_stats.merge(&individual_stats);
                 }
                 IndividualNodeStatsResult::FailedToConnectToNode { service_name } => {
+                    failed_to_connect.insert(service_name.clone());
                     probably_failed.insert(service_name.clone());
                 }
                 IndividualNodeStatsResult::OtherFailure { service_name } => {
@@ -110,6 +114,8 @@ impl AggregatedNodeStats {
                 }
             }
         }
+
+        aggregated_node_stats.failed_to_connect = failed_to_connect.into_iter().collect();
 
         if let Err(err) =
             action_sender.send(Action::StoreAggregatedNodeStats(aggregated_node_stats))
