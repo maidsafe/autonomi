@@ -163,9 +163,34 @@ jobs:
       #   timeout-minutes: 5
       #   run: cargo test --release --package ant-node --features="open-metrics, encrypt-records" can_store_after_restart
 
-      - name: Run launchpad tests
+      - name: Run launchpad tests (unit tests first)
+        timeout-minutes: 15
+        run: cargo test --release --package node-launchpad --lib -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
+
+      - name: Run launchpad tests (integration tests individually on Windows)
+        if: matrix.os == 'windows-latest'
         timeout-minutes: 25
-        run: cargo test --release --package node-launchpad -- --no-capture
+        run: |
+          echo "Running registry_tests..."
+          cargo test --release --package node-launchpad --test registry_tests -- --no-capture
+          echo "Running screen_content_tests..."
+          cargo test --release --package node-launchpad --test screen_content_tests -- --no-capture
+          echo "Running scene_navigation_tests..."
+          cargo test --release --package node-launchpad --test scene_navigation_tests -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
+
+      - name: Run launchpad tests (all integration tests on non-Windows)
+        if: matrix.os != 'windows-latest'
+        timeout-minutes: 25
+        run: cargo test --release --package node-launchpad --tests -- --no-capture
+        env:
+          RUST_BACKTRACE: full
+          RUST_LOG: debug
 
       - name: Run protocol tests
         timeout-minutes: 25
