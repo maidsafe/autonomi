@@ -25,7 +25,7 @@ const MAX_BAR_INNER: usize = 10;
 const MIN_BAR_WIDTH: usize = MIN_BAR_INNER + 2;
 const MAX_BAR_WIDTH: usize = MAX_BAR_INNER + 2;
 
-use super::lifecycle::{LifecycleState, NodeViewModel};
+use super::lifecycle::{CommandKind, LifecycleState, NodeViewModel};
 use super::state::NodeTableState;
 use crate::components::node_table::StatefulTable;
 use crate::style::{COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE};
@@ -414,6 +414,19 @@ fn row_style(node_item: &NodeViewModel, is_selected: bool) -> Style {
 
 fn format_status_cell(node_item: &NodeViewModel, status_width: usize) -> String {
     let status_width = status_width.max(1);
+    if let Some(failure) = node_item.last_failure.as_ref()
+        && !matches!(
+            node_item.lifecycle,
+            LifecycleState::Running | LifecycleState::Starting | LifecycleState::Adding
+        )
+    {
+        let text = truncate_to_width(failure, status_width);
+        return pad_to_width(text, status_width);
+    }
+    if matches!(node_item.pending_command, Some(CommandKind::Maintain)) {
+        let text = truncate_to_width("Maintaining", status_width);
+        return pad_to_width(text, status_width);
+    }
     let text = match node_item.lifecycle {
         LifecycleState::Adding | LifecycleState::Starting => {
             match node_item.reachability_progress {
@@ -472,7 +485,7 @@ fn format_startup_check(percent: u8, status_width: usize) -> String {
 
     let label = STARTUP_CHECK_LABEL;
     let label_len = label.len();
-    let percent_text = format!("{percent}%");
+    let percent_text = format!("{:02}%", percent);
     let percent_len = percent_text.len();
 
     if status_width < label_len {
@@ -572,6 +585,7 @@ mod tests {
             metrics: NodeMetrics::default(),
             locked: false,
             last_failure: None,
+            pending_command: None,
         }
     }
 
@@ -613,5 +627,26 @@ mod tests {
         let bar = &bar[bar_start..];
         assert!(bar.starts_with('[') && bar.ends_with(']'));
         assert_eq!(bar.len(), MAX_BAR_WIDTH);
+    }
+
+    #[test]
+    fn status_cell_reports_maintaining_while_locked() {
+        let mut model = model_template();
+        model.pending_command = Some(CommandKind::Maintain);
+        model.locked = true;
+
+        let text = format_status_cell(&model, STATUS_WIDTH);
+        assert!(text.contains("Maintaining"));
+    }
+
+    #[test]
+    fn status_cell_prefers_failure_message_when_present() {
+        let mut model = model_template();
+        model.lifecycle = LifecycleState::Stopped;
+        model.last_failure = Some("Error (Unreachable)".to_string());
+
+        let text = format_status_cell(&model, STATUS_WIDTH);
+        assert!(text.contains("Error (Unreachable)"));
+        assert!(!text.contains("Stopped"));
     }
 }

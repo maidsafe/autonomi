@@ -233,6 +233,7 @@ pub struct NodeViewModel {
     pub metrics: NodeMetrics,
     pub locked: bool,
     pub last_failure: Option<String>,
+    pub pending_command: Option<CommandKind>,
 }
 
 impl NodeViewModel {
@@ -243,6 +244,7 @@ impl NodeViewModel {
         reachability_status: ReachabilityStatusValues,
         metrics: NodeMetrics,
         locked: bool,
+        pending_command: Option<CommandKind>,
     ) -> Self {
         let (status, registry_progress, mut failure_reason, version) = if let Some(node) = registry
         {
@@ -307,6 +309,7 @@ impl NodeViewModel {
             metrics,
             locked,
             last_failure: failure_reason,
+            pending_command,
         }
     }
 
@@ -392,6 +395,7 @@ pub fn build_view_models(
     transitions: &TransitionState,
     reachability: &BTreeMap<NodeId, ReachabilityStatusValues>,
     metrics: &BTreeMap<NodeId, NodeMetrics>,
+    locked_nodes: &BTreeSet<NodeId>,
 ) -> Vec<NodeViewModel> {
     let mut ids: BTreeSet<NodeId> = registry.nodes.keys().cloned().collect();
     ids.extend(desired.provisioning.iter().cloned());
@@ -406,10 +410,13 @@ pub fn build_view_models(
             derive_lifecycle_state(registry_node, desired_state, is_provisioning, transition);
         let reachability_status = reachability.get(&id).cloned().unwrap_or_default();
         let metrics = metrics.get(&id).cloned().unwrap_or_default();
-        let locked = matches!(
-            transition.map(|t| &t.command),
-            Some(CommandKind::Remove | CommandKind::Stop | CommandKind::Start | CommandKind::Add)
-        );
+        let locked = locked_nodes.contains(&id)
+            || matches!(
+                transition.map(|t| &t.command),
+                Some(
+                    CommandKind::Remove | CommandKind::Stop | CommandKind::Start | CommandKind::Add
+                )
+            );
         models.push(NodeViewModel::new(
             id,
             lifecycle,
@@ -417,6 +424,7 @@ pub fn build_view_models(
             reachability_status,
             metrics,
             locked,
+            transition.map(|t| t.command.clone()),
         ));
     }
 
@@ -511,8 +519,16 @@ mod tests {
             },
         );
         let metrics = BTreeMap::new();
+        let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(&registry, &desired, &transitions, &reachability, &metrics);
+        let models = build_view_models(
+            &registry,
+            &desired,
+            &transitions,
+            &reachability,
+            &metrics,
+            &locked_nodes,
+        );
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -554,8 +570,16 @@ mod tests {
             },
         );
         let metrics = BTreeMap::new();
+        let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(&registry, &desired, &transitions, &reachability, &metrics);
+        let models = build_view_models(
+            &registry,
+            &desired,
+            &transitions,
+            &reachability,
+            &metrics,
+            &locked_nodes,
+        );
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -598,7 +622,16 @@ mod tests {
             },
         );
 
-        let models = build_view_models(&registry, &desired, &transitions, &reachability, &metrics);
+        let locked_nodes = BTreeSet::new();
+
+        let models = build_view_models(
+            &registry,
+            &desired,
+            &transitions,
+            &reachability,
+            &metrics,
+            &locked_nodes,
+        );
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -638,7 +671,16 @@ mod tests {
             },
         );
 
-        let models = build_view_models(&registry, &desired, &transitions, &reachability, &metrics);
+        let locked_nodes = BTreeSet::new();
+
+        let models = build_view_models(
+            &registry,
+            &desired,
+            &transitions,
+            &reachability,
+            &metrics,
+            &locked_nodes,
+        );
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -670,8 +712,16 @@ mod tests {
             },
         );
         let metrics = BTreeMap::new();
+        let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(&registry, &desired, &transitions, &reachability, &metrics);
+        let models = build_view_models(
+            &registry,
+            &desired,
+            &transitions,
+            &reachability,
+            &metrics,
+            &locked_nodes,
+        );
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
