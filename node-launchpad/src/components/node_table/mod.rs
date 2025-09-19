@@ -254,7 +254,21 @@ impl NodeTableComponent {
                     init_peers_config: self.state.init_peers_config.clone(),
                     port_range: self.state.port_range,
                 };
-                self.state.operations.handle_maintain_nodes(&config)
+                match self.state.operations.handle_maintain_nodes(&config) {
+                    Ok(Some(action)) => {
+                        for id in &ids {
+                            self.state.controller.clear_transition(id);
+                        }
+                        Ok(Some(action))
+                    }
+                    Ok(None) => Ok(None),
+                    Err(err) => {
+                        for id in &ids {
+                            self.state.controller.clear_transition(id);
+                        }
+                        Err(err)
+                    }
+                }
             }
             NodeManagementCommand::AddNode => {
                 let config = operations::AddNodeConfig {
@@ -291,7 +305,18 @@ impl NodeTableComponent {
                             .controller
                             .set_node_target(id, DesiredNodeState::Run);
                     }
-                    self.state.operations.handle_start_node(nodes_to_start)?;
+                    self.state
+                        .operations
+                        .handle_start_node(nodes_to_start.clone())
+                        .inspect_err(|err| {
+                            error!("StartNodes operation failed: {err}");
+                            for id in &nodes_to_start {
+                                self.state.controller.clear_transition(id);
+                                self.state
+                                    .controller
+                                    .set_node_target(id, DesiredNodeState::FollowCluster);
+                            }
+                        })?;
                 } else {
                     debug!("StartNodes: No nodes available to start");
                 }
@@ -314,7 +339,18 @@ impl NodeTableComponent {
                             .controller
                             .set_node_target(id, DesiredNodeState::Stop);
                     }
-                    self.state.operations.handle_stop_nodes(nodes_to_stop)?;
+                    self.state
+                        .operations
+                        .handle_stop_nodes(nodes_to_stop.clone())
+                        .inspect_err(|err| {
+                            for id in &nodes_to_stop {
+                                error!("Failed to stop node {id}: {err}");
+                                self.state.controller.clear_transition(id);
+                                self.state
+                                    .controller
+                                    .set_node_target(id, DesiredNodeState::FollowCluster);
+                            }
+                        })?;
                 } else {
                     debug!("StopNodes: No nodes available to stop");
                 }
@@ -330,28 +366,46 @@ impl NodeTableComponent {
                     match selected.lifecycle {
                         LifecycleState::Running | LifecycleState::Starting => {
                             if selected.can_stop() {
+                                let service = selected.id.clone();
                                 self.state
                                     .controller
-                                    .mark_transition(&selected.id, CommandKind::Stop);
+                                    .mark_transition(&service, CommandKind::Stop);
                                 self.state
                                     .controller
-                                    .set_node_target(&selected.id, DesiredNodeState::Stop);
+                                    .set_node_target(&service, DesiredNodeState::Stop);
                                 self.state
                                     .operations
-                                    .handle_stop_nodes(vec![selected.id.clone()])?;
+                                    .handle_stop_nodes(vec![service.clone()])
+                                    .inspect_err(|err| {
+                                        error!("Failed to stop node {service}: {err}");
+                                        self.state.controller.clear_transition(&service);
+                                        self.state.controller.set_node_target(
+                                            &service,
+                                            DesiredNodeState::FollowCluster,
+                                        );
+                                    })?;
                             }
                         }
                         LifecycleState::Stopped | LifecycleState::Unreachable { .. } => {
                             if selected.can_start() {
+                                let service = selected.id.clone();
                                 self.state
                                     .controller
-                                    .mark_transition(&selected.id, CommandKind::Start);
+                                    .mark_transition(&service, CommandKind::Start);
                                 self.state
                                     .controller
-                                    .set_node_target(&selected.id, DesiredNodeState::Run);
+                                    .set_node_target(&service, DesiredNodeState::Run);
                                 self.state
                                     .operations
-                                    .handle_start_node(vec![selected.id.clone()])?;
+                                    .handle_start_node(vec![service.clone()])
+                                    .inspect_err(|err| {
+                                        error!("Failed to start node {service}: {err}");
+                                        self.state.controller.clear_transition(&service);
+                                        self.state.controller.set_node_target(
+                                            &service,
+                                            DesiredNodeState::FollowCluster,
+                                        );
+                                    })?;
                             }
                         }
                         _ => {
@@ -370,15 +424,23 @@ impl NodeTableComponent {
                         debug!("Cannot remove node {}: node is locked", selected.id);
                         return Ok(None);
                     }
+                    let service = selected.id.clone();
                     self.state
                         .controller
-                        .mark_transition(&selected.id, CommandKind::Remove);
+                        .mark_transition(&service, CommandKind::Remove);
                     self.state
                         .controller
-                        .set_node_target(&selected.id, DesiredNodeState::Remove);
+                        .set_node_target(&service, DesiredNodeState::Remove);
                     self.state
                         .operations
-                        .handle_remove_nodes(vec![selected.id.clone()])?;
+                        .handle_remove_nodes(vec![service.clone()])
+                        .inspect_err(|err| {
+                            error!("Failed to remove node {service}: {err}");
+                            self.state.controller.clear_transition(&service);
+                            self.state
+                                .controller
+                                .set_node_target(&service, DesiredNodeState::FollowCluster);
+                        })?;
                 }
                 Ok(None)
             }
@@ -400,7 +462,13 @@ impl NodeTableComponent {
                     }
                     self.state
                         .operations
-                        .handle_upgrade_nodes(nodes_to_upgrade)?;
+                        .handle_upgrade_nodes(nodes_to_upgrade.clone())
+                        .inspect_err(|err| {
+                            error!("UpgradeNodes operation failed: {err}");
+                            for id in &nodes_to_upgrade {
+                                self.state.controller.clear_transition(id);
+                            }
+                        })?;
                 } else {
                     debug!("UpgradeNodes: No nodes available to upgrade");
                 }
@@ -422,7 +490,15 @@ impl NodeTableComponent {
                         .controller
                         .set_node_target(id, DesiredNodeState::Remove);
                 }
-                self.state_mut().operations.handle_reset_nodes()?;
+                if let Err(err) = self.state_mut().operations.handle_reset_nodes() {
+                    for id in &ids {
+                        self.state.controller.clear_transition(id);
+                        self.state
+                            .controller
+                            .set_node_target(id, DesiredNodeState::FollowCluster);
+                    }
+                    return Err(err);
+                }
                 Ok(None)
             }
         }

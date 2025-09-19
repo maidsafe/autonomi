@@ -24,7 +24,7 @@ use ant_service_management::{
 };
 use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::{path::PathBuf, time::Instant};
 use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error};
@@ -63,6 +63,7 @@ pub struct NodeStateController {
     pub registry: RegistrySnapshot,
     pub desired: DesiredTopology,
     pub transitions: TransitionState,
+    pub locked_nodes: BTreeSet<NodeId>,
     pub reachability_status: BTreeMap<NodeId, ReachabilityStatusValues>,
     pub metrics: BTreeMap<NodeId, NodeMetrics>,
     pub view: StatefulTable<NodeViewModel>,
@@ -80,6 +81,7 @@ impl NodeStateController {
             registry: RegistrySnapshot::default(),
             desired: DesiredTopology::default(),
             transitions: TransitionState::default(),
+            locked_nodes: BTreeSet::new(),
             reachability_status: BTreeMap::new(),
             metrics: BTreeMap::new(),
             view: StatefulTable::with_items(vec![]),
@@ -101,6 +103,7 @@ impl NodeStateController {
             &self.transitions,
             &self.reachability_status,
             &self.metrics,
+            &self.locked_nodes,
         );
         let mut table = StatefulTable::with_items(models);
         if let Some(selected_index) = selected
@@ -136,11 +139,13 @@ impl NodeStateController {
 
     pub fn mark_transition(&mut self, id: &str, command: CommandKind) {
         self.transitions.mark(id.to_string(), command);
+        self.locked_nodes.insert(id.to_string());
         self.refresh_view();
     }
 
     pub fn clear_transition(&mut self, id: &str) {
         self.transitions.unmark(id);
+        self.locked_nodes.remove(id);
         self.refresh_view();
     }
 
@@ -160,6 +165,7 @@ impl NodeStateController {
         let had_entries = !to_clear.is_empty();
         for id in to_clear {
             self.transitions.unmark(&id);
+            self.locked_nodes.remove(&id);
         }
         if had_entries {
             self.refresh_view();
@@ -186,6 +192,10 @@ impl NodeStateController {
     fn reconcile_transitions(&mut self) {
         let mut completed = Vec::new();
         for (id, entry) in self.transitions.entries.iter() {
+            if self.locked_nodes.contains(id) {
+                // Maintain lock while node operations triggered via Launchpad are in flight.
+                continue;
+            }
             let registry_state = self.registry.nodes.get(id);
             match entry.command {
                 CommandKind::Start => {
@@ -237,6 +247,7 @@ impl NodeStateController {
 
         for id in completed {
             self.transitions.unmark(&id);
+            self.locked_nodes.remove(&id);
         }
     }
 }
@@ -378,7 +389,7 @@ impl NodeTableState {
             self.last_reported_running_count = running_nodes;
         }
 
-        debug!("Node state updated. Node count changed to {}", view_len);
+        debug!("Node state updated. Node count changed to {view_len}");
 
         let _ = self.send_state_update();
         let _ = self.send_selection_update();
