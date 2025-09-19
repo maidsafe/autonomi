@@ -485,7 +485,7 @@ fn format_startup_check(percent: u8, status_width: usize) -> String {
 
     let label = STARTUP_CHECK_LABEL;
     let label_len = label.len();
-    let percent_text = format!("{:02}%", percent);
+    let percent_text = format!("{percent:02}%");
     let percent_len = percent_text.len();
 
     if status_width < label_len {

@@ -14,8 +14,8 @@ use super::{
     operations::NodeOperations,
     table_state::StatefulTable,
 };
-use crate::action::{Action, NodeTableActions};
 use crate::node_management::NodeManagement;
+use crate::{action::Action, components::node_table::operations::NodeOperationsConfig};
 use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::AggregatedNodeStats};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
@@ -30,27 +30,18 @@ use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error};
 
 pub struct NodeTableState {
-    pub node_services: Vec<NodeServiceData>,
-    pub node_registry: NodeRegistryManager,
+    /// The manager for the node registry on disk. This struct is an Arc<RwLock<>> internally and is automatically kept
+    /// in sync with the registry file on disk. This is done with the help of a file watcher.
+    pub node_registry_manager: NodeRegistryManager,
+    /// Operations on the nodes are performed by calling ant-node-manager lib APIs via this struct.
     pub operations: NodeOperations,
+    /// Configuration for the node operations.
+    pub operations_config: NodeOperationsConfig,
+
     pub controller: NodeStateController,
 
     // Stats
     pub node_stats_last_update: Instant,
-
-    // Configuration (desired intent inputs)
-    pub network_id: Option<u8>,
-    pub init_peers_config: InitialPeersConfig,
-    pub antnode_path: Option<PathBuf>,
-    pub data_dir_path: PathBuf,
-    pub upnp_enabled: bool,
-    pub port_range: Option<(u32, u32)>,
-    pub rewards_address: Option<EvmAddress>,
-    pub nodes_to_start: u64,
-
-    // Storage info (for validation)
-    pub storage_mountpoint: PathBuf,
-    pub available_disk_space_gb: u64,
 
     // UI state
     pub spinner_states: Vec<ThrobberState>,
@@ -60,7 +51,7 @@ pub struct NodeTableState {
 
 /// Controller responsible for reconciling registry snapshots, user intent, and transitions.
 pub struct NodeStateController {
-    pub registry: RegistrySnapshot,
+    pub registry_snapshot: RegistrySnapshot,
     pub desired: DesiredTopology,
     pub transitions: TransitionState,
     pub locked_nodes: BTreeSet<NodeId>,
@@ -71,26 +62,24 @@ pub struct NodeStateController {
 
 impl Default for NodeStateController {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl NodeStateController {
-    pub fn new() -> Self {
         Self {
-            registry: RegistrySnapshot::default(),
+            view: StatefulTable::with_items(vec![]),
+            registry_snapshot: RegistrySnapshot::default(),
             desired: DesiredTopology::default(),
             transitions: TransitionState::default(),
             locked_nodes: BTreeSet::new(),
             reachability_status: BTreeMap::new(),
             metrics: BTreeMap::new(),
-            view: StatefulTable::with_items(vec![]),
         }
     }
+}
 
+impl NodeStateController {
     pub fn with_registry(registry: RegistrySnapshot) -> Self {
-        let mut controller = Self::new();
-        controller.registry = registry;
+        let mut controller = Self {
+            registry_snapshot: registry,
+            ..Self::default()
+        };
         controller.refresh_view();
         controller
     }
@@ -98,7 +87,7 @@ impl NodeStateController {
     pub fn refresh_view(&mut self) {
         let selected = self.view.state.selected();
         let models = build_view_models(
-            &self.registry,
+            &self.registry_snapshot,
             &self.desired,
             &self.transitions,
             &self.reachability_status,
@@ -117,7 +106,7 @@ impl NodeStateController {
     }
 
     pub fn update_registry(&mut self, services: &[NodeServiceData]) {
-        self.registry = RegistrySnapshot::from_services(services);
+        self.registry_snapshot = RegistrySnapshot::from_services(services);
         self.reconcile_transitions();
         self.refresh_view();
     }
@@ -196,7 +185,7 @@ impl NodeStateController {
                 // Maintain lock while node operations triggered via Launchpad are in flight.
                 continue;
             }
-            let registry_state = self.registry.nodes.get(id);
+            let registry_state = self.registry_snapshot.nodes.get(id);
             match entry.command {
                 CommandKind::Start => {
                     if matches!(
@@ -267,24 +256,27 @@ impl NodeTableState {
         let mut controller = NodeStateController::with_registry(registry_snapshot);
         controller.update_desired_running_count(config.nodes_to_start);
 
-        let mut state = Self {
-            node_services: node_services.clone(),
-            node_registry,
-            operations: NodeOperations::new(node_management),
-            controller,
-            node_stats_last_update: Instant::now(),
-            network_id: config.network_id,
-            init_peers_config: config.init_peers_config,
-            antnode_path: config.antnode_path,
-            data_dir_path: config.data_dir_path,
-            upnp_enabled: config.upnp_enabled,
-            port_range: config.port_range,
-            rewards_address: config.rewards_address,
-            nodes_to_start: config.nodes_to_start,
-            storage_mountpoint: config.storage_mountpoint.clone(),
+        let operations = NodeOperations::new(node_management);
+        let operations_config = NodeOperationsConfig {
             available_disk_space_gb: crate::system::get_available_space_b(
                 config.storage_mountpoint.as_path(),
             )? / crate::components::popup::manage_nodes::GB,
+            storage_mountpoint: config.storage_mountpoint.clone(),
+            rewards_address: config.rewards_address,
+            nodes_to_start: config.nodes_to_start,
+            antnode_path: config.antnode_path,
+            upnp_enabled: config.upnp_enabled,
+            data_dir_path: config.data_dir_path,
+            network_id: config.network_id,
+            init_peers_config: config.init_peers_config,
+            port_range: config.port_range,
+        };
+        let mut state = Self {
+            node_registry_manager: node_registry,
+            operations,
+            operations_config,
+            controller,
+            node_stats_last_update: Instant::now(),
             spinner_states: vec![],
             last_reported_running_count: 0,
             bandwidth_totals: BTreeMap::new(),
@@ -297,28 +289,15 @@ impl NodeTableState {
         Ok(state)
     }
 
-    pub fn get_running_nodes(&self) -> Vec<String> {
-        self.node_services
-            .iter()
-            .filter_map(|node| {
-                if node.status == ServiceStatus::Running {
-                    Some(node.service_name.clone())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    /// Tries to trigger the update of node stats if the last update was more than `NODE_STAT_UPDATE_INTERVAL` ago.
+    /// Tries to fetch the node stats the last update was more than `NODE_STAT_UPDATE_INTERVAL` ago.
     /// The result is sent via the StatusActions::NodesStatsObtained action.
-    pub fn try_update_node_stats(&mut self, force_update: bool) -> Result<()> {
+    pub fn try_fetch_node_stats(&mut self, force_update: bool) -> Result<()> {
         if self.node_stats_last_update.elapsed() > NODE_STAT_UPDATE_INTERVAL || force_update {
             self.node_stats_last_update = Instant::now();
 
             if let Some(action_sender) = &self.operations.action_sender {
                 crate::node_stats::AggregatedNodeStats::fetch_aggregated_node_stats(
-                    &self.node_services,
+                    self.controller.registry_snapshot.running_nodes(),
                     action_sender.clone(),
                 );
             }
@@ -326,47 +305,11 @@ impl NodeTableState {
         Ok(())
     }
 
-    pub fn send_state_update(&self) -> Result<()> {
-        if let Some(action_sender) = &self.operations.action_sender {
-            let node_count = self.controller.view.items.len() as u64;
-            let has_running_nodes = self.controller.registry.running_count() > 0;
-            let has_nodes = node_count > 0;
-
-            let state_action = Action::NodeTableActions(NodeTableActions::StateChanged {
-                node_count,
-                has_running_nodes,
-                has_nodes,
-            });
-
-            action_sender.send(state_action)?;
-        } else {
-            error!("Could not send StateChanged action - no action_sender available");
-        }
-        Ok(())
-    }
-
-    pub fn send_selection_update(&self) -> Result<()> {
-        if let Some(action_sender) = &self.operations.action_sender {
-            let selected_node = self.controller.selected_item().map(NodeSelectionInfo::from);
-
-            debug!("Sending selected_node={selected_node:?}");
-            let selection_action = Action::NodeTableActions(NodeTableActions::SelectionChanged {
-                selection: selected_node.clone(),
-            });
-
-            action_sender.send(selection_action)?;
-        } else {
-            error!("No action_sender available to send SelectionChanged");
-        }
-        Ok(())
-    }
-
     /// Synchronise controller with registry snapshot and reconcile transitions.
     pub fn sync_node_service_data(&mut self, all_nodes_data: &[NodeServiceData]) {
-        self.node_services = all_nodes_data.to_vec();
         self.controller.update_registry(all_nodes_data);
         self.controller
-            .update_desired_running_count(self.nodes_to_start);
+            .update_desired_running_count(self.operations_config.nodes_to_start);
 
         let view_len = self.controller.view.items.len();
         self.spinner_states
@@ -374,12 +317,10 @@ impl NodeTableState {
 
         if self.controller.selected_index().is_none() && view_len > 0 {
             debug!("Auto-selecting first unlocked node since no selection exists");
-            if let Err(err) = self.navigate_first_unlocked() {
-                error!("Failed to select first unlocked node: {err}");
-            }
+            self.navigate_first_unlocked()
         }
 
-        let running_nodes = self.controller.registry.running_count() as u64;
+        let running_nodes = self.controller.registry_snapshot.running_count() as u64;
         if running_nodes != self.last_reported_running_count {
             if let Some(action_sender) = &self.operations.action_sender
                 && let Err(err) = action_sender.send(Action::StoreRunningNodeCount(running_nodes))
@@ -390,9 +331,6 @@ impl NodeTableState {
         }
 
         debug!("Node state updated. Node count changed to {view_len}");
-
-        let _ = self.send_state_update();
-        let _ = self.send_selection_update();
     }
 
     // update the values inside node items
@@ -452,25 +390,37 @@ impl NodeTableState {
         debug!("Synced node metrics with aggregated stats");
     }
 
+    pub fn has_nodes(&self) -> bool {
+        !self.controller.view.items.is_empty()
+    }
+
+    pub fn has_running_nodes(&self) -> bool {
+        self.controller.registry_snapshot.running_count() > 0
+    }
+
+    pub fn selected_node(&self) -> Option<NodeSelectionInfo> {
+        self.controller.selected_item().map(NodeSelectionInfo::from)
+    }
+
     pub fn sync_rewards_address(&mut self, rewards_address: Option<EvmAddress>) {
-        self.rewards_address = rewards_address;
+        self.operations_config.rewards_address = rewards_address;
         debug!("Synced rewards_address to {rewards_address:?}");
     }
 
     pub fn sync_nodes_to_start(&mut self, nodes_to_start: u64) {
-        self.nodes_to_start = nodes_to_start;
+        self.operations_config.nodes_to_start = nodes_to_start;
         self.controller
-            .update_desired_running_count(self.nodes_to_start);
+            .update_desired_running_count(self.operations_config.nodes_to_start);
         debug!("Synced nodes_to_start to {nodes_to_start}");
     }
 
     pub fn sync_upnp_setting(&mut self, upnp_enabled: bool) {
-        self.upnp_enabled = upnp_enabled;
+        self.operations_config.upnp_enabled = upnp_enabled;
         debug!("Synced upnp_enabled to {upnp_enabled:?}");
     }
 
     pub fn sync_port_range(&mut self, port_range: Option<(u32, u32)>) {
-        self.port_range = port_range;
+        self.operations_config.port_range = port_range;
         debug!("Synced port_range to {port_range:?}");
     }
 
@@ -530,38 +480,32 @@ impl NodeTableState {
             .map(|(idx, _)| idx)
     }
 
-    pub fn navigate_next_unlocked(&mut self) -> Result<()> {
+    pub fn navigate_next_unlocked(&mut self) {
         let next_index = self.find_next_unlocked_index();
         self.select_node_if_unlocked(next_index)
     }
 
-    pub fn navigate_previous_unlocked(&mut self) -> Result<()> {
+    pub fn navigate_previous_unlocked(&mut self) {
         let prev_index = self.find_previous_unlocked_index();
         self.select_node_if_unlocked(prev_index)
     }
 
-    pub fn navigate_first_unlocked(&mut self) -> Result<()> {
+    pub fn navigate_first_unlocked(&mut self) {
         let first_index = self.find_first_unlocked_index();
         self.select_node_if_unlocked(first_index)
     }
 
-    pub fn navigate_last_unlocked(&mut self) -> Result<()> {
+    pub fn navigate_last_unlocked(&mut self) {
         let last_index = self.find_last_unlocked_index();
         self.select_node_if_unlocked(last_index)
     }
 
-    fn set_selection(&mut self, index: Option<usize>) -> Result<()> {
-        let old_selection = self.controller.view.state.selected();
+    fn set_selection(&mut self, index: Option<usize>) {
         self.controller.view.state.select(index);
         self.controller.view.last_selected = index;
-
-        if old_selection != index {
-            self.send_selection_update()?;
-        }
-        Ok(())
     }
 
-    pub fn select_node_if_unlocked(&mut self, index: Option<usize>) -> Result<()> {
+    pub fn select_node_if_unlocked(&mut self, index: Option<usize>) {
         match index {
             Some(idx) if idx < self.controller.view.items.len() => {
                 if !self.controller.view.items[idx].is_locked() {
@@ -571,20 +515,19 @@ impl NodeTableState {
                 }
             }
             None => self.set_selection(None),
-            _ => Ok(()),
+            _ => (),
         }
     }
 
-    pub fn clear_selection(&mut self) -> Result<()> {
+    pub fn clear_selection(&mut self) {
         self.set_selection(None)
     }
 
     pub fn try_clear_selection_if_locked(&mut self) {
         if let Some(selected) = self.controller.selected_index()
             && self.controller.items()[selected].is_locked()
-            && let Err(e) = self.clear_selection()
         {
-            error!("Failed to clear selection for locked node: {e}");
+            self.clear_selection();
         }
     }
 }
