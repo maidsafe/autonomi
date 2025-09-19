@@ -35,7 +35,7 @@ use color_eyre::Result;
 use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub use operations::{AddNodeConfig, MaintainNodesConfig, NodeOperations};
+pub use operations::NodeOperations;
 pub use state::{NodeSelectionInfo, NodeTableState};
 pub use table_state::StatefulTable;
 pub use widget::{NodeTableConfig, NodeTableWidget};
@@ -68,7 +68,7 @@ impl Component for NodeTableComponent {
         self.action_sender = Some(tx.clone());
         self.state.operations.register_action_sender(tx.clone())?;
 
-        let node_registry_clone = self.state().node_registry.clone();
+        let node_registry_clone = self.state().node_registry_manager.clone();
         let action_sender_clone = tx.clone();
         debug!(
             "Returning the initial registry state and also sending NodeTableComponent::RefreshRegistry command to NodeManagement"
@@ -91,8 +91,8 @@ impl Component for NodeTableComponent {
 
         // Watch for registry file changes
         let action_sender_clone = tx.clone();
-        let mut node_registry_watcher = self.state.node_registry.watch_registry_file()?;
-        let node_registry_clone = self.state.node_registry.clone();
+        let mut node_registry_watcher = self.state.node_registry_manager.watch_registry_file()?;
+        let node_registry_clone = self.state.node_registry_manager.clone();
         tokio::spawn(async move {
             while let Some(()) = node_registry_watcher.recv().await {
                 let services = node_registry_clone.get_node_service_data().await;
@@ -109,11 +109,6 @@ impl Component for NodeTableComponent {
             }
         });
 
-        // Send initial state update to synchronize Status component's cached state
-        // This ensures the Status component knows about nodes loaded from registry during initialization
-        self.state.send_state_update()?;
-        self.state.send_selection_update()?;
-
         Ok(())
     }
 
@@ -121,17 +116,8 @@ impl Component for NodeTableComponent {
         match action {
             // Handle NodeTableActions directly
             Action::NodeTableActions(node_action) => match node_action {
-                NodeTableActions::StateChanged { .. } => {
-                    // StateChanged is sent by NodeTable, not handled by it
-                    Ok(None)
-                }
-                NodeTableActions::SelectionChanged { .. } => {
-                    // SelectionChanged is sent by NodeTable, not handled by it
-                    Ok(None)
-                }
                 NodeTableActions::RegistryFileUpdated { all_nodes_data } => {
                     self.state_mut().sync_node_service_data(&all_nodes_data);
-                    self.state_mut().send_state_update()?;
                     Ok(None)
                 }
                 NodeTableActions::TriggerNodeLogs => {
@@ -178,30 +164,30 @@ impl Component for NodeTableComponent {
                     result
                 }
                 NodeTableActions::NavigateUp => {
-                    self.state.navigate_previous_unlocked().ok();
+                    self.state.navigate_previous_unlocked();
                     Ok(None)
                 }
                 NodeTableActions::NavigateDown => {
-                    self.state.navigate_next_unlocked().ok();
+                    self.state.navigate_next_unlocked();
                     Ok(None)
                 }
                 NodeTableActions::NavigateHome => {
-                    self.state.navigate_first_unlocked().ok();
+                    self.state.navigate_first_unlocked();
                     Ok(None)
                 }
                 NodeTableActions::NavigateEnd => {
-                    self.state.navigate_last_unlocked().ok();
+                    self.state.navigate_last_unlocked();
                     Ok(None)
                 }
                 NodeTableActions::NavigatePageUp => {
                     for _ in 0..10 {
-                        self.state.navigate_previous_unlocked().ok();
+                        self.state.navigate_previous_unlocked();
                     }
                     Ok(None)
                 }
                 NodeTableActions::NavigatePageDown => {
                     for _ in 0..10 {
-                        self.state.navigate_next_unlocked().ok();
+                        self.state.navigate_next_unlocked();
                     }
                     Ok(None)
                 }
@@ -244,17 +230,12 @@ impl NodeTableComponent {
                         .controller
                         .mark_transition(id, CommandKind::Maintain);
                 }
-                let config = operations::MaintainNodesConfig {
-                    rewards_address: self.state.rewards_address.as_ref(),
-                    nodes_to_start: self.state.nodes_to_start,
-                    antnode_path: self.state.antnode_path.clone(),
-                    upnp_enabled: self.state.upnp_enabled,
-                    data_dir_path: self.state.data_dir_path.clone(),
-                    network_id: self.state.network_id,
-                    init_peers_config: self.state.init_peers_config.clone(),
-                    port_range: self.state.port_range,
-                };
-                match self.state.operations.handle_maintain_nodes(&config) {
+
+                match self
+                    .state
+                    .operations
+                    .handle_maintain_nodes(&self.state.operations_config)
+                {
                     Ok(Some(action)) => {
                         for id in &ids {
                             self.state.controller.clear_transition(id);
@@ -270,22 +251,10 @@ impl NodeTableComponent {
                     }
                 }
             }
-            NodeManagementCommand::AddNode => {
-                let config = operations::AddNodeConfig {
-                    node_count: self.state.controller.items().len() as u64,
-                    available_disk_space_gb: self.state.available_disk_space_gb,
-                    storage_mountpoint: &self.state.storage_mountpoint,
-                    rewards_address: self.state.rewards_address.as_ref(),
-                    nodes_to_start: self.state.nodes_to_start,
-                    antnode_path: self.state.antnode_path.clone(),
-                    upnp_enabled: self.state.upnp_enabled,
-                    data_dir_path: self.state.data_dir_path.clone(),
-                    network_id: self.state.network_id,
-                    init_peers_config: self.state.init_peers_config.clone(),
-                    port_range: self.state.port_range,
-                };
-                self.state.operations.handle_add_node(&config)
-            }
+            NodeManagementCommand::AddNode => self.state.operations.handle_add_node(
+                &self.state.operations_config,
+                self.state.controller.items().len() as u64,
+            ),
             NodeManagementCommand::StartNodes => {
                 let nodes_to_start: Vec<_> = self
                     .state

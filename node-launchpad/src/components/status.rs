@@ -10,13 +10,13 @@ use crate::action::OptionsActions;
 use crate::components::Component;
 use crate::components::footer::{Footer, FooterState};
 use crate::components::header::{Header, SelectedMenuItem};
-use crate::components::node_table::{NodeSelectionInfo, NodeTableComponent, NodeTableConfig};
+use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::config::get_launchpad_nodes_data_dir_path;
 use crate::system::get_available_space_b;
 use crate::{
-    action::{Action, NodeTableActions, StatusActions},
+    action::{Action, StatusActions},
     focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     node_stats::AggregatedNodeStats,
@@ -54,12 +54,6 @@ pub struct Status {
 
     // NodeTable component (contains the state)
     node_table_component: NodeTableComponent,
-
-    // Cached state from NodeTable
-    node_count: u64,
-    has_running_nodes: bool,
-    has_nodes: bool,
-    selected_node: Option<NodeSelectionInfo>,
 }
 
 pub struct StatusConfig {
@@ -104,12 +98,6 @@ impl Status {
                 registry_path_override: config.registry_path_override.clone(),
             })
             .await?,
-
-            // Initialize cached state
-            node_count: 0,
-            has_running_nodes: false,
-            has_nodes: false,
-            selected_node: None,
         };
 
         Ok(status)
@@ -140,7 +128,7 @@ impl Component for Status {
         // Update the stats to be shown as soon as the app is run
         self.node_table_component
             .state_mut()
-            .try_update_node_stats(true)?;
+            .try_fetch_node_stats(true)?;
 
         Ok(())
     }
@@ -180,32 +168,10 @@ impl Component for Status {
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         // Handle NodeTable actions directly
-        if let Action::NodeTableActions(node_table_action) = action.clone() {
-            match node_table_action {
-                NodeTableActions::StateChanged {
-                    node_count,
-                    has_running_nodes,
-                    has_nodes,
-                } => {
-                    self.node_count = node_count;
-                    self.has_running_nodes = has_running_nodes;
-                    self.has_nodes = has_nodes;
-                    debug!(
-                        "Updated cached state: node_count={}, has_nodes={}, has_running_nodes={}",
-                        self.node_count, self.has_nodes, self.has_running_nodes
-                    );
-                    return Ok(None);
-                }
-                NodeTableActions::SelectionChanged { selection } => {
-                    self.selected_node = selection;
-                    debug!("Updated selection: selected_node={:?}", self.selected_node);
-                    return Ok(None);
-                }
-                _ => {
-                    // Forward all other NodeTableActions to NodeTableComponent
-                    return self.node_table_component.update(action);
-                }
-            }
+        if let Action::NodeTableActions(node_table_action) = &action {
+            return self
+                .node_table_component
+                .update(Action::NodeTableActions(node_table_action.clone()));
         }
 
         // Handle Status-specific actions
@@ -216,7 +182,7 @@ impl Component for Status {
             Action::Tick => {
                 self.node_table_component
                     .state_mut()
-                    .try_update_node_stats(false)?;
+                    .try_fetch_node_stats(false)?;
             }
             Action::StoreRunningNodeCount(count) => {
                 self.nodes_to_start = count;
@@ -433,7 +399,7 @@ impl Component for Status {
         // ==== Node Status =====
 
         // No nodes. Empty Table.
-        if !self.has_nodes || self.rewards_address.is_none() {
+        if !self.node_table_component.state().has_nodes() || self.rewards_address.is_none() {
             let line1 = Line::from(vec![
                 Span::styled("Press ", Style::default().fg(LIGHT_PERIWINKLE)),
                 Span::styled("[+] ", Style::default().fg(GHOST_WHITE).bold()),
@@ -480,9 +446,9 @@ impl Component for Status {
 
         let footer = Footer::default();
         let mut footer_state = FooterState {
-            has_nodes: self.has_nodes,
-            has_running_nodes: self.has_running_nodes,
-            selected_node: self.selected_node.clone(),
+            has_nodes: self.node_table_component.state().has_nodes(),
+            has_running_nodes: self.node_table_component.state().has_running_nodes(),
+            selected_node: self.node_table_component.state().selected_node(),
             rewards_address_set: self.rewards_address.is_some(),
         };
 
@@ -506,7 +472,6 @@ impl Component for Status {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::components::node_table::lifecycle::LifecycleState;
     use crate::focus::{EventResult, FocusManager};
     use crate::node_stats::IndividualNodeStats;
     use crate::test_utils::*;
@@ -628,7 +593,11 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(status.rewards_address, Some(new_address));
         assert_eq!(
-            status.node_table_component.state().rewards_address,
+            status
+                .node_table_component
+                .state()
+                .operations_config
+                .rewards_address,
             Some(new_address)
         );
     }
@@ -641,7 +610,13 @@ mod tests {
         let result = status.update(Action::StoreUpnpSetting(false));
         assert!(result.is_ok());
         assert!(!status.upnp_enabled);
-        assert!(!status.node_table_component.state().upnp_enabled);
+        assert!(
+            !status
+                .node_table_component
+                .state()
+                .operations_config
+                .upnp_enabled
+        );
     }
 
     #[tokio::test]
@@ -653,7 +628,11 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(status.port_range, Some((20000, 20100)));
         assert_eq!(
-            status.node_table_component.state().port_range,
+            status
+                .node_table_component
+                .state()
+                .operations_config
+                .port_range,
             Some((20000, 20100))
         );
     }
@@ -757,49 +736,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_status_update_node_table_state_changed() {
-        let config = create_test_status_config();
-        let mut status = Status::new(config).await.unwrap();
-
-        let result = status.update(Action::NodeTableActions(NodeTableActions::StateChanged {
-            node_count: 5,
-            has_running_nodes: true,
-            has_nodes: true,
-        }));
-        assert!(result.is_ok());
-        assert_eq!(status.node_count, 5);
-        assert!(status.has_running_nodes);
-        assert!(status.has_nodes);
-    }
-
-    #[tokio::test]
-    async fn test_status_update_node_table_selection_changed() {
-        let config = create_test_status_config();
-        let mut status = Status::new(config).await.unwrap();
-
-        let result = status.update(Action::NodeTableActions(
-            NodeTableActions::SelectionChanged {
-                selection: Some(NodeSelectionInfo {
-                    lifecycle: LifecycleState::Running,
-                    locked: false,
-                    can_start: false,
-                    can_stop: true,
-                }),
-            },
-        ));
-        assert!(result.is_ok());
-        assert_eq!(
-            status.selected_node,
-            Some(NodeSelectionInfo {
-                lifecycle: LifecycleState::Running,
-                locked: false,
-                can_start: false,
-                can_stop: true,
-            })
-        );
-    }
-
-    #[tokio::test]
     async fn test_status_store_running_node_count_syncs_table() {
         let config = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
@@ -807,7 +743,14 @@ mod tests {
         let result = status.update(Action::StoreRunningNodeCount(7));
         assert!(result.is_ok());
         assert_eq!(status.nodes_to_start, 7);
-        assert_eq!(status.node_table_component.state().nodes_to_start, 7);
+        assert_eq!(
+            status
+                .node_table_component
+                .state()
+                .operations_config
+                .nodes_to_start,
+            7
+        );
     }
 
     #[tokio::test]
