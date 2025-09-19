@@ -80,7 +80,7 @@ impl BootstrapCacheStore {
         if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
             return;
         }
-        let Some(addr) = craft_valid_multiaddr(&addr, false) else {
+        let Some(addr) = craft_valid_multiaddr(&addr) else {
             return;
         };
         let peer_id = match addr.iter().find(|p| matches!(p, Protocol::P2p(_))) {
@@ -142,6 +142,11 @@ impl BootstrapCacheStore {
     pub async fn sync_and_flush_to_disk(&self) -> Result<()> {
         if self.config.disable_cache_writing {
             info!("Cache writing is disabled, skipping sync to disk");
+            return Ok(());
+        }
+
+        if self.data.read().await.peers.is_empty() {
+            info!("No peers to write to disk, skipping sync to disk");
             return Ok(());
         }
 
@@ -246,7 +251,7 @@ fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
     let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
 
     let random_adjustment = Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
-    if random_adjustment.as_secs() % 2 == 0 {
+    if random_adjustment.as_secs().is_multiple_of(2) {
         duration - random_adjustment
     } else {
         duration + random_adjustment

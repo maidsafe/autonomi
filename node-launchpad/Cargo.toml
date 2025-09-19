@@ -21,13 +21,13 @@ nightly = []
 ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.7" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
+ant-logging = { path = "../ant-logging", version = "0.2.52" }
 ant-node-manager = { version = "0.13.3", path = "../ant-node-manager" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.8" }
 ant-releases = { version = "0.4.1" }
 ant-service-management = { version = "0.4.16", path = "../ant-service-management" }
 arboard = "3.4.1"
 atty = "0.2.14"
-better-panic = "0.3.0"
 chrono = "~0.4.19"
 clap = { version = "4.4.5", features = [
     "derive",
@@ -40,14 +40,13 @@ clap = { version = "4.4.5", features = [
 color-eyre = "0.6.3"
 config = "0.14.0"
 crossterm = { version = "0.27.0", features = ["serde", "event-stream"] }
+custom_debug = "~0.6.1"
 derive_deref = "1.1.1"
 directories = "5.0.1"
 dirs-next = "~2.0.0"
 faccess = "0.2.4"
 futures = "0.3.28"
 fs_extra = "1.3.0"
-human-panic = "1.2.0"
-igd-next = "0.16.0"
 itertools = "~0.12.1"
 json5 = "0.4.1"
 libc = "0.2.148"
@@ -57,7 +56,6 @@ open = "5.0.1"
 pretty_assertions = "1.4.0"
 prometheus-parse = "0.2.5"
 ratatui = { version = "0.29.0", features = ["serde", "macros", "unstable-widget-ref"] }
-regex = "1.11.0"
 reqwest = { version = "0.12.2", default-features = false, features = [
     "rustls-tls-manual-roots",
 ] }
@@ -69,6 +67,7 @@ strip-ansi-escapes = "0.2.0"
 strum = { version = "0.26.1", features = ["derive"] }
 sysinfo = "0.30.12"
 tempfile = "3.12.0"
+thiserror = "1.0"
 throbber-widgets-tui = "0.8.0"
 tokio = { version = "1.43.1", features = ["full"] }
 tokio-util = "0.7.9"

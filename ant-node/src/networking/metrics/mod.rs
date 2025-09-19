@@ -6,23 +6,27 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-// Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
+mod metadata;
+mod reachability_check;
 mod relay_client;
 pub(super) mod service;
 mod upnp;
 
-use crate::networking::MetricsRegistries;
 use crate::networking::log_markers::Marker;
+use crate::{ReachabilityStatus, networking::MetricsRegistries};
 use bad_node::{BadNodeMetrics, BadNodeMetricsMsg, TimeFrame};
 use libp2p::{
     PeerId,
     metrics::{Metrics as Libp2pMetrics, Recorder},
 };
+pub(crate) use metadata::MetadataExtendedRecorder;
+pub(crate) use metadata::MetadataRecorder;
 use prometheus_client::{
     encoding::EncodeLabelSet,
     metrics::{counter::Counter, family::Family, gauge::Gauge},
 };
+
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
 use sysinfo::{Pid, ProcessRefreshKind, System};
@@ -39,25 +43,33 @@ pub(crate) struct VersionLabels {
 }
 
 /// The shared recorders that are used to record metrics.
+#[allow(dead_code)] // TODO: Remove this once we have removed all the deprecated metrics related to relay.
 pub(crate) struct NetworkMetricsRecorder {
     // Records libp2p related metrics
     // Must directly call self.libp2p_metrics.record(libp2p_event) with Recorder trait in scope. But since we have
     // re-implemented the trait for the wrapper struct, we can instead call self.record(libp2p_event)
     libp2p_metrics: Libp2pMetrics,
     upnp_events: Family<upnp::UpnpEventLabels, Counter>,
+    // DEPRECATED: This is no longer used.
     relay_client_events: Family<relay_client::RelayClientEventLabels, Counter>,
 
     // metrics from ant-networking
     pub(crate) connected_peers: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) connected_relay_clients: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) estimated_network_size: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_peers_percentage: Gauge<f64, AtomicU64>,
     pub(crate) open_connections: Gauge,
     pub(crate) peers_in_routing_table: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_peers_in_routing_table: Gauge,
     pub(crate) records_stored: Gauge,
+    // DEPRECATED: This is no longer used.
     pub(crate) relay_reservation_health: Gauge<f64, AtomicU64>,
     pub(crate) node_versions: Family<VersionLabels, Gauge>,
+    pub(crate) reachability_check_progress: Gauge<f64, AtomicU64>,
 
     // quoting metrics
     relevant_records: Gauge,
@@ -84,13 +96,39 @@ pub(crate) struct NetworkMetricsRecorder {
 }
 
 impl NetworkMetricsRecorder {
-    pub(crate) fn new(registries: &mut MetricsRegistries) -> Self {
+    pub(crate) fn new(
+        registries: &mut MetricsRegistries,
+        reachability_status: &Option<ReachabilityStatus>,
+    ) -> Self {
         // ==== Standard metrics =====
 
         let libp2p_metrics = Libp2pMetrics::new(&mut registries.standard_metrics);
         let sub_registry = registries
             .standard_metrics
             .sub_registry_with_prefix("ant_networking");
+
+        // reachability check should be a part of the standard metrics and is a gauge value, but never changes.
+        let reachability_adapter_metric =
+            reachability_check::get_reachability_adapter_metric(reachability_status);
+
+        sub_registry.register(
+            "reachability_adapter",
+            "The reachability adapter status of the node.",
+            reachability_adapter_metric,
+        );
+
+        let reachability_check_progress = Gauge::<f64, AtomicU64>::default();
+        // set to 100 if reachability_status is found (completed)
+        if reachability_status.is_some() {
+            let _ = reachability_check_progress.set(100.0);
+        } else {
+            let _ = reachability_check_progress.set(0.0);
+        }
+        sub_registry.register(
+            "reachability_check_progress",
+            "Progress indicator for reachability check. 0 = not run, 1-99 = in progress, 100 = completed",
+            reachability_check_progress.clone(),
+        );
 
         let records_stored = Gauge::default();
         sub_registry.register(
@@ -275,6 +313,7 @@ impl NetworkMetricsRecorder {
             received_payment_count,
             live_time,
             node_versions,
+            reachability_check_progress,
 
             bad_peers_count,
             shunned_count_across_time_frames,
@@ -400,12 +439,6 @@ impl NetworkMetricsRecorder {
 /// Impl the Recorder traits again for our struct.
 impl Recorder<libp2p::kad::Event> for NetworkMetricsRecorder {
     fn record(&self, event: &libp2p::kad::Event) {
-        self.libp2p_metrics.record(event)
-    }
-}
-
-impl Recorder<libp2p::relay::Event> for NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::relay::Event) {
         self.libp2p_metrics.record(event)
     }
 }

@@ -28,8 +28,7 @@ const MAX_CANDIDATES: usize = 50;
 /// To be deprecated in future. The external address that is advertised by the node is not used for dialing the peers
 /// anymore. But this whole struct exists for backwards compatibility with the old code.
 ///
-/// Manages the external addresses of a Public node. For a relayed node, the RelayManager should deal with
-/// adding and removing external addresses. Also, we don't manage "local" addresses here.
+/// Manages the external addresses of a Public node. We don't manage "local" addresses here.
 #[derive(Debug)]
 pub(crate) struct ExternalAddressManager {
     /// All the external addresses of the node

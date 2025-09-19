@@ -6,19 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::connection_mode::ConnectionMode;
 use crate::system::get_primary_mount_point;
-use crate::{action::Action, mode::Scene};
+use ant_evm::EvmAddress;
 use ant_node_manager::config::is_running_as_root;
 use color_eyre::eyre::{Result, eyre};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use derive_deref::{Deref, DerefMut};
-use ratatui::style::{Color, Modifier, Style};
-use serde::{Deserialize, Serialize, de::Deserializer};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-const CONFIG: &str = include_str!("../.config/config.json5");
+use tracing::{debug, error, warn};
 
 /// Where to store the Nodes data.
 ///
@@ -111,36 +105,49 @@ pub async fn configure_winsw() -> Result<()> {
 }
 
 #[cfg(not(windows))]
+#[allow(clippy::unused_async)]
 pub async fn configure_winsw() -> Result<()> {
     Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AppData {
-    pub discord_username: String,
-    pub nodes_to_start: usize,
+    pub rewards_address: Option<EvmAddress>,
+    pub nodes_to_start: u64,
     pub storage_mountpoint: Option<PathBuf>,
     pub storage_drive: Option<String>,
-    pub connection_mode: Option<ConnectionMode>,
-    pub port_from: Option<u32>,
-    pub port_to: Option<u32>,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
 }
 
 impl Default for AppData {
     fn default() -> Self {
         Self {
-            discord_username: "".to_string(),
+            rewards_address: None,
             nodes_to_start: 1,
             storage_mountpoint: None,
             storage_drive: None,
-            connection_mode: None,
-            port_from: None,
-            port_to: None,
+            upnp_enabled: true,
+            port_range: None,
         }
     }
 }
 
 impl AppData {
+    fn try_salvage_fields(json_value: &serde_json::Value) -> Self {
+        let mut salvaged = Self::default();
+
+        if let Some(rewards_addr_value) = json_value.get("rewards_address")
+            && let Ok(rewards_addr) =
+                serde_json::from_value::<Option<EvmAddress>>(rewards_addr_value.clone())
+        {
+            salvaged.rewards_address = rewards_addr;
+            debug!("Salvaged rewards_address: {:?}", rewards_addr);
+        }
+
+        salvaged
+    }
+
     pub fn load(custom_path: Option<PathBuf>) -> Result<Self> {
         let config_path = if let Some(path) = custom_path {
             path
@@ -159,17 +166,50 @@ impl AppData {
             color_eyre::eyre::eyre!("Failed to read app data file: {}", e)
         })?;
 
-        let mut app_data: AppData = serde_json::from_str(&data).map_err(|e| {
-            error!("Failed to parse app data: {}", e);
-            color_eyre::eyre::eyre!("Failed to parse app data: {}", e)
-        })?;
+        match serde_json::from_str::<AppData>(&data) {
+            Ok(app_data) => Ok(app_data),
+            Err(parse_err) => {
+                warn!(
+                    "Failed to parse app data due to corruption or structure change: {parse_err:?}, trying to salvage fields...",
+                );
 
-        // Don't allow the manual setting to HomeNetwork anymore
-        if let Some(ConnectionMode::HomeNetwork) = app_data.connection_mode {
-            app_data.connection_mode = Some(ConnectionMode::Automatic);
+                // Try to salvage individual fields using generic JSON parsing
+                match serde_json::from_str::<serde_json::Value>(&data) {
+                    Ok(json_value) => {
+                        let salvaged_data = Self::try_salvage_fields(&json_value);
+
+                        if let Err(save_err) = salvaged_data.save(Some(config_path.clone())) {
+                            error!(
+                                "Failed to save salvaged app data to {config_path:?}: {save_err:?}"
+                            );
+                            return Err(eyre!(
+                                "Failed to parse corrupted app data and could not save salvaged data: {save_err}",
+                            ));
+                        }
+
+                        debug!("Successfully saved salvaged app data to {config_path:?}");
+                        Ok(salvaged_data)
+                    }
+                    Err(json_err) => {
+                        warn!(
+                            "Config file is completely corrupted, cannot salvage any fields: {json_err:?}"
+                        );
+                        let default_data = Self::default();
+                        if let Err(save_err) = default_data.save(Some(config_path.clone())) {
+                            error!(
+                                "Failed to save fresh app data to {config_path:?}: {save_err:?}"
+                            );
+                            return Err(eyre!(
+                                "Failed to parse corrupted app data and could not save fresh data: {save_err}",
+                            ));
+                        }
+
+                        debug!("Successfully restored fresh app data to {config_path:?}");
+                        Ok(default_data)
+                    }
+                }
+            }
         }
-
-        Ok(app_data)
     }
 
     pub fn save(&self, custom_path: Option<PathBuf>) -> Result<()> {
@@ -188,651 +228,113 @@ impl AppData {
     }
 }
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct Config {
-    #[serde(default)]
-    pub keybindings: KeyBindings,
-    #[serde(default)]
-    pub styles: Styles,
-}
-
-impl Config {
-    pub fn new() -> Result<Self, config::ConfigError> {
-        let default_config: Config = json5::from_str(CONFIG).unwrap();
-        let data_dir = get_launchpad_data_dir_path()
-            .map_err(|_| config::ConfigError::Message("Could not obtain data dir".to_string()))?;
-        let config_dir = get_config_dir()
-            .map_err(|_| config::ConfigError::Message("Could not obtain data dir".to_string()))?;
-        let mut builder = config::Config::builder()
-            .set_default("_data_dir", data_dir.to_str().unwrap())?
-            .set_default("_config_dir", config_dir.to_str().unwrap())?;
-
-        let config_files = [
-            ("config.json5", config::FileFormat::Json5),
-            ("config.json", config::FileFormat::Json),
-            ("config.yaml", config::FileFormat::Yaml),
-            ("config.toml", config::FileFormat::Toml),
-            ("config.ini", config::FileFormat::Ini),
-        ];
-        let mut found_config = false;
-        for (file, format) in &config_files {
-            builder = builder.add_source(
-                config::File::from(config_dir.join(file))
-                    .format(*format)
-                    .required(false),
-            );
-            if config_dir.join(file).exists() {
-                found_config = true
-            }
-        }
-        if !found_config {
-            log::error!("No configuration file found. Application may not behave as expected");
-        }
-
-        let mut cfg: Self = builder.build()?.try_deserialize()?;
-
-        for (mode, default_bindings) in default_config.keybindings.iter() {
-            let user_bindings = cfg.keybindings.entry(*mode).or_default();
-            for (key, cmd) in default_bindings.iter() {
-                user_bindings
-                    .entry(key.clone())
-                    .or_insert_with(|| cmd.clone());
-            }
-        }
-        for (mode, default_styles) in default_config.styles.iter() {
-            let user_styles = cfg.styles.entry(*mode).or_default();
-            for (style_key, style) in default_styles.iter() {
-                user_styles
-                    .entry(style_key.clone())
-                    .or_insert_with(|| *style);
-            }
-        }
-
-        Ok(cfg)
-    }
-}
-
-#[derive(Clone, Debug, Default, Deref, DerefMut, Serialize)]
-pub struct KeyBindings(pub HashMap<Scene, HashMap<Vec<KeyEvent>, Action>>);
-
-impl<'de> Deserialize<'de> for KeyBindings {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed_map = HashMap::<Scene, HashMap<String, Action>>::deserialize(deserializer)?;
-
-        let keybindings = parsed_map
-            .into_iter()
-            .map(|(mode, inner_map)| {
-                let converted_inner_map = inner_map
-                    .into_iter()
-                    .map(|(key_str, cmd)| (parse_key_sequence(&key_str).unwrap(), cmd))
-                    .collect();
-                (mode, converted_inner_map)
-            })
-            .collect();
-
-        Ok(KeyBindings(keybindings))
-    }
-}
-
-fn parse_key_event(raw: &str) -> Result<KeyEvent, String> {
-    let raw_lower = raw.to_ascii_lowercase();
-    let (remaining, modifiers) = extract_modifiers(&raw_lower);
-    parse_key_code_with_modifiers(remaining, modifiers)
-}
-
-fn extract_modifiers(raw: &str) -> (&str, KeyModifiers) {
-    let mut modifiers = KeyModifiers::empty();
-    let mut current = raw;
-
-    loop {
-        match current {
-            rest if rest.starts_with("ctrl-") => {
-                modifiers.insert(KeyModifiers::CONTROL);
-                current = &rest[5..];
-            }
-            rest if rest.starts_with("alt-") => {
-                modifiers.insert(KeyModifiers::ALT);
-                current = &rest[4..];
-            }
-            rest if rest.starts_with("shift-") => {
-                modifiers.insert(KeyModifiers::SHIFT);
-                current = &rest[6..];
-            }
-            _ => break, // break out of the loop if no known prefix is detected
-        };
-    }
-
-    (current, modifiers)
-}
-
-fn parse_key_code_with_modifiers(
-    raw: &str,
-    mut modifiers: KeyModifiers,
-) -> Result<KeyEvent, String> {
-    let c = match raw {
-        "esc" => KeyCode::Esc,
-        "enter" => KeyCode::Enter,
-        "left" => KeyCode::Left,
-        "right" => KeyCode::Right,
-        "up" => KeyCode::Up,
-        "down" => KeyCode::Down,
-        "home" => KeyCode::Home,
-        "end" => KeyCode::End,
-        "pageup" => KeyCode::PageUp,
-        "pagedown" => KeyCode::PageDown,
-        "backtab" => {
-            modifiers.insert(KeyModifiers::SHIFT);
-            KeyCode::BackTab
-        }
-        "backspace" => KeyCode::Backspace,
-        "delete" => KeyCode::Delete,
-        "insert" => KeyCode::Insert,
-        "f1" => KeyCode::F(1),
-        "f2" => KeyCode::F(2),
-        "f3" => KeyCode::F(3),
-        "f4" => KeyCode::F(4),
-        "f5" => KeyCode::F(5),
-        "f6" => KeyCode::F(6),
-        "f7" => KeyCode::F(7),
-        "f8" => KeyCode::F(8),
-        "f9" => KeyCode::F(9),
-        "f10" => KeyCode::F(10),
-        "f11" => KeyCode::F(11),
-        "f12" => KeyCode::F(12),
-        "space" => KeyCode::Char(' '),
-        "hyphen" => KeyCode::Char('-'),
-        "minus" => KeyCode::Char('-'),
-        "tab" => KeyCode::Tab,
-        c if c.len() == 1 => {
-            let mut c = c.chars().next().unwrap();
-            if modifiers.contains(KeyModifiers::SHIFT) {
-                c = c.to_ascii_uppercase();
-            }
-            KeyCode::Char(c)
-        }
-        _ => return Err(format!("Unable to parse {raw}")),
-    };
-    Ok(KeyEvent::new(c, modifiers))
-}
-
-pub fn key_event_to_string(key_event: &KeyEvent) -> String {
-    let char;
-    let key_code = match key_event.code {
-        KeyCode::Backspace => "backspace",
-        KeyCode::Enter => "enter",
-        KeyCode::Left => "left",
-        KeyCode::Right => "right",
-        KeyCode::Up => "up",
-        KeyCode::Down => "down",
-        KeyCode::Home => "home",
-        KeyCode::End => "end",
-        KeyCode::PageUp => "pageup",
-        KeyCode::PageDown => "pagedown",
-        KeyCode::Tab => "tab",
-        KeyCode::BackTab => "backtab",
-        KeyCode::Delete => "delete",
-        KeyCode::Insert => "insert",
-        KeyCode::F(c) => {
-            char = format!("f({c})");
-            &char
-        }
-        KeyCode::Char(' ') => "space",
-        KeyCode::Char(c) => {
-            char = c.to_string();
-            &char
-        }
-        KeyCode::Esc => "esc",
-        KeyCode::Null => "",
-        KeyCode::CapsLock => "",
-        KeyCode::Menu => "",
-        KeyCode::ScrollLock => "",
-        KeyCode::Media(_) => "",
-        KeyCode::NumLock => "",
-        KeyCode::PrintScreen => "",
-        KeyCode::Pause => "",
-        KeyCode::KeypadBegin => "",
-        KeyCode::Modifier(_) => "",
-    };
-
-    let mut modifiers = Vec::with_capacity(3);
-
-    if key_event.modifiers.intersects(KeyModifiers::CONTROL) {
-        modifiers.push("ctrl");
-    }
-
-    if key_event.modifiers.intersects(KeyModifiers::SHIFT) {
-        modifiers.push("shift");
-    }
-
-    if key_event.modifiers.intersects(KeyModifiers::ALT) {
-        modifiers.push("alt");
-    }
-
-    let mut key = modifiers.join("-");
-
-    if !key.is_empty() {
-        key.push('-');
-    }
-    key.push_str(key_code);
-
-    key
-}
-
-pub fn parse_key_sequence(raw: &str) -> Result<Vec<KeyEvent>, String> {
-    if raw.chars().filter(|c| *c == '>').count() != raw.chars().filter(|c| *c == '<').count() {
-        return Err(format!("Unable to parse `{raw}`"));
-    }
-    let raw = if !raw.contains("><") {
-        let raw = raw.strip_prefix('<').unwrap_or(raw);
-        raw.strip_prefix('>').unwrap_or(raw)
-    } else {
-        raw
-    };
-    let sequences = raw
-        .split("><")
-        .map(|seq| {
-            if let Some(s) = seq.strip_prefix('<') {
-                s
-            } else if let Some(s) = seq.strip_suffix('>') {
-                s
-            } else {
-                seq
-            }
-        })
-        .collect::<Vec<_>>();
-
-    sequences.into_iter().map(parse_key_event).collect()
-}
-
-#[derive(Clone, Debug, Default, Deref, DerefMut, Serialize)]
-pub struct Styles(pub HashMap<Scene, HashMap<String, Style>>);
-
-impl<'de> Deserialize<'de> for Styles {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let parsed_map = HashMap::<Scene, HashMap<String, String>>::deserialize(deserializer)?;
-
-        let styles = parsed_map
-            .into_iter()
-            .map(|(mode, inner_map)| {
-                let converted_inner_map = inner_map
-                    .into_iter()
-                    .map(|(str, style)| (str, parse_style(&style)))
-                    .collect();
-                (mode, converted_inner_map)
-            })
-            .collect();
-
-        Ok(Styles(styles))
-    }
-}
-
-pub fn parse_style(line: &str) -> Style {
-    let (foreground, background) =
-        line.split_at(line.to_lowercase().find("on ").unwrap_or(line.len()));
-    let foreground = process_color_string(foreground);
-    let background = process_color_string(&background.replace("on ", ""));
-
-    let mut style = Style::default();
-    if let Some(fg) = parse_color(&foreground.0) {
-        style = style.fg(fg);
-    }
-    if let Some(bg) = parse_color(&background.0) {
-        style = style.bg(bg);
-    }
-    style = style.add_modifier(foreground.1 | background.1);
-    style
-}
-
-fn process_color_string(color_str: &str) -> (String, Modifier) {
-    let color = color_str
-        .replace("grey", "gray")
-        .replace("bright ", "")
-        .replace("bold ", "")
-        .replace("underline ", "")
-        .replace("inverse ", "");
-
-    let mut modifiers = Modifier::empty();
-    if color_str.contains("underline") {
-        modifiers |= Modifier::UNDERLINED;
-    }
-    if color_str.contains("bold") {
-        modifiers |= Modifier::BOLD;
-    }
-    if color_str.contains("inverse") {
-        modifiers |= Modifier::REVERSED;
-    }
-
-    (color, modifiers)
-}
-
-fn parse_color(s: &str) -> Option<Color> {
-    let s = s.trim_start();
-    let s = s.trim_end();
-    if s.contains("bright color") {
-        let s = s.trim_start_matches("bright ");
-        let c = s
-            .trim_start_matches("color")
-            .parse::<u8>()
-            .unwrap_or_default();
-        Some(Color::Indexed(c.wrapping_shl(8)))
-    } else if s.contains("color") {
-        let c = s
-            .trim_start_matches("color")
-            .parse::<u8>()
-            .unwrap_or_default();
-        Some(Color::Indexed(c))
-    } else if s.contains("gray") {
-        let c = 232
-            + s.trim_start_matches("gray")
-                .parse::<u8>()
-                .unwrap_or_default();
-        Some(Color::Indexed(c))
-    } else if s.contains("rgb") {
-        let red = (s.as_bytes()[3] as char).to_digit(10).unwrap_or_default() as u8;
-        let green = (s.as_bytes()[4] as char).to_digit(10).unwrap_or_default() as u8;
-        let blue = (s.as_bytes()[5] as char).to_digit(10).unwrap_or_default() as u8;
-        let c = 16 + red * 36 + green * 6 + blue;
-        Some(Color::Indexed(c))
-    } else if s == "bold black" {
-        Some(Color::Indexed(8))
-    } else if s == "bold red" {
-        Some(Color::Indexed(9))
-    } else if s == "bold green" {
-        Some(Color::Indexed(10))
-    } else if s == "bold yellow" {
-        Some(Color::Indexed(11))
-    } else if s == "bold blue" {
-        Some(Color::Indexed(12))
-    } else if s == "bold magenta" {
-        Some(Color::Indexed(13))
-    } else if s == "bold cyan" {
-        Some(Color::Indexed(14))
-    } else if s == "bold white" {
-        Some(Color::Indexed(15))
-    } else if s == "black" {
-        Some(Color::Indexed(0))
-    } else if s == "red" {
-        Some(Color::Indexed(1))
-    } else if s == "green" {
-        Some(Color::Indexed(2))
-    } else if s == "yellow" {
-        Some(Color::Indexed(3))
-    } else if s == "blue" {
-        Some(Color::Indexed(4))
-    } else if s == "magenta" {
-        Some(Color::Indexed(5))
-    } else if s == "cyan" {
-        Some(Color::Indexed(6))
-    } else if s == "white" {
-        Some(Color::Indexed(7))
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use pretty_assertions::assert_eq;
+    use super::*;
+    use std::fs;
     use tempfile::tempdir;
 
-    use super::*;
-
     #[test]
-    fn test_parse_style_default() {
-        let style = parse_style("");
-        assert_eq!(style, Style::default());
-    }
+    fn test_salvage_rewards_address_on_missing_field() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let config_path = temp_dir.path().join("missing_field.json");
 
-    #[test]
-    fn test_parse_style_foreground() {
-        let style = parse_style("red");
-        assert_eq!(style.fg, Some(Color::Indexed(1)));
-    }
+        // The exact scenario user reported - missing upnp_enabled field but valid rewards_address
+        let config_data = r#"{
+    "rewards_address": "0x1234567890abcdef1234567890abcdef12345678",
+    "nodes_to_start": 5,
+    "storage_mountpoint": "/some/path",
+    "storage_drive": "C:",
+    "port_range": [12000, 13000]
+}"#;
+        fs::write(&config_path, config_data)?;
 
-    #[test]
-    fn test_parse_style_background() {
-        let style = parse_style("on blue");
-        assert_eq!(style.bg, Some(Color::Indexed(4)));
-    }
+        let app_data = AppData::load(Some(config_path))?;
 
-    #[test]
-    fn test_parse_style_modifiers() {
-        let style = parse_style("underline red on blue");
-        assert_eq!(style.fg, Some(Color::Indexed(1)));
-        assert_eq!(style.bg, Some(Color::Indexed(4)));
-    }
-
-    #[test]
-    fn test_process_color_string() {
-        let (color, modifiers) = process_color_string("underline bold inverse gray");
-        assert_eq!(color, "gray");
-        assert!(modifiers.contains(Modifier::UNDERLINED));
-        assert!(modifiers.contains(Modifier::BOLD));
-        assert!(modifiers.contains(Modifier::REVERSED));
-    }
-
-    #[test]
-    fn test_parse_color_rgb() {
-        let color = parse_color("rgb123");
-        let expected = 16 + 36 + 2 * 6 + 3;
-        assert_eq!(color, Some(Color::Indexed(expected)));
-    }
-
-    #[test]
-    fn test_parse_color_unknown() {
-        let color = parse_color("unknown");
-        assert_eq!(color, None);
-    }
-
-    #[test]
-    fn test_config() -> Result<()> {
-        let c = Config::new()?;
+        // Should salvage rewards_address, use defaults for missing upnp_enabled
         assert_eq!(
-            c.keybindings
-                .get(&Scene::Status)
-                .unwrap()
-                .get(&parse_key_sequence("<q>").unwrap_or_default())
-                .unwrap(),
-            &Action::Quit
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_simple_keys() {
-        assert_eq!(
-            parse_key_event("a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::empty())
-        );
-
-        assert_eq!(
-            parse_key_event("enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())
-        );
-
-        assert_eq!(
-            parse_key_event("esc").unwrap(),
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())
-        );
-    }
-
-    #[test]
-    fn test_with_modifiers() {
-        assert_eq!(
-            parse_key_event("ctrl-a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-        );
-
-        assert_eq!(
-            parse_key_event("alt-enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-        );
-
-        assert_eq!(
-            parse_key_event("shift-esc").unwrap(),
-            KeyEvent::new(KeyCode::Esc, KeyModifiers::SHIFT)
-        );
-    }
-
-    #[test]
-    fn test_multiple_modifiers() {
-        assert_eq!(
-            parse_key_event("ctrl-alt-a").unwrap(),
-            KeyEvent::new(
-                KeyCode::Char('a'),
-                KeyModifiers::CONTROL | KeyModifiers::ALT
+            app_data.rewards_address,
+            Some(
+                "0x1234567890abcdef1234567890abcdef12345678"
+                    .parse()
+                    .unwrap()
             )
         );
+        assert!(app_data.upnp_enabled); // Default value for missing field
 
-        assert_eq!(
-            parse_key_event("ctrl-shift-enter").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL | KeyModifiers::SHIFT)
-        );
+        Ok(())
     }
 
     #[test]
-    fn test_reverse_multiple_modifiers() {
-        assert_eq!(
-            key_event_to_string(&KeyEvent::new(
-                KeyCode::Char('a'),
-                KeyModifiers::CONTROL | KeyModifiers::ALT
-            )),
-            "ctrl-alt-a".to_string()
-        );
-    }
-
-    #[test]
-    fn test_invalid_keys() {
-        assert!(parse_key_event("invalid-key").is_err());
-        assert!(parse_key_event("ctrl-invalid-key").is_err());
-    }
-
-    #[test]
-    fn test_case_insensitivity() {
-        assert_eq!(
-            parse_key_event("CTRL-a").unwrap(),
-            KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL)
-        );
-
-        assert_eq!(
-            parse_key_event("AlT-eNtEr").unwrap(),
-            KeyEvent::new(KeyCode::Enter, KeyModifiers::ALT)
-        );
-    }
-
-    #[test]
-    fn test_app_data_file_does_not_exist() -> Result<()> {
+    fn test_fallback_on_complete_corruption() -> Result<()> {
         let temp_dir = tempdir()?;
-        let non_existent_path = temp_dir.path().join("non_existent_app_data.json");
+        let config_path = temp_dir.path().join("corrupted.json");
 
-        let app_data = AppData::load(Some(non_existent_path))?;
+        // File content that's not JSON at all
+        fs::write(&config_path, "this is not json at all!@#$%")?;
 
-        assert_eq!(app_data.discord_username, "");
+        let app_data = AppData::load(Some(config_path))?;
+
+        // Should fall back to full defaults since generic parsing fails
+        assert_eq!(app_data.rewards_address, None);
         assert_eq!(app_data.nodes_to_start, 1);
-        assert_eq!(app_data.storage_mountpoint, None);
-        assert_eq!(app_data.storage_drive, None);
-        assert_eq!(app_data.connection_mode, None);
-        assert_eq!(app_data.port_from, None);
-        assert_eq!(app_data.port_to, None);
+        assert!(app_data.upnp_enabled);
 
         Ok(())
     }
 
     #[test]
-    fn test_app_data_partial_info() -> Result<()> {
+    fn test_fallback_on_invalid_rewards_address() -> Result<()> {
         let temp_dir = tempdir()?;
-        let partial_data_path = temp_dir.path().join("partial_app_data.json");
+        let config_path = temp_dir.path().join("invalid_rewards.json");
 
-        let partial_data = r#"
-        {
-            "discord_username": "test_user",
-            "nodes_to_start": 3
-        }
-        "#;
+        // Valid JSON structure but invalid rewards_address format
+        let config_data = r#"{
+    "rewards_address": "not_a_valid_ethereum_address",
+    "nodes_to_start": 7,
+    "upnp_enabled": true
+}"#;
+        fs::write(&config_path, config_data)?;
 
-        std::fs::write(&partial_data_path, partial_data)?;
+        let app_data = AppData::load(Some(config_path))?;
 
-        let app_data = AppData::load(Some(partial_data_path))?;
-
-        assert_eq!(app_data.discord_username, "test_user");
-        assert_eq!(app_data.nodes_to_start, 3);
-        assert_eq!(app_data.storage_mountpoint, None);
-        assert_eq!(app_data.storage_drive, None);
-        assert_eq!(app_data.connection_mode, None);
-        assert_eq!(app_data.port_from, None);
-        assert_eq!(app_data.port_to, None);
+        // Should use default for invalid rewards_address since validation fails
+        assert_eq!(app_data.rewards_address, None);
+        assert_eq!(app_data.nodes_to_start, 1); // Back to defaults since struct parsing failed
+        assert!(app_data.upnp_enabled);
 
         Ok(())
     }
 
     #[test]
-    fn test_app_data_missing_mountpoint() -> Result<()> {
+    fn test_normal_parsing_unchanged() -> Result<()> {
         let temp_dir = tempdir()?;
-        let missing_mountpoint_path = temp_dir.path().join("missing_mountpoint_app_data.json");
+        let config_path = temp_dir.path().join("valid.json");
 
-        let missing_mountpoint_data = r#"
-        {
-            "discord_username": "test_user",
-            "nodes_to_start": 3,
-            "storage_drive": "C:"
-        }
-        "#;
+        // Complete, valid config file
+        let valid_app_data = AppData {
+            rewards_address: Some(
+                "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+                    .parse()
+                    .unwrap(),
+            ),
+            nodes_to_start: 3,
+            storage_mountpoint: Some("/valid/path".into()),
+            storage_drive: Some("D:".to_string()),
+            upnp_enabled: false,
+            port_range: Some((15000, 16000)),
+        };
+        valid_app_data.save(Some(config_path.clone()))?;
 
-        std::fs::write(&missing_mountpoint_path, missing_mountpoint_data)?;
+        let loaded_app_data = AppData::load(Some(config_path))?;
 
-        let app_data = AppData::load(Some(missing_mountpoint_path))?;
-
-        assert_eq!(app_data.discord_username, "test_user");
-        assert_eq!(app_data.nodes_to_start, 3);
-        assert_eq!(app_data.storage_mountpoint, None);
-        assert_eq!(app_data.storage_drive, Some("C:".to_string()));
-        assert_eq!(app_data.connection_mode, None);
-        assert_eq!(app_data.port_from, None);
-        assert_eq!(app_data.port_to, None);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_app_data_save_and_load() -> Result<()> {
-        let temp_dir = tempdir()?;
-        let test_path = temp_dir.path().join("test_app_data.json");
-
-        let mut app_data = AppData::default();
-        let var_name = &"save_load_user";
-        app_data.discord_username = var_name.to_string();
-        app_data.nodes_to_start = 4;
-        app_data.storage_mountpoint = Some(PathBuf::from("/mnt/test"));
-        app_data.storage_drive = Some("E:".to_string());
-        app_data.connection_mode = Some(ConnectionMode::CustomPorts);
-        app_data.port_from = Some(12000);
-        app_data.port_to = Some(13000);
-
-        // Save to custom path
-        app_data.save(Some(test_path.clone()))?;
-
-        // Load from custom path
-        let loaded_data = AppData::load(Some(test_path))?;
-
-        assert_eq!(loaded_data.discord_username, "save_load_user");
-        assert_eq!(loaded_data.nodes_to_start, 4);
+        // Should parse normally without any fallback/salvage
         assert_eq!(
-            loaded_data.storage_mountpoint,
-            Some(PathBuf::from("/mnt/test"))
+            loaded_app_data.rewards_address,
+            valid_app_data.rewards_address
         );
-        assert_eq!(loaded_data.storage_drive, Some("E:".to_string()));
-        assert_eq!(
-            loaded_data.connection_mode,
-            Some(ConnectionMode::CustomPorts)
-        );
-        assert_eq!(loaded_data.port_from, Some(12000));
-        assert_eq!(loaded_data.port_to, Some(13000));
+        assert_eq!(loaded_app_data.nodes_to_start, 3);
+        assert!(!loaded_app_data.upnp_enabled);
 
         Ok(())
     }
