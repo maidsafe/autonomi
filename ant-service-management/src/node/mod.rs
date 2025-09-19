@@ -21,7 +21,7 @@ const CRITICAL_FAILURE_POLL_DELAY_MS: u64 = 250;
 use crate::{
     ReachabilityProgress, ServiceStartupStatus, ServiceStateActions, ServiceStatus, UpgradeOptions,
     control::ServiceControl,
-    error::Result,
+    error::{Error, Result},
     fs::{CriticalFailure, FileSystemActions},
     metric::MetricsAction,
 };
@@ -88,7 +88,16 @@ impl ServiceStateActions for NodeService {
         options: UpgradeOptions,
     ) -> Result<ServiceInstallCtx> {
         let service_data = self.service_data.read().await;
-        let label: ServiceLabel = service_data.service_name.parse()?;
+        let label: ServiceLabel =
+            service_data
+                .service_name
+                .parse()
+                .map_err(|err| Error::ServiceLabelParsingFailed {
+                    reason: format!(
+                        "Failed to parse service name '{}': {err}",
+                        service_data.service_name
+                    ),
+                })?;
         let mut args = vec![
             OsString::from("--root-dir"),
             OsString::from(service_data.data_dir_path.to_string_lossy().to_string()),

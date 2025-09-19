@@ -76,7 +76,11 @@ pub async fn status_report(
     .await?;
 
     if output_json {
-        let json = serde_json::to_string_pretty(&node_registry.to_status_summary().await)?;
+        let json = serde_json::to_string_pretty(&node_registry.to_status_summary().await).map_err(
+            |err| Error::JsonError {
+                reason: format!("Failed to serialize status summary to JSON: {err}"),
+            },
+        )?;
         println!("{json}");
     } else if detailed_view {
         for node in node_registry.nodes.read().await.iter() {

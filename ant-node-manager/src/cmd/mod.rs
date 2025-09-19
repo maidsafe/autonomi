@@ -45,7 +45,16 @@ pub async fn download_and_get_upgrade_bin_path(
             );
         }
         let bin_version = get_bin_version(&path)?;
-        return Ok((path, bin_version.parse()?));
+        return Ok((
+            path,
+            bin_version
+                .parse()
+                .map_err(|err: semver::Error| Error::VersionParsingFailed {
+                    version: bin_version.clone(),
+                    context: "custom binary version".to_string(),
+                    reason: err.to_string(),
+                })?,
+        ));
     }
 
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
@@ -60,7 +69,14 @@ pub async fn download_and_get_upgrade_bin_path(
             None,
         )
         .await?;
-        Ok((upgrade_bin_path, Version::parse(&version)?))
+        Ok((
+            upgrade_bin_path,
+            Version::parse(&version).map_err(|err| Error::VersionParsingFailed {
+                version: version.clone(),
+                context: "download release version string".to_string(),
+                reason: err.to_string(),
+            })?,
+        ))
     } else if let Some(url) = url {
         debug!("Downloading {release_type} from url: {url}");
         let (upgrade_bin_path, version) = download_and_extract_release(
@@ -72,13 +88,25 @@ pub async fn download_and_get_upgrade_bin_path(
             None,
         )
         .await?;
-        Ok((upgrade_bin_path, Version::parse(&version)?))
+        Ok((
+            upgrade_bin_path,
+            Version::parse(&version).map_err(|err| Error::VersionParsingFailed {
+                version: version.clone(),
+                context: "URL download release version".to_string(),
+                reason: err.to_string(),
+            })?,
+        ))
     } else {
         if verbosity != VerbosityLevel::Minimal {
             println!("Retrieving latest version of {release_type}...");
         }
         debug!("Retrieving latest version of {release_type}...");
-        let latest_version = release_repo.get_latest_version(&release_type).await?;
+        let latest_version = release_repo
+            .get_latest_version(&release_type)
+            .await
+            .map_err(|err| Error::AntReleasesError {
+                reason: format!("Failed to get latest version for {release_type}: {err}"),
+            })?;
         if verbosity != VerbosityLevel::Minimal {
             println!("Latest version is {latest_version}");
         }
@@ -207,11 +235,17 @@ fn build_binary(bin_type: &ReleaseType) -> Result<PathBuf> {
     let build_result = build_result
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .output()?;
+        .output()
+        .map_err(|err| Error::ProcessSpawnFailed {
+            binary_path: PathBuf::from("cargo"),
+            reason: err.to_string(),
+        })?;
 
     if !build_result.status.success() {
         error!("Failed to build binaries {bin_name}");
-        return Err(Error::FailedToBuildBinary { bin_name });
+        return Err(Error::FailedToBuildBinary {
+            bin_name: bin_name.to_string(),
+        });
     }
 
     Ok(target_dir)

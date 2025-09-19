@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{PortRangeError, Result};
+use crate::error::{Error, PortRangeError, Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
@@ -34,8 +34,16 @@ impl PortRange {
             if parts.len() != 2 {
                 return Err(PortRangeError::InvalidFormat.into());
             }
-            let start = parts[0].parse::<u16>().map_err(PortRangeError::from)?;
-            let end = parts[1].parse::<u16>().map_err(PortRangeError::from)?;
+            let start = parts[0]
+                .parse::<u16>()
+                .map_err(|err| PortRangeError::ParseError {
+                    reason: format!("Failed to parse start port '{}': {err}", parts[0]),
+                })?;
+            let end = parts[1]
+                .parse::<u16>()
+                .map_err(|err| PortRangeError::ParseError {
+                    reason: format!("Failed to parse end port '{}': {err}", parts[1]),
+                })?;
             if start >= end {
                 return Err(PortRangeError::InvalidRange.into());
             }
@@ -100,7 +108,13 @@ pub struct InstallNodeServiceCtxBuilder {
 
 impl InstallNodeServiceCtxBuilder {
     pub fn build(self) -> Result<ServiceInstallCtx> {
-        let label: ServiceLabel = self.name.parse()?;
+        let label: ServiceLabel =
+            self.name
+                .parse()
+                .map_err(|err: std::io::Error| Error::ServiceLabelParsingFailed {
+                    label: self.name.clone(),
+                    reason: err.to_string(),
+                })?;
         let mut args = vec![
             OsString::from("--root-dir"),
             OsString::from(self.data_dir_path.to_string_lossy().to_string()),

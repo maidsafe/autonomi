@@ -170,7 +170,13 @@ pub async fn add(
     let added_services_names =
         add_node(options, node_registry.clone(), &service_manager, verbosity).await?;
 
-    node_registry.save().await?;
+    node_registry
+        .save()
+        .await
+        .map_err(|err| Error::RegistryOperationFailed {
+            operation: "save node registry".to_string(),
+            reason: err.to_string(),
+        })?;
     debug!("Node registry saved");
 
     Ok(added_services_names)
@@ -271,9 +277,15 @@ pub async fn reset(
         info!("Prompting user for confirmation before reset");
         println!("WARNING: all antnode services, data, and logs will be removed.");
         println!("Do you wish to proceed? [y/n]");
-        std::io::stdout().flush()?;
+        std::io::stdout().flush().map_err(|err| Error::IoError {
+            reason: format!("Failed to flush stdout: {err}"),
+        })?;
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
+        std::io::stdin()
+            .read_line(&mut input)
+            .map_err(|err| Error::IoError {
+                reason: format!("Failed to read line from stdin: {err}"),
+            })?;
         if input.trim().to_lowercase() != "y" {
             println!("Reset aborted");
             info!("User aborted reset operation");
@@ -290,7 +302,10 @@ pub async fn reset(
     let node_registry_path = config::get_node_registry_path()?;
     if node_registry_path.exists() {
         info!("Removing node registry file: {node_registry_path:?}");
-        std::fs::remove_file(node_registry_path)?;
+        std::fs::remove_file(&node_registry_path).map_err(|err| Error::FileRemovalFailed {
+            path: node_registry_path.clone(),
+            reason: format!("Failed to remove node registry file: {err}"),
+        })?;
     } else {
         debug!("Node registry file does not exist, no need to remove it");
     }
@@ -460,7 +475,12 @@ pub async fn upgrade(
 
         for node in node_registry.nodes.read().await.iter() {
             let node = node.read().await;
-            let version = Version::parse(&node.version)?;
+            let version =
+                Version::parse(&node.version).map_err(|err| Error::VersionParsingFailed {
+                    version: node.version.clone(),
+                    context: "node version parsing".to_string(),
+                    reason: format!("Failed to parse version: {err}"),
+                })?;
             node_versions.push(version);
         }
 
@@ -514,7 +534,7 @@ pub async fn upgrade(
                 ant_service_management::UpgradeResult::UpgradedButNotStarted(_, _, _)
             )
     }) {
-        return Err(Error::ServiceOperationFailed {
+        return Err(Error::ServiceBatchOperationFailedWithSuggestion {
             operation: "upgrade".to_string(),
             suggestion: "For any services that were upgraded but did not start, you can attempt to start them again using the 'start' command.".to_string(),
         });
@@ -561,7 +581,10 @@ async fn get_services_for_ops(
             let mut found_service_with_peer_id = false;
             let given_peer_id = PeerId::from_str(peer_id_str).map_err(|e| {
                 error!("Invalid PeerId '{peer_id_str}': {e}");
-                Error::ServiceNotFound(peer_id_str.to_string())
+                Error::PeerIdParsingFailed {
+                    peer_id: peer_id_str.to_string(),
+                    reason: e.to_string(),
+                }
             })?;
             for node in node_registry.nodes.read().await.iter() {
                 let node_read = node.read().await;

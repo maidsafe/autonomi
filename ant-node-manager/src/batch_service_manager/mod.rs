@@ -97,8 +97,14 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 Ok(()) => {
                     info!("Stopped service {service_name}");
                     if let Err(err) = self.node_registry.save().await {
+                        let detailed_err = Error::RegistryOperationFailed {
+                            operation: format!(
+                                "save registry after stopping service {service_name}"
+                            ),
+                            reason: err.to_string(),
+                        };
                         error!(
-                            "Failed to save node registry after stopping service {service_name}: {err}"
+                            "Failed to save node registry after stopping service {service_name}: {detailed_err}"
                         );
                     }
 
@@ -115,7 +121,11 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         }
 
         if let Err(err) = self.node_registry.save().await {
-            error!("Failed to save node registry after stopping all services: {err}");
+            let detailed_err = Error::RegistryOperationFailed {
+                operation: "save registry after stopping all services".to_string(),
+                reason: err.to_string(),
+            };
+            error!("Failed to save node registry after stopping all services: {detailed_err}");
         }
 
         batch_result
@@ -330,8 +340,12 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 if data_dir_path.exists() {
                     debug!("Removing data directory {data_dir_path:?}");
                     if let Err(err) = std::fs::remove_dir_all(&data_dir_path) {
-                        error!("Failed to remove data directory {data_dir_path:?}: {err}");
-                        batch_result.insert_error(service_name.clone(), err.into());
+                        let detailed_err = Error::DirectoryRemovalFailed {
+                            path: data_dir_path.clone(),
+                            reason: err.to_string(),
+                        };
+                        error!("Failed to remove data directory {data_dir_path:?}: {detailed_err}");
+                        batch_result.insert_error(service_name.clone(), detailed_err);
                         continue;
                     }
                 }
@@ -340,8 +354,12 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 if log_dir_path.exists() {
                     debug!("Removing log directory {log_dir_path:?}");
                     if let Err(err) = std::fs::remove_dir_all(&log_dir_path) {
-                        error!("Failed to remove log directory {log_dir_path:?}: {err}");
-                        batch_result.insert_error(service_name.clone(), err.into());
+                        let detailed_err = Error::DirectoryRemovalFailed {
+                            path: log_dir_path.clone(),
+                            reason: err.to_string(),
+                        };
+                        error!("Failed to remove log directory {log_dir_path:?}: {detailed_err}");
+                        batch_result.insert_error(service_name.clone(), detailed_err);
                     }
                 }
             }
@@ -354,12 +372,22 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             }
 
             if let Err(err) = self.node_registry.save().await {
-                error!("Failed to save node registry after removing service {service_name}: {err}");
+                let detailed_err = Error::RegistryOperationFailed {
+                    operation: format!("save registry after removing service {service_name}"),
+                    reason: err.to_string(),
+                };
+                error!(
+                    "Failed to save node registry after removing service {service_name}: {detailed_err}"
+                );
             }
         }
 
         if let Err(err) = self.node_registry.save().await {
-            error!("Failed to save node registry after removing all services: {err}");
+            let detailed_err = Error::RegistryOperationFailed {
+                operation: "save registry after removing all services".to_string(),
+                reason: err.to_string(),
+            };
+            error!("Failed to save node registry after removing all services: {detailed_err}");
         }
 
         batch_result
@@ -418,7 +446,13 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                     // setting the status to Running here, the node could error out due to status failure though.
                     service.set_status(ServiceStatus::Running).await;
                     if let Err(err) = self.node_registry.save().await {
-                        error!("Failed to save node registry after starting services: {err}");
+                        let detailed_err = Error::RegistryOperationFailed {
+                            operation: "save registry after starting services".to_string(),
+                            reason: err.to_string(),
+                        };
+                        error!(
+                            "Failed to save node registry after starting services: {detailed_err}"
+                        );
                     }
                     self.service_control.wait(fixed_interval);
                 }
@@ -755,7 +789,13 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
     ) -> crate::error::Result<bool> {
         let service_name = service.name().await;
 
-        let current_version = Version::parse(&service.version().await)?;
+        let service_version = service.version().await;
+        let current_version =
+            Version::parse(&service_version).map_err(|err| Error::VersionParsingFailed {
+                version: service_version.clone(),
+                context: format!("service '{service_name}' version"),
+                reason: err.to_string(),
+            })?;
         if !options.force
             && (current_version == options.target_version
                 || options.target_version < current_version)
@@ -772,8 +812,15 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
             .inspect_err(|err| {
                 error!("Failed to stop service {service_name}: {err}");
             })?;
-        std::fs::copy(&options.target_bin_path, service.bin_path().await).inspect_err(|err| {
-            error!("Failed to copy the binary for service {service_name}: {err}");
+        let service_bin_path = service.bin_path().await;
+        std::fs::copy(&options.target_bin_path, &service_bin_path).map_err(|err| {
+            let detailed_err = Error::FileCopyFailed {
+                src: options.target_bin_path.clone(),
+                dst: service_bin_path.clone(),
+                reason: err.to_string(),
+            };
+            error!("Failed to copy the binary for service {service_name}: {detailed_err}");
+            detailed_err
         })?;
 
         service_control
