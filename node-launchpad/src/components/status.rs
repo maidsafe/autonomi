@@ -10,7 +10,7 @@ use crate::action::OptionsActions;
 use crate::components::Component;
 use crate::components::footer::{Footer, FooterState};
 use crate::components::header::{Header, SelectedMenuItem};
-use crate::components::node_table::{NodeDisplayStatus, NodeTableComponent, NodeTableConfig};
+use crate::components::node_table::{NodeSelectionInfo, NodeTableComponent, NodeTableConfig};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::config::get_launchpad_nodes_data_dir_path;
@@ -59,7 +59,7 @@ pub struct Status {
     node_count: u64,
     has_running_nodes: bool,
     has_nodes: bool,
-    selected_node_status: Option<NodeDisplayStatus>,
+    selected_node: Option<NodeSelectionInfo>,
 }
 
 pub struct StatusConfig {
@@ -109,7 +109,7 @@ impl Status {
             node_count: 0,
             has_running_nodes: false,
             has_nodes: false,
-            selected_node_status: None,
+            selected_node: None,
         };
 
         Ok(status)
@@ -196,14 +196,9 @@ impl Component for Status {
                     );
                     return Ok(None);
                 }
-                NodeTableActions::SelectionChanged {
-                    selected_node_status,
-                } => {
-                    self.selected_node_status = selected_node_status;
-                    debug!(
-                        "Updated selection: selected_node_status={:?}",
-                        self.selected_node_status
-                    );
+                NodeTableActions::SelectionChanged { selection } => {
+                    self.selected_node = selection;
+                    debug!("Updated selection: selected_node={:?}", self.selected_node);
                     return Ok(None);
                 }
                 _ => {
@@ -487,7 +482,7 @@ impl Component for Status {
         let mut footer_state = FooterState {
             has_nodes: self.has_nodes,
             has_running_nodes: self.has_running_nodes,
-            selected_node_status: self.selected_node_status,
+            selected_node: self.selected_node.clone(),
             rewards_address_set: self.rewards_address.is_some(),
         };
 
@@ -511,6 +506,7 @@ impl Component for Status {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::node_table::lifecycle::LifecycleState;
     use crate::focus::{EventResult, FocusManager};
     use crate::node_stats::IndividualNodeStats;
     use crate::test_utils::*;
@@ -681,6 +677,7 @@ mod tests {
                 connections: 5,
                 ..Default::default()
             }],
+            failed_to_connect: vec![],
         };
 
         let result = status.update(Action::StoreAggregatedNodeStats(new_stats.clone()));
@@ -688,18 +685,18 @@ mod tests {
         assert_eq!(status.node_stats.total_memory_usage_mb, 1024);
         assert_eq!(status.node_stats.total_rewards_wallet_balance, 100);
 
-        let node_item = status
+        let node_model = status
             .node_table_component
             .state()
-            .items
-            .items
+            .controller
+            .items()
             .iter()
-            .find(|item| item.service_name == node.service_name)
-            .expect("node item updated");
-        assert_eq!(node_item.rewards_wallet_balance, 55);
-        assert_eq!(node_item.memory, 777);
-        assert_eq!(node_item.records, 33);
-        assert_eq!(node_item.connections, 5);
+            .find(|model| model.id == node.service_name)
+            .expect("node view updated");
+        assert_eq!(node_model.metrics.rewards_wallet_balance, 55);
+        assert_eq!(node_model.metrics.memory_usage_mb, 777);
+        assert_eq!(node_model.metrics.records, 33);
+        assert_eq!(node_model.metrics.connections, 5);
     }
 
     #[tokio::test]
@@ -782,13 +779,23 @@ mod tests {
 
         let result = status.update(Action::NodeTableActions(
             NodeTableActions::SelectionChanged {
-                selected_node_status: Some(NodeDisplayStatus::Running),
+                selection: Some(NodeSelectionInfo {
+                    lifecycle: LifecycleState::Running,
+                    locked: false,
+                    can_start: false,
+                    can_stop: true,
+                }),
             },
         ));
         assert!(result.is_ok());
         assert_eq!(
-            status.selected_node_status,
-            Some(NodeDisplayStatus::Running)
+            status.selected_node,
+            Some(NodeSelectionInfo {
+                lifecycle: LifecycleState::Running,
+                locked: false,
+                can_start: false,
+                can_stop: true,
+            })
         );
     }
 
