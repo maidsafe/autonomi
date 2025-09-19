@@ -64,7 +64,14 @@ impl From<f64> for ReachabilityProgress {
         if value == 0.0 {
             ReachabilityProgress::NotRun
         } else if value > 0.0 && value < 100.0 {
-            ReachabilityProgress::InProgress(value as u8)
+            // handle edge cases where value is closer to 0 or 100
+            if value < 1.0 {
+                ReachabilityProgress::InProgress(1)
+            } else if value > 99.0 && value < 99.99 {
+                ReachabilityProgress::InProgress(99)
+            } else {
+                ReachabilityProgress::InProgress(value as u8)
+            }
         } else {
             ReachabilityProgress::Complete
         }
