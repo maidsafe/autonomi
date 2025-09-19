@@ -67,6 +67,12 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<Option<(PeerInfo, PaymentQuote)>>,
     },
+    /// cf [`crate::driver::task_handler::TaskHandler::update_get_version`]
+    GetVersion {
+        peer: PeerInfo,
+        #[debug(skip)]
+        resp: OneShotTaskResult<String>,
+    },
     /// Get information about the amount of connections made
     ConnectionsMade {
         #[debug(skip)]
