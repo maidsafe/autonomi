@@ -3,25 +3,24 @@
 The node table is the central status view for Launchpad. It is implemented as a collection of small modules that each focus on a single responsibility. At a high level the flow is:
 
 ```
-Registry Snapshot ─┐
+Registry feed ─────┐
                    ├─> NodeStateController ─┬─> NodeViewModel list ─┬─> Widgets (table + spinners)
-User Intent ───────┘                         │                      │
+User intent ───────┘                         │                      │
                                              │                      └─> Status / Screen fixtures
-Transition tracker ──────────────────────────┘
+Transitions ─────────────────────────────────┘
 ```
 
 ## Module Overview
 
 - `lifecycle.rs`
   - Defines the immutable data shared by the rest of the component:
-    - `RegistrySnapshot`: view of the node registry at a point in time.
-    - `DesiredTopology`: the user’s intent (desired running count and node-specific targets).
-    - `TransitionState`: operations that have been issued but not yet reflected in the registry.
+    - `RegistryNode`: lightweight representation of a node record coming from the registry.
+    - `DesiredNodeState`, `CommandKind`, `TransitionEntry`: intent + transition helpers.
     - `LifecycleState` and `NodeViewModel`: derived state used to render the UI.
   - Provides helper functions (`derive_lifecycle_state`, `build_view_models`) and the `NodeMetrics` structure that bundles telemetry values.
 
 - `state.rs`
-  - `NodeStateController`: owns `RegistrySnapshot`, `DesiredTopology`, `TransitionState`, reachability information, metrics, and the `StatefulTable<NodeViewModel>` used by the UI. It refreshes the view model whenever registry data, user intent, or transitions change.
+  - `NodeStateController`: owns per-node state (`NodeState` holds registry data, desired state, transitions, metrics, reachability, bandwidth totals), the desired running count, and the `StatefulTable<NodeViewModel>` used by the UI. It refreshes the view model whenever registry data, user intent, or transitions change.
   - `NodeTableState`: Launchpad’s integration layer. It invokes the controller, orchestrates reconciliation, maintains configuration values, and bridges to actions (`Action::NodeTableActions`). Selection/navigation logic now delegates to the controller’s table state.
 
 - `operations.rs`
@@ -38,9 +37,9 @@ Transition tracker ────────────────────�
 
 ## Data Flow
 
-1. **Registry updates**: the watcher sends `NodeTableActions::RegistryUpdated`. `NodeTableState::sync_node_service_data` stores the latest `NodeServiceData` list, updates the controller’s snapshot, reconciles transitions, refreshes the view model, and emits state/selection updates.
+1. **Registry updates**: the watcher sends `NodeTableActions::RegistryUpdated`. `NodeTableState::sync_node_service_data` stores the latest `NodeServiceData` list, merges them into the controller’s `NodeState` map, reconciles transitions, refreshes the view model, and emits state/selection updates.
 
-2. **User intent**: commands such as `StartNodes` or `StopNodes` collect eligible `NodeViewModel`s, set targets/transition markers on the controller, and dispatch the corresponding operation via `NodeOperations`. When the registry later reflects the change, reconciliation clears the transition.
+2. **User intent**: commands such as `StartNodes` or `StopNodes` collect eligible `NodeViewModel`s, set per-node targets/transition markers on the controller, and dispatch the corresponding operation via `NodeOperations`. When the registry later reflects the change, reconciliation clears the transition and unlocks the rows.
 
 3. **Metrics/reachability**: aggregated stats and reachability reports feed into `NodeStateController::update_metrics` / `update_reachability`, which refresh the view model so the UI reflects live telemetry.
 
@@ -52,8 +51,8 @@ Selection is stored in the controller’s `StatefulTable<NodeViewModel>`. Naviga
 
 The previous implementation intertwined registry snapshots, user intent, and UI bookkeeping inside `NodeTableState`, making intent fragile (`nodes_to_start` was clobbered during sync) and spinner logic error-prone. The new architecture separates concerns:
 
-- **Registry is immutable input**.
-- **Intent is explicit** and only mutated by user actions.
+- **Registry data is merged** into long-lived `NodeState` entries.
+- **Intent is explicit per node** and only mutated by user actions.
 - **Transitions** model in-flight commands.
 - **Lifecycle** collapses the three into a deterministic view model consumed by the UI.
 
@@ -69,6 +68,6 @@ This separation allowed us to delete large amounts of ad-hoc locking code, remov
 
 - To add a new column: extend `NodeMetrics` (or add to `NodeViewModel`), update `build_view_models`, and adjust `widget.rs` formatting helpers.
 - To support a new command: add a `CommandKind` variant, update transition reconciliation, and wire a new handler in `NodeTableComponent` that sets desired state and invokes `NodeOperations`.
-- To expose new intent (e.g. pinning a node): add methods on `NodeStateController` to mutate `DesiredTopology`, then surface the intent through actions.
+- To expose new intent (e.g. pinning a node): add methods on `NodeStateController` to adjust `NodeState::desired`, then surface the intent through actions.
 
 With the lifecycle controller in place, UI changes no longer need to manipulate registry structs directly—only the controller’s APIs.

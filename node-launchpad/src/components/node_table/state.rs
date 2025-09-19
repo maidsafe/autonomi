@@ -8,8 +8,8 @@
 
 use super::{
     lifecycle::{
-        CommandKind, DesiredNodeState, DesiredTopology, LifecycleState, NodeId, NodeMetrics,
-        NodeViewModel, RegistrySnapshot, TransitionState, build_view_models,
+        CommandKind, DesiredNodeState, LifecycleState, NodeId, NodeMetrics, NodeViewModel,
+        RegistryNode, TransitionEntry, build_view_models,
     },
     operations::NodeOperations,
     table_state::StatefulTable,
@@ -46,7 +46,31 @@ pub struct NodeTableState {
     // UI state
     pub spinner_states: Vec<ThrobberState>,
     pub last_reported_running_count: u64,
-    pub bandwidth_totals: BTreeMap<NodeId, (u64, u64)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NodeState {
+    pub registry: Option<RegistryNode>,
+    pub desired: DesiredNodeState,
+    pub transition: Option<TransitionEntry>,
+    pub is_provisioning: bool,
+    pub metrics: NodeMetrics,
+    pub reachability: ReachabilityStatusValues,
+    pub bandwidth_totals: (u64, u64),
+}
+
+impl Default for NodeState {
+    fn default() -> Self {
+        Self {
+            registry: None,
+            desired: DesiredNodeState::FollowCluster,
+            transition: None,
+            is_provisioning: false,
+            metrics: NodeMetrics::default(),
+            reachability: ReachabilityStatusValues::default(),
+            bandwidth_totals: (0, 0),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -58,13 +82,11 @@ pub enum NavigationDirection {
 }
 
 /// Controller responsible for reconciling registry snapshots, user intent, and transitions.
+#[derive(Debug)]
 pub struct NodeStateController {
-    pub registry_snapshot: RegistrySnapshot,
-    pub desired: DesiredTopology,
-    pub transitions: TransitionState,
+    pub nodes: BTreeMap<NodeId, NodeState>,
+    pub desired_running_count: u64,
     pub locked_nodes: BTreeSet<NodeId>,
-    pub reachability_status: BTreeMap<NodeId, ReachabilityStatusValues>,
-    pub metrics: BTreeMap<NodeId, NodeMetrics>,
     pub view: StatefulTable<NodeViewModel>,
 }
 
@@ -72,36 +94,58 @@ impl Default for NodeStateController {
     fn default() -> Self {
         Self {
             view: StatefulTable::with_items(vec![]),
-            registry_snapshot: RegistrySnapshot::default(),
-            desired: DesiredTopology::default(),
-            transitions: TransitionState::default(),
+            nodes: BTreeMap::new(),
+            desired_running_count: 0,
             locked_nodes: BTreeSet::new(),
-            reachability_status: BTreeMap::new(),
-            metrics: BTreeMap::new(),
         }
     }
 }
 
 impl NodeStateController {
-    pub fn with_registry(registry: RegistrySnapshot) -> Self {
-        let mut controller = Self {
-            registry_snapshot: registry,
-            ..Self::default()
-        };
+    pub fn with_services(services: &[NodeServiceData]) -> Self {
+        let mut controller = Self::default();
+        controller.apply_registry_services(services);
         controller.refresh_view();
         controller
     }
 
+    fn apply_registry_services(&mut self, services: &[NodeServiceData]) {
+        let mut seen = BTreeSet::new();
+        for service in services {
+            let registry_node = RegistryNode {
+                service_name: service.service_name.clone(),
+                metrics_port: service.metrics_port,
+                status: service.status.clone(),
+                reachability_progress: service.reachability_progress.clone(),
+                last_failure: service.last_critical_failure.clone(),
+                version: service.version.clone(),
+            };
+
+            let entry = self.nodes.entry(service.service_name.clone()).or_default();
+            entry.registry = Some(registry_node);
+            entry.is_provisioning = false;
+            seen.insert(service.service_name.clone());
+        }
+
+        for (id, node_state) in self.nodes.iter_mut() {
+            if !seen.contains(id) {
+                node_state.registry = None;
+            }
+        }
+
+        self.nodes.retain(|id, state| {
+            state.registry.is_some()
+                || state.is_provisioning
+                || state.transition.is_some()
+                || !matches!(state.desired, DesiredNodeState::FollowCluster)
+                || self.locked_nodes.contains(id)
+        });
+        debug!("Applied registry services, current controller: {self:?}");
+    }
+
     pub fn refresh_view(&mut self) {
         let selected = self.view.state.selected();
-        let models = build_view_models(
-            &self.registry_snapshot,
-            &self.desired,
-            &self.transitions,
-            &self.reachability_status,
-            &self.metrics,
-            &self.locked_nodes,
-        );
+        let models = build_view_models(&self.nodes, &self.locked_nodes);
         let mut table = StatefulTable::with_items(models);
         if let Some(selected_index) = selected
             && !table.items.is_empty()
@@ -114,54 +158,53 @@ impl NodeStateController {
     }
 
     pub fn update_registry(&mut self, services: &[NodeServiceData]) {
-        self.registry_snapshot = RegistrySnapshot::from_services(services);
+        self.apply_registry_services(services);
         self.reconcile_transitions();
         self.refresh_view();
     }
 
     pub fn update_desired_running_count(&mut self, count: u64) {
-        self.desired.set_desired_running_count(count);
-        self.refresh_view();
-    }
-
-    pub fn update_reachability(&mut self, id: NodeId, status: ReachabilityStatusValues) {
-        self.reachability_status.insert(id, status);
-        self.refresh_view();
-    }
-
-    pub fn update_metrics(&mut self, id: NodeId, metrics: NodeMetrics) {
-        self.metrics.insert(id, metrics);
+        self.desired_running_count = count;
         self.refresh_view();
     }
 
     pub fn mark_transition(&mut self, id: &str, command: CommandKind) {
-        self.transitions.mark(id.to_string(), command);
+        let entry = self.nodes.entry(id.to_string()).or_default();
+        entry.transition = Some(TransitionEntry {
+            command,
+            started_at: Instant::now(),
+        });
+        if matches!(command, CommandKind::Add) && entry.registry.is_none() {
+            entry.is_provisioning = true;
+        }
         self.locked_nodes.insert(id.to_string());
         self.refresh_view();
     }
 
     pub fn clear_transition(&mut self, id: &str) {
-        self.transitions.unmark(id);
+        if let Some(node) = self.nodes.get_mut(id) {
+            node.transition = None;
+        }
         self.locked_nodes.remove(id);
         self.refresh_view();
     }
 
     pub fn clear_transitions_by_command(&mut self, command: CommandKind) {
-        let to_clear: Vec<_> = self
-            .transitions
-            .entries
-            .iter()
-            .filter_map(|(id, entry)| {
-                if entry.command == command {
-                    Some(id.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut to_clear = Vec::new();
+        for (id, node) in self.nodes.iter() {
+            if node
+                .transition
+                .as_ref()
+                .is_some_and(|entry| entry.command == command)
+            {
+                to_clear.push(id.clone());
+            }
+        }
         let had_entries = !to_clear.is_empty();
         for id in to_clear {
-            self.transitions.unmark(&id);
+            if let Some(node) = self.nodes.get_mut(&id) {
+                node.transition = None;
+            }
             self.locked_nodes.remove(&id);
         }
         if had_entries {
@@ -170,7 +213,19 @@ impl NodeStateController {
     }
 
     pub fn set_node_target(&mut self, id: &str, state: DesiredNodeState) {
-        self.desired.set_node_target(id.to_string(), state);
+        let entry = self.nodes.entry(id.to_string()).or_default();
+        entry.desired = state;
+        if !matches!(state, DesiredNodeState::Remove) {
+            entry.is_provisioning = false;
+        }
+        if matches!(state, DesiredNodeState::FollowCluster)
+            && entry.transition.is_none()
+            && entry.registry.is_none()
+            && !entry.is_provisioning
+            && !self.locked_nodes.contains(id)
+        {
+            self.nodes.remove(id);
+        }
         self.refresh_view();
     }
 
@@ -186,64 +241,75 @@ impl NodeStateController {
         self.view.state.selected()
     }
 
+    pub fn running_nodes(&self) -> Vec<RegistryNode> {
+        self.nodes
+            .values()
+            .filter_map(|state| {
+                state
+                    .registry
+                    .as_ref()
+                    .filter(|node| node.status == ServiceStatus::Running)
+                    .cloned()
+            })
+            .collect()
+    }
+
+    pub fn running_count(&self) -> usize {
+        self.nodes
+            .values()
+            .filter(|state| {
+                state
+                    .registry
+                    .as_ref()
+                    .is_some_and(|node| node.status == ServiceStatus::Running)
+            })
+            .count()
+    }
+
     fn reconcile_transitions(&mut self) {
         let mut completed = Vec::new();
-        for (id, entry) in self.transitions.entries.iter() {
+        for (id, node) in self.nodes.iter() {
             if self.locked_nodes.contains(id) {
-                // Maintain lock while node operations triggered via Launchpad are in flight.
                 continue;
             }
-            let registry_state = self.registry_snapshot.nodes.get(id);
-            match entry.command {
-                CommandKind::Start => {
-                    if matches!(
-                        registry_state.map(|n| &n.status),
-                        Some(ServiceStatus::Running)
-                    ) {
-                        completed.push(id.clone());
-                    }
-                }
-                CommandKind::Maintain => {
-                    let status = registry_state.map(|n| n.status.clone());
-                    if matches!(
-                        status,
-                        None | Some(
-                            ServiceStatus::Running
-                                | ServiceStatus::Stopped
-                                | ServiceStatus::Removed
-                        )
-                    ) {
-                        completed.push(id.clone());
-                    }
-                }
-                CommandKind::Stop => {
-                    if !matches!(
-                        registry_state.map(|n| &n.status),
-                        Some(ServiceStatus::Running)
-                    ) {
-                        completed.push(id.clone());
-                    }
-                }
-                CommandKind::Add => {
-                    if registry_state.is_some() {
-                        completed.push(id.clone());
-                    }
-                }
+            let Some(entry) = node.transition.as_ref() else {
+                continue;
+            };
+            let registry_state = node.registry.as_ref();
+            let done = match entry.command {
+                CommandKind::Start => matches!(
+                    registry_state.map(|n| &n.status),
+                    Some(ServiceStatus::Running)
+                ),
+                CommandKind::Maintain => matches!(
+                    registry_state.map(|n| n.status.clone()),
+                    None | Some(
+                        ServiceStatus::Running | ServiceStatus::Stopped | ServiceStatus::Removed
+                    )
+                ),
+                CommandKind::Stop => !matches!(
+                    registry_state.map(|n| &n.status),
+                    Some(ServiceStatus::Running)
+                ),
+                CommandKind::Add => registry_state.is_some(),
                 CommandKind::Remove => {
-                    if registry_state.is_none()
+                    registry_state.is_none()
                         || matches!(
                             registry_state.map(|n| &n.status),
                             Some(ServiceStatus::Removed)
                         )
-                    {
-                        completed.push(id.clone());
-                    }
                 }
+            };
+
+            if done {
+                completed.push(id.clone());
             }
         }
 
         for id in completed {
-            self.transitions.unmark(&id);
+            if let Some(node) = self.nodes.get_mut(&id) {
+                node.transition = None;
+            }
             self.locked_nodes.remove(&id);
         }
     }
@@ -260,8 +326,7 @@ impl NodeTableState {
         let node_services = node_registry.get_node_service_data().await;
         let node_management = NodeManagement::new(node_registry.clone())?;
 
-        let registry_snapshot = RegistrySnapshot::from_services(&node_services);
-        let mut controller = NodeStateController::with_registry(registry_snapshot);
+        let mut controller = NodeStateController::with_services(&node_services);
         controller.update_desired_running_count(config.nodes_to_start);
 
         let operations = NodeOperations::new(node_management);
@@ -287,7 +352,6 @@ impl NodeTableState {
             node_stats_last_update: Instant::now(),
             spinner_states: vec![],
             last_reported_running_count: 0,
-            bandwidth_totals: BTreeMap::new(),
         };
 
         // Populate the UI table items from the loaded node services
@@ -305,7 +369,7 @@ impl NodeTableState {
 
             if let Some(action_sender) = &self.operations.action_sender {
                 crate::node_stats::AggregatedNodeStats::fetch_aggregated_node_stats(
-                    self.controller.registry_snapshot.running_nodes(),
+                    self.controller.running_nodes(),
                     action_sender.clone(),
                 );
             }
@@ -328,7 +392,7 @@ impl NodeTableState {
             self.navigate(NavigationDirection::First)
         }
 
-        let running_nodes = self.controller.registry_snapshot.running_count() as u64;
+        let running_nodes = self.controller.running_count() as u64;
         if running_nodes != self.last_reported_running_count {
             if let Some(action_sender) = &self.operations.action_sender
                 && let Err(err) = action_sender.send(Action::StoreRunningNodeCount(running_nodes))
@@ -349,24 +413,20 @@ impl NodeTableState {
             let current_inbound_total = stats.bandwidth_inbound as u64;
             let current_outbound_total = stats.bandwidth_outbound as u64;
 
-            let (bandwidth_inbound_bps, bandwidth_outbound_bps) =
-                if let Some((prev_in, prev_out)) = self.bandwidth_totals.get(&stats.service_name) {
-                    let inbound_delta = current_inbound_total.saturating_sub(*prev_in);
-                    let outbound_delta = current_outbound_total.saturating_sub(*prev_out);
-                    (
-                        (inbound_delta as f64 * 8.0) / interval_secs,
-                        (outbound_delta as f64 * 8.0) / interval_secs,
-                    )
-                } else {
-                    (0.0, 0.0)
-                };
+            let entry = self
+                .controller
+                .nodes
+                .entry(stats.service_name.clone())
+                .or_default();
 
-            self.bandwidth_totals.insert(
-                stats.service_name.clone(),
-                (current_inbound_total, current_outbound_total),
-            );
+            let (prev_in, prev_out) = entry.bandwidth_totals;
+            let inbound_delta = current_inbound_total.saturating_sub(prev_in);
+            let outbound_delta = current_outbound_total.saturating_sub(prev_out);
+            let bandwidth_inbound_bps = (inbound_delta as f64 * 8.0) / interval_secs;
+            let bandwidth_outbound_bps = (outbound_delta as f64 * 8.0) / interval_secs;
 
-            let metrics = NodeMetrics {
+            entry.bandwidth_totals = (current_inbound_total, current_outbound_total);
+            entry.metrics = NodeMetrics {
                 rewards_wallet_balance: stats.rewards_wallet_balance as u64,
                 memory_usage_mb: stats.memory_usage_mb as u64,
                 bandwidth_inbound_bps,
@@ -376,25 +436,23 @@ impl NodeTableState {
                 connections: stats.connections as u64,
                 endpoint_online: true,
             };
-            self.controller
-                .update_metrics(stats.service_name.clone(), metrics);
-            self.controller.update_reachability(
-                stats.service_name.clone(),
-                stats.reachability_status.clone(),
-            );
+            entry.reachability = stats.reachability_status.clone();
         }
 
         for failed_service in node_stats.failed_to_connect {
-            let metrics = NodeMetrics {
+            let entry = self
+                .controller
+                .nodes
+                .entry(failed_service.clone())
+                .or_default();
+            entry.metrics = NodeMetrics {
                 endpoint_online: false,
                 ..Default::default()
             };
-            self.controller
-                .update_metrics(failed_service.clone(), metrics);
-            self.controller
-                .update_reachability(failed_service.clone(), ReachabilityStatusValues::default());
-            self.bandwidth_totals.remove(&failed_service);
+            entry.reachability = ReachabilityStatusValues::default();
+            entry.bandwidth_totals = (0, 0);
         }
+        self.controller.refresh_view();
         debug!("Synced node metrics with aggregated stats");
     }
 
@@ -403,7 +461,7 @@ impl NodeTableState {
     }
 
     pub fn has_running_nodes(&self) -> bool {
-        self.controller.registry_snapshot.running_count() > 0
+        self.controller.running_count() > 0
     }
 
     pub fn selected_node(&self) -> Option<NodeSelectionInfo> {
