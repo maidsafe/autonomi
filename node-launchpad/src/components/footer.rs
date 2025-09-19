@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    components::node_table::NodeDisplayStatus,
+    components::node_table::NodeSelectionInfo,
     style::{COOL_GREY, EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE},
 };
 use ratatui::{prelude::*, widgets::*};
@@ -16,7 +16,7 @@ use ratatui::{prelude::*, widgets::*};
 pub struct FooterState {
     pub has_nodes: bool,
     pub has_running_nodes: bool,
-    pub selected_node_status: Option<NodeDisplayStatus>,
+    pub selected_node: Option<NodeSelectionInfo>,
     pub rewards_address_set: bool,
 }
 
@@ -53,7 +53,7 @@ impl Footer {
 
     /// Remove command - enabled when a node is selected
     fn remove_styles(state: &FooterState) -> (Style, Style) {
-        let enabled = state.selected_node_status.is_some();
+        let enabled = state.selected_node.is_some();
         (
             Self::command_style(enabled),
             if enabled {
@@ -66,26 +66,22 @@ impl Footer {
 
     /// Toggle command - enabled when a node is selected, style depends on selected node status
     fn toggle_styles(state: &FooterState) -> (Style, Style) {
-        match &state.selected_node_status {
-            Some(NodeDisplayStatus::Running | NodeDisplayStatus::ReachabilityCheck) => (
-                Self::command_style(true),
-                Style::default().fg(GHOST_WHITE), // White for stopping
-            ),
-            Some(
-                NodeDisplayStatus::Stopped
-                | NodeDisplayStatus::Added
-                | NodeDisplayStatus::Unreachable,
-            ) => (
-                Self::command_style(true),
-                Style::default().fg(EUCALYPTUS), // Green for starting
-            ),
-            _ => (Self::command_style(false), Self::disabled_text_style()),
+        if let Some(selection) = &state.selected_node {
+            if selection.can_stop {
+                return (Self::command_style(true), Style::default().fg(GHOST_WHITE));
+            }
+
+            if selection.can_start {
+                return (Self::command_style(true), Style::default().fg(EUCALYPTUS));
+            }
         }
+
+        (Self::command_style(false), Self::disabled_text_style())
     }
 
     /// Open Logs command - enabled when a node is selected
     fn logs_styles(state: &FooterState) -> (Style, Style) {
-        let enabled = state.selected_node_status.is_some();
+        let enabled = state.selected_node.is_some();
         (
             Self::command_style(enabled),
             if enabled {
@@ -217,12 +213,13 @@ impl StatefulWidget for Footer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::components::node_table::lifecycle::LifecycleState;
 
     fn base_state() -> FooterState {
         FooterState {
             has_nodes: false,
             has_running_nodes: false,
-            selected_node_status: None,
+            selected_node: None,
             rewards_address_set: false,
         }
     }
@@ -247,7 +244,12 @@ mod tests {
         assert_eq!(remove_text.fg, Some(COOL_GREY));
 
         let mut selected = state;
-        selected.selected_node_status = Some(NodeDisplayStatus::Running);
+        selected.selected_node = Some(NodeSelectionInfo {
+            lifecycle: LifecycleState::Running,
+            locked: false,
+            can_start: false,
+            can_stop: true,
+        });
         let (_, remove_enabled) = Footer::remove_styles(&selected);
         assert_eq!(remove_enabled.fg, Some(LIGHT_PERIWINKLE));
 
