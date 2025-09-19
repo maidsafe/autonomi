@@ -52,6 +52,21 @@ impl NodeService {
         }
     }
 
+    pub async fn should_mark_removed(&self) -> bool {
+        let service_data = self.service_data.read().await;
+
+        if service_data.status == ServiceStatus::Removed
+            || service_data.status == ServiceStatus::Added
+        {
+            return false;
+        }
+
+        let ant_node_missing = !service_data.antnode_path.exists();
+        let data_dir_missing = !service_data.data_dir_path.exists();
+
+        ant_node_missing || data_dir_missing
+    }
+
     async fn read_critical_failure_with_retry(&self) -> Option<CriticalFailure> {
         let root_dir = { self.service_data.read().await.data_dir_path.clone() };
 
@@ -206,7 +221,14 @@ impl ServiceStateActions for NodeService {
     }
 
     async fn on_remove(&self) {
-        self.service_data.write().await.status = ServiceStatus::Removed;
+        let mut service_data = self.service_data.write().await;
+        service_data.status = ServiceStatus::Removed;
+        service_data.pid = None;
+        service_data.connected_peers = 0;
+        service_data.peer_id = None;
+        service_data.listen_addr = None;
+        service_data.reachability_progress = ReachabilityProgress::NotRun;
+        service_data.last_critical_failure = None;
     }
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {

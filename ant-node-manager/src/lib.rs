@@ -260,7 +260,13 @@ pub async fn refresh_node_registry(
                         }
                         Err(_) => {
                             debug!("Failed to retrieve PID for local node {service_name}",);
-                            service.on_stop().await?;
+                            if service.should_mark_removed().await {
+                                debug!("Local node {service_name} resources missing, marking as removed");
+                                service.on_remove().await;
+                            } else {
+                                debug!("{service_name} is not running, marking as stopped");
+                                service.on_stop().await?;
+                            }
                         }
                     }
                 } else {
@@ -269,20 +275,27 @@ pub async fn refresh_node_registry(
                             debug!("{service_name} is running with PID {pid}",);
                             service.on_start(Some(pid), full_refresh).await?;
                         }
-                        Err(_) => match service.status().await {
-                            ServiceStatus::Added => {
-                                debug!(
-                                    "{service_name} has not been started since it was installed"
-                                );
+                        Err(_) => {
+                            if service.should_mark_removed().await {
+                                debug!("{service_name} resources missing, marking as removed");
+                                service.on_remove().await;
+                            } else {
+                                match service.status().await {
+                                    ServiceStatus::Added => {
+                                        debug!(
+                                            "{service_name} has not been started since it was installed"
+                                        );
+                                    }
+                                    ServiceStatus::Removed => {
+                                        debug!("{service_name} has been removed");
+                                    }
+                                    _ => {
+                                        debug!("Failed to retrieve PID for {service_name}");
+                                        service.on_stop().await?;
+                                    }
+                                }
                             }
-                            ServiceStatus::Removed => {
-                                debug!("{service_name} has been removed");
-                            }
-                            _ => {
-                                debug!("Failed to retrieve PID for {service_name}");
-                                service.on_stop().await?;
-                            }
-                        },
+                        }
                     }
                 }
 
