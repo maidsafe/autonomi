@@ -13,7 +13,7 @@ use self::config::{AddNodeServiceOptions, InstallNodeServiceCtxBuilder};
 use crate::{
     VerbosityLevel,
     config::{create_owned_dir, get_user_antnode_data_dir},
-    error::{AddNodeError, Result},
+    error::{AddNodeError, Error, Result},
     helpers::{check_port_availability, get_start_port_if_applicable, increment_port_option},
 };
 use ant_service_management::{
@@ -149,15 +149,28 @@ pub async fn add_node(
             create_owned_dir(service_log_dir_path.clone(), user)?;
         } else {
             debug!("Creating data_dir and log_dirs without user");
-            std::fs::create_dir_all(service_data_dir_path.clone())?;
-            std::fs::create_dir_all(service_log_dir_path.clone())?;
+            std::fs::create_dir_all(&service_data_dir_path).map_err(|err| {
+                Error::DirectoryCreationFailed {
+                    path: service_data_dir_path.clone(),
+                    reason: err.to_string(),
+                }
+            })?;
+            std::fs::create_dir_all(&service_log_dir_path).map_err(|err| {
+                Error::DirectoryCreationFailed {
+                    path: service_log_dir_path.clone(),
+                    reason: err.to_string(),
+                }
+            })?;
         }
 
         debug!("Copying antnode binary to {service_antnode_path:?}");
-        std::fs::copy(
-            options.antnode_src_path.clone(),
-            service_antnode_path.clone(),
-        )?;
+        std::fs::copy(&options.antnode_src_path, &service_antnode_path).map_err(|err| {
+            Error::FileCopyFailed {
+                src: options.antnode_src_path.clone(),
+                dst: service_antnode_path.clone(),
+                reason: err.to_string(),
+            }
+        })?;
 
         let install_ctx = InstallNodeServiceCtxBuilder {
             alpha: options.alpha,
@@ -234,7 +247,13 @@ pub async fn add_node(
                     .await;
                 // We save the node registry for each service because it's possible any number of
                 // services could fail to be added.
-                node_registry.save().await?;
+                node_registry
+                    .save()
+                    .await
+                    .map_err(|err| Error::RegistryOperationFailed {
+                        operation: "save node registry after adding service".to_string(),
+                        reason: err.to_string(),
+                    })?;
             }
             Err(e) => {
                 error!("Failed to add service {service_name}: {e}");
@@ -250,7 +269,12 @@ pub async fn add_node(
 
     if options.delete_antnode_src {
         debug!("Deleting antnode binary file");
-        std::fs::remove_file(options.antnode_src_path)?;
+        std::fs::remove_file(&options.antnode_src_path).map_err(|err| {
+            Error::FileRemovalFailed {
+                path: options.antnode_src_path.clone(),
+                reason: err.to_string(),
+            }
+        })?;
     }
 
     if !added_service_data.is_empty() {

@@ -21,10 +21,21 @@ pub fn get_node_manager_path() -> Result<PathBuf> {
         debug!("Running as root");
         let path = PathBuf::from("/var/antctl/");
         debug!("Creating antctl directory: {path:?}");
-        std::fs::create_dir_all(&path)?;
-        let mut perm = std::fs::metadata(&path)?.permissions();
+        std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: err.to_string(),
+        })?;
+        let mut perm = std::fs::metadata(&path)
+            .map_err(|err| Error::FileMetadataAccessFailed {
+                path: path.clone(),
+                reason: err.to_string(),
+            })?
+            .permissions();
         perm.set_mode(0o755); // set permissions to rwxr-xr-x
-        std::fs::set_permissions(&path, perm)?;
+        std::fs::set_permissions(&path, perm).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: format!("Failed to set permissions: {err}"),
+        })?;
         path
     } else {
         debug!("Running as non-root");
@@ -34,10 +45,21 @@ pub fn get_node_manager_path() -> Result<PathBuf> {
     };
 
     if is_running_as_root() && !path.exists() {
-        std::fs::create_dir_all(&path)?;
-        let mut perm = std::fs::metadata(&path)?.permissions();
+        std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: err.to_string(),
+        })?;
+        let mut perm = std::fs::metadata(&path)
+            .map_err(|err| Error::FileMetadataAccessFailed {
+                path: path.clone(),
+                reason: err.to_string(),
+            })?
+            .permissions();
         perm.set_mode(0o755); // set permissions to rwxr-xr-x
-        std::fs::set_permissions(&path, perm)?;
+        std::fs::set_permissions(&path, perm).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.clone(),
+            reason: format!("Failed to set permissions: {err}"),
+        })?;
     }
 
     Ok(path)
@@ -50,7 +72,10 @@ pub fn get_node_manager_path() -> Result<PathBuf> {
     debug!("Running as root, creating node_manager_path at: {path:?}");
 
     if !path.exists() {
-        std::fs::create_dir_all(path)?;
+        std::fs::create_dir_all(path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.to_path_buf(),
+            reason: err.to_string(),
+        })?;
     }
     Ok(path.to_path_buf())
 }
@@ -68,16 +93,30 @@ pub fn get_node_registry_path() -> Result<PathBuf> {
             .write(true)
             .create(true)
             .truncate(true) // Do not append to the file if it already exists.
-            .open(node_registry_path.clone())?;
+            .open(node_registry_path.clone())
+            .map_err(|err| Error::RegistryOperationFailed {
+                operation: "create registry file".to_string(),
+                reason: err.to_string(),
+            })?;
         // Set the permissions of /var/antctl/node_registry.json to rwxrwxrwx. The
         // `status` command updates the registry with the latest information it has on the
         // services at the time it runs. It's normally the case that service management status
         // operations do not require elevated privileges. If we want that to be the case, we
         // need to give all users the ability to write to the registry file. Everything else in
         // the /var/antctl directory and its subdirectories will still require elevated privileges.
-        let mut perm = std::fs::metadata(node_registry_path.clone())?.permissions();
+        let mut perm = std::fs::metadata(node_registry_path.clone())
+            .map_err(|err| Error::FileMetadataAccessFailed {
+                path: node_registry_path.clone(),
+                reason: err.to_string(),
+            })?
+            .permissions();
         perm.set_mode(0o777);
-        std::fs::set_permissions(node_registry_path.clone(), perm)?;
+        std::fs::set_permissions(node_registry_path.clone(), perm).map_err(|err| {
+            Error::RegistryOperationFailed {
+                operation: "set registry file permissions".to_string(),
+                reason: err.to_string(),
+            }
+        })?;
     }
     debug!("Node registry path: {node_registry_path:?}");
 
@@ -89,7 +128,10 @@ pub fn get_node_registry_path() -> Result<PathBuf> {
     use std::path::Path;
     let path = Path::new("C:\\ProgramData\\antctl");
     if !path.exists() {
-        std::fs::create_dir_all(path)?;
+        std::fs::create_dir_all(path).map_err(|err| Error::DirectoryCreationFailed {
+            path: path.to_path_buf(),
+            reason: err.to_string(),
+        })?;
     }
     debug!("Node registry path is: {path:?}");
 
@@ -145,7 +187,10 @@ pub fn get_service_data_dir_path(
             path
         }
     };
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: err.to_string(),
+    })?;
     Ok(path)
 }
 
@@ -161,7 +206,10 @@ pub fn get_bootstrap_cache_owner_path(owner: &str) -> Result<PathBuf> {
 #[cfg(windows)]
 pub fn get_bootstrap_cache_owner_path(_owner: &str) -> Result<PathBuf> {
     let path = PathBuf::from("C:\\ProgramData\\antctl\\bootstrap_cache");
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: err.to_string(),
+    })?;
     Ok(path)
 }
 
@@ -218,20 +266,30 @@ pub fn get_service_log_dir_path(
             path
         }
     };
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: err.to_string(),
+    })?;
     Ok(path)
 }
 
 #[cfg(unix)]
 pub fn create_owned_dir(path: PathBuf, owner: &str) -> Result<()> {
     debug!("Creating owned dir and setting permissions: {path:?} with owner: {owner}");
+    use crate::error::Error;
     use nix::unistd::{Gid, Uid, chown};
     use std::os::unix::fs::PermissionsExt;
     use users::get_user_by_name;
 
-    std::fs::create_dir_all(&path)?;
+    std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: err.to_string(),
+    })?;
     let permissions = std::fs::Permissions::from_mode(0o755);
-    std::fs::set_permissions(&path, permissions)?;
+    std::fs::set_permissions(&path, permissions).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: format!("Failed to set permissions: {err}"),
+    })?;
 
     let user = get_user_by_name(owner).ok_or_else(|| {
         error!("User '{owner}' does not exist");
@@ -241,14 +299,22 @@ pub fn create_owned_dir(path: PathBuf, owner: &str) -> Result<()> {
     })?;
     let uid = Uid::from_raw(user.uid());
     let gid = Gid::from_raw(user.primary_group_id());
-    chown(&path, Some(uid), Some(gid))?;
+    chown(&path, Some(uid), Some(gid)).map_err(|err| Error::NixError {
+        reason: format!(
+            "Failed to change ownership of path '{}': {err}",
+            path.display()
+        ),
+    })?;
     Ok(())
 }
 
 #[cfg(windows)]
 pub fn create_owned_dir(path: PathBuf, _owner: &str) -> Result<()> {
     debug!("Creating owned dir: {path:?}");
-    std::fs::create_dir_all(path)?;
+    std::fs::create_dir_all(&path).map_err(|err| Error::DirectoryCreationFailed {
+        path: path.clone(),
+        reason: err.to_string(),
+    })?;
     Ok(())
 }
 

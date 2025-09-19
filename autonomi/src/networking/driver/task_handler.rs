@@ -6,15 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::interface::NetworkTask;
-use crate::networking::utils::get_quorum_amount;
 use crate::networking::NetworkError;
 use crate::networking::OneShotTaskResult;
+use crate::networking::interface::NetworkTask;
+use crate::networking::utils::get_quorum_amount;
 use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
+use libp2p::PeerId;
 use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
 use libp2p::request_response::OutboundRequestId;
-use libp2p::PeerId;
 use std::collections::HashMap;
 use thiserror::Error;
 
