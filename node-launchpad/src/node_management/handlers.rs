@@ -200,11 +200,11 @@ pub async fn remove_nodes(
     services: Vec<String>,
     node_registry: NodeRegistryManager,
 ) -> Result<(), NodeManagementError> {
-    info!("Stopping nodes before removal: {:?}", services);
+    info!("Stopping nodes before removal: {services:?}");
     stop_nodes_helper(node_registry.clone(), services.clone()).await?;
-    info!("Stopped nodes, proceeding with removal: {:?}", services);
+    info!("Stopped nodes, proceeding with removal: {services:?}");
     remove_nodes_helper(node_registry, services.clone()).await?;
-    info!("Successfully removed nodes: {:?}", services);
+    info!("Successfully removed nodes: {services:?}");
 
     Ok(())
 }
