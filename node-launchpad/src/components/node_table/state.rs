@@ -49,6 +49,14 @@ pub struct NodeTableState {
     pub bandwidth_totals: BTreeMap<NodeId, (u64, u64)>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum NavigationDirection {
+    Up(usize),
+    Down(usize),
+    First,
+    Last,
+}
+
 /// Controller responsible for reconciling registry snapshots, user intent, and transitions.
 pub struct NodeStateController {
     pub registry_snapshot: RegistrySnapshot,
@@ -317,7 +325,7 @@ impl NodeTableState {
 
         if self.controller.selected_index().is_none() && view_len > 0 {
             debug!("Auto-selecting first unlocked node since no selection exists");
-            self.navigate_first_unlocked()
+            self.navigate(NavigationDirection::First)
         }
 
         let running_nodes = self.controller.registry_snapshot.running_count() as u64;
@@ -480,24 +488,31 @@ impl NodeTableState {
             .map(|(idx, _)| idx)
     }
 
-    pub fn navigate_next_unlocked(&mut self) {
-        let next_index = self.find_next_unlocked_index();
-        self.select_node_if_unlocked(next_index)
-    }
-
-    pub fn navigate_previous_unlocked(&mut self) {
-        let prev_index = self.find_previous_unlocked_index();
-        self.select_node_if_unlocked(prev_index)
-    }
-
-    pub fn navigate_first_unlocked(&mut self) {
-        let first_index = self.find_first_unlocked_index();
-        self.select_node_if_unlocked(first_index)
-    }
-
-    pub fn navigate_last_unlocked(&mut self) {
-        let last_index = self.find_last_unlocked_index();
-        self.select_node_if_unlocked(last_index)
+    pub fn navigate(&mut self, direction: NavigationDirection) {
+        match direction {
+            NavigationDirection::Up(steps) => {
+                let count = steps.max(1);
+                for _ in 0..count {
+                    let prev_index = self.find_previous_unlocked_index();
+                    self.select_node_if_unlocked(prev_index);
+                }
+            }
+            NavigationDirection::Down(steps) => {
+                let count = steps.max(1);
+                for _ in 0..count {
+                    let next_index = self.find_next_unlocked_index();
+                    self.select_node_if_unlocked(next_index);
+                }
+            }
+            NavigationDirection::First => {
+                let first_index = self.find_first_unlocked_index();
+                self.select_node_if_unlocked(first_index);
+            }
+            NavigationDirection::Last => {
+                let last_index = self.find_last_unlocked_index();
+                self.select_node_if_unlocked(last_index);
+            }
+        }
     }
 
     fn set_selection(&mut self, index: Option<usize>) {
