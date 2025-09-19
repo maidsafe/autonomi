@@ -6,9 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::components::node_table::StatefulTable;
+use crate::components::node_table::state::NodeState;
 use ant_service_management::{
-    NodeServiceData, ReachabilityProgress, ServiceStatus, fs::CriticalFailure,
-    metric::ReachabilityStatusValues,
+    ReachabilityProgress, ServiceStatus, fs::CriticalFailure, metric::ReachabilityStatusValues,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -16,61 +17,6 @@ use std::time::Instant;
 
 /// Identifier used across registry, desired topology, and transitions.
 pub type NodeId = String;
-
-/// Immutable snapshot of the registry at a given instant.
-#[derive(Clone, Debug)]
-pub struct RegistrySnapshot {
-    pub nodes: BTreeMap<NodeId, RegistryNode>,
-    pub seen_at: Instant,
-}
-
-impl Default for RegistrySnapshot {
-    fn default() -> Self {
-        Self {
-            nodes: BTreeMap::new(),
-            seen_at: Instant::now(),
-        }
-    }
-}
-
-impl RegistrySnapshot {
-    pub fn from_services(services: &[NodeServiceData]) -> Self {
-        let nodes = services
-            .iter()
-            .map(|service| {
-                let node = RegistryNode {
-                    service_name: service.service_name.clone(),
-                    metrics_port: service.metrics_port,
-                    status: service.status.clone(),
-                    reachability_progress: service.reachability_progress.clone(),
-                    last_failure: service.last_critical_failure.clone(),
-                    version: service.version.clone(),
-                };
-                (service.service_name.clone(), node)
-            })
-            .collect();
-
-        Self {
-            nodes,
-            seen_at: Instant::now(),
-        }
-    }
-
-    pub fn running_count(&self) -> usize {
-        self.nodes
-            .values()
-            .filter(|node| node.status == ServiceStatus::Running)
-            .count()
-    }
-
-    pub fn running_nodes(&self) -> Vec<RegistryNode> {
-        self.nodes
-            .values()
-            .filter(|node| node.status == ServiceStatus::Running)
-            .cloned()
-            .collect()
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct RegistryNode {
@@ -82,47 +28,7 @@ pub struct RegistryNode {
     pub version: String,
 }
 
-/// Desired topology expresses user intent.
-#[derive(Clone, Debug, Default)]
-pub struct DesiredTopology {
-    /// Desired number of nodes up and running.
-    pub desired_running_count: u64,
-    /// Explicit per-node intent overrides (start/stop/remove).
-    pub node_targets: BTreeMap<NodeId, DesiredNodeState>,
-    /// Nodes that should exist but are not yet in the registry (pending add).
-    pub provisioning: BTreeSet<NodeId>,
-}
-
-impl DesiredTopology {
-    pub fn set_desired_running_count(&mut self, count: u64) {
-        self.desired_running_count = count;
-    }
-
-    pub fn set_node_target(&mut self, id: NodeId, target: DesiredNodeState) {
-        if target == DesiredNodeState::FollowCluster {
-            self.node_targets.remove(&id);
-        } else {
-            self.node_targets.insert(id, target);
-        }
-    }
-
-    pub fn mark_provisioning<I: IntoIterator<Item = NodeId>>(&mut self, ids: I) {
-        self.provisioning.extend(ids);
-    }
-
-    pub fn unmark_provisioning(&mut self, id: &str) {
-        self.provisioning.remove(id);
-    }
-
-    pub fn desired_state_for(&self, id: &str) -> DesiredNodeState {
-        self.node_targets
-            .get(id)
-            .cloned()
-            .unwrap_or(DesiredNodeState::FollowCluster)
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum DesiredNodeState {
     /// Follow default policy derived from desired running count.
     #[default]
@@ -135,39 +41,13 @@ pub enum DesiredNodeState {
     Remove,
 }
 
-/// Tracks operations issued but not yet reflected in the registry.
-#[derive(Clone, Debug, Default)]
-pub struct TransitionState {
-    pub entries: BTreeMap<NodeId, TransitionEntry>,
-}
-
-impl TransitionState {
-    pub fn mark(&mut self, id: NodeId, command: CommandKind) {
-        self.entries.insert(
-            id,
-            TransitionEntry {
-                command,
-                started_at: Instant::now(),
-            },
-        );
-    }
-
-    pub fn unmark(&mut self, id: &str) {
-        self.entries.remove(id);
-    }
-
-    pub fn get(&self, id: &str) -> Option<&TransitionEntry> {
-        self.entries.get(id)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct TransitionEntry {
     pub command: CommandKind,
     pub started_at: Instant,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommandKind {
     Start,
     Stop,
@@ -244,6 +124,16 @@ pub struct NodeViewModel {
     pub locked: bool,
     pub last_failure: Option<String>,
     pub pending_command: Option<CommandKind>,
+}
+
+impl std::fmt::Debug for StatefulTable<NodeViewModel> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StatefulTable<NodeViewModel>")
+            .field("state", &self.state)
+            .field("items_count", &self.items.len())
+            .field("last_selected", &self.last_selected)
+            .finish()
+    }
 }
 
 impl NodeViewModel {
@@ -400,26 +290,30 @@ pub fn derive_lifecycle_state(
 
 /// Builds a set of node view models from the data sources.
 pub fn build_view_models(
-    registry: &RegistrySnapshot,
-    desired: &DesiredTopology,
-    transitions: &TransitionState,
-    reachability: &BTreeMap<NodeId, ReachabilityStatusValues>,
-    metrics: &BTreeMap<NodeId, NodeMetrics>,
+    nodes: &BTreeMap<NodeId, NodeState>,
     locked_nodes: &BTreeSet<NodeId>,
 ) -> Vec<NodeViewModel> {
-    let mut ids: BTreeSet<NodeId> = registry.nodes.keys().cloned().collect();
-    ids.extend(desired.provisioning.iter().cloned());
+    let ids: BTreeSet<NodeId> = nodes.keys().cloned().collect();
 
     let mut models = Vec::with_capacity(ids.len());
     for id in ids {
-        let registry_node = registry.nodes.get(&id);
-        let desired_state = desired.desired_state_for(&id);
-        let is_provisioning = desired.provisioning.contains(&id);
-        let transition = transitions.get(&id);
+        let node_state = nodes.get(&id);
+        let registry_node = node_state.and_then(|state| state.registry.as_ref());
+        let desired_state = node_state
+            .map(|state| state.desired)
+            .unwrap_or(DesiredNodeState::FollowCluster);
+        let is_provisioning = node_state
+            .map(|state| state.is_provisioning)
+            .unwrap_or(false);
+        let transition = node_state.and_then(|state| state.transition.as_ref());
         let lifecycle =
             derive_lifecycle_state(registry_node, desired_state, is_provisioning, transition);
-        let reachability_status = reachability.get(&id).cloned().unwrap_or_default();
-        let metrics = metrics.get(&id).cloned().unwrap_or_default();
+        let reachability_status = node_state
+            .map(|state| state.reachability.clone())
+            .unwrap_or_default();
+        let metrics = node_state
+            .map(|state| state.metrics.clone())
+            .unwrap_or_default();
         let locked = locked_nodes.contains(&id)
             || matches!(
                 transition.map(|t| &t.command),
@@ -434,7 +328,7 @@ pub fn build_view_models(
             reachability_status,
             metrics,
             locked,
-            transition.map(|t| t.command.clone()),
+            transition.map(|t| t.command),
         ));
     }
 
@@ -455,6 +349,22 @@ mod tests {
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
             version: "0.1.0".to_string(),
+        }
+    }
+
+    fn node_state(
+        registry: Option<RegistryNode>,
+        reachability: ReachabilityStatusValues,
+        metrics: NodeMetrics,
+    ) -> NodeState {
+        NodeState {
+            registry,
+            desired: Default::default(),
+            transition: None,
+            is_provisioning: false,
+            reachability,
+            metrics,
+            bandwidth_totals: (0, 0),
         }
     }
 
@@ -507,40 +417,22 @@ mod tests {
 
     #[test]
     fn reachability_progress_prefers_metrics_update() {
-        let mut registry = RegistrySnapshot::default();
-        registry.nodes.insert(
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
             "node-1".to_string(),
-            RegistryNode {
-                service_name: "node-1".to_string(),
-                metrics_port: 3000,
-                status: ServiceStatus::Running,
-                reachability_progress: ReachabilityProgress::NotRun,
-                last_failure: None,
-                version: "0.1.0".to_string(),
-            },
+            node_state(
+                Some(registry_node(ServiceStatus::Running)),
+                ReachabilityStatusValues {
+                    progress: ReachabilityProgress::InProgress(12),
+                    ..Default::default()
+                },
+                NodeMetrics::default(),
+            ),
         );
 
-        let desired = DesiredTopology::default();
-        let transitions = TransitionState::default();
-        let mut reachability = BTreeMap::new();
-        reachability.insert(
-            "node-1".to_string(),
-            ReachabilityStatusValues {
-                progress: ReachabilityProgress::InProgress(12),
-                ..Default::default()
-            },
-        );
-        let metrics = BTreeMap::new();
         let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(
-            &registry,
-            &desired,
-            &transitions,
-            &reachability,
-            &metrics,
-            &locked_nodes,
-        );
+        let models = build_view_models(&nodes, &locked_nodes);
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -554,45 +446,34 @@ mod tests {
 
     #[test]
     fn reachability_metrics_mark_node_unreachable_with_reason() {
-        let mut registry = RegistrySnapshot::default();
-        registry.nodes.insert(
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
             "node-1".to_string(),
-            RegistryNode {
-                service_name: "node-1".to_string(),
-                metrics_port: 3000,
-                status: ServiceStatus::Running,
-                reachability_progress: ReachabilityProgress::InProgress(50),
-                last_failure: Some(CriticalFailure {
-                    reason: "Port unreachable".to_string(),
-                    date_time: Utc::now(),
+            node_state(
+                Some(RegistryNode {
+                    service_name: "node-1".to_string(),
+                    metrics_port: 3000,
+                    status: ServiceStatus::Running,
+                    reachability_progress: ReachabilityProgress::InProgress(50),
+                    last_failure: Some(CriticalFailure {
+                        reason: "Port unreachable".to_string(),
+                        date_time: Utc::now(),
+                    }),
+                    version: "0.1.0".to_string(),
                 }),
-                version: "0.1.0".to_string(),
-            },
+                ReachabilityStatusValues {
+                    progress: ReachabilityProgress::Complete,
+                    public: false,
+                    private: false,
+                    upnp: false,
+                },
+                NodeMetrics::default(),
+            ),
         );
 
-        let desired = DesiredTopology::default();
-        let transitions = TransitionState::default();
-        let mut reachability = BTreeMap::new();
-        reachability.insert(
-            "node-1".to_string(),
-            ReachabilityStatusValues {
-                progress: ReachabilityProgress::Complete,
-                public: false,
-                private: false,
-                upnp: false,
-            },
-        );
-        let metrics = BTreeMap::new();
         let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(
-            &registry,
-            &desired,
-            &transitions,
-            &reachability,
-            &metrics,
-            &locked_nodes,
-        );
+        let models = build_view_models(&nodes, &locked_nodes);
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -608,44 +489,32 @@ mod tests {
 
     #[test]
     fn metrics_endpoint_failure_with_reason_shows_error() {
-        let mut registry = RegistrySnapshot::default();
-        registry.nodes.insert(
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
             "node-1".to_string(),
-            RegistryNode {
-                service_name: "node-1".to_string(),
-                metrics_port: 3000,
-                status: ServiceStatus::Stopped,
-                reachability_progress: ReachabilityProgress::NotRun,
-                last_failure: Some(CriticalFailure {
-                    reason: "Process crashed".to_string(),
-                    date_time: Utc::now(),
+            node_state(
+                Some(RegistryNode {
+                    service_name: "node-1".to_string(),
+                    metrics_port: 3000,
+                    status: ServiceStatus::Stopped,
+                    reachability_progress: ReachabilityProgress::NotRun,
+                    last_failure: Some(CriticalFailure {
+                        reason: "Process crashed".to_string(),
+                        date_time: Utc::now(),
+                    }),
+                    version: "0.1.0".to_string(),
                 }),
-                version: "0.1.0".to_string(),
-            },
-        );
-
-        let desired = DesiredTopology::default();
-        let transitions = TransitionState::default();
-        let reachability = BTreeMap::new();
-        let mut metrics = BTreeMap::new();
-        metrics.insert(
-            "node-1".to_string(),
-            NodeMetrics {
-                endpoint_online: false,
-                ..Default::default()
-            },
+                ReachabilityStatusValues::default(),
+                NodeMetrics {
+                    endpoint_online: false,
+                    ..Default::default()
+                },
+            ),
         );
 
         let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(
-            &registry,
-            &desired,
-            &transitions,
-            &reachability,
-            &metrics,
-            &locked_nodes,
-        );
+        let models = build_view_models(&nodes, &locked_nodes);
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -661,41 +530,29 @@ mod tests {
 
     #[test]
     fn metrics_endpoint_failure_without_reason_keeps_registry_state() {
-        let mut registry = RegistrySnapshot::default();
-        registry.nodes.insert(
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
             "node-1".to_string(),
-            RegistryNode {
-                service_name: "node-1".to_string(),
-                metrics_port: 3000,
-                status: ServiceStatus::Stopped,
-                reachability_progress: ReachabilityProgress::NotRun,
-                last_failure: None,
-                version: "0.1.0".to_string(),
-            },
-        );
-
-        let desired = DesiredTopology::default();
-        let transitions = TransitionState::default();
-        let reachability = BTreeMap::new();
-        let mut metrics = BTreeMap::new();
-        metrics.insert(
-            "node-1".to_string(),
-            NodeMetrics {
-                endpoint_online: false,
-                ..Default::default()
-            },
+            node_state(
+                Some(RegistryNode {
+                    service_name: "node-1".to_string(),
+                    metrics_port: 3000,
+                    status: ServiceStatus::Stopped,
+                    reachability_progress: ReachabilityProgress::NotRun,
+                    last_failure: None,
+                    version: "0.1.0".to_string(),
+                }),
+                ReachabilityStatusValues::default(),
+                NodeMetrics {
+                    endpoint_online: false,
+                    ..Default::default()
+                },
+            ),
         );
 
         let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(
-            &registry,
-            &desired,
-            &transitions,
-            &reachability,
-            &metrics,
-            &locked_nodes,
-        );
+        let models = build_view_models(&nodes, &locked_nodes);
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
@@ -706,37 +563,30 @@ mod tests {
 
     #[test]
     fn running_node_with_historic_unreachable_failure_recovers_when_metrics_ok() {
-        let mut registry = RegistrySnapshot::default();
         let mut node = registry_node(ServiceStatus::Running);
         node.last_failure = Some(CriticalFailure {
             reason: "Unreachable".to_string(),
             date_time: Utc::now(),
         });
-        registry.nodes.insert("node-1".to_string(), node);
 
-        let desired = DesiredTopology::default();
-        let transitions = TransitionState::default();
-        let mut reachability = BTreeMap::new();
-        reachability.insert(
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
             "node-1".to_string(),
-            ReachabilityStatusValues {
-                progress: ReachabilityProgress::Complete,
-                public: true,
-                private: false,
-                upnp: false,
-            },
+            node_state(
+                Some(node),
+                ReachabilityStatusValues {
+                    progress: ReachabilityProgress::Complete,
+                    public: true,
+                    private: false,
+                    upnp: false,
+                },
+                NodeMetrics::default(),
+            ),
         );
-        let metrics = BTreeMap::new();
+
         let locked_nodes = BTreeSet::new();
 
-        let models = build_view_models(
-            &registry,
-            &desired,
-            &transitions,
-            &reachability,
-            &metrics,
-            &locked_nodes,
-        );
+        let models = build_view_models(&nodes, &locked_nodes);
         let model = models
             .iter()
             .find(|model| model.id == "node-1")
