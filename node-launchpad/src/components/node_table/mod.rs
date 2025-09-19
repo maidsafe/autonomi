@@ -36,7 +36,7 @@ use ratatui::layout::Rect;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub use operations::NodeOperations;
-pub use state::{NodeSelectionInfo, NodeTableState};
+pub use state::{NavigationDirection, NodeSelectionInfo, NodeTableState};
 pub use table_state::StatefulTable;
 pub use widget::{NodeTableConfig, NodeTableWidget};
 
@@ -164,31 +164,27 @@ impl Component for NodeTableComponent {
                     result
                 }
                 NodeTableActions::NavigateUp => {
-                    self.state.navigate_previous_unlocked();
+                    self.state.navigate(NavigationDirection::Up(1));
                     Ok(None)
                 }
                 NodeTableActions::NavigateDown => {
-                    self.state.navigate_next_unlocked();
+                    self.state.navigate(NavigationDirection::Down(1));
                     Ok(None)
                 }
                 NodeTableActions::NavigateHome => {
-                    self.state.navigate_first_unlocked();
+                    self.state.navigate(NavigationDirection::First);
                     Ok(None)
                 }
                 NodeTableActions::NavigateEnd => {
-                    self.state.navigate_last_unlocked();
+                    self.state.navigate(NavigationDirection::Last);
                     Ok(None)
                 }
                 NodeTableActions::NavigatePageUp => {
-                    for _ in 0..10 {
-                        self.state.navigate_previous_unlocked();
-                    }
+                    self.state.navigate(NavigationDirection::Up(10));
                     Ok(None)
                 }
                 NodeTableActions::NavigatePageDown => {
-                    for _ in 0..10 {
-                        self.state.navigate_next_unlocked();
-                    }
+                    self.state.navigate(NavigationDirection::Down(10));
                     Ok(None)
                 }
             },
