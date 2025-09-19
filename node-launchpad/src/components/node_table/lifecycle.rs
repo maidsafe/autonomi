@@ -40,6 +40,7 @@ impl RegistrySnapshot {
             .map(|service| {
                 let node = RegistryNode {
                     service_name: service.service_name.clone(),
+                    metrics_port: service.metrics_port,
                     status: service.status.clone(),
                     reachability_progress: service.reachability_progress.clone(),
                     last_failure: service.last_critical_failure.clone(),
@@ -61,11 +62,20 @@ impl RegistrySnapshot {
             .filter(|node| node.status == ServiceStatus::Running)
             .count()
     }
+
+    pub fn running_nodes(&self) -> Vec<RegistryNode> {
+        self.nodes
+            .values()
+            .filter(|node| node.status == ServiceStatus::Running)
+            .cloned()
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct RegistryNode {
     pub service_name: String,
+    pub metrics_port: u16,
     pub status: ServiceStatus,
     pub reachability_progress: ReachabilityProgress,
     pub last_failure: Option<CriticalFailure>,
@@ -440,6 +450,7 @@ mod tests {
     fn registry_node(status: ServiceStatus) -> RegistryNode {
         RegistryNode {
             service_name: "node-1".to_string(),
+            metrics_port: 3000,
             status,
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
@@ -501,6 +512,7 @@ mod tests {
             "node-1".to_string(),
             RegistryNode {
                 service_name: "node-1".to_string(),
+                metrics_port: 3000,
                 status: ServiceStatus::Running,
                 reachability_progress: ReachabilityProgress::NotRun,
                 last_failure: None,
@@ -547,6 +559,7 @@ mod tests {
             "node-1".to_string(),
             RegistryNode {
                 service_name: "node-1".to_string(),
+                metrics_port: 3000,
                 status: ServiceStatus::Running,
                 reachability_progress: ReachabilityProgress::InProgress(50),
                 last_failure: Some(CriticalFailure {
@@ -600,6 +613,7 @@ mod tests {
             "node-1".to_string(),
             RegistryNode {
                 service_name: "node-1".to_string(),
+                metrics_port: 3000,
                 status: ServiceStatus::Stopped,
                 reachability_progress: ReachabilityProgress::NotRun,
                 last_failure: Some(CriticalFailure {
@@ -652,6 +666,7 @@ mod tests {
             "node-1".to_string(),
             RegistryNode {
                 service_name: "node-1".to_string(),
+                metrics_port: 3000,
                 status: ServiceStatus::Stopped,
                 reachability_progress: ReachabilityProgress::NotRun,
                 last_failure: None,

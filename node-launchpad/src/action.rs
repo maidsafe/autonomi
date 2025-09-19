@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::{
-    components::{node_table::NodeSelectionInfo, popup::error_popup::ErrorPopup},
+    components::popup::error_popup::ErrorPopup,
     mode::{InputMode, Scene},
     node_stats::AggregatedNodeStats,
 };
@@ -91,15 +91,6 @@ pub enum UpgradeLaunchpadActions {
 
 #[derive(custom_debug::Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeTableActions {
-    // State updates FROM NodeTable TO Status (push only)
-    StateChanged {
-        node_count: u64,
-        has_running_nodes: bool,
-        has_nodes: bool,
-    },
-    SelectionChanged {
-        selection: Option<NodeSelectionInfo>,
-    },
     RegistryFileUpdated {
         #[debug(skip)]
         all_nodes_data: Vec<NodeServiceData>,

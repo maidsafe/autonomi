@@ -21,22 +21,10 @@ use color_eyre::eyre::Result;
 use std::path::PathBuf;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub struct AddNodeConfig<'a> {
-    pub node_count: u64,
+pub struct NodeOperationsConfig {
     pub available_disk_space_gb: u64,
-    pub storage_mountpoint: &'a PathBuf,
-    pub rewards_address: Option<&'a EvmAddress>,
-    pub nodes_to_start: u64,
-    pub antnode_path: Option<PathBuf>,
-    pub upnp_enabled: bool,
-    pub data_dir_path: PathBuf,
-    pub network_id: Option<u8>,
-    pub init_peers_config: InitialPeersConfig,
-    pub port_range: Option<(u32, u32)>,
-}
-
-pub struct MaintainNodesConfig<'a> {
-    pub rewards_address: Option<&'a EvmAddress>,
+    pub storage_mountpoint: PathBuf,
+    pub rewards_address: Option<EvmAddress>,
     pub nodes_to_start: u64,
     pub antnode_path: Option<PathBuf>,
     pub upnp_enabled: bool,
@@ -75,7 +63,11 @@ impl NodeOperations {
         Ok(())
     }
 
-    pub fn handle_add_node(&mut self, config: &AddNodeConfig) -> Result<Option<Action>> {
+    pub fn handle_add_node(
+        &mut self,
+        config: &NodeOperationsConfig,
+        current_node_count: u64,
+    ) -> Result<Option<Action>> {
         // Validation: Available space
         if GB_PER_NODE > config.available_disk_space_gb {
             let error_popup = ErrorPopup::new(
@@ -91,7 +83,7 @@ impl NodeOperations {
         }
 
         // Validation: Amount of nodes
-        if config.node_count + 1 > MAX_NODE_COUNT {
+        if current_node_count + 1 > MAX_NODE_COUNT {
             let error_popup = ErrorPopup::new(
                 "Cannot Add Node",
                 format!("You have reached the maximum node limit ({MAX_NODE_COUNT}).").as_ref(),
@@ -128,7 +120,7 @@ impl NodeOperations {
             network_id: config.network_id,
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
-            rewards_address: config.rewards_address.cloned(),
+            rewards_address: config.rewards_address,
         };
 
         self.node_management
@@ -141,7 +133,7 @@ impl NodeOperations {
 
     pub fn handle_maintain_nodes(
         &mut self,
-        config: &MaintainNodesConfig,
+        config: &NodeOperationsConfig,
     ) -> Result<Option<Action>> {
         if config.rewards_address.is_none() {
             info!("Rewards address is not set. Ask for input.");
@@ -165,7 +157,7 @@ impl NodeOperations {
             network_id: config.network_id,
             init_peers_config: config.init_peers_config.clone(),
             port_range: Some(port_range),
-            rewards_address: config.rewards_address.cloned(),
+            rewards_address: config.rewards_address,
         };
 
         self.node_management

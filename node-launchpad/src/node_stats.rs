@@ -7,11 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use super::components::status::NODE_STAT_UPDATE_INTERVAL;
-use crate::action::{Action, NodeManagementCommand, NodeTableActions};
-use ant_service_management::{NodeServiceData, ServiceStatus, metric::ReachabilityStatusValues};
+use crate::{
+    action::{Action, NodeManagementCommand, NodeTableActions},
+    components::node_table::lifecycle::RegistryNode,
+};
+use ant_service_management::metric::ReachabilityStatusValues;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, path::PathBuf, time::Instant};
+use std::{collections::HashSet, time::Instant};
 use tokio::sync::mpsc::UnboundedSender;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,38 +57,24 @@ impl AggregatedNodeStats {
 
     /// Fetches statistics from all running nodes and sends the aggregated stats via the action sender.
     pub fn fetch_aggregated_node_stats(
-        nodes: &[NodeServiceData],
+        running_nodes: Vec<RegistryNode>,
         action_sender: UnboundedSender<Action>,
     ) {
-        let node_details = nodes
-            .iter()
-            .filter_map(|node| {
-                // Only consider running nodes, the status is saved as Running while reachability is running.
-                if node.status == ServiceStatus::Running {
-                    Some((
-                        node.service_name.clone(),
-                        node.metrics_port,
-                        node.data_dir_path.clone(),
-                    ))
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        if !node_details.is_empty() {
+        if !running_nodes.is_empty() {
             tokio::spawn(async move {
-                Self::fetch_aggregated_node_stats_inner(node_details, action_sender).await;
+                Self::fetch_aggregated_node_stats_inner(running_nodes, action_sender).await;
             });
         }
     }
 
     async fn fetch_aggregated_node_stats_inner(
-        node_details: Vec<(String, u16, PathBuf)>,
+        running_nodes: Vec<RegistryNode>,
         action_sender: UnboundedSender<Action>,
     ) {
-        let mut stream = futures::stream::iter(node_details)
-            .map(|(service_name, metrics_port, data_dir)| async move {
-                Self::fetch_stat_per_node(service_name.clone(), metrics_port, data_dir).await
+        let mut stream = futures::stream::iter(running_nodes)
+            .map(|registry_node| async move {
+                Self::fetch_stat_per_node(registry_node.service_name, registry_node.metrics_port)
+                    .await
             })
             .buffer_unordered(5);
 
@@ -138,7 +127,6 @@ impl AggregatedNodeStats {
     async fn fetch_stat_per_node(
         service_name: String,
         metrics_port: u16,
-        _data_dir: PathBuf,
     ) -> IndividualNodeStatsResult {
         let now = Instant::now();
 
