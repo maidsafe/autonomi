@@ -12,6 +12,7 @@ use crate::NetworkAddress;
 use crate::error::{Error, Result};
 use bls::{Ciphertext, PublicKey, SecretKey, Signature};
 use serde::{Deserialize, Serialize};
+use std::mem::size_of;
 
 use xor_name::XorName;
 
@@ -205,6 +206,22 @@ impl Scratchpad {
     pub fn is_too_big(&self) -> bool {
         self.size() > Self::MAX_SIZE
     }
+
+    /// Returns the signature of the scratchpad
+    pub fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    /// Returns the hash of the entire scratchpad (including all fields)
+    pub fn scratchpad_hash(&self) -> XorName {
+        let mut content = Vec::new();
+        content.extend(self.address.to_hex().as_bytes());
+        content.extend(self.data_encoding.to_be_bytes());
+        content.extend(&self.encrypted_data);
+        content.extend(self.counter.to_be_bytes());
+        content.extend(self.signature.to_bytes());
+        XorName::from_content(&content)
+    }
 }
 
 #[cfg(test)]
@@ -236,5 +253,35 @@ mod tests {
 
         let decrypted_data = scratchpad.decrypt_data(&sk).unwrap();
         assert_eq!(decrypted_data, raw_data);
+    }
+
+    #[test]
+    fn test_bls_determinism() {
+        let secret_key = SecretKey::random();
+        let public_key = secret_key.public_key();
+        let message = b"test message";
+
+        let mut ciphertexts = Vec::new();
+        for _ in 0..5 {
+            let ciphertext = public_key.encrypt(message);
+            ciphertexts.push(ciphertext.to_bytes());
+        }
+        let encryption_deterministic = ciphertexts.iter().all(|c| c == &ciphertexts[0]);
+
+        let mut signatures = Vec::new();
+        for _ in 0..5 {
+            let signature = secret_key.sign(message);
+            signatures.push(signature.to_bytes());
+        }
+        let signature_deterministic = signatures.iter().all(|s| s == &signatures[0]);
+
+        assert!(
+            !encryption_deterministic,
+            "BLS encryption should be non-deterministic"
+        );
+        assert!(
+            signature_deterministic,
+            "BLS signatures should be deterministic"
+        );
     }
 }

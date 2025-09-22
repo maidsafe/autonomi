@@ -12,9 +12,10 @@ use autonomi::client::payment::PaymentOption;
 use autonomi::scratchpad::ScratchpadError;
 use autonomi::{
     Client,
+    client::data_types::scratchpad::print_fork_analysis,
     client::scratchpad::{Bytes, Scratchpad},
 };
-use eyre::Result;
+use eyre::{Result, eyre};
 use serial_test::serial;
 use test_utils::evm::get_funded_wallet;
 
@@ -267,5 +268,144 @@ async fn scratchpad_errors() -> Result<()> {
     // check that the content is decrypted correctly and matches the original
     let got_content = got.decrypt_data(&key)?;
     assert_eq!(got_content, content);
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn scratchpad_fork_display() -> Result<()> {
+    let _log_appender_guard = LogBuilder::init_single_threaded_tokio_test();
+
+    const INITIAL_SETUP_DELAY: u64 = 2;
+    const CONCURRENT_UPDATES_COUNT: usize = 5;
+    const MAX_ATTEMPTS: usize = 10;
+
+    let client = Client::init_local().await?;
+    let wallet = get_funded_wallet();
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        println!("\nAttempt {attempt} of {MAX_ATTEMPTS}");
+        println!("Creating new scratchpad for this attempt...");
+
+        let owner_key = bls::SecretKey::random();
+        let initial_data = Bytes::from("Wanna fork?");
+        let payment = PaymentOption::from(&wallet);
+
+        println!(
+            "Initial data: \"{}\"",
+            String::from_utf8_lossy(&initial_data)
+        );
+        println!("Secret key: {}", hex::encode(owner_key.to_bytes()));
+
+        let (_cost, addr) = client
+            .scratchpad_create(&owner_key, 0, &initial_data, payment)
+            .await?;
+        println!("Created scratchpad at: {}", addr.to_hex());
+
+        let base_scratchpad = client.scratchpad_get(&addr).await?;
+        println!("Base counter: {}", base_scratchpad.counter());
+
+        // Initialize batch of clients for the later on concurrent updates
+        let mut clients = vec![];
+        for _i in 1..=CONCURRENT_UPDATES_COUNT {
+            clients.push(Client::init_local().await?);
+            tokio::time::sleep(tokio::time::Duration::from_secs(INITIAL_SETUP_DELAY)).await;
+        }
+
+        println!("Running concurrent updates...");
+        let mut tasks = Vec::new();
+        for (i, c) in clients.iter().enumerate().take(CONCURRENT_UPDATES_COUNT) {
+            let base_scratchpad_clone = base_scratchpad.clone();
+            let owner_key_clone = owner_key.clone();
+            let client_instance = c.clone();
+
+            let task = tokio::spawn(async move {
+                let data = Bytes::from("Let's fork!");
+                let result = client_instance
+                    .scratchpad_update_from(&base_scratchpad_clone, &owner_key_clone, 0, &data)
+                    .await;
+
+                match result {
+                    Ok(_) => format!(
+                        "Update {}: Success with \"{}\"",
+                        i,
+                        String::from_utf8_lossy(&data)
+                    ),
+                    Err(e) => format!(
+                        "Update {}: {}",
+                        i,
+                        e.to_string().split_whitespace().next().unwrap_or("Error")
+                    ),
+                }
+            });
+            tasks.push(task);
+        }
+
+        let results = futures::future::try_join_all(tasks).await?;
+        for result in results {
+            println!("  {result}");
+        }
+
+        println!("\nChecking for fork...");
+        let result = client.scratchpad_get(&addr).await;
+        match result {
+            Ok(scratchpad) => {
+                let data = scratchpad.decrypt_data(&owner_key)?;
+                println!(
+                    "Success: counter={}, data=\"{}\"",
+                    scratchpad.counter(),
+                    String::from_utf8_lossy(&data)
+                );
+                println!("No fork detected");
+            }
+            Err(ScratchpadError::Fork(conflicting_scratchpads)) => {
+                if let Err(e) = print_fork_analysis(&conflicting_scratchpads, &owner_key) {
+                    eprintln!("Failed to print fork analysis: {e}");
+                }
+                verify_fork_data(&conflicting_scratchpads, &owner_key)?;
+                println!("\nFork detection test passed!");
+                return Ok(());
+            }
+            Err(other_error) => return Err(other_error.into()),
+        }
+
+        if attempt >= MAX_ATTEMPTS {
+            panic!("Maximum attempts reached without fork detection - test failed");
+        }
+        println!("Retrying with new scratchpad...");
+    }
+    Ok(())
+}
+
+fn verify_fork_data(
+    conflicting_scratchpads: &[Scratchpad],
+    owner_key: &bls::SecretKey,
+) -> Result<()> {
+    assert!(
+        !conflicting_scratchpads.is_empty(),
+        "Fork error should contain conflicting scratchpads"
+    );
+    assert!(
+        conflicting_scratchpads.len() >= 2,
+        "Fork should have at least 2 conflicting scratchpads"
+    );
+
+    let first_scratchpad = conflicting_scratchpads
+        .first()
+        .ok_or_else(|| eyre!("Fork error contains no conflicting scratchpads"))?;
+    let first_content = first_scratchpad.decrypt_data(owner_key)?;
+
+    for scratchpad in conflicting_scratchpads.iter().skip(1) {
+        let content = scratchpad.decrypt_data(owner_key)?;
+        assert_eq!(
+            content, first_content,
+            "All conflicting scratchpads should have same decrypted content"
+        );
+        assert_ne!(
+            scratchpad.encrypted_data(),
+            first_scratchpad.encrypted_data(),
+            "Conflicting scratchpads should have different encrypted data due to BLS non-deterministic encryption"
+        );
+    }
     Ok(())
 }

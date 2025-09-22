@@ -76,7 +76,7 @@ walkdir = "2.5.0"
 xor_name = "5.0.0"
 
 [dev-dependencies]
-alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
+alloy = { version = "1.0.32", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
 evmlib = { path = "../evmlib", version = "0.4.3" }
 eyre = "0.6.5"

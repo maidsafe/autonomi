@@ -235,6 +235,10 @@ impl EncryptionStream {
             drop(chunk_sender);
         });
 
+        #[cfg(feature = "loud")]
+        println!("Streaming encryption of {file_path} ...");
+        info!("Streaming encryption of {file_path} ...");
+
         let stream = EncryptionStream {
             file_path,
             relative_path,
@@ -273,7 +277,17 @@ pub(crate) async fn encrypt_directory_files(
 
         let dir_path = dir_path.clone();
 
-        encryption_tasks.push(async move { encrypt_file(entry, dir_path, is_public).await });
+        encryption_tasks.push(async move {
+            let metadata = crate::client::files::fs_public::metadata_from_entry(&entry);
+            let file_path = entry.path().to_path_buf();
+            let relative_path =
+                get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
+            let file_size = entry
+                .metadata()
+                .map_err(|err| format!("Error getting file size {file_path:?}: {err:?}"))?
+                .len() as usize;
+            encrypt_file(relative_path, file_path, file_size, metadata, is_public).await
+        });
     }
 
     let encryption_results =
@@ -283,22 +297,15 @@ pub(crate) async fn encrypt_directory_files(
 }
 
 pub(crate) async fn encrypt_file(
-    entry: walkdir::DirEntry,
-    dir_path: PathBuf,
+    relative_path: PathBuf,
+    file_path: PathBuf,
+    file_size: usize,
+    metadata: Metadata,
     is_public: bool,
 ) -> Result<EncryptionStream, String> {
-    let file_path = entry.path().to_path_buf();
     info!("Encrypting file: {file_path:?}..");
     #[cfg(feature = "loud")]
     println!("Encrypting file: {file_path:?}..");
-
-    // gather metadata
-    let metadata = crate::client::files::fs_public::metadata_from_entry(&entry);
-    let relative_path = get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
-    let file_size = entry
-        .metadata()
-        .map_err(|err| format!("Error getting file size {file_path:?}: {err:?}"))?
-        .len() as usize;
 
     // choose encryption method
     if file_size > *IN_MEMORY_ENCRYPTION_MAX_SIZE {

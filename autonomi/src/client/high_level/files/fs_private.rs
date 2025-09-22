@@ -12,7 +12,6 @@ use super::{DownloadError, UploadError};
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::payment::PaymentOption;
 use crate::{AttoTokens, Client};
-use bytes::Bytes;
 use std::path::PathBuf;
 
 use crate::self_encryption::encrypt_directory_files;
@@ -80,6 +79,7 @@ impl Client {
                     error!("Error during file encryption: {err_msg}");
                     #[cfg(feature = "loud")]
                     println!("Error during file encryption: {err_msg}");
+                    return Err(UploadError::Encryption(err_msg));
                 }
             }
         }
@@ -134,14 +134,11 @@ impl Client {
         path: PathBuf,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataMapChunk), UploadError> {
-        info!("Uploading file: {path:?}");
-        #[cfg(feature = "loud")]
-        println!("Uploading file: {path:?}");
-
-        let data = tokio::fs::read(path).await?;
-        let data = Bytes::from(data);
-        let (total_cost, addr) = self.data_put(data, payment_option).await?;
-        debug!("Uploaded file successfully in the privateAchive: {addr:?}");
-        Ok((total_cost, addr))
+        let (data_map_chunk, processed_chunks, free_chunks, receipts) =
+            self.stream_upload_file(path, payment_option, false).await?;
+        let total_cost = self
+            .calculate_total_cost(processed_chunks, receipts, free_chunks)
+            .await;
+        Ok((total_cost, data_map_chunk))
     }
 }

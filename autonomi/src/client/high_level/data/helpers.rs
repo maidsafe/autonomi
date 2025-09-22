@@ -24,7 +24,7 @@ type AggregatedChunks = Vec<((String, usize, usize), Chunk)>;
 
 impl Client {
     /// Returns total tokens spent or the first encountered upload error
-    async fn calculate_total_cost(
+    pub(crate) async fn calculate_total_cost(
         &self,
         total_chunks: usize,
         payment_receipts: Vec<Receipt>,
@@ -122,7 +122,7 @@ impl Client {
     }
 
     /// Returns: (processed_chunks, total_free_chunks, receipt)
-    async fn pay_and_upload_file(
+    pub(crate) async fn pay_and_upload_file(
         &self,
         payment_option: PaymentOption,
         file: &mut EncryptionStream,
@@ -185,11 +185,13 @@ impl Client {
 
                 // there was upload failure happens, in that case, carry out a short sleep
                 // to allow the glitch calm down.
+                #[cfg(feature = "loud")]
                 println!("⚠️ Encountered upload failure, take 1 minute pause before continue...");
                 info!("Encountered upload failure, take 1 minute pause before continue...");
 
                 // Wait 1 minute before retry
                 sleep(Duration::from_secs(60)).await;
+                #[cfg(feature = "loud")]
                 println!("🔄 continue with upload...");
                 info!("🔄 continue with upload...");
             }

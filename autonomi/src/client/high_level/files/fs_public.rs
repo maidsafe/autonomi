@@ -145,15 +145,16 @@ impl Client {
         path: PathBuf,
         payment_option: PaymentOption,
     ) -> Result<(AttoTokens, DataAddress), UploadError> {
-        info!("Uploading file: {path:?}");
-        #[cfg(feature = "loud")]
-        println!("Uploading file: {path:?}");
+        let (data_map_chunk, processed_chunks, free_chunks, receipts) = self
+            .stream_upload_file(path.clone(), payment_option, true)
+            .await?;
+        let addr = DataAddress::new(*data_map_chunk.0.name());
+        let total_cost = self
+            .calculate_total_cost(processed_chunks, receipts, free_chunks)
+            .await;
 
-        let data = tokio::fs::read(path.clone()).await?;
-        let data = Bytes::from(data);
-        let (cost, addr) = self.data_put_public(data, payment_option).await?;
         debug!("File {path:?} uploaded to the network at {addr:?}");
-        Ok((cost, addr))
+        Ok((total_cost, addr))
     }
 
     /// Get the cost to upload a file/dir to the network.

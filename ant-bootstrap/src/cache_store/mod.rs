@@ -246,7 +246,7 @@ fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
     let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
 
     let random_adjustment = Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
-    if random_adjustment.as_secs() % 2 == 0 {
+    if random_adjustment.as_secs().is_multiple_of(2) {
         duration - random_adjustment
     } else {
         duration + random_adjustment

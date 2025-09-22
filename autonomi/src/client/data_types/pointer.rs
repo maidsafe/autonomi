@@ -22,6 +22,7 @@ use ant_protocol::{
     NetworkAddress,
     storage::{DataTypes, RecordHeader, RecordKind, try_deserialize_record, try_serialize_record},
 };
+use std::collections::HashSet;
 use tracing::{debug, error, trace};
 
 pub use ant_protocol::storage::{Pointer, PointerAddress, PointerTarget};
@@ -79,7 +80,9 @@ impl Client {
                     pointer_from_record,
                     |p: &Pointer| p.counter(),
                     |a: &Pointer, b: &Pointer| a == b,
-                    |multiples: Vec<Pointer>| PointerError::Fork(multiples),
+                    |multiples: HashSet<Pointer>| {
+                        PointerError::Fork(multiples.into_iter().collect())
+                    },
                     || {
                         PointerError::Corrupt(format!(
                             "Found multiple conflicting invalid pointers at {key:?}"

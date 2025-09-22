@@ -23,6 +23,7 @@ use ant_protocol::{
     storage::{DataTypes, RecordKind, try_deserialize_record, try_serialize_record},
 };
 use libp2p::kad::Record;
+use std::collections::HashSet;
 
 pub use crate::Bytes;
 pub use ant_protocol::storage::{Scratchpad, ScratchpadAddress};
@@ -57,6 +58,56 @@ pub enum ScratchpadError {
         "Got multiple conflicting scratchpads with the latest version, the fork can be resolved by putting a new scratchpad with a higher counter"
     )]
     Fork(Vec<Scratchpad>),
+}
+
+/// Print detailed fork analysis for conflicting scratchpads
+pub fn print_fork_analysis(
+    conflicting_scratchpads: &[Scratchpad],
+    owner_key: &SecretKey,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut sorted_scratchpads = conflicting_scratchpads.to_vec();
+    sorted_scratchpads.sort_by(|a, b| {
+        hex::encode(a.signature().to_bytes()).cmp(&hex::encode(b.signature().to_bytes()))
+    });
+
+    println!("\nFORK ANALYSIS:");
+    println!("{}", "=".repeat(80));
+    println!(
+        "Found {} conflicting scratchpads:",
+        sorted_scratchpads.len()
+    );
+
+    for (i, scratchpad) in sorted_scratchpads.iter().enumerate() {
+        println!();
+        println!("#{} OF {}:", i + 1, sorted_scratchpads.len());
+        println!("  Counter: {}", scratchpad.counter());
+        println!("  Data type encoding: {}", scratchpad.data_encoding());
+        println!(
+            "  PublicKey/Address: {}",
+            hex::encode(scratchpad.owner().to_bytes())
+        );
+        println!(
+            "  Signature: {}",
+            hex::encode(scratchpad.signature().to_bytes())
+        );
+        println!(
+            "  Scratchpad hash: {}",
+            hex::encode(scratchpad.scratchpad_hash().0)
+        );
+        println!(
+            "  Encrypted data hash: {}",
+            hex::encode(scratchpad.encrypted_data_hash())
+        );
+
+        match scratchpad.decrypt_data(owner_key) {
+            Ok(decrypted_data) => {
+                let data_str = String::from_utf8_lossy(&decrypted_data);
+                println!("  Decrypted data: \"{data_str}\"");
+            }
+            Err(decrypt_err) => println!("  Decryption failed: {decrypt_err}"),
+        }
+    }
+    Ok(())
 }
 
 impl Client {
@@ -104,7 +155,9 @@ impl Client {
                         a.data_encoding() == b.data_encoding()
                             && a.encrypted_data() == b.encrypted_data()
                     },
-                    |latest: Vec<Scratchpad>| ScratchpadError::Fork(latest),
+                    |latest: HashSet<Scratchpad>| {
+                        ScratchpadError::Fork(latest.into_iter().collect())
+                    },
                     || ScratchpadError::Corrupt(*address),
                 )?
             }
