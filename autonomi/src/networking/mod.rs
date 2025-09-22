@@ -272,9 +272,38 @@ impl Network {
         );
 
         // Try to get record using the request response protocol
-        let mut tasks = FuturesUnordered::new();
         // The input addr could be from non-record_key, hence have to carry out a conversion.
         let record_key_addr = NetworkAddress::from(&addr.to_record_key());
+
+        // In case `expected_holders` to be just one, i.e. for the most popular case of chuck fetch,
+        // the DM scheme can be improved to:
+        //   * query candidates one by one
+        //   * complete on the first 
+        if quorum == Quorum::One {
+            let mut err_res = None;
+            for peer in closest_peers {
+                let res = self.get_record_req(record_key_addr.clone(), peer.clone()).await;
+                match res {
+                    // collect errors
+                    Err(e) => err_res = Some(e),
+                    // not found, ignore
+                    Ok(None) => {}
+                    Ok(Some(record_data)) => {
+                        let record = record_from_value(record_data, &addr);
+                        return Ok((Some(record), vec![peer.peer_id]));
+                    }
+                }
+            }
+
+            // if no records were found, return an error if we have an error, otherwise the record is not found: None
+            if let Some(e) = err_res {
+                return Err(e.clone());
+            } else {
+                return Ok((None, vec![]));
+            }
+        }
+
+        let mut tasks = FuturesUnordered::new();
         for peer in closest_peers {
             let addr_clone = record_key_addr.clone();
             tasks.push(async move {
