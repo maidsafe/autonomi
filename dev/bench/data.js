@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758546474129,
+  "lastUpdate": 1758546475899,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5268,6 +5268,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 20,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9c36720dc61a8c6d3810b429415b6a4f1bf94d82",
+          "message": "Merge pull request #3206 from maqi/remove_outdated_as_record_key\n\nchore: remove outdated NetworkAddress::as_record_key function",
+          "timestamp": "2025-09-22T12:01:01Z",
+          "tree_id": "c660c8059d15856e8723deb75c7a20bbda20347a",
+          "url": "https://github.com/maidsafe/autonomi/commit/9c36720dc61a8c6d3810b429415b6a4f1bf94d82"
+        },
+        "date": 1758546475319,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 19,
             "unit": "MB"
           },
           {
