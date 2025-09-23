@@ -8,7 +8,8 @@
 
 use super::MAX_CONCURRENT_DIALS;
 use crate::networking::{
-    driver::event::DIAL_BACK_DELAY, multiaddr_get_p2p, reachability_check::get_majority,
+    driver::event::DIAL_BACK_DELAY, error::NetworkError, error::Result, multiaddr_get_p2p,
+    reachability_check::get_majority,
 };
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol, swarm::ConnectionId};
 use std::{
@@ -124,12 +125,15 @@ impl DialState {
         }
     }
 
-    fn transition_to_dial_back_received(&mut self, peer_id: &PeerId) {
+    /// Return true if the state was updated, false otherwise.
+    fn transition_to_dial_back_received(&mut self, peer_id: &PeerId) -> bool {
+        let mut updated = false;
         match self {
             DialState::Connected { at } => {
                 if at.elapsed() > DIAL_BACK_DELAY {
                     info!("DialState for {peer_id:?} has been updated to DialBackReceived");
                     *self = DialState::DialBackReceived { at: Instant::now() };
+                    updated = true;
                 } else {
                     warn!(
                         "DialState for {peer_id:?} has not been updated to DialBackReceived. We got the response too early."
@@ -142,11 +146,12 @@ impl DialState {
                 );
             }
         }
+        updated
     }
 }
 
 impl InitialContactsManager {
-    pub(crate) fn new(initial_contacts: Vec<Multiaddr>) -> Self {
+    pub(crate) fn new(initial_contacts: Vec<Multiaddr>, self_peer_id: PeerId) -> Result<Self> {
         let len = initial_contacts.len();
         let initial_contacts: Vec<Multiaddr> = initial_contacts
             .into_iter()
@@ -156,18 +161,33 @@ impl InitialContactsManager {
                     .any(|protocol| matches!(protocol, Protocol::P2pCircuit))
             })
             .filter(|addr| {
-                addr.iter()
-                    .any(|protocol| matches!(protocol, Protocol::P2p(_)))
+                let mut keep = false;
+                if let Some(peer_id) = multiaddr_get_p2p(addr) {
+                    if peer_id != self_peer_id {
+                        keep = true;
+                    } else {
+                        warn!("Initial contact address {addr:?} contains our own peer id. Skipping it.");
+                    }
+                }
+                keep
             })
             .collect();
         info!(
             "Initial contacts len after filtering out circuit addresses and ones without peer ids: {:?}. original len: {len:?}",
             initial_contacts.len()
         );
-        Self {
+        if initial_contacts.len() < MAX_CONCURRENT_DIALS {
+            error!(
+                "Not enough bootstrap addresses provided. We need at least {MAX_CONCURRENT_DIALS} valid bootstrap addresses to perform reachability check, but only got {}",
+                initial_contacts.len()
+            );
+            return Err(NetworkError::NotEnoughBootstrapAddresses);
+        }
+
+        Ok(Self {
             initial_contacts,
             attempted_indices: HashSet::new(),
-        }
+        })
     }
 
     /// Return a random contact from the initial contacts list that we haven't attempted to dial yet.
@@ -197,13 +217,14 @@ impl InitialContactsManager {
 }
 
 impl DialManager {
-    pub(crate) fn new(initial_contacts: Vec<Multiaddr>) -> Self {
-        Self {
+    pub(crate) fn new(initial_contacts: Vec<Multiaddr>, self_peer_id: PeerId) -> Result<Self> {
+        let manager = Self {
             current_workflow_attempt: 1,
             dialer: Dialer::default(),
             all_dial_attempts: HashMap::new(),
-            initial_contacts_manager: InitialContactsManager::new(initial_contacts),
-        }
+            initial_contacts_manager: InitialContactsManager::new(initial_contacts, self_peer_id)?,
+        };
+        Ok(manager)
     }
 
     /// Re attempt the dialer workflow by resetting the dialer and initial contacts manager.
@@ -348,20 +369,29 @@ impl DialManager {
         }
     }
 
-    pub(crate) fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) {
+    /// Update the `DialState` to `DialBackReceived` if we had an ongoing dial attempt with the given `peer_id` and the
+    /// response was received after the `DIAL_BACK_DELAY`.
+    /// Returns true if the state was updated, false otherwise.
+    pub(crate) fn on_successful_dial_back_identify(&mut self, peer_id: &PeerId) -> bool {
+        let mut updated = false;
         let entry = self.dialer.ongoing_dial_attempts
             .entry(*peer_id)
             .and_modify(|state| {
                 let old_state = state.clone();
-                state.transition_to_dial_back_received(peer_id);
-                info!("Identify received for for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
-            });
+                if state.transition_to_dial_back_received(peer_id) {
+                    updated = true;
+                    info!("Identify received for {peer_id:?} that we had dialed! Transition from {old_state:?} To {state:?}. Elapsed: {:?} seconds", state.elapsed().as_secs());
+                } else {
+                    info!("Identify received for {peer_id:?}. We did not transition to DialBackReceived. Elapsed: {:?} seconds", state.elapsed().as_secs());
+                }
+        });
 
         if let Entry::Vacant(_) = entry {
             info!(
                 "We received identify from {peer_id:?} that was not in our ongoing dial attempts. This is unexpected. Not tracking it."
             );
         }
+        updated
     }
 
     pub(crate) fn on_outgoing_connection_error(&mut self, peer_id: PeerId) {
