@@ -227,9 +227,9 @@ impl TaskHandler {
         match result {
             Ok((_addr, data)) => {
                 responder.send(Ok(Some(data.to_vec()))).map_err(|_| {
-                    TaskHandlerError::NetworkClientDropped(
-                        "OutboundRequestId {request_id:?}".to_string(),
-                    )
+                    TaskHandlerError::NetworkClientDropped(format!(
+                        "OutboundRequestId {request_id:?}"
+                    ))
                 })?;
             }
             Err(ProtocolError::ReplicatedRecordNotFound { .. }) => {
