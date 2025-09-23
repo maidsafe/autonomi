@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758546477683,
+  "lastUpdate": 1758665970883,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2027,6 +2027,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.09109934772195,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "5a54c3a841ef7b58bc9546ee36b0859e0d07138f",
+          "message": "Merge pull request #3208 from maqi/using_tokio_spawn_blocking\n\nchore(client): use tokio::spawn_blocking",
+          "timestamp": "2025-09-23T21:22:09Z",
+          "tree_id": "72294d1770fa9ef5263d0460c3d3105252c1071b",
+          "url": "https://github.com/maidsafe/autonomi/commit/5a54c3a841ef7b58bc9546ee36b0859e0d07138f"
+        },
+        "date": 1758665963137,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.297129897417239,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.0999427757606,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.187441894717615,
             "unit": "MiB/s"
           }
         ]
