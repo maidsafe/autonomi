@@ -40,77 +40,52 @@ use throbber_widgets_tui::{Throbber, ThrobberState, WhichUse};
 // Re-export config from state module for convenience
 pub use super::state::NodeTableConfig;
 
-pub struct NodeTableWidget;
+pub fn render_node_table(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut NodeTableState) {
+    let node_count = state.controller.view.items.len();
+    let block = node_table_block(node_count);
+    let table_area = block.inner(area);
 
-impl NodeTableWidget {
-    pub fn render(self, area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut NodeTableState) {
-        let node_count = state.controller.view.items.len();
-        let block = NodeTableBlock::new(node_count);
-        let table_area = block.inner(area);
+    let reachability_active = state.controller.view.items.iter().any(|node| {
+        matches!(
+            node.reachability_progress,
+            ReachabilityProgress::InProgress(_)
+        )
+    });
 
-        let reachability_active = state.controller.view.items.iter().any(|node| {
-            matches!(
-                node.reachability_progress,
-                ReachabilityProgress::InProgress(_)
-            )
-        });
+    let status_width_hint = measure_status_width(&state.controller.view.items);
 
-        let status_width_hint = measure_status_width(&state.controller.view.items);
+    let (column_constraints, status_width) =
+        compute_layout(table_area.width, reachability_active, status_width_hint);
 
-        let (column_constraints, status_width) =
-            compute_layout(table_area.width, reachability_active, status_width_hint);
+    let table_widget = NodesTable::new(column_constraints, status_width, reachability_active);
+    f.render_stateful_widget(table_widget, table_area, &mut state.controller.view);
 
-        let table_widget = NodesTable::new(column_constraints, status_width, reachability_active);
-        f.render_stateful_widget(table_widget, table_area, &mut state.controller.view);
-
-        if state.spinner_states.len() < node_count {
-            state
-                .spinner_states
-                .resize_with(node_count, ThrobberState::default);
-        } else if state.spinner_states.len() > node_count {
-            state.spinner_states.truncate(node_count);
-        }
-
-        let spinner_widget = NodeSpinnerColumn::new(&state.controller.view.items);
-        f.render_stateful_widget(spinner_widget, table_area, &mut state.spinner_states);
-
-        f.render_widget(block, area);
+    if state.spinner_states.len() < node_count {
+        state
+            .spinner_states
+            .resize_with(node_count, ThrobberState::default);
+    } else if state.spinner_states.len() > node_count {
+        state.spinner_states.truncate(node_count);
     }
+
+    render_spinner_column(table_area, f, state);
+
+    f.render_widget(block, area);
 }
 
-struct NodeTableBlock {
-    node_count: usize,
-}
-
-impl NodeTableBlock {
-    fn new(node_count: usize) -> Self {
-        Self { node_count }
-    }
-
-    fn block(&self) -> Block<'static> {
-        Block::default()
-            .title(Line::from(vec![
-                Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
-                Span::styled(
-                    format!(" ({}) ", self.node_count),
-                    Style::default().fg(LIGHT_PERIWINKLE),
-                ),
-            ]))
-            .padding(Padding::new(1, 1, 0, 0))
-            .title_style(Style::default().fg(GHOST_WHITE))
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(EUCALYPTUS))
-    }
-
-    fn inner(&self, area: Rect) -> Rect {
-        self.block().inner(area)
-    }
-}
-
-impl Widget for NodeTableBlock {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        self.block().render(area, buf);
-    }
+fn node_table_block(node_count: usize) -> Block<'static> {
+    Block::default()
+        .title(Line::from(vec![
+            Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
+            Span::styled(
+                format!(" ({}) ", node_count),
+                Style::default().fg(LIGHT_PERIWINKLE),
+            ),
+        ]))
+        .padding(Padding::new(1, 1, 0, 0))
+        .title_style(Style::default().fg(GHOST_WHITE))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(EUCALYPTUS))
 }
 
 fn measure_status_width(items: &[NodeViewModel]) -> usize {
@@ -226,41 +201,27 @@ impl StatefulWidget for NodesTable {
     }
 }
 
-struct NodeSpinnerColumn<'a> {
-    items: &'a [NodeViewModel],
-}
+fn render_spinner_column(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut NodeTableState) {
+    let spinner_x = area.right().saturating_sub(2);
+    let start_y = area.y + 1;
 
-impl<'a> NodeSpinnerColumn<'a> {
-    fn new(items: &'a [NodeViewModel]) -> Self {
-        Self { items }
-    }
-}
-
-impl StatefulWidget for NodeSpinnerColumn<'_> {
-    type State = Vec<ThrobberState>;
-
-    fn render(self, area: Rect, buf: &mut Buffer, states: &mut Self::State) {
-        let spinner_x = area.right().saturating_sub(2);
-        let start_y = area.y + 1;
-
-        for (index, node_item) in self.items.iter().enumerate() {
-            if index >= states.len() {
-                break;
-            }
-
-            let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
-            let style = match node_item.lifecycle {
-                LifecycleState::Running => SpinnerStyle::Running,
-                LifecycleState::Starting | LifecycleState::Adding => SpinnerStyle::Starting,
-                LifecycleState::Stopping => SpinnerStyle::Stopping,
-                LifecycleState::Removing => SpinnerStyle::Stopping,
-                LifecycleState::Unreachable { .. } => SpinnerStyle::Stopped,
-                _ => SpinnerStyle::Idle,
-            };
-
-            let spinner = spinner_for(style, node_item.locked);
-            StatefulWidget::render(spinner, spinner_area, buf, &mut states[index]);
+    for (index, node_item) in state.controller.view.items.iter().enumerate() {
+        if index >= state.spinner_states.len() {
+            break;
         }
+
+        let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
+        let style = match node_item.lifecycle {
+            LifecycleState::Running => SpinnerStyle::Running,
+            LifecycleState::Starting | LifecycleState::Adding => SpinnerStyle::Starting,
+            LifecycleState::Stopping => SpinnerStyle::Stopping,
+            LifecycleState::Removing => SpinnerStyle::Stopping,
+            LifecycleState::Unreachable { .. } => SpinnerStyle::Stopped,
+            _ => SpinnerStyle::Idle,
+        };
+
+        let spinner = spinner_for(style, node_item.locked);
+        f.render_stateful_widget(spinner, spinner_area, &mut state.spinner_states[index]);
     }
 }
 
