@@ -263,6 +263,9 @@ impl ServiceStateActions for NodeService {
 
                 let reachability_status = node_metrics.reachability_status.clone();
                 let failure_log = if reachability_status.indicates_unreachable() {
+                    info!(
+                        "Reachability status indicates unreachable, attempting to read critical failure log"
+                    );
                     self.read_critical_failure_with_retry().await
                 } else {
                     None
@@ -289,6 +292,9 @@ impl ServiceStateActions for NodeService {
             };
 
         let mut service_data = self.service_data.write().await;
+        debug!(
+            "Writing new state for {service_name}, pid: {pid:?}, connected_peers: {connected_peers}, reachability_progress: {reachability_progress:?}, last_critical_failure: {last_critical_failure:?}"
+        );
         service_data.connected_peers = connected_peers;
         service_data.peer_id = peer_id;
         service_data.pid = pid;

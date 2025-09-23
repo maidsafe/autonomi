@@ -146,7 +146,7 @@ impl NodeViewModel {
         locked: bool,
         pending_command: Option<CommandKind>,
     ) -> Self {
-        let (status, registry_progress, mut failure_reason, version) = if let Some(node) = registry
+        let (status, registry_progress, base_failure_reason, version) = if let Some(node) = registry
         {
             (
                 format!("{:?}", node.status),
@@ -163,36 +163,13 @@ impl NodeViewModel {
             )
         };
 
-        let mut effective_lifecycle = lifecycle;
-
-        if reachability_status.indicates_unreachable() {
-            let reason_text = failure_reason
-                .take()
-                .map(|reason| format!("Error ({reason})"))
-                .unwrap_or_else(|| "Unreachable".to_string());
-            failure_reason = Some(reason_text.clone());
-            effective_lifecycle = LifecycleState::Unreachable {
-                reason: Some(reason_text),
-            };
-        } else if !metrics.endpoint_online {
-            if let Some(reason) = failure_reason.take() {
-                let reason_text = format!("Error ({reason})");
-                failure_reason = Some(reason_text.clone());
-                effective_lifecycle = LifecycleState::Unreachable {
-                    reason: Some(reason_text),
-                };
-            } else {
-                failure_reason = None;
-            }
-        }
-
-        if matches!(effective_lifecycle, LifecycleState::Unreachable { .. })
-            && registry.is_some_and(|node| node.status == ServiceStatus::Running)
-            && !reachability_status.indicates_unreachable()
-            && metrics.endpoint_online
-        {
-            effective_lifecycle = LifecycleState::Running;
-        }
+        let (effective_lifecycle, failure_reason) = decorate_lifecycle_with_reachability(
+            lifecycle,
+            registry,
+            &reachability_status,
+            &metrics,
+            base_failure_reason,
+        );
 
         let progress = match reachability_status.progress.clone() {
             ReachabilityProgress::NotRun => registry_progress,
@@ -238,26 +215,27 @@ impl NodeViewModel {
     }
 }
 
-/// Determines the lifecycle state for a node.
-pub fn derive_lifecycle_state(
+fn lifecycle_from_transition(transition: Option<&TransitionEntry>) -> Option<LifecycleState> {
+    let entry = transition?;
+    Some(match entry.command {
+        CommandKind::Start | CommandKind::Maintain => LifecycleState::Starting,
+        CommandKind::Stop => LifecycleState::Stopping,
+        CommandKind::Add => LifecycleState::Adding,
+        CommandKind::Remove => LifecycleState::Removing,
+    })
+}
+
+fn lifecycle_from_provisioning(
+    is_provisioning: bool,
+    registry: Option<&RegistryNode>,
+) -> Option<LifecycleState> {
+    (is_provisioning && registry.is_none()).then_some(LifecycleState::Adding)
+}
+
+fn lifecycle_from_registry(
     registry: Option<&RegistryNode>,
     desired: DesiredNodeState,
-    is_provisioning: bool,
-    transition: Option<&TransitionEntry>,
 ) -> LifecycleState {
-    if let Some(entry) = transition {
-        return match entry.command {
-            CommandKind::Start | CommandKind::Maintain => LifecycleState::Starting,
-            CommandKind::Stop => LifecycleState::Stopping,
-            CommandKind::Add => LifecycleState::Adding,
-            CommandKind::Remove => LifecycleState::Removing,
-        };
-    }
-
-    if is_provisioning && registry.is_none() {
-        return LifecycleState::Adding;
-    }
-
     let Some(node) = registry else {
         return LifecycleState::Refreshing;
     };
@@ -286,6 +264,69 @@ pub fn derive_lifecycle_state(
         (ServiceStatus::Added, _) => LifecycleState::Stopped,
         (ServiceStatus::Removed, _) => LifecycleState::Removing,
     }
+}
+
+fn decorate_lifecycle_with_reachability(
+    lifecycle: LifecycleState,
+    registry: Option<&RegistryNode>,
+    reachability_status: &ReachabilityStatusValues,
+    metrics: &NodeMetrics,
+    mut failure_reason: Option<String>,
+) -> (LifecycleState, Option<String>) {
+    let mut effective = lifecycle;
+
+    if reachability_status.indicates_unreachable() {
+        let reason_text = failure_reason
+            .take()
+            .map(|reason| format!("Error ({reason})"))
+            .unwrap_or_else(|| "Unreachable".to_string());
+        failure_reason = Some(reason_text.clone());
+        effective = LifecycleState::Unreachable {
+            reason: Some(reason_text),
+        };
+    } else if !metrics.endpoint_online {
+        if let Some(reason) = failure_reason.take() {
+            let reason_text = format!("Error ({reason})");
+            failure_reason = Some(reason_text.clone());
+            effective = LifecycleState::Unreachable {
+                reason: Some(reason_text),
+            };
+        }
+    }
+
+    if matches!(effective, LifecycleState::Unreachable { .. })
+        && registry.is_some_and(|node| node.status == ServiceStatus::Running)
+        && !reachability_status.indicates_unreachable()
+        && metrics.endpoint_online
+    {
+        effective = LifecycleState::Running;
+    }
+
+    (effective, failure_reason)
+}
+
+/// Determines the lifecycle state for a node.
+///
+/// Precedence rules:
+/// 1. Active transitions (`transition`) always win so in-flight actions surface immediately.
+/// 2. Provisioning intent (`is_provisioning`) takes priority when no registry entry exists yet.
+/// 3. Registry status + desired intent provide the steady-state fallback.
+pub fn derive_lifecycle_state(
+    registry: Option<&RegistryNode>,
+    desired: DesiredNodeState,
+    is_provisioning: bool,
+    transition: Option<&TransitionEntry>,
+) -> LifecycleState {
+    // Precedence intentionally ordered: explicit transitions > provisioning > registry snapshot.
+    if let Some(state) = lifecycle_from_transition(transition) {
+        return state;
+    }
+
+    if let Some(state) = lifecycle_from_provisioning(is_provisioning, registry) {
+        return state;
+    }
+
+    lifecycle_from_registry(registry, desired)
 }
 
 /// Builds a set of node view models from the data sources.
@@ -376,6 +417,40 @@ mod tests {
             false,
             Some(&TransitionEntry {
                 command: CommandKind::Start,
+                started_at: Instant::now(),
+            }),
+        );
+        assert_eq!(lifecycle, LifecycleState::Starting);
+    }
+
+    #[test]
+    fn transition_supersedes_provisioning() {
+        let lifecycle = derive_lifecycle_state(
+            None,
+            DesiredNodeState::Run,
+            true,
+            Some(&TransitionEntry {
+                command: CommandKind::Remove,
+                started_at: Instant::now(),
+            }),
+        );
+        assert_eq!(lifecycle, LifecycleState::Removing);
+    }
+
+    #[test]
+    fn lifecycle_refreshing_when_registry_missing_and_not_provisioning() {
+        let lifecycle = derive_lifecycle_state(None, DesiredNodeState::Run, false, None);
+        assert_eq!(lifecycle, LifecycleState::Refreshing);
+    }
+
+    #[test]
+    fn maintain_transition_is_treated_as_starting() {
+        let lifecycle = derive_lifecycle_state(
+            Some(&registry_node(ServiceStatus::Stopped)),
+            DesiredNodeState::Run,
+            false,
+            Some(&TransitionEntry {
+                command: CommandKind::Maintain,
                 started_at: Instant::now(),
             }),
         );
