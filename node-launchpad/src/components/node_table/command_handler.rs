@@ -12,6 +12,7 @@ use super::state::NodeTableState;
 use crate::action::{Action, NodeManagementCommand, NodeManagementResponse};
 use crate::components::popup::error_popup::ErrorPopup;
 use color_eyre::Result;
+use std::borrow::Cow;
 use tracing::{debug, error};
 
 /// Orchestrates node management commands and responses.
@@ -167,8 +168,10 @@ impl<'a> NodeCommandHandler<'a> {
             Some(DesiredNodeState::Run),
             Some(DesiredNodeState::FollowCluster),
             |ops, ids| ops.handle_start_node(ids),
-            "StartNodes: No nodes available to start",
-            "StartNodes operation failed",
+            CommandMessages {
+                empty: "StartNodes: No nodes available to start",
+                error: Cow::Borrowed("StartNodes operation failed"),
+            },
         )?;
 
         Ok(None)
@@ -190,8 +193,10 @@ impl<'a> NodeCommandHandler<'a> {
             Some(DesiredNodeState::Stop),
             Some(DesiredNodeState::FollowCluster),
             |ops, ids| ops.handle_stop_nodes(ids),
-            "StopNodes: No nodes available to stop",
-            "Failed to stop node",
+            CommandMessages {
+                empty: "StopNodes: No nodes available to stop",
+                error: Cow::Borrowed("Failed to stop node"),
+            },
         )?;
 
         Ok(None)
@@ -211,28 +216,34 @@ impl<'a> NodeCommandHandler<'a> {
             LifecycleState::Running | LifecycleState::Starting => {
                 if selected.can_stop() {
                     let error_message = format!("Failed to stop node {}", selected.id);
+                    let messages = CommandMessages {
+                        empty: "StopNodes: No nodes available to stop",
+                        error: Cow::Owned(error_message),
+                    };
                     self.apply_transition_command(
                         vec![selected.id.clone()],
                         CommandKind::Stop,
                         Some(DesiredNodeState::Stop),
                         Some(DesiredNodeState::FollowCluster),
                         |ops, ids| ops.handle_stop_nodes(ids),
-                        "StopNodes: No nodes available to stop",
-                        error_message.as_str(),
+                        messages,
                     )?;
                 }
             }
             LifecycleState::Stopped | LifecycleState::Unreachable { .. } => {
                 if selected.can_start() {
                     let error_message = format!("Failed to start node {}", selected.id);
+                    let messages = CommandMessages {
+                        empty: "StartNodes: No nodes available to start",
+                        error: Cow::Owned(error_message),
+                    };
                     self.apply_transition_command(
                         vec![selected.id.clone()],
                         CommandKind::Start,
                         Some(DesiredNodeState::Run),
                         Some(DesiredNodeState::FollowCluster),
                         |ops, ids| ops.handle_start_node(ids),
-                        "StartNodes: No nodes available to start",
-                        error_message.as_str(),
+                        messages,
                     )?;
                 }
             }
@@ -258,14 +269,17 @@ impl<'a> NodeCommandHandler<'a> {
         }
 
         let error_message = format!("Failed to remove node {}", selected.id);
+        let messages = CommandMessages {
+            empty: "RemoveNodes: No node selected for removal",
+            error: Cow::Owned(error_message),
+        };
         self.apply_transition_command(
             vec![selected.id.clone()],
             CommandKind::Remove,
             Some(DesiredNodeState::Remove),
             Some(DesiredNodeState::FollowCluster),
             |ops, ids| ops.handle_remove_nodes(ids),
-            "RemoveNodes: No node selected for removal",
-            error_message.as_str(),
+            messages,
         )?;
 
         Ok(None)
@@ -287,8 +301,10 @@ impl<'a> NodeCommandHandler<'a> {
             None,
             None,
             |ops, ids| ops.handle_upgrade_nodes(ids),
-            "UpgradeNodes: No nodes available to upgrade",
-            "UpgradeNodes operation failed",
+            CommandMessages {
+                empty: "UpgradeNodes: No nodes available to upgrade",
+                error: Cow::Borrowed("UpgradeNodes operation failed"),
+            },
         )?;
 
         Ok(None)
@@ -325,21 +341,20 @@ impl<'a> NodeCommandHandler<'a> {
         Ok(None)
     }
 
-    fn apply_transition_command<F>(
+    fn apply_transition_command<'msg, F>(
         &mut self,
         ids: Vec<String>,
         command: CommandKind,
         desired: Option<DesiredNodeState>,
         revert_on_error: Option<DesiredNodeState>,
         execute: F,
-        empty_message: &str,
-        error_message: &str,
+        messages: CommandMessages<'msg>,
     ) -> Result<()>
     where
         F: FnOnce(&mut NodeOperations, Vec<String>) -> Result<()>,
     {
         if ids.is_empty() {
-            debug!("{empty_message}");
+            debug!("{}", messages.empty);
             return Ok(());
         }
 
@@ -351,7 +366,7 @@ impl<'a> NodeCommandHandler<'a> {
         }
 
         if let Err(err) = execute(&mut self.state.operations, ids.clone()) {
-            error!("{error_message}: {err}");
+            error!("{}: {err}", messages.error);
             for id in &ids {
                 self.state.controller.clear_transition(id);
                 if let Some(target) = revert_on_error {
@@ -403,4 +418,9 @@ impl<'a> NodeCommandHandler<'a> {
             Ok(None)
         }
     }
+}
+
+struct CommandMessages<'a> {
+    empty: &'a str,
+    error: Cow<'a, str>,
 }
