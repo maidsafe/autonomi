@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
-pub use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig, error::Error as BootstrapError};
+pub use ant_bootstrap::{error::Error as BootstrapError, BootstrapCacheConfig, InitialPeersConfig};
 use ant_evm::EvmNetwork;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use std::{num::NonZero, sync::LazyLock};
@@ -31,7 +31,10 @@ pub static CHUNK_DOWNLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
     let batch_size = std::env::var("CHUNK_DOWNLOAD_BATCH_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
+        // With the network fetch switched from kad::get_record to req/rsp DM,
+        // which use much less memory and traffic each individual network query,
+        // the default parallism can now be increased from 1 to 4.
+        .unwrap_or(4);
     info!("Chunk download batch size: {}", batch_size);
     batch_size
 });
