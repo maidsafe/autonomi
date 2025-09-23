@@ -7,6 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ratatui::widgets::TableState;
+use throbber_widgets_tui::ThrobberState;
 
 #[derive(Default, Clone)]
 pub struct StatefulTable<T> {
@@ -64,5 +65,39 @@ impl<T> StatefulTable<T> {
         self.state
             .selected()
             .and_then(|index| self.items.get_mut(index))
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct TableUiState {
+    spinner_states: Vec<ThrobberState>,
+}
+
+impl TableUiState {
+    pub fn new() -> Self {
+        Self {
+            spinner_states: Vec::new(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.spinner_states.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.spinner_states.is_empty()
+    }
+
+    pub fn spinner_states(&self) -> &[ThrobberState] {
+        &self.spinner_states
+    }
+
+    pub fn spinner_states_mut(&mut self) -> &mut Vec<ThrobberState> {
+        &mut self.spinner_states
+    }
+
+    pub fn ensure_spinner_count(&mut self, count: usize) {
+        self.spinner_states
+            .resize_with(count, ThrobberState::default);
     }
 }

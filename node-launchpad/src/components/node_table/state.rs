@@ -8,11 +8,12 @@
 
 use super::{
     lifecycle::{
-        CommandKind, DesiredNodeState, LifecycleState, NodeId, NodeMetrics, NodeViewModel,
-        RegistryNode, TransitionEntry, build_view_models,
+        CommandKind, DesiredNodeState, LifecycleState, NodeId, NodeMetrics, RegistryNode,
+        TransitionEntry,
     },
     operations::NodeOperations,
-    table_state::StatefulTable,
+    table_state::{StatefulTable, TableUiState},
+    view::{NodeViewModel, build_view_models},
 };
 use crate::node_management::NodeManagement;
 use crate::{action::Action, components::node_table::operations::NodeOperationsConfig};
@@ -26,7 +27,6 @@ use color_eyre::eyre::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{path::PathBuf, time::Instant};
-use throbber_widgets_tui::ThrobberState;
 use tracing::{debug, error};
 
 pub struct NodeTableState {
@@ -44,7 +44,7 @@ pub struct NodeTableState {
     pub node_stats_last_update: Instant,
 
     // UI state
-    pub spinner_states: Vec<ThrobberState>,
+    pub ui: TableUiState,
     pub last_reported_running_count: u64,
 }
 
@@ -57,6 +57,7 @@ pub struct NodeState {
     pub metrics: NodeMetrics,
     pub reachability: ReachabilityStatusValues,
     pub bandwidth_totals: (u64, u64),
+    pub awaiting_response: bool,
 }
 
 impl Default for NodeState {
@@ -69,7 +70,50 @@ impl Default for NodeState {
             metrics: NodeMetrics::default(),
             reachability: ReachabilityStatusValues::default(),
             bandwidth_totals: (0, 0),
+            awaiting_response: false,
         }
+    }
+}
+
+impl NodeState {
+    pub fn set_transition(&mut self, command: CommandKind, started_at: Instant) {
+        self.transition = Some(TransitionEntry {
+            command,
+            started_at,
+        });
+        if matches!(command, CommandKind::Add) && self.registry.is_none() {
+            self.is_provisioning = true;
+        }
+    }
+
+    pub fn clear_transition(&mut self) {
+        self.transition = None;
+        self.awaiting_response = false;
+    }
+
+    pub fn transition_command(&self) -> Option<CommandKind> {
+        self.transition.as_ref().map(|entry| entry.command)
+    }
+
+    pub fn is_locked(&self) -> bool {
+        matches!(
+            self.transition_command(),
+            Some(
+                CommandKind::Add
+                    | CommandKind::Remove
+                    | CommandKind::Start
+                    | CommandKind::Stop
+                    | CommandKind::Maintain
+            )
+        )
+    }
+
+    pub fn should_keep(&self) -> bool {
+        self.registry.is_some()
+            || self.is_provisioning
+            || self.transition.is_some()
+            || !matches!(self.desired, DesiredNodeState::FollowCluster)
+            || self.awaiting_response
     }
 }
 
@@ -86,7 +130,6 @@ pub enum NavigationDirection {
 pub struct NodeStateController {
     pub nodes: BTreeMap<NodeId, NodeState>,
     pub desired_running_count: u64,
-    pub locked_nodes: BTreeSet<NodeId>,
     pub view: StatefulTable<NodeViewModel>,
 }
 
@@ -96,7 +139,6 @@ impl Default for NodeStateController {
             view: StatefulTable::with_items(vec![]),
             nodes: BTreeMap::new(),
             desired_running_count: 0,
-            locked_nodes: BTreeSet::new(),
         }
     }
 }
@@ -133,19 +175,13 @@ impl NodeStateController {
             }
         }
 
-        self.nodes.retain(|id, state| {
-            state.registry.is_some()
-                || state.is_provisioning
-                || state.transition.is_some()
-                || !matches!(state.desired, DesiredNodeState::FollowCluster)
-                || self.locked_nodes.contains(id)
-        });
+        self.nodes.retain(|_, state| state.should_keep());
         debug!("Applied registry services, current controller: {self:?}");
     }
 
     pub fn refresh_view(&mut self) {
         let selected = self.view.state.selected();
-        let models = build_view_models(&self.nodes, &self.locked_nodes);
+        let models = build_view_models(&self.nodes);
         let mut table = StatefulTable::with_items(models);
         if let Some(selected_index) = selected
             && !table.items.is_empty()
@@ -170,22 +206,15 @@ impl NodeStateController {
 
     pub fn mark_transition(&mut self, id: &str, command: CommandKind) {
         let entry = self.nodes.entry(id.to_string()).or_default();
-        entry.transition = Some(TransitionEntry {
-            command,
-            started_at: Instant::now(),
-        });
-        if matches!(command, CommandKind::Add) && entry.registry.is_none() {
-            entry.is_provisioning = true;
-        }
-        self.locked_nodes.insert(id.to_string());
+        entry.set_transition(command, Instant::now());
+        entry.awaiting_response = true;
         self.refresh_view();
     }
 
     pub fn clear_transition(&mut self, id: &str) {
         if let Some(node) = self.nodes.get_mut(id) {
-            node.transition = None;
+            node.clear_transition();
         }
-        self.locked_nodes.remove(id);
         self.refresh_view();
     }
 
@@ -203,9 +232,8 @@ impl NodeStateController {
         let had_entries = !to_clear.is_empty();
         for id in to_clear {
             if let Some(node) = self.nodes.get_mut(&id) {
-                node.transition = None;
+                node.clear_transition();
             }
-            self.locked_nodes.remove(&id);
         }
         if had_entries {
             self.refresh_view();
@@ -222,7 +250,6 @@ impl NodeStateController {
             && entry.transition.is_none()
             && entry.registry.is_none()
             && !entry.is_provisioning
-            && !self.locked_nodes.contains(id)
         {
             self.nodes.remove(id);
         }
@@ -269,48 +296,67 @@ impl NodeStateController {
     fn reconcile_transitions(&mut self) {
         let mut completed = Vec::new();
         for (id, node) in self.nodes.iter() {
-            if self.locked_nodes.contains(id) {
+            let Some(transition) = node.transition.as_ref() else {
                 continue;
-            }
-            let Some(entry) = node.transition.as_ref() else {
-                continue;
-            };
-            let registry_state = node.registry.as_ref();
-            let done = match entry.command {
-                CommandKind::Start => matches!(
-                    registry_state.map(|n| &n.status),
-                    Some(ServiceStatus::Running)
-                ),
-                CommandKind::Maintain => matches!(
-                    registry_state.map(|n| n.status.clone()),
-                    None | Some(
-                        ServiceStatus::Running | ServiceStatus::Stopped | ServiceStatus::Removed
-                    )
-                ),
-                CommandKind::Stop => !matches!(
-                    registry_state.map(|n| &n.status),
-                    Some(ServiceStatus::Running)
-                ),
-                CommandKind::Add => registry_state.is_some(),
-                CommandKind::Remove => {
-                    registry_state.is_none()
-                        || matches!(
-                            registry_state.map(|n| &n.status),
-                            Some(ServiceStatus::Removed)
-                        )
-                }
             };
 
-            if done {
+            if node.awaiting_response {
+                continue;
+            }
+
+            if self.transition_complete(node, transition.command) {
                 completed.push(id.clone());
             }
         }
 
         for id in completed {
             if let Some(node) = self.nodes.get_mut(&id) {
-                node.transition = None;
+                node.clear_transition();
             }
-            self.locked_nodes.remove(&id);
+        }
+    }
+
+    fn transition_complete(&self, node: &NodeState, command: CommandKind) -> bool {
+        match command {
+            CommandKind::Start => self.transition_complete_for_start(node),
+            CommandKind::Stop => self.transition_complete_for_stop(node),
+            CommandKind::Add => self.transition_complete_for_add(node),
+            CommandKind::Remove => self.transition_complete_for_remove(node),
+            CommandKind::Maintain => self.transition_complete_for_maintain(node),
+        }
+    }
+
+    fn transition_complete_for_start(&self, node: &NodeState) -> bool {
+        node.registry
+            .as_ref()
+            .is_some_and(|registry| registry.status == ServiceStatus::Running)
+    }
+
+    fn transition_complete_for_stop(&self, node: &NodeState) -> bool {
+        !node
+            .registry
+            .as_ref()
+            .is_some_and(|registry| registry.status == ServiceStatus::Running)
+    }
+
+    fn transition_complete_for_add(&self, node: &NodeState) -> bool {
+        node.registry.is_some()
+    }
+
+    fn transition_complete_for_remove(&self, node: &NodeState) -> bool {
+        match node.registry.as_ref() {
+            None => true,
+            Some(registry) => registry.status == ServiceStatus::Removed,
+        }
+    }
+
+    fn transition_complete_for_maintain(&self, node: &NodeState) -> bool {
+        match node.registry.as_ref() {
+            None => true,
+            Some(registry) => matches!(
+                registry.status,
+                ServiceStatus::Running | ServiceStatus::Stopped | ServiceStatus::Removed
+            ),
         }
     }
 }
@@ -350,7 +396,7 @@ impl NodeTableState {
             operations_config,
             controller,
             node_stats_last_update: Instant::now(),
-            spinner_states: vec![],
+            ui: TableUiState::new(),
             last_reported_running_count: 0,
         };
 
@@ -384,8 +430,7 @@ impl NodeTableState {
             .update_desired_running_count(self.operations_config.nodes_to_start);
 
         let view_len = self.controller.view.items.len();
-        self.spinner_states
-            .resize_with(view_len, ThrobberState::default);
+        self.ui.ensure_spinner_count(view_len);
 
         if self.controller.selected_index().is_none() && view_len > 0 {
             debug!("Auto-selecting first unlocked node since no selection exists");
@@ -490,14 +535,97 @@ impl NodeTableState {
         debug!("Synced port_range to {port_range:?}");
     }
 
-    /// Find the index of the next unlocked node, wrapping around if needed
-    fn find_next_unlocked_index(&self) -> Option<usize> {
-        let items = self.controller.items();
+    pub fn navigate(&mut self, direction: NavigationDirection) {
+        self.ui.navigate(&mut self.controller, direction);
+    }
+
+    pub fn select_node_if_unlocked(&mut self, index: Option<usize>) {
+        self.ui.select_node_if_unlocked(&mut self.controller, index);
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.ui.clear_selection(&mut self.controller)
+    }
+
+    pub fn try_clear_selection_if_locked(&mut self) {
+        self.ui.try_clear_selection_if_locked(&mut self.controller)
+    }
+}
+
+impl TableUiState {
+    pub fn navigate(
+        &mut self,
+        controller: &mut NodeStateController,
+        direction: NavigationDirection,
+    ) {
+        match direction {
+            NavigationDirection::Up(steps) => {
+                let count = steps.max(1);
+                for _ in 0..count {
+                    let prev_index = self.find_previous_unlocked_index(controller);
+                    self.select_node_if_unlocked(controller, prev_index);
+                }
+            }
+            NavigationDirection::Down(steps) => {
+                let count = steps.max(1);
+                for _ in 0..count {
+                    let next_index = self.find_next_unlocked_index(controller);
+                    self.select_node_if_unlocked(controller, next_index);
+                }
+            }
+            NavigationDirection::First => {
+                let first_index = self.find_first_unlocked_index(controller);
+                self.select_node_if_unlocked(controller, first_index);
+            }
+            NavigationDirection::Last => {
+                let last_index = self.find_last_unlocked_index(controller);
+                self.select_node_if_unlocked(controller, last_index);
+            }
+        }
+    }
+
+    pub fn select_node_if_unlocked(
+        &mut self,
+        controller: &mut NodeStateController,
+        index: Option<usize>,
+    ) {
+        match index {
+            Some(idx) if idx < controller.view.items.len() => {
+                if !controller.view.items[idx].is_locked() {
+                    self.set_selection(controller, Some(idx));
+                } else {
+                    self.set_selection(controller, None);
+                }
+            }
+            None => self.set_selection(controller, None),
+            _ => (),
+        }
+    }
+
+    pub fn clear_selection(&mut self, controller: &mut NodeStateController) {
+        self.set_selection(controller, None);
+    }
+
+    pub fn try_clear_selection_if_locked(&mut self, controller: &mut NodeStateController) {
+        if let Some(selected) = controller.selected_index()
+            && controller.items()[selected].is_locked()
+        {
+            self.clear_selection(controller);
+        }
+    }
+
+    fn set_selection(&mut self, controller: &mut NodeStateController, index: Option<usize>) {
+        controller.view.state.select(index);
+        controller.view.last_selected = index;
+    }
+
+    fn find_next_unlocked_index(&self, controller: &NodeStateController) -> Option<usize> {
+        let items = controller.items();
         if items.is_empty() {
             return None;
         }
 
-        let current = self.controller.selected_index().unwrap_or(0);
+        let current = controller.selected_index().unwrap_or(0);
         let total_items = items.len();
 
         for i in 1..=total_items {
@@ -509,13 +637,13 @@ impl NodeTableState {
         None
     }
 
-    fn find_previous_unlocked_index(&self) -> Option<usize> {
-        let items = self.controller.items();
+    fn find_previous_unlocked_index(&self, controller: &NodeStateController) -> Option<usize> {
+        let items = controller.items();
         if items.is_empty() {
             return None;
         }
 
-        let current = self.controller.selected_index().unwrap_or(0);
+        let current = controller.selected_index().unwrap_or(0);
         let total_items = items.len();
 
         for i in 1..=total_items {
@@ -527,8 +655,8 @@ impl NodeTableState {
         None
     }
 
-    fn find_first_unlocked_index(&self) -> Option<usize> {
-        self.controller
+    fn find_first_unlocked_index(&self, controller: &NodeStateController) -> Option<usize> {
+        controller
             .items()
             .iter()
             .enumerate()
@@ -536,8 +664,8 @@ impl NodeTableState {
             .map(|(idx, _)| idx)
     }
 
-    fn find_last_unlocked_index(&self) -> Option<usize> {
-        self.controller
+    fn find_last_unlocked_index(&self, controller: &NodeStateController) -> Option<usize> {
+        controller
             .items()
             .iter()
             .enumerate()
@@ -545,63 +673,355 @@ impl NodeTableState {
             .find(|(_, item)| !item.is_locked())
             .map(|(idx, _)| idx)
     }
+}
 
-    pub fn navigate(&mut self, direction: NavigationDirection) {
-        match direction {
-            NavigationDirection::Up(steps) => {
-                let count = steps.max(1);
-                for _ in 0..count {
-                    let prev_index = self.find_previous_unlocked_index();
-                    self.select_node_if_unlocked(prev_index);
-                }
-            }
-            NavigationDirection::Down(steps) => {
-                let count = steps.max(1);
-                for _ in 0..count {
-                    let next_index = self.find_next_unlocked_index();
-                    self.select_node_if_unlocked(next_index);
-                }
-            }
-            NavigationDirection::First => {
-                let first_index = self.find_first_unlocked_index();
-                self.select_node_if_unlocked(first_index);
-            }
-            NavigationDirection::Last => {
-                let last_index = self.find_last_unlocked_index();
-                self.select_node_if_unlocked(last_index);
-            }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ant_service_management::ReachabilityProgress;
+
+    fn registry_node(status: ServiceStatus) -> RegistryNode {
+        RegistryNode {
+            service_name: "node-1".to_string(),
+            metrics_port: 1200,
+            status,
+            reachability_progress: ReachabilityProgress::NotRun,
+            last_failure: None,
+            version: "0.1.0".to_string(),
         }
     }
 
-    fn set_selection(&mut self, index: Option<usize>) {
-        self.controller.view.state.select(index);
-        self.controller.view.last_selected = index;
-    }
+    #[test]
+    fn node_state_marks_all_transitions_as_locked() {
+        let commands = [
+            CommandKind::Add,
+            CommandKind::Remove,
+            CommandKind::Start,
+            CommandKind::Stop,
+            CommandKind::Maintain,
+        ];
 
-    pub fn select_node_if_unlocked(&mut self, index: Option<usize>) {
-        match index {
-            Some(idx) if idx < self.controller.view.items.len() => {
-                if !self.controller.view.items[idx].is_locked() {
-                    self.set_selection(Some(idx))
-                } else {
-                    self.set_selection(None)
-                }
-            }
-            None => self.set_selection(None),
-            _ => (),
+        for command in commands {
+            let mut state = NodeState::default();
+            state.set_transition(command, Instant::now());
+            assert!(
+                state.is_locked(),
+                "command {command:?} should lock the node"
+            );
         }
     }
 
-    pub fn clear_selection(&mut self) {
-        self.set_selection(None)
+    #[test]
+    fn node_state_should_keep_matches_intent_and_transition() {
+        let mut state = NodeState::default();
+        assert!(
+            !state.should_keep(),
+            "default state without data should not be kept"
+        );
+
+        state.desired = DesiredNodeState::Run;
+        assert!(
+            state.should_keep(),
+            "explicit desired state should retain the node"
+        );
+
+        let mut transitioning = NodeState::default();
+        transitioning.set_transition(CommandKind::Start, Instant::now());
+        assert!(
+            transitioning.should_keep(),
+            "transitioning nodes should be retained"
+        );
+
+        let provisioning = NodeState {
+            is_provisioning: true,
+            ..Default::default()
+        };
+        assert!(
+            provisioning.should_keep(),
+            "provisioning nodes should be retained"
+        );
+
+        let registered = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        assert!(
+            registered.should_keep(),
+            "registered nodes must stay tracked"
+        );
     }
 
-    pub fn try_clear_selection_if_locked(&mut self) {
-        if let Some(selected) = self.controller.selected_index()
-            && self.controller.items()[selected].is_locked()
-        {
-            self.clear_selection();
+    #[test]
+    fn transition_complete_for_start_requires_running_status() {
+        let controller = NodeStateController::default();
+
+        let node_running = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        assert!(controller.transition_complete(&node_running, CommandKind::Start));
+
+        let node_stopped = NodeState {
+            registry: Some(registry_node(ServiceStatus::Stopped)),
+            ..Default::default()
+        };
+        assert!(!controller.transition_complete(&node_stopped, CommandKind::Start));
+    }
+
+    #[test]
+    fn transition_complete_for_stop_when_not_running() {
+        let controller = NodeStateController::default();
+        assert!(controller.transition_complete(&NodeState::default(), CommandKind::Stop));
+
+        let running_node = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        assert!(!controller.transition_complete(&running_node, CommandKind::Stop));
+    }
+
+    #[test]
+    fn transition_complete_for_add_requires_registry_entry() {
+        let controller = NodeStateController::default();
+
+        let node_without_registry = NodeState::default();
+        assert!(!controller.transition_complete(&node_without_registry, CommandKind::Add));
+
+        let node_with_registry = NodeState {
+            registry: Some(registry_node(ServiceStatus::Stopped)),
+            ..Default::default()
+        };
+        assert!(controller.transition_complete(&node_with_registry, CommandKind::Add));
+    }
+
+    #[test]
+    fn transition_complete_for_remove_handles_removed_status() {
+        let controller = NodeStateController::default();
+
+        let node_without_registry = NodeState::default();
+        assert!(controller.transition_complete(&node_without_registry, CommandKind::Remove));
+
+        let node_running = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        assert!(!controller.transition_complete(&node_running, CommandKind::Remove));
+
+        let node_removed = NodeState {
+            registry: Some(registry_node(ServiceStatus::Removed)),
+            ..Default::default()
+        };
+        assert!(controller.transition_complete(&node_removed, CommandKind::Remove));
+    }
+
+    #[test]
+    fn transition_complete_for_maintain_accepts_common_states() {
+        let controller = NodeStateController::default();
+
+        let node_without_registry = NodeState::default();
+        assert!(controller.transition_complete(&node_without_registry, CommandKind::Maintain));
+
+        for status in [
+            ServiceStatus::Running,
+            ServiceStatus::Stopped,
+            ServiceStatus::Removed,
+        ] {
+            let node = NodeState {
+                registry: Some(registry_node(status.clone())),
+                ..Default::default()
+            };
+            assert!(
+                controller.transition_complete(&node, CommandKind::Maintain),
+                "status {status:?} should complete maintain"
+            );
         }
+
+        let added = NodeState {
+            registry: Some(registry_node(ServiceStatus::Added)),
+            ..Default::default()
+        };
+        assert!(
+            !controller.transition_complete(&added, CommandKind::Maintain),
+            "Added nodes should remain in maintain transition"
+        );
+    }
+
+    #[test]
+    fn reconcile_transitions_clears_completed_entries() {
+        let mut controller = NodeStateController::default();
+        let mut node = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        node.set_transition(CommandKind::Start, Instant::now());
+
+        controller.nodes.insert("node-1".to_string(), node.clone());
+
+        controller.reconcile_transitions();
+
+        assert!(
+            controller
+                .nodes
+                .get("node-1")
+                .and_then(NodeState::transition_command)
+                .is_none(),
+            "transition should be cleared when completed"
+        );
+    }
+
+    #[test]
+    fn node_state_set_transition_marks_provisioning_for_add() {
+        let mut state = NodeState::default();
+        state.set_transition(CommandKind::Add, Instant::now());
+        assert!(state.is_provisioning);
+
+        state.registry = Some(registry_node(ServiceStatus::Running));
+        state.clear_transition();
+        assert!(
+            state.is_provisioning,
+            "remains true until registry sync clears it"
+        );
+    }
+
+    #[test]
+    fn reconcile_transitions_respects_unfinished_commands() {
+        let mut controller = NodeStateController::default();
+        let mut node = NodeState {
+            registry: Some(registry_node(ServiceStatus::Running)),
+            ..Default::default()
+        };
+        node.set_transition(CommandKind::Remove, Instant::now());
+
+        controller.nodes.insert("node-1".to_string(), node.clone());
+
+        controller.reconcile_transitions();
+
+        assert!(
+            controller
+                .nodes
+                .get("node-1")
+                .and_then(NodeState::transition_command)
+                .is_some(),
+            "remove transition should persist until registry removes the node"
+        );
+
+        let node_entry = controller.nodes.get_mut("node-1").unwrap();
+        node_entry.registry = Some(registry_node(ServiceStatus::Removed));
+        controller.reconcile_transitions();
+        assert!(
+            controller
+                .nodes
+                .get("node-1")
+                .and_then(NodeState::transition_command)
+                .is_none(),
+            "remove transition clears once registry reports removed"
+        );
+    }
+
+    #[test]
+    fn maintain_transition_waits_for_explicit_clear() {
+        let mut controller = NodeStateController::default();
+        controller.mark_transition("node-1", CommandKind::Maintain);
+
+        controller.reconcile_transitions();
+
+        assert!(
+            controller
+                .nodes
+                .get("node-1")
+                .and_then(NodeState::transition_command)
+                .is_some(),
+            "maintain transition should remain until explicit response"
+        );
+
+        controller.clear_transitions_by_command(CommandKind::Maintain);
+
+        assert!(
+            controller
+                .nodes
+                .get("node-1")
+                .and_then(NodeState::transition_command)
+                .is_none(),
+            "maintain transition clears when response is handled"
+        );
+    }
+
+    #[test]
+    fn apply_registry_services_drops_pruned_nodes_without_state() {
+        let mut controller = NodeStateController::default();
+        controller
+            .nodes
+            .insert("node-1".to_string(), NodeState::default());
+
+        controller.apply_registry_services(&[]);
+
+        assert!(controller.nodes.is_empty());
+    }
+
+    #[test]
+    fn apply_registry_services_keeps_transitioning_nodes() {
+        let mut controller = NodeStateController::default();
+        let mut node_state = NodeState::default();
+        node_state.set_transition(CommandKind::Start, Instant::now());
+        controller.nodes.insert("node-1".to_string(), node_state);
+
+        controller.apply_registry_services(&[]);
+
+        assert!(
+            controller.nodes.contains_key("node-1"),
+            "transitioning nodes should not be removed"
+        );
+    }
+
+    #[test]
+    fn apply_registry_services_keeps_nodes_with_custom_desired_state() {
+        let mut controller = NodeStateController::default();
+        controller.nodes.insert(
+            "node-1".to_string(),
+            NodeState {
+                desired: DesiredNodeState::Run,
+                ..Default::default()
+            },
+        );
+
+        controller.apply_registry_services(&[]);
+
+        assert!(
+            controller.nodes.contains_key("node-1"),
+            "nodes with desired intent should remain tracked"
+        );
+    }
+
+    #[test]
+    fn apply_registry_services_clears_registry_for_missing_entries() {
+        let mut controller = NodeStateController::default();
+        controller.nodes.insert(
+            "node-1".to_string(),
+            NodeState {
+                registry: Some(registry_node(ServiceStatus::Running)),
+                ..Default::default()
+            },
+        );
+
+        controller.apply_registry_services(&[]);
+
+        assert!(
+            !controller.nodes.contains_key("node-1"),
+            "nodes without data should be removed"
+        );
+    }
+
+    #[test]
+    fn node_state_clear_transition_does_not_remove_provisioning_flag_immediately() {
+        let mut state = NodeState::default();
+        state.set_transition(CommandKind::Add, Instant::now());
+        state.clear_transition();
+
+        assert!(state.is_provisioning);
+
+        state.is_provisioning = false;
+        state.clear_transition();
+        assert!(!state.is_provisioning);
     }
 }
 

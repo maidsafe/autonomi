@@ -25,8 +25,9 @@ const MAX_BAR_INNER: usize = 10;
 const MIN_BAR_WIDTH: usize = MIN_BAR_INNER + 2;
 const MAX_BAR_WIDTH: usize = MAX_BAR_INNER + 2;
 
-use super::lifecycle::{CommandKind, LifecycleState, NodeViewModel};
+use super::lifecycle::{CommandKind, LifecycleState};
 use super::state::NodeTableState;
+use super::view::NodeViewModel;
 use crate::components::node_table::StatefulTable;
 use crate::style::{COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE};
 use ant_service_management::{ReachabilityProgress, metric::ReachabilityStatusValues};
@@ -60,12 +61,13 @@ pub fn render_node_table(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut 
     let table_widget = NodesTable::new(column_constraints, status_width, reachability_active);
     f.render_stateful_widget(table_widget, table_area, &mut state.controller.view);
 
-    if state.spinner_states.len() < node_count {
-        state
-            .spinner_states
-            .resize_with(node_count, ThrobberState::default);
-    } else if state.spinner_states.len() > node_count {
-        state.spinner_states.truncate(node_count);
+    {
+        let spinner_states = state.ui.spinner_states_mut();
+        if spinner_states.len() < node_count {
+            spinner_states.resize_with(node_count, ThrobberState::default);
+        } else if spinner_states.len() > node_count {
+            spinner_states.truncate(node_count);
+        }
     }
 
     render_spinner_column(table_area, f, state);
@@ -78,7 +80,7 @@ fn node_table_block(node_count: usize) -> Block<'static> {
         .title(Line::from(vec![
             Span::styled(" Nodes", Style::default().fg(GHOST_WHITE).bold()),
             Span::styled(
-                format!(" ({}) ", node_count),
+                format!(" ({node_count}) "),
                 Style::default().fg(LIGHT_PERIWINKLE),
             ),
         ]))
@@ -205,11 +207,10 @@ fn render_spinner_column(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut 
     let spinner_x = area.right().saturating_sub(2);
     let start_y = area.y + 1;
 
-    for (index, node_item) in state.controller.view.items.iter().enumerate() {
-        if index >= state.spinner_states.len() {
-            break;
-        }
+    let render_count = state.controller.view.items.len().min(state.ui.len());
 
+    for index in 0..render_count {
+        let node_item = &state.controller.view.items[index];
         let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
         let style = match node_item.lifecycle {
             LifecycleState::Running => SpinnerStyle::Running,
@@ -221,7 +222,9 @@ fn render_spinner_column(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut 
         };
 
         let spinner = spinner_for(style, node_item.locked);
-        f.render_stateful_widget(spinner, spinner_area, &mut state.spinner_states[index]);
+        if let Some(spinner_state) = state.ui.spinner_states_mut().get_mut(index) {
+            f.render_stateful_widget(spinner, spinner_area, spinner_state);
+        }
     }
 }
 

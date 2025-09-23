@@ -23,6 +23,7 @@ pub mod lifecycle;
 pub mod operations;
 pub mod state;
 pub mod table_state;
+pub mod view;
 pub mod widget;
 
 use crate::action::{Action, NodeManagementCommand, NodeManagementResponse, NodeTableActions};
@@ -37,6 +38,7 @@ use tokio::sync::mpsc::UnboundedSender;
 pub use operations::NodeOperations;
 pub use state::{NavigationDirection, NodeSelectionInfo, NodeTableState};
 pub use table_state::StatefulTable;
+pub use view::{NodeViewModel, build_view_models};
 pub use widget::NodeTableConfig;
 
 pub struct NodeTableComponent {
