@@ -81,6 +81,9 @@ fn node_error_to_reason(error: &Error) -> String {
                 NetworkError::InternalMsgChannelDropped => "InternalMsgChannelDropped".to_string(),
                 NetworkError::ReceivedResponseDropped(_) => "ReceivedResponseDropped".to_string(),
                 NetworkError::OutgoingResponseDropped(_) => "OutgoingResponseDropped".to_string(),
+                NetworkError::NotEnoughBootstrapAddresses => {
+                    "NotEnoughBootstrapAddresses".to_string()
+                }
             };
             format!("NetworkError::{network_err_str}")
         }

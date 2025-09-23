@@ -18,7 +18,7 @@ use libp2p::identity::Keypair;
 use libp2p::multiaddr::Protocol;
 use libp2p::swarm::dial_opts::{DialOpts, PeerCondition};
 use libp2p::swarm::{ConnectionId, DialError};
-use libp2p::{Multiaddr, identify};
+use libp2p::{Multiaddr, PeerId, identify};
 use libp2p::{
     Swarm,
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -140,12 +140,12 @@ impl ReachabilityCheckSwarmDriver {
         #[cfg(feature = "open-metrics")] metrics_recorder: Option<NetworkMetricsRecorder>,
     ) -> Result<Self, NetworkError> {
         let swarm = swarm;
+        println!("Obtaining valid listeners for the reachability check workflow");
 
-        println!("Obtaining valid listeners for the reachability check workflow..");
-
+        let peer_id = PeerId::from(keypair.public());
         Ok(Self {
             swarm,
-            dial_manager: DialManager::new(initial_contacts),
+            dial_manager: DialManager::new(initial_contacts, peer_id)?,
             progress_calculator: ProgressCalculator::new(),
             listener_manager: ListenerManager::new(keypair, listen_addr, no_upnp).await?,
             #[cfg(feature = "open-metrics")]
@@ -274,7 +274,8 @@ impl ReachabilityCheckSwarmDriver {
                 event_string = "ConnectionEstablished";
                 debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
-                // If we have dialed, then transition to connected state
+                // If we have dialed, then transition to connected state,
+                // else we are a listener, so track the connection ID.
                 if let ConnectedPoint::Dialer { address, .. } = endpoint {
                     self.dial_manager
                         .on_connection_established_as_dialer(&address);
@@ -309,7 +310,7 @@ impl ReachabilityCheckSwarmDriver {
                     .incoming_connection_ids
                     .remove(&connection_id)
                 {
-                    debug!("Removed connection {connection_id:?} from incomming_connections");
+                    debug!("Removed connection {connection_id:?} from incoming_connections");
                 }
             }
             SwarmEvent::ConnectionClosed {
@@ -328,7 +329,7 @@ impl ReachabilityCheckSwarmDriver {
                     .incoming_connection_ids
                     .remove(&connection_id)
                 {
-                    debug!("Removed connection {connection_id:?} from incomming_connections");
+                    debug!("Removed connection {connection_id:?} from incoming_connections");
                 }
             }
             SwarmEvent::Behaviour(ReachabilityCheckEvent::Identify(identify_event)) => {
@@ -339,7 +340,16 @@ impl ReachabilityCheckSwarmDriver {
                         info,
                         connection_id,
                     } => {
-                        debug!(%peer_id, ?info, "identify: received info on {connection_id:?}");
+                        if tracing::enabled!(tracing::Level::INFO) {
+                            info!(
+                                "Received identify info on {connection_id:?} from {peer_id:?}. Our observed addr: {:?} Their listen addr: {:?}",
+                                info.observed_addr, info.listen_addrs
+                            );
+                        } else {
+                            debug!(
+                                "Received identify info on {connection_id:?} from {peer_id:?}: {info:?}"
+                            );
+                        }
                         if self
                             .dial_manager
                             .dialer
@@ -347,10 +357,17 @@ impl ReachabilityCheckSwarmDriver {
                             .contains(&connection_id)
                         {
                             debug!(
-                                "Received identify info from incoming connection {connection_id:?}. Adding observed address to our list."
+                                "Received identify info from incoming connection {connection_id:?}. Trying to add the observed address to our list."
                             );
-                            self.insert_observed_address(info.observed_addr, connection_id);
-                            self.dial_manager.on_successful_dial_back_identify(&peer_id);
+                            if self.dial_manager.on_successful_dial_back_identify(&peer_id) {
+                                self.insert_observed_address(info.observed_addr, connection_id);
+                            } else {
+                                debug!("We did not track the observed address for {peer_id:?}.");
+                            }
+                        } else {
+                            error!(
+                                "Received identify info from connection {connection_id:?} that is not in our incoming connections list."
+                            );
                         }
                         if self.dial_manager.has_dialing_completed() {
                             info!(

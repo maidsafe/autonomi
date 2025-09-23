@@ -325,15 +325,15 @@ fn main() {
             }
         };
 
-    info!("Antnode started with opt: {opt:?}");
-    info!("EVM network: {evm_network:?}");
-    println!("EVM network: {evm_network:?}");
     let cargo_info = format!(
         "Running {} v{}",
         env!("CARGO_BIN_NAME"),
         env!("CARGO_PKG_VERSION")
     );
     info!("\n{}\n{}", cargo_info, "=".repeat(cargo_info.len()));
+    info!("Antnode started with opt: {opt:?}");
+    info!("EVM network: {evm_network:?}");
+    println!("EVM network: {evm_network:?}");
 
     ant_build_info::log_version_info(env!("CARGO_PKG_VERSION"), &identify_protocol_str);
     info!(

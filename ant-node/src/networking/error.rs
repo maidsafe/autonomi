@@ -47,6 +47,9 @@ pub enum NetworkError {
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
 
+    #[error("Not enough bootstrap addresses provided")]
+    NotEnoughBootstrapAddresses,
+
     #[error("No listen addresses found")]
     NoListenAddressesFound,
 
