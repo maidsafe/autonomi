@@ -15,7 +15,7 @@ use std::{
     net::{SocketAddr, TcpListener},
     path::Path,
 };
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, System};
 
 /// A thin wrapper around the `service_manager::ServiceManager`, which makes our own testing
 /// easier.
@@ -222,7 +222,11 @@ impl ServiceControl for ServiceController {
             "Searching for process with binary at {}",
             bin_path.to_string_lossy()
         );
-        let system = System::new_all();
+        let process_refresh_kind = ProcessRefreshKind::everything()
+            .without_disk_usage()
+            .without_memory();
+        let mut system = System::new();
+        system.refresh_processes_specifics(process_refresh_kind);
         for (pid, process) in system.processes() {
             if let Some(path) = process.exe()
                 && bin_path == path

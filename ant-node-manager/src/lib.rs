@@ -276,7 +276,12 @@ pub async fn refresh_node_registry(
                             service.on_start(Some(pid), full_refresh).await?;
                         }
                         Err(_) => {
-                            if service.should_mark_removed().await {
+                            // try once to check for connectivity, in case the service is running but we
+                            // couldn't find it by path
+                            if service.metrics_action.check_connectivity().await {
+                                debug!("{service_name} is running (PID not found)",);
+                                service.on_start(None, full_refresh).await?;
+                            } else if service.should_mark_removed().await {
                                 debug!("{service_name} resources missing, marking as removed");
                                 service.on_remove().await;
                             } else {

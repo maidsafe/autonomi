@@ -567,6 +567,7 @@ mod tests {
         #[async_trait]
         impl MetricsAction for MetricClient {
             async fn get_node_metrics(&self) -> Result<ant_service_management::metric::NodeMetrics, ant_service_management::metric::MetricsActionError>;
+            async fn check_connectivity(&self) -> bool;
             async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, ant_service_management::metric::MetricsActionError>;
         }
     }

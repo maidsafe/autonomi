@@ -84,6 +84,7 @@ impl ReachabilityStatusValues {
 #[async_trait]
 pub trait MetricsAction: Sync + Send {
     async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
+    async fn check_connectivity(&self) -> bool;
     async fn get_node_metadata_extended(&self) -> Result<NodeMetadataExtended, MetricsActionError>;
 }
 
@@ -217,6 +218,26 @@ impl MetricsAction for MetricsClient {
         let node_metadata = NodeMetadataExtended::try_from(&all_metrics.samples)?;
 
         Ok(node_metadata)
+    }
+
+    async fn check_connectivity(&self) -> bool {
+        let timeout = Duration::from_secs(5);
+        let url = format!("http://localhost:{}/metrics", self.port);
+        let connectivity_check = tokio::time::timeout(timeout, reqwest::get(&url)).await;
+        match connectivity_check {
+            Ok(Ok(_)) => {
+                debug!("Successfully connected to metrics endpoint at {url}");
+                true
+            }
+            Ok(Err(err)) => {
+                debug!("Failed to connect to metrics endpoint at {url}: {err}");
+                false
+            }
+            Err(err) => {
+                debug!("Timed out connecting to metrics endpoint at {url}: {err}");
+                false
+            }
+        }
     }
 }
 

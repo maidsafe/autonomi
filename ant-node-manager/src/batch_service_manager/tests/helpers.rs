@@ -75,6 +75,7 @@ mock! {
     #[async_trait]
     impl MetricsAction for MetricsClient {
         async fn get_node_metrics(&self) -> Result<NodeMetrics, MetricsActionError>;
+        async fn check_connectivity(&self) -> bool;
         async fn get_node_metadata_extended(&self) -> Result<ant_service_management::metric::NodeMetadataExtended, MetricsActionError>;
     }
 
