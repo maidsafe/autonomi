@@ -60,8 +60,6 @@ async fn journey_status_screen_renders_correctly() -> Result<(), eyre::Report> {
         .expect("Failed to create journey")
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
-        .expect_node_count_in_registry(0)?
-        .expect_registry_is_empty()?
         .expect_screen(expected_status_screen)
         .run()
         .await
@@ -113,7 +111,6 @@ async fn journey_status_screen_with_nodes_renders_correctly() -> Result<(), eyre
         .start_from(Scene::Status)
         .expect_scene(Scene::Status)
         .expect_screen(expected_status_screen)
-        .expect_node_count_in_registry(3)?
         .run()
         .await
         .expect("Status screen rendering journey failed");

@@ -9,62 +9,75 @@
 use super::{
     mock_metrics::MockMetricsService,
     mock_node_management::{MockNodeManagement, MockNodeManagementHandle},
-    mock_registry::MockNodeRegistry,
 };
 use crate::node_management::NodeManagementHandle;
+use crate::test_utils::make_node_service_data;
 use crate::{
     app::App,
     config::AppData,
     node_stats::{AggregatedNodeStats, MetricsFetcher},
 };
 use ant_bootstrap::InitialPeersConfig;
-use ant_service_management::NodeRegistryManager;
+use ant_service_management::{NodeRegistryManager, NodeServiceData, ServiceStatus};
 use color_eyre::eyre::Result;
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
-use std::sync::Arc;
+use std::{iter, sync::Arc};
+use tempfile::TempDir;
 
 pub struct TestAppBuilder {
-    mock_registry: Option<MockNodeRegistry>,
     node_management: Option<Arc<dyn NodeManagementHandle>>,
     node_registry: Option<NodeRegistryManager>,
+    initial_nodes: Vec<NodeServiceData>,
     nodes_to_start: Option<u64>,
     metrics_fetcher: Option<Arc<dyn MetricsFetcher>>,
-    mock_node_management_handle: Option<MockNodeManagementHandle>,
-    mock_node_management: Option<Arc<MockNodeManagement>>,
 }
 
 impl TestAppBuilder {
     pub fn new() -> Self {
         Self {
-            mock_registry: None,
             node_management: None,
             node_registry: None,
+            initial_nodes: Vec::new(),
             nodes_to_start: None,
             metrics_fetcher: None,
-            mock_node_management_handle: None,
-            mock_node_management: None,
         }
     }
 
-    pub fn with_mock_registry(mut self, registry: MockNodeRegistry) -> Self {
-        self.mock_registry = Some(registry);
+    pub fn with_initial_node(mut self, node: NodeServiceData) -> Self {
+        self.initial_nodes.push(node);
         self
+    }
+
+    pub fn with_initial_nodes<I>(mut self, nodes: I) -> Self
+    where
+        I: IntoIterator<Item = NodeServiceData>,
+    {
+        self.initial_nodes.extend(nodes);
+        self
+    }
+
+    pub fn with_nodes<I>(mut self, statuses: I) -> Self
+    where
+        I: IntoIterator<Item = ServiceStatus>,
+    {
+        let offset = self.initial_nodes.len() as u64;
+        for (idx, status) in statuses.into_iter().enumerate() {
+            let node = make_node_service_data(offset + idx as u64, status);
+            self.initial_nodes.push(node);
+        }
+        self
+    }
+
+    pub fn with_running_nodes(self, count: u64) -> Self {
+        self.with_nodes(iter::repeat_n(ServiceStatus::Running, count as usize))
+    }
+
+    pub fn with_stopped_nodes(self, count: u64) -> Self {
+        self.with_nodes(iter::repeat_n(ServiceStatus::Stopped, count as usize))
     }
 
     pub fn with_node_management(mut self, node_management: Arc<dyn NodeManagementHandle>) -> Self {
         self.node_management = Some(node_management);
-        self
-    }
-
-    pub fn with_mock_node_management(
-        mut self,
-        node_management: Arc<MockNodeManagement>,
-        handle: MockNodeManagementHandle,
-    ) -> Self {
-        let dyn_handle = Arc::clone(&node_management);
-        self.mock_node_management = Some(node_management);
-        self.node_management = Some(dyn_handle);
-        self.mock_node_management_handle = Some(handle);
         self
     }
 
@@ -78,35 +91,60 @@ impl TestAppBuilder {
         self
     }
 
-    pub fn with_metrics_script(mut self, script: Vec<AggregatedNodeStats>) -> Self {
+    pub fn with_metrics_events<I>(mut self, stats: I) -> Self
+    where
+        I: IntoIterator<Item = AggregatedNodeStats>,
+    {
+        let script: Vec<_> = stats.into_iter().collect();
         self.metrics_fetcher = Some(MockMetricsService::scripted(script));
         self
     }
 
+    pub fn with_metrics_script(self, script: Vec<AggregatedNodeStats>) -> Self {
+        self.with_metrics_events(script)
+    }
+
     pub async fn build(self) -> Result<TestAppContext> {
         let Self {
-            mock_registry,
             node_management,
             node_registry,
+            mut initial_nodes,
             nodes_to_start,
             metrics_fetcher,
-            mock_node_management_handle,
-            mock_node_management,
         } = self;
 
-        let registry = match mock_registry {
-            Some(registry) => registry,
-            None => MockNodeRegistry::empty()?,
-        };
+        let mut node_management = node_management;
+        let mut mock_node_management: Option<Arc<MockNodeManagement>> = None;
+        let mut mock_node_management_handle: Option<MockNodeManagementHandle> = None;
 
-        let registry_path = registry.get_registry_path().clone();
+        if node_management.is_none() {
+            let (mock, handle) = MockNodeManagement::new();
+            mock_node_management_handle = Some(handle);
+            mock_node_management = Some(Arc::clone(&mock));
+            let dyn_handle: Arc<dyn NodeManagementHandle> = mock;
+            node_management = Some(dyn_handle);
+        }
 
-        let node_registry_manager = match node_registry {
-            Some(manager) => manager,
-            None => NodeRegistryManager::load(&registry_path).await?,
-        };
+        let (node_registry_manager, registry_dir): (NodeRegistryManager, Option<TempDir>) =
+            match node_registry {
+                Some(manager) => (manager, None),
+                None => {
+                    let dir = TempDir::new()?;
+                    let path = dir.path().join("node_registry.json");
+                    (NodeRegistryManager::empty(path), Some(dir))
+                }
+            };
 
-        let nodes_to_start = nodes_to_start.unwrap_or_else(|| registry.node_count());
+        for node in initial_nodes.drain(..) {
+            node_registry_manager.push_node(node).await;
+        }
+
+        if registry_dir.is_some() {
+            node_registry_manager.save().await?;
+        }
+
+        let seeded_node_count = node_registry_manager.get_node_service_data().await.len() as u64;
+        let nodes_to_start = nodes_to_start.unwrap_or(seeded_node_count);
 
         let app_data = AppData {
             rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse()?),
@@ -134,18 +172,18 @@ impl TestAppBuilder {
 
         Ok(TestAppContext {
             app,
-            registry,
             node_management_handle: mock_node_management_handle,
             mock_node_management,
+            registry_dir,
         })
     }
 }
 
 pub struct TestAppContext {
     pub app: App,
-    pub registry: MockNodeRegistry,
     pub node_management_handle: Option<MockNodeManagementHandle>,
     pub mock_node_management: Option<Arc<MockNodeManagement>>,
+    pub registry_dir: Option<TempDir>,
 }
 
 impl Default for TestAppBuilder {

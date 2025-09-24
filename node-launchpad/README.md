@@ -77,7 +77,7 @@ pre-built node binary and connect it to a network with a custom network ID.
 
 ## Testing
 
-Launchpad favours deterministic UI tests built on `ratatui::Terminal<TestBackend>` alongside registry fakes.
+Launchpad favours deterministic UI tests built on `ratatui::Terminal<TestBackend>` alongside focused fixture helpers.
 
 ```bash
 # Run the full suite
@@ -92,7 +92,7 @@ cargo fmt --all && cargo clippy --all-features --all-targets
 
 Testing tips:
 
-- Use `test_utils::MockNodeRegistry` to emulate node lifecycle changes without touching real services.
+- Use `test_utils::make_node_service_data` with `TestAppBuilder::with_initial_nodes` to seed node lifecycles while letting the app drive updates.
 - Prefer focused `#[tokio::test]` async unit tests inside modules for state machines (e.g. `NodeTableState`).
 - Keep integration tests in `tests/` for cross-component rendering and journey coverage.
 - When asserting buffers, convert `Terminal` output to strings with helpers from `test_utils::test_helpers`.

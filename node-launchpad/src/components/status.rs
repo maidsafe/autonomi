@@ -537,8 +537,7 @@ mod tests {
     }
 
     fn sync_single_node(status: &mut Status, service_status: ServiceStatus) -> NodeServiceData {
-        let registry = MockNodeRegistry::empty().expect("failed to create mock registry");
-        let node = registry.create_test_node_service_data(0, service_status);
+        let node = crate::test_utils::make_node_service_data(0, service_status);
         status
             .node_table_component
             .state_mut()
