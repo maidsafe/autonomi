@@ -55,6 +55,7 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
         .wait(Duration::from_millis(10))
         .step()
         .expect_node_state(&node_template.service_name, LifecycleState::Running, false)
+        .expect_text("Running")
         .build()?;
 
     journey.run().await?;
