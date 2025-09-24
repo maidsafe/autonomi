@@ -96,3 +96,6 @@ Testing tips:
 - Prefer focused `#[tokio::test]` async unit tests inside modules for state machines (e.g. `NodeTableState`).
 - Keep integration tests in `tests/` for cross-component rendering and journey coverage.
 - When asserting buffers, convert `Terminal` output to strings with helpers from `test_utils::test_helpers`.
+- Typical flow: configure `TestAppBuilder` (seeding nodes, metrics, disk space), produce a journey via `JourneyBuilder`, and finish with `.run()`.
+- Use `JourneyBuilder::with_node_action_response(MockResponsePlan::...)` plus `.then_metrics()` / `.then_registry_snapshot()` to model node-management flows.
+- Override simulated disk space with `TestAppBuilder::with_available_disk_space(gb)` (defaults to 700 GB) or call `with_real_disk_space()` to exercise production checks.

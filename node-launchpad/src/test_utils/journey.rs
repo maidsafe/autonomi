@@ -33,6 +33,8 @@ use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tracing::error;
 
+/// Captures a scripted test run of the TUI application.
+/// Construct via `JourneyBuilder` and drive it with scripted key input and expectations.
 pub struct Journey {
     pub name: String,
     pub steps: Vec<JourneyStep>,
@@ -67,6 +69,8 @@ pub fn node_view_model<'a>(app: &'a App, node_id: &str) -> Result<&'a NodeViewMo
         .ok_or_else(|| eyre!("Node `{node_id}` not found in view"))
 }
 
+/// High-level step describing key input, expectations, and follow-up actions.
+/// Usually produced indirectly via the fluent `JourneyBuilder` API.
 #[derive(Debug, Clone)]
 pub struct JourneyStep {
     pub keys: Vec<KeyEvent>,
@@ -75,6 +79,8 @@ pub struct JourneyStep {
     pub follow_up_steps: Vec<TestStep>,
 }
 
+/// Assertions that act on the rendered screen buffer.
+/// Combined inside a `JourneyStep` when composing multi-assertion scenarios.
 #[derive(Debug, Clone)]
 pub enum ScreenAssertion {
     ExactScreen(Vec<String>),
@@ -82,6 +88,8 @@ pub enum ScreenAssertion {
 }
 
 impl Journey {
+    /// Construct a journey from an `App` plus optional mock handle.
+    /// Typically invoked by `JourneyBuilder::from_context`.
     pub fn new(
         name: String,
         mut app: App,
@@ -138,10 +146,14 @@ impl Journey {
         self.scripted_tasks.push(handle);
     }
 
+    /// Record a fully-constructed step that is ready to execute.
+    /// Pair with builder helpers such as `press` and `expect_text` before calling `run`.
     pub fn add_step(&mut self, step: JourneyStep) {
         self.steps.push(step);
     }
 
+    /// Execute the scripted journey against the test runtime.
+    /// Call once all steps have been staged via `JourneyBuilder` and `build`.
     pub async fn run(&mut self) -> Result<()> {
         // Convert journey steps to test script
         let script = self.build_test_script();
@@ -164,6 +176,8 @@ impl Journey {
         Ok(())
     }
 
+    /// Materialise the queued steps into runtime-friendly test steps.
+    /// Internally used by `run`; exposed for completeness.
     fn build_test_script(&self) -> Vec<crate::runtime::TestStep> {
         let mut script = Vec::new();
 
@@ -212,14 +226,20 @@ pub struct JourneyBuilder {
 }
 
 impl JourneyBuilder {
+    /// Create a journey with a fresh app containing no nodes.
+    /// Chain `.start_from` or `.press` calls to define behaviour before `.run`.
     pub async fn new(name: &str) -> Result<Self> {
         Self::new_with_setup(name, |builder| builder).await
     }
 
+    /// Create a journey with a pre-seeded set of running nodes.
+    /// Add scripted responses via `.with_node_action_response` for lifecycle transitions.
     pub async fn new_with_nodes(name: &str, node_count: u64) -> Result<Self> {
         Self::new_with_setup(name, move |builder| builder.with_running_nodes(node_count)).await
     }
 
+    /// Create a journey with a fully custom `TestAppBuilder` configuration.
+    /// Useful when combining multiple builder customisations before testing.
     pub async fn new_with_setup<F>(name: &str, setup: F) -> Result<Self>
     where
         F: FnOnce(TestAppBuilder) -> TestAppBuilder,
@@ -228,6 +248,8 @@ impl JourneyBuilder {
         Self::from_context(name, builder.build().await?)
     }
 
+    /// Construct a builder from an already-built `TestAppContext`.
+    /// Handy when the test needs to manipulate the raw app before scripting steps.
     pub fn from_context(name: &str, context: TestAppContext) -> Result<Self> {
         let TestAppContext {
             app,
@@ -249,6 +271,8 @@ impl JourneyBuilder {
         })
     }
 
+    /// Override the metrics script injected into the status component.
+    /// Pair with `with_node_action_response` to ensure metrics align with scripted events.
     pub fn with_metrics_script(mut self, script: Vec<AggregatedNodeStats>) -> Self {
         if let Some(app) = self.journey.app.as_mut() {
             match status_component_mut(app) {
@@ -267,6 +291,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Register a scripted response for a node-management command.
+    /// Best combined with `MockResponsePlan` chaining helpers like `then_metrics`.
     pub fn with_node_action_response(
         mut self,
         command: NodeManagementCommand,
@@ -277,6 +303,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Start the journey from a non-default scene.
+    /// Often followed by `.press` to navigate elsewhere in the UI.
     pub fn start_from(mut self, scene: Scene) -> Self {
         if let Some(app) = self.journey.app.as_mut() {
             app.scene = scene;
@@ -284,6 +312,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Queue a sequence of key presses.
+    /// Combine with `.expect_scene`/`.expect_text` to validate resultant state.
     pub fn press(mut self, keys: impl Into<KeySequence>) -> Self {
         let key_sequence: KeySequence = keys.into();
         let key_events = key_sequence.build();
@@ -301,6 +331,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Queue a single key event.
+    /// Useful between `.step()` calls for fine-grained navigation.
     pub fn press_key(mut self, key: KeyEvent) -> Self {
         if let Some(ref mut step) = self.current_step {
             step.keys.push(key);
@@ -315,6 +347,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Assert that the app enters the specified scene.
+    /// Typically paired with `.press` or `.press_key` to trigger the transition.
     pub fn expect_scene(mut self, scene: Scene) -> Self {
         if let Some(ref mut step) = self.current_step {
             step.expected_scene = Some(scene);
@@ -329,6 +363,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Assert that the rendered buffer contains the provided snippet.
+    /// Combine with `.press` or `.wait` to assert dynamic content updates.
     pub fn expect_text(mut self, text: &str) -> Self {
         if let Some(ref mut step) = self.current_step {
             step.assertions
@@ -344,6 +380,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Assert that the entire buffer matches the provided reference screen.
+    /// Precede with `.wait` to allow rendering to settle before capturing output.
     pub fn expect_screen(mut self, screen: &[&str]) -> Self {
         let screen_lines: Vec<String> = screen.iter().map(|s| s.to_string()).collect();
 
@@ -361,6 +399,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Insert a delay between scripted actions.
+    /// Use alongside `.with_node_action_response` when asynchronous updates are expected.
     pub fn wait(mut self, duration: Duration) -> Self {
         if let Some(ref mut step) = self.current_step {
             step.follow_up_steps.push(TestStep::Wait(duration));
@@ -375,6 +415,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Advance the virtual clock used by the test runtime.
+    /// Often coupled with `.wait_for_condition` in time-sensitive flows.
     pub fn advance_time(mut self, duration: Duration) -> Self {
         if let Some(ref mut step) = self.current_step {
             step.follow_up_steps.push(TestStep::AdvanceTime(duration));
@@ -389,6 +431,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Poll the app until the supplied predicate returns `true` or times out.
+    /// Works well with `.wait_for_node_state`/`.wait_for_reachability` wrappers.
     pub fn wait_for_condition<F>(
         mut self,
         description: impl Into<String>,
@@ -415,6 +459,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Run an arbitrary assertion against the current application state.
+    /// Pair with custom validation logic when built-in assertions are insufficient.
     pub fn assert_app_state<F>(mut self, description: impl Into<String>, predicate: F) -> Self
     where
         F: Fn(&App) -> Result<()> + Send + Sync + 'static,
@@ -433,6 +479,8 @@ impl JourneyBuilder {
         self
     }
 
+    /// Ensure the currently displayed error popup contains the provided substring.
+    /// Combine with `.with_node_action_response` scripts that surface errors.
     pub fn expect_error_popup_contains(self, snippet: &str) -> Self {
         let snippet = snippet.to_string();
         self.assert_app_state(
@@ -457,6 +505,8 @@ impl JourneyBuilder {
         )
     }
 
+    /// Assert a node's lifecycle state and whether it is locked by a transition.
+    /// Often paired with `.assert_spinner` or `.expect_reachability` for richer checks.
     pub fn expect_node_state(self, node_id: &str, lifecycle: LifecycleState, locked: bool) -> Self {
         let node_id = node_id.to_string();
         self.assert_app_state(
@@ -484,6 +534,8 @@ impl JourneyBuilder {
         )
     }
 
+    /// Verify whether a node is currently displaying a spinner.
+    /// Use after `.with_node_action_response` to confirm pending transitions.
     pub fn assert_spinner(self, node_id: &str, spinning: bool) -> Self {
         let node_id = node_id.to_string();
         self.assert_app_state(format!("Assert spinner for `{node_id}`"), move |app| {
@@ -501,6 +553,8 @@ impl JourneyBuilder {
         })
     }
 
+    /// Assert reachability progress and status for a node view model.
+    /// Works well with `.wait_for_reachability` when expecting async metrics updates.
     pub fn expect_reachability(
         self,
         node_id: &str,
@@ -525,6 +579,8 @@ impl JourneyBuilder {
         })
     }
 
+    /// Wait for a node to reach the specified lifecycle state.
+    /// Combine with `.with_node_action_response` to synchronise on mock transitions.
     pub fn wait_for_node_state(
         self,
         node_id: &str,
@@ -544,6 +600,8 @@ impl JourneyBuilder {
         )
     }
 
+    /// Wait for a node's reachability progress to reach the target state.
+    /// Pair with `.with_metrics_script` or `.then_metrics` in response plans.
     pub fn wait_for_reachability(
         self,
         node_id: &str,
@@ -563,6 +621,8 @@ impl JourneyBuilder {
         )
     }
 
+    /// Finalise the currently staged step and push it into the journey queue.
+    /// Invoke between groups of `.press`/`.expect_*` calls to keep scripts readable.
     pub fn step(mut self) -> Self {
         if let Some(step) = self.current_step.take() {
             self.journey.add_step(step);
@@ -570,11 +630,15 @@ impl JourneyBuilder {
         self
     }
 
+    /// Build and execute the journey, returning any error from runtime execution.
+    /// Use when the scripted steps should run immediately.
     pub async fn run(self) -> Result<()> {
         let mut journey = self.build()?;
         journey.run().await
     }
 
+    /// Convert the builder into an executable `Journey`.
+    /// Enables manual reuse of the constructed journey before calling `.run`.
     pub fn build(mut self) -> Result<Journey> {
         if let Some(step) = self.current_step.take() {
             self.journey.add_step(step);
