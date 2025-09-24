@@ -18,6 +18,8 @@ use tokio::task::JoinHandle;
 use tokio::time::{Duration, sleep};
 use tracing::{debug, error, warn};
 
+/// Script describing how the mock node-management service should respond.
+/// Build a plan, then feed it to `JourneyBuilder::with_node_action_response`.
 #[derive(Clone, Debug, Default)]
 pub struct MockResponsePlan {
     pub delay: Duration,
@@ -26,6 +28,8 @@ pub struct MockResponsePlan {
 }
 
 impl MockResponsePlan {
+    /// Immediately return the supplied response without scheduling follow-up actions.
+    /// Ideal for simple success/error cases when no extra actions are needed.
     pub fn immediate(response: NodeManagementResponse) -> Self {
         Self {
             response: Some(response),
@@ -33,6 +37,8 @@ impl MockResponsePlan {
         }
     }
 
+    /// Legacy helper for building a plan with explicit follow-up actions.
+    /// Prefer chaining `then_metrics`/`then_registry_snapshot` for clarity.
     pub fn with_follow_up(response: NodeManagementResponse, followup_actions: Vec<Action>) -> Self {
         Self {
             response: Some(response),
@@ -41,11 +47,15 @@ impl MockResponsePlan {
         }
     }
 
+    /// Introduce an artificial delay before emitting the response and actions.
+    /// Combine with `then_metrics` to simulate asynchronous updates.
     pub fn with_delay(mut self, delay: Duration) -> Self {
         self.delay = delay;
         self
     }
 
+    /// Append additional side-effect actions.
+    /// Use for custom `Action` values not covered by the dedicated helpers.
     pub fn then_actions<I>(mut self, actions: I) -> Self
     where
         I: IntoIterator<Item = Action>,
@@ -54,6 +64,8 @@ impl MockResponsePlan {
         self
     }
 
+    /// Convenience for queueing a `RegistryFileUpdated` action with the provided nodes.
+    /// Pair with node builders such as `make_node_service_data` to mirror registry snapshots.
     pub fn then_registry_snapshot(mut self, nodes: Vec<NodeServiceData>) -> Self {
         self.followup_actions.push(Action::NodeTableActions(
             NodeTableActions::RegistryFileUpdated {
@@ -63,6 +75,8 @@ impl MockResponsePlan {
         self
     }
 
+    /// Queue metrics updates that will be fed into the app's stats reducer.
+    /// Works well alongside `with_metrics_events` so tests observe consistent data.
     pub fn then_metrics<I>(mut self, stats: I) -> Self
     where
         I: IntoIterator<Item = AggregatedNodeStats>,
