@@ -131,14 +131,6 @@ impl NetworkDriver {
                 trace!("GetClosestPeers: {:?}", res);
                 self.pending_tasks.update_closest_peers(id, res)?;
             }
-            QueryResult::GetRecord(res) => {
-                // The result here is not logged because it can produce megabytes of text.
-                trace!("GetRecord event occurred");
-                let finished = self.pending_tasks.update_get_record(id, res)?;
-                if finished && let Some(mut query) = self.kad().query_mut(&id) {
-                    query.finish();
-                }
-            }
             QueryResult::PutRecord(res) => {
                 trace!("PutRecord: {:?}", res);
                 self.pending_tasks.update_put_record_kad(id, res)?;
@@ -158,7 +150,7 @@ impl NetworkDriver {
         request_id: OutboundRequestId,
         response: Response,
     ) -> Result<(), NetworkDriverError> {
-        trace!("Request response event: {:?}", response);
+        trace!("Request response event({request_id:?}): {:?}", response);
 
         // skip unknown or completed queries
         if !self.pending_tasks.contains_query(&request_id) {
@@ -183,9 +175,15 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_put_record_req(request_id, result)?;
             }
-
+            Response::Query(QueryResponse::GetReplicatedRecord(result)) => {
+                self.pending_tasks.update_get_record_req(request_id, result)?;
+            }
             _ => {
-                trace!("Other request response event: {response:?}");
+                info!("Other request response event({request_id:?}): {response:?}");
+                // Unrecoganized req/rsp DM indicates peer is in an incorrect version
+                // For such case, it shall be counted as a failure.
+                // Using ranodom id as place holder.
+                self.pending_tasks.terminate_query(request_id, PeerId::random(), OutboundFailure::UnsupportedProtocols)?;
             }
         }
 

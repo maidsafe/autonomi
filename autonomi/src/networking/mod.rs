@@ -35,7 +35,7 @@ use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
 use interface::NetworkTask;
 use libp2p::kad::NoKnownPeers;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::Duration;
@@ -259,17 +259,85 @@ impl Network {
         addr: NetworkAddress,
         quorum: Quorum,
     ) -> Result<(Option<Record>, Vec<PeerId>), NetworkError> {
-        let (tx, rx) = oneshot::channel();
-        let task = NetworkTask::GetRecord {
-            addr,
-            quorum,
-            resp: tx,
-        };
-        self.task_sender
-            .send(task)
-            .await
-            .map_err(|_| NetworkError::NetworkDriverOffline)?;
-        rx.await?
+        // Get closest peers to the address, note the returned list is `CLOSE_GROUP_SIZE + 2`.
+        let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?;
+        let expected_holders = expected_holders(quorum, CLOSE_GROUP_SIZE);
+
+        trace!(
+            "Get record {addr} from {} peers with quorum {quorum:?}",
+            closest_peers.len()
+        );
+
+        // The input addr could be from non-record_key, hence have to carry out a conversion.
+        let record_key_addr = NetworkAddress::from(&addr.to_record_key());
+
+        // Try to get record using the request response protocol with batched processing
+        let batch_size = expected_holders + 2;
+        let mut got_unique_records = HashSet::new();
+        let mut successful_responses = HashMap::new();
+        let mut err_res: Vec<_> = vec![];
+        
+        // Process peers in batches
+        for batch in closest_peers.chunks(batch_size) {
+            let mut tasks = FuturesUnordered::new();
+            
+            // Send requests to batch peers in parallel
+            for peer in batch {
+                let addr_clone = record_key_addr.clone();
+                let peer_clone = peer.clone();
+                tasks.push(async move {
+                    let res = self.get_record_req(addr_clone, peer_clone.clone()).await;
+                    (res, peer_clone)
+                });
+            }
+
+            // Collect results from current batch
+            while let Some((res, peer)) = tasks.next().await {
+                match res {
+                    // collect errors
+                    Err(e) => err_res.push(e),
+                    // not found, ignore
+                    Ok(None) => {}
+                    // accumulate successful responses
+                    Ok(Some(record_data)) => {
+                        successful_responses.insert(peer.peer_id, record_data.clone());
+                        let _ = got_unique_records.insert(record_data.clone());
+
+                        // Early return if we found unique answers from expected holders
+                        if got_unique_records.len() == 1 && successful_responses.len() >= expected_holders {
+                            let record = record_from_value(record_data, &addr);
+                            let holders = successful_responses.keys().cloned().collect();
+                            return Ok((Some(record), holders));
+                        }
+                    }
+                }
+            }
+        }
+
+        // if no records were found, return an error if we have an error, otherwise the record is not found: None
+        if successful_responses.is_empty() {
+            if let Some(err) = err_res.first() {
+                return Err(err.clone());
+            } else {
+                return Ok((None, vec![]));
+            }
+        }
+
+        // check for forks
+        if got_unique_records.len() > 1 {
+            let record_per_peer = successful_responses
+                .iter()
+                .map(|(peer_id, record)| {
+                    (*peer_id, record_from_value(record.clone(), &addr))
+                })
+                .collect::<HashMap<_, _>>();
+            return Err(NetworkError::SplitRecord(record_per_peer));
+        }
+
+        Err(NetworkError::GetRecordQuorumFailed {
+            got_holders: successful_responses.len(),
+            expected_holders,
+        })
     }
 
     /// Put a record to the network
@@ -281,11 +349,7 @@ impl Network {
         quorum: Quorum,
     ) -> Result<(), NetworkError> {
         let key = PrettyPrintRecordKey::from(&record.key);
-        // For data_type like ScratchPad, it is observed the holders will be 7
-        // which result in the expected_holders to be 4, and could result in false alert.
-        let candidates = std::cmp::min(CLOSE_GROUP_SIZE, to.len());
-        let total = NonZeroUsize::new(candidates).ok_or(NetworkError::PutRecordMissingTargets)?;
-        let expected_holders = expected_holders(quorum, total);
+        let expected_holders = expected_holders(quorum, CLOSE_GROUP_SIZE);
 
         trace!(
             "Put record {key} to {} peers with quorum {quorum:?}",
@@ -322,7 +386,7 @@ impl Network {
                 // accumulate oks until Quorum is met
                 Ok(()) => {
                     ok_res.push(peer);
-                    if ok_res.len() >= expected_holders.get() {
+                    if ok_res.len() >= expected_holders {
                         return Ok(());
                     }
                 }
@@ -342,7 +406,7 @@ impl Network {
                     // accumulate oks until Quorum is met
                     Ok(()) => {
                         ok_res.push(peer);
-                        if ok_res.len() >= expected_holders.get() {
+                        if ok_res.len() >= expected_holders {
                             let old_nodes_ok = ok_res.len() - new_nodes_ok;
                             trace!(
                                 "Put record {key} completed with {new_nodes_ok} new nodes ok and {old_nodes_ok} old nodes ok"
@@ -362,6 +426,25 @@ impl Network {
         );
 
         Err(NetworkError::PutRecordTooManyPeerFailed(ok_peers, err_res))
+    }
+
+    async fn get_record_req(
+        &self,
+        addr: NetworkAddress,
+        from: PeerInfo,
+    ) -> Result<Option<Vec<u8>>, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetRecordReq {
+            addr,
+            from,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+
+        rx.await?
     }
 
     async fn put_record_req(&self, record: Record, to: PeerInfo) -> Result<(), NetworkError> {
@@ -555,11 +638,20 @@ impl Network {
     }
 }
 
-fn expected_holders(quorum: Quorum, total: NonZeroUsize) -> NonZeroUsize {
+fn expected_holders(quorum: Quorum, total: usize) -> usize {
     match quorum {
-        Quorum::One => NonZeroUsize::new(1).expect("0 != 1"),
-        Quorum::Majority => NonZeroUsize::new(total.get() / 2 + 1).expect("n/2+1 != 0"),
+        Quorum::One => 1,
+        Quorum::Majority => total / 2 + 1,
         Quorum::All => total,
-        Quorum::N(n) => n,
+        Quorum::N(n) => n.get(),
+    }
+}
+
+fn record_from_value(value: Vec<u8>, addr: &NetworkAddress) -> Record {
+    Record {
+        key: addr.to_record_key(),
+        value,
+        publisher: None,
+        expires: None,
     }
 }
