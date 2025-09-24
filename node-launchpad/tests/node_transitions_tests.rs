@@ -481,7 +481,12 @@ async fn journey_maintain_nodes_failure_shows_error_popup() -> Result<()> {
         .expect_scene(Scene::ManageNodesPopUp { amount_of_nodes: 2 })
         .step()
         .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .expect_scene(Scene::Status)
+        .wait_for_condition(
+            "Status scene after manage nodes",
+            |app| Ok(app.scene == Scene::Status),
+            Duration::from_millis(200),
+            Duration::from_millis(20),
+        )
         .assert_spinner(&first_node.service_name, true)
         .assert_spinner(&second_node.service_name, true)
         .step()
