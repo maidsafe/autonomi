@@ -377,6 +377,9 @@ impl ReachabilityCheckSwarmDriver {
                                     .map(|addr| addr.to_string())
                                     .unwrap_or_else(|| "unknown".to_string())
                             );
+                            let _ = self
+                                .listener_manager
+                                .remove_current_listener(&mut self.swarm);
                             return self.get_reachability_status();
                         }
                     }
@@ -421,6 +424,9 @@ impl ReachabilityCheckSwarmDriver {
 
         if self.dial_manager.has_dialing_completed() {
             info!("Dialing completed. Checking the reachability status now.");
+            let _ = self
+                .listener_manager
+                .remove_current_listener(&mut self.swarm);
             match self.get_reachability_status() {
                 Some(status) => {
                     info!("Reachability status has been found to be: {status:?}");

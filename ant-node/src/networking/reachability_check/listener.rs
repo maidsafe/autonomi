@@ -211,19 +211,26 @@ impl ListenerManager {
         })
     }
 
-    /// Bind to the current index. Returns Ok if successful, Err if no more listeners.
-    pub(crate) fn bind_listener(
+    pub(crate) fn remove_current_listener(
         &mut self,
         swarm: &mut Swarm<ReachabilityCheckBehaviour>,
     ) -> Result<(), NetworkError> {
-        // Remove current listener if one exists
         if let Some(listener_id) = self.current_listener_id.take() {
             if !swarm.remove_listener(listener_id) {
                 error!("CRITICAL: Failed to remove listener {listener_id:?}");
                 return Err(NetworkError::ListenerCleanupFailed);
             }
-            info!("Successfully removed previous listener {listener_id:?}");
+            info!("Successfully removed listener {listener_id:?}");
         }
+        Ok(())
+    }
+
+    /// Bind to the current index. Returns Ok if successful, Err if no more listeners.
+    pub(crate) fn bind_listener(
+        &mut self,
+        swarm: &mut Swarm<ReachabilityCheckBehaviour>,
+    ) -> Result<(), NetworkError> {
+        self.remove_current_listener(swarm)?;
 
         // Check if we have more listeners to try
         if self.current_listener_index >= self.available_listeners.len() {
