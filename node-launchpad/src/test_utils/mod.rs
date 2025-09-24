@@ -8,11 +8,15 @@
 
 pub mod journey;
 pub mod keyboard;
+pub mod mock_metrics;
+pub mod mock_node_management;
 pub mod mock_registry;
 pub mod test_helpers;
 
 pub use journey::*;
 pub use keyboard::*;
+pub use mock_metrics::*;
+pub use mock_node_management::*;
 pub use mock_registry::*;
 pub use test_helpers::*;
 

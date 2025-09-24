@@ -16,6 +16,7 @@ use crate::{
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
+use std::any::Any;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE: u16 = 5;
@@ -211,6 +212,14 @@ impl Component for ResetNodesPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

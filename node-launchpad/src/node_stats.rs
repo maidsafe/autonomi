@@ -41,6 +41,25 @@ pub struct AggregatedNodeStats {
     pub failed_to_connect: Vec<String>,
 }
 
+pub trait MetricsFetcher: Send + Sync {
+    fn fetch(&self, running_nodes: Vec<RegistryNode>, action_sender: UnboundedSender<Action>);
+}
+
+#[derive(Default)]
+pub struct AsyncMetricsFetcher;
+
+impl MetricsFetcher for AsyncMetricsFetcher {
+    fn fetch(&self, running_nodes: Vec<RegistryNode>, action_sender: UnboundedSender<Action>) {
+        if running_nodes.is_empty() {
+            return;
+        }
+
+        tokio::spawn(async move {
+            AggregatedNodeStats::collect(running_nodes, action_sender).await;
+        });
+    }
+}
+
 /// Result of fetching stats from an individual node.
 enum IndividualNodeStatsResult {
     Success(IndividualNodeStats),
@@ -55,22 +74,7 @@ impl AggregatedNodeStats {
         self.individual_stats.push(other.clone()); // Store individual stats
     }
 
-    /// Fetches statistics from all running nodes and sends the aggregated stats via the action sender.
-    pub fn fetch_aggregated_node_stats(
-        running_nodes: Vec<RegistryNode>,
-        action_sender: UnboundedSender<Action>,
-    ) {
-        if !running_nodes.is_empty() {
-            tokio::spawn(async move {
-                Self::fetch_aggregated_node_stats_inner(running_nodes, action_sender).await;
-            });
-        }
-    }
-
-    async fn fetch_aggregated_node_stats_inner(
-        running_nodes: Vec<RegistryNode>,
-        action_sender: UnboundedSender<Action>,
-    ) {
+    async fn collect(running_nodes: Vec<RegistryNode>, action_sender: UnboundedSender<Action>) {
         let mut stream = futures::stream::iter(running_nodes)
             .map(|registry_node| async move {
                 Self::fetch_stat_per_node(registry_node.service_name, registry_node.metrics_port)

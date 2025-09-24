@@ -6,10 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{default::Default, path::PathBuf, rc::Rc};
-
 use super::super::utils::centered_rect_fixed;
-
 use color_eyre::{Result, eyre::OptionExt};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -20,6 +17,7 @@ use ratatui::{
         Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Wrap,
     },
 };
+use std::{any::Any, default::Default, path::PathBuf, rc::Rc};
 
 use crate::{
     action::{Action, OptionsActions},
@@ -576,6 +574,14 @@ impl Component for ChangeDrivePopup {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[derive(Default, Clone)]
@@ -684,32 +690,42 @@ mod tests {
     use super::*;
     use crate::focus::FocusManager;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use tempfile::{TempDir, tempdir};
 
-    fn build_popup() -> ChangeDrivePopup {
-        let temp_path = std::env::temp_dir().join("test-drive-selection");
-        ChangeDrivePopup::new(temp_path, 1).expect("popup created")
+    fn build_popup() -> (TempDir, ChangeDrivePopup) {
+        let temp_path = tempdir().expect("failed to create temp directory");
+        let path = temp_path.path().to_path_buf();
+        (
+            temp_path,
+            ChangeDrivePopup::new(path, 1).expect("popup created"),
+        )
     }
 
-    fn drive(name: &str, mount: &str, status: DriveStatus) -> DriveItem {
-        let temp_base = std::env::temp_dir();
+    fn drive(name: &str, mount: &str, status: DriveStatus) -> (TempDir, DriveItem) {
+        let temp_dir = tempdir().expect("failed to create temp directory");
+        let path = temp_dir.path().to_path_buf();
         let mount_path = if mount == "/" {
-            temp_base.join("test-primary")
+            path.join("test-primary")
         } else {
-            temp_base.join(mount.trim_start_matches('/'))
+            path.join(mount.trim_start_matches('/'))
         };
-        DriveItem {
-            name: name.into(),
-            mountpoint: mount_path,
-            size: "100 GB".into(),
-            status,
-        }
+        (
+            temp_dir,
+            DriveItem {
+                name: name.into(),
+                mountpoint: mount_path,
+                size: "100 GB".into(),
+                status,
+            },
+        )
     }
 
     #[test]
     fn assign_drive_selection_marks_item_selected() {
-        let mut popup = build_popup();
-        let selected = drive("Primary", "/", DriveStatus::Selected);
-        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, selected) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
         popup.drive_selection = selected.clone();
         popup.items = Some(StatefulList::with_items(vec![
             selected.clone(),
@@ -729,9 +745,10 @@ mod tests {
 
     #[test]
     fn select_drive_highlights_current_selection() {
-        let mut popup = build_popup();
-        let current = drive("Primary", "/", DriveStatus::Selected);
-        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
         popup.drive_selection = other.clone();
         popup.items = Some(StatefulList::with_items(vec![
             current.clone(),
@@ -745,9 +762,10 @@ mod tests {
 
     #[test]
     fn handle_key_events_updates_selection_and_can_select() {
-        let mut popup = build_popup();
-        let current = drive("Primary", "/", DriveStatus::Selected);
-        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
         popup.drive_selection = current.clone();
         popup.items = Some(StatefulList::with_items(vec![current, other]));
         if let Some(ref mut items) = popup.items {
@@ -770,9 +788,10 @@ mod tests {
 
     #[test]
     fn can_select_prevents_unavailable_drive_selection() {
-        let mut popup = build_popup();
-        let current = drive("Primary", "/", DriveStatus::Selected);
-        let other = drive("Secondary", "/mnt/secondary", DriveStatus::NotEnoughSpace);
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_drive_2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotEnoughSpace);
         popup.drive_selection = current.clone();
         popup.items = Some(StatefulList::with_items(vec![current, other]));
         if let Some(ref mut items) = popup.items {

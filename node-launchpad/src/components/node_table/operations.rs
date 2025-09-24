@@ -11,14 +11,14 @@ use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB_PER_NODE, MAX_NODE_COUNT};
 use crate::node_management::config::{PORT_MAX, PORT_MIN};
 use crate::node_management::{
-    AddNodesConfig, NodeManagement, NodeManagementTask, UpgradeNodesConfig,
+    AddNodesConfig, NodeManagementHandle, NodeManagementTask, UpgradeNodesConfig,
 };
 use crate::system::get_drive_name;
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
 use ant_node_manager::add_services::config::PortRange;
 use color_eyre::eyre::Result;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub struct NodeOperationsConfig {
@@ -35,12 +35,12 @@ pub struct NodeOperationsConfig {
 }
 
 pub struct NodeOperations {
-    node_management: NodeManagement,
+    node_management: Arc<dyn NodeManagementHandle>,
     pub action_sender: Option<UnboundedSender<Action>>,
 }
 
 impl NodeOperations {
-    pub fn new(node_management: NodeManagement) -> Self {
+    pub fn new(node_management: Arc<dyn NodeManagementHandle>) -> Self {
         Self {
             node_management,
             action_sender: None,

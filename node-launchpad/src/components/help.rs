@@ -6,7 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::Component;
 use super::header::SelectedMenuItem;
+use crate::{
+    action::Action,
+    components::header::Header,
+    mode::{InputMode, Scene},
+    style::{COOL_GREY, GHOST_WHITE, VIVID_SKY_BLUE},
+    widgets::hyperlink::Hyperlink,
+};
 use color_eyre::eyre::Result;
 use ratatui::{
     Frame,
@@ -15,16 +23,8 @@ use ratatui::{
     text::Span,
     widgets::{Block, Borders, Padding},
 };
+use std::any::Any;
 use tokio::sync::mpsc::UnboundedSender;
-
-use super::Component;
-use crate::{
-    action::Action,
-    components::header::Header,
-    mode::{InputMode, Scene},
-    style::{COOL_GREY, GHOST_WHITE, VIVID_SKY_BLUE},
-    widgets::hyperlink::Hyperlink,
-};
 
 #[derive(Clone)]
 pub struct Help {
@@ -174,6 +174,14 @@ impl Component for Help {
 
     fn focus_target(&self) -> crate::focus::FocusTarget {
         crate::focus::FocusTarget::Help
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

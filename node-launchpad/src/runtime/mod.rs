@@ -16,7 +16,7 @@ use crate::tui;
 use color_eyre::eyre::Result;
 pub use production::ProductionRuntime;
 use ratatui::{Frame, prelude::Rect};
-pub use test::{TestRuntime, TestStep};
+pub use test::{StateAssertion, TestRuntime, TestStep, WaitCondition};
 
 /// Type alias for the render function to reduce complexity
 pub type RenderFn<'a> = Box<dyn FnOnce(&mut Frame) -> Result<()> + 'a>;

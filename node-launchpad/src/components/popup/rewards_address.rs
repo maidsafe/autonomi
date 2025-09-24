@@ -20,6 +20,7 @@ use arboard::Clipboard;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
+use std::any::Any;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
@@ -482,6 +483,14 @@ impl Component for RewardsAddressPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

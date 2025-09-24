@@ -6,17 +6,67 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use super::{keyboard::KeySequence, mock_registry::MockNodeRegistry, test_helpers::TestAppBuilder};
-use crate::{app::App, mode::Scene, runtime::TestRuntime};
-use color_eyre::Result;
+use super::{
+    keyboard::KeySequence,
+    mock_metrics::MockMetricsService,
+    mock_node_management::{
+        MockNodeManagement, MockNodeManagementHandle, MockResponsePlan, ScriptedNodeAction,
+    },
+    mock_registry::MockNodeRegistry,
+    test_helpers::{TestAppBuilder, TestAppContext},
+};
+use crate::{
+    action::NodeManagementCommand,
+    app::App,
+    components::{
+        node_table::{lifecycle::LifecycleState, view::NodeViewModel},
+        status::Status,
+    },
+    mode::Scene,
+    node_stats::AggregatedNodeStats,
+    runtime::{StateAssertion, TestRuntime, TestStep, WaitCondition},
+};
+use ant_service_management::{
+    ReachabilityProgress, ServiceStatus, metric::ReachabilityStatusValues,
+};
+use color_eyre::{Result, eyre::eyre};
 use crossterm::event::KeyEvent;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
+use tokio::task::JoinHandle;
+use tracing::error;
 
 pub struct Journey {
     pub name: String,
     pub steps: Vec<JourneyStep>,
-    app: App,
+    app: Option<App>,
     test_runtime: TestRuntime,
+    node_management_handle: Option<MockNodeManagementHandle>,
+    scripted_tasks: Vec<JoinHandle<()>>,
+    mock_registry: Option<MockNodeRegistry>,
+    mock_node_management: Option<Arc<MockNodeManagement>>,
+}
+
+pub fn status_component(app: &App) -> Result<&Status> {
+    app.components
+        .iter()
+        .find_map(|component| component.as_ref().as_any().downcast_ref::<Status>())
+        .ok_or_else(|| eyre!("Status component not found"))
+}
+
+pub fn status_component_mut(app: &mut App) -> Result<&mut Status> {
+    app.components
+        .iter_mut()
+        .find_map(|component| component.as_mut().as_any_mut().downcast_mut::<Status>())
+        .ok_or_else(|| eyre!("Status component not found"))
+}
+
+pub fn node_view_model<'a>(app: &'a App, node_id: &str) -> Result<&'a NodeViewModel> {
+    status_component(app)?
+        .node_table()
+        .view_items()
+        .iter()
+        .find(|model| model.id == node_id)
+        .ok_or_else(|| eyre!("Node `{node_id}` not found in view"))
 }
 
 #[derive(Debug, Clone)]
@@ -24,6 +74,7 @@ pub struct JourneyStep {
     pub keys: Vec<KeyEvent>,
     pub expected_scene: Option<Scene>,
     pub assertions: Vec<ScreenAssertion>,
+    pub follow_up_steps: Vec<TestStep>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +84,11 @@ pub enum ScreenAssertion {
 }
 
 impl Journey {
-    pub fn new(name: String, mut app: App) -> Result<Self> {
+    pub fn new(
+        name: String,
+        mut app: App,
+        node_management_handle: Option<MockNodeManagementHandle>,
+    ) -> Result<Self> {
         let test_runtime = TestRuntime::new_simple(160, 30)?;
 
         use tokio::sync::mpsc;
@@ -59,12 +114,30 @@ impl Journey {
             processed_count += 1;
         }
 
+        let journey_app = Some(app);
+
         Ok(Self {
             name,
             steps: Vec::new(),
-            app,
+            app: journey_app,
             test_runtime,
+            node_management_handle,
+            scripted_tasks: Vec::new(),
+            mock_registry: None,
+            mock_node_management: None,
         })
+    }
+
+    pub fn node_management_handle(&mut self) -> Option<&mut MockNodeManagementHandle> {
+        self.node_management_handle.as_mut()
+    }
+
+    pub fn take_node_management_handle(&mut self) -> Option<MockNodeManagementHandle> {
+        self.node_management_handle.take()
+    }
+
+    pub fn register_script_task(&mut self, handle: JoinHandle<()>) {
+        self.scripted_tasks.push(handle);
     }
 
     pub fn add_step(&mut self, step: JourneyStep) {
@@ -78,7 +151,17 @@ impl Journey {
 
         // Actually run the app with the scripted test runtime!
         // This is the key: we use the SAME App::run_with_runtime as production
-        self.app.run_with_runtime(&mut self.test_runtime).await?;
+        if let Some(mut app) = self.app.take() {
+            app.run_with_runtime(&mut self.test_runtime).await?;
+        }
+
+        // Drop mocks to close any channels before awaiting scripted tasks
+        self.node_management_handle.take();
+        self.mock_node_management.take();
+
+        for task in self.scripted_tasks.drain(..) {
+            let _ = task.await;
+        }
 
         Ok(())
     }
@@ -89,32 +172,36 @@ impl Journey {
         for step in self.steps.iter() {
             // Add key events
             for key in &step.keys {
-                script.push(crate::runtime::TestStep::InjectKey(*key));
+                script.push(TestStep::InjectKey(*key));
             }
 
             // Add scene expectation if present
             if let Some(expected_scene) = step.expected_scene {
-                script.push(crate::runtime::TestStep::ExpectScene(expected_scene));
+                script.push(TestStep::ExpectScene(expected_scene));
             }
 
             // Add screen assertions
             for assertion in &step.assertions {
                 match assertion {
                     ScreenAssertion::ExactScreen(lines) => {
-                        script.push(crate::runtime::TestStep::ExactScreen(lines.clone()));
+                        script.push(TestStep::ExactScreen(lines.clone()));
                     }
                     ScreenAssertion::ContainsText(text) => {
-                        script.push(crate::runtime::TestStep::ExpectText(text.clone()));
+                        script.push(TestStep::ExpectText(text.clone()));
                     }
                 }
             }
 
+            for follow_up in &step.follow_up_steps {
+                script.push(follow_up.clone());
+            }
+
             // Add a small wait between steps
-            script.push(crate::runtime::TestStep::Wait(Duration::from_millis(50)));
+            script.push(TestStep::Wait(Duration::from_millis(50)));
         }
 
         // Add exit at the end to terminate the test properly
-        script.push(crate::runtime::TestStep::Exit);
+        script.push(TestStep::Exit);
 
         script
     }
@@ -124,21 +211,13 @@ pub struct JourneyBuilder {
     journey: Journey,
     current_step: Option<JourneyStep>,
     mock_registry: Option<MockNodeRegistry>,
+    node_action_scripts: Vec<ScriptedNodeAction>,
 }
 
 impl JourneyBuilder {
     pub async fn new(name: &str) -> Result<Self> {
         let registry = MockNodeRegistry::empty()?;
-        let (app, registry) = TestAppBuilder::new()
-            .with_mock_registry(registry)
-            .build()
-            .await?;
-
-        Ok(Self {
-            journey: Journey::new(name.to_string(), app)?,
-            current_step: None,
-            mock_registry: Some(registry),
-        })
+        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
     }
 
     pub async fn new_with_nodes(name: &str, node_count: u64) -> Result<Self> {
@@ -148,33 +227,73 @@ impl JourneyBuilder {
             MockNodeRegistry::empty()?
         };
 
-        let (app, registry) = TestAppBuilder::new()
-            .with_mock_registry(registry)
-            .build()
-            .await?;
-
-        Ok(Self {
-            journey: Journey::new(name.to_string(), app)?,
-            current_step: None,
-            mock_registry: Some(registry),
-        })
+        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
     }
 
     pub async fn new_with_registry(name: &str, registry: MockNodeRegistry) -> Result<Self> {
-        let (app, registry) = TestAppBuilder::new()
-            .with_mock_registry(registry)
-            .build()
-            .await?;
+        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
+    }
+
+    pub async fn new_with_setup<F>(name: &str, setup: F) -> Result<Self>
+    where
+        F: FnOnce(TestAppBuilder) -> TestAppBuilder,
+    {
+        Self::from_context(name, setup(TestAppBuilder::new()).build().await?)
+    }
+
+    pub fn from_context(name: &str, context: TestAppContext) -> Result<Self> {
+        let TestAppContext {
+            app,
+            registry,
+            node_management_handle,
+            mock_node_management,
+            ..
+        } = context;
 
         Ok(Self {
-            journey: Journey::new(name.to_string(), app)?,
+            journey: {
+                let mut journey = Journey::new(name.to_string(), app, node_management_handle)?;
+                journey.mock_node_management = mock_node_management;
+                journey
+            },
             current_step: None,
             mock_registry: Some(registry),
+            node_action_scripts: Vec::new(),
         })
     }
 
+    pub fn with_metrics_script(mut self, script: Vec<AggregatedNodeStats>) -> Self {
+        if let Some(app) = self.journey.app.as_mut() {
+            match status_component_mut(app) {
+                Ok(status) => {
+                    let fetcher = MockMetricsService::scripted(script);
+                    status
+                        .node_table_mut()
+                        .state_mut()
+                        .set_metrics_fetcher(fetcher);
+                }
+                Err(err) => {
+                    error!("Failed to configure metrics script: {err}");
+                }
+            }
+        }
+        self
+    }
+
+    pub fn with_node_action_response(
+        mut self,
+        command: NodeManagementCommand,
+        plan: MockResponsePlan,
+    ) -> Self {
+        self.node_action_scripts
+            .push(ScriptedNodeAction { command, plan });
+        self
+    }
+
     pub fn start_from(mut self, scene: Scene) -> Self {
-        self.journey.app.scene = scene;
+        if let Some(app) = self.journey.app.as_mut() {
+            app.scene = scene;
+        }
         self
     }
 
@@ -189,6 +308,7 @@ impl JourneyBuilder {
                 keys: key_events,
                 expected_scene: None,
                 assertions: Vec::new(),
+                follow_up_steps: Vec::new(),
             });
         }
         self
@@ -202,6 +322,7 @@ impl JourneyBuilder {
                 keys: vec![key],
                 expected_scene: None,
                 assertions: Vec::new(),
+                follow_up_steps: Vec::new(),
             });
         }
         self
@@ -215,6 +336,7 @@ impl JourneyBuilder {
                 keys: Vec::new(),
                 expected_scene: Some(scene),
                 assertions: Vec::new(),
+                follow_up_steps: Vec::new(),
             });
         }
         self
@@ -229,6 +351,7 @@ impl JourneyBuilder {
                 keys: Vec::new(),
                 expected_scene: None,
                 assertions: vec![ScreenAssertion::ContainsText(text.to_string())],
+                follow_up_steps: Vec::new(),
             });
         }
         self
@@ -245,9 +368,212 @@ impl JourneyBuilder {
                 keys: Vec::new(),
                 expected_scene: None,
                 assertions: vec![ScreenAssertion::ExactScreen(screen_lines)],
+                follow_up_steps: Vec::new(),
             });
         }
         self
+    }
+
+    pub fn wait(mut self, duration: Duration) -> Self {
+        if let Some(ref mut step) = self.current_step {
+            step.follow_up_steps.push(TestStep::Wait(duration));
+        } else {
+            self.current_step = Some(JourneyStep {
+                keys: Vec::new(),
+                expected_scene: None,
+                assertions: Vec::new(),
+                follow_up_steps: vec![TestStep::Wait(duration)],
+            });
+        }
+        self
+    }
+
+    pub fn advance_time(mut self, duration: Duration) -> Self {
+        if let Some(ref mut step) = self.current_step {
+            step.follow_up_steps.push(TestStep::AdvanceTime(duration));
+        } else {
+            self.current_step = Some(JourneyStep {
+                keys: Vec::new(),
+                expected_scene: None,
+                assertions: Vec::new(),
+                follow_up_steps: vec![TestStep::AdvanceTime(duration)],
+            });
+        }
+        self
+    }
+
+    pub fn wait_for_condition<F>(
+        mut self,
+        description: impl Into<String>,
+        predicate: F,
+        timeout: Duration,
+        poll_interval: Duration,
+    ) -> Self
+    where
+        F: Fn(&App) -> Result<bool> + Send + Sync + 'static,
+    {
+        let condition =
+            WaitCondition::new(description, Arc::new(predicate), timeout, poll_interval);
+        if let Some(ref mut step) = self.current_step {
+            step.follow_up_steps
+                .push(TestStep::WaitForCondition(condition));
+        } else {
+            self.current_step = Some(JourneyStep {
+                keys: Vec::new(),
+                expected_scene: None,
+                assertions: Vec::new(),
+                follow_up_steps: vec![TestStep::WaitForCondition(condition)],
+            });
+        }
+        self
+    }
+
+    pub fn assert_app_state<F>(mut self, description: impl Into<String>, predicate: F) -> Self
+    where
+        F: Fn(&App) -> Result<()> + Send + Sync + 'static,
+    {
+        let assertion = StateAssertion::new(description, Arc::new(predicate));
+        if let Some(ref mut step) = self.current_step {
+            step.follow_up_steps.push(TestStep::AssertState(assertion));
+        } else {
+            self.current_step = Some(JourneyStep {
+                keys: Vec::new(),
+                expected_scene: None,
+                assertions: Vec::new(),
+                follow_up_steps: vec![TestStep::AssertState(assertion)],
+            });
+        }
+        self
+    }
+
+    pub fn expect_error_popup_contains(self, snippet: &str) -> Self {
+        let snippet = snippet.to_string();
+        self.assert_app_state(
+            format!("Expect error popup to contain `{snippet}`"),
+            move |app| {
+                let status = status_component(app)?;
+                let popup = status
+                    .error_popup()
+                    .filter(|popup| popup.is_visible())
+                    .ok_or_else(|| eyre!("Error popup not visible"))?;
+                if popup.message().contains(&snippet) || popup.error_message().contains(&snippet) {
+                    Ok(())
+                } else {
+                    Err(eyre!(
+                        "Error popup missing snippet `{}` (message='{}', error='{}')",
+                        snippet,
+                        popup.message(),
+                        popup.error_message()
+                    ))
+                }
+            },
+        )
+    }
+
+    pub fn expect_node_state(self, node_id: &str, lifecycle: LifecycleState, locked: bool) -> Self {
+        let node_id = node_id.to_string();
+        self.assert_app_state(
+            format!("Expect node `{node_id}` lifecycle {lifecycle:?} locked {locked}",),
+            move |app| {
+                let model = node_view_model(app, &node_id)?;
+                if model.lifecycle != lifecycle {
+                    return Err(eyre!(
+                        "Node `{}` lifecycle mismatch: expected {:?}, found {:?}",
+                        node_id,
+                        lifecycle,
+                        model.lifecycle
+                    ));
+                }
+                if model.locked != locked {
+                    return Err(eyre!(
+                        "Node `{}` lock state mismatch: expected {}, found {}",
+                        node_id,
+                        locked,
+                        model.locked
+                    ));
+                }
+                Ok(())
+            },
+        )
+    }
+
+    pub fn assert_spinner(self, node_id: &str, spinning: bool) -> Self {
+        let node_id = node_id.to_string();
+        self.assert_app_state(format!("Assert spinner for `{node_id}`"), move |app| {
+            let model = node_view_model(app, &node_id)?;
+            let is_spinning = model.pending_command.is_some();
+            if is_spinning != spinning {
+                return Err(eyre!(
+                    "Node `{}` spinner state mismatch: expected {}, found {}",
+                    node_id,
+                    spinning,
+                    is_spinning
+                ));
+            }
+            Ok(())
+        })
+    }
+
+    pub fn expect_reachability(
+        self,
+        node_id: &str,
+        progress: ReachabilityProgress,
+        status: ReachabilityStatusValues,
+    ) -> Self {
+        let node_id = node_id.to_string();
+        self.assert_app_state(format!("Expect reachability for `{node_id}`"), move |app| {
+            let model = node_view_model(app, &node_id)?;
+            if model.reachability_progress != progress {
+                return Err(eyre!(
+                    "Node `{}` reachability progress mismatch: expected {:?}, found {:?}",
+                    node_id,
+                    progress,
+                    model.reachability_progress
+                ));
+            }
+            if model.reachability_status != status {
+                return Err(eyre!("Node `{}` reachability status mismatch", node_id));
+            }
+            Ok(())
+        })
+    }
+
+    pub fn wait_for_node_state(
+        self,
+        node_id: &str,
+        lifecycle: LifecycleState,
+        timeout: Duration,
+        poll_interval: Duration,
+    ) -> Self {
+        let node_id = node_id.to_string();
+        self.wait_for_condition(
+            format!("Wait for node `{node_id}` lifecycle {lifecycle:?}"),
+            move |app| {
+                let model = node_view_model(app, &node_id)?;
+                Ok(model.lifecycle == lifecycle)
+            },
+            timeout,
+            poll_interval,
+        )
+    }
+
+    pub fn wait_for_reachability(
+        self,
+        node_id: &str,
+        progress: ReachabilityProgress,
+        timeout: Duration,
+        poll_interval: Duration,
+    ) -> Self {
+        let node_id = node_id.to_string();
+        self.wait_for_condition(
+            format!("Wait for reachability `{node_id}` to {progress:?}"),
+            move |app| {
+                let model = node_view_model(app, &node_id)?;
+                Ok(model.reachability_progress == progress)
+            },
+            timeout,
+            poll_interval,
+        )
     }
 
     // Registry manipulation methods
@@ -275,7 +601,7 @@ impl JourneyBuilder {
     pub fn update_registry_node_status(
         mut self,
         service_name: &str,
-        status: ant_service_management::ServiceStatus,
+        status: ServiceStatus,
     ) -> Result<Self> {
         if let Some(ref mut registry) = self.mock_registry {
             registry
@@ -320,7 +646,7 @@ impl JourneyBuilder {
     pub fn expect_registry_node_status(
         self,
         service_name: &str,
-        status: ant_service_management::ServiceStatus,
+        status: ServiceStatus,
     ) -> Result<Self> {
         if let Some(ref registry) = self.mock_registry
             && !registry.verify_node_status(service_name, status.clone())
@@ -355,17 +681,33 @@ impl JourneyBuilder {
         self
     }
 
-    pub async fn run(mut self) -> Result<()> {
-        if let Some(step) = self.current_step.take() {
-            self.journey.add_step(step);
-        }
-
-        self.journey.run().await
+    pub async fn run(self) -> Result<()> {
+        let mut journey = self.build()?;
+        journey.run().await
     }
 
     pub fn build(mut self) -> Result<Journey> {
         if let Some(step) = self.current_step.take() {
             self.journey.add_step(step);
+        }
+
+        if let Some(handle) = self.journey.take_node_management_handle() {
+            if self.node_action_scripts.is_empty() {
+                self.journey.node_management_handle = Some(handle);
+            } else {
+                let actions = std::mem::take(&mut self.node_action_scripts);
+                let scripted_task = handle.spawn_script(actions);
+                self.journey.register_script_task(scripted_task);
+            }
+        } else if !self.node_action_scripts.is_empty() {
+            // No handle available to run scripts; log for visibility.
+            tracing::warn!(
+                "Node action scripts configured but no mock node-management handle provided"
+            );
+        }
+
+        if self.journey.mock_registry.is_none() {
+            self.journey.mock_registry = self.mock_registry.take();
         }
 
         Ok(self.journey)

@@ -63,6 +63,14 @@ impl ErrorPopup {
         }
     }
 
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+
+    pub fn error_message(&self) -> &str {
+        &self.error_message
+    }
+
     pub fn draw_error(&self, f: &mut Frame, area: Rect) {
         if !self.visible {
             return;

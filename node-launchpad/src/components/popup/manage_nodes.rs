@@ -6,13 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::path::PathBuf;
-
 use crate::action::{NodeManagementCommand, NodeTableActions, OptionsActions};
 use crate::system::get_available_space_b;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
+use std::{any::Any, path::PathBuf};
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 use crate::{
@@ -347,6 +346,14 @@ impl Component for ManageNodesPopup {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[cfg(test)]
@@ -354,16 +361,22 @@ mod tests {
     use super::*;
     use crate::focus::FocusManager;
     use crossterm::event::KeyModifiers;
+    use tempfile::TempDir;
+    use tempfile::tempdir;
 
-    fn build_popup(initial: u64) -> ManageNodesPopup {
-        let mount = std::env::temp_dir().join("test-manage-nodes");
+    fn build_popup(initial: u64) -> (TempDir, ManageNodesPopup) {
+        let temp_dir = tempdir().expect("failed to create temp directory");
+        let mount = temp_dir.path().to_path_buf();
         std::fs::create_dir_all(&mount).expect("failed to create temp directory");
-        ManageNodesPopup::new(initial, mount).expect("popup initialised")
+        (
+            temp_dir,
+            ManageNodesPopup::new(initial, mount).expect("popup initialised"),
+        )
     }
 
     #[test]
     fn numeric_input_clamps_to_max_node_count() {
-        let mut popup = build_popup(0);
+        let (_temp_dir, mut popup) = build_popup(0);
         popup.available_disk_space_gb = GB_PER_NODE * (MAX_NODE_COUNT + 5);
         popup.nodes_to_start_input = Input::default();
 
@@ -382,7 +395,7 @@ mod tests {
 
     #[test]
     fn enter_confirms_value_and_dispatches_actions() {
-        let mut popup = build_popup(2);
+        let (_temp_dir, mut popup) = build_popup(2);
         popup.available_disk_space_gb = GB_PER_NODE * 5;
         let actions = popup
             .handle_key_events_internal(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
@@ -408,7 +421,7 @@ mod tests {
 
     #[test]
     fn update_switch_scene_enters_entry_mode() {
-        let mut popup = build_popup(3);
+        let (_temp_dir, mut popup) = build_popup(3);
         let action = popup
             .update(Action::SwitchScene(Scene::ManageNodesPopUp {
                 amount_of_nodes: 8,
@@ -422,7 +435,7 @@ mod tests {
 
     #[test]
     fn handle_key_events_requires_focus() {
-        let mut popup = build_popup(1);
+        let (_temp_dir, mut popup) = build_popup(1);
         let focus_manager = FocusManager::new(FocusTarget::Status);
         let (actions, result) = popup
             .handle_key_events(
@@ -436,7 +449,7 @@ mod tests {
 
     #[test]
     fn boundary_conditions_disk_space_and_node_limits() {
-        let mut popup = build_popup(0);
+        let (_temp_dir, mut popup) = build_popup(0);
 
         // Test with exact maximum nodes allowed by disk space
         popup.available_disk_space_gb = GB_PER_NODE * MAX_NODE_COUNT;

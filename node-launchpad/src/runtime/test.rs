@@ -13,12 +13,18 @@
 
 use super::{RenderFn, Runtime};
 use crate::{app::App, mode::Scene, tui};
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use crossterm::event::KeyEvent;
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer, prelude::Rect};
 use std::collections::VecDeque;
+use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
+
+type AppResultPredicate = Arc<dyn Fn(&App) -> Result<()> + Send + Sync>;
+type AppBoolPredicate = Arc<dyn Fn(&App) -> Result<bool> + Send + Sync>;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 use tracing::error;
 
 /// Maximum number of frames to keep in the capture buffer.
@@ -33,14 +39,114 @@ pub enum TestStep {
     InjectEvent(tui::Event),
     /// Wait for a specified duration (converted to tick events).
     Wait(Duration),
+    /// Advance Tokio's virtual time by a duration.
+    AdvanceTime(Duration),
+    /// Wait for a predicate to succeed (polling until timeout).
+    WaitForCondition(WaitCondition),
     /// Assert that the application is in a specific scene.
     ExpectScene(Scene),
     /// Assert that the screen contains specific text.
     ExpectText(String),
     /// Assert that the screen matches exactly the given lines.
     ExactScreen(Vec<String>),
+    /// Assert arbitrary state by running a predicate against the app.
+    AssertState(StateAssertion),
     /// Exit the test execution.
     Exit,
+}
+
+#[derive(Clone)]
+pub struct StateAssertion {
+    description: String,
+    predicate: AppResultPredicate,
+}
+
+impl StateAssertion {
+    pub fn new(description: impl Into<String>, predicate: AppResultPredicate) -> Self {
+        Self {
+            description: description.into(),
+            predicate,
+        }
+    }
+
+    pub fn evaluate(&self, app: &App) -> Result<()> {
+        (self.predicate)(app)
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+}
+
+impl fmt::Debug for StateAssertion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("StateAssertion")
+            .field("description", &self.description)
+            .finish()
+    }
+}
+
+#[derive(Clone)]
+pub struct WaitCondition {
+    description: String,
+    predicate: AppBoolPredicate,
+    timeout: Duration,
+    poll_interval: Duration,
+}
+
+impl WaitCondition {
+    pub fn new(
+        description: impl Into<String>,
+        predicate: AppBoolPredicate,
+        timeout: Duration,
+        poll_interval: Duration,
+    ) -> Self {
+        Self {
+            description: description.into(),
+            predicate,
+            timeout,
+            poll_interval,
+        }
+    }
+
+    pub fn evaluate(&self, app: &App) -> Result<bool> {
+        (self.predicate)(app)
+    }
+
+    pub fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    pub fn poll_interval(&self) -> Duration {
+        self.poll_interval
+    }
+
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+}
+
+impl fmt::Debug for WaitCondition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("WaitCondition")
+            .field("description", &self.description)
+            .field("timeout", &self.timeout)
+            .field("poll_interval", &self.poll_interval)
+            .finish()
+    }
+}
+
+struct PendingWait {
+    condition: WaitCondition,
+    deadline: Instant,
+    next_poll: Instant,
+}
+
+enum PendingAssertion {
+    Scene(Scene),
+    Text(String),
+    ExactScreen(Vec<String>),
+    State(StateAssertion),
 }
 
 /// Test runtime that provides event scripting and frame capture for UI testing.
@@ -61,7 +167,9 @@ pub struct TestRuntime {
     size: Rect,
     test_script: Vec<TestStep>,
     current_step: usize,
-    pending_assertion: Option<TestStep>,
+    pending_assertion: Option<PendingAssertion>,
+    pending_wait: Option<PendingWait>,
+    pending_time_advances: VecDeque<Duration>,
     dynamic_event_queue: VecDeque<tui::Event>,
 }
 
@@ -94,6 +202,8 @@ impl TestRuntime {
             test_script: Vec::new(),
             current_step: 0,
             pending_assertion: None,
+            pending_wait: None,
+            pending_time_advances: VecDeque::new(),
             dynamic_event_queue: VecDeque::new(),
         })
     }
@@ -139,13 +249,40 @@ impl TestRuntime {
         match step {
             TestStep::InjectKey(key) => Some(tui::Event::Key(key)),
             TestStep::InjectEvent(event) => Some(event),
-            TestStep::Wait(_duration) => {
-                // For wait steps, we'll just inject a tick and handle timing elsewhere
+            TestStep::Wait(duration) => {
+                // For wait steps, convert to a tick; actual timing handled in next_event
+                self.pending_time_advances.push_back(duration);
                 Some(tui::Event::Tick)
             }
-            TestStep::ExpectScene(_) | TestStep::ExpectText(_) | TestStep::ExactScreen(_) => {
-                // Store assertion for later execution and inject a render to trigger assertion check
-                self.pending_assertion = Some(step);
+            TestStep::AdvanceTime(duration) => {
+                self.pending_time_advances.push_back(duration);
+                Some(tui::Event::Tick)
+            }
+            TestStep::WaitForCondition(condition) => {
+                let now = Instant::now();
+                let condition_clone = condition.clone();
+                let timeout = condition_clone.timeout();
+                self.pending_wait = Some(PendingWait {
+                    condition: condition_clone,
+                    deadline: now + timeout,
+                    next_poll: now,
+                });
+                Some(tui::Event::Render)
+            }
+            TestStep::ExpectScene(expected_scene) => {
+                self.pending_assertion = Some(PendingAssertion::Scene(expected_scene));
+                Some(tui::Event::Render)
+            }
+            TestStep::ExpectText(text) => {
+                self.pending_assertion = Some(PendingAssertion::Text(text));
+                Some(tui::Event::Render)
+            }
+            TestStep::ExactScreen(lines) => {
+                self.pending_assertion = Some(PendingAssertion::ExactScreen(lines));
+                Some(tui::Event::Render)
+            }
+            TestStep::AssertState(assertion) => {
+                self.pending_assertion = Some(PendingAssertion::State(assertion));
                 Some(tui::Event::Render)
             }
             TestStep::Exit => Some(tui::Event::Quit),
@@ -168,30 +305,32 @@ impl TestRuntime {
     pub fn check_pending_assertion(&mut self, app: &App) -> Result<()> {
         if let Some(assertion) = self.pending_assertion.take() {
             match assertion {
-                TestStep::ExpectScene(expected_scene) => {
+                PendingAssertion::Scene(expected_scene) => {
                     if app.scene != expected_scene {
-                        return Err(color_eyre::eyre::eyre!(
+                        return Err(eyre!(
                             "Expected scene {:?}, got {:?}",
                             expected_scene,
                             app.scene
                         ));
                     }
                 }
-                TestStep::ExpectText(text) => {
+                PendingAssertion::Text(text) => {
                     if let Some(buffer) = self.get_last_frame() {
                         let screen_content =
                             crate::test_utils::test_helpers::buffer_to_lines(buffer);
                         let found = screen_content.iter().any(|line| line.contains(&text));
                         if !found {
-                            return Err(color_eyre::eyre::eyre!(
+                            return Err(eyre!(
                                 "Screen does not contain text: '{}'. Actual screen content: {:?}",
                                 text,
                                 screen_content
                             ));
                         }
+                    } else {
+                        return Err(eyre!("No frame captured while checking for text"));
                     }
                 }
-                TestStep::ExactScreen(expected_lines) => {
+                PendingAssertion::ExactScreen(expected_lines) => {
                     if let Some(buffer) = self.get_last_frame() {
                         let screen_lines = crate::test_utils::test_helpers::buffer_to_lines(buffer);
                         if screen_lines != expected_lines {
@@ -229,18 +368,19 @@ impl TestRuntime {
                                 )
                             };
 
-                            return Err(color_eyre::eyre::eyre!("{}", error_msg));
+                            return Err(eyre!(error_msg));
                         }
                     } else {
-                        return Err(color_eyre::eyre::eyre!(
-                            "No frame was captured for screen assertion"
-                        ));
+                        return Err(eyre!("No frame was captured for screen assertion"));
                     }
                 }
-                _ => {}
+                PendingAssertion::State(assertion) => {
+                    assertion.evaluate(app)?;
+                }
             }
         }
-        Ok(())
+
+        self.process_pending_wait(app)
     }
 
     /// Gets references to all captured frames.
@@ -264,10 +404,45 @@ impl TestRuntime {
     pub fn queue_event(&mut self, event: tui::Event) {
         self.dynamic_event_queue.push_back(event);
     }
+
+    fn process_pending_wait(&mut self, app: &App) -> Result<()> {
+        if let Some(mut wait) = self.pending_wait.take() {
+            let now = Instant::now();
+
+            if now >= wait.deadline {
+                return Err(eyre!(
+                    "Timed out waiting for condition: {}",
+                    wait.condition.description()
+                ));
+            }
+
+            if wait.condition.evaluate(app)? {
+                // Condition satisfied, nothing else to do.
+                return Ok(());
+            }
+
+            // Condition not yet satisfied; schedule another render after the poll interval.
+            let next_poll = now + wait.condition.poll_interval();
+            wait.next_poll = next_poll;
+            self.pending_wait = Some(wait);
+            let delay = next_poll.saturating_duration_since(now);
+            self.pending_time_advances.push_back(delay);
+            self.dynamic_event_queue.push_back(tui::Event::Render);
+        }
+
+        Ok(())
+    }
 }
 
 impl Runtime for TestRuntime {
     async fn next_event(&mut self) -> Option<tui::Event> {
+        while let Some(delay) = self.pending_time_advances.pop_front() {
+            if !delay.is_zero() {
+                tokio::time::sleep(delay).await;
+            }
+            // Multiple queued delays should be processed sequentially before sourcing next event.
+        }
+
         // Priority 1: Check dynamic event queue first (for helper method events)
         if let Some(event) = self.dynamic_event_queue.pop_front() {
             return Some(event);

@@ -139,7 +139,6 @@ fn main() -> Result<()> {
             args.antnode_path,
             args.path,
             args.network_id,
-            None,
         )
         .await?;
         app.run().await?;

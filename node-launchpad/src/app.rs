@@ -26,16 +26,19 @@ use crate::{
     keybindings::get_keybindings,
     log_management::LogManagement,
     mode::{InputMode, Scene},
+    node_management::NodeManagementHandle,
+    node_stats::{AsyncMetricsFetcher, MetricsFetcher},
     runtime::{ProductionRuntime, Runtime},
     style::SPACE_CADET,
     system::{get_default_mount_point, get_primary_mount_point, get_primary_mount_point_name},
     tui,
 };
 use ant_bootstrap::InitialPeersConfig;
+use ant_service_management::NodeRegistryManager;
 use color_eyre::eyre::Result;
 use crossterm::event::KeyEvent;
 use ratatui::{prelude::Rect, style::Style, widgets::Block};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tracing::{debug, info};
 
@@ -51,6 +54,7 @@ pub struct App {
     pub scene: Scene,
     pub last_tick_key_events: Vec<KeyEvent>,
     pub focus_manager: FocusManager,
+    persist_app_data: bool,
 }
 
 impl App {
@@ -61,11 +65,48 @@ impl App {
         antnode_path: Option<PathBuf>,
         app_data_path: Option<PathBuf>,
         network_id: Option<u8>,
-        registry_path_override: Option<PathBuf>,
+    ) -> Result<Self> {
+        Self::new_with_dependencies(
+            tick_rate,
+            frame_rate,
+            init_peers_config,
+            antnode_path,
+            app_data_path,
+            network_id,
+            None,
+            None,
+            None,
+            true,
+            None,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn new_with_dependencies(
+        tick_rate: f64,
+        frame_rate: f64,
+        init_peers_config: InitialPeersConfig,
+        antnode_path: Option<PathBuf>,
+        app_data_path: Option<PathBuf>,
+        network_id: Option<u8>,
+        node_management: Option<Arc<dyn NodeManagementHandle>>,
+        node_registry_manager: Option<NodeRegistryManager>,
+        app_data_override: Option<AppData>,
+        persist_app_data: bool,
+        metrics_fetcher: Option<Arc<dyn MetricsFetcher>>,
     ) -> Result<Self> {
         // Configurations
-        let app_data = AppData::load(app_data_path)?;
+        let mut app_data = AppData::load(app_data_path)?;
+        if let Some(custom_app_data) = app_data_override {
+            app_data = custom_app_data;
+        }
         let keybindings = get_keybindings();
+
+        let metrics_fetcher: Arc<dyn MetricsFetcher> = metrics_fetcher.unwrap_or_else(|| {
+            let fetcher: Arc<dyn MetricsFetcher> = Arc::new(AsyncMetricsFetcher);
+            fetcher
+        });
 
         // Tries to set the data dir path based on the storage mountpoint set by the user,
         // if not set, it tries to get the default mount point (where the executable is) and
@@ -103,7 +144,9 @@ impl App {
             upnp_enabled,
             port_range,
             storage_mountpoint: storage_mountpoint.clone(),
-            registry_path_override,
+            node_management,
+            node_registry_manager,
+            metrics_fetcher: Arc::clone(&metrics_fetcher),
         };
 
         let status = Status::new(status_config).await?;
@@ -163,6 +206,7 @@ impl App {
             scene: Scene::Status,
             last_tick_key_events: Vec::new(),
             focus_manager: FocusManager::new(FocusTarget::Status), // Start with Status focused
+            persist_app_data,
         })
     }
 
@@ -323,27 +367,37 @@ impl App {
                 debug!("Storing storage drive: {drive_mountpoint:?}, {drive_name:?}");
                 self.app_data.storage_mountpoint = Some(drive_mountpoint.clone());
                 self.app_data.storage_drive = Some(drive_name.as_str().to_string());
-                self.app_data.save(None)?;
+                if self.persist_app_data {
+                    self.app_data.save(None)?;
+                }
             }
             Action::StoreUpnpSetting(ref enabled) => {
                 debug!("Storing UPnP setting: {enabled:?}");
                 self.app_data.upnp_enabled = *enabled;
-                self.app_data.save(None)?;
+                if self.persist_app_data {
+                    self.app_data.save(None)?;
+                }
             }
             Action::StorePortRange(ref range) => {
                 debug!("Storing port range: {range:?}");
                 self.app_data.port_range = *range;
-                self.app_data.save(None)?;
+                if self.persist_app_data {
+                    self.app_data.save(None)?;
+                }
             }
             Action::StoreRewardsAddress(ref rewards_address) => {
                 debug!("Storing rewards address: {rewards_address:?}");
                 self.app_data.rewards_address = Some(*rewards_address);
-                self.app_data.save(None)?;
+                if self.persist_app_data {
+                    self.app_data.save(None)?;
+                }
             }
             Action::StoreRunningNodeCount(ref count) => {
                 debug!("Storing nodes to start: {count:?}");
                 self.app_data.nodes_to_start = *count;
-                self.app_data.save(None)?;
+                if self.persist_app_data {
+                    self.app_data.save(None)?;
+                }
             }
             _ => {}
         }
@@ -525,7 +579,6 @@ mod tests {
             init_peers_config,
             None,
             Some(non_existent_config_path),
-            None,
             None,
         )
         .await;
