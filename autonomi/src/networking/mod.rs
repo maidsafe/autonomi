@@ -260,79 +260,55 @@ impl Network {
         quorum: Quorum,
     ) -> Result<(Option<Record>, Vec<PeerId>), NetworkError> {
         // Get closest peers to the address, note the returned list is `CLOSE_GROUP_SIZE + 2`.
-        let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?.into_iter().take(CLOSE_GROUP_SIZE);
-        let total = NonZeroUsize::new(closest_peers.len()).ok_or(NetworkError::GetRecordError(
-            "No peers available, please check your network connection".to_string(),
-        ))?;
-        let expected_holders = expected_holders(quorum, total);
+        let closest_peers = self.get_closest_peers_with_retries(addr.clone()).await?;
+        let expected_holders = expected_holders(quorum, CLOSE_GROUP_SIZE);
 
         trace!(
             "Get record {addr} from {} peers with quorum {quorum:?}",
             closest_peers.len()
         );
 
-        // Try to get record using the request response protocol
         // The input addr could be from non-record_key, hence have to carry out a conversion.
         let record_key_addr = NetworkAddress::from(&addr.to_record_key());
 
-        // In case `expected_holders` to be just one, i.e. for the most popular case of chuck fetch,
-        // the DM scheme can be improved to:
-        //   * query candidates one by one
-        //   * complete on the first 
-        if quorum == Quorum::One {
-            let mut err_res = None;
-            for peer in closest_peers {
-                let res = self.get_record_req(record_key_addr.clone(), peer.clone()).await;
-                match res {
-                    // collect errors
-                    Err(e) => err_res = Some(e),
-                    // not found, ignore
-                    Ok(None) => {}
-                    Ok(Some(record_data)) => {
-                        let record = record_from_value(record_data, &addr);
-                        return Ok((Some(record), vec![peer.peer_id]));
-                    }
-                }
-            }
-
-            // if no records were found, return an error if we have an error, otherwise the record is not found: None
-            if let Some(e) = err_res {
-                return Err(e.clone());
-            } else {
-                return Ok((None, vec![]));
-            }
-        }
-
-        let mut tasks = FuturesUnordered::new();
-        for peer in closest_peers {
-            let addr_clone = record_key_addr.clone();
-            tasks.push(async move {
-                let res = self.get_record_req(addr_clone, peer.clone()).await;
-                (res, peer)
-            });
-        }
-
-        // Collect results
+        // Try to get record using the request response protocol with batched processing
+        let batch_size = expected_holders + 2;
         let mut got_unique_records = HashSet::new();
         let mut successful_responses = HashMap::new();
         let mut err_res: Vec<_> = vec![];
+        
+        // Process peers in batches
+        for batch in closest_peers.chunks(batch_size) {
+            let mut tasks = FuturesUnordered::new();
+            
+            // Send requests to batch peers in parallel
+            for peer in batch {
+                let addr_clone = record_key_addr.clone();
+                let peer_clone = peer.clone();
+                tasks.push(async move {
+                    let res = self.get_record_req(addr_clone, peer_clone.clone()).await;
+                    (res, peer_clone)
+                });
+            }
 
-        while let Some((res, peer)) = tasks.next().await {
-            match res {
-                // collect errors
-                Err(e) => err_res.push(e),
-                // not found, ignore
-                Ok(None) => {}
-                // accumulate successful responses
-                Ok(Some(record_data)) => {
-                    successful_responses.insert(peer.peer_id, record_data.clone());
-                    let _ = got_unique_records.insert(record_data.clone());
+            // Collect results from current batch
+            while let Some((res, peer)) = tasks.next().await {
+                match res {
+                    // collect errors
+                    Err(e) => err_res.push(e),
+                    // not found, ignore
+                    Ok(None) => {}
+                    // accumulate successful responses
+                    Ok(Some(record_data)) => {
+                        successful_responses.insert(peer.peer_id, record_data.clone());
+                        let _ = got_unique_records.insert(record_data.clone());
 
-                    // Check if we have enough responses to meet quorum
-                    if got_unique_records.len() == 1 && successful_responses.len() >= expected_holders.get() {
-                        let record = record_from_value(record_data, &addr);
-                        let holders = successful_responses.keys().cloned().collect();
-                        return Ok((Some(record), holders));
+                        // Early return if we found unique answers from expected holders
+                        if got_unique_records.len() == 1 && successful_responses.len() >= expected_holders {
+                            let record = record_from_value(record_data, &addr);
+                            let holders = successful_responses.keys().cloned().collect();
+                            return Ok((Some(record), holders));
+                        }
                     }
                 }
             }
@@ -360,7 +336,7 @@ impl Network {
 
         Err(NetworkError::GetRecordQuorumFailed {
             got_holders: successful_responses.len(),
-            expected_holders: expected_holders.get(),
+            expected_holders,
         })
     }
 
@@ -373,11 +349,7 @@ impl Network {
         quorum: Quorum,
     ) -> Result<(), NetworkError> {
         let key = PrettyPrintRecordKey::from(&record.key);
-        // For data_type like ScratchPad, it is observed the holders will be 7
-        // which result in the expected_holders to be 4, and could result in false alert.
-        let candidates = std::cmp::min(CLOSE_GROUP_SIZE, to.len());
-        let total = NonZeroUsize::new(candidates).ok_or(NetworkError::PutRecordMissingTargets)?;
-        let expected_holders = expected_holders(quorum, total);
+        let expected_holders = expected_holders(quorum, CLOSE_GROUP_SIZE);
 
         trace!(
             "Put record {key} to {} peers with quorum {quorum:?}",
@@ -414,7 +386,7 @@ impl Network {
                 // accumulate oks until Quorum is met
                 Ok(()) => {
                     ok_res.push(peer);
-                    if ok_res.len() >= expected_holders.get() {
+                    if ok_res.len() >= expected_holders {
                         return Ok(());
                     }
                 }
@@ -434,7 +406,7 @@ impl Network {
                     // accumulate oks until Quorum is met
                     Ok(()) => {
                         ok_res.push(peer);
-                        if ok_res.len() >= expected_holders.get() {
+                        if ok_res.len() >= expected_holders {
                             let old_nodes_ok = ok_res.len() - new_nodes_ok;
                             trace!(
                                 "Put record {key} completed with {new_nodes_ok} new nodes ok and {old_nodes_ok} old nodes ok"
@@ -666,12 +638,12 @@ impl Network {
     }
 }
 
-fn expected_holders(quorum: Quorum, total: NonZeroUsize) -> NonZeroUsize {
+fn expected_holders(quorum: Quorum, total: usize) -> usize {
     match quorum {
-        Quorum::One => NonZeroUsize::new(1).expect("0 != 1"),
-        Quorum::Majority => NonZeroUsize::new(total.get() / 2 + 1).expect("n/2+1 != 0"),
+        Quorum::One => 1,
+        Quorum::Majority => total / 2 + 1,
         Quorum::All => total,
-        Quorum::N(n) => n,
+        Quorum::N(n) => n.get(),
     }
 }
 
