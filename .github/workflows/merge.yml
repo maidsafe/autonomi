@@ -174,8 +174,6 @@ jobs:
         if: matrix.os == 'windows-latest'
         timeout-minutes: 25
         run: |
-          echo "Running registry_tests..."
-          cargo test --release --package node-launchpad --test registry_tests -- --no-capture
           echo "Running screen_content_tests..."
           cargo test --release --package node-launchpad --test screen_content_tests -- --no-capture
           echo "Running scene_navigation_tests..."

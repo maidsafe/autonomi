@@ -10,14 +10,14 @@ pub mod journey;
 pub mod keyboard;
 pub mod mock_metrics;
 pub mod mock_node_management;
-pub mod mock_registry;
+pub mod node_fixtures;
 pub mod test_helpers;
 
 pub use journey::*;
 pub use keyboard::*;
 pub use mock_metrics::*;
 pub use mock_node_management::*;
-pub use mock_registry::*;
+pub use node_fixtures::*;
 pub use test_helpers::*;
 
 pub const TEST_WALLET_ADDRESS: &str = "0x03B770D9cD32077cC0bF330c13C114a87643B124";

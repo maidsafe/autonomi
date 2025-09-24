@@ -59,7 +59,7 @@ Key shortcuts exposed in the Status scene:
 
 ### Unit and Component Tests
 
-- `test_utils::MockNodeRegistry` builds a temporary registry file for deterministic node lifecycle tests.
+- `test_utils::make_node_service_data` offers deterministic node snapshots for UI tests without touching real services.
 - Rendering checks rely on `ratatui::Terminal<TestBackend>` to capture buffers for assertion.
 - Tests cover scenarios where registry sync triggers `Action::StoreRunningNodeCount`, ensuring the action fires exactly once per state change.
 

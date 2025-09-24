@@ -8,6 +8,8 @@
 
 use crate::action::{Action, NodeManagementCommand, NodeManagementResponse, NodeTableActions};
 use crate::node_management::{NodeManagementHandle, NodeManagementTask};
+use crate::node_stats::AggregatedNodeStats;
+use ant_service_management::NodeServiceData;
 use color_eyre::eyre::{Result, eyre};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -41,6 +43,34 @@ impl MockResponsePlan {
 
     pub fn with_delay(mut self, delay: Duration) -> Self {
         self.delay = delay;
+        self
+    }
+
+    pub fn then_actions<I>(mut self, actions: I) -> Self
+    where
+        I: IntoIterator<Item = Action>,
+    {
+        self.followup_actions.extend(actions);
+        self
+    }
+
+    pub fn then_registry_snapshot(mut self, nodes: Vec<NodeServiceData>) -> Self {
+        self.followup_actions.push(Action::NodeTableActions(
+            NodeTableActions::RegistryFileUpdated {
+                all_nodes_data: nodes,
+            },
+        ));
+        self
+    }
+
+    pub fn then_metrics<I>(mut self, stats: I) -> Self
+    where
+        I: IntoIterator<Item = AggregatedNodeStats>,
+    {
+        for stat in stats {
+            self.followup_actions
+                .push(Action::StoreAggregatedNodeStats(stat));
+        }
         self
     }
 }

@@ -7,28 +7,23 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_service_management::{
-    NodeRegistryManager, ReachabilityProgress, ServiceStatus, metric::ReachabilityStatusValues,
+    ReachabilityProgress, ServiceStatus, metric::ReachabilityStatusValues,
 };
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use node_launchpad::action::{
-    Action, NodeManagementCommand, NodeManagementResponse, NodeTableActions,
-};
+use node_launchpad::action::{NodeManagementCommand, NodeManagementResponse};
 use node_launchpad::components::node_table::lifecycle::LifecycleState;
 use node_launchpad::mode::Scene;
 use node_launchpad::node_stats::{AggregatedNodeStats, IndividualNodeStats};
 use node_launchpad::test_utils::{
-    JourneyBuilder, MockNodeManagement, MockNodeRegistry, MockResponsePlan, TestAppBuilder,
+    JourneyBuilder, MockResponsePlan, TestAppBuilder, make_node_service_data,
 };
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
 #[tokio::test]
 async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
-    // Prepare mock registry and final node snapshot
-    let registry = MockNodeRegistry::empty()?;
-    let node_template = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
+    // Prepare final node snapshot
+    let node_template = make_node_service_data(0, ServiceStatus::Running);
 
     // Prepare scripted metrics events: initial, in-progress, complete
     let metrics_in_progress = aggregated_stats(
@@ -41,31 +36,17 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
         ReachabilityProgress::Complete,
         true,
     );
-    // Prepare mock node management
-    let (mock_management, management_handle) = MockNodeManagement::new();
-
     // Build app with injected dependencies
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
         .with_nodes_to_start(1)
-        .with_metrics_script(vec![AggregatedNodeStats::default()])
+        .with_metrics_events([AggregatedNodeStats::default()])
         .build()
         .await?;
-    drop(mock_management);
-
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::AddNode { error: None },
-        vec![
-            Action::StoreAggregatedNodeStats(metrics_in_progress.clone()),
-            Action::StoreAggregatedNodeStats(metrics_complete.clone()),
-            Action::NodeTableActions(NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![node_template.clone()],
-            }),
-        ],
-    )
-    .with_delay(Duration::from_millis(10));
+    let response_plan =
+        MockResponsePlan::immediate(NodeManagementResponse::AddNode { error: None })
+            .then_metrics([metrics_in_progress.clone(), metrics_complete.clone()])
+            .then_registry_snapshot(vec![node_template.clone()])
+            .with_delay(Duration::from_millis(10));
 
     let mut journey = JourneyBuilder::from_context("Add node transition", test_app)?
         .with_node_action_response(NodeManagementCommand::AddNode, response_plan)
@@ -83,23 +64,13 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
 
 #[tokio::test]
 async fn journey_start_node_failure_surfaces_error_and_clears_transition() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let stopped_node = registry.create_test_node_service_data(0, ServiceStatus::Stopped);
-    registry.add_node(stopped_node.clone())?;
+    let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let node_name = stopped_node.service_name.clone();
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(stopped_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
     let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StartNodes {
         service_names: vec![node_name.clone()],
         error: Some("failed to start".to_string()),
@@ -152,33 +123,17 @@ fn aggregated_stats(
 
 #[tokio::test]
 async fn journey_add_node_failure_shows_error_popup() -> Result<()> {
-    let registry = MockNodeRegistry::empty()?;
-    let node_template = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let node_template = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
         .with_nodes_to_start(1)
-        .with_metrics_script(vec![AggregatedNodeStats::default()])
+        .with_metrics_events([AggregatedNodeStats::default()])
         .build()
         .await?;
-    drop(mock_management);
-
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::AddNode {
-            error: Some("disk full".to_string()),
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![node_template.clone()],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::AddNode {
+        error: Some("disk full".to_string()),
+    })
+    .then_registry_snapshot(vec![node_template.clone()])
     .with_delay(Duration::from_millis(10));
 
     let mut journey = JourneyBuilder::from_context("Add node failure", test_app)?
@@ -199,43 +154,26 @@ async fn journey_add_node_failure_shows_error_popup() -> Result<()> {
 
 #[tokio::test]
 async fn journey_start_node_success_updates_state() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let stopped_node = registry.create_test_node_service_data(0, ServiceStatus::Stopped);
-    registry.add_node(stopped_node.clone())?;
+    let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let mut running_node = stopped_node.clone();
     running_node.status = ServiceStatus::Running;
 
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
-
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(stopped_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
     let running_metrics = aggregated_stats(
         &running_node.service_name,
         ReachabilityProgress::Complete,
         true,
     );
 
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::StartNodes {
-            service_names: vec![running_node.service_name.clone()],
-            error: None,
-        },
-        vec![
-            Action::StoreAggregatedNodeStats(running_metrics),
-            Action::NodeTableActions(NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![running_node.clone()],
-            }),
-        ],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StartNodes {
+        service_names: vec![running_node.service_name.clone()],
+        error: None,
+    })
+    .then_metrics([running_metrics])
+    .then_registry_snapshot(vec![running_node.clone()])
     .with_delay(Duration::from_millis(10));
 
     let mut journey = JourneyBuilder::from_context("Start node success", test_app)?
@@ -256,36 +194,19 @@ async fn journey_start_node_success_updates_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_stop_node_success_updates_state() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
     let mut stopped_node = running_node.clone();
     stopped_node.status = ServiceStatus::Stopped;
 
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
-
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::StopNodes {
-            service_names: vec![running_node.service_name.clone()],
-            error: None,
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![stopped_node.clone()],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StopNodes {
+        service_names: vec![running_node.service_name.clone()],
+        error: None,
+    })
+    .then_registry_snapshot(vec![stopped_node.clone()])
     .with_delay(Duration::from_millis(10));
 
     let mut journey = JourneyBuilder::from_context("Stop node success", test_app)?
@@ -306,34 +227,17 @@ async fn journey_stop_node_success_updates_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_stop_node_failure_displays_error() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
-
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::StopNodes {
-            service_names: vec![running_node.service_name.clone()],
-            error: Some("could not stop".to_string()),
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![running_node.clone()],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StopNodes {
+        service_names: vec![running_node.service_name.clone()],
+        error: Some("could not stop".to_string()),
+    })
+    .then_registry_snapshot(vec![running_node.clone()])
     .with_delay(Duration::from_millis(10));
 
     let mut journey = JourneyBuilder::from_context("Stop node failure", test_app)?
@@ -356,19 +260,10 @@ async fn journey_stop_node_failure_displays_error() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_ignores_locked_node() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
-
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
 
@@ -380,7 +275,6 @@ async fn journey_toggle_node_ignores_locked_node() -> Result<()> {
         .step()
         .build()?;
 
-    drop(mock_management);
     journey.run().await?;
 
     Ok(())
@@ -388,43 +282,26 @@ async fn journey_toggle_node_ignores_locked_node() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_start_transitions_to_running() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let stopped_node = registry.create_test_node_service_data(0, ServiceStatus::Stopped);
-    registry.add_node(stopped_node.clone())?;
+    let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let mut running_node = stopped_node.clone();
     running_node.status = ServiceStatus::Running;
 
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
-
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(stopped_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
     let metrics = aggregated_stats(
         &running_node.service_name,
         ReachabilityProgress::Complete,
         true,
     );
 
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::StartNodes {
-            service_names: vec![running_node.service_name.clone()],
-            error: None,
-        },
-        vec![
-            Action::StoreAggregatedNodeStats(metrics),
-            Action::NodeTableActions(NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![running_node.clone()],
-            }),
-        ],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StartNodes {
+        service_names: vec![running_node.service_name.clone()],
+        error: None,
+    })
+    .then_metrics([metrics])
+    .then_registry_snapshot(vec![running_node.clone()])
     .with_delay(Duration::from_millis(20));
 
     let mut journey = JourneyBuilder::from_context("Toggle start node", test_app)?
@@ -453,36 +330,19 @@ async fn journey_toggle_node_start_transitions_to_running() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_stop_transitions_to_stopped() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
     let mut stopped_node = running_node.clone();
     stopped_node.status = ServiceStatus::Stopped;
 
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
-
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::StopNodes {
-            service_names: vec![running_node.service_name.clone()],
-            error: None,
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![stopped_node.clone()],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::StopNodes {
+        service_names: vec![running_node.service_name.clone()],
+        error: None,
+    })
+    .then_registry_snapshot(vec![stopped_node.clone()])
     .with_delay(Duration::from_millis(20));
 
     let mut journey = JourneyBuilder::from_context("Toggle stop node", test_app)?
@@ -511,36 +371,19 @@ async fn journey_toggle_node_stop_transitions_to_stopped() -> Result<()> {
 
 #[tokio::test]
 async fn journey_remove_node_success_enters_refreshing_state() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
-
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
     let node_name = running_node.service_name.clone();
 
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::RemoveNodes {
-            service_names: vec![node_name.clone()],
-            error: None,
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::RemoveNodes {
+        service_names: vec![node_name.clone()],
+        error: None,
+    })
+    .then_registry_snapshot(vec![])
     .with_delay(Duration::from_millis(20));
 
     let mut journey = JourneyBuilder::from_context("Remove node success", test_app)?
@@ -572,37 +415,20 @@ async fn journey_remove_node_success_enters_refreshing_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_remove_node_failure_shows_error_and_keeps_node() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let running_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    registry.add_node(running_node.clone())?;
-
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_node(running_node.clone())
         .build()
         .await?;
-    drop(mock_management);
-
     let node_name = running_node.service_name.clone();
     let failure_message = "could not remove".to_string();
 
-    let response_plan = MockResponsePlan::with_follow_up(
-        NodeManagementResponse::RemoveNodes {
-            service_names: vec![node_name.clone()],
-            error: Some(failure_message.clone()),
-        },
-        vec![Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: vec![running_node.clone()],
-            },
-        )],
-    )
+    let response_plan = MockResponsePlan::immediate(NodeManagementResponse::RemoveNodes {
+        service_names: vec![node_name.clone()],
+        error: Some(failure_message.clone()),
+    })
+    .then_registry_snapshot(vec![running_node.clone()])
     .with_delay(Duration::from_millis(20));
 
     let mut journey = JourneyBuilder::from_context("Remove node failure", test_app)?
@@ -631,26 +457,14 @@ async fn journey_remove_node_failure_shows_error_and_keeps_node() -> Result<()> 
 
 #[tokio::test]
 async fn journey_maintain_nodes_failure_shows_error_popup() -> Result<()> {
-    let mut registry = MockNodeRegistry::empty()?;
-    let first_node = registry.create_test_node_service_data(0, ServiceStatus::Running);
-    let second_node = registry.create_test_node_service_data(1, ServiceStatus::Running);
-    registry.add_node(first_node.clone())?;
-    registry.add_node(second_node.clone())?;
-
-    let registry_path = registry.get_registry_path().clone();
-    let node_registry_manager = NodeRegistryManager::load(&registry_path).await?;
-
-    let (mock_management, management_handle) = MockNodeManagement::new();
+    let first_node = make_node_service_data(0, ServiceStatus::Running);
+    let second_node = make_node_service_data(1, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
-        .with_mock_registry(registry)
-        .with_mock_node_management(Arc::clone(&mock_management), management_handle)
-        .with_node_registry(node_registry_manager.clone())
+        .with_initial_nodes([first_node.clone(), second_node.clone()])
         .with_nodes_to_start(2)
         .build()
         .await?;
-    drop(mock_management);
-
     let error_message = "maintenance failed".to_string();
     let response_plan = MockResponsePlan::immediate(NodeManagementResponse::MaintainNodes {
         error: Some(error_message.clone()),

@@ -12,7 +12,6 @@ use super::{
     mock_node_management::{
         MockNodeManagement, MockNodeManagementHandle, MockResponsePlan, ScriptedNodeAction,
     },
-    mock_registry::MockNodeRegistry,
     test_helpers::{TestAppBuilder, TestAppContext},
 };
 use crate::{
@@ -26,12 +25,11 @@ use crate::{
     node_stats::AggregatedNodeStats,
     runtime::{StateAssertion, TestRuntime, TestStep, WaitCondition},
 };
-use ant_service_management::{
-    ReachabilityProgress, ServiceStatus, metric::ReachabilityStatusValues,
-};
+use ant_service_management::{ReachabilityProgress, metric::ReachabilityStatusValues};
 use color_eyre::{Result, eyre::eyre};
 use crossterm::event::KeyEvent;
 use std::{sync::Arc, time::Duration};
+use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tracing::error;
 
@@ -42,8 +40,8 @@ pub struct Journey {
     test_runtime: TestRuntime,
     node_management_handle: Option<MockNodeManagementHandle>,
     scripted_tasks: Vec<JoinHandle<()>>,
-    mock_registry: Option<MockNodeRegistry>,
     mock_node_management: Option<Arc<MockNodeManagement>>,
+    registry_dir: Option<TempDir>,
 }
 
 pub fn status_component(app: &App) -> Result<&Status> {
@@ -123,8 +121,8 @@ impl Journey {
             test_runtime,
             node_management_handle,
             scripted_tasks: Vec::new(),
-            mock_registry: None,
             mock_node_management: None,
+            registry_dir: None,
         })
     }
 
@@ -210,43 +208,32 @@ impl Journey {
 pub struct JourneyBuilder {
     journey: Journey,
     current_step: Option<JourneyStep>,
-    mock_registry: Option<MockNodeRegistry>,
     node_action_scripts: Vec<ScriptedNodeAction>,
 }
 
 impl JourneyBuilder {
     pub async fn new(name: &str) -> Result<Self> {
-        let registry = MockNodeRegistry::empty()?;
-        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
+        Self::new_with_setup(name, |builder| builder).await
     }
 
     pub async fn new_with_nodes(name: &str, node_count: u64) -> Result<Self> {
-        let registry = if node_count > 0 {
-            MockNodeRegistry::with_nodes(node_count)?
-        } else {
-            MockNodeRegistry::empty()?
-        };
-
-        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
-    }
-
-    pub async fn new_with_registry(name: &str, registry: MockNodeRegistry) -> Result<Self> {
-        Self::new_with_setup(name, move |builder| builder.with_mock_registry(registry)).await
+        Self::new_with_setup(name, move |builder| builder.with_running_nodes(node_count)).await
     }
 
     pub async fn new_with_setup<F>(name: &str, setup: F) -> Result<Self>
     where
         F: FnOnce(TestAppBuilder) -> TestAppBuilder,
     {
-        Self::from_context(name, setup(TestAppBuilder::new()).build().await?)
+        let builder = setup(TestAppBuilder::new());
+        Self::from_context(name, builder.build().await?)
     }
 
     pub fn from_context(name: &str, context: TestAppContext) -> Result<Self> {
         let TestAppContext {
             app,
-            registry,
             node_management_handle,
             mock_node_management,
+            registry_dir,
             ..
         } = context;
 
@@ -254,10 +241,10 @@ impl JourneyBuilder {
             journey: {
                 let mut journey = Journey::new(name.to_string(), app, node_management_handle)?;
                 journey.mock_node_management = mock_node_management;
+                journey.registry_dir = registry_dir;
                 journey
             },
             current_step: None,
-            mock_registry: Some(registry),
             node_action_scripts: Vec::new(),
         })
     }
@@ -576,104 +563,6 @@ impl JourneyBuilder {
         )
     }
 
-    // Registry manipulation methods
-    pub fn add_node_to_registry(
-        mut self,
-        node_data: ant_service_management::NodeServiceData,
-    ) -> Result<Self> {
-        if let Some(ref mut registry) = self.mock_registry {
-            registry
-                .add_node(node_data)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to add node to registry: {e}"))?;
-        }
-        Ok(self)
-    }
-
-    pub fn remove_node_from_registry(mut self, service_name: &str) -> Result<Self> {
-        if let Some(ref mut registry) = self.mock_registry {
-            registry
-                .remove_node(service_name)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to remove node from registry: {e}"))?;
-        }
-        Ok(self)
-    }
-
-    pub fn update_registry_node_status(
-        mut self,
-        service_name: &str,
-        status: ServiceStatus,
-    ) -> Result<Self> {
-        if let Some(ref mut registry) = self.mock_registry {
-            registry
-                .update_node_status(service_name, status)
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to update node status: {e}"))?;
-        }
-        Ok(self)
-    }
-
-    pub fn reset_registry(mut self) -> Result<Self> {
-        if let Some(ref mut registry) = self.mock_registry {
-            registry
-                .reset_all()
-                .map_err(|e| color_eyre::eyre::eyre!("Failed to reset registry: {e}"))?;
-        }
-        Ok(self)
-    }
-
-    // Registry assertions
-    pub fn expect_registry_contains(self, service_name: &str) -> Result<Self> {
-        if let Some(ref registry) = self.mock_registry
-            && !registry.contains_node(service_name)
-        {
-            return Err(color_eyre::eyre::eyre!(
-                "Registry does not contain expected node: {service_name}"
-            ));
-        }
-        Ok(self)
-    }
-
-    pub fn expect_registry_not_contains(self, service_name: &str) -> Result<Self> {
-        if let Some(ref registry) = self.mock_registry
-            && registry.contains_node(service_name)
-        {
-            return Err(color_eyre::eyre::eyre!(
-                "Registry unexpectedly contains node: {service_name}"
-            ));
-        }
-        Ok(self)
-    }
-
-    pub fn expect_registry_node_status(
-        self,
-        service_name: &str,
-        status: ServiceStatus,
-    ) -> Result<Self> {
-        if let Some(ref registry) = self.mock_registry
-            && !registry.verify_node_status(service_name, status.clone())
-        {
-            return Err(color_eyre::eyre::eyre!(
-                "Registry node {service_name} does not have expected status: {status:?}"
-            ));
-        }
-        Ok(self)
-    }
-
-    pub fn expect_node_count_in_registry(self, count: u64) -> Result<Self> {
-        if let Some(ref registry) = self.mock_registry
-            && registry.node_count() != count
-        {
-            return Err(color_eyre::eyre::eyre!(
-                "Registry has {} nodes, expected {count}",
-                registry.node_count()
-            ));
-        }
-        Ok(self)
-    }
-
-    pub fn expect_registry_is_empty(self) -> Result<Self> {
-        self.expect_node_count_in_registry(0)
-    }
-
     pub fn step(mut self) -> Self {
         if let Some(step) = self.current_step.take() {
             self.journey.add_step(step);
@@ -704,10 +593,6 @@ impl JourneyBuilder {
             tracing::warn!(
                 "Node action scripts configured but no mock node-management handle provided"
             );
-        }
-
-        if self.journey.mock_registry.is_none() {
-            self.journey.mock_registry = self.mock_registry.take();
         }
 
         Ok(self.journey)
