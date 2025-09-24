@@ -27,7 +27,6 @@ use crate::{
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmNetwork;
-use ant_protocol::get_port_from_multiaddr;
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{ffi::OsString, path::PathBuf, sync::Arc, time::Duration};
 use tokio::sync::RwLock;
@@ -261,19 +260,6 @@ impl ServiceStateActions for NodeService {
                 })?;
 
                 self.service_data.write().await.listen_addr = Some(listen_addrs.clone());
-
-                for addr in &listen_addrs {
-                    if let Some(port) = get_port_from_multiaddr(addr) {
-                        debug!("Found antnode port for {service_name}: {port}");
-                        self.service_data.write().await.node_port = Some(port);
-                        break;
-                    }
-                }
-
-                if self.service_data.read().await.node_port.is_none() {
-                    error!("Could not find antnode port");
-                    error!("This will cause the node to have a different port during upgrade");
-                }
 
                 let reachability_status = node_metrics.reachability_status.clone();
                 let failure_log = if reachability_status.indicates_unreachable() {
