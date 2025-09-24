@@ -20,6 +20,7 @@ use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 use semver::Version;
+use std::any::Any;
 use std::time::Duration;
 
 #[derive(Debug, Default)]
@@ -220,6 +221,14 @@ impl Component for UpgradeLaunchpadPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

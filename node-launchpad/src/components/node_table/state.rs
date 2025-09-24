@@ -15,18 +15,22 @@ use super::{
     table_state::{StatefulTable, TableUiState},
     view::{NodeViewModel, build_view_models},
 };
-use crate::node_management::NodeManagement;
+use crate::node_management::{NodeManagement, NodeManagementHandle};
 use crate::{action::Action, components::node_table::operations::NodeOperationsConfig};
-use crate::{components::status::NODE_STAT_UPDATE_INTERVAL, node_stats::AggregatedNodeStats};
+use crate::{
+    components::status::NODE_STAT_UPDATE_INTERVAL,
+    node_stats::{AggregatedNodeStats, MetricsFetcher},
+};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
+use ant_node_manager::config::get_node_registry_path;
 use ant_service_management::{
     NodeRegistryManager, NodeServiceData, ServiceStatus, metric::ReachabilityStatusValues,
 };
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
-use std::{path::PathBuf, time::Instant};
+use std::{path::PathBuf, sync::Arc, time::Instant};
 use tracing::{debug, error};
 
 pub struct NodeTableState {
@@ -37,6 +41,7 @@ pub struct NodeTableState {
     pub operations: NodeOperations,
     /// Configuration for the node operations.
     pub operations_config: NodeOperationsConfig,
+    metrics_fetcher: Arc<dyn MetricsFetcher>,
 
     pub controller: NodeStateController,
 
@@ -260,6 +265,10 @@ impl NodeStateController {
         &self.view.items
     }
 
+    pub fn view_items(&self) -> &[NodeViewModel] {
+        &self.view.items
+    }
+
     pub fn selected_item(&self) -> Option<&NodeViewModel> {
         self.view.selected_item()
     }
@@ -363,32 +372,64 @@ impl NodeStateController {
 
 impl NodeTableState {
     pub async fn new(config: NodeTableConfig) -> Result<Self> {
-        let registry_path = if let Some(override_path) = &config.registry_path_override {
-            override_path.clone()
-        } else {
-            ant_node_manager::config::get_node_registry_path()?
+        let NodeTableConfig {
+            network_id,
+            init_peers_config,
+            antnode_path,
+            data_dir_path,
+            upnp_enabled,
+            port_range,
+            rewards_address,
+            nodes_to_start,
+            storage_mountpoint,
+            node_management,
+            node_registry_manager,
+            metrics_fetcher,
+        } = config;
+
+        let (node_registry, node_management_handle): (
+            NodeRegistryManager,
+            Arc<dyn NodeManagementHandle>,
+        ) = match (node_registry_manager, node_management) {
+            (Some(registry), Some(handle)) => (registry, handle),
+            (Some(registry), None) => {
+                let handle: Arc<dyn NodeManagementHandle> =
+                    Arc::new(NodeManagement::new(registry.clone())?);
+                (registry, handle)
+            }
+            (None, Some(_)) => {
+                return Err(eyre!(
+                    "custom node management handle provided without registry manager"
+                ));
+            }
+            (None, None) => {
+                let registry_path = get_node_registry_path()?;
+                let node_registry = NodeRegistryManager::load(&registry_path).await?;
+                let node_management: Arc<dyn NodeManagementHandle> =
+                    Arc::new(NodeManagement::new(node_registry.clone())?);
+                (node_registry, node_management)
+            }
         };
-        let node_registry = NodeRegistryManager::load(&registry_path).await?;
-        let node_services = node_registry.get_node_service_data().await;
-        let node_management = NodeManagement::new(node_registry.clone())?;
+        #[allow(clippy::needless_collect)]
+        let node_services: Vec<NodeServiceData> = node_registry.get_node_service_data().await;
 
         let mut controller = NodeStateController::with_services(&node_services);
-        controller.update_desired_running_count(config.nodes_to_start);
+        controller.update_desired_running_count(nodes_to_start);
 
-        let operations = NodeOperations::new(node_management);
+        let operations = NodeOperations::new(Arc::clone(&node_management_handle));
         let operations_config = NodeOperationsConfig {
             available_disk_space_gb: crate::system::get_available_space_b(
-                config.storage_mountpoint.as_path(),
+                storage_mountpoint.as_path(),
             )? / crate::components::popup::manage_nodes::GB,
-            storage_mountpoint: config.storage_mountpoint.clone(),
-            rewards_address: config.rewards_address,
-            nodes_to_start: config.nodes_to_start,
-            antnode_path: config.antnode_path,
-            upnp_enabled: config.upnp_enabled,
-            data_dir_path: config.data_dir_path,
-            network_id: config.network_id,
-            init_peers_config: config.init_peers_config,
-            port_range: config.port_range,
+            storage_mountpoint: storage_mountpoint.clone(),
+            rewards_address,
+            nodes_to_start,
+            antnode_path,
+            upnp_enabled,
+            data_dir_path: data_dir_path.clone(),
+            network_id,
+            init_peers_config,
+            port_range,
         };
         let mut state = Self {
             node_registry_manager: node_registry,
@@ -398,6 +439,7 @@ impl NodeTableState {
             node_stats_last_update: Instant::now(),
             ui: TableUiState::new(),
             last_reported_running_count: 0,
+            metrics_fetcher,
         };
 
         // Populate the UI table items from the loaded node services
@@ -414,13 +456,15 @@ impl NodeTableState {
             self.node_stats_last_update = Instant::now();
 
             if let Some(action_sender) = &self.operations.action_sender {
-                crate::node_stats::AggregatedNodeStats::fetch_aggregated_node_stats(
-                    self.controller.running_nodes(),
-                    action_sender.clone(),
-                );
+                self.metrics_fetcher
+                    .fetch(self.controller.running_nodes(), action_sender.clone());
             }
         }
         Ok(())
+    }
+
+    pub fn set_metrics_fetcher(&mut self, fetcher: Arc<dyn MetricsFetcher>) {
+        self.metrics_fetcher = fetcher;
     }
 
     /// Synchronise controller with registry snapshot and reconcile transitions.
@@ -448,6 +492,10 @@ impl NodeTableState {
         }
 
         debug!("Node state updated. Node count changed to {view_len}");
+    }
+
+    pub fn view_items(&self) -> &[NodeViewModel] {
+        self.controller.items()
     }
 
     // update the values inside node items
@@ -673,6 +721,41 @@ impl TableUiState {
             .find(|(_, item)| !item.is_locked())
             .map(|(idx, _)| idx)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct NodeSelectionInfo {
+    pub lifecycle: LifecycleState,
+    pub locked: bool,
+    pub can_start: bool,
+    pub can_stop: bool,
+}
+
+impl From<&NodeViewModel> for NodeSelectionInfo {
+    fn from(node: &NodeViewModel) -> Self {
+        Self {
+            lifecycle: node.lifecycle.clone(),
+            locked: node.is_locked(),
+            can_start: node.can_start(),
+            can_stop: node.can_stop(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct NodeTableConfig {
+    pub network_id: Option<u8>,
+    pub init_peers_config: InitialPeersConfig,
+    pub antnode_path: Option<PathBuf>,
+    pub data_dir_path: PathBuf,
+    pub upnp_enabled: bool,
+    pub port_range: Option<(u32, u32)>,
+    pub rewards_address: Option<EvmAddress>,
+    pub nodes_to_start: u64,
+    pub storage_mountpoint: PathBuf,
+    pub node_management: Option<Arc<dyn NodeManagementHandle>>,
+    pub node_registry_manager: Option<NodeRegistryManager>,
+    pub metrics_fetcher: Arc<dyn MetricsFetcher>,
 }
 
 #[cfg(test)]
@@ -1023,37 +1106,4 @@ mod tests {
         state.clear_transition();
         assert!(!state.is_provisioning);
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct NodeSelectionInfo {
-    pub lifecycle: LifecycleState,
-    pub locked: bool,
-    pub can_start: bool,
-    pub can_stop: bool,
-}
-
-impl From<&NodeViewModel> for NodeSelectionInfo {
-    fn from(node: &NodeViewModel) -> Self {
-        Self {
-            lifecycle: node.lifecycle.clone(),
-            locked: node.is_locked(),
-            can_start: node.can_start(),
-            can_stop: node.can_stop(),
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct NodeTableConfig {
-    pub network_id: Option<u8>,
-    pub init_peers_config: InitialPeersConfig,
-    pub antnode_path: Option<PathBuf>,
-    pub data_dir_path: PathBuf,
-    pub upnp_enabled: bool,
-    pub port_range: Option<(u32, u32)>,
-    pub rewards_address: Option<EvmAddress>,
-    pub nodes_to_start: u64,
-    pub storage_mountpoint: PathBuf,
-    pub registry_path_override: Option<PathBuf>,
 }

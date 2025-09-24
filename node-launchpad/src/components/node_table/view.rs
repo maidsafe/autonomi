@@ -379,7 +379,7 @@ mod tests {
     }
 
     #[test]
-    fn removal_intent_overrides_running_status() {
+    fn removal_intent_takes_precedence_over_running_status() {
         let mut nodes = BTreeMap::new();
         let mut state = base_state();
         state.registry = Some(registry_node(ServiceStatus::Running));

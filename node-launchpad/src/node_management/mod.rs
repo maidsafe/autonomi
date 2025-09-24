@@ -60,6 +60,10 @@ pub struct NodeManagement {
     task_sender: UnboundedSender<NodeManagementTask>,
 }
 
+pub trait NodeManagementHandle: Send + Sync {
+    fn send_task(&self, task: NodeManagementTask) -> Result<()>;
+}
+
 impl NodeManagement {
     pub fn new(node_registry: NodeRegistryManager) -> Result<Self> {
         let (task_sender, task_recv) = mpsc::unbounded_channel();
@@ -303,5 +307,11 @@ impl NodeManagement {
             .inspect_err(|err| error!("The node management local set is down {err:?}"))
             .map_err(|_| eyre!("Failed to send task to the node management local set"))?;
         Ok(())
+    }
+}
+
+impl NodeManagementHandle for NodeManagement {
+    fn send_task(&self, task: NodeManagementTask) -> Result<()> {
+        Self::send_task(self, task)
     }
 }

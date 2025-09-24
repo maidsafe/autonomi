@@ -16,7 +16,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Cell, Row, Table},
 };
-use std::{cmp::max, path::PathBuf};
+use std::{any::Any, cmp::max, path::PathBuf};
 use tokio::sync::mpsc::UnboundedSender;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
@@ -509,6 +509,14 @@ impl Component for Options {
             _ => {}
         }
         Ok(None)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -9,6 +9,7 @@
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
+use std::any::Any;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
@@ -29,7 +30,7 @@ pub mod utils;
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 /// Implementors of this trait can be registered with the main application loop and will be able to receive events,
 /// update state, and be rendered on the screen.
-pub trait Component {
+pub trait Component: Any {
     /// Register an action handler that can send actions for processing if necessary.
     ///
     /// # Arguments
@@ -148,4 +149,8 @@ pub trait Component {
     fn focus_target(&self) -> FocusTarget {
         FocusTarget::Status // Default to Status, components should override this
     }
+
+    fn as_any(&self) -> &dyn Any;
+
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

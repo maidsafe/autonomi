@@ -28,8 +28,8 @@ use ratatui::{
         ScrollbarOrientation, ScrollbarState, Wrap,
     },
 };
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{any::Any, path::PathBuf};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{error, info};
 
@@ -930,6 +930,14 @@ impl Component for NodeLogsPopup {
         self.render_word_wrap_indicator(f, popup_area);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

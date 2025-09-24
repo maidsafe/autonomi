@@ -33,13 +33,13 @@ use crate::mode::Scene;
 use crate::tui::Frame;
 use color_eyre::Result;
 use ratatui::layout::Rect;
+use std::any::Any;
 use tokio::sync::mpsc::UnboundedSender;
 
 pub use operations::NodeOperations;
-pub use state::{NavigationDirection, NodeSelectionInfo, NodeTableState};
+pub use state::{NavigationDirection, NodeSelectionInfo, NodeTableConfig, NodeTableState};
 pub use table_state::StatefulTable;
 pub use view::{NodeViewModel, build_view_models};
-pub use widget::NodeTableConfig;
 
 pub struct NodeTableComponent {
     pub state: NodeTableState,
@@ -61,6 +61,10 @@ impl NodeTableComponent {
 
     pub fn state_mut(&mut self) -> &mut NodeTableState {
         &mut self.state
+    }
+
+    pub fn view_items(&self) -> &[NodeViewModel] {
+        self.state.view_items()
     }
 }
 
@@ -200,6 +204,14 @@ impl Component for NodeTableComponent {
 
     fn focus_target(&self) -> FocusTarget {
         FocusTarget::NodeTable
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

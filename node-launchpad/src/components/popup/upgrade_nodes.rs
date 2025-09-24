@@ -18,6 +18,7 @@ use crate::{
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
+use std::any::Any;
 
 pub struct UpgradeNodesPopUp {}
 
@@ -191,6 +192,14 @@ impl Component for UpgradeNodesPopUp {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 

@@ -14,6 +14,8 @@ use crate::components::node_table::{NodeTableComponent, NodeTableConfig};
 use crate::components::popup::error_popup::ErrorPopup;
 use crate::components::popup::manage_nodes::{GB, GB_PER_NODE};
 use crate::config::get_launchpad_nodes_data_dir_path;
+use crate::node_management::NodeManagementHandle;
+use crate::node_stats::MetricsFetcher;
 use crate::system::get_available_space_b;
 use crate::{
     action::{Action, StatusActions},
@@ -24,12 +26,14 @@ use crate::{
 };
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::EvmAddress;
+use ant_service_management::NodeRegistryManager;
 use color_eyre::eyre::{Ok, Result};
 use crossterm::event::KeyEvent;
 use ratatui::text::Span;
 use ratatui::{prelude::*, widgets::*};
-use std::time::Duration;
-use std::{path::PathBuf, vec};
+use std::any::Any;
+use std::sync::Arc;
+use std::{path::PathBuf, time::Duration, vec};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
@@ -66,7 +70,9 @@ pub struct StatusConfig {
     pub init_peers_config: InitialPeersConfig,
     pub storage_mountpoint: PathBuf,
     pub rewards_address: Option<EvmAddress>,
-    pub registry_path_override: Option<PathBuf>,
+    pub node_management: Option<Arc<dyn NodeManagementHandle>>,
+    pub node_registry_manager: Option<NodeRegistryManager>,
+    pub metrics_fetcher: Arc<dyn MetricsFetcher>,
 }
 
 impl Status {
@@ -95,12 +101,26 @@ impl Status {
                 rewards_address: config.rewards_address,
                 nodes_to_start: config.allocated_disk_space,
                 storage_mountpoint: config.storage_mountpoint.clone(),
-                registry_path_override: config.registry_path_override.clone(),
+                node_management: config.node_management.clone(),
+                node_registry_manager: config.node_registry_manager.clone(),
+                metrics_fetcher: Arc::clone(&config.metrics_fetcher),
             })
             .await?,
         };
 
         Ok(status)
+    }
+
+    pub(crate) fn node_table(&self) -> &NodeTableComponent {
+        &self.node_table_component
+    }
+
+    pub(crate) fn node_table_mut(&mut self) -> &mut NodeTableComponent {
+        &mut self.node_table_component
+    }
+
+    pub(crate) fn error_popup(&self) -> Option<&ErrorPopup> {
+        self.error_popup.as_ref()
     }
 
     fn handle_status_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
@@ -467,6 +487,14 @@ impl Component for Status {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 #[cfg(test)]
@@ -478,28 +506,34 @@ mod tests {
     use ant_service_management::{NodeServiceData, ServiceStatus};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::{Terminal, backend::TestBackend};
-    use std::env::temp_dir;
     use std::time::Duration;
+    use tempfile::{TempDir, tempdir};
 
-    fn create_test_status_config() -> StatusConfig {
-        let temp_path = temp_dir().join("node-launchpad-test-data");
+    fn create_test_status_config() -> (TempDir, StatusConfig) {
+        let temp_dir = tempdir().expect("failed to create temp directory");
+        let temp_path = temp_dir.path().to_path_buf();
         std::fs::create_dir_all(&temp_path).expect("failed to create temp directory");
         let storage_mountpoint = temp_path.clone();
 
-        StatusConfig {
-            allocated_disk_space: 10,
-            antnode_path: Some(temp_path.join("antnode")),
-            upnp_enabled: true,
-            port_range: Some((15000, 15100)),
-            data_dir_path: temp_path.clone(),
-            network_id: Some(1),
-            init_peers_config: InitialPeersConfig::default(),
-            storage_mountpoint,
-            rewards_address: "0x1234567890123456789012345678901234567890"
-                .parse::<EvmAddress>()
-                .ok(),
-            registry_path_override: Some(temp_path.join("registry")),
-        }
+        (
+            temp_dir,
+            StatusConfig {
+                allocated_disk_space: 10,
+                antnode_path: Some(temp_path.join("antnode")),
+                upnp_enabled: true,
+                port_range: Some((15000, 15100)),
+                data_dir_path: temp_path.clone(),
+                network_id: Some(1),
+                init_peers_config: InitialPeersConfig::default(),
+                storage_mountpoint,
+                rewards_address: "0x1234567890123456789012345678901234567890"
+                    .parse::<EvmAddress>()
+                    .ok(),
+                node_management: None,
+                node_registry_manager: None,
+                metrics_fetcher: MockMetricsService::scripted(vec![]),
+            },
+        )
     }
 
     fn sync_single_node(status: &mut Status, service_status: ServiceStatus) -> NodeServiceData {
@@ -514,7 +548,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_handle_key_events_with_error_popup() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let focus_manager = FocusManager::new(FocusTarget::Status);
 
@@ -538,7 +572,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_handle_key_events_when_focused() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let focus_manager = FocusManager::new(FocusTarget::Status);
 
@@ -553,7 +587,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_tick_action_updates_last_refresh_time() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let table_state = status.node_table_component.state_mut();
@@ -572,7 +606,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_switch_scene() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let result = status.update(Action::SwitchScene(Scene::Status));
@@ -583,7 +617,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_store_rewards_address() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let new_address = "0x1234567890abcdef1234567890abcdef12345678"
             .parse::<EvmAddress>()
@@ -604,7 +638,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_store_upnp_setting() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let result = status.update(Action::StoreUpnpSetting(false));
@@ -621,7 +655,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_store_port_range() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let result = status.update(Action::StorePortRange(Some((20000, 20100))));
@@ -639,7 +673,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_nodes_stats_obtained() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let node = sync_single_node(&mut status, ServiceStatus::Running);
         let new_stats = AggregatedNodeStats {
@@ -680,7 +714,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_trigger_manage_nodes() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         status.nodes_to_start = 5;
 
@@ -697,7 +731,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_trigger_rewards_address_empty() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         status.rewards_address = None;
 
@@ -712,7 +746,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_trigger_rewards_address_non_empty() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let result = status.update(Action::StatusActions(StatusActions::TriggerRewardsAddress));
@@ -723,7 +757,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_update_show_error_popup() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
         let error_popup = ErrorPopup::new("Test Error", "Test error message", "Detailed error");
 
@@ -737,7 +771,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_store_running_node_count_syncs_table() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let result = status.update(Action::StoreRunningNodeCount(7));
@@ -755,7 +789,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_status_drawing_with_error_popup() {
-        let config = create_test_status_config();
+        let (_temp_dir, config) = create_test_status_config();
         let mut status = Status::new(config).await.unwrap();
 
         let mut error_popup = ErrorPopup::new("Test Error", "Test error message", "Detailed error");
@@ -778,7 +812,7 @@ mod tests {
     // TODO: Rewrite this test to use real node data instead of MockNode
     // #[tokio::test]
     // async fn test_status_component_integration_with_real_nodes() {
-    //     let config = create_test_status_config();
+    //      let (_temp_dir, config) = create_test_status_config();
     //     let mut status = Status::new(config).await.unwrap();
     //     // Test with real node services
     //     assert!(true); // Placeholder
