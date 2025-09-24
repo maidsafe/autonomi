@@ -25,13 +25,15 @@ use std::{iter, sync::Arc};
 use tempfile::TempDir;
 
 /// Builder for fully wired `App` instances used in UI integration tests.
-/// Configure it with helpers below, then call `build` to obtain the runnable context.
+/// Defaults to reporting ample disk space (1024GB) so CI runs reliably; call
+/// `with_real_disk_space` when verifying the production disk checks.
 pub struct TestAppBuilder {
     node_management: Option<Arc<dyn NodeManagementHandle>>,
     node_registry: Option<NodeRegistryManager>,
     initial_nodes: Vec<NodeServiceData>,
     nodes_to_start: Option<u64>,
     metrics_fetcher: Option<Arc<dyn MetricsFetcher>>,
+    available_disk_space_override: Option<u64>,
 }
 
 impl TestAppBuilder {
@@ -44,6 +46,7 @@ impl TestAppBuilder {
             initial_nodes: Vec::new(),
             nodes_to_start: None,
             metrics_fetcher: None,
+            available_disk_space_override: None,
         }
     }
 
@@ -128,6 +131,20 @@ impl TestAppBuilder {
         self.with_metrics_events(script)
     }
 
+    /// Override the perceived available disk space (defaults to 700GB).
+    /// Combine with `with_nodes_to_start` when simulating large node fleets.
+    pub fn with_available_disk_space(mut self, gb: u64) -> Self {
+        self.available_disk_space_override = Some(gb);
+        self
+    }
+
+    /// Use the actual filesystem free space instead of the test override.
+    /// Helpful when validating disk-limit error paths.
+    pub fn with_real_disk_space(mut self) -> Self {
+        self.available_disk_space_override = None;
+        self
+    }
+
     /// Finalise the builder and return the constructed test context.
     /// Call once configuration steps (nodes, metrics, mocks) are complete.
     pub async fn build(self) -> Result<TestAppContext> {
@@ -137,6 +154,7 @@ impl TestAppBuilder {
             mut initial_nodes,
             nodes_to_start,
             metrics_fetcher,
+            available_disk_space_override,
         } = self;
 
         let mut node_management = node_management;
@@ -181,7 +199,7 @@ impl TestAppBuilder {
             port_range: None,
         };
 
-        let app = App::new_with_dependencies(
+        let mut app = App::new_with_dependencies(
             1.0,  // tick_rate
             60.0, // frame_rate
             InitialPeersConfig::default(),
@@ -195,6 +213,15 @@ impl TestAppBuilder {
             metrics_fetcher,
         )
         .await?;
+
+        let override_gb = available_disk_space_override.unwrap_or(700);
+        if let Ok(status) = crate::test_utils::status_component_mut(&mut app) {
+            status
+                .node_table_mut()
+                .state_mut()
+                .operations_config
+                .available_disk_space_gb = override_gb;
+        }
 
         Ok(TestAppContext {
             app,
