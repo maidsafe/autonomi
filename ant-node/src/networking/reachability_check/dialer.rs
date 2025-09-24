@@ -208,7 +208,11 @@ impl InitialContactsManager {
     }
 
     pub(crate) fn has_extra_peers_for_dialing(&self) -> bool {
-        self.attempted_indices.len() < self.initial_contacts.len()
+        let has_extra = self.attempted_indices.len() < self.initial_contacts.len();
+        if !has_extra {
+            info!("No extra peers left for dialing.");
+        }
+        has_extra
     }
 
     pub(crate) fn reset(&mut self) {
@@ -266,7 +270,15 @@ impl DialManager {
         if self.dialer.ongoing_dial_attempts.len() < get_majority(MAX_CONCURRENT_DIALS)
             && !self.initial_contacts_manager.has_extra_peers_for_dialing()
         {
+            info!(
+                "Dialing has completed because we do not have majority dial attempts in progress and we have no more peers to dial."
+            );
             return true;
+        }
+
+        if self.dialer.ongoing_dial_attempts.is_empty() {
+            info!("Dialing has not started yet.");
+            return false;
         }
 
         let mut still_waiting_for_dial_back = false;
@@ -274,19 +286,40 @@ impl DialManager {
             "Checking if dialing has completed. Ongoing dial attempts: {:?}",
             self.dialer.ongoing_dial_attempts
         );
+
+        let mut initiated = 0;
+        let mut connected_timeout = 0;
+        let mut waiting_for_dial_back = 0;
+        let mut dial_back_received = 0;
         for state in self.dialer.ongoing_dial_attempts.values() {
             match state {
                 DialState::Initiated { .. } => {
                     // this state should eventually be cleaned up by `cleanup_dial_attempts`
                     still_waiting_for_dial_back = true;
+                    initiated += 1;
                 }
                 DialState::Connected { .. } => {
                     if state.elapsed().as_secs() < TIMEOUT_ON_CONNECTED_STATE.as_secs() {
+                        waiting_for_dial_back += 1;
                         still_waiting_for_dial_back = true;
+                    } else {
+                        connected_timeout += 1;
                     }
                 }
-                DialState::DialBackReceived { .. } => {}
+                DialState::DialBackReceived { .. } => {
+                    dial_back_received += 1;
+                }
             }
+        }
+
+        if still_waiting_for_dial_back {
+            info!(
+                "Dialing is still in progress. initiated: {initiated}, connected (waiting for dial back): {waiting_for_dial_back}, connected (timed out): {connected_timeout}, dial back received: {dial_back_received}"
+            );
+        } else {
+            info!(
+                "Dialing has completed. initiated: {initiated}, connected (waiting for dial back): {waiting_for_dial_back}, connected (timed out): {connected_timeout}, dial back received: {dial_back_received}"
+            );
         }
 
         !still_waiting_for_dial_back
