@@ -206,12 +206,6 @@ impl MockNodeManagementHandle {
         self.task_rx.recv().await
     }
 
-    /// Non-blocking variant of [`recv_task`].
-    /// Handy inside assertions where polling is sufficient.
-    pub fn try_recv_task(&mut self) -> Option<NodeManagementTask> {
-        self.task_rx.try_recv().ok()
-    }
-
     fn registry_manager(&self) -> Option<NodeRegistryManager> {
         self.state.lock().ok()?.node_registry.clone()
     }
@@ -279,7 +273,7 @@ impl MockNodeManagementHandle {
                             sleep(plan.delay).await;
                         }
 
-                        let mut events = plan.followup_events.into_iter();
+                        let events = plan.followup_events.into_iter();
 
                         if let Some(response) = plan.response
                             && let Err(err) = handle.respond(response)
@@ -287,7 +281,7 @@ impl MockNodeManagementHandle {
                             error!("Failed to send scripted node-management response: {err}");
                         }
 
-                        while let Some(event) = events.next() {
+                        for event in events {
                             match event {
                                 PlannedEvent::Wait(duration) => sleep(duration).await,
                                 PlannedEvent::Action(action) => {

@@ -78,12 +78,22 @@ async fn load_logs_internal(
 
     // Determine log directory
     let log_dir = if let Some(custom_dir) = log_dir {
-        custom_dir.join("logs")
+        if custom_dir.exists() {
+            custom_dir
+        } else {
+            custom_dir.join("logs")
+        }
     } else {
-        get_service_log_dir_path(ReleaseType::NodeLaunchpad, None, None)
+        let candidate = get_service_log_dir_path(ReleaseType::AntNode, None, None)
             .with_context(|| format!("Failed to get log directory for {node_name}"))?
-            .join(&node_name)
-            .join("logs")
+            .join(&node_name);
+
+        let with_logs = candidate.join("logs");
+        if with_logs.exists() {
+            with_logs
+        } else {
+            candidate
+        }
     };
 
     // Check if log directory exists

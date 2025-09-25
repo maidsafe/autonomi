@@ -202,6 +202,7 @@ async fn journey_stopped_unreachable_failure_node_shows_error_status() -> Result
                 }
             }
         })
+        .assert_spinner(&failed_node.service_name, false)
         .expect_text("Error (Unreachable)")
         .step()
         .build()?;

@@ -859,10 +859,11 @@ impl Component for NodeLogsPopup {
             Action::SwitchScene(Scene::NodeLogsPopUp) => {
                 Ok(Some(Action::SwitchInputMode(crate::mode::InputMode::Entry)))
             }
-            Action::SetNodeLogsTarget(node_name) => {
+            Action::SetNodeLogsTarget { node_name, log_dir } => {
                 if let (Some(log_management), Some(action_sender)) =
                     (self.log_management.clone(), self.action_sender.clone())
                 {
+                    self.log_dir = log_dir;
                     self.set_node_name(node_name, &log_management, action_sender);
                 } else {
                     error!("LogManagement or action_sender not available for SetNodeLogsTarget");

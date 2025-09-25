@@ -56,15 +56,14 @@ pub fn centered_rect_fixed(x: u16, y: u16, r: Rect) -> Rect {
 ///
 /// A `Result` indicating the success or failure of the operation.
 pub fn open_logs(node_name: Option<String>) -> Result<(), eyre::Report> {
-    let service_path = get_service_log_dir_path(ReleaseType::NodeLaunchpad, None, None)?
-        .to_string_lossy()
-        .into_owned();
+    let mut path = get_service_log_dir_path(ReleaseType::AntNode, None, None)?;
 
-    let folder = if let Some(node_name) = node_name {
-        format!("{service_path}/{node_name}")
-    } else {
-        service_path.to_string()
-    };
+    if let Some(node_name) = node_name {
+        path = path.join(node_name);
+    }
+
+    let folder = path.to_string_lossy().into_owned();
+
     if let Err(e) = system::open_folder(&folder) {
         error!("Failed to open folder: {}", e);
     }

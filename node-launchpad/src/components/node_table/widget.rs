@@ -212,29 +212,37 @@ fn render_spinner_column(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut 
     for index in 0..render_count {
         let node_item = &state.controller.view.items[index];
         let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
-        let style = match node_item.lifecycle {
-            LifecycleState::Running => SpinnerStyle::Running,
-            LifecycleState::Starting | LifecycleState::Adding | LifecycleState::Added => {
-                SpinnerStyle::Starting
-            }
-            LifecycleState::Stopping => SpinnerStyle::Stopping,
-            LifecycleState::Removing => SpinnerStyle::Stopping,
-            LifecycleState::Unreachable { .. } => SpinnerStyle::Stopped,
-            _ => SpinnerStyle::Idle,
-        };
-
-        let spinner = spinner_for(style, node_item.locked);
+        let style = spinner_style_for(node_item);
         if let Some(spinner_state) = state.ui.spinner_states_mut().get_mut(index) {
+            let spinner = spinner_for(style, node_item.locked);
             f.render_stateful_widget(spinner, spinner_area, spinner_state);
         }
     }
 }
 
+fn spinner_style_for(node_item: &NodeViewModel) -> SpinnerStyle {
+    if matches!(
+        node_item.reachability_progress,
+        ReachabilityProgress::InProgress(_)
+    ) {
+        return SpinnerStyle::Transition;
+    }
+
+    match node_item.lifecycle {
+        LifecycleState::Running => SpinnerStyle::Running,
+        LifecycleState::Starting
+        | LifecycleState::Adding
+        | LifecycleState::Added
+        | LifecycleState::Stopping
+        | LifecycleState::Removing => SpinnerStyle::Transition,
+        _ => SpinnerStyle::Idle,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SpinnerStyle {
     Running,
-    Starting,
-    Stopping,
-    Stopped,
+    Transition,
     Idle,
 }
 
@@ -246,35 +254,20 @@ fn spinner_for(style: SpinnerStyle, locked: bool) -> Throbber<'static> {
             } else {
                 Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
             })
-            .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
+            .throbber_set(throbber_widgets_tui::OGHAM_C)
             .use_type(WhichUse::Spin),
-        SpinnerStyle::Starting => Throbber::default()
+        SpinnerStyle::Transition => Throbber::default()
             .throbber_style(if locked {
                 Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
             })
-            .throbber_set(throbber_widgets_tui::BOX_DRAWING)
+            .throbber_set(throbber_widgets_tui::WHITE_CIRCLE)
             .use_type(WhichUse::Spin),
-        SpinnerStyle::Stopping => Throbber::default()
-            .throbber_style(if locked {
-                Style::default().fg(COOL_GREY).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(EUCALYPTUS).add_modifier(Modifier::BOLD)
-            })
-            .throbber_set(throbber_widgets_tui::CLOCK)
-            .use_type(WhichUse::Spin),
-        SpinnerStyle::Stopped => Throbber::default()
-            .throbber_style(
-                Style::default()
-                    .fg(if locked { COOL_GREY } else { GHOST_WHITE })
-                    .add_modifier(Modifier::BOLD),
-            )
-            .throbber_set(throbber_widgets_tui::BRAILLE_SIX_DOUBLE)
-            .use_type(WhichUse::Full),
         SpinnerStyle::Idle => Throbber::default()
             .throbber_style(Style::default().fg(if locked { COOL_GREY } else { GHOST_WHITE }))
-            .use_type(WhichUse::Full),
+            .throbber_set(throbber_widgets_tui::WHITE_CIRCLE)
+            .use_type(WhichUse::Empty),
     }
 }
 
@@ -632,5 +625,87 @@ mod tests {
 
         let text = format_status_cell(&model, STATUS_WIDTH);
         assert!(text.contains("Added"));
+    }
+
+    fn spinner_view_model(
+        lifecycle: LifecycleState,
+        reachability: ReachabilityProgress,
+    ) -> NodeViewModel {
+        NodeViewModel {
+            id: "node-1".into(),
+            lifecycle,
+            status: "status".into(),
+            version: "1.0.0".into(),
+            reachability_progress: reachability,
+            reachability_status: ReachabilityStatusValues::default(),
+            metrics: NodeMetrics::default(),
+            locked: false,
+            last_failure: None,
+            pending_command: None,
+        }
+    }
+
+    #[test]
+    fn spinner_style_running_prefers_running_set() {
+        let model = spinner_view_model(LifecycleState::Running, ReachabilityProgress::Complete);
+        assert_eq!(spinner_style_for(&model), SpinnerStyle::Running);
+    }
+
+    #[test]
+    fn spinner_style_reachability_overrides_running() {
+        let model = spinner_view_model(
+            LifecycleState::Running,
+            ReachabilityProgress::InProgress(42),
+        );
+        assert_eq!(spinner_style_for(&model), SpinnerStyle::Transition);
+    }
+
+    #[test]
+    fn spinner_style_transition_lifecycles_use_white_circle() {
+        let model = spinner_view_model(LifecycleState::Starting, ReachabilityProgress::NotRun);
+        assert_eq!(spinner_style_for(&model), SpinnerStyle::Transition);
+    }
+
+    #[test]
+    fn spinner_style_idle_for_inactive_nodes() {
+        let model = spinner_view_model(LifecycleState::Stopped, ReachabilityProgress::NotRun);
+        assert_eq!(spinner_style_for(&model), SpinnerStyle::Idle);
+    }
+
+    #[test]
+    fn running_spinner_yields_ogham_character() {
+        let spinner = spinner_for(SpinnerStyle::Running, false);
+        let mut state = ThrobberState::default();
+        state.calc_next();
+        let symbol = spinner.to_symbol_span(&state).content.to_string();
+        assert!(
+            throbber_widgets_tui::OGHAM_C
+                .symbols
+                .iter()
+                .any(|glyph| symbol.contains(glyph))
+        );
+    }
+
+    #[test]
+    fn transition_spinner_uses_white_circle_symbols() {
+        let spinner = spinner_for(SpinnerStyle::Transition, false);
+        let mut state = ThrobberState::default();
+        state.calc_next();
+        let symbol = spinner.to_symbol_span(&state).content.to_string();
+        assert!(
+            throbber_widgets_tui::WHITE_CIRCLE
+                .symbols
+                .iter()
+                .any(|glyph| symbol.contains(glyph))
+        );
+    }
+
+    #[test]
+    fn idle_spinner_renders_empty_output() {
+        let spinner = spinner_for(SpinnerStyle::Idle, false);
+        let state = ThrobberState::default();
+        let symbol = spinner.to_symbol_span(&state).content.to_string();
+        let expected = format!("{} ", throbber_widgets_tui::WHITE_CIRCLE.empty);
+        assert_eq!(symbol, expected, "expected empty spinner symbol");
     }
 }

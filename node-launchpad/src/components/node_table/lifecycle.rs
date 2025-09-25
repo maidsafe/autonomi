@@ -8,7 +8,7 @@
 
 use ant_service_management::{ReachabilityProgress, ServiceStatus, fs::CriticalFailure};
 use serde::{Deserialize, Serialize};
-use std::time::Instant;
+use std::{path::PathBuf, time::Instant};
 
 /// Identifier used across registry, desired topology, and transitions.
 pub type NodeId = String;
@@ -21,6 +21,7 @@ pub struct RegistryNode {
     pub reachability_progress: ReachabilityProgress,
     pub last_failure: Option<CriticalFailure>,
     pub version: String,
+    pub log_dir_path: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -187,6 +188,7 @@ pub fn derive_lifecycle_state(
 mod tests {
     use super::*;
     use chrono::Utc;
+    use std::path::PathBuf;
 
     fn registry_node(status: ServiceStatus) -> RegistryNode {
         RegistryNode {
@@ -196,6 +198,7 @@ mod tests {
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         }
     }
 
