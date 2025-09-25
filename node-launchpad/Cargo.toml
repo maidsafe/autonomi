@@ -8,7 +8,6 @@ license = "GPL-3.0"
 homepage = "https://maidsafe.net"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-build = "build.rs"
 
 [[bin]]
 name = "node-launchpad"
@@ -68,7 +67,7 @@ strum = { version = "0.26.1", features = ["derive"] }
 sysinfo = "0.30.12"
 tempfile = "3.12.0"
 thiserror = "1.0"
-throbber-widgets-tui = "0.8.0"
+throbber-widgets-tui = "0.9.0"
 tokio = { version = "1.43.1", features = ["full"] }
 tokio-util = "0.7.9"
 tracing = "0.1.37"
