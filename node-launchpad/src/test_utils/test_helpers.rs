@@ -167,19 +167,6 @@ impl TestAppBuilder {
             "Building test application context"
         );
 
-        let mut node_management = node_management;
-        let mut mock_node_management: Option<Arc<MockNodeManagement>> = None;
-        let mut mock_node_management_handle: Option<MockNodeManagementHandle> = None;
-
-        if node_management.is_none() {
-            let (mock, handle) = MockNodeManagement::new();
-            mock_node_management_handle = Some(handle);
-            mock_node_management = Some(Arc::clone(&mock));
-            let dyn_handle: Arc<dyn NodeManagementHandle> = mock;
-            node_management = Some(dyn_handle);
-            debug!("Injected default mock node-management handle");
-        }
-
         let (node_registry_manager, registry_dir): (NodeRegistryManager, Option<TempDir>) =
             match node_registry {
                 Some(manager) => (manager, None),
@@ -205,6 +192,20 @@ impl TestAppBuilder {
             seeded_node_count,
             nodes_to_start, "Prepared node registry for test app"
         );
+
+        let mut node_management = node_management;
+        let mut mock_node_management: Option<Arc<MockNodeManagement>> = None;
+        let mut mock_node_management_handle: Option<MockNodeManagementHandle> = None;
+
+        if node_management.is_none() {
+            let (mock, handle) =
+                MockNodeManagement::new_with_registry(Some(node_registry_manager.clone()));
+            mock_node_management_handle = Some(handle);
+            mock_node_management = Some(Arc::clone(&mock));
+            let dyn_handle: Arc<dyn NodeManagementHandle> = mock;
+            node_management = Some(dyn_handle);
+            debug!("Injected default mock node-management handle");
+        }
 
         let app_data = AppData {
             rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse()?),

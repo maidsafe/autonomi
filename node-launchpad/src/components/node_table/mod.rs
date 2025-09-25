@@ -82,14 +82,18 @@ impl Component for NodeTableComponent {
             // give some time for the rest of the system to initialize
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             let services = node_registry_clone.get_node_service_data().await;
-            if let Err(err) = action_sender_clone.send(Action::NodeTableActions(
+            if action_sender_clone.is_closed() {
+                error!("Action channel closed while sending initial registry state");
+            } else if let Err(err) = action_sender_clone.send(Action::NodeTableActions(
                 NodeTableActions::RegistryFileUpdated {
                     all_nodes_data: services,
                 },
             )) {
                 error!("Failed to send initial registry state: {err}");
             }
-            if let Err(err) = action_sender_clone.send(Action::NodeTableActions(
+            if action_sender_clone.is_closed() {
+                error!("Action channel closed while sending refresh registry command");
+            } else if let Err(err) = action_sender_clone.send(Action::NodeTableActions(
                 NodeTableActions::NodeManagementCommand(NodeManagementCommand::RefreshRegistry),
             )) {
                 error!("Failed to send NodeTableActions::RefreshRegistry command: {err}");
@@ -106,7 +110,9 @@ impl Component for NodeTableComponent {
                 debug!(
                     "Node registry file has been updated. Sending NodeTableActions::RegistryUpdated event."
                 );
-                if let Err(e) = action_sender_clone.send(Action::NodeTableActions(
+                if action_sender_clone.is_closed() {
+                    error!("Action channel closed while broadcasting registry update");
+                } else if let Err(e) = action_sender_clone.send(Action::NodeTableActions(
                     NodeTableActions::RegistryFileUpdated {
                         all_nodes_data: services,
                     },

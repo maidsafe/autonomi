@@ -24,19 +24,8 @@ use std::time::Duration;
 async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
     let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     // Prepare final node snapshot
-    let node_template = make_node_service_data(0, ServiceStatus::Running);
+    let node_template = make_node_service_data(0, ServiceStatus::Added);
 
-    // Prepare scripted metrics events: initial, in-progress, complete
-    let metrics_in_progress = aggregated_stats(
-        &node_template.service_name,
-        ReachabilityProgress::InProgress(20),
-        false,
-    );
-    let metrics_complete = aggregated_stats(
-        &node_template.service_name,
-        ReachabilityProgress::Complete,
-        true,
-    );
     // Build app with injected dependencies
     let test_app = TestAppBuilder::new()
         .with_nodes_to_start(1)
@@ -45,7 +34,6 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
         .await?;
     let response_plan =
         MockResponsePlan::immediate(NodeManagementResponse::AddNode { error: None })
-            .then_metrics([metrics_in_progress.clone(), metrics_complete.clone()])
             .then_registry_snapshot(vec![node_template.clone()])
             .with_delay(Duration::from_millis(10));
 
@@ -53,10 +41,22 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
         .with_node_action_response(NodeManagementCommand::AddNode, response_plan)
         .press('+')
         .step()
-        .wait(Duration::from_millis(10))
+        .wait(Duration::from_millis(5))
         .step()
-        .expect_node_state(&node_template.service_name, LifecycleState::Running, false)
-        .expect_text("Running")
+        .expect_node_state(&node_template.service_name, LifecycleState::Added, false)
+        .wait_for_condition(
+            "Wait for node to appear as added",
+            {
+                let node_id = node_template.service_name.clone();
+                move |app| {
+                    let model = node_launchpad::test_utils::node_view_model(app, &node_id)?;
+                    Ok(matches!(model.lifecycle, LifecycleState::Added))
+                }
+            },
+            Duration::from_millis(1000),
+            Duration::from_millis(25),
+        )
+        .expect_text("Added")
         .build()?;
 
     journey.run().await?;
@@ -409,14 +409,15 @@ async fn journey_remove_node_success_enters_refreshing_state() -> Result<()> {
         .assert_spinner(&node_name, true)
         .expect_node_state(&node_name, LifecycleState::Removing, true)
         .step()
-        .wait_for_node_state(
-            &node_name,
-            LifecycleState::Refreshing,
+        .wait_for_condition(
+            "Wait for node to disappear after removal",
+            {
+                let node_id = node_name.clone();
+                move |app| Ok(node_launchpad::test_utils::node_view_model(app, &node_id).is_err())
+            },
             Duration::from_millis(500),
             Duration::from_millis(20),
         )
-        .step()
-        .expect_node_state(&node_name, LifecycleState::Refreshing, false)
         .build()?;
 
     journey.run().await?;

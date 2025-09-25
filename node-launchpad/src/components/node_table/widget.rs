@@ -214,7 +214,9 @@ fn render_spinner_column(area: Rect, f: &mut crate::tui::Frame<'_>, state: &mut 
         let spinner_area = Rect::new(spinner_x, start_y + index as u16, 1, 1);
         let style = match node_item.lifecycle {
             LifecycleState::Running => SpinnerStyle::Running,
-            LifecycleState::Starting | LifecycleState::Adding => SpinnerStyle::Starting,
+            LifecycleState::Starting | LifecycleState::Adding | LifecycleState::Added => {
+                SpinnerStyle::Starting
+            }
             LifecycleState::Stopping => SpinnerStyle::Stopping,
             LifecycleState::Removing => SpinnerStyle::Stopping,
             LifecycleState::Unreachable { .. } => SpinnerStyle::Stopped,
@@ -411,9 +413,17 @@ fn format_status_cell(node_item: &NodeViewModel, status_width: usize) -> String 
             }
             _ => format_running_status(node_item, status_width),
         },
+        LifecycleState::Added => truncate_to_width("Added", status_width),
         LifecycleState::Stopping => truncate_to_width("Stopping", status_width),
         LifecycleState::Removing => truncate_to_width("Removing", status_width),
-        LifecycleState::Stopped => truncate_to_width("Stopped", status_width),
+        LifecycleState::Stopped => {
+            let normalized = node_item.status.trim();
+            if !normalized.is_empty() && !normalized.eq_ignore_ascii_case("Stopped") {
+                truncate_to_width(normalized, status_width)
+            } else {
+                truncate_to_width("Stopped", status_width)
+            }
+        }
         LifecycleState::Unreachable { ref reason } => {
             let fallback = reason.clone().unwrap_or_else(|| "Failed".to_string());
             truncate_to_width(fallback, status_width)
@@ -612,5 +622,15 @@ mod tests {
         let text = format_status_cell(&model, STATUS_WIDTH);
         assert!(text.contains("Error (Unreachable)"));
         assert!(!text.contains("Stopped"));
+    }
+
+    #[test]
+    fn status_cell_shows_added_state() {
+        let mut model = model_template();
+        model.lifecycle = LifecycleState::Added;
+        model.status = "Added".to_string();
+
+        let text = format_status_cell(&model, STATUS_WIDTH);
+        assert!(text.contains("Added"));
     }
 }
