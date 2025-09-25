@@ -9,11 +9,11 @@
 use crate::action::{Action, NodeManagementCommand, NodeManagementResponse, NodeTableActions};
 use crate::node_management::{NodeManagementHandle, NodeManagementTask};
 use crate::node_stats::AggregatedNodeStats;
-use ant_service_management::NodeServiceData;
+use ant_service_management::{NodeRegistryManager, NodeServiceData};
 use color_eyre::eyre::{Result, eyre};
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::{RwLock, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
@@ -25,6 +25,7 @@ pub struct MockResponsePlan {
     pub delay: Duration,
     pub response: Option<NodeManagementResponse>,
     pub followup_actions: Vec<Action>,
+    pub registry_snapshot: Option<Vec<NodeServiceData>>,
 }
 
 impl MockResponsePlan {
@@ -64,14 +65,10 @@ impl MockResponsePlan {
         self
     }
 
-    /// Convenience for queueing a `RegistryFileUpdated` action with the provided nodes.
+    /// Convenience for persisting a registry snapshot that will be picked up by the watcher.
     /// Pair with node builders such as `make_node_service_data` to mirror registry snapshots.
     pub fn then_registry_snapshot(mut self, nodes: Vec<NodeServiceData>) -> Self {
-        self.followup_actions.push(Action::NodeTableActions(
-            NodeTableActions::RegistryFileUpdated {
-                all_nodes_data: nodes,
-            },
-        ));
+        self.registry_snapshot = Some(nodes);
         self
     }
 
@@ -105,6 +102,7 @@ pub struct MockNodeManagement {
 
 struct MockState {
     action_sender: Option<UnboundedSender<Action>>,
+    node_registry: Option<NodeRegistryManager>,
 }
 
 pub struct MockNodeManagementHandle {
@@ -116,9 +114,16 @@ impl MockNodeManagement {
     /// Create a mock node-management pair (service + handle).
     /// Feed the handle into `TestAppBuilder` or `JourneyBuilder` when you need full manual control.
     pub fn new() -> (Arc<Self>, MockNodeManagementHandle) {
+        Self::new_with_registry(None)
+    }
+
+    pub fn new_with_registry(
+        node_registry: Option<NodeRegistryManager>,
+    ) -> (Arc<Self>, MockNodeManagementHandle) {
         let (task_tx, task_rx) = mpsc::unbounded_channel();
         let state = Arc::new(Mutex::new(MockState {
             action_sender: None,
+            node_registry,
         }));
         let management = Arc::new(Self {
             task_tx,
@@ -157,6 +162,10 @@ impl MockNodeManagementHandle {
     /// Handy inside assertions where polling is sufficient.
     pub fn try_recv_task(&mut self) -> Option<NodeManagementTask> {
         self.task_rx.try_recv().ok()
+    }
+
+    fn registry_manager(&self) -> Option<NodeRegistryManager> {
+        self.state.lock().ok()?.node_registry.clone()
     }
 
     /// Send a `NodeManagementResponse` back into the application.
@@ -222,6 +231,18 @@ impl MockNodeManagementHandle {
                             sleep(plan.delay).await;
                         }
 
+                        if let Some(nodes) = plan.registry_snapshot.clone() {
+                            if let Some(registry) = handle.registry_manager() {
+                                if let Err(err) = persist_registry_snapshot(registry, nodes).await {
+                                    warn!("Failed to persist registry snapshot: {err}");
+                                }
+                            } else {
+                                warn!(
+                                    "Registry snapshot provided but no registry manager is attached"
+                                );
+                            }
+                        }
+
                         if let Some(response) = plan.response
                             && let Err(err) = handle.respond(response)
                         {
@@ -284,4 +305,17 @@ fn command_from_task(task: &NodeManagementTask) -> Option<NodeManagementCommand>
         NodeManagementTask::RemoveNodes { .. } => Some(NodeManagementCommand::RemoveNodes),
         NodeManagementTask::StartNode { .. } => Some(NodeManagementCommand::StartNodes),
     }
+}
+
+async fn persist_registry_snapshot(
+    registry: NodeRegistryManager,
+    nodes: Vec<NodeServiceData>,
+) -> Result<()> {
+    {
+        let mut registry_nodes = registry.nodes.write().await;
+        registry_nodes.clear();
+        registry_nodes.extend(nodes.into_iter().map(|node| Arc::new(RwLock::new(node))));
+    }
+    registry.save().await?;
+    Ok(())
 }

@@ -230,7 +230,9 @@ impl<'a> NodeCommandHandler<'a> {
                     )?;
                 }
             }
-            LifecycleState::Stopped | LifecycleState::Unreachable { .. } => {
+            LifecycleState::Stopped
+            | LifecycleState::Added
+            | LifecycleState::Unreachable { .. } => {
                 if selected.can_start() {
                     let error_message = format!("Failed to start node {}", selected.id);
                     let messages = CommandMessages {
@@ -399,6 +401,12 @@ impl<'a> NodeCommandHandler<'a> {
 
             let error_popup = ErrorPopup::new(error_title, "Please try again", &err);
             return Ok(Some(Action::ShowErrorPopup(error_popup)));
+        }
+
+        if let Some(target) = revert_target {
+            for service in &service_names {
+                self.state.controller.set_node_target(service, target);
+            }
         }
 
         Ok(None)

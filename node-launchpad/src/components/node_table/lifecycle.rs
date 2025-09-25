@@ -56,6 +56,7 @@ pub enum CommandKind {
 pub enum LifecycleState {
     Running,
     Stopped,
+    Added,
     Adding,
     Starting,
     Stopping,
@@ -69,6 +70,7 @@ impl LifecycleState {
         match self {
             LifecycleState::Running => "Running",
             LifecycleState::Stopped => "Stopped",
+            LifecycleState::Added => "Added",
             LifecycleState::Adding => "Adding",
             LifecycleState::Starting => "Starting",
             LifecycleState::Stopping => "Stopping",
@@ -152,7 +154,7 @@ fn lifecycle_from_registry(
         (ServiceStatus::Stopped, _) => LifecycleState::Stopped,
         (ServiceStatus::Added, DesiredNodeState::Run) => LifecycleState::Starting,
         (ServiceStatus::Added, DesiredNodeState::Remove) => LifecycleState::Removing,
-        (ServiceStatus::Added, _) => LifecycleState::Stopped,
+        (ServiceStatus::Added, _) => LifecycleState::Added,
         (ServiceStatus::Removed, _) => LifecycleState::Removing,
     }
 }
@@ -249,6 +251,17 @@ mod tests {
     fn lifecycle_provisioning_when_absent_and_marked() {
         let lifecycle = derive_lifecycle_state(None, DesiredNodeState::Run, true, None);
         assert_eq!(lifecycle, LifecycleState::Adding);
+    }
+
+    #[test]
+    fn lifecycle_added_status_exposed() {
+        let lifecycle = derive_lifecycle_state(
+            Some(&registry_node(ServiceStatus::Added)),
+            DesiredNodeState::FollowCluster,
+            false,
+            None,
+        );
+        assert_eq!(lifecycle, LifecycleState::Added);
     }
 
     #[test]

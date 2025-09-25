@@ -69,7 +69,9 @@ impl NodeViewModel {
         !self.locked
             && matches!(
                 self.lifecycle,
-                LifecycleState::Stopped | LifecycleState::Unreachable { .. }
+                LifecycleState::Stopped
+                    | LifecycleState::Added
+                    | LifecycleState::Unreachable { .. }
             )
     }
 
@@ -376,6 +378,19 @@ mod tests {
         let model = models.first().unwrap();
 
         assert!(matches!(model.lifecycle, LifecycleState::Adding));
+    }
+
+    #[test]
+    fn added_registry_status_surfaces_added_lifecycle() {
+        let mut nodes = BTreeMap::new();
+        let mut state = base_state();
+        state.registry = Some(registry_node(ServiceStatus::Added));
+        nodes.insert("node-1".to_string(), state);
+
+        let models = build_view_models(&nodes);
+        let model = models.first().unwrap();
+
+        assert!(matches!(model.lifecycle, LifecycleState::Added));
     }
 
     #[test]
