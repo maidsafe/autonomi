@@ -16,7 +16,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 use tokio::time::{Duration, sleep};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 /// Script describing how the mock node-management service should respond.
 /// Build a plan, then feed it to `JourneyBuilder::with_node_action_response`.
@@ -208,6 +208,16 @@ impl MockNodeManagementHandle {
                     {
                         let scripted = script_queue.remove(index);
                         let plan = scripted.plan;
+                        let delay_ms = plan.delay.as_millis();
+                        let follow_ups = plan.followup_actions.len();
+                        let has_response = plan.response.is_some();
+                        info!(
+                            ?command,
+                            delay_ms,
+                            follow_ups,
+                            has_response,
+                            "Executing scripted node-management plan"
+                        );
                         if plan.delay.as_millis() > 0 {
                             sleep(plan.delay).await;
                         }
@@ -226,6 +236,7 @@ impl MockNodeManagementHandle {
                     } else {
                         match command {
                             NodeManagementCommand::RefreshRegistry => {
+                                debug!("Auto-responding to RefreshRegistry command");
                                 if let Err(err) =
                                     handle.respond(NodeManagementResponse::RefreshRegistry {
                                         error: None,

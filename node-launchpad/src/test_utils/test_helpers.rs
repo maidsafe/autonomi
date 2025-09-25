@@ -24,6 +24,7 @@ use color_eyre::eyre::Result;
 use ratatui::{Terminal, backend::TestBackend, buffer::Buffer};
 use std::{iter, sync::Arc};
 use tempfile::TempDir;
+use tracing::{debug, info};
 
 /// Builder for fully wired `App` instances used in UI integration tests.
 /// Defaults to reporting ample disk space (700 GB) so CI runs reliably; call
@@ -159,6 +160,13 @@ impl TestAppBuilder {
             available_disk_space_override,
         } = self;
 
+        info!(
+            initial_nodes = initial_nodes.len(),
+            has_custom_metrics = metrics_fetcher.is_some(),
+            disk_override_gb = ?available_disk_space_override,
+            "Building test application context"
+        );
+
         let mut node_management = node_management;
         let mut mock_node_management: Option<Arc<MockNodeManagement>> = None;
         let mut mock_node_management_handle: Option<MockNodeManagementHandle> = None;
@@ -169,6 +177,7 @@ impl TestAppBuilder {
             mock_node_management = Some(Arc::clone(&mock));
             let dyn_handle: Arc<dyn NodeManagementHandle> = mock;
             node_management = Some(dyn_handle);
+            debug!("Injected default mock node-management handle");
         }
 
         let (node_registry_manager, registry_dir): (NodeRegistryManager, Option<TempDir>) =
@@ -187,10 +196,15 @@ impl TestAppBuilder {
 
         if registry_dir.is_some() {
             node_registry_manager.save().await?;
+            debug!("Persisted temporary node registry to disk");
         }
 
         let seeded_node_count = node_registry_manager.get_node_service_data().await.len() as u64;
         let nodes_to_start = nodes_to_start.unwrap_or(seeded_node_count);
+        debug!(
+            seeded_node_count,
+            nodes_to_start, "Prepared node registry for test app"
+        );
 
         let app_data = AppData {
             rewards_address: Some(crate::test_utils::TEST_WALLET_ADDRESS.parse()?),
@@ -233,7 +247,11 @@ impl TestAppBuilder {
             }) {
                 popup.override_available_disk_space(override_gb);
             }
+
+            debug!(override_gb, "Applied disk-space override to test app");
         }
+
+        info!(nodes_to_start, "Finished building test application context");
 
         Ok(TestAppContext {
             app,
