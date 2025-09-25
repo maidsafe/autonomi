@@ -90,7 +90,7 @@ fn node_error_to_reason(error: &Error) -> String {
         Error::FailedToGetNodePort => "FailedToGetNodePort".to_string(),
         Error::InvalidQuoteContent => "InvalidQuoteContent".to_string(),
         Error::InvalidQuoteSignature => "InvalidQuoteSignature".to_string(),
-        Error::UnreachableNode => "UnreachableNode".to_string(),
+        Error::UnreachableNode => "Unreachable".to_string(),
         Error::PidFileWriteFailed { .. } => "PidFileWriteFailed".to_string(),
         Error::ControlChannelClosed => "ControlChannelClosed".to_string(),
         Error::NodeEventChannelClosed => "NodeEventChannelClosed".to_string(),

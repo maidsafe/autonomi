@@ -19,16 +19,51 @@ use tokio::time::{Duration, sleep};
 use tracing::{debug, error, info, warn};
 
 /// Script describing how the mock node-management service should respond.
-/// Build a plan, then feed it to `JourneyBuilder::with_node_action_response`.
+///
+/// The plan works as a miniature DSL for modelling the asynchronous behaviour of
+/// the real node-management pipeline. A plan can optionally wait, emit a single
+/// [`NodeManagementResponse`], and replay a sequence of follow-up events—each of
+/// which maps to something the production launchpad would observe (registry
+/// updates via the watcher, metrics snapshots, or arbitrary `Action`s). By
+/// chaining the builder helpers (`then_registry_snapshot`, `then_metrics`,
+/// `then_actions`, `then_wait`) journey tests remain declarative while still
+/// exercising the exact UI update paths triggered by antctl.
+///
+/// Typical usage:
+/// ```ignore
+/// let plan = MockNodeResponsePlan::immediate(NodeManagementResponse::MaintainNodes { error: None })
+///     .then_registry_snapshot(vec![node_added])
+///     .then_metrics([progress_metrics])
+///     .then_wait(Duration::from_millis(200))
+///     .then_registry_snapshot(vec![node_running])
+///     .then_metrics([completion_metrics]);
+///
+/// JourneyBuilder::from_context("scenario", test_app)?
+///     .with_node_action_response(NodeManagementCommand::MaintainNodes, plan)
+///     .build()?;
+/// ```
+///
+/// The scripted executor inside [`MockNodeManagementHandle::spawn_script`] will read
+/// the plan and feed its events back into the application under test.
 #[derive(Clone, Debug, Default)]
-pub struct MockResponsePlan {
+pub struct MockNodeResponsePlan {
     pub delay: Duration,
     pub response: Option<NodeManagementResponse>,
-    pub followup_actions: Vec<Action>,
-    pub registry_snapshot: Option<Vec<NodeServiceData>>,
+    pub followup_events: Vec<PlannedEvent>,
 }
 
-impl MockResponsePlan {
+/// Follow-up events that the scripted executor will replay after the initial response.
+///
+/// Events are processed sequentially; waits pause execution, actions are sent to the
+/// application directly, and registry snapshots persist data so the watcher refreshes the UI.
+#[derive(Clone, Debug)]
+pub enum PlannedEvent {
+    Wait(Duration),
+    Action(Action),
+    RegistrySnapshot(Vec<NodeServiceData>),
+}
+
+impl MockNodeResponsePlan {
     /// Immediately return the supplied response without scheduling follow-up actions.
     /// Ideal for simple success/error cases when no extra actions are needed.
     pub fn immediate(response: NodeManagementResponse) -> Self {
@@ -43,7 +78,10 @@ impl MockResponsePlan {
     pub fn with_follow_up(response: NodeManagementResponse, followup_actions: Vec<Action>) -> Self {
         Self {
             response: Some(response),
-            followup_actions,
+            followup_events: followup_actions
+                .into_iter()
+                .map(PlannedEvent::Action)
+                .collect(),
             ..Default::default()
         }
     }
@@ -61,14 +99,16 @@ impl MockResponsePlan {
     where
         I: IntoIterator<Item = Action>,
     {
-        self.followup_actions.extend(actions);
+        self.followup_events
+            .extend(actions.into_iter().map(PlannedEvent::Action));
         self
     }
 
     /// Convenience for persisting a registry snapshot that will be picked up by the watcher.
     /// Pair with node builders such as `make_node_service_data` to mirror registry snapshots.
     pub fn then_registry_snapshot(mut self, nodes: Vec<NodeServiceData>) -> Self {
-        self.registry_snapshot = Some(nodes);
+        self.followup_events
+            .push(PlannedEvent::RegistrySnapshot(nodes));
         self
     }
 
@@ -78,10 +118,18 @@ impl MockResponsePlan {
     where
         I: IntoIterator<Item = AggregatedNodeStats>,
     {
-        for stat in stats {
-            self.followup_actions
-                .push(Action::StoreAggregatedNodeStats(stat));
-        }
+        self.followup_events.extend(
+            stats
+                .into_iter()
+                .map(|stat| PlannedEvent::Action(Action::StoreAggregatedNodeStats(stat))),
+        );
+        self
+    }
+
+    /// Schedule a delay before the next follow-up event is dispatched.
+    /// Useful when modelling asynchronous registry watcher updates in tests.
+    pub fn then_wait(mut self, duration: Duration) -> Self {
+        self.followup_events.push(PlannedEvent::Wait(duration));
         self
     }
 }
@@ -91,7 +139,7 @@ impl MockResponsePlan {
 #[derive(Clone, Debug)]
 pub struct ScriptedNodeAction {
     pub command: NodeManagementCommand,
-    pub plan: MockResponsePlan,
+    pub plan: MockNodeResponsePlan,
 }
 
 #[derive(Clone)]
@@ -169,7 +217,7 @@ impl MockNodeManagementHandle {
     }
 
     /// Send a `NodeManagementResponse` back into the application.
-    /// Use alongside `MockResponsePlan::immediate` when steering flows manually.
+    /// Use alongside `MockNodeResponsePlan::immediate` when steering flows manually.
     pub fn respond(&self, response: NodeManagementResponse) -> Result<()> {
         let sender = self
             .state
@@ -187,7 +235,7 @@ impl MockNodeManagementHandle {
     }
 
     /// Inject an arbitrary action onto the app's event stream.
-    /// Pair with `MockResponsePlan::then_actions` when composing advanced scripts.
+    /// Pair with `MockNodeResponsePlan::then_actions` when composing advanced scripts.
     pub fn send_action(&self, action: Action) -> Result<()> {
         let sender = self
             .state
@@ -218,7 +266,7 @@ impl MockNodeManagementHandle {
                         let scripted = script_queue.remove(index);
                         let plan = scripted.plan;
                         let delay_ms = plan.delay.as_millis();
-                        let follow_ups = plan.followup_actions.len();
+                        let follow_ups = plan.followup_events.len();
                         let has_response = plan.response.is_some();
                         info!(
                             ?command,
@@ -231,17 +279,7 @@ impl MockNodeManagementHandle {
                             sleep(plan.delay).await;
                         }
 
-                        if let Some(nodes) = plan.registry_snapshot.clone() {
-                            if let Some(registry) = handle.registry_manager() {
-                                if let Err(err) = persist_registry_snapshot(registry, nodes).await {
-                                    warn!("Failed to persist registry snapshot: {err}");
-                                }
-                            } else {
-                                warn!(
-                                    "Registry snapshot provided but no registry manager is attached"
-                                );
-                            }
-                        }
+                        let mut events = plan.followup_events.into_iter();
 
                         if let Some(response) = plan.response
                             && let Err(err) = handle.respond(response)
@@ -249,9 +287,27 @@ impl MockNodeManagementHandle {
                             error!("Failed to send scripted node-management response: {err}");
                         }
 
-                        for action in plan.followup_actions {
-                            if let Err(err) = handle.send_action(action) {
-                                error!("Failed to send scripted follow-up action: {err}");
+                        while let Some(event) = events.next() {
+                            match event {
+                                PlannedEvent::Wait(duration) => sleep(duration).await,
+                                PlannedEvent::Action(action) => {
+                                    if let Err(err) = handle.send_action(action) {
+                                        error!("Failed to send scripted follow-up action: {err}");
+                                    }
+                                }
+                                PlannedEvent::RegistrySnapshot(nodes) => {
+                                    if let Some(registry) = handle.registry_manager() {
+                                        if let Err(err) =
+                                            persist_registry_snapshot(registry, nodes.clone()).await
+                                        {
+                                            warn!("Failed to persist registry snapshot: {err}");
+                                        }
+                                    } else {
+                                        warn!(
+                                            "Registry snapshot provided but no registry manager is attached"
+                                        );
+                                    }
+                                }
                             }
                         }
                     } else {
