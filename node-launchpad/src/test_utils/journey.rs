@@ -10,7 +10,7 @@ use super::{
     keyboard::KeySequence,
     mock_metrics::MockMetricsService,
     mock_node_management::{
-        MockNodeManagement, MockNodeManagementHandle, MockResponsePlan, ScriptedNodeAction,
+        MockNodeManagement, MockNodeManagementHandle, MockNodeResponsePlan, ScriptedNodeAction,
     },
     test_helpers::{TestAppBuilder, TestAppContext},
 };
@@ -149,7 +149,7 @@ impl Journey {
     }
 
     /// Track an async task spawned as part of the scripted journey.
-    /// Pair with `MockResponsePlan::then_*` helpers when chaining additional async behaviour.
+    /// Pair with `MockNodeResponsePlan::then_*` helpers when chaining additional async behaviour.
     pub fn register_script_task(&mut self, handle: JoinHandle<()>) {
         self.scripted_tasks.push(handle);
     }
@@ -412,14 +412,14 @@ impl JourneyBuilder {
     }
 
     /// Register a scripted response for a node-management command.
-    /// Best combined with `MockResponsePlan` chaining helpers like `then_metrics`.
+    /// Best combined with `MockNodeResponsePlan` chaining helpers like `then_metrics`.
     pub fn with_node_action_response(
         mut self,
         command: NodeManagementCommand,
-        plan: MockResponsePlan,
+        plan: MockNodeResponsePlan,
     ) -> Self {
         let delay_ms = plan.delay.as_millis();
-        let follow_ups = plan.followup_actions.len();
+        let follow_ups = plan.followup_events.len();
         let has_response = plan.response.is_some();
         debug!(
             ?command,
@@ -755,8 +755,15 @@ impl JourneyBuilder {
         )
     }
 
-    /// Finalise the currently staged step and push it into the journey queue.
-    /// Invoke between groups of `.press`/`.expect_*` calls to keep scripts readable.
+    /// Finalise the currently staged step and enqueue it for execution.
+    ///
+    /// Each fluent call (`press`, `expect_text`, `wait`, …) accumulates work in
+    /// `current_step`. Calling `step()` commits that buffered input so the
+    /// runtime processes it before you start describing the next phase of the
+    /// journey. Skipping `step()` does **not** lose the actions—the builder calls
+    /// it automatically inside `build`/`run`—but the tests become harder to read
+    /// because all the interactions collapse into a single opaque block. Treat it
+    /// as “end of paragraph” punctuation when scripting multi-stage scenarios.
     pub fn step(mut self) -> Self {
         if let Some(step) = self.current_step.take() {
             debug!(

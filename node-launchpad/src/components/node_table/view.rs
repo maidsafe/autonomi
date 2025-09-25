@@ -171,7 +171,7 @@ fn decorate_lifecycle_with_reachability(
         let reason_text = failure_reason
             .take()
             .map(|reason| format!("Error ({reason})"))
-            .unwrap_or_else(|| "Unreachable".to_string());
+            .unwrap_or_else(|| "Error (Unreachable)".to_string());
         failure_reason = Some(reason_text.clone());
         effective = LifecycleState::Unreachable {
             reason: Some(reason_text),
@@ -184,6 +184,25 @@ fn decorate_lifecycle_with_reachability(
         effective = LifecycleState::Unreachable {
             reason: Some(reason_text),
         };
+    }
+
+    if let Some(reason) = failure_reason.as_mut() {
+        if !reason.starts_with("Error (") {
+            *reason = format!("Error ({reason})");
+        }
+    }
+
+    let progress_hint = match reachability_status.progress.clone() {
+        ReachabilityProgress::NotRun => registry
+            .map(|node| node.reachability_progress.clone())
+            .unwrap_or(ReachabilityProgress::NotRun),
+        other => other,
+    };
+
+    if matches!(progress_hint, ReachabilityProgress::InProgress(_))
+        && matches!(effective, LifecycleState::Added)
+    {
+        effective = LifecycleState::Starting;
     }
 
     if matches!(effective, LifecycleState::Unreachable { .. })
