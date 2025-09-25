@@ -79,6 +79,8 @@ impl Component for NodeTableComponent {
             "Returning the initial registry state and also sending NodeTableComponent::RefreshRegistry command to NodeManagement"
         );
         tokio::spawn(async move {
+            // give some time for the rest of the system to initialize
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
             let services = node_registry_clone.get_node_service_data().await;
             if let Err(err) = action_sender_clone.send(Action::NodeTableActions(
                 NodeTableActions::RegistryFileUpdated {

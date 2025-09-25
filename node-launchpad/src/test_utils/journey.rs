@@ -31,7 +31,7 @@ use crossterm::event::KeyEvent;
 use std::{sync::Arc, time::Duration};
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
-use tracing::error;
+use tracing::{debug, error, info};
 
 /// Captures a scripted test run of the TUI application.
 /// Construct via `JourneyBuilder` and drive it with scripted key input and expectations.
@@ -128,6 +128,8 @@ impl Journey {
 
         let journey_app = Some(app);
 
+        info!(journey_name = %name, "Initialised test journey context");
+
         Ok(Self {
             name,
             steps: Vec::new(),
@@ -167,8 +169,11 @@ impl Journey {
     /// Execute the scripted journey against the test runtime.
     /// Call once all steps have been staged via `JourneyBuilder` and `build`.
     pub async fn run(&mut self) -> Result<()> {
+        info!(journey = %self.name, steps = self.steps.len(), "Starting scripted journey run");
+
         // Convert journey steps to test script
         let script = self.build_test_script();
+        debug!(journey = %self.name, actions = script.len(), "Loaded scripted runtime actions");
         self.test_runtime.set_script(script);
 
         // Actually run the app with the scripted test runtime!
@@ -185,6 +190,8 @@ impl Journey {
             let _ = task.await;
         }
 
+        info!(journey = %self.name, "Completed scripted journey run");
+
         Ok(())
     }
 
@@ -193,7 +200,17 @@ impl Journey {
     fn build_test_script(&self) -> Vec<crate::runtime::TestStep> {
         let mut script = Vec::new();
 
-        for step in self.steps.iter() {
+        for (index, step) in self.steps.iter().enumerate() {
+            debug!(
+                journey = %self.name,
+                step_index = index,
+                key_events = step.keys.len(),
+                assertions = step.assertions.len(),
+                follow_ups = step.follow_up_steps.len(),
+                has_scene_expectation = step.expected_scene.is_some(),
+                "Translating scripted journey step"
+            );
+
             // Add key events
             for key in &step.keys {
                 script.push(TestStep::InjectKey(*key));
@@ -271,6 +288,11 @@ impl JourneyBuilder {
             ..
         } = context;
 
+        debug!(
+            journey_name = name,
+            "Creating journey builder from test context"
+        );
+
         Ok(Self {
             journey: {
                 let mut journey = Journey::new(name.to_string(), app, node_management_handle)?;
@@ -289,11 +311,17 @@ impl JourneyBuilder {
         if let Some(app) = self.journey.app.as_mut() {
             match status_component_mut(app) {
                 Ok(status) => {
+                    let script_len = script.len();
                     let fetcher = MockMetricsService::scripted(script);
                     status
                         .node_table_mut()
                         .state_mut()
                         .set_metrics_fetcher(fetcher);
+                    debug!(
+                        journey = %self.journey.name,
+                        metrics_samples = script_len,
+                        "Configured scripted metrics fetcher"
+                    );
                 }
                 Err(err) => {
                     error!("Failed to configure metrics script: {err}");
@@ -310,6 +338,13 @@ impl JourneyBuilder {
         command: NodeManagementCommand,
         plan: MockResponsePlan,
     ) -> Self {
+        let delay_ms = plan.delay.as_millis();
+        let follow_ups = plan.followup_actions.len();
+        let has_response = plan.response.is_some();
+        debug!(
+            ?command,
+            delay_ms, follow_ups, has_response, "Registered scripted node-management response"
+        );
         self.node_action_scripts
             .push(ScriptedNodeAction { command, plan });
         self
@@ -321,6 +356,7 @@ impl JourneyBuilder {
         if let Some(app) = self.journey.app.as_mut() {
             app.scene = scene;
         }
+        debug!(journey = %self.journey.name, ?scene, "Staged journey start scene");
         self
     }
 
@@ -457,6 +493,12 @@ impl JourneyBuilder {
     {
         let condition =
             WaitCondition::new(description, Arc::new(predicate), timeout, poll_interval);
+        debug!(
+            journey = %self.journey.name,
+            timeout_ms = timeout.as_millis(),
+            poll_interval_ms = poll_interval.as_millis(),
+            "Registered wait-for-condition step"
+        );
         if let Some(ref mut step) = self.current_step {
             step.follow_up_steps
                 .push(TestStep::WaitForCondition(condition));
@@ -637,6 +679,14 @@ impl JourneyBuilder {
     /// Invoke between groups of `.press`/`.expect_*` calls to keep scripts readable.
     pub fn step(mut self) -> Self {
         if let Some(step) = self.current_step.take() {
+            debug!(
+                journey = %self.journey.name,
+                key_events = step.keys.len(),
+                assertions = step.assertions.len(),
+                follow_ups = step.follow_up_steps.len(),
+                has_scene_expectation = step.expected_scene.is_some(),
+                "Queued journey step"
+            );
             self.journey.add_step(step);
         }
         self
@@ -656,11 +706,28 @@ impl JourneyBuilder {
             self.journey.add_step(step);
         }
 
+        let step_count = self.journey.steps.len();
+        let action_count = self.journey.build_test_script().len();
+        let scripted_commands = self.node_action_scripts.len();
+        info!(
+            journey = %self.journey.name,
+            step_count,
+            action_count,
+            scripted_commands,
+            "Finalising journey build"
+        );
+
         if let Some(handle) = self.journey.take_node_management_handle() {
             if self.node_action_scripts.is_empty() {
+                debug!(journey = %self.journey.name, "Reusing existing node-management handle");
                 self.journey.node_management_handle = Some(handle);
             } else {
                 let actions = std::mem::take(&mut self.node_action_scripts);
+                debug!(
+                    journey = %self.journey.name,
+                    scripts = actions.len(),
+                    "Spawning scripted node-management task"
+                );
                 let scripted_task = handle.spawn_script(actions);
                 self.journey.register_script_task(scripted_task);
             }

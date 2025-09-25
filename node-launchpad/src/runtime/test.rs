@@ -25,7 +25,7 @@ type AppResultPredicate = Arc<dyn Fn(&App) -> Result<()> + Send + Sync>;
 type AppBoolPredicate = Arc<dyn Fn(&App) -> Result<bool> + Send + Sync>;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
-use tracing::error;
+use tracing::{debug, error, warn};
 
 /// Maximum number of frames to keep in the capture buffer.
 const MAX_CAPTURED_FRAMES: usize = 20;
@@ -240,13 +240,24 @@ impl TestRuntime {
     /// Returns `Some(Event::Quit)` when the script is complete.
     fn get_next_script_event(&mut self) -> Option<tui::Event> {
         if self.current_step >= self.test_script.len() {
+            debug!("Script completed, emitting quit event");
             return Some(tui::Event::Quit); // Exit when script is done
         }
 
+        let step_index = self.current_step;
         let step = self.test_script[self.current_step].clone();
+        let remaining = self.test_script.len().saturating_sub(step_index + 1);
+
+        debug!(
+            step_index,
+            remaining,
+            step = %Self::describe_step(&step),
+            "Dispatching scripted step"
+        );
+
         self.current_step += 1;
 
-        match step {
+        let event = match step {
             TestStep::InjectKey(key) => Some(tui::Event::Key(key)),
             TestStep::InjectEvent(event) => Some(event),
             TestStep::Wait(duration) => {
@@ -286,7 +297,13 @@ impl TestRuntime {
                 Some(tui::Event::Render)
             }
             TestStep::Exit => Some(tui::Event::Quit),
+        };
+
+        if let Some(ref event) = event {
+            debug!(?event, "Scripted event scheduled");
         }
+
+        event
     }
 
     /// Checks and executes any pending test assertion.
@@ -306,33 +323,48 @@ impl TestRuntime {
         if let Some(assertion) = self.pending_assertion.take() {
             match assertion {
                 PendingAssertion::Scene(expected_scene) => {
+                    debug!(?expected_scene, actual = ?app.scene, "Checking scene assertion");
                     if app.scene != expected_scene {
+                        warn!(
+                            ?expected_scene,
+                            actual = ?app.scene,
+                            "Scene assertion failed"
+                        );
                         return Err(eyre!(
                             "Expected scene {:?}, got {:?}",
                             expected_scene,
                             app.scene
                         ));
                     }
+                    debug!("Scene assertion satisfied");
                 }
                 PendingAssertion::Text(text) => {
+                    let snippet = Self::truncate_for_log(&text);
                     if let Some(buffer) = self.get_last_frame() {
                         let screen_content =
                             crate::test_utils::test_helpers::buffer_to_lines(buffer);
                         let found = screen_content.iter().any(|line| line.contains(&text));
+                        debug!(snippet = %snippet, "Checking text assertion");
                         if !found {
+                            warn!(snippet = %snippet, "Text assertion failed, screen does not contain text: '{text}'");
                             return Err(eyre!(
-                                "Screen does not contain text: '{}'. Actual screen content: {:?}",
-                                text,
-                                screen_content
+                                "Screen does not contain text: '{text}'. Actual screen content: {screen_content:?}"
                             ));
                         }
+                        debug!(snippet = %snippet, "Text assertion satisfied");
                     } else {
+                        warn!("No frame captured while checking for text");
                         return Err(eyre!("No frame captured while checking for text"));
                     }
                 }
                 PendingAssertion::ExactScreen(expected_lines) => {
                     if let Some(buffer) = self.get_last_frame() {
                         let screen_lines = crate::test_utils::test_helpers::buffer_to_lines(buffer);
+                        debug!(
+                            expected_lines = expected_lines.len(),
+                            actual_lines = screen_lines.len(),
+                            "Checking exact screen assertion"
+                        );
                         if screen_lines != expected_lines {
                             // Find the first differing line for a helpful error message
                             let mut first_diff_line = None;
@@ -368,19 +400,65 @@ impl TestRuntime {
                                 )
                             };
 
+                            warn!("Exact screen assertion failed: {error_msg}");
                             return Err(eyre!(error_msg));
                         }
+                        debug!("Exact screen assertion satisfied");
                     } else {
+                        warn!("No frame was captured for screen assertion");
                         return Err(eyre!("No frame was captured for screen assertion"));
                     }
                 }
                 PendingAssertion::State(assertion) => {
+                    let description = assertion.description().to_string();
+                    debug!(description = %description, "Checking state assertion");
                     assertion.evaluate(app)?;
+                    debug!(description = %description, "State assertion satisfied");
                 }
             }
         }
 
         self.process_pending_wait(app)
+    }
+
+    fn truncate_for_log(text: &str) -> String {
+        const LIMIT: usize = 64;
+        let mut truncated = String::new();
+        let mut chars = text.chars();
+        for _ in 0..LIMIT {
+            match chars.next() {
+                Some(ch) => truncated.push(ch),
+                None => return truncated,
+            }
+        }
+
+        truncated.push_str("...");
+        truncated
+    }
+
+    fn describe_step(step: &TestStep) -> String {
+        match step {
+            TestStep::InjectKey(key) => format!("InjectKey({key:?})"),
+            TestStep::InjectEvent(event) => format!("InjectEvent({event:?})"),
+            TestStep::Wait(duration) => format!("Wait({duration:?})"),
+            TestStep::AdvanceTime(duration) => format!("AdvanceTime({duration:?})"),
+            TestStep::WaitForCondition(condition) => format!(
+                "WaitForCondition('{}', timeout={:?}, poll={:?})",
+                Self::truncate_for_log(condition.description()),
+                condition.timeout(),
+                condition.poll_interval()
+            ),
+            TestStep::ExpectScene(scene) => format!("ExpectScene({scene:?})"),
+            TestStep::ExpectText(text) => {
+                format!("ExpectText('{}')", Self::truncate_for_log(text))
+            }
+            TestStep::ExactScreen(lines) => format!("ExactScreen(lines={})", lines.len()),
+            TestStep::AssertState(assertion) => format!(
+                "AssertState('{}')",
+                Self::truncate_for_log(assertion.description())
+            ),
+            TestStep::Exit => "Exit".to_string(),
+        }
     }
 
     /// Gets references to all captured frames.
@@ -410,6 +488,10 @@ impl TestRuntime {
             let now = Instant::now();
 
             if now >= wait.deadline {
+                warn!(
+                    description = wait.condition.description(),
+                    "Timed out waiting for condition"
+                );
                 return Err(eyre!(
                     "Timed out waiting for condition: {}",
                     wait.condition.description()
@@ -417,7 +499,10 @@ impl TestRuntime {
             }
 
             if wait.condition.evaluate(app)? {
-                // Condition satisfied, nothing else to do.
+                debug!(
+                    description = wait.condition.description(),
+                    "Wait condition satisfied"
+                );
                 return Ok(());
             }
 
@@ -428,6 +513,13 @@ impl TestRuntime {
             let delay = next_poll.saturating_duration_since(now);
             self.pending_time_advances.push_back(delay);
             self.dynamic_event_queue.push_back(tui::Event::Render);
+            if let Some(wait) = self.pending_wait.as_ref() {
+                debug!(
+                    description = wait.condition.description(),
+                    next_poll_ms = delay.as_millis(),
+                    "Wait condition pending, scheduling re-check"
+                );
+            }
         }
 
         Ok(())
@@ -445,6 +537,7 @@ impl Runtime for TestRuntime {
 
         // Priority 1: Check dynamic event queue first (for helper method events)
         if let Some(event) = self.dynamic_event_queue.pop_front() {
+            debug!(?event, "Emitting dynamic queued event");
             return Some(event);
         }
 
@@ -456,7 +549,11 @@ impl Runtime for TestRuntime {
         }
 
         // Priority 3: Fall back to manual event injection (for backward compatibility)
-        self.event_receiver.recv().await
+        let event = self.event_receiver.recv().await;
+        if let Some(ref event) = event {
+            debug!(?event, "Emitting manual runtime event");
+        }
+        event
     }
 
     fn draw(&mut self, render_fn: RenderFn<'_>) -> Result<()> {

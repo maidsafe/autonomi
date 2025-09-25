@@ -12,7 +12,7 @@ use crate::node_stats::{AggregatedNodeStats, MetricsFetcher};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::error;
+use tracing::{debug, error};
 
 pub struct MockMetricsService;
 
@@ -33,7 +33,13 @@ impl MetricsFetcher for ScriptedMetricsFetcher {
         match self.script.lock() {
             Ok(mut script) => {
                 if let Some(stats) = script.pop_front() {
+                    debug!(
+                        remaining = script.len(),
+                        "Dispatching scripted metrics sample"
+                    );
                     let _ = sender.send(Action::StoreAggregatedNodeStats(stats));
+                } else {
+                    debug!("No scripted metrics remaining to dispatch");
                 }
             }
             Err(err) => {
