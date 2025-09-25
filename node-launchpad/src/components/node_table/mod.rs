@@ -140,27 +140,51 @@ impl Component for NodeTableComponent {
                         return Ok(None);
                     }
 
-                    let selected_node_name = self
-                        .state
-                        .controller
-                        .selected_item()
-                        .map(|node| node.id.clone())
-                        .or_else(|| {
-                            self.state
+                    let (selected_node_name, log_dir) =
+                        if let Some(selected) = self.state.controller.selected_item() {
+                            let name = selected.id.clone();
+                            let dir = self
+                                .state
                                 .controller
-                                .items()
-                                .first()
-                                .map(|node| node.id.clone())
-                        })
-                        .unwrap_or_else(|| "No node available".to_string());
+                                .nodes
+                                .get(&name)
+                                .and_then(|state| state.registry.as_ref())
+                                .map(|registry| registry.log_dir_path.clone());
+                            (name, dir)
+                        } else if let Some(first) = self.state.controller.items().first() {
+                            let name = first.id.clone();
+                            let dir = self
+                                .state
+                                .controller
+                                .nodes
+                                .get(&name)
+                                .and_then(|state| state.registry.as_ref())
+                                .map(|registry| registry.log_dir_path.clone());
+                            (name, dir)
+                        } else {
+                            ("No node available".to_string(), None)
+                        };
 
-                    Ok(Some(Action::SetNodeLogsTarget(selected_node_name)))
+                    Ok(Some(Action::SetNodeLogsTarget {
+                        node_name: selected_node_name,
+                        log_dir,
+                    }))
                 }
                 NodeTableActions::TriggerRemoveNodePopup => {
                     debug!(
                         "NodeTable: TriggerRemoveNodePopup action received, showing RemoveNodePopUp"
                     );
                     Ok(Some(Action::SwitchScene(Scene::RemoveNodePopUp)))
+                }
+                NodeTableActions::Tick => {
+                    let state = self.state_mut();
+                    let spinner_advanced = state.advance_spinner_frames();
+                    state.try_fetch_node_stats(false)?;
+                    if spinner_advanced {
+                        Ok(Some(Action::Render))
+                    } else {
+                        Ok(None)
+                    }
                 }
                 NodeTableActions::NodeManagementCommand(command) => {
                     debug!("NodeTable: Handling NodeManagementCommand: {command:?}");

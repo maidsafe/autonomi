@@ -166,6 +166,7 @@ impl NodeStateController {
                 reachability_progress: service.reachability_progress.clone(),
                 last_failure: service.last_critical_failure.clone(),
                 version: service.version.clone(),
+                log_dir_path: service.log_dir_path.clone(),
             };
 
             let entry = self.nodes.entry(service.service_name.clone()).or_default();
@@ -583,6 +584,22 @@ impl NodeTableState {
         debug!("Synced port_range to {port_range:?}");
     }
 
+    pub fn advance_spinner_frames(&mut self) -> bool {
+        let mut advanced = false;
+        for (spinner_state, node_item) in self
+            .ui
+            .spinner_states_mut()
+            .iter_mut()
+            .zip(&self.controller.view.items)
+        {
+            if spinner_should_spin(node_item) {
+                spinner_state.calc_next();
+                advanced = true;
+            }
+        }
+        advanced
+    }
+
     pub fn navigate(&mut self, direction: NavigationDirection) {
         self.ui.navigate(&mut self.controller, direction);
     }
@@ -597,6 +614,20 @@ impl NodeTableState {
 
     pub fn try_clear_selection_if_locked(&mut self) {
         self.ui.try_clear_selection_if_locked(&mut self.controller)
+    }
+}
+
+fn spinner_should_spin(node_item: &NodeViewModel) -> bool {
+    match node_item.lifecycle {
+        LifecycleState::Running
+        | LifecycleState::Starting
+        | LifecycleState::Adding
+        | LifecycleState::Added
+        | LifecycleState::Stopping
+        | LifecycleState::Removing => true,
+        LifecycleState::Unreachable { .. }
+        | LifecycleState::Stopped
+        | LifecycleState::Refreshing => false,
     }
 }
 
@@ -771,6 +802,7 @@ mod tests {
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         }
     }
 
@@ -1105,5 +1137,22 @@ mod tests {
         state.is_provisioning = false;
         state.clear_transition();
         assert!(!state.is_provisioning);
+    }
+
+    #[test]
+    fn spinner_should_not_spin_for_stopped_nodes_even_with_progress() {
+        let model = NodeViewModel {
+            id: "node".into(),
+            lifecycle: LifecycleState::Stopped,
+            status: "Stopped".into(),
+            version: "1.0".into(),
+            reachability_progress: ReachabilityProgress::InProgress(42),
+            reachability_status: ReachabilityStatusValues::default(),
+            metrics: NodeMetrics::default(),
+            locked: false,
+            last_failure: None,
+            pending_command: None,
+        };
+        assert!(!spinner_should_spin(&model));
     }
 }

@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::action::OptionsActions;
+use crate::action::{NodeTableActions, OptionsActions};
 use crate::components::Component;
 use crate::components::footer::{Footer, FooterState};
 use crate::components::header::{Header, SelectedMenuItem};
@@ -200,9 +200,9 @@ impl Component for Status {
                 return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
             }
             Action::Tick => {
-                self.node_table_component
-                    .state_mut()
-                    .try_fetch_node_stats(false)?;
+                return self
+                    .node_table_component
+                    .update(Action::NodeTableActions(NodeTableActions::Tick));
             }
             Action::StoreRunningNodeCount(count) => {
                 self.nodes_to_start = count;

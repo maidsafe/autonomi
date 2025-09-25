@@ -41,7 +41,7 @@ Autonomi Node Launchpad is a terminal user interface that orchestrates node life
 ## Logs & Diagnostics
 
 - `Ctrl+T` (or the footer shortcut) opens the Logs popup for the currently selected node.
-- `Action::NodeTableActions::TriggerNodeLogs` identifies the target service, and `Action::SetNodeLogsTarget` instructs the popup to stream log lines. Errors surface through `Action::LogsLoadError` so the UI can present troubleshooting feedback.
+- `Action::NodeTableActions::TriggerNodeLogs` identifies the target service, and `Action::SetNodeLogsTarget { node_name, log_dir }` instructs the popup to stream log lines from the registry-reported directory. Errors surface through `Action::LogsLoadError` so the UI can present troubleshooting feedback.
 
 ## Keyboard Highlights
 

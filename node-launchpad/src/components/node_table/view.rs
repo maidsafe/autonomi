@@ -186,10 +186,10 @@ fn decorate_lifecycle_with_reachability(
         };
     }
 
-    if let Some(reason) = failure_reason.as_mut() {
-        if !reason.starts_with("Error (") {
-            *reason = format!("Error ({reason})");
-        }
+    if let Some(reason) = failure_reason.as_mut()
+        && !reason.starts_with("Error (")
+    {
+        *reason = format!("Error ({reason})");
     }
 
     let progress_hint = match reachability_status.progress.clone() {
@@ -224,6 +224,7 @@ mod tests {
         ReachabilityProgress, ServiceStatus, fs::CriticalFailure, metric::ReachabilityStatusValues,
     };
     use chrono::Utc;
+    use std::path::PathBuf;
     use std::time::Instant;
 
     fn registry_node(status: ServiceStatus) -> RegistryNode {
@@ -234,6 +235,7 @@ mod tests {
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         }
     }
 
@@ -284,6 +286,7 @@ mod tests {
                 date_time: Utc::now(),
             }),
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         });
         state.reachability = ReachabilityStatusValues {
             progress: ReachabilityProgress::Complete,
@@ -318,6 +321,7 @@ mod tests {
                 date_time: Utc::now(),
             }),
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         });
         state.metrics = NodeMetrics {
             endpoint_online: false,
@@ -347,6 +351,7 @@ mod tests {
             reachability_progress: ReachabilityProgress::NotRun,
             last_failure: None,
             version: "0.1.0".to_string(),
+            log_dir_path: PathBuf::from("/logs"),
         });
         state.metrics = NodeMetrics {
             endpoint_online: false,
@@ -383,7 +388,7 @@ mod tests {
         let model = models.iter().find(|model| model.id == "node-1").unwrap();
 
         assert!(matches!(model.lifecycle, LifecycleState::Running));
-        assert_eq!(model.last_failure.as_deref(), Some("Unreachable"));
+        assert_eq!(model.last_failure.as_deref(), Some("Error (Unreachable)"));
     }
 
     #[test]

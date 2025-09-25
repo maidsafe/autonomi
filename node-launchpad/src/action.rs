@@ -36,7 +36,10 @@ pub enum Action {
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
 
     ShowErrorPopup(ErrorPopup),
-    SetNodeLogsTarget(String),
+    SetNodeLogsTarget {
+        node_name: String,
+        log_dir: Option<PathBuf>,
+    },
 
     LogsLoaded {
         node_name: String,
@@ -99,6 +102,7 @@ pub enum NodeTableActions {
     NodeManagementResponse(NodeManagementResponse),
     TriggerRemoveNodePopup,
     TriggerNodeLogs,
+    Tick,
 
     // Navigation actions
     NavigateUp,
