@@ -18,3 +18,7 @@ Default to `cargo test --workspace --all-features`. Property and integration tes
 
 ## Commit & Pull Request Guidelines
 Commits typically follow Conventional Commit phrases (`feat(launchpad): …`, `fix(node): …`); match that style with clear scopes. Include only formatted code and passing tests, and reference issues in the body when relevant. Pull requests should describe the change, note any new commands or env vars, and link affected READMEs. Add screenshots or logs for UI or tooling updates, and remind reviewers of any manual network setup required for verification.
+
+## Automation Do’s & Don’ts
+- Use the default workspace `target/` directory; override `CARGO_TARGET_DIR` to `./target` during scripted runs.
+- Prefer the existing file-reading commands (`cat`, `sed`, `rg`, editor patches) rather than short Python scripts when inspecting or editing files. Reach for Python only when the transformation would be impractical to express with the standard tooling.
