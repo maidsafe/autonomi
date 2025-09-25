@@ -299,6 +299,7 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
                 ("evm_testnet".to_string(), Level::TRACE),
                 ("antnode".to_string(), Level::TRACE),
                 ("antctl".to_string(), Level::TRACE),
+                ("node_launchpad".to_string(), Level::DEBUG),
                 // libs
                 ("ant_bootstrap".to_string(), Level::TRACE),
                 ("ant_build_info".to_string(), Level::TRACE),
@@ -308,6 +309,7 @@ fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> 
                 ("ant_node_rpc_client".to_string(), Level::TRACE),
                 ("ant_protocol".to_string(), Level::TRACE),
                 ("ant_service_management".to_string(), Level::TRACE),
+                ("service-manager".to_string(), Level::DEBUG),
                 ("autonomi".to_string(), Level::TRACE),
                 ("evmlib".to_string(), Level::TRACE),
             ]);
