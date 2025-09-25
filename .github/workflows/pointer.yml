@@ -1,0 +1,299 @@
+name: Pointer Checks
+
+on:
+  merge_group:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  pointer:
+    name: Pointer tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            ant_path: /home/runner/.local/share/autonomi
+          - os: windows-latest
+            ant_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi
+          - os: macos-latest
+            ant_path: /Users/runner/Library/Application\ Support/autonomi
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        run: cargo build --release --bin antnode --bin ant --bin antctl
+        timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
+
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          build: true
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: bash
+        run: |
+          if [[ -z "$ANT_PEERS" ]]; then
+            echo "The ANT_PEERS variable has not been set"
+            exit 1
+          elif [[ -z "$EVM_NETWORK" ]]; then
+            echo "The EVM_NETWORK variable has not been set"
+            exit 1
+          else
+            echo "ANT_PEERS has been set to $ANT_PEERS"
+            echo "EVM_NETWORK has been set to $EVM_NETWORK"
+          fi
+
+      # FIXME: do this in a generic way for localtestnets
+      - name: export default secret key
+        if: matrix.os != 'windows-latest'
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" >> $GITHUB_ENV
+        shell: bash
+      - name: Set secret key for Windows
+        if: matrix.os == 'windows-latest'
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      # Create test data files for pointer targets
+      - name: Create test data files
+        run: |
+          echo "test_data_A" > test_data_A.txt
+          echo "test_data_B" > test_data_B.txt
+
+      # Upload test data to get addresses for pointer targets
+      - name: Upload test data A
+        run: ./target/release/ant --local file upload --public test_data_A.txt > ./upload_output_A 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Parse address A (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ADDRESS_A=$(rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output_A)
+          echo "ADDRESS_A=$ADDRESS_A" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Parse address A (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $ADDRESS_A = rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output_A
+          echo "ADDRESS_A=$ADDRESS_A" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Upload test data B
+        run: ./target/release/ant --local file upload --public test_data_B.txt > ./upload_output_B 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Parse address B (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ADDRESS_B=$(rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output_B)
+          echo "ADDRESS_B=$ADDRESS_B" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Parse address B (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $ADDRESS_B = rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output_B
+          echo "ADDRESS_B=$ADDRESS_B" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Generate pointer signing key
+        run: ./target/release/ant --local pointer generate-key
+
+      - name: Create pointer pointing to address_A
+        run: ./target/release/ant --local pointer create test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_create_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Edit pointer with address_A
+        run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_edit_output_1 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 1 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 1" ./pointer_edit_output_1; then
+            echo "✅ Counter 1 found as expected"
+          else
+            echo "❌ Counter 1 not found in output"
+            cat ./pointer_edit_output_1
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 1 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./pointer_edit_output_1 -Raw
+          if ($content -match "New counter: 1") {
+            echo "✅ Counter 1 found as expected"
+          } else {
+            echo "❌ Counter 1 not found in output"
+            cat ./pointer_edit_output_1
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after first edit
+        run: sleep 10
+
+      - name: Edit pointer with same address_A again
+        run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_edit_output_2 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 2 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 2" ./pointer_edit_output_2; then
+            echo "✅ Counter 2 found as expected"
+          else
+            echo "❌ Counter 2 not found in output"
+            cat ./pointer_edit_output_2
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 2 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./pointer_edit_output_2 -Raw
+          if ($content -match "New counter: 2") {
+            echo "✅ Counter 2 found as expected"
+          } else {
+            echo "❌ Counter 2 not found in output"
+            cat ./pointer_edit_output_2
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after duplicate edit
+        run: sleep 10
+
+      - name: Get pointer and verify address_A
+        run: ./target/release/ant --local pointer get test_pointer > ./pointer_get_output_1 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Verify address_A (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "Target.*${{ env.ADDRESS_A }}" ./pointer_get_output_1; then
+            echo "✅ Target matches address_A as expected"
+          else
+            echo "❌ Target does not match address_A"
+            cat ./pointer_get_output_1
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify address_A (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./pointer_get_output_1 -Raw
+          if ($content -match "Target.*${{ env.ADDRESS_A }}") {
+            echo "✅ Target matches address_A as expected"
+          } else {
+            echo "❌ Target does not match address_A"
+            cat ./pointer_get_output_1
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Edit pointer with address_B
+        run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_B }} --target-data-type chunk > ./pointer_edit_output_3 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 3 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 3" ./pointer_edit_output_3; then
+            echo "✅ Counter 3 found as expected"
+          else
+            echo "❌ Counter 3 not found in output"
+            cat ./pointer_edit_output_3
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 3 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./pointer_edit_output_3 -Raw
+          if ($content -match "New counter: 3") {
+            echo "✅ Counter 3 found as expected"
+          } else {
+            echo "❌ Counter 3 not found in output"
+            cat ./pointer_edit_output_3
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after address_B edit
+        run: sleep 10
+
+      - name: Get pointer and verify address_B
+        run: ./target/release/ant --local pointer get test_pointer > ./pointer_get_output_2 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Verify address_B (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "Target.*${{ env.ADDRESS_B }}" ./pointer_get_output_2; then
+            echo "✅ Target updated to address_B as expected"
+          else
+            echo "❌ Target does not match address_B"
+            cat ./pointer_get_output_2
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify address_B (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./pointer_get_output_2 -Raw
+          if ($content -match "Target.*${{ env.ADDRESS_B }}") {
+            echo "✅ Target updated to address_B as expected"
+          } else {
+            echo "❌ Target does not match address_B"
+            cat ./pointer_get_output_2
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_pointer
+          build: true

@@ -139,7 +139,7 @@ pub fn get_primary_mount_point_name() -> Result<String> {
 }
 
 // Gets available disk space in bytes for the given mountpoint
-pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<usize> {
+pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<u64> {
     let disks = Disks::new_with_refreshed_list();
     if tracing::level_enabled!(tracing::Level::DEBUG) {
         for disk in disks.list() {
@@ -156,7 +156,7 @@ pub fn get_available_space_b(storage_mountpoint: &PathBuf) -> Result<usize> {
         .iter()
         .find(|disk| disk.mount_point() == storage_mountpoint)
         .context("Cannot find the primary disk. Configuration file might be wrong.")?
-        .available_space() as usize;
+        .available_space();
 
     Ok(available_space_b)
 }

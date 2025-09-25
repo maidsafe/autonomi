@@ -30,6 +30,7 @@ pub(crate) fn upload_exit_code(err: &UploadError) -> i32 {
         UploadError::WalkDir(_) => IO_ERROR,
         UploadError::IoError(_) => IO_ERROR,
         UploadError::PutError(err) => put_error_exit_code(err),
+        UploadError::Encryption(_) => SELF_ENCRYPTION_ERROR,
     }
 }
 

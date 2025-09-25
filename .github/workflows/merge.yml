@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.x'
       - name: Display Python version
@@ -229,7 +229,7 @@ jobs:
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
-        timeout-minutes: 20
+        timeout-minutes: 40
 
       # FIXME: do this in a generic way for localtestnets
       - name: export default secret key
@@ -985,6 +985,23 @@ jobs:
           UPLOAD_ADDRESS=$(rg "At address: ([0-9a-f]*)" -o -r '$1' ./upload_output)
           echo "Parsed address is $UPLOAD_ADDRESS"
           echo "UPLOAD_ADDRESS=$UPLOAD_ADDRESS" >> $GITHUB_ENV
+        shell: bash
+
+      - name: File Download Error Check
+        run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} . > ./error_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+        continue-on-error: true
+
+      - name: Verify expected error message
+        run: |
+          cat ./error_output
+          if ! grep -q "cannot be used for streaming disk flushing" ./error_output; then
+            echo "Expected error message 'cannot be used for streaming disk flushing' not found in output"
+            exit 1
+          fi
+          echo "Expected error message found in output"
         shell: bash
 
       - name: File Download

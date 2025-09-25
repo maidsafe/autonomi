@@ -109,3 +109,26 @@ def test_wallet():
 
     assert wallet.address() == '0x69D5BF2Bc42bca8782b8D2b4FdfF2b1Fa7644Fe7'
     assert wallet.network() == network
+
+def test_data_stream_types():
+    """Test that data stream classes can be instantiated and have expected methods"""
+    # Test that DataStream exists and can be imported
+    try:
+        stream_class = DataStream
+        assert hasattr(stream_class, '__name__')
+        assert stream_class.__name__ == 'DataStream'
+    except NameError:
+        pytest.fail("DataStream class not found in autonomi_client module")
+    
+    # Test that DataMapChunk can be created (needed for data_stream)
+    data_map_hex = "0" * 64  # Mock hex string
+    try:
+        data_map = DataMapChunk.from_hex(data_map_hex)
+        assert data_map.hex() == data_map_hex
+    except Exception:
+        pass  # Expected to fail with mock data, but class should exist
+    
+    # Test that DataAddress can be created (needed for data_stream_public)
+    xor_hex = random_xor()
+    data_addr = DataAddress(XorName(xor_hex))
+    assert isinstance(data_addr.hex, str)

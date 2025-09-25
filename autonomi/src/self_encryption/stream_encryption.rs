@@ -6,8 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::Client;
-use crate::client::{data_types::chunk::DataMapChunk, utils::process_tasks_with_max_concurrency};
+use crate::client::data_types::chunk::DataMapChunk;
 use crate::files::{Metadata, get_relative_file_path_from_abs_file_and_folder_path};
 use crate::self_encryption::encrypt;
 use ant_protocol::storage::Chunk;
@@ -15,10 +14,11 @@ use bytes::Bytes;
 use self_encryption::MAX_CHUNK_SIZE;
 use std::path::PathBuf;
 use std::time::Instant;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, task::spawn_blocking};
 
-use super::data::DataAddress;
 use crate::client::config::{FILE_ENCRYPT_BATCH_SIZE, IN_MEMORY_ENCRYPTION_MAX_SIZE};
+use crate::client::data::DataAddress;
+use crate::utils::process_tasks_with_max_concurrency;
 
 const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 100;
 
@@ -197,7 +197,7 @@ impl EncryptionStream {
         let file_path_clone = file_path.clone();
 
         // Spawn a task to handle streaming encryption
-        tokio::spawn(async move {
+        spawn_blocking(move || {
             // encrypt the file and send chunks in a chunk channel
             let path = PathBuf::from(&file_path_clone);
             let result = self_encryption::streaming_encrypt_from_file(&path, |_xorname, bytes| {
@@ -235,6 +235,10 @@ impl EncryptionStream {
             drop(chunk_sender);
         });
 
+        #[cfg(feature = "loud")]
+        println!("Streaming encryption of {file_path} ...");
+        info!("Streaming encryption of {file_path} ...");
+
         let stream = EncryptionStream {
             file_path,
             relative_path,
@@ -257,53 +261,57 @@ impl EncryptionStream {
     }
 }
 
-impl Client {
-    /// Encrypts all files in a directory and returns the encryption results (common logic)
-    pub(crate) async fn encrypt_directory_files_in_memory(
-        &self,
-        dir_path: PathBuf,
-        is_public: bool,
-    ) -> Result<Vec<Result<EncryptionStream, String>>, walkdir::Error> {
-        let mut encryption_tasks = vec![];
+/// Encrypts all files in a directory and returns the encryption results (common logic)
+pub(crate) async fn encrypt_directory_files(
+    dir_path: PathBuf,
+    is_public: bool,
+) -> Result<Vec<Result<EncryptionStream, String>>, walkdir::Error> {
+    let mut encryption_tasks = vec![];
 
-        for entry in walkdir::WalkDir::new(&dir_path) {
-            let entry = entry?;
+    for entry in walkdir::WalkDir::new(&dir_path) {
+        let entry = entry?;
 
-            if entry.file_type().is_dir() {
-                continue;
-            }
-
-            let dir_path = dir_path.clone();
-
-            encryption_tasks.push(async move {
-                let file_path = entry.path().to_path_buf();
-                info!("Encrypting file: {file_path:?}..");
-                #[cfg(feature = "loud")]
-                println!("Encrypting file: {file_path:?}..");
-
-                // gather metadata
-                let metadata =
-                    crate::client::high_level::files::fs_public::metadata_from_entry(&entry);
-                let relative_path =
-                    get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
-                let file_size = entry
-                    .metadata()
-                    .map_err(|err| format!("Error getting file size {file_path:?}: {err:?}"))?
-                    .len() as usize;
-
-                // choose encryption method
-                if file_size > *IN_MEMORY_ENCRYPTION_MAX_SIZE {
-                    encrypt_file_in_stream(file_path, is_public, metadata, relative_path, file_size)
-                } else {
-                    encrypt_file_in_memory(file_path, is_public, metadata, relative_path).await
-                }
-            });
+        if entry.file_type().is_dir() {
+            continue;
         }
 
-        let encryption_results =
-            process_tasks_with_max_concurrency(encryption_tasks, *FILE_ENCRYPT_BATCH_SIZE).await;
+        let dir_path = dir_path.clone();
 
-        Ok(encryption_results)
+        encryption_tasks.push(async move {
+            let metadata = crate::client::files::fs_public::metadata_from_entry(&entry);
+            let file_path = entry.path().to_path_buf();
+            let relative_path =
+                get_relative_file_path_from_abs_file_and_folder_path(&file_path, &dir_path);
+            let file_size = entry
+                .metadata()
+                .map_err(|err| format!("Error getting file size {file_path:?}: {err:?}"))?
+                .len() as usize;
+            encrypt_file(relative_path, file_path, file_size, metadata, is_public).await
+        });
+    }
+
+    let encryption_results =
+        process_tasks_with_max_concurrency(encryption_tasks, *FILE_ENCRYPT_BATCH_SIZE).await;
+
+    Ok(encryption_results)
+}
+
+pub(crate) async fn encrypt_file(
+    relative_path: PathBuf,
+    file_path: PathBuf,
+    file_size: usize,
+    metadata: Metadata,
+    is_public: bool,
+) -> Result<EncryptionStream, String> {
+    info!("Encrypting file: {file_path:?}..");
+    #[cfg(feature = "loud")]
+    println!("Encrypting file: {file_path:?}..");
+
+    // choose encryption method
+    if file_size > *IN_MEMORY_ENCRYPTION_MAX_SIZE {
+        encrypt_file_in_stream(file_path, is_public, metadata, relative_path, file_size)
+    } else {
+        encrypt_file_in_memory(file_path, is_public, metadata, relative_path).await
     }
 }
 

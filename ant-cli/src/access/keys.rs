@@ -45,7 +45,7 @@ pub fn get_secret_key_from_env() -> Result<String> {
 
 pub fn get_vault_secret_key() -> Result<VaultSecretKey> {
     let secret_key = load_wallet_private_key()?;
-    autonomi::client::vault::derive_vault_key(&secret_key)
+    autonomi::client::vault::vault_derive_key(&secret_key)
         .wrap_err("Failed to derive vault secret key from EVM secret key")
 }
 

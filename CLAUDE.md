@@ -41,7 +41,7 @@ cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -Dwarnings
 
 # Check documentation
-RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace --exclude=ant-cli
+RUSTDOCFLAGS="--deny=warnings" cargo doc --no-deps --workspace
 ```
 
 ### Local Network Development

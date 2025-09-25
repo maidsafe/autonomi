@@ -787,9 +787,9 @@ impl Client {
 
     /// Get the user data from the vault
     #[napi]
-    pub async fn get_user_data_from_vault(&self, secret_key: &VaultSecretKey) -> Result<UserData> {
+    pub async fn vault_get_user_data(&self, secret_key: &VaultSecretKey) -> Result<UserData> {
         self.0
-            .get_user_data_from_vault(&secret_key.0)
+            .vault_get_user_data(&secret_key.0)
             .await
             .map(UserData)
             .map_err(map_error)
@@ -799,14 +799,14 @@ impl Client {
     ///
     /// Returns the total cost of the put operation
     #[napi]
-    pub async fn put_user_data_to_vault(
+    pub async fn vault_put_user_data(
         &self,
         secret_key: &VaultSecretKey,
         payment_option: &PaymentOption,
         user_data: &UserData,
     ) -> Result</* AttoTokens */ String> {
         self.0
-            .put_user_data_to_vault(&secret_key.0, payment_option.0.clone(), user_data.0.clone())
+            .vault_put_user_data(&secret_key.0, payment_option.0.clone(), user_data.0.clone())
             .await
             .map(|c| c.to_string())
             .map_err(map_error)
@@ -816,15 +816,11 @@ impl Client {
     ///
     /// Returns the content type of the bytes in the vault.
     #[napi]
-    pub async fn fetch_and_decrypt_vault(
+    pub async fn vault_get(
         &self,
         secret_key: &VaultSecretKey,
     ) -> Result</* (Bytes, VaultContentType) */ tuple_result::FetchAndDecryptVault> {
-        let (data, content_type) = self
-            .0
-            .fetch_and_decrypt_vault(&secret_key.0)
-            .await
-            .map_err(map_error)?;
+        let (data, content_type) = self.0.vault_get(&secret_key.0).await.map_err(map_error)?;
 
         Ok(tuple_result::FetchAndDecryptVault { data, content_type })
     }
@@ -855,7 +851,7 @@ impl Client {
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
 
     #[napi]
-    pub async fn write_bytes_to_vault(
+    pub async fn vault_put(
         &self,
         data: Buffer,
         payment_option: &PaymentOption,
@@ -865,7 +861,7 @@ impl Client {
         let data = Bytes::copy_from_slice(&data);
 
         self.0
-            .write_bytes_to_vault(
+            .vault_put(
                 data,
                 payment_option.0.clone(),
                 &secret_key.0,
@@ -874,6 +870,46 @@ impl Client {
             .await
             .map(|c| c.to_string())
             .map_err(map_error)
+    }
+
+    /// @deprecated Use `vault_get_user_data` instead. This function will be removed in a future version.
+    #[napi]
+    pub async fn get_user_data_from_vault(&self, secret_key: &VaultSecretKey) -> Result<UserData> {
+        self.vault_get_user_data(secret_key).await
+    }
+
+    /// @deprecated Use `vault_put_user_data` instead. This function will be removed in a future version.
+    #[napi]
+    pub async fn put_user_data_to_vault(
+        &self,
+        secret_key: &VaultSecretKey,
+        payment_option: &PaymentOption,
+        user_data: &UserData,
+    ) -> Result</* AttoTokens */ String> {
+        self.vault_put_user_data(secret_key, payment_option, user_data)
+            .await
+    }
+
+    /// @deprecated Use `vault_get` instead. This function will be removed in a future version.
+    #[napi]
+    pub async fn fetch_and_decrypt_vault(
+        &self,
+        secret_key: &VaultSecretKey,
+    ) -> Result</* (Bytes, VaultContentType) */ tuple_result::FetchAndDecryptVault> {
+        self.vault_get(secret_key).await
+    }
+
+    /// @deprecated Use `vault_put` instead. This function will be removed in a future version.
+    #[napi]
+    pub async fn write_bytes_to_vault(
+        &self,
+        data: Buffer,
+        payment_option: &PaymentOption,
+        secret_key: &VaultSecretKey,
+        content_type: &VaultContentType,
+    ) -> Result</* AttoTokens */ String> {
+        self.vault_put(data, payment_option, secret_key, content_type)
+            .await
     }
 
     // Registers

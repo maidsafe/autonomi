@@ -45,9 +45,9 @@ use self::storage::{ChunkAddress, GraphEntryAddress, PointerAddress, ScratchpadA
 pub use bytes::Bytes;
 
 use libp2p::{
-    Multiaddr, PeerId,
     kad::{KBucketDistance as Distance, KBucketKey as Key, RecordKey},
     multiaddr::Protocol,
+    Multiaddr, PeerId,
 };
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{
@@ -115,14 +115,6 @@ impl NetworkAddress {
             return Some(peer_id);
         }
         None
-    }
-
-    /// Try to return the represented `RecordKey`.
-    pub fn as_record_key(&self) -> Option<RecordKey> {
-        match self {
-            NetworkAddress::RecordKey(bytes) => Some(RecordKey::new(bytes)),
-            _ => None,
-        }
     }
 
     /// Return the convertable `RecordKey`.
@@ -392,9 +384,9 @@ impl std::fmt::Debug for PrettyPrintRecordKey<'_> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        NetworkAddress, PeerId,
         messages::{Nonce, Query},
         storage::GraphEntryAddress,
+        NetworkAddress, PeerId,
     };
     use serde::{Deserialize, Serialize};
 

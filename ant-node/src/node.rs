@@ -672,10 +672,9 @@ impl Node {
                     holder: Box::new(our_address.clone()),
                     key: Box::new(key.clone()),
                 });
-                let record_key = key.as_record_key();
+                let record_key = key.to_record_key();
 
-                if let Some(record_key) = record_key
-                    && let Ok(Some(record)) = network.get_local_record(&record_key).await
+                if let Ok(Some(record)) = network.get_local_record(&record_key).await
                 {
                     result = Ok((our_address, Bytes::from(record.value)));
                 }

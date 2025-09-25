@@ -248,7 +248,7 @@ async fn data_availability_during_churn() -> Result<()> {
         }
 
         let failed = failures.read().await;
-        if start_time.elapsed().as_secs() % 10 == 0 {
+        if start_time.elapsed().as_secs().is_multiple_of(10) {
             println!(
                 "Current failures after {:?} ({}): {:?}",
                 start_time.elapsed(),

@@ -131,6 +131,7 @@ impl Tui {
                         match evt {
                           CrosstermEvent::Key(key) => {
                             if key.kind == KeyEventKind::Press {
+                              debug!("TUI received raw key event: {:?}", key);
                               _event_tx.send(Event::Key(key)).unwrap();
                             }
                           },

@@ -29,6 +29,7 @@ use pyo3::{
 };
 use pyo3_async_runtimes::tokio::future_into_py;
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
 use tokio::sync::mpsc;
 use xor_name::{XOR_NAME_LEN, XorName};
 
@@ -59,73 +60,30 @@ use crate::{
 fn scratchpad_error_to_py_err(
     error: crate::client::data_types::scratchpad::ScratchpadError,
 ) -> PyErr {
-    // Use the original Rust error message directly
-    PyRuntimeError::new_err(format!("{error}"))
-}
-
-/// Enhanced helper that can decrypt conflicting data when owner key is available
-fn scratchpad_error_to_py_err_with_owner(
-    error: crate::client::data_types::scratchpad::ScratchpadError,
-    owner_key: Option<&crate::client::data_types::scratchpad::SecretKey>,
-) -> PyErr {
     use crate::client::data_types::scratchpad::ScratchpadError;
 
     match error {
         ScratchpadError::Fork(conflicting_scratchpads) => {
-            let mut message = format!("{}", ScratchpadError::Fork(conflicting_scratchpads.clone()));
+            // Convert Rust scratchpads to Python scratchpads
+            let py_scratchpads: Vec<PyScratchpad> = conflicting_scratchpads
+                .iter()
+                .map(|s| PyScratchpad { inner: s.clone() })
+                .collect();
 
-            // If we have the owner key, decrypt and show the actual conflicting data
-            if let Some(owner) = owner_key {
-                message.push_str("\n\nConflicting data content:");
+            // Create the fork error message
+            let message = format!("{}", ScratchpadError::Fork(conflicting_scratchpads.clone()));
 
-                for (i, scratchpad) in conflicting_scratchpads.iter().enumerate() {
-                    match scratchpad.decrypt_data(owner) {
-                        Ok(decrypted_bytes) => match String::from_utf8(decrypted_bytes.to_vec()) {
-                            Ok(decrypted_text) => {
-                                message.push_str(&format!(
-                                    "\n  Conflict {}: \"{}\" (Counter: {}, Hash: {})",
-                                    i + 1,
-                                    decrypted_text,
-                                    scratchpad.counter(),
-                                    hex::encode(scratchpad.encrypted_data_hash())[..16].to_string()
-                                        + "..."
-                                ));
-                            }
-                            Err(_) => {
-                                message.push_str(&format!(
-                                        "\n  Conflict {}: <binary data {} bytes> (Counter: {}, Hash: {})",
-                                        i + 1,
-                                        decrypted_bytes.len(),
-                                        scratchpad.counter(),
-                                        hex::encode(scratchpad.encrypted_data_hash())[..16].to_string() + "..."
-                                    ));
-                            }
-                        },
-                        Err(_) => {
-                            message.push_str(&format!(
-                                "\n  Conflict {}: <decryption failed> (Counter: {}, Hash: {})",
-                                i + 1,
-                                scratchpad.counter(),
-                                hex::encode(scratchpad.encrypted_data_hash())[..16].to_string()
-                                    + "..."
-                            ));
-                        }
-                    }
+            // Create a runtime error with the conflicting scratchpads attached
+            Python::with_gil(|py| {
+                let exception = PyRuntimeError::new_err(message);
+                if let Ok(exc_value) = exception
+                    .value(py)
+                    .downcast::<pyo3::exceptions::PyRuntimeError>()
+                {
+                    let _ = exc_value.setattr("conflicting_scratchpads", py_scratchpads);
                 }
-
-                let max_counter = conflicting_scratchpads
-                    .iter()
-                    .map(|s| s.counter())
-                    .max()
-                    .unwrap_or(0);
-
-                message.push_str(&format!(
-                    "\n\nChoose which data to keep and update with counter: {}",
-                    max_counter + 1
-                ));
-            }
-
-            PyRuntimeError::new_err(message)
+                exception
+            })
         }
         _ => PyRuntimeError::new_err(format!("{error}")),
     }
@@ -514,6 +472,29 @@ impl PyClient {
         })
     }
 
+    /// Update an existing scratchpad from a specific scratchpad
+    ///
+    /// This will increment the counter of the scratchpad and update the content
+    /// This function is used internally by `Client.scratchpad_update` after the scratchpad has been retrieved from the network.
+    /// To skip the retrieval step if you already have the scratchpad, use this function directly
+    /// This function will return the new scratchpad after it has been updated
+    fn scratchpad_put_update<'a>(
+        &self,
+        py: Python<'a>,
+        scratchpad: PyScratchpad,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+
+        future_into_py(py, async move {
+            client
+                .scratchpad_put_update(scratchpad.inner)
+                .await
+                .map_err(scratchpad_error_to_py_err)?;
+
+            Ok(())
+        })
+    }
+
     /// Create a new scratchpad to the network.
     ///
     /// Make sure that the owner key is not already used for another scratchpad as each key is associated with one scratchpad.
@@ -541,7 +522,7 @@ impl PyClient {
                     payment,
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok((cost.to_string(), PyScratchpadAddress { inner: addr }))
         })
@@ -564,7 +545,7 @@ impl PyClient {
             client
                 .scratchpad_update(&owner.inner, content_type, &Bytes::from(data))
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(())
         })
@@ -595,7 +576,7 @@ impl PyClient {
                     &Bytes::from(data),
                 )
                 .await
-                .map_err(|e| scratchpad_error_to_py_err_with_owner(e, Some(&owner.inner)))?;
+                .map_err(scratchpad_error_to_py_err)?;
 
             Ok(PyScratchpad {
                 inner: new_scratchpad,
@@ -896,6 +877,25 @@ impl PyClient {
         })
     }
 
+    /// Stream a blob of (private) data from the network. Returns a Python iterator.
+    /// Use this for large blobs of data to avoid loading everything into memory.
+    fn data_stream<'a>(
+        &self,
+        py: Python<'a>,
+        access: &PyDataMapChunk,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+        let access = access.inner.clone();
+
+        future_into_py(py, async move {
+            let stream = client
+                .data_stream(&access)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to create stream: {e}")))?;
+            Ok(PyDataStream::new(stream))
+        })
+    }
+
     /// Get the estimated cost of storing a piece of data.
     fn data_cost<'a>(&self, py: Python<'a>, data: Vec<u8>) -> PyResult<Bound<'a, PyAny>> {
         let client = self.inner.clone();
@@ -946,6 +946,25 @@ impl PyClient {
                 .await
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get data: {e}")))?;
             Ok(data.to_vec())
+        })
+    }
+
+    /// Stream a blob of public data from the network. Returns a Python iterator.
+    /// Use this for large blobs of data to avoid loading everything into memory.
+    fn data_stream_public<'a>(
+        &self,
+        py: Python<'a>,
+        addr: &PyDataAddress,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        let client = self.inner.clone();
+        let addr = addr.inner;
+
+        future_into_py(py, async move {
+            let stream = client
+                .data_stream_public(&addr)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(format!("Failed to create stream: {e}")))?;
+            Ok(PyDataStream::new(stream))
         })
     }
 
@@ -1055,7 +1074,7 @@ impl PyClient {
     /// Dynamically expand the vault capacity by paying for more space (Scratchpad) when needed.
     ///
     /// It is recommended to use the hash of the app name or unique identifier as the content type.
-    fn write_bytes_to_vault<'a>(
+    fn vault_put<'a>(
         &self,
         py: Python<'a>,
         data: Vec<u8>,
@@ -1069,7 +1088,7 @@ impl PyClient {
 
         future_into_py(py, async move {
             match client
-                .write_bytes_to_vault(bytes::Bytes::from(data), payment, &key, content_type)
+                .vault_put(bytes::Bytes::from(data), payment, &key, content_type)
                 .await
             {
                 Ok(cost) => Ok(cost.to_string()),
@@ -1198,7 +1217,7 @@ impl PyClient {
         let key = key.inner.clone();
 
         future_into_py(py, async move {
-            match client.fetch_and_decrypt_vault(&key).await {
+            match client.vault_get(&key).await {
                 Ok((data, content_type)) => Ok((data.to_vec(), content_type)),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to fetch vault: {e}"
@@ -1208,7 +1227,7 @@ impl PyClient {
     }
 
     /// Get the user data from the vault
-    fn get_user_data_from_vault<'a>(
+    fn vault_get_user_data<'a>(
         &self,
         py: Python<'a>,
         key: &PyVaultSecretKey,
@@ -1217,7 +1236,7 @@ impl PyClient {
         let key = key.inner.clone();
 
         future_into_py(py, async move {
-            match client.get_user_data_from_vault(&key).await {
+            match client.vault_get_user_data(&key).await {
                 Ok(user_data) => Ok(PyUserData { inner: user_data }),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to get user data from vault: {e}"
@@ -1229,7 +1248,7 @@ impl PyClient {
     /// Put the user data to the vault.
     ///
     /// Returns the total cost of the put operation.
-    fn put_user_data_to_vault<'a>(
+    fn vault_put_user_data<'a>(
         &self,
         py: Python<'a>,
         key: &PyVaultSecretKey,
@@ -1242,16 +1261,45 @@ impl PyClient {
         let user_data = user_data.inner.clone();
 
         future_into_py(py, async move {
-            match client
-                .put_user_data_to_vault(&key, payment, user_data)
-                .await
-            {
+            match client.vault_put_user_data(&key, payment, user_data).await {
                 Ok(cost) => Ok(cost.to_string()),
                 Err(e) => Err(PyRuntimeError::new_err(format!(
                     "Failed to put user data: {e}"
                 ))),
             }
         })
+    }
+
+    /// @deprecated Use `vault_put` instead. This function will be removed in a future version.
+    fn write_bytes_to_vault<'a>(
+        &self,
+        py: Python<'a>,
+        data: Vec<u8>,
+        payment: &PyPaymentOption,
+        key: &PyVaultSecretKey,
+        content_type: u64,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_put(py, data, payment, key, content_type)
+    }
+
+    /// @deprecated Use `vault_get_user_data` instead. This function will be removed in a future version.
+    fn get_user_data_from_vault<'a>(
+        &self,
+        py: Python<'a>,
+        key: &PyVaultSecretKey,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_get_user_data(py, key)
+    }
+
+    /// @deprecated Use `vault_put_user_data` instead. This function will be removed in a future version.
+    fn put_user_data_to_vault<'a>(
+        &self,
+        py: Python<'a>,
+        key: &PyVaultSecretKey,
+        payment: &PyPaymentOption,
+        user_data: &PyUserData,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.vault_put_user_data(py, key, payment, user_data)
     }
 
     /// Get a pointer from the network
@@ -3540,6 +3588,158 @@ impl PyDataMapChunk {
     }
 }
 
+/// Python iterator wrapper for data streaming
+#[pyclass(name = "DataStream")]
+pub struct PyDataStream {
+    inner: Mutex<crate::client::data::DataStream>,
+}
+
+impl PyDataStream {
+    fn new(stream: crate::client::data::DataStream) -> Self {
+        Self {
+            inner: Mutex::new(stream),
+        }
+    }
+}
+
+#[pymethods]
+impl PyDataStream {
+    /// Make this object iterable
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    /// Get the next chunk from the stream
+    fn __next__(&mut self) -> PyResult<Option<Vec<u8>>> {
+        let mut stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        match stream.next() {
+            Some(Ok(chunk)) => Ok(Some(chunk.to_vec())),
+            Some(Err(e)) => Err(PyRuntimeError::new_err(format!("Stream error: {e}"))),
+            None => Ok(None),
+        }
+    }
+
+    /// Returns the original data size
+    fn data_size(&self) -> PyResult<usize> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        Ok(stream.data_size())
+    }
+
+    /// Decrypts and returns a specific byte range from the encrypted data.
+    ///
+    /// Args:
+    ///     start: The starting byte position (inclusive)
+    ///     len: The number of bytes to read
+    ///
+    /// Returns:
+    ///     List of bytes containing the decrypted range data
+    fn get_range(&self, start: usize, len: usize) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .get_range(start, len)
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Convenience method to get a range using start and end positions.
+    ///
+    /// Args:
+    ///     start: The starting byte position (inclusive)
+    ///     end: The ending byte position (exclusive)
+    ///
+    /// Returns:
+    ///     List of bytes containing the decrypted range data
+    fn range(&self, start: usize, end: usize) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .range(start..end)
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Convenience method to get a range from a starting position to the end of the file.
+    ///
+    /// Args:
+    ///     start: The starting byte position (inclusive)
+    ///
+    /// Returns:
+    ///     List of bytes from start position to end of file
+    fn range_from(&self, start: usize) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .range_from(start)
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Convenience method to get a range from the beginning of the file to an end position.
+    ///
+    /// Args:
+    ///     end: The ending byte position (exclusive)
+    ///
+    /// Returns:
+    ///     List of bytes from beginning of file to end position
+    fn range_to(&self, end: usize) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .range_to(end)
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Convenience method to get the entire file content.
+    ///
+    /// Returns:
+    ///     List of bytes containing the entire file content
+    fn range_all(&self) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .range_full()
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    /// Convenience method to get an inclusive range.
+    ///
+    /// Args:
+    ///     start: The starting byte position (inclusive)
+    ///     end: The ending byte position (inclusive)
+    ///
+    /// Returns:
+    ///     List of bytes containing the decrypted inclusive range data
+    fn range_inclusive(&self, start: usize, end: usize) -> PyResult<Vec<u8>> {
+        let stream = self
+            .inner
+            .lock()
+            .map_err(|e| PyRuntimeError::new_err(format!("Lock error: {e}")))?;
+        let bytes = stream
+            .range_inclusive(start, end)
+            .map_err(|e| PyRuntimeError::new_err(format!("Range access error: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+}
+
 #[pyfunction]
 fn encrypt(data: Vec<u8>) -> PyResult<(Vec<u8>, Vec<Vec<u8>>)> {
     let (data_map, chunks) = self_encryption::encrypt(Bytes::from(data))
@@ -3997,6 +4197,35 @@ impl PyScratchpad {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(data.to_vec())
     }
+
+    /// Returns the owner public key
+    pub fn owner(&self) -> PyPublicKey {
+        PyPublicKey {
+            inner: *self.inner.owner(),
+        }
+    }
+
+    /// Returns the signature
+    pub fn signature(&self) -> PySignature {
+        PySignature {
+            inner: self.inner.signature().clone(),
+        }
+    }
+
+    /// Returns the scratchpad hash as hex string
+    pub fn scratchpad_hash(&self) -> String {
+        hex::encode(self.inner.scratchpad_hash().0)
+    }
+
+    /// Returns the encrypted data hash as hex string
+    pub fn encrypted_data_hash(&self) -> String {
+        hex::encode(self.inner.encrypted_data_hash())
+    }
+
+    /// Returns the encrypted data
+    pub fn encrypted_data(&self) -> Vec<u8> {
+        self.inner.encrypted_data().to_vec()
+    }
 }
 
 /// A handle to the register history
@@ -4253,6 +4482,7 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyClientOperatingStrategy>()?;
     m.add_class::<PyDataAddress>()?;
     m.add_class::<PyDataMapChunk>()?;
+    m.add_class::<PyDataStream>()?;
     m.add_class::<PyDataTypes>()?;
     m.add_class::<PyDerivationIndex>()?;
     m.add_class::<PyDerivedPubkey>()?;
@@ -4283,7 +4513,6 @@ fn autonomi_client_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRetryStrategy>()?;
     m.add_class::<PyScratchpad>()?;
     m.add_class::<PyScratchpadAddress>()?;
-
     m.add_class::<PySecretKey>()?;
     m.add_class::<PySignature>()?;
     m.add_class::<PyStoreQuote>()?;

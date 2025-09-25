@@ -23,9 +23,9 @@ use crate::{
 
 use super::super::{Component, utils::centered_rect_fixed};
 
-pub const GB_PER_NODE: usize = 35;
-pub const MB: usize = 1000 * 1000;
-pub const GB: usize = MB * 1000;
+pub const GB_PER_NODE: u64 = 35;
+pub const MB: u64 = 1000 * 1000;
+pub const GB: u64 = MB * 1000;
 pub const MAX_NODE_COUNT: usize = 50;
 
 pub struct ManageNodes {
@@ -43,7 +43,7 @@ impl ManageNodes {
         let nodes_to_start = std::cmp::min(nodes_to_start, MAX_NODE_COUNT);
         let new = Self {
             active: false,
-            available_disk_space_gb: get_available_space_b(&storage_mountpoint)? / GB,
+            available_disk_space_gb: (get_available_space_b(&storage_mountpoint)? / GB) as usize,
             nodes_to_start_input: Input::default().with_value(nodes_to_start.to_string()),
             old_value: Default::default(),
             storage_mountpoint: storage_mountpoint.clone(),
@@ -58,7 +58,10 @@ impl ManageNodes {
     // Returns the max number of nodes to start
     // It is the minimum of the available disk space and the max nodes limit
     fn max_nodes_to_start(&self) -> usize {
-        std::cmp::min(self.available_disk_space_gb / GB_PER_NODE, MAX_NODE_COUNT)
+        std::cmp::min(
+            self.available_disk_space_gb / GB_PER_NODE as usize,
+            MAX_NODE_COUNT,
+        )
     }
 }
 
@@ -111,7 +114,7 @@ impl Component for ManageNodes {
                     .parse::<usize>()
                     .unwrap_or(0);
                 // if it might exceed the available space or if more than max_node_count, then enter the max
-                if new_value * GB_PER_NODE > self.available_disk_space_gb
+                if (new_value as u64) * GB_PER_NODE > (self.available_disk_space_gb as u64) * GB
                     || new_value > MAX_NODE_COUNT
                 {
                     self.nodes_to_start_input = self
@@ -134,7 +137,9 @@ impl Component for ManageNodes {
                     if key.code == KeyCode::Up {
                         if current_val + 1 >= MAX_NODE_COUNT {
                             MAX_NODE_COUNT
-                        } else if (current_val + 1) * GB_PER_NODE <= self.available_disk_space_gb {
+                        } else if ((current_val + 1) as u64) * GB_PER_NODE
+                            <= (self.available_disk_space_gb as u64) * GB
+                        {
                             current_val + 1
                         } else {
                             current_val
@@ -179,7 +184,7 @@ impl Component for ManageNodes {
             },
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, _drive_name)) => {
                 self.storage_mountpoint.clone_from(&mountpoint);
-                self.available_disk_space_gb = get_available_space_b(&mountpoint)? / GB;
+                self.available_disk_space_gb = (get_available_space_b(&mountpoint)? / GB) as usize;
                 None
             }
             _ => None,
@@ -266,7 +271,10 @@ impl Component for ManageNodes {
         let info = Line::from(vec![
             Span::styled("Using", info_style),
             Span::styled(
-                format!(" {}GB ", self.get_nodes_to_start_val() * GB_PER_NODE),
+                format!(
+                    " {}GB ",
+                    (self.get_nodes_to_start_val() as u64) * GB_PER_NODE
+                ),
                 info_style.bold(),
             ),
             Span::styled(

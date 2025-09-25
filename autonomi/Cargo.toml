@@ -64,7 +64,7 @@ pyo3-async-runtimes = { version = "0.23", optional = true, features = ["tokio-ru
 rand = "0.8.5"
 rayon = "1.8.0"
 rmp-serde = "1.1.1"
-self_encryption = { version = "0.33.0" }
+self_encryption = { version = "0.34.0" }
 # Older version of self_encryption for backward compatibility
 self_encryption_old = { package = "self_encryption", version = "0.30.0" }
 serde = { version = "1.0.133", features = ["derive", "rc"] }
@@ -76,7 +76,7 @@ walkdir = "2.5.0"
 xor_name = "5.0.0"
 
 [dev-dependencies]
-alloy = { version = "0.15.6", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
+alloy = { version = "1.0.32", default-features = false, features = ["contract", "json-rpc", "network", "node-bindings", "provider-http", "reqwest-rustls-tls", "rpc-client", "rpc-types", "signer-local", "std"] }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
 evmlib = { path = "../evmlib", version = "0.4.3" }
 eyre = "0.6.5"

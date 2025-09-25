@@ -16,6 +16,9 @@ pub mod private;
 pub mod public;
 
 mod helpers;
+mod stream;
+
+pub use stream::DataStream;
 
 /// A [`DataAddress`] which points to a DataMap
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]

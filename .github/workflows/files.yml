@@ -166,6 +166,22 @@ jobs:
                 echo "Running ant with args: $upload_args"
                 ./target/release/ant --log-output-dest=data-dir --local file upload "$test_file" $upload_args 2>&1 | tee ./${size}_upload_output_${test_name}
                 
+                # Show upload output to screen
+                echo "=== Upload Output for ${size} file ==="
+                cat "./${size}_upload_output_${test_name}"
+                echo "=== End Upload Output ==="
+                
+                # Check for streaming upload when file_size_mb is 200
+                streaming_upload_check_passed=true
+                if [[ $file_size_mb -eq 200 ]]; then
+                  if ! grep -q "Streaming encryption of" "./${size}_upload_output_${test_name}"; then
+                    echo "⚠️  WARNING: streaming upload not detected for 200MB file"
+                    streaming_upload_check_passed=false
+                  else
+                    echo "✅ Streaming upload detected for 200MB file"
+                  fi
+                fi
+                
                 ADDRESS=$(extract_address "./${size}_upload_output_${test_name}")
                 echo "${size} file address: $ADDRESS"
                 
@@ -200,7 +216,7 @@ jobs:
                   original_size=$(stat -c%s "$test_file" 2>/dev/null || stat -f%z "$test_file")
                   downloaded_size=$(stat -c%s "test_download/downloaded_${size}_file_${test_name}" 2>/dev/null || stat -f%z "test_download/downloaded_${size}_file_${test_name}")
                   
-                  if [[ $original_size -eq $downloaded_size ]] && [[ $streaming_check_passed == true ]]; then
+                  if [[ $original_size -eq $downloaded_size ]] && [[ $streaming_check_passed == true ]] && [[ $streaming_upload_check_passed == true ]]; then
                     echo "✅ $test_name ${size} file test passed: $downloaded_size bytes"
                     passed_tests+=("$test_name ($size file) - $downloaded_size bytes")
                   elif [[ $original_size -ne $downloaded_size ]]; then
@@ -209,6 +225,9 @@ jobs:
                   elif [[ $streaming_check_passed == false ]]; then
                     echo "❌ $test_name ${size} file test failed: streaming download not detected"
                     failed_tests+=("$test_name ($size file) - streaming download not detected")
+                  elif [[ $streaming_upload_check_passed == false ]]; then
+                    echo "❌ $test_name ${size} file test failed: streaming upload not detected"
+                    failed_tests+=("$test_name ($size file) - streaming upload not detected")
                   fi
                 else
                   echo "❌ $test_name ${size} file download failed"
@@ -463,6 +482,23 @@ jobs:
                   & ".\target\release\ant.exe" --local file upload $testFile 2>&1 | Tee-Object -FilePath $uploadOutput
                 }
                 
+                # Show upload output to screen
+                Write-Host "=== Upload Output for $size file ==="
+                Get-Content $uploadOutput
+                Write-Host "=== End Upload Output ==="
+                
+                # Check for streaming upload when fileSizeMB is 200
+                $streamingUploadCheckPassed = $true
+                if ($fileSizeMB -eq 200) {
+                  $uploadContent = Get-Content $uploadOutput -Raw
+                  if ($uploadContent -notmatch "Streaming encryption of") {
+                    Write-Host "⚠️  WARNING: streaming upload not detected for 200MB file"
+                    $streamingUploadCheckPassed = $false
+                  } else {
+                    Write-Host "✅ Streaming upload detected for 200MB file"
+                  }
+                }
+                
                 $address = Extract-Address $uploadOutput
                 Write-Host "$size file address: $address"
                 
@@ -498,7 +534,7 @@ jobs:
                   $originalSize = (Get-Item $testFile).Length
                   $downloadedSize = (Get-Item "test_download\downloaded_${size}_file_$testName").Length
                   
-                  if (($originalSize -eq $downloadedSize) -and $streamingCheckPassed) {
+                  if (($originalSize -eq $downloadedSize) -and $streamingCheckPassed -and $streamingUploadCheckPassed) {
                     Write-Host "✅ $testName $size file test passed: $downloadedSize bytes"
                     $passedTests += "$testName ($size file) - $downloadedSize bytes"
                   } elseif ($originalSize -ne $downloadedSize) {
@@ -507,6 +543,9 @@ jobs:
                   } elseif (-not $streamingCheckPassed) {
                     Write-Host "❌ $testName $size file test failed: streaming download not detected"
                     $failedTests += "$testName ($size file) - streaming download not detected"
+                  } elseif (-not $streamingUploadCheckPassed) {
+                    Write-Host "❌ $testName $size file test failed: streaming upload not detected"
+                    $failedTests += "$testName ($size file) - streaming upload not detected"
                   }
                 } else {
                   Write-Host "❌ $testName $size file download failed"

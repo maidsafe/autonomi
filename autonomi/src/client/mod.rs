@@ -41,10 +41,8 @@ pub mod external_signer;
 // private module with utility functions
 mod chunk_cache;
 mod data_map_restoration;
-mod encryption;
 mod network;
 mod put_error_state;
-mod utils;
 
 use payment::Receipt;
 pub use put_error_state::ChunkBatchUploadState;

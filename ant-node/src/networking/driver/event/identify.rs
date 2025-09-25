@@ -92,14 +92,19 @@ impl SwarmDriver {
         // If the peer dials us with a different addr, we would add it to our RT via update_pre_existing_peer
         let Some((_, addr_fom_connection, _)) = self.live_connected_peers.get(&connection_id)
         else {
-            warn!("identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers");
+            warn!(
+                "identify: received info for peer {peer_id:?} on {connection_id:?} that is not in the live connected peers"
+            );
             return;
         };
 
         let our_identify_protocol = IDENTIFY_PROTOCOL_STR.read().expect("IDENTIFY_PROTOCOL_STR has been locked to write. A call to set_network_id performed. This should not happen.").to_string();
 
         if info.protocol_version != our_identify_protocol {
-            warn!("identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}. Their protocol version: {:?}",info.protocol_version);
+            warn!(
+                "identify: {peer_id:?} does not have the same protocol. Our IDENTIFY_PROTOCOL_STR: {our_identify_protocol:?}. Their protocol version: {:?}",
+                info.protocol_version
+            );
 
             self.send_event(NetworkEvent::PeerWithUnsupportedProtocol {
                 our_protocol: our_identify_protocol,
@@ -108,7 +113,9 @@ impl SwarmDriver {
             // Block the peer from any further communication.
             let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
             if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
-                error!("Clearing out a protocol mismatch peer from RT. The peer pushed an incorrect identify info after being added: {peer_id:?}");
+                error!(
+                    "Clearing out a protocol mismatch peer from RT. The peer pushed an incorrect identify info after being added: {peer_id:?}"
+                );
                 self.update_on_peer_removal(*dead_peer.node.key.preimage());
             }
 
@@ -132,13 +139,17 @@ impl SwarmDriver {
                 .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
                 .unique()
                 .collect::<Vec<_>>();
-            debug!("Peer {peer_id:?} is a relayed peer. Using p2p addr from identify directly: {p2p_addrs:?}");
+            debug!(
+                "Peer {peer_id:?} is a relayed peer. Using p2p addr from identify directly: {p2p_addrs:?}"
+            );
             p2p_addrs
         };
 
         // return early for reachability-check-peer / clients
         if info.agent_version.contains("reachability-check-peer") {
-            debug!("Peer {peer_id:?} is requesting for a reachability check. Adding it to the dial queue. Not adding to RT.");
+            debug!(
+                "Peer {peer_id:?} is requesting for a reachability check. Adding it to the dial queue. Not adding to RT."
+            );
             let _ = self.dial_queue.insert(
                 peer_id,
                 (
@@ -182,7 +193,9 @@ impl SwarmDriver {
             // If the peer is part already of the RT, try updating the addresses based on the new push info.
             // We don't have to dial it back.
 
-            debug!("Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new.");
+            debug!(
+                "Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new."
+            );
             self.update_pre_existing_peer(peer_id, &addrs, is_relayed_peer);
         } else if !self.local && !has_dialed {
             // When received an identify from un-dialed peer, try to dial it
@@ -194,11 +207,15 @@ impl SwarmDriver {
 
             // Only need to dial back for not fulfilled kbucket
             if kbucket_full && !exists_in_dial_queue {
-                debug!("received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}");
+                debug!(
+                    "received identify for a full bucket {ilog2:?}, not dialing {peer_id:?} on {addrs:?}"
+                );
                 return;
             }
 
-            info!("received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}");
+            info!(
+                "received identify info from undialed peer {peer_id:?} for not full kbucket {ilog2:?}, dialing back after {DIAL_BACK_DELAY:?}. Addrs: {addrs:?}"
+            );
 
             let support_dnd = does_the_peer_support_dnd(&info);
             let mut send_dnd = false;
@@ -217,10 +234,14 @@ impl SwarmDriver {
                         send_dnd = true;
 
                         if support_dnd {
-                            debug!("Peer {peer_id:?} has been reset 3 times. Will now send a DoNotDisturb request.");
+                            debug!(
+                                "Peer {peer_id:?} has been reset 3 times. Will now send a DoNotDisturb request."
+                            );
                         } else {
                             *time = Instant::now();
-                            warn!("Peer {peer_id:?} has been reset 3 times. It does not support DoNotDisturb. Dialing it back immediately.");
+                            warn!(
+                                "Peer {peer_id:?} has been reset 3 times. It does not support DoNotDisturb. Dialing it back immediately."
+                            );
                         }
                     } else {
                         debug!(
@@ -248,7 +269,9 @@ impl SwarmDriver {
                             }
                         });
                         if removed {
-                            debug!("Removed non-p2p addr from dial queue for {peer_id:?}. Remaining addrs: {old_addrs:?}");
+                            debug!(
+                                "Removed non-p2p addr from dial queue for {peer_id:?}. Remaining addrs: {old_addrs:?}"
+                            );
                         }
                     }
                 }
@@ -277,7 +300,9 @@ impl SwarmDriver {
             // With the new bootstrap cache, the workload is distributed,
             // hence no longer need to replace bootstrap nodes for workload share.
             // self.remove_bootstrap_from_full(peer_id);
-            debug!("identify: attempting to add addresses to routing table for {peer_id:?}. Addrs: {addrs:?}");
+            debug!(
+                "identify: attempting to add addresses to routing table for {peer_id:?}. Addrs: {addrs:?}"
+            );
 
             // Attempt to add the addresses to the routing table.
             for addr in addrs.into_iter() {
@@ -324,7 +349,9 @@ impl SwarmDriver {
                 addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
 
                 if !addresses_to_remove.is_empty() {
-                    debug!("Removing addresses from RT for {peer_id:?} (relayed) as the new identify does not contain them: {addresses_to_remove:?}");
+                    debug!(
+                        "Removing addresses from RT for {peer_id:?} (relayed) as the new identify does not contain them: {addresses_to_remove:?}"
+                    );
                     for multiaddr in addresses_to_remove {
                         let _routing_update = self
                             .swarm
@@ -336,7 +363,9 @@ impl SwarmDriver {
             }
 
             if !addresses_to_add.is_empty() {
-                debug!("Adding addresses to RT for {peer_id:?} as the new identify contains them: {addresses_to_add:?}");
+                debug!(
+                    "Adding addresses to RT for {peer_id:?} as the new identify contains them: {addresses_to_add:?}"
+                );
                 for multiaddr in addresses_to_add {
                     let _routing_update = self
                         .swarm

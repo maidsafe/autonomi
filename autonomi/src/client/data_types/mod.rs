@@ -13,7 +13,7 @@ pub mod scratchpad;
 
 use crate::networking::{PeerId, Record};
 use ant_protocol::NetworkAddress;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::{debug, error, warn};
 
 /// Resolve split records by selecting the highest counter.
@@ -31,11 +31,11 @@ pub(crate) fn resolve_split_records<T, E, FDeser, FCounter, FEqual, FFork, FCorr
     corrupt_error: FCorrupt,
 ) -> Result<T, E>
 where
-    T: Clone,
+    T: Clone + std::hash::Hash + Eq,
     FDeser: Fn(Record) -> Result<T, E>,
     FCounter: Fn(&T) -> u64,
     FEqual: Fn(&T, &T) -> bool,
-    FFork: Fn(Vec<T>) -> E,
+    FFork: Fn(HashSet<T>) -> E,
     FCorrupt: Fn() -> E,
 {
     debug!("Resolving split records at {key:?}");
@@ -61,35 +61,29 @@ where
         }
     };
 
-    // Collect all with max counter
-    let latest: Vec<T> = items
-        .into_iter()
-        .filter(|t| counter_of(t) == max_counter)
-        .collect();
-
-    if latest.is_empty() {
-        error!("No latest records found for {key:?}");
-        return Err(corrupt_error());
-    }
-
-    // Deduplicate equal-content entries
-    let mut dedup_latest: Vec<T> = Vec::with_capacity(latest.len());
-    for item in latest.iter().cloned() {
-        if !dedup_latest
-            .iter()
-            .any(|existing| same_content(existing, &item))
+    // Collect unique entries with max counter
+    let mut latest: HashSet<T> = HashSet::new();
+    for item in items.into_iter() {
+        if counter_of(&item) == max_counter
+            && !latest.iter().any(|existing| same_content(existing, &item))
         {
-            dedup_latest.push(item);
+            latest.insert(item);
         }
     }
 
-    match dedup_latest.as_slice() {
-        [one] => Ok(one.clone()),
-        [] => {
-            error!("No valid records remain after deduplication for {key:?}");
+    match latest.len() {
+        1 => {
+            let item = latest
+                .into_iter()
+                .next()
+                .expect("HashSet with len() == 1 must contain exactly one item");
+            Ok(item)
+        }
+        0 => {
+            error!("No latest records found for {key:?}");
             Err(corrupt_error())
         }
-        _multi => {
+        _ => {
             warn!("Multiple conflicting records found at latest version for {key:?}");
             Err(fork_error(latest))
         }

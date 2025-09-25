@@ -10,7 +10,6 @@ use ant_protocol::storage::Chunk;
 use bytes::{BufMut, Bytes, BytesMut};
 use rayon::prelude::*;
 use self_encryption::DataMap;
-pub use self_encryption::MAX_CHUNK_SIZE;
 use self_encryption_old::DataMap as OldDataMap;
 use serde::{Deserialize, Serialize};
 

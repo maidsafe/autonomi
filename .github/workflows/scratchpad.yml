@@ -1,0 +1,252 @@
+name: Scratchpad Checks
+
+on:
+  merge_group:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  scratchpad:
+    name: Scratchpad tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            ant_path: /home/runner/.local/share/autonomi
+          - os: windows-latest
+            ant_path: C:\\Users\\runneradmin\\AppData\\Roaming\\autonomi
+          - os: macos-latest
+            ant_path: /Users/runner/Library/Application\ Support/autonomi
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        run: cargo build --release --bin antnode --bin ant --bin antctl
+        timeout-minutes: 30
+
+      - name: Install antctl on Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $destination = "C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps"
+          Copy-Item "target\\release\\antctl.exe" -Destination $destination -Force
+          Write-Host "antctl installed to $destination"
+
+      - name: Start a local network
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: start
+          enable-evm-testnet: true
+          node-path: target/release/antnode
+          build: true
+
+      - name: Check if ANT_PEERS and EVM_NETWORK are set
+        shell: bash
+        run: |
+          if [[ -z "$ANT_PEERS" ]]; then
+            echo "The ANT_PEERS variable has not been set"
+            exit 1
+          elif [[ -z "$EVM_NETWORK" ]]; then
+            echo "The EVM_NETWORK variable has not been set"
+            exit 1
+          else
+            echo "ANT_PEERS has been set to $ANT_PEERS"
+            echo "EVM_NETWORK has been set to $EVM_NETWORK"
+          fi
+
+      # FIXME: do this in a generic way for localtestnets
+      - name: export default secret key
+        if: matrix.os != 'windows-latest'
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" >> $GITHUB_ENV
+        shell: bash
+      - name: Set secret key for Windows
+        if: matrix.os == 'windows-latest'
+        run: echo "SECRET_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Generate scratchpad signing key
+        run: ./target/release/ant --local scratchpad generate-key
+
+      - name: Create scratchpad
+        run: ./target/release/ant --local scratchpad create test_scratchpad "content_A" > ./scratchpad_create_output 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Edit scratchpad with content_A
+        run: ./target/release/ant --local scratchpad edit test_scratchpad "content_A" > ./scratchpad_edit_output_1 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 1 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 1" ./scratchpad_edit_output_1; then
+            echo "✅ Counter 1 found as expected"
+          else
+            echo "❌ Counter 1 not found in output"
+            cat ./scratchpad_edit_output_1
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 1 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./scratchpad_edit_output_1 -Raw
+          if ($content -match "New counter: 1") {
+            echo "✅ Counter 1 found as expected"
+          } else {
+            echo "❌ Counter 1 not found in output"
+            cat ./scratchpad_edit_output_1
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after first edit
+        run: sleep 10
+
+      - name: Edit scratchpad with same content_A again
+        run: ./target/release/ant --local scratchpad edit test_scratchpad "content_A" > ./scratchpad_edit_output_2 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 2 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 2" ./scratchpad_edit_output_2; then
+            echo "✅ Counter 2 found as expected"
+          else
+            echo "❌ Counter 2 not found in output"
+            cat ./scratchpad_edit_output_2
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 2 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./scratchpad_edit_output_2 -Raw
+          if ($content -match "New counter: 2") {
+            echo "✅ Counter 2 found as expected"
+          } else {
+            echo "❌ Counter 2 not found in output"
+            cat ./scratchpad_edit_output_2
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after duplicate edit
+        run: sleep 10
+
+      - name: Get scratchpad and verify content_A
+        run: ./target/release/ant --local scratchpad get test_scratchpad > ./scratchpad_get_output_1 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Verify content_A (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "Data: content_A" ./scratchpad_get_output_1; then
+            echo "✅ Content matches content_A as expected"
+          else
+            echo "❌ Content does not match content_A"
+            cat ./scratchpad_get_output_1
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify content_A (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./scratchpad_get_output_1 -Raw
+          if ($content -match "Data: content_A") {
+            echo "✅ Content matches content_A as expected"
+          } else {
+            echo "❌ Content does not match content_A"
+            cat ./scratchpad_get_output_1
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Edit scratchpad with content_B
+        run: ./target/release/ant --local scratchpad edit test_scratchpad "content_B" > ./scratchpad_edit_output_3 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 10
+
+      - name: Verify counter 3 (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "New counter: 3" ./scratchpad_edit_output_3; then
+            echo "✅ Counter 3 found as expected"
+          else
+            echo "❌ Counter 3 not found in output"
+            cat ./scratchpad_edit_output_3
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify counter 3 (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./scratchpad_edit_output_3 -Raw
+          if ($content -match "New counter: 3") {
+            echo "✅ Counter 3 found as expected"
+          } else {
+            echo "❌ Counter 3 not found in output"
+            cat ./scratchpad_edit_output_3
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Wait for short period after content_B edit
+        run: sleep 10
+
+      - name: Get scratchpad and verify content_B
+        run: ./target/release/ant --local scratchpad get test_scratchpad > ./scratchpad_get_output_2 2>&1
+        env:
+          ANT_LOG: "v"
+        timeout-minutes: 5
+
+      - name: Verify content_B (unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          if grep -q "Data: content_B" ./scratchpad_get_output_2; then
+            echo "✅ Content updated to content_B as expected"
+          else
+            echo "❌ Content does not match content_B"
+            cat ./scratchpad_get_output_2
+            exit 1
+          fi
+        shell: bash
+
+      - name: Verify content_B (win)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $content = Get-Content ./scratchpad_get_output_2 -Raw
+          if ($content -match "Data: content_B") {
+            echo "✅ Content updated to content_B as expected"
+          } else {
+            echo "❌ Content does not match content_B"
+            cat ./scratchpad_get_output_2
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Stop the local network and upload logs
+        if: always()
+        uses: maidsafe/ant-local-testnet-action@main
+        with:
+          action: stop
+          log_file_prefix: ant_test_logs_scratchpad
+          build: true

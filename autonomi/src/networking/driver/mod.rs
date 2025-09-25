@@ -13,29 +13,29 @@ mod task_handler;
 use std::collections::BTreeMap;
 use std::{num::NonZeroUsize, time::Duration};
 
-use crate::networking::interface::NetworkTask;
 use crate::networking::NetworkError;
+use crate::networking::interface::NetworkTask;
 use ant_bootstrap::BootstrapCacheStore;
-use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::NetworkAddress;
+use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::{
     messages::{Query, Request, Response},
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use libp2p::kad::store::MemoryStoreConfig;
 use libp2p::kad::NoKnownPeers;
+use libp2p::kad::store::MemoryStoreConfig;
 use libp2p::swarm::ConnectionId;
 use libp2p::{
+    Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
     core::muxing::StreamMuxerBox,
     futures::StreamExt,
     identity::Keypair,
     kad::{self, store::MemoryStore},
     multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
-    request_response::{self, cbor::codec::Codec as CborCodec, ProtocolSupport},
+    request_response::{self, ProtocolSupport, cbor::codec::Codec as CborCodec},
     swarm::NetworkBehaviour,
-    Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
 };
 use task_handler::TaskHandler;
 use tokio::sync::mpsc;

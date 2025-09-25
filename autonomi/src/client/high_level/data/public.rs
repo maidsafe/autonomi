@@ -10,10 +10,11 @@ use ant_protocol::storage::DataTypes;
 use bytes::Bytes;
 use std::time::Instant;
 
-use crate::client::encryption::EncryptionStream;
 use crate::client::payment::PaymentOption;
 use crate::client::quote::CostError;
 use crate::client::{GetError, PutError};
+use crate::data::DataStream;
+use crate::self_encryption::EncryptionStream;
 use crate::{
     Client,
     chunk::{ChunkAddress, DataMapChunk},
@@ -32,6 +33,33 @@ impl Client {
         let datamap_chunk =
             DataMapChunk(self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?);
         self.data_get(&datamap_chunk).await
+    }
+
+    /// Stream a blob of public data from the network. Returns an Iterator that yields chunks progressively.
+    /// Use this for large blobs of data like videos to avoid loading everything into memory.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use autonomi::Client;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = Client::init().await?;
+    /// # let addr = todo!();
+    /// let stream = client.data_stream_public(&addr).await?;
+    /// for chunk_result in stream {
+    ///     let chunk = chunk_result?;
+    ///     // Process chunk...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn data_stream_public(&self, addr: &DataAddress) -> Result<DataStream, GetError> {
+        info!("Starting streaming fetch of public data from Data Address: {addr:?}");
+        let datamap_chunk =
+            DataMapChunk(self.chunk_get(&ChunkAddress::new(*addr.xorname())).await?);
+        let stream = self.data_stream(&datamap_chunk).await?;
+        Ok(stream)
     }
 
     /// Upload a piece of data to the network. This data is publicly accessible.

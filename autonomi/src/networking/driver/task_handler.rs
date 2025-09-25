@@ -6,15 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::NetworkError;
-use crate::networking::OneShotTaskResult;
 use crate::networking::interface::NetworkTask;
 use crate::networking::utils::get_quorum_amount;
+use crate::networking::NetworkError;
+use crate::networking::OneShotTaskResult;
 use ant_evm::PaymentQuote;
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
-use libp2p::PeerId;
 use libp2p::kad::{self, PeerInfo, QueryId, Quorum, Record};
 use libp2p::request_response::OutboundRequestId;
+use libp2p::PeerId;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -161,12 +161,16 @@ impl TaskHandler {
                     holders.insert(peer_id, record.record);
                 }
 
-                // If we have enough holders, finish the task.
+                // If we have enough holders with the same content, finish the task.
                 if let Some((_resp, quorum)) = self.get_record.get(&id) {
                     let expected_holders = get_quorum_amount(quorum);
 
-                    if holders.len() >= expected_holders {
-                        info!("QueryId({id}): got enough holders, finishing task");
+                    if let Some(max_content_holders) = get_max_content_holders_count(holders)
+                        && max_content_holders >= expected_holders
+                    {
+                        info!(
+                            "QueryId({id}): got enough holders with same content, finishing task"
+                        );
                         self.send_get_record_result(id)?;
                         return Ok(true);
                     }
@@ -460,6 +464,24 @@ impl TaskHandler {
         let holders = self.get_record_accumulator.remove(&id).unwrap_or_default();
         Ok(((responder, quorum), holders))
     }
+}
+
+/// Helper function to get the count of holders that have the most frequent record content
+/// Returns None if there are no holders, otherwise returns the count of holders with the most frequent content
+fn get_max_content_holders_count(holders: &HashMap<PeerId, Record>) -> Option<usize> {
+    if holders.is_empty() {
+        return None;
+    }
+
+    // Group holders by record content and count occurrences
+    let mut content_counts: HashMap<Vec<u8>, usize> = HashMap::new();
+    for record in holders.values() {
+        let content = record.value.clone();
+        *content_counts.entry(content).or_insert(0) += 1;
+    }
+
+    // Return the maximum count
+    content_counts.values().max().copied()
 }
 
 fn verify_quote(

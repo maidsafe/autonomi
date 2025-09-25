@@ -204,12 +204,17 @@ impl App {
                     tui::Event::Render => action_tx.send(Action::Render)?,
                     tui::Event::Resize(x, y) => action_tx.send(Action::Resize(x, y))?,
                     tui::Event::Key(key) => {
+                        debug!("App received key event: {:?}", key);
                         if self.input_mode == InputMode::Navigation {
                             if let Some(keymap) = self.config.keybindings.get(&self.scene) {
                                 if let Some(action) = keymap.get(&vec![key]) {
                                     info!("Got action: {action:?}");
                                     action_tx.send(action.clone())?;
                                 } else {
+                                    debug!(
+                                        "Key {:?} not found in keymap for scene {:?}",
+                                        key, self.scene
+                                    );
                                     // If the key was not handled as a single key action,
                                     // then consider it for multi-key combinations.
                                     self.last_tick_key_events.push(key);
@@ -218,6 +223,11 @@ impl App {
                                     if let Some(action) = keymap.get(&self.last_tick_key_events) {
                                         info!("Got action: {action:?}");
                                         action_tx.send(action.clone())?;
+                                    } else if self.last_tick_key_events.len() > 1 {
+                                        debug!(
+                                            "Multi-key combination {:?} not found in keymap",
+                                            self.last_tick_key_events
+                                        );
                                     }
                                 }
                             };

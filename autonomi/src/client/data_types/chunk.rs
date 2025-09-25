@@ -17,8 +17,8 @@ use crate::{
         ChunkBatchUploadState, GetError, PutError,
         payment::{PaymentOption, Receipt},
         quote::CostError,
-        utils::process_tasks_with_max_concurrency,
     },
+    utils::process_tasks_with_max_concurrency,
 };
 use ant_evm::{Amount, AttoTokens, ClientProofOfPayment};
 pub use ant_protocol::storage::{Chunk, ChunkAddress};

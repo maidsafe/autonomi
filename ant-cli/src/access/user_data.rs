@@ -10,6 +10,7 @@ use std::collections::HashMap;
 
 use autonomi::{
     Pointer, PointerAddress, Scratchpad, ScratchpadAddress,
+    chunk::DataMapChunk,
     client::{
         files::{archive_private::PrivateArchiveDataMap, archive_public::ArchiveAddress},
         register::RegisterAddress,
@@ -104,14 +105,14 @@ pub fn get_local_private_archive_access(local_addr: &str) -> Result<PrivateArchi
     Ok(private_file_archive_access)
 }
 
-pub fn get_local_private_file_access(local_addr: &str) -> Result<PrivateArchiveDataMap> {
+pub fn get_local_private_file_access(local_addr: &str) -> Result<DataMapChunk> {
     let data_dir = get_client_data_dir_path()?;
     let user_data_path = data_dir.join("user_data");
     let private_files_path = user_data_path.join("private_files");
     let file_path = private_files_path.join(local_addr);
     let file_content = std::fs::read_to_string(file_path)?;
     let private_file: PrivateFile = serde_json::from_str(&file_content)?;
-    let private_file_access = PrivateArchiveDataMap::from_hex(&private_file.secret_access)?;
+    let private_file_access = DataMapChunk::from_hex(&private_file.secret_access)?;
     Ok(private_file_access)
 }
 

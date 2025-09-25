@@ -30,13 +30,19 @@ const VAULT_SECRET_KEY_SEED: &[u8] = b"Massive Array of Internet Disks Secure Ac
 /// Derives the vault secret key from the EVM secret key hex string
 /// The EVM secret key is used to sign a message and the signature is hashed to derive the vault secret key
 /// Being able to derive the vault secret key from the EVM secret key allows users to only keep track of one key: the EVM secret key
-pub fn derive_vault_key(evm_sk_hex: &str) -> Result<VaultSecretKey, VaultKeyError> {
+pub fn vault_derive_key(evm_sk_hex: &str) -> Result<VaultSecretKey, VaultKeyError> {
     let signature = ant_evm::cryptography::sign_message(evm_sk_hex, VAULT_SECRET_KEY_SEED)
         .map_err(VaultKeyError::FailedToSignMessage)?;
 
     let blst_key = derive_secret_key_from_seed(&signature)?;
     let vault_sk = blst_to_blsttc(&blst_key)?;
     Ok(vault_sk)
+}
+
+/// @deprecated Use [`vault_derive_key`] instead. This function will be removed in a future version.
+#[deprecated(since = "0.6.0", note = "Use `vault_derive_key` instead")]
+pub fn derive_vault_key(evm_sk_hex: &str) -> Result<VaultSecretKey, VaultKeyError> {
+    vault_derive_key(evm_sk_hex)
 }
 
 /// Derives the vault secret key from a signature hex string

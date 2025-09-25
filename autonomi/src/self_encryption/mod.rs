@@ -1,4 +1,4 @@
-// Copyright 2024 MaidSafe.net limited.
+// Copyright 2025 MaidSafe.net limited.
 //
 // This SAFE Network Software is licensed to you under The General Public License (GPL), version 3.
 // Unless required by applicable law or agreed to in writing, the SAFE Network Software distributed
@@ -6,9 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure()
-        .format(false)  // Disable rustfmt formatting
-        .compile(&["./src/antnode_proto/antnode.proto"], &["./src/antnode_proto"])?;
-    Ok(())
-}
+mod memory_encryption;
+mod stream_encryption;
+
+pub use memory_encryption::{DataMapLevel, Error, encrypt};
+pub use self_encryption::MAX_CHUNK_SIZE;
+pub(crate) use stream_encryption::{EncryptionStream, encrypt_directory_files, encrypt_file};

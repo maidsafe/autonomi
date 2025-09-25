@@ -8,9 +8,9 @@
 
 use super::Client;
 use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
-use crate::client::utils::process_tasks_with_max_concurrency;
 use crate::networking::Network;
 use crate::networking::common::Addresses;
+use crate::utils::process_tasks_with_max_concurrency;
 use ant_evm::payment_vault::get_market_price;
 use ant_evm::{Amount, PaymentQuote, QuotePayment, QuotingMetrics};
 pub use ant_protocol::storage::DataTypes;
@@ -25,6 +25,7 @@ use xor_name::XorName;
 const GET_MARKET_PRICE_BATCH_LIMIT: usize = 2000;
 
 /// A quote for a single address
+#[derive(Debug, Clone)]
 pub struct QuoteForAddress(pub(crate) Vec<(PeerId, Addresses, PaymentQuote, Amount)>);
 
 impl QuoteForAddress {
@@ -34,6 +35,7 @@ impl QuoteForAddress {
 }
 
 /// A quote for many addresses
+#[derive(Debug, Clone)]
 pub struct StoreQuote(pub HashMap<XorName, QuoteForAddress>);
 
 impl StoreQuote {

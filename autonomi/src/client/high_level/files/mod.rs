@@ -13,11 +13,16 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error;
+use tracing::info;
 
-use crate::Client;
 use crate::client::data_types::chunk::ChunkAddress;
-use crate::client::utils::process_tasks_with_max_concurrency;
 use crate::client::{GetError, PutError, quote::CostError};
+use crate::utils::process_tasks_with_max_concurrency;
+use crate::{
+    Client,
+    chunk::DataMapChunk,
+    client::payment::{PaymentOption, Receipt},
+};
 use bytes::Bytes;
 use self_encryption::streaming_decrypt_from_storage;
 use xor_name::XorName;
@@ -98,6 +103,8 @@ pub enum UploadError {
     IoError(#[from] std::io::Error),
     #[error("Failed to upload file")]
     PutError(#[from] PutError),
+    #[error("Encryption error")]
+    Encryption(String),
 }
 
 /// Errors that can occur during the download operation.
@@ -144,6 +151,34 @@ impl Client {
         data_map: DataMap,
         to_dest: &Path,
     ) -> Result<(), DownloadError> {
+        // Verify that the destination path can be used to create a file.
+        if let Err(e) = std::fs::File::create(to_dest) {
+            #[cfg(feature = "loud")]
+            println!(
+                "Input destination path {to_dest:?} cannot be used for streaming disk flushing: {e}"
+            );
+            #[cfg(feature = "loud")]
+            println!(
+                "This file may have been uploaded without a metadata archive. A file name must be provided to download and save it."
+            );
+            info!(
+                "Input destination path {to_dest:?} cannot be used for streaming disk flushing: {e}"
+            );
+            return Err(DownloadError::IoError(e));
+        }
+
+        // Clean up the temporary verification file
+        if let Err(cleanup_err) = std::fs::remove_file(to_dest) {
+            #[cfg(feature = "loud")]
+            println!(
+                "Warning: Failed to clean up temporary verification file {to_dest:?}: {cleanup_err}"
+            );
+            info!(
+                "Warning: Failed to clean up temporary verification file {to_dest:?}: {cleanup_err}"
+            );
+            return Err(DownloadError::IoError(cleanup_err));
+        }
+
         let total_chunks = data_map.infos().len();
 
         #[cfg(feature = "loud")]
@@ -232,6 +267,56 @@ impl Client {
         .collect::<Result<Vec<(usize, Bytes)>, self_encryption::Error>>()?;
 
         Ok(chunks)
+    }
+
+    async fn stream_upload_file(
+        &self,
+        path: PathBuf,
+        payment_option: PaymentOption,
+        is_public: bool,
+    ) -> Result<(DataMapChunk, usize, usize, Vec<Receipt>), UploadError> {
+        info!("Uploading file: {path:?}");
+        #[cfg(feature = "loud")]
+        println!("Uploading file: {path:?}");
+
+        // encrypt
+        let file_size = std::fs::metadata(&path)?.len() as usize;
+        let meta = Metadata::new_with_size(file_size as u64);
+        let encryption_result = crate::self_encryption::encrypt_file(
+            path.clone(),
+            path.clone(),
+            file_size,
+            meta,
+            is_public,
+        )
+        .await;
+        let mut encryption_stream = match encryption_result {
+            Ok(s) => s,
+            Err(err) => {
+                error!("Error during file encryption: {err}");
+                #[cfg(feature = "loud")]
+                println!("Error during file encryption: {err}");
+                return Err(UploadError::Encryption(err.to_string()));
+            }
+        };
+
+        // pay and upload
+        let (processed_chunks, free_chunks, receipts) = self
+            .pay_and_upload_file(payment_option, &mut encryption_stream)
+            .await?;
+
+        // gather results
+        let data_map_chunk = match encryption_stream.data_map_chunk() {
+            Some(chunk) => chunk,
+            None => {
+                error!("Data map chunk not found for file: {path:?}, this is a BUG");
+                return Err(UploadError::Encryption(
+                    "Data map chunk not found after encryption, this is a BUG".to_string(),
+                ));
+            }
+        };
+
+        Ok((data_map_chunk, processed_chunks, free_chunks, receipts))
     }
 }
 

@@ -13,11 +13,13 @@ use crate::wallet::load_wallet;
 use autonomi::Bytes;
 use autonomi::ScratchpadAddress;
 use autonomi::TransactionConfig;
+use autonomi::client::data_types::scratchpad::{ScratchpadError, print_fork_analysis};
 use autonomi::client::scratchpad::SecretKey as ScratchpadSecretKey;
 use color_eyre::Section;
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 use color_eyre::eyre::eyre;
+use color_eyre::owo_colors::OwoColorize;
 
 /// Generates a new general scratchpad key
 ///
@@ -148,10 +150,25 @@ pub async fn get(context: NetworkContext, name: String, secret_key: bool, hex: b
 
     println!("Retrieving scratchpad from network...");
     let address = ScratchpadAddress::new(scratchpad_key.public_key());
-    let scratchpad = client
-        .scratchpad_get(&address)
-        .await
-        .wrap_err("Failed to retrieve scratchpad from network")?;
+    let scratchpad_result = client.scratchpad_get(&address).await;
+
+    let scratchpad = match scratchpad_result {
+        Ok(scratchpad) => scratchpad,
+        Err(ScratchpadError::Fork(conflicting_scratchpads)) => {
+            let error =
+                color_eyre::Report::new(ScratchpadError::Fork(conflicting_scratchpads.clone()))
+                    .wrap_err("Failed to retrieve scratchpad from network");
+            eprintln!("{error:?}");
+            if let Err(e) = print_fork_analysis(&conflicting_scratchpads, &scratchpad_key) {
+                eprintln!("Failed to print fork analysis: {e}");
+            }
+            std::process::exit(1);
+        }
+        Err(other_error) => {
+            return Err(color_eyre::Report::new(other_error)
+                .wrap_err("Failed to retrieve scratchpad from network"));
+        }
+    };
 
     let data = scratchpad
         .decrypt_data(&scratchpad_key)
@@ -199,10 +216,23 @@ pub async fn edit(
     // get network current scratchpad
     println!("Retrieving scratchpad from network...");
     let address = ScratchpadAddress::new(scratchpad_key.public_key());
-    let net_scratchpad = client
-        .scratchpad_get(&address)
-        .await
-        .wrap_err("Failed to retrieve scratchpad from network")?;
+    let scratchpad_result = client.scratchpad_get(&address).await;
+
+    let net_scratchpad = match scratchpad_result {
+        Ok(scratchpad) => scratchpad,
+        Err(ScratchpadError::Fork(conflicting_scratchpads)) => {
+            eprintln!("{}", "⚠️  Fork detected, forcing update...".yellow());
+            // Continue with the first conflicting scratchpad - scratchpad_update_from will handle the fork.
+            conflicting_scratchpads
+                .first()
+                .ok_or_else(|| eyre!("Fork error contains no conflicting scratchpads"))?
+                .clone()
+        }
+        Err(other_error) => {
+            return Err(color_eyre::Report::new(other_error)
+                .wrap_err("Failed to retrieve scratchpad from network"));
+        }
+    };
     println!(
         "Got current scratchpad at address {address:?} with counter: {}",
         net_scratchpad.counter()
