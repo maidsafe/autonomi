@@ -89,6 +89,8 @@ impl MockResponsePlan {
     }
 }
 
+/// Pairing of a node-management command with the scripted plan that should answer it.
+/// Produced automatically by `JourneyBuilder::with_node_action_response`.
 #[derive(Clone, Debug)]
 pub struct ScriptedNodeAction {
     pub command: NodeManagementCommand,
@@ -111,6 +113,8 @@ pub struct MockNodeManagementHandle {
 }
 
 impl MockNodeManagement {
+    /// Create a mock node-management pair (service + handle).
+    /// Feed the handle into `TestAppBuilder` or `JourneyBuilder` when you need full manual control.
     pub fn new() -> (Arc<Self>, MockNodeManagementHandle) {
         let (task_tx, task_rx) = mpsc::unbounded_channel();
         let state = Arc::new(Mutex::new(MockState {
@@ -143,14 +147,20 @@ impl NodeManagementHandle for MockNodeManagement {
 }
 
 impl MockNodeManagementHandle {
+    /// Await the next task dispatched by the application under test.
+    /// Combine with `spawn_script` when building bespoke async orchestration.
     pub async fn recv_task(&mut self) -> Option<NodeManagementTask> {
         self.task_rx.recv().await
     }
 
+    /// Non-blocking variant of [`recv_task`].
+    /// Handy inside assertions where polling is sufficient.
     pub fn try_recv_task(&mut self) -> Option<NodeManagementTask> {
         self.task_rx.try_recv().ok()
     }
 
+    /// Send a `NodeManagementResponse` back into the application.
+    /// Use alongside `MockResponsePlan::immediate` when steering flows manually.
     pub fn respond(&self, response: NodeManagementResponse) -> Result<()> {
         let sender = self
             .state
@@ -167,6 +177,8 @@ impl MockNodeManagementHandle {
             .map_err(|err| eyre!("failed to send mock node-management response: {err}"))
     }
 
+    /// Inject an arbitrary action onto the app's event stream.
+    /// Pair with `MockResponsePlan::then_actions` when composing advanced scripts.
     pub fn send_action(&self, action: Action) -> Result<()> {
         let sender = self
             .state
@@ -181,6 +193,8 @@ impl MockNodeManagementHandle {
             .map_err(|err| eyre!("failed to send action through mock node-management: {err}"))
     }
 
+    /// Spawn a background task that replays scripted responses sequentially.
+    /// Typically driven via `JourneyBuilder::with_node_action_response`.
     pub fn spawn_script(self, script: Vec<ScriptedNodeAction>) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut script_queue = script;
@@ -243,6 +257,8 @@ impl MockNodeManagementHandle {
     }
 }
 
+/// Translate a raw node-management task into its high-level command.
+/// Internal helper used by the scripted mock executor spawned by `spawn_script`.
 fn command_from_task(task: &NodeManagementTask) -> Option<NodeManagementCommand> {
     match task {
         NodeManagementTask::RegisterActionSender { .. } => None,

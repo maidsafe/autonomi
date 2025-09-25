@@ -14,6 +14,7 @@ use node_launchpad::{mode::Scene, test_utils::JourneyBuilder};
 
 #[tokio::test]
 async fn journey_navigate_to_options_and_back() {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     JourneyBuilder::new("Navigate to Options and Back")
         .await
         .expect("Failed to create journey")
@@ -41,6 +42,7 @@ async fn journey_navigate_to_options_and_back() {
 
 #[tokio::test]
 async fn journey_navigate_to_help_and_back() {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     JourneyBuilder::new("Navigate to Help and Back")
         .await
         .expect("Failed to create journey")
@@ -62,6 +64,7 @@ async fn journey_navigate_to_help_and_back() {
 
 #[tokio::test]
 async fn journey_cycle_through_all_main_scenes() {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     JourneyBuilder::new("Cycle Through All Main Scenes")
         .await
         .expect("Failed to create journey")

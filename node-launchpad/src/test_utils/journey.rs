@@ -46,6 +46,8 @@ pub struct Journey {
     registry_dir: Option<TempDir>,
 }
 
+/// Locate the immutable status component for inspection.
+/// Pair with `status_component_mut` when you need to stage follow-up mutations.
 pub fn status_component(app: &App) -> Result<&Status> {
     app.components
         .iter()
@@ -53,6 +55,8 @@ pub fn status_component(app: &App) -> Result<&Status> {
         .ok_or_else(|| eyre!("Status component not found"))
 }
 
+/// Locate the mutable status component so tests can tweak it before running journeys.
+/// Commonly paired with `TestAppBuilder` to override disk space or inject alternate metrics fetchers.
 pub fn status_component_mut(app: &mut App) -> Result<&mut Status> {
     app.components
         .iter_mut()
@@ -60,6 +64,8 @@ pub fn status_component_mut(app: &mut App) -> Result<&mut Status> {
         .ok_or_else(|| eyre!("Status component not found"))
 }
 
+/// Fetch a node view model by service name for assertion helpers.
+/// Works in tandem with `expect_node_state`, `assert_spinner`, and other per-node checks.
 pub fn node_view_model<'a>(app: &'a App, node_id: &str) -> Result<&'a NodeViewModel> {
     status_component(app)?
         .node_table()
@@ -134,14 +140,20 @@ impl Journey {
         })
     }
 
+    /// Expose the mock node-management handle for custom scripting.
+    /// Ideal when a test needs to enqueue bespoke responses instead of relying on `JourneyBuilder`.
     pub fn node_management_handle(&mut self) -> Option<&mut MockNodeManagementHandle> {
         self.node_management_handle.as_mut()
     }
 
+    /// Detach the node-management handle from the journey.
+    /// Useful when handing control to background tasks or manual mock coordination.
     pub fn take_node_management_handle(&mut self) -> Option<MockNodeManagementHandle> {
         self.node_management_handle.take()
     }
 
+    /// Track an async task spawned as part of the scripted journey.
+    /// Pair with `MockResponsePlan::then_*` helpers when chaining additional async behaviour.
     pub fn register_script_task(&mut self, handle: JoinHandle<()>) {
         self.scripted_tasks.push(handle);
     }
@@ -177,7 +189,7 @@ impl Journey {
     }
 
     /// Materialise the queued steps into runtime-friendly test steps.
-    /// Internally used by `run`; exposed for completeness.
+    /// Prefer calling `run` directly unless you need to inject the script into a custom runtime.
     fn build_test_script(&self) -> Vec<crate::runtime::TestStep> {
         let mut script = Vec::new();
 
