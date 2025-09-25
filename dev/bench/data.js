@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758821417286,
+  "lastUpdate": 1758821418971,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5574,6 +5574,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 20,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9219a4ad565c1d97a77ee4ad156b6dc983e96d26",
+          "message": "Merge pull request #3210 from grumbach/fix_analyze_old_datamap\n\nfix: analyze for old datamap types",
+          "timestamp": "2025-09-25T16:30:02Z",
+          "tree_id": "87d78d87abf088d6ea0eaeb2aa43c79b3069528e",
+          "url": "https://github.com/maidsafe/autonomi/commit/9219a4ad565c1d97a77ee4ad156b6dc983e96d26"
+        },
+        "date": 1758821418401,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 16,
             "unit": "MB"
           },
           {
