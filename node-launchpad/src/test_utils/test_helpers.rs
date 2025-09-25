@@ -10,6 +10,7 @@ use super::{
     mock_metrics::MockMetricsService,
     mock_node_management::{MockNodeManagement, MockNodeManagementHandle},
 };
+use crate::components::popup::manage_nodes::ManageNodesPopup;
 use crate::node_management::NodeManagementHandle;
 use crate::test_utils::make_node_service_data;
 use crate::{
@@ -25,8 +26,9 @@ use std::{iter, sync::Arc};
 use tempfile::TempDir;
 
 /// Builder for fully wired `App` instances used in UI integration tests.
-/// Defaults to reporting ample disk space (1024GB) so CI runs reliably; call
-/// `with_real_disk_space` when verifying the production disk checks.
+/// Defaults to reporting ample disk space (700 GB) so CI runs reliably; call
+/// `with_real_disk_space` when verifying the production disk checks or pair with
+/// `with_available_disk_space` for targeted scenarios.
 pub struct TestAppBuilder {
     node_management: Option<Arc<dyn NodeManagementHandle>>,
     node_registry: Option<NodeRegistryManager>,
@@ -46,7 +48,7 @@ impl TestAppBuilder {
             initial_nodes: Vec::new(),
             nodes_to_start: None,
             metrics_fetcher: None,
-            available_disk_space_override: None,
+            available_disk_space_override: Some(700),
         }
     }
 
@@ -214,13 +216,23 @@ impl TestAppBuilder {
         )
         .await?;
 
-        let override_gb = available_disk_space_override.unwrap_or(700);
-        if let Ok(status) = crate::test_utils::status_component_mut(&mut app) {
-            status
-                .node_table_mut()
-                .state_mut()
-                .operations_config
-                .available_disk_space_gb = override_gb;
+        if let Some(override_gb) = available_disk_space_override {
+            if let Ok(status) = crate::test_utils::status_component_mut(&mut app) {
+                status
+                    .node_table_mut()
+                    .state_mut()
+                    .operations_config
+                    .available_disk_space_gb = override_gb;
+            }
+
+            if let Some(popup) = app.components.iter_mut().find_map(|component| {
+                component
+                    .as_mut()
+                    .as_any_mut()
+                    .downcast_mut::<ManageNodesPopup>()
+            }) {
+                popup.override_available_disk_space(override_gb);
+            }
         }
 
         Ok(TestAppContext {

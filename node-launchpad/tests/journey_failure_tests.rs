@@ -25,6 +25,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn journey_expect_scene_failure_reports_mismatch() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new("expect_scene_failure")
         .await?
         .start_from(Scene::Status)
@@ -42,6 +43,7 @@ async fn journey_expect_scene_failure_reports_mismatch() -> Result<()> {
 
 #[tokio::test]
 async fn journey_expect_text_failure_reports_missing_text() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new("expect_text_failure")
         .await?
         .start_from(Scene::Status)
@@ -59,6 +61,7 @@ async fn journey_expect_text_failure_reports_missing_text() -> Result<()> {
 
 #[tokio::test]
 async fn journey_expect_screen_failure_reports_mismatch() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new("expect_screen_failure")
         .await?
         .start_from(Scene::Status)
@@ -73,6 +76,7 @@ async fn journey_expect_screen_failure_reports_mismatch() -> Result<()> {
 
 #[tokio::test]
 async fn journey_expect_error_popup_failure_reports_absence() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let missing_err = JourneyBuilder::new("expect_error_popup_missing_failure")
         .await?
         .start_from(Scene::Status)
@@ -110,6 +114,7 @@ async fn journey_expect_error_popup_failure_reports_absence() -> Result<()> {
 
 #[tokio::test]
 async fn journey_expect_node_state_failure_reports_mismatch() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let lifecycle_err = JourneyBuilder::new_with_nodes("expect_node_state_failure", 1)
         .await?
         .expect_node_state("antnode-1", LifecycleState::Stopped, false)
@@ -132,6 +137,7 @@ async fn journey_expect_node_state_failure_reports_mismatch() -> Result<()> {
 
 #[tokio::test]
 async fn journey_assert_spinner_failure_reports_mismatch() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new_with_nodes("assert_spinner_failure", 1)
         .await?
         .assert_spinner("antnode-1", true)
@@ -145,6 +151,7 @@ async fn journey_assert_spinner_failure_reports_mismatch() -> Result<()> {
 
 #[tokio::test]
 async fn journey_expect_reachability_failure_reports_mismatch() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let progress_err = JourneyBuilder::new_with_nodes("expect_reachability_progress_failure", 1)
         .await?
         .expect_reachability(
@@ -193,6 +200,7 @@ async fn journey_expect_reachability_failure_reports_mismatch() -> Result<()> {
 
 #[tokio::test]
 async fn journey_wait_for_node_state_failure_times_out() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new_with_nodes("wait_for_node_state_failure", 1)
         .await?
         .wait_for_node_state(
@@ -211,6 +219,7 @@ async fn journey_wait_for_node_state_failure_times_out() -> Result<()> {
 
 #[tokio::test]
 async fn journey_wait_for_reachability_failure_times_out() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new_with_nodes("wait_for_reachability_failure", 1)
         .await?
         .wait_for_reachability(
@@ -229,6 +238,7 @@ async fn journey_wait_for_reachability_failure_times_out() -> Result<()> {
 
 #[tokio::test]
 async fn journey_wait_for_condition_failure_times_out() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let timeout_err = JourneyBuilder::new("wait_for_condition_timeout_failure")
         .await?
         .wait_for_condition(
@@ -261,6 +271,7 @@ async fn journey_wait_for_condition_failure_times_out() -> Result<()> {
 
 #[tokio::test]
 async fn journey_assert_app_state_failure_propagates_error() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let err = JourneyBuilder::new("assert_app_state_failure")
         .await?
         .assert_app_state("forced failure", |_| Err(eyre!("boom")))

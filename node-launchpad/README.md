@@ -98,4 +98,13 @@ Testing tips:
 - When asserting buffers, convert `Terminal` output to strings with helpers from `test_utils::test_helpers`.
 - Typical flow: configure `TestAppBuilder` (seeding nodes, metrics, disk space), produce a journey via `JourneyBuilder`, and finish with `.run()`.
 - Use `JourneyBuilder::with_node_action_response(MockResponsePlan::...)` plus `.then_metrics()` / `.then_registry_snapshot()` to model node-management flows.
-- Override simulated disk space with `TestAppBuilder::with_available_disk_space(gb)` (defaults to 700 GB) or call `with_real_disk_space()` to exercise production checks.
+- Override simulated disk space with `TestAppBuilder::with_available_disk_space(gb)` (defaults to 700 GB) or call `with_real_disk_space()` to exercise production checks.
+- Negative-path coverage for every journey assertion lives in `tests/journey_failure_tests.rs`; mirror that style when adding new helpers.
+
+### Journey framework quickstart
+
+- Build an app with `TestAppBuilder::new()` and chain helpers (`with_running_nodes`, `with_metrics_events`, etc.) to mirror the scenario under test.
+- Construct scripts with `JourneyBuilder::from_context` or `JourneyBuilder::new`, then compose steps using `press`, `expect_*`, `wait`, and `wait_for_condition`.
+- Script backend behaviour via `with_node_action_response` and `MockResponsePlan::then_*` helpers so the real event loop processes updates.
+- Finish with `.run()` (or `.build()` for reuse) to exercise `App::run_with_runtime`; failures surface rich eyre diagnostics for debugging.
+- Pair journeys with `LogBuilder::init_single_threaded_tokio_test()` when deeper tracing is required, especially for node-management flows.

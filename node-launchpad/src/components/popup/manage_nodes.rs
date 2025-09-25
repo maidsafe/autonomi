@@ -48,6 +48,12 @@ impl ManageNodesPopup {
         Ok(new)
     }
 
+    /// Override the cached disk availability value, primarily for tests.
+    /// Pair with `TestAppBuilder::with_available_disk_space` to bypass host-specific limits.
+    pub(crate) fn override_available_disk_space(&mut self, gb: u64) {
+        self.available_disk_space_gb = gb;
+    }
+
     fn get_nodes_to_start_val(&self) -> u64 {
         self.nodes_to_start_input.value().parse().unwrap_or(0)
     }

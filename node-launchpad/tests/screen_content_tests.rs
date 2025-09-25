@@ -19,6 +19,7 @@ use node_launchpad::{
 
 #[tokio::test]
 async fn journey_status_screen_renders_correctly() -> Result<(), eyre::Report> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     // Create journey that starts at Status and validates the exact screen
     let expected_status_screen = &[
         &format!(
@@ -70,6 +71,7 @@ async fn journey_status_screen_renders_correctly() -> Result<(), eyre::Report> {
 
 #[tokio::test]
 async fn journey_status_screen_with_nodes_renders_correctly() -> Result<(), eyre::Report> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let expected_status_screen = &[
         &format!(
             " Autonomi Node Launchpad (v{TEST_LAUNCHPAD_VERSION})                                                                                                [S]tatus | [O]ptions | [H]elp "
@@ -120,6 +122,7 @@ async fn journey_status_screen_with_nodes_renders_correctly() -> Result<(), eyre
 
 #[tokio::test]
 async fn journey_options_screen_via_navigation() {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let expected_options_screen = vec![
         format!(" Autonomi Node Launchpad (v{TEST_LAUNCHPAD_VERSION})                                                                                                [S]tatus | [O]ptions | [H]elp "),
         "┌ Device Options ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐".to_string(),
@@ -177,6 +180,7 @@ async fn journey_options_screen_via_navigation() {
 
 #[tokio::test]
 async fn journey_help_screen_via_navigation() {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let _expected_help_screen = vec![
         format!(" Autonomi Node Launchpad (v{TEST_LAUNCHPAD_VERSION})                                                                                                [S]tatus | [O]ptions | [H]elp "),
         "┌ Get Help & Support ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐".to_string(),

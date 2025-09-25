@@ -22,6 +22,7 @@ use std::time::Duration;
 
 #[tokio::test]
 async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     // Prepare final node snapshot
     let node_template = make_node_service_data(0, ServiceStatus::Running);
 
@@ -65,6 +66,7 @@ async fn journey_add_node_shows_transition_and_metrics() -> Result<()> {
 
 #[tokio::test]
 async fn journey_start_node_failure_surfaces_error_and_clears_transition() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let node_name = stopped_node.service_name.clone();
 
@@ -124,6 +126,7 @@ fn aggregated_stats(
 
 #[tokio::test]
 async fn journey_add_node_failure_shows_error_popup() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let node_template = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
@@ -155,6 +158,7 @@ async fn journey_add_node_failure_shows_error_popup() -> Result<()> {
 
 #[tokio::test]
 async fn journey_start_node_success_updates_state() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let mut running_node = stopped_node.clone();
     running_node.status = ServiceStatus::Running;
@@ -195,6 +199,7 @@ async fn journey_start_node_success_updates_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_stop_node_success_updates_state() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
     let mut stopped_node = running_node.clone();
     stopped_node.status = ServiceStatus::Stopped;
@@ -228,6 +233,7 @@ async fn journey_stop_node_success_updates_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_stop_node_failure_displays_error() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
@@ -261,6 +267,7 @@ async fn journey_stop_node_failure_displays_error() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_ignores_locked_node() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
@@ -283,6 +290,7 @@ async fn journey_toggle_node_ignores_locked_node() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_start_transitions_to_running() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
     let mut running_node = stopped_node.clone();
     running_node.status = ServiceStatus::Running;
@@ -331,6 +339,7 @@ async fn journey_toggle_node_start_transitions_to_running() -> Result<()> {
 
 #[tokio::test]
 async fn journey_toggle_node_stop_transitions_to_stopped() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
     let mut stopped_node = running_node.clone();
     stopped_node.status = ServiceStatus::Stopped;
@@ -372,6 +381,7 @@ async fn journey_toggle_node_stop_transitions_to_stopped() -> Result<()> {
 
 #[tokio::test]
 async fn journey_remove_node_success_enters_refreshing_state() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
@@ -416,6 +426,7 @@ async fn journey_remove_node_success_enters_refreshing_state() -> Result<()> {
 
 #[tokio::test]
 async fn journey_remove_node_failure_shows_error_and_keeps_node() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);
 
     let test_app = TestAppBuilder::new()
@@ -458,6 +469,7 @@ async fn journey_remove_node_failure_shows_error_and_keeps_node() -> Result<()> 
 
 #[tokio::test]
 async fn journey_maintain_nodes_failure_shows_error_popup() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let first_node = make_node_service_data(0, ServiceStatus::Running);
     let second_node = make_node_service_data(1, ServiceStatus::Running);
 
@@ -481,16 +493,17 @@ async fn journey_maintain_nodes_failure_shows_error_popup() -> Result<()> {
         .expect_scene(Scene::ManageNodesPopUp { amount_of_nodes: 2 })
         .step()
         .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
-        .wait_for_condition(
-            "Status scene after manage nodes",
-            |app| Ok(app.scene == Scene::Status),
-            Duration::from_millis(200),
-            Duration::from_millis(20),
-        )
         .assert_spinner(&first_node.service_name, true)
         .assert_spinner(&second_node.service_name, true)
         .step()
-        .wait(Duration::from_millis(40))
+        .wait_for_condition(
+            "Status scene after manage nodes",
+            |app| Ok(app.scene == Scene::Status),
+            Duration::from_millis(1_000),
+            Duration::from_millis(50),
+        )
+        .step()
+        .wait(Duration::from_millis(80))
         .step()
         .expect_error_popup_contains(&error_message)
         .assert_spinner(&first_node.service_name, false)
