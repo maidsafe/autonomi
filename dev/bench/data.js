@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758818666459,
+  "lastUpdate": 1758818744221,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3644,6 +3644,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 91,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "32bf8ac5559f3011f1309a4480a2ee985b84484c",
+          "message": "Merge pull request #3213 from maqi/avoid_using_rustfmt_during_proto_build\n\nfix(CI): avoid using rustfmt during CI build",
+          "timestamp": "2025-09-25T15:42:37Z",
+          "tree_id": "2ca0de732ca4eb5f372c6c210c122f34b2231b12",
+          "url": "https://github.com/maidsafe/autonomi/commit/32bf8ac5559f3011f1309a4480a2ee985b84484c"
+        },
+        "date": 1758818743238,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 84,
             "unit": "MB"
           }
         ]
