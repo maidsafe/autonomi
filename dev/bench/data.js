@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758887725242,
+  "lastUpdate": 1758887726635,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7857,6 +7857,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22271,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "36204420+vphongph@users.noreply.github.com",
+            "name": "vphongph",
+            "username": "vphongph"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7f13ae5e445e6f983be5e0e073bf261f4c645cf2",
+          "message": "Merge pull request #3211 from grumbach/scratchpad_err_remove_general_get\n\nfeat: improve scratchpad errors by removing duplicated error type in get",
+          "timestamp": "2025-09-26T11:06:50Z",
+          "tree_id": "cd0a884093713712dc653dfa43ea8ec67dc3bdde",
+          "url": "https://github.com/maidsafe/autonomi/commit/7f13ae5e445e6f983be5e0e073bf261f4c645cf2"
+        },
+        "date": 1758887726272,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9510,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19146,
             "unit": "ms"
           },
           {
