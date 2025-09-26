@@ -235,15 +235,24 @@ impl NodeStateController {
                 to_clear.push(id.clone());
             }
         }
-        let had_entries = !to_clear.is_empty();
-        for id in to_clear {
-            if let Some(node) = self.nodes.get_mut(&id) {
+
+        if to_clear.is_empty() {
+            return;
+        }
+
+        for id in &to_clear {
+            if let Some(node) = self.nodes.get_mut(id) {
                 node.clear_transition();
             }
         }
-        if had_entries {
-            self.refresh_view();
+
+        if command == CommandKind::Remove {
+            for id in to_clear {
+                self.nodes.remove(&id);
+            }
         }
+
+        self.refresh_view();
     }
 
     pub fn set_node_target(&mut self, id: &str, state: DesiredNodeState) {
