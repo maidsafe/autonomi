@@ -40,12 +40,12 @@ impl Component for ResetNodesPopup {
         let send_back = match key.code {
             KeyCode::Enter => {
                 if self.can_reset {
-                    debug!("Got reset, sending Reset action and switching to Options");
+                    debug!("Got reset, sending Reset action and returning to Status");
                     vec![
                         Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
                             NodeManagementCommand::ResetNodes,
                         )),
-                        Action::SwitchScene(Scene::Options),
+                        Action::SwitchScene(Scene::Status),
                     ]
                 } else {
                     vec![]
@@ -263,7 +263,7 @@ mod tests {
         assert!(
             actions
                 .iter()
-                .any(|a| matches!(a, Action::SwitchScene(Scene::Options)))
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
         );
     }
 

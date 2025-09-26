@@ -113,6 +113,7 @@ impl<'a> NodeCommandHandler<'a> {
                 self.state
                     .controller
                     .clear_transitions_by_command(CommandKind::Remove);
+
                 self.error_popup_if_needed(error, "Error while resetting nodes", "Please try again")
             }
         }

@@ -213,6 +213,76 @@ async fn journey_stopped_unreachable_failure_node_shows_error_status() -> Result
 }
 
 #[tokio::test]
+async fn journey_reset_nodes_removes_all_nodes() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
+    let running_node = make_node_service_data(0, ServiceStatus::Running);
+
+    let maintain_plan =
+        MockNodeResponsePlan::immediate(NodeManagementResponse::MaintainNodes { error: None });
+
+    let reset_plan =
+        MockNodeResponsePlan::immediate(NodeManagementResponse::ResetNodes { error: None })
+            .then_wait(Duration::from_millis(40))
+            .then_registry_snapshot(vec![]);
+
+    let test_app = TestAppBuilder::new()
+        .with_initial_node(running_node.clone())
+        .with_nodes_to_start(1)
+        .build()
+        .await?;
+
+    let mut journey = JourneyBuilder::from_context("Reset nodes removes all", test_app)?
+        .with_node_action_response(NodeManagementCommand::MaintainNodes, maintain_plan)
+        .with_node_action_response(NodeManagementCommand::ResetNodes, reset_plan)
+        .expect_node_state(&running_node.service_name, LifecycleState::Running, false)
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
+        .expect_scene(Scene::ManageNodesPopUp { amount_of_nodes: 1 })
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect_scene(Scene::Status)
+        .step()
+        .press('o')
+        .expect_scene(Scene::Options)
+        .expect_text("Begin Reset")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL))
+        .expect_scene(Scene::ResetNodesPopUp)
+        .expect_text("Type in 'reset'")
+        .step()
+        .press('r')
+        .press('e')
+        .press('s')
+        .press('e')
+        .press('t')
+        .expect_text("reset")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect_scene(Scene::Status)
+        .expect_node_state(&running_node.service_name, LifecycleState::Removing, true)
+        .expect_text("Removing")
+        .step()
+        .wait_for_condition(
+            "Wait for node removal",
+            {
+                let node_id = running_node.service_name.clone();
+                move |app| {
+                    let result = node_launchpad::test_utils::node_view_model(app, &node_id);
+                    Ok(result.is_err())
+                }
+            },
+            Duration::from_millis(600),
+            Duration::from_millis(25),
+        )
+        .expect_text("Nodes (0)")
+        .build()?;
+
+    journey.run().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn journey_start_node_failure_surfaces_error_and_clears_transition() -> Result<()> {
     let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let stopped_node = make_node_service_data(0, ServiceStatus::Stopped);
@@ -695,6 +765,122 @@ async fn journey_manage_nodes_success_brings_new_node_online() -> Result<()> {
             ReachabilityProgress::Complete,
             completion_status,
         );
+
+    let mut journey = journey_builder.build()?;
+    journey.run().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn journey_manage_then_remove_node_clears_status_table() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
+    let node_name = "antnode-1".to_string();
+
+    let mut node_added = make_node_service_data(0, ServiceStatus::Added);
+    node_added.reachability_progress = ReachabilityProgress::InProgress(25);
+
+    let mut node_running = make_node_service_data(0, ServiceStatus::Running);
+    node_running.reachability_progress = ReachabilityProgress::Complete;
+
+    let progress_metrics =
+        aggregated_stats(&node_name, ReachabilityProgress::InProgress(25), false);
+    let progress_status = progress_metrics.individual_stats[0]
+        .reachability_status
+        .clone();
+    let completion_metrics = aggregated_stats(&node_name, ReachabilityProgress::Complete, true);
+    let completion_status = completion_metrics.individual_stats[0]
+        .reachability_status
+        .clone();
+
+    let test_app = TestAppBuilder::new()
+        .with_metrics_events([AggregatedNodeStats::default()])
+        .build()
+        .await?;
+
+    let maintain_plan =
+        MockNodeResponsePlan::immediate(NodeManagementResponse::MaintainNodes { error: None })
+            .then_registry_snapshot(vec![node_added.clone()])
+            .then_metrics([progress_metrics])
+            .then_wait(Duration::from_millis(120))
+            .then_registry_snapshot(vec![node_running.clone()])
+            .then_metrics([completion_metrics]);
+
+    let remove_plan = MockNodeResponsePlan::immediate(NodeManagementResponse::RemoveNodes {
+        service_names: vec![node_name.clone()],
+        error: None,
+    })
+    .then_registry_snapshot(vec![])
+    .with_delay(Duration::from_millis(20));
+
+    let journey_builder = JourneyBuilder::from_context("Manage, then remove node", test_app)?
+        .with_node_action_response(NodeManagementCommand::MaintainNodes, maintain_plan)
+        .with_node_action_response(NodeManagementCommand::RemoveNodes, remove_plan)
+        .expect_text("Press [+] to Add and Start your first node")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL))
+        .expect_scene(Scene::ManageNodesPopUp { amount_of_nodes: 0 })
+        .expect_text("Using 0GB of 700GB available space")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE))
+        .expect_text("Using 35GB of 700GB available space")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect_scene(Scene::Status)
+        .step()
+        .wait_for_condition(
+            "Wait for new node to appear",
+            {
+                let node_id = node_name.clone();
+                move |app| Ok(node_launchpad::test_utils::node_view_model(app, &node_id).is_ok())
+            },
+            Duration::from_millis(1_000),
+            Duration::from_millis(25),
+        )
+        .expect_node_state(&node_name, LifecycleState::Starting, false)
+        .expect_reachability(
+            &node_name,
+            ReachabilityProgress::InProgress(25),
+            progress_status,
+        )
+        .expect_text("Reachability 25%")
+        .step()
+        .wait(Duration::from_millis(150))
+        .wait_for_node_state(
+            &node_name,
+            LifecycleState::Running,
+            Duration::from_millis(1_000),
+            Duration::from_millis(25),
+        )
+        .step()
+        .expect_node_state(&node_name, LifecycleState::Running, false)
+        .expect_reachability(
+            &node_name,
+            ReachabilityProgress::Complete,
+            completion_status,
+        )
+        .step()
+        .press('-')
+        .expect_scene(Scene::RemoveNodePopUp)
+        .expect_text("Removing this node will stop it, and delete all")
+        .expect_text("its data.")
+        .expect_text("Press Enter to confirm.")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+        .expect_scene(Scene::Status)
+        .assert_spinner(&node_name, true)
+        .expect_node_state(&node_name, LifecycleState::Removing, true)
+        .step()
+        .wait_for_condition(
+            "Wait for node removal",
+            {
+                let node_id = node_name.clone();
+                move |app| Ok(node_launchpad::test_utils::node_view_model(app, &node_id).is_err())
+            },
+            Duration::from_millis(600),
+            Duration::from_millis(25),
+        )
+        .expect_text("Nodes (0)");
 
     let mut journey = journey_builder.build()?;
     journey.run().await?;
