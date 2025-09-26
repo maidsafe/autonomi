@@ -12,10 +12,16 @@ use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watche
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
+    fs::{File, OpenOptions, TryLockError},
     io::{Read, Write},
     path::{Path, PathBuf},
+    thread,
+    time::Duration,
 };
 use tokio::sync::{RwLock, mpsc};
+
+const LOCK_RETRY_ATTEMPTS: usize = 10;
+const LOCK_RETRY_DELAY_MS: u64 = 50;
 
 /// Used to manage the NodeRegistry data and allows us to share the data across multiple threads.
 ///
@@ -189,6 +195,33 @@ impl NodeRegistryManager {
     }
 }
 
+fn lock_with_retry<F>(mut lock_fn: F, description: &str) -> Result<(), Error>
+where
+    F: FnMut() -> std::result::Result<(), TryLockError>,
+{
+    let mut num_attempts = 0;
+    while num_attempts < LOCK_RETRY_ATTEMPTS {
+        match lock_fn() {
+            Ok(()) => return Ok(()),
+            Err(TryLockError::WouldBlock) => {
+                num_attempts += 1;
+                if num_attempts < LOCK_RETRY_ATTEMPTS {
+                    thread::sleep(Duration::from_millis(LOCK_RETRY_DELAY_MS));
+                }
+            }
+            Err(TryLockError::Error(err)) => {
+                return Err(Error::FileOperationFailed {
+                    reason: format!("Error locking {description}: {err:?}"),
+                });
+            }
+        }
+    }
+
+    Err(Error::FileOperationFailed {
+        reason: format!("Timed out acquiring {description} after {LOCK_RETRY_ATTEMPTS} attempts",),
+    })
+}
+
 /// The struct that is written to the fs.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct NodeRegistry {
@@ -204,10 +237,29 @@ pub struct StatusSummary {
 
 impl NodeRegistry {
     fn save(&self) -> Result<()> {
-        debug!(
-            "Saving node registry to {}",
-            self.save_path.to_string_lossy()
-        );
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let running_nodes = self
+                .nodes
+                .iter()
+                .filter(|node| node.status == crate::ServiceStatus::Running)
+                .count();
+            let stopped_nodes = self
+                .nodes
+                .iter()
+                .filter(|node| node.status == crate::ServiceStatus::Stopped)
+                .count();
+            let added_nodes = self
+                .nodes
+                .iter()
+                .filter(|node| node.status == crate::ServiceStatus::Added)
+                .count();
+            debug!(
+                "Saving node registry with {} nodes ({running_nodes} running, {stopped_nodes} stopped, {added_nodes} added) to {}",
+                self.nodes.len(),
+                self.save_path.to_string_lossy()
+            );
+        }
+
         let path = Path::new(&self.save_path);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|err| Error::FileOperationFailed {
@@ -219,16 +271,34 @@ impl NodeRegistry {
         let json = serde_json::to_string(self).map_err(|err| Error::JsonOperationFailed {
             reason: format!("Error serializing node registry: {err:?}"),
         })?;
-        let mut file = std::fs::File::create(self.save_path.clone()).map_err(|err| {
-            Error::FileOperationFailed {
-                reason: format!("Error creating node registry file: {err:?}"),
-            }
-        })?;
-        file.write_all(json.as_bytes())
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(self.save_path.clone())
             .map_err(|err| Error::FileOperationFailed {
-                reason: format!("Error writing to node registry: {err:?}"),
+                reason: format!("Error creating node registry file: {err:?}"),
             })?;
 
+        lock_with_retry(
+            || file.try_lock(),
+            "exclusive lock on node registry for write",
+        )?;
+
+        let write_result = file.write_all(json.as_bytes());
+        let unlock_result = file.unlock();
+
+        write_result.map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error writing to node registry: {err:?}"),
+        })?;
+        unlock_result.map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error unlocking node registry after write: {err:?}"),
+        })?;
+
+        debug!(
+            "Node registry saved successfully to {}",
+            self.save_path.to_string_lossy()
+        );
         Ok(())
     }
 
@@ -243,15 +313,25 @@ impl NodeRegistry {
         }
         debug!("Loading node registry from {}", path.to_string_lossy());
 
-        let mut file = std::fs::File::open(path).map_err(|err| Error::FileOperationFailed {
+        let mut file = File::open(path).map_err(|err| Error::FileOperationFailed {
             reason: format!("Error opening node registry: {err:?}"),
         })?;
 
+        lock_with_retry(
+            || file.try_lock_shared(),
+            "shared lock on node registry for read",
+        )?;
+
         let mut contents = String::new();
-        file.read_to_string(&mut contents)
-            .map_err(|err| Error::FileOperationFailed {
-                reason: format!("Error reading node registry: {err:?}"),
-            })?;
+        let read_result = file.read_to_string(&mut contents);
+        let unlock_result = file.unlock();
+
+        read_result.map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error reading node registry: {err:?}"),
+        })?;
+        unlock_result.map_err(|err| Error::FileOperationFailed {
+            reason: format!("Error unlocking node registry after read: {err:?}"),
+        })?;
 
         // It's possible for the file to be empty if the user runs a `status` command before any
         // services were added.
