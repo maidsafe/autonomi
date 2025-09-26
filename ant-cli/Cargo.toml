@@ -58,6 +58,7 @@ criterion = "0.5.1"
 eyre = "0.6.8"
 rand = { version = "~0.8.5", features = ["small_rng"] }
 rayon = "1.8.0"
+serial_test = "3.0"
 tempfile = "3.6.0"
 
 [lints]
