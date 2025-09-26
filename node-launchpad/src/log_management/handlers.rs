@@ -13,6 +13,7 @@ use crate::action::Action;
 use ant_node_manager::config::get_service_log_dir_path;
 use ant_releases::ReleaseType;
 use color_eyre::eyre::Context;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use tokio::fs;
@@ -139,7 +140,7 @@ async fn load_logs_internal(
     let modification_time = metadata.modified().ok();
 
     // Load and process the log file
-    let logs = load_log_file_with_limits(&latest_log_file).await?;
+    let (logs, total_log_lines) = load_log_file_with_limits(&latest_log_file).await?;
 
     if logs.is_empty() {
         return Ok((
@@ -157,11 +158,7 @@ async fn load_logs_internal(
     let mut result_logs = vec![
         format!("=== Logs for node '{node_name}' ==="),
         format!("File: {}", latest_log_file.display()),
-        format!(
-            "Lines: {} (showing last {})",
-            logs.len(),
-            MAX_LOG_LINES.min(logs.len())
-        ),
+        format!("Lines: {} (showing last {})", total_log_lines, logs.len()),
         "".to_string(),
     ];
 
@@ -220,27 +217,21 @@ async fn find_latest_log_file(log_dir: &Path) -> Result<PathBuf, LogError> {
 }
 
 /// Load a log file with memory and line limits
-async fn load_log_file_with_limits(file_path: &Path) -> Result<Vec<String>, LogError> {
+async fn load_log_file_with_limits(file_path: &Path) -> Result<(Vec<String>, usize), LogError> {
     let file = fs::File::open(file_path)
         .await
         .with_context(|| format!("Failed to open log file: {}", file_path.display()))?;
 
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
-    let mut result = Vec::new();
-    let mut line_count = 0;
+    let mut result = VecDeque::with_capacity(MAX_LOG_LINES.min(1024));
+    let mut total_lines = 0;
 
     while let Some(line) = lines
         .next_line()
         .await
         .with_context(|| "Failed to read line from log file")?
     {
-        // Enforce line count limit
-        if line_count >= MAX_LOG_LINES {
-            warn!("Reached maximum log line limit ({MAX_LOG_LINES}), truncating");
-            break;
-        }
-
         // Enforce line length limit
         let truncated_line = if line.len() > MAX_LOG_LINE_LENGTH {
             warn!("Truncating long log line (length: {})", line.len());
@@ -249,18 +240,18 @@ async fn load_log_file_with_limits(file_path: &Path) -> Result<Vec<String>, LogE
             line
         };
 
-        result.push(truncated_line);
-        line_count += 1;
+        if result.len() == MAX_LOG_LINES {
+            result.pop_front();
+        }
+        result.push_back(truncated_line);
+        total_lines += 1;
     }
 
-    // Keep only the last MAX_LOG_LINES for performance (tail behavior)
-    if result.len() > MAX_LOG_LINES {
-        let skip_count = result.len() - MAX_LOG_LINES;
-        result = result.into_iter().skip(skip_count).collect();
+    if total_lines > MAX_LOG_LINES {
         info!("Showing last {MAX_LOG_LINES} lines from log file");
     }
 
-    Ok(result)
+    Ok((result.into_iter().collect(), total_lines))
 }
 
 #[cfg(test)]

@@ -213,6 +213,111 @@ async fn journey_stopped_unreachable_failure_node_shows_error_status() -> Result
 }
 
 #[tokio::test]
+async fn journey_restart_unreachable_node_clears_failure() -> Result<()> {
+    let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
+    let mut failed_node = make_node_service_data(0, ServiceStatus::Stopped);
+    failed_node.last_critical_failure = Some(CriticalFailure {
+        date_time: Utc::now(),
+        reason: "Unreachable".to_string(),
+    });
+
+    let mut running_node = failed_node.clone();
+    running_node.status = ServiceStatus::Running;
+    running_node.last_critical_failure = None;
+
+    let running_metrics = aggregated_stats(
+        &running_node.service_name,
+        ReachabilityProgress::Complete,
+        true,
+    );
+    let reachability_status = running_metrics
+        .individual_stats
+        .first()
+        .map(|stats| stats.reachability_status.clone())
+        .unwrap_or(ReachabilityStatusValues {
+            progress: ReachabilityProgress::Complete,
+            public: true,
+            private: false,
+            upnp: true,
+        });
+
+    let test_app = TestAppBuilder::new()
+        .with_initial_node(failed_node.clone())
+        .build()
+        .await?;
+
+    let start_plan = MockNodeResponsePlan::immediate(NodeManagementResponse::StartNodes {
+        service_names: vec![failed_node.service_name.clone()],
+        error: None,
+    })
+    .then_metrics([running_metrics.clone()])
+    .then_registry_snapshot(vec![running_node.clone()])
+    .with_delay(Duration::from_millis(20));
+
+    let mut journey = JourneyBuilder::from_context("Restart unreachable stopped node", test_app)?
+        .with_node_action_response(NodeManagementCommand::StartNodes, start_plan)
+        .expect_node_state(&failed_node.service_name, LifecycleState::Stopped, false)
+        .assert_app_state("Last failure recorded", {
+            let node_id = failed_node.service_name.clone();
+            move |app| {
+                let model = node_launchpad::test_utils::node_view_model(app, &node_id)?;
+                if model
+                    .last_failure
+                    .as_deref()
+                    .is_some_and(|failure| failure == "Error (Unreachable)")
+                {
+                    Ok(())
+                } else {
+                    Err(eyre!(
+                        "Expected last failure 'Error (Unreachable)' but found {:?}",
+                        model.last_failure
+                    ))
+                }
+            }
+        })
+        .assert_spinner(&failed_node.service_name, false)
+        .expect_text("Error (Unreachable)")
+        .step()
+        .press_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL))
+        .assert_spinner(&failed_node.service_name, true)
+        .expect_node_state(&failed_node.service_name, LifecycleState::Starting, true)
+        .step()
+        .wait_for_node_state(
+            &failed_node.service_name,
+            LifecycleState::Running,
+            Duration::from_millis(1_000),
+            Duration::from_millis(25),
+        )
+        .assert_spinner(&failed_node.service_name, false)
+        .assert_app_state("Last failure cleared", {
+            let node_id = failed_node.service_name.clone();
+            move |app| {
+                let model = node_launchpad::test_utils::node_view_model(app, &node_id)?;
+                if model.last_failure.is_none() {
+                    Ok(())
+                } else {
+                    Err(eyre!(
+                        "Expected last failure to be cleared but found {:?}",
+                        model.last_failure
+                    ))
+                }
+            }
+        })
+        .expect_node_state(&failed_node.service_name, LifecycleState::Running, false)
+        .expect_reachability(
+            &failed_node.service_name,
+            ReachabilityProgress::Complete,
+            reachability_status,
+        )
+        .step()
+        .build()?;
+
+    journey.run().await?;
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn journey_reset_nodes_removes_all_nodes() -> Result<()> {
     let _log_guard = ant_logging::LogBuilder::init_single_threaded_tokio_test();
     let running_node = make_node_service_data(0, ServiceStatus::Running);

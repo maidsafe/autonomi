@@ -31,7 +31,7 @@ use ratatui::{
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{any::Any, path::PathBuf};
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, info};
+use tracing::{error, info, trace};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LogLoadingState {
@@ -136,7 +136,7 @@ enum ViewMode {
 
 pub struct NodeLogsPopup {
     node_name: String,
-    logs: Vec<String>,
+    pub logs: Vec<String>,
     view_mode: ViewMode,
     selection: SelectionState,
     clipboard: Option<Clipboard>,
@@ -225,6 +225,7 @@ impl NodeLogsPopup {
                     scroll_state,
                 } => {
                     list_state.select(Some(last_index));
+                    *list_state.offset_mut() = last_index.saturating_sub(10);
                     *scroll_state = scroll_state
                         .position(last_index)
                         .content_length(self.logs.len());
@@ -293,7 +294,29 @@ impl NodeLogsPopup {
         }
     }
 
+    pub fn highlighted_line_index(&self) -> Option<usize> {
+        match &self.view_mode {
+            ViewMode::List { list_state, .. } => list_state.selected(),
+            ViewMode::WordWrap { state } => {
+                let position = state.scroll_offset + state.cursor_offset;
+                (position < self.logs.len()).then_some(position)
+            }
+        }
+    }
+
+    pub fn highlighted_log_line(&self) -> Option<&str> {
+        self.highlighted_line_index()
+            .and_then(|index| self.logs.get(index))
+            .map(String::as_str)
+    }
+
+    pub fn is_word_wrap_enabled(&self) -> bool {
+        matches!(self.view_mode, ViewMode::WordWrap { .. })
+    }
+
     fn handle_scroll(&mut self, direction: ScrollDirection, with_shift: bool) {
+        let direction_for_trace = direction.clone();
+
         let (old_position, new_position) = match &mut self.view_mode {
             ViewMode::WordWrap { state } => {
                 // Calculate old position before scrolling
@@ -305,7 +328,7 @@ impl NodeLogsPopup {
                 };
 
                 // Perform the scroll
-                Self::handle_word_wrap_scroll_static(direction, state, &self.logs);
+                Self::handle_word_wrap_scroll_static(direction.clone(), state, &self.logs);
 
                 // Calculate new position after scrolling
                 let new_pos = if !self.logs.is_empty() {
@@ -323,7 +346,7 @@ impl NodeLogsPopup {
             } => {
                 let old_pos = list_state.selected();
                 let new_pos = Self::handle_list_scroll_static(
-                    direction,
+                    direction.clone(),
                     list_state,
                     scroll_state,
                     &self.logs,
@@ -351,6 +374,23 @@ impl NodeLogsPopup {
             }
         } else {
             self.selection.clear();
+        }
+
+        if let Some(index) = self.highlighted_line_index() {
+            let line = self.logs.get(index).map(|line| line.as_str()).unwrap_or("");
+            trace!(
+                target = "node_logs_popup",
+                index,
+                ?direction_for_trace,
+                line,
+                "Updated log selection"
+            );
+        } else {
+            trace!(
+                target = "node_logs_popup",
+                ?direction_for_trace,
+                "No log selection after handling scroll"
+            );
         }
     }
 
@@ -434,6 +474,9 @@ impl NodeLogsPopup {
                     if current > 0 {
                         let new_pos = current - 1;
                         list_state.select(Some(new_pos));
+                        let offset = list_state.offset_mut();
+                        let current_offset = *offset;
+                        *offset = current_offset.saturating_sub(1);
                         *scroll_state = scroll_state.position(new_pos);
                         Some(new_pos)
                     } else {
@@ -452,6 +495,9 @@ impl NodeLogsPopup {
                     if current < logs.len().saturating_sub(1) {
                         let new_pos = current + 1;
                         list_state.select(Some(new_pos));
+                        let offset = list_state.offset_mut();
+                        let current_offset = *offset;
+                        *offset = (current_offset + 1).min(new_pos);
                         *scroll_state = scroll_state.position(new_pos);
                         Some(new_pos)
                     } else {
@@ -469,6 +515,9 @@ impl NodeLogsPopup {
                 if let Some(current) = selected {
                     let new_pos = current.saturating_sub(10);
                     list_state.select(Some(new_pos));
+                    let offset = list_state.offset_mut();
+                    let current_offset = *offset;
+                    *offset = current_offset.saturating_sub(10);
                     *scroll_state = scroll_state.position(new_pos);
                     Some(new_pos)
                 } else {
@@ -479,6 +528,9 @@ impl NodeLogsPopup {
                 if let Some(current) = selected {
                     let new_pos = (current + 10).min(logs.len().saturating_sub(1));
                     list_state.select(Some(new_pos));
+                    let offset = list_state.offset_mut();
+                    let current_offset = *offset;
+                    *offset = (current_offset + 10).min(new_pos);
                     *scroll_state = scroll_state.position(new_pos);
                     Some(new_pos)
                 } else {
@@ -488,6 +540,7 @@ impl NodeLogsPopup {
             ScrollDirection::Home => {
                 if !logs.is_empty() {
                     list_state.select(Some(0));
+                    *list_state.offset_mut() = 0;
                     *scroll_state = scroll_state.position(0);
                     Some(0)
                 } else {
@@ -498,6 +551,7 @@ impl NodeLogsPopup {
                 if !logs.is_empty() {
                     let last_index = logs.len() - 1;
                     list_state.select(Some(last_index));
+                    *list_state.offset_mut() = last_index.saturating_sub(10);
                     *scroll_state = scroll_state.position(last_index);
                     Some(last_index)
                 } else {

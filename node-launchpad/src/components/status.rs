@@ -111,7 +111,7 @@ impl Status {
         Ok(status)
     }
 
-    pub(crate) fn node_table(&self) -> &NodeTableComponent {
+    pub fn node_table(&self) -> &NodeTableComponent {
         &self.node_table_component
     }
 

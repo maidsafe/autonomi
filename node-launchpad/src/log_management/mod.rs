@@ -28,6 +28,8 @@ const MAX_LOG_FILE_SIZE: u64 = 100 * 1024 * 1024; // 100MB
 const MAX_LOG_LINES: usize = 10_000;
 const MAX_LOG_LINE_LENGTH: usize = 2_000;
 
+pub const LOG_DISPLAY_LINE_LIMIT: usize = MAX_LOG_LINES;
+
 #[derive(Debug)]
 pub enum LogManagementTask {
     /// Load logs for a specific node
