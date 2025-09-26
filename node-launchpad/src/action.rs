@@ -6,34 +6,53 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::upnp::UpnpSupport;
 use crate::{
-    connection_mode::ConnectionMode,
+    components::popup::error_popup::ErrorPopup,
     mode::{InputMode, Scene},
-    node_stats::NodeStats,
+    node_stats::AggregatedNodeStats,
 };
+use ant_evm::EvmAddress;
 use ant_service_management::NodeServiceData;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strum::Display;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Display, Deserialize)]
+#[derive(custom_debug::Debug, Clone, PartialEq, Serialize, Display, Deserialize)]
 pub enum Action {
     StatusActions(StatusActions),
     OptionsActions(OptionsActions),
+    NodeTableActions(NodeTableActions),
 
     SwitchScene(Scene),
     SwitchInputMode(InputMode),
 
     StoreStorageDrive(PathBuf, String),
-    StoreConnectionMode(ConnectionMode),
-    StorePortRange(u32, u32),
-    StoreRewardsAddress(String),
-    StoreNodesToStart(usize),
-
-    SetUpnpSupport(UpnpSupport),
+    StoreUpnpSetting(bool),
+    StorePortRange(Option<(u32, u32)>),
+    StoreRewardsAddress(EvmAddress),
+    StoreRunningNodeCount(u64),
+    StoreAggregatedNodeStats(AggregatedNodeStats),
 
     UpgradeLaunchpadActions(UpgradeLaunchpadActions),
+
+    ShowErrorPopup(ErrorPopup),
+    SetNodeLogsTarget {
+        node_name: String,
+        log_dir: Option<PathBuf>,
+    },
+
+    LogsLoaded {
+        node_name: String,
+        #[debug(skip)]
+        logs: Vec<String>,
+        total_lines: usize,
+        file_path: Option<String>,
+        last_modified: Option<std::time::SystemTime>,
+    },
+    LogsLoadError {
+        node_name: String,
+        error: String,
+    },
 
     Tick,
     Render,
@@ -49,99 +68,19 @@ pub enum Action {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum StatusActions {
-    AddNode,
-    StartNodes,
-    StopNodes,
-    RemoveNodes,
-    StartStopNode,
-    StartNodesCompleted {
-        service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    StopNodesCompleted {
-        service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    ResetNodesCompleted {
-        trigger_start_node: bool,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    RemoveNodesCompleted {
-        service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    AddNodesCompleted {
-        service_name: String,
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    UpdateNodesCompleted {
-        all_nodes_data: Vec<NodeServiceData>,
-        is_nat_status_determined: bool,
-    },
-    NatDetectionStarted,
-    SuccessfullyDetectedNatStatus,
-    ErrorWhileRunningNatDetection,
-    ErrorLoadingNodeRegistry {
-        raw_error: String,
-    },
-    ErrorGettingNodeRegistryPath {
-        raw_error: String,
-    },
-    ErrorScalingUpNodes {
-        raw_error: String,
-    },
-    ErrorResettingNodes {
-        raw_error: String,
-    },
-    ErrorUpdatingNodes {
-        raw_error: String,
-    },
-    ErrorAddingNodes {
-        raw_error: String,
-    },
-    ErrorStartingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
-    ErrorStoppingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
-    ErrorRemovingNodes {
-        services: Vec<String>,
-        raw_error: String,
-    },
-    NodesStatsObtained(NodeStats),
-
     TriggerManageNodes,
     TriggerRewardsAddress,
-    TriggerNodeLogs,
-    TriggerRemoveNode,
-
-    PreviousTableItem,
-    NextTableItem,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Display, Deserialize)]
 pub enum OptionsActions {
-    ResetNodes,
-    UpdateNodes,
-
     TriggerChangeDrive,
-    TriggerChangeConnectionMode,
-    TriggerChangePortRange,
+    TriggerPortRangeEdit,
     TriggerRewardsAddress,
     TriggerUpdateNodes,
     TriggerResetNodes,
     TriggerAccessLogs,
-    UpdateConnectionMode(ConnectionMode),
-    UpdatePortRange(u32, u32),
-    UpdateRewardsAddress(String),
+    ToggleUpnpSetting,
     UpdateStorageDrive(PathBuf, String),
 }
 
@@ -150,5 +89,71 @@ pub enum UpgradeLaunchpadActions {
     UpdateAvailable {
         current_version: String,
         latest_version: String,
+    },
+}
+
+#[derive(custom_debug::Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NodeTableActions {
+    RegistryFileUpdated {
+        #[debug(skip)]
+        all_nodes_data: Vec<NodeServiceData>,
+    },
+    NodeManagementCommand(NodeManagementCommand),
+    NodeManagementResponse(NodeManagementResponse),
+    TriggerRemoveNodePopup,
+    TriggerNodeLogs,
+    Tick,
+
+    // Navigation actions
+    NavigateUp,
+    NavigateDown,
+    NavigateHome,
+    NavigateEnd,
+    NavigatePageUp,
+    NavigatePageDown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NodeManagementCommand {
+    MaintainNodes,
+    AddNode,
+    StartNodes,
+    StopNodes,
+    RemoveNodes,
+    ToggleNode,
+    UpgradeNodes,
+    ResetNodes,
+    RefreshRegistry,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NodeManagementResponse {
+    MaintainNodes {
+        error: Option<String>,
+    },
+    AddNode {
+        error: Option<String>,
+    },
+    StartNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    StopNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    RemoveNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    UpgradeNodes {
+        service_names: Vec<String>,
+        error: Option<String>,
+    },
+    ResetNodes {
+        error: Option<String>,
+    },
+    RefreshRegistry {
+        error: Option<String>,
     },
 }

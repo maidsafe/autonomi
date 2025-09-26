@@ -34,8 +34,15 @@ pub use tracing_core::Level;
 
 #[derive(Debug, Clone)]
 pub enum LogOutputDest {
+    /// Log to standard error
     Stderr,
+    /// Log to standard output
     Stdout,
+    /// If a path with .log extension is provided, log to that file.
+    ///
+    /// If a directory path is provided, log with file rotation enabled in that directory.
+    ///
+    /// If the directory does not exist, it will be created.
     Path(PathBuf),
 }
 
@@ -246,39 +253,67 @@ impl LogBuilder {
     /// Test names typically follow the pattern: module::path::test_name
     /// We extract the module path and use it as the test file name.
     fn extract_test_file_name(test_name: &str) -> String {
-        // Try to extract from structured test name first (e.g., "ant_bootstrap::tests::test_something")
-        if let Some(module_name) = Self::extract_from_structured_test_name(test_name) {
-            return module_name;
-        }
+        let (module_prefix, executable_name, _) = Self::test_name_sources(test_name);
 
-        // For integration tests, try to extract from the current executable name
-        if let Some(integration_test_name) = Self::extract_from_executable_name() {
-            return integration_test_name;
-        }
-
-        // Fallback to the full test name if all parsing methods fail
-        test_name.to_string()
+        module_prefix
+            .or(executable_name)
+            .unwrap_or_else(|| test_name.to_string())
     }
 
-    /// Extract module name from structured test names like "ant_bootstrap::tests::test_something"
-    fn extract_from_structured_test_name(test_name: &str) -> Option<String> {
-        let parts: Vec<&str> = test_name.split("::").collect();
-        if parts.len() >= 2 {
-            Some(parts[0].to_string())
-        } else {
-            None
+    /// Determine the crate name associated with the test, if possible.
+    fn extract_crate_name(test_name: &str) -> Option<String> {
+        let (module_prefix, executable_name, package_name) = Self::test_name_sources(test_name);
+
+        let module_normalized = module_prefix.as_deref().map(Self::normalized_crate_name);
+        let executable_normalized = executable_name.as_deref().map(Self::normalized_crate_name);
+        let package_normalized = package_name.as_deref().map(Self::normalized_crate_name);
+
+        if let (Some(pkg), Some(module)) = (&package_normalized, &module_normalized)
+            && pkg == module
+        {
+            return Some(pkg.clone());
         }
+
+        if let (Some(pkg), Some(exe)) = (&package_normalized, &executable_normalized)
+            && pkg == exe
+        {
+            return Some(pkg.clone());
+        }
+
+        if let (Some(module), Some(exe)) = (&module_normalized, &executable_normalized)
+            && module == exe
+        {
+            return Some(module.clone());
+        }
+
+        executable_normalized
+            .or(package_normalized)
+            .or(module_normalized)
     }
 
-    /// Extract test name from the current executable for integration tests
-    fn extract_from_executable_name() -> Option<String> {
-        let current_exe = std::env::current_exe().ok()?;
-        let file_name = current_exe.file_name()?;
-        let exe_name = file_name.to_string_lossy();
+    fn test_name_sources(test_name: &str) -> (Option<String>, Option<String>, Option<String>) {
+        let module_prefix = test_name
+            .split_once("::")
+            .map(|(segment, _)| segment)
+            .filter(|segment| !segment.is_empty())
+            .map(|segment| segment.to_string());
 
-        // Integration test binaries are typically named like "test_name-<hash>"
-        // Extract the test file name part before the first dash
-        exe_name.split('-').next().map(|s| s.to_string())
+        let executable_name = std::env::current_exe().ok().and_then(|path| {
+            path.file_name().map(|name| {
+                let name = name.to_string_lossy().into_owned();
+                name.split_once('-')
+                    .map(|(prefix, _)| prefix.to_string())
+                    .unwrap_or(name)
+            })
+        });
+
+        let package_name = std::env::var("CARGO_PKG_NAME").ok();
+
+        (module_prefix, executable_name, package_name)
+    }
+
+    fn normalized_crate_name(name: &str) -> String {
+        name.replace('-', "_").to_ascii_lowercase()
     }
 
     /// Initialize just the fmt_layer for testing purposes with per-test log files.
@@ -286,16 +321,7 @@ impl LogBuilder {
     /// Each test gets its own log file based on the test name to avoid mixing logs.
     /// Also overwrites the ANT_LOG variable to log everything including the test_file_name
     fn get_test_layers(test_name: &str, test_file_name: &str) -> TracingLayers {
-        // overwrite ANT_LOG
-        // Use a more inclusive pattern to capture all logs from the test module
-        // For integration tests, we need to capture logs from the test file itself
-        let log_pattern = if test_file_name.contains("_tests") || test_file_name.contains("test_") {
-            // For integration tests, include the test file name directly
-            format!("{test_file_name}=TRACE,all,autonomi=DEBUG,all")
-        } else {
-            // For unit tests, use the original pattern
-            format!("{test_file_name}=TRACE,{test_file_name}::tests=TRACE,all,autonomi=DEBUG,all")
-        };
+        let log_pattern = format!("{test_file_name}=TRACE,{test_file_name}::tests=TRACE,all");
 
         println!("Setting ANT_LOG to: {log_pattern}");
 
@@ -307,23 +333,53 @@ impl LogBuilder {
             std::env::set_var("ANT_LOG", log_pattern);
         }
 
-        let output_dest = match dirs_next::data_dir() {
-            Some(dir) => {
-                // Get the current timestamp and format it to be human readable
-                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-                // Create unique filename using test name and timestamp
-                let test_name = test_name.replace("::", "_").replace(" ", "_");
-                let path = dir
-                    .join("autonomi")
-                    .join("client")
-                    .join("logs")
-                    .join(format!("log_{timestamp}_{test_name}"));
-                LogOutputDest::Path(path)
-            }
-            None => LogOutputDest::Stdout,
-        };
+        let crate_name = std::env::var("CARGO_PKG_NAME")
+            .ok()
+            .or_else(|| Self::extract_crate_name(test_name))
+            .unwrap_or_else(|| "unknown_crate".to_string());
+        let sanitized_crate_name = crate_name.replace("::", "-").replace(" ", "-");
+        let sanitized_test_name = test_name.replace("::", "-").replace(" ", "-");
 
-        println!("Logging test {test_name:?} from {test_file_name:?} to {output_dest:?}");
+        let override_dest = std::env::var("ANT_LOG_DEST")
+            .ok()
+            .and_then(|raw| {
+                let value = raw.trim();
+                if value.is_empty() {
+                    return None;
+                }
+                match LogOutputDest::parse_from_str(value) {
+                    Ok(dest) => Some(dest),
+                    Err(err) => {
+                        eprintln!(
+                            "ANT_LOG_DEST='{value}' is invalid ({err}). Falling back to default test log destination."
+                        );
+                        None
+                    }
+                }
+            });
+
+        let output_dest = override_dest.unwrap_or_else(|| {
+            match dirs_next::data_dir() {
+                Some(dir) => {
+                    // Get the current timestamp and format it to be human readable
+                    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                    // Create unique filename using test name and timestamp
+                    let path = dir
+                        .join("autonomi")
+                        .join("client")
+                        .join("logs")
+                        .join(format!(
+                            "log-{timestamp}-{sanitized_crate_name}-{sanitized_test_name}.log"
+                        ));
+                    LogOutputDest::Path(path)
+                }
+                None => LogOutputDest::Stdout,
+            }
+        });
+
+        println!(
+            "Logging test {test_name:?} from {test_file_name:?} (crate {crate_name:?}) to {output_dest:?}"
+        );
 
         let mut layers = TracingLayers::default();
 
@@ -336,8 +392,9 @@ impl LogBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ReloadHandle, layers::LogFormatter};
+    use crate::{LogBuilder, ReloadHandle, layers::LogFormatter};
     use color_eyre::Result;
+    use std::sync::{Mutex, OnceLock};
     use tracing::{Level, trace, warn};
     use tracing_subscriber::{
         Layer, Registry,
@@ -348,6 +405,125 @@ mod tests {
         util::SubscriberInitExt,
     };
     use tracing_test::internal::global_buf;
+
+    static ENV_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    struct EnvVarGuard {
+        key: String,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &str, value: &str) -> Self {
+            let previous = std::env::var(key).ok();
+            #[allow(unsafe_code)]
+            unsafe {
+                std::env::set_var(key, value);
+            }
+            Self {
+                key: key.to_owned(),
+                previous,
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                #[allow(unsafe_code)]
+                unsafe {
+                    std::env::set_var(&self.key, previous);
+                }
+            } else {
+                #[allow(unsafe_code)]
+                unsafe {
+                    std::env::remove_var(&self.key);
+                }
+            }
+        }
+    }
+
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        ENV_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("env mutex poisoned")
+    }
+
+    fn current_executable_base() -> String {
+        let exe = std::env::current_exe().expect("executable path available");
+        let file_name = exe.file_name().expect("executable name available");
+        let name = file_name.to_string_lossy().into_owned();
+        name.split_once('-')
+            .map(|(prefix, _)| prefix.to_string())
+            .unwrap_or(name)
+    }
+
+    #[test]
+    fn extract_crate_name_prefers_executable_for_unit_like_tests() {
+        let expected = LogBuilder::normalized_crate_name(&current_executable_base());
+
+        let detected = LogBuilder::extract_crate_name("client::tests::some_unit_test")
+            .expect("crate name should be detected");
+
+        assert_eq!(detected, expected);
+    }
+
+    #[test]
+    fn extract_crate_name_handles_structured_paths() {
+        let detected =
+            LogBuilder::extract_crate_name("ant_logging::tests::structured_test").unwrap();
+
+        assert_eq!(detected, "ant_logging");
+    }
+
+    #[test]
+    fn extract_test_file_name_prefers_module_prefix() {
+        let file_name = LogBuilder::extract_test_file_name("mock_crate::tests::takes_module");
+        assert_eq!(file_name, "mock_crate");
+    }
+
+    #[test]
+    fn extract_test_file_name_falls_back_to_executable() {
+        let expected = current_executable_base();
+        let file_name = LogBuilder::extract_test_file_name("no_module_name");
+        assert_eq!(file_name, expected);
+    }
+
+    #[test]
+    fn extract_crate_name_prefers_package_when_matching_module() {
+        let _lock = lock_env();
+        let _env_guard = EnvVarGuard::set("CARGO_PKG_NAME", "mock-crate");
+
+        let detected =
+            LogBuilder::extract_crate_name("mock_crate::tests::unit").expect("crate name");
+
+        assert_eq!(detected, "mock_crate");
+    }
+
+    #[test]
+    fn extract_crate_name_prefers_package_when_matching_executable() {
+        let expected = LogBuilder::normalized_crate_name(&current_executable_base());
+        let _lock = lock_env();
+        let _env_guard = EnvVarGuard::set("CARGO_PKG_NAME", &expected);
+
+        let detected = LogBuilder::extract_crate_name("other_module::tests::unit").unwrap();
+
+        assert_eq!(detected, expected);
+    }
+
+    #[test]
+    fn extract_crate_name_prefers_module_when_exe_matches_but_package_differs() {
+        let expected = LogBuilder::normalized_crate_name(&current_executable_base());
+        let _lock = lock_env();
+        let _env_guard = EnvVarGuard::set("CARGO_PKG_NAME", "different-package");
+
+        let mut owned_name = expected.clone();
+        owned_name.push_str("::tests::unit");
+        let detected = LogBuilder::extract_crate_name(&owned_name).unwrap();
+
+        assert_eq!(detected, expected);
+    }
 
     #[test]
     // todo: break down the TracingLayers so that we can plug in the writer without having to rewrite the whole function

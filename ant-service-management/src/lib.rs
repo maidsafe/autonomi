@@ -11,11 +11,11 @@
 #![allow(clippy::expect_used)]
 
 pub mod control;
-pub mod daemon;
 pub mod error;
+pub mod fs;
+pub mod metric;
 pub mod node;
 pub mod registry;
-pub mod rpc;
 
 #[macro_use]
 extern crate tracing;
@@ -25,14 +25,13 @@ pub mod antctl_proto {
     tonic::include_proto!("antctl_proto");
 }
 
-use std::path::PathBuf;
-
+use crate::control::ServiceControl;
 use async_trait::async_trait;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use service_manager::ServiceInstallCtx;
+use std::path::PathBuf;
 
-pub use daemon::{DaemonService, DaemonServiceData};
 pub use error::{Error, Result};
 pub use node::{NodeService, NodeServiceData};
 pub use registry::{NodeRegistryManager, StatusSummary, get_local_node_registry_path};
@@ -49,14 +48,57 @@ pub enum ServiceStatus {
     Removed,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum NatDetectionStatus {
-    Public,
-    UPnP,
-    Private,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ReachabilityProgress {
+    /// Reachability check has not been run (0%)
+    #[default]
+    NotRun,
+    /// Reachability check is in progress (1-99%)
+    InProgress(u8),
+    /// Reachability check is completed (100%)
+    Complete,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+impl From<f64> for ReachabilityProgress {
+    fn from(value: f64) -> Self {
+        if value == 0.0 {
+            ReachabilityProgress::NotRun
+        } else if value > 0.0 && value < 100.0 {
+            // handle edge cases where value is closer to 0 or 100
+            if value < 1.0 {
+                ReachabilityProgress::InProgress(1)
+            } else if value > 99.0 && value < 99.99 {
+                ReachabilityProgress::InProgress(99)
+            } else {
+                ReachabilityProgress::InProgress(value as u8)
+            }
+        } else {
+            ReachabilityProgress::Complete
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ServiceStartupStatus {
+    /// Service startup is in progress with percentage value (0-99)
+    InProgress(u8),
+    /// Service has completed startup (reachability check complete)
+    Started,
+    /// Service startup has failed
+    Failed { reason: String },
+}
+
+impl From<ReachabilityProgress> for ServiceStartupStatus {
+    fn from(progress: ReachabilityProgress) -> Self {
+        match progress {
+            ReachabilityProgress::Complete => ServiceStartupStatus::Started,
+            ReachabilityProgress::NotRun => ServiceStartupStatus::Started,
+            ReachabilityProgress::InProgress(value) => ServiceStartupStatus::InProgress(value),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum UpgradeResult {
     Forced(String, String),
     NotRequired,
@@ -89,8 +131,12 @@ pub trait ServiceStateActions {
     async fn pid(&self) -> Option<u32>;
     async fn on_remove(&self);
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
+    async fn startup_status(&self) -> ServiceStartupStatus;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;
+    async fn set_status(&self, status: ServiceStatus);
+    async fn set_metrics_port_if_not_set(&self, service_control: &dyn ServiceControl)
+    -> Result<()>;
     async fn version(&self) -> String;
 }

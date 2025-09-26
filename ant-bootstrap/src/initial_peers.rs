@@ -15,7 +15,7 @@ use ant_protocol::version::{ALPHANET_ID, MAINNET_ID, get_network_id};
 use clap::Args;
 use libp2p::Multiaddr;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 use url::Url;
 
 /// The name of the environment variable that can be used to pass peers to the node.
@@ -81,7 +81,7 @@ impl InitialPeersConfig {
             return Ok(vec![]);
         }
 
-        let mut bootstrap_addresses = vec![];
+        let mut bootstrap_addresses: HashSet<Multiaddr> = HashSet::new();
 
         // Read from ANT_PEERS environment variable if present
         bootstrap_addresses.extend(Self::read_bootstrap_addr_from_env());
@@ -91,14 +91,14 @@ impl InitialPeersConfig {
                 "Found {} bootstrap addresses from environment variable",
                 bootstrap_addresses.len()
             );
-            return Ok(bootstrap_addresses);
+            return Ok(bootstrap_addresses.into_iter().collect());
         }
 
         // Add addrs from arguments if present
         for addr in &self.addrs {
-            if let Some(addr) = craft_valid_multiaddr(addr, false) {
+            if let Some(addr) = craft_valid_multiaddr(addr) {
                 info!("Adding addr from arguments: {addr}");
-                bootstrap_addresses.push(addr);
+                let _ = bootstrap_addresses.insert(addr);
             } else {
                 warn!("Invalid multiaddress format from arguments: {addr}");
             }
@@ -112,7 +112,7 @@ impl InitialPeersConfig {
                 "Found {} bootstrap addresses. Returning early.",
                 bootstrap_addresses.len()
             );
-            return Ok(bootstrap_addresses);
+            return Ok(bootstrap_addresses.into_iter().collect());
         }
 
         // load from cache if present
@@ -125,7 +125,12 @@ impl InitialPeersConfig {
 
             if let Some(cfg) = cfg {
                 if let Ok(data) = BootstrapCacheStore::load_cache_data(&cfg) {
-                    bootstrap_addresses.extend(data.get_all_addrs().cloned());
+                    let addrs_from_cache = data.get_all_addrs().cloned().collect::<Vec<_>>();
+                    info!(
+                        "Found {} bootstrap addresses from local cache",
+                        addrs_from_cache.len()
+                    );
+                    bootstrap_addresses.extend(addrs_from_cache);
 
                     if let Some(count) = count
                         && bootstrap_addresses.len() >= count
@@ -135,7 +140,7 @@ impl InitialPeersConfig {
                             "Found {} bootstrap addresses. Returning early.",
                             bootstrap_addresses.len()
                         );
-                        return Ok(bootstrap_addresses);
+                        return Ok(bootstrap_addresses.into_iter().collect());
                     }
                 }
             } else {
@@ -171,7 +176,7 @@ impl InitialPeersConfig {
                     "Found {} bootstrap addresses. Returning early.",
                     bootstrap_addresses.len()
                 );
-                return Ok(bootstrap_addresses);
+                return Ok(bootstrap_addresses.into_iter().collect());
             }
         }
 
@@ -201,7 +206,7 @@ impl InitialPeersConfig {
                 "Found {} bootstrap addresses. Returning early.",
                 bootstrap_addresses.len()
             );
-            Ok(bootstrap_addresses)
+            Ok(bootstrap_addresses.into_iter().collect())
         } else {
             error!("No initial bootstrap peers found through any means");
             Err(Error::NoBootstrapPeersFound)
@@ -213,7 +218,7 @@ impl InitialPeersConfig {
         // Read from ANT_PEERS environment variable if present
         if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
             for addr_str in addrs.split(',') {
-                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
+                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str) {
                     info!("Adding addr from environment variable: {addr}");
                     bootstrap_addresses.push(addr);
                 } else {
@@ -222,5 +227,21 @@ impl InitialPeersConfig {
             }
         }
         bootstrap_addresses
+    }
+}
+
+trait HashSetTruncate<T> {
+    fn truncate(&mut self, n: usize);
+}
+
+impl<T: Clone + std::hash::Hash + Eq> HashSetTruncate<T> for HashSet<T> {
+    fn truncate(&mut self, n: usize) {
+        while self.len() > n {
+            if let Some(item) = self.iter().next().cloned() {
+                self.remove(&item);
+            } else {
+                break;
+            }
+        }
     }
 }

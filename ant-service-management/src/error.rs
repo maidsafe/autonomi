@@ -15,28 +15,31 @@ pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error(transparent)]
-    AddrParseError(#[from] std::net::AddrParseError),
+    #[error("Failed to parse network address: {reason}")]
+    AddrParseError { reason: String },
     #[error("The endpoint for the daemon has not been set")]
     DaemonEndpointNotSet,
+    #[error("Failed to execute command: {reason}")]
+    ExecutionFailed { reason: String },
+    #[error("Failed to access file or perform I/O operation: {reason}")]
+    FileOperationFailed { reason: String },
+    #[error("Failed to serialize/deserialize JSON: {reason}")]
+    JsonOperationFailed { reason: String },
     #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
-    #[error(transparent)]
-    MultiAddrParseError(#[from] libp2p::multiaddr::Error),
-    #[error("The registry does not contain a service named '{0}'")]
-    NodeNotFound(String),
-    #[error(transparent)]
-    ParseIntError(#[from] std::num::ParseIntError),
-    #[error(transparent)]
-    PeerIdParseError(#[from] libp2p_identity::ParseError),
+    MetricsError(#[from] crate::metric::MetricsActionError),
+    #[error("Failed to parse number: {reason}")]
+    NumberParsingFailed { reason: String },
+    #[error(
+        "Could not connect to the network using rpc endpoint '{rpc_endpoint}' within {timeout:?}"
+    )]
+    NodeConnectionTimedOut {
+        rpc_endpoint: String,
+        timeout: std::time::Duration,
+    },
     #[error("Could not connect to RPC endpoint '{0}'")]
     RpcConnectionError(String),
     #[error("Could not obtain node info through RPC: {0}")]
     RpcNodeInfoError(String),
-    #[error("Could not obtain network info through RPC: {0}")]
-    RpcNetworkInfoError(String),
     #[error("Could not restart node through RPC: {0}")]
     RpcNodeRestartError(String),
     #[error("Could not stop node through RPC: {0}")]
@@ -45,6 +48,10 @@ pub enum Error {
     RpcNodeUpdateError(String),
     #[error("Could not obtain record addresses through RPC: {0}")]
     RpcRecordAddressError(String),
+    #[error("Failed to parse service label: {reason}")]
+    ServiceLabelParsingFailed { reason: String },
+    #[error("Service management operation failed: {reason}")]
+    ServiceManagementFailed { reason: String },
     #[error("Could not find process at '{0}'")]
     ServiceProcessNotFound(String),
     #[error("The service '{0}' does not exists and cannot be removed.")]
@@ -53,8 +60,16 @@ pub enum Error {
     ServiceRemovedManually(String),
     #[error("Failed to create service user account")]
     ServiceUserAccountCreationFailed,
+    #[error("String conversion failed: {reason}")]
+    StringConversion { reason: String },
     #[error("Could not obtain user's data directory")]
     UserDataDirectoryNotObtainable,
-    #[error(transparent)]
-    Utf8Error(#[from] std::str::Utf8Error),
+    #[error("File watcher error: {0}")]
+    WatcherError(String),
+}
+
+impl From<notify::Error> for Error {
+    fn from(err: notify::Error) -> Self {
+        Error::WatcherError(err.to_string())
+    }
 }

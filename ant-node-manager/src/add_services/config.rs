@@ -6,11 +6,11 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use crate::error::{Error, PortRangeError, Result};
 use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
-use color_eyre::{Result, eyre::eyre};
 use service_manager::{ServiceInstallCtx, ServiceLabel};
 use std::{
     ffi::OsString,
@@ -32,12 +32,20 @@ impl PortRange {
         } else {
             let parts: Vec<&str> = s.split('-').collect();
             if parts.len() != 2 {
-                return Err(eyre!("Port range must be in the format 'start-end'"));
+                return Err(PortRangeError::InvalidFormat.into());
             }
-            let start = parts[0].parse::<u16>()?;
-            let end = parts[1].parse::<u16>()?;
+            let start = parts[0]
+                .parse::<u16>()
+                .map_err(|err| PortRangeError::ParseError {
+                    reason: format!("Failed to parse start port '{}': {err}", parts[0]),
+                })?;
+            let end = parts[1]
+                .parse::<u16>()
+                .map_err(|err| PortRangeError::ParseError {
+                    reason: format!("Failed to parse end port '{}': {err}", parts[1]),
+                })?;
             if start >= end {
-                return Err(eyre!("End port must be greater than start port"));
+                return Err(PortRangeError::InvalidRange.into());
             }
             Ok(Self::Range(start, end))
         }
@@ -49,18 +57,22 @@ impl PortRange {
             Self::Single(_) => {
                 if count != 1 {
                     error!("The count ({count}) does not match the number of ports (1)");
-                    return Err(eyre!(
-                        "The count ({count}) does not match the number of ports (1)"
-                    ));
+                    return Err(PortRangeError::CountMismatch {
+                        expected: 1,
+                        actual: count,
+                    }
+                    .into());
                 }
             }
             Self::Range(start, end) => {
                 let port_count = end - start + 1;
                 if count != port_count {
                     error!("The count ({count}) does not match the number of ports ({port_count})");
-                    return Err(eyre!(
-                        "The count ({count}) does not match the number of ports ({port_count})"
-                    ));
+                    return Err(PortRangeError::CountMismatch {
+                        expected: port_count,
+                        actual: count,
+                    }
+                    .into());
                 }
             }
         }
@@ -83,28 +95,37 @@ pub struct InstallNodeServiceCtxBuilder {
     pub no_upnp: bool,
     pub max_archived_log_files: Option<usize>,
     pub max_log_files: Option<usize>,
-    pub metrics_port: Option<u16>,
+    pub metrics_port: u16,
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<u16>,
     pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
-    pub relay: bool,
-    pub rpc_socket_addr: SocketAddr,
+    pub rpc_socket_addr: Option<SocketAddr>,
     pub service_user: Option<String>,
+    pub skip_reachability_check: bool,
     pub write_older_cache_files: bool,
 }
 
 impl InstallNodeServiceCtxBuilder {
     pub fn build(self) -> Result<ServiceInstallCtx> {
-        let label: ServiceLabel = self.name.parse()?;
+        let label: ServiceLabel =
+            self.name
+                .parse()
+                .map_err(|err: std::io::Error| Error::ServiceLabelParsingFailed {
+                    label: self.name.clone(),
+                    reason: err.to_string(),
+                })?;
         let mut args = vec![
-            OsString::from("--rpc"),
-            OsString::from(self.rpc_socket_addr.to_string()),
             OsString::from("--root-dir"),
             OsString::from(self.data_dir_path.to_string_lossy().to_string()),
             OsString::from("--log-output-dest"),
             OsString::from(self.log_dir_path.to_string_lossy().to_string()),
         ];
+
+        if let Some(rpc_socket_addr) = self.rpc_socket_addr {
+            args.push(OsString::from("--rpc"));
+            args.push(OsString::from(rpc_socket_addr.to_string()));
+        }
 
         push_arguments_from_initial_peers_config(&self.init_peers_config, &mut args);
         if self.alpha {
@@ -114,9 +135,11 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--network-id"));
             args.push(OsString::from(id.to_string()));
         }
-        if self.relay {
-            args.push(OsString::from("--relay"));
+
+        if self.skip_reachability_check {
+            args.push(OsString::from("--skip-reachability-check"));
         }
+
         if let Some(log_format) = self.log_format {
             args.push(OsString::from("--log-format"));
             args.push(OsString::from(log_format.as_str()));
@@ -132,10 +155,10 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--port"));
             args.push(OsString::from(node_port.to_string()));
         }
-        if let Some(metrics_port) = self.metrics_port {
-            args.push(OsString::from("--metrics-server-port"));
-            args.push(OsString::from(metrics_port.to_string()));
-        }
+
+        args.push(OsString::from("--metrics-server-port"));
+        args.push(OsString::from(self.metrics_port.to_string()));
+
         if let Some(log_files) = self.max_archived_log_files {
             args.push(OsString::from("--max-archived-log-files"));
             args.push(OsString::from(log_files.to_string()));
@@ -184,10 +207,8 @@ pub struct AddNodeServiceOptions {
     pub antnode_dir_path: PathBuf,
     pub antnode_src_path: PathBuf,
     pub auto_restart: bool,
-    pub auto_set_nat_flags: bool,
     pub count: Option<u16>,
     pub delete_antnode_src: bool,
-    pub enable_metrics_server: bool,
     pub env_variables: Option<Vec<(String, String)>>,
     pub evm_network: EvmNetwork,
     pub init_peers_config: InitialPeersConfig,
@@ -199,7 +220,7 @@ pub struct AddNodeServiceOptions {
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<PortRange>,
     pub no_upnp: bool,
-    pub relay: bool,
+    pub skip_reachability_check: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
@@ -209,16 +230,6 @@ pub struct AddNodeServiceOptions {
     pub user_mode: bool,
     pub version: String,
     pub write_older_cache_files: bool,
-}
-
-pub struct AddDaemonServiceOptions {
-    pub address: Ipv4Addr,
-    pub env_variables: Option<Vec<(String, String)>>,
-    pub daemon_install_bin_path: PathBuf,
-    pub daemon_src_bin_path: PathBuf,
-    pub port: u16,
-    pub user: String,
-    pub version: String,
 }
 
 #[cfg(test)]
@@ -235,21 +246,21 @@ mod tests {
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
             evm_network: EvmNetwork::ArbitrumOne,
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
-            metrics_port: None,
+            metrics_port: 6001,
             name: "test-node".to_string(),
             network_id: None,
             no_upnp: false,
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            skip_reachability_check: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            rpc_socket_addr: None,
             service_user: None,
             write_older_cache_files: false,
         }
@@ -272,20 +283,20 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
-            metrics_port: None,
+            metrics_port: 6001,
             name: "test-node".to_string(),
             network_id: None,
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            skip_reachability_check: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            rpc_socket_addr: None,
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
@@ -310,20 +321,23 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: Some(10),
             max_log_files: Some(10),
-            metrics_port: None,
+            metrics_port: 6001,
             name: "test-node".to_string(),
             network_id: Some(5),
             node_ip: None,
             node_port: None,
             init_peers_config: InitialPeersConfig::default(),
+            skip_reachability_check: false,
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
-            rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
+            rpc_socket_addr: Some(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                8080,
+            )),
             antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
             no_upnp: false,
@@ -343,12 +357,12 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
             "/logs",
+            "--metrics-server-port",
+            "6001",
             "--rewards-address",
             "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             "evm-arbitrum-one",
@@ -375,12 +389,12 @@ mod tests {
         assert_eq!(result.working_directory, None);
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
             "/logs",
+            "--metrics-server-port",
+            "6001",
             "--rewards-address",
             "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             "evm-custom",
@@ -405,16 +419,20 @@ mod tests {
     fn build_should_assign_expected_values_when_all_options_are_enabled() {
         let mut builder = create_builder_with_all_options_enabled();
         builder.alpha = true;
-        builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
         builder.no_upnp = true;
+        builder.skip_reachability_check = true;
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
         builder.node_port = Some(12345);
-        builder.metrics_port = Some(9090);
+        builder.metrics_port = 9090;
         builder.init_peers_config.addrs = vec![
             "/ip4/127.0.0.1/tcp/8080".parse().unwrap(),
             "/ip4/192.168.1.1/tcp/8081".parse().unwrap(),
         ];
+        builder.rpc_socket_addr = Some(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            8080,
+        ));
         builder.init_peers_config.first = true;
         builder.init_peers_config.local = true;
         builder.init_peers_config.network_contacts_url =
@@ -426,12 +444,12 @@ mod tests {
         let result = builder.build().unwrap();
 
         let expected_args = vec![
-            "--rpc",
-            "127.0.0.1:8080",
             "--root-dir",
             "/data",
             "--log-output-dest",
             "/logs",
+            "--rpc",
+            "127.0.0.1:8080",
             "--first",
             "--local",
             "--peer",
@@ -442,7 +460,7 @@ mod tests {
             "--alpha",
             "--network-id",
             "5",
-            "--relay",
+            "--skip-reachability-check",
             "--log-format",
             "json",
             "--no-upnp",

@@ -8,13 +8,15 @@
 
 use super::super::{Component, utils::centered_rect_fixed};
 use crate::{
-    action::{Action, OptionsActions},
+    action::{Action, NodeManagementCommand, NodeTableActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
+use std::any::Any;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE: u16 = 5;
@@ -22,24 +24,28 @@ const INPUT_AREA: u16 = INPUT_SIZE + 2; // +2 for the left and right padding
 
 #[derive(Default)]
 pub struct ResetNodesPopup {
-    /// Whether the component is active right now, capturing keystrokes + draw things.
-    active: bool,
     confirmation_input_field: Input,
     can_reset: bool,
 }
 
 impl Component for ResetNodesPopup {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         let send_back = match key.code {
             KeyCode::Enter => {
                 if self.can_reset {
-                    debug!("Got reset, sending Reset action and switching to Options");
+                    debug!("Got reset, sending Reset action and returning to Status");
                     vec![
-                        Action::OptionsActions(OptionsActions::ResetNodes),
-                        Action::SwitchScene(Scene::Options),
+                        Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                            NodeManagementCommand::ResetNodes,
+                        )),
+                        Action::SwitchScene(Scene::Status),
                     ]
                 } else {
                     vec![]
@@ -67,37 +73,33 @@ impl Component for ResetNodesPopup {
                 vec![]
             }
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ResetNodesPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ResetNodesPopUp => {
-                    self.active = true;
-                    self.confirmation_input_field = self
-                        .confirmation_input_field
-                        .clone()
-                        .with_value(String::new());
-                    // set to entry input mode as we want to handle everything within our handle_key_events
-                    // so by default if this scene is active, we capture inputs.
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ResetNodesPopUp) => {
+                self.confirmation_input_field = self
+                    .confirmation_input_field
+                    .clone()
+                    .with_value(String::new());
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             _ => None,
         };
         Ok(send_back)
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
@@ -210,5 +212,140 @@ impl Component for ResetNodesPopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    fn build_popup() -> ResetNodesPopup {
+        ResetNodesPopup::default()
+    }
+
+    #[test]
+    fn typing_reset_enables_confirmation() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default();
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+        for ch in ['r', 'e', 's', 'e', 't'] {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("handled");
+        }
+        assert!(popup.can_reset);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::ResetNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = build_popup();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('r'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn escape_returns_to_options_without_modifying_input() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default().with_value("reset".into());
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+        let (actions, _) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.contains(&Action::SwitchScene(Scene::Options)));
+        assert_eq!(popup.confirmation_input_field.value(), "reset");
+    }
+
+    #[test]
+    fn update_switch_scene_prepares_entry_mode() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default().with_value("something".into());
+        let action = popup
+            .update(Action::SwitchScene(Scene::ResetNodesPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
+        assert!(popup.confirmation_input_field.value().is_empty());
+    }
+
+    #[test]
+    fn wrong_confirmation_text_prevents_reset() {
+        let mut popup = build_popup();
+        popup.confirmation_input_field = Input::default();
+        let focus_manager = FocusManager::new(FocusTarget::ResetNodesPopup);
+
+        // Type wrong confirmation
+        for ch in "wrong".chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+
+        // Try to confirm with Enter
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+
+        // Validate error state - Enter should be ignored when no actions are emitted
+        assert_eq!(result, EventResult::Ignored);
+        assert!(
+            !popup.can_reset,
+            "reset should not be enabled with wrong confirmation"
+        );
+        assert_eq!(
+            popup.confirmation_input_field.value(),
+            "wrong",
+            "input should retain wrong confirmation text"
+        );
+        assert!(
+            actions.is_empty(),
+            "no actions should be emitted when confirmation is wrong"
+        );
     }
 }

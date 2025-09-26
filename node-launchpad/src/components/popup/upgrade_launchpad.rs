@@ -10,6 +10,7 @@ use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
     action::{Action, UpgradeLaunchpadActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
@@ -19,46 +20,47 @@ use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
 use semver::Version;
+use std::any::Any;
 use std::time::Duration;
 
 #[derive(Debug, Default)]
 pub struct UpgradeLaunchpadPopup {
-    active: bool,
     current_version: Option<String>,
     latest_version: Option<String>,
 }
 
 impl Component for UpgradeLaunchpadPopup {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
 
         match key.code {
             KeyCode::Enter | KeyCode::Esc => {
                 info!("User dismissed the LP upgrade notification.");
-                self.active = false;
-                Ok(vec![
+                let actions = vec![
                     Action::SwitchInputMode(InputMode::Navigation),
                     Action::SwitchScene(Scene::Status),
-                ])
+                ];
+                Ok((actions, EventResult::Consumed))
             }
-            _ => Ok(vec![]),
+            _ => Ok((vec![], EventResult::Ignored)),
         }
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::UpgradeLaunchpadPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::UpgradeLaunchpadPopUp => {
-                    self.active = true;
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::UpgradeLaunchpadPopUp) => {
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             Action::UpgradeLaunchpadActions(update_launchpad_actions) => {
                 match update_launchpad_actions {
                     UpgradeLaunchpadActions::UpdateAvailable {
@@ -112,10 +114,6 @@ impl Component for UpgradeLaunchpadPopup {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let Some(current_version) = self.current_version.as_ref() else {
             error!(
                 "Current version is not set, even though the upgrade popup is active. This is unexpected."
@@ -224,6 +222,14 @@ impl Component for UpgradeLaunchpadPopup {
 
         Ok(())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
 }
 
 /// Checks if an update is available.
@@ -248,5 +254,68 @@ pub async fn check_for_update() -> Result<Option<(Version, Version)>> {
             debug!("Failed to check for updates: {}", e);
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn handle_key_events_returns_to_status() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeLaunchpadPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.contains(&Action::SwitchScene(Scene::Status)));
+        assert!(actions.contains(&Action::SwitchInputMode(InputMode::Navigation)));
+    }
+
+    #[test]
+    fn update_available_switches_scene_and_stores_versions() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let action = popup
+            .update(Action::UpgradeLaunchpadActions(
+                UpgradeLaunchpadActions::UpdateAvailable {
+                    current_version: "0.1.0".into(),
+                    latest_version: "0.2.0".into(),
+                },
+            ))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchScene(Scene::UpgradeLaunchpadPopUp));
+        assert_eq!(popup.current_version.as_deref(), Some("0.1.0"));
+        assert_eq!(popup.latest_version.as_deref(), Some("0.2.0"));
+    }
+
+    #[test]
+    fn switch_scene_enters_entry_mode() {
+        let mut popup = UpgradeLaunchpadPopup::default();
+        let action = popup
+            .update(Action::SwitchScene(Scene::UpgradeLaunchpadPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
     }
 }

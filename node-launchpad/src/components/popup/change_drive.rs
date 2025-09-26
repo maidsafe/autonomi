@@ -6,11 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use std::{default::Default, path::PathBuf, rc::Rc};
-
 use super::super::utils::centered_rect_fixed;
-
-use color_eyre::Result;
+use color_eyre::{Result, eyre::OptionExt};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -20,6 +17,7 @@ use ratatui::{
         Block, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Wrap,
     },
 };
+use std::{any::Any, default::Default, path::PathBuf, rc::Rc};
 
 use crate::{
     action::{Action, OptionsActions},
@@ -28,6 +26,7 @@ use crate::{
         popup::manage_nodes::{GB, GB_PER_NODE},
     },
     config::get_launchpad_nodes_data_dir_path,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{
         COOL_GREY, DARK_GUNMETAL, EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE,
@@ -45,21 +44,19 @@ enum ChangeDriveState {
 
 #[derive(Default)]
 pub struct ChangeDrivePopup {
-    active: bool,
     state: ChangeDriveState,
     items: Option<StatefulList<DriveItem>>,
     drive_selection: DriveItem,
     drive_selection_initial_state: DriveItem,
-    nodes_to_start: usize,
+    nodes_to_start: u64,
     storage_mountpoint: PathBuf,
     can_select: bool, // Used to enable the "Change Drive" button based on conditions
 }
 
 impl ChangeDrivePopup {
-    pub fn new(storage_mountpoint: PathBuf, nodes_to_start: usize) -> Result<Self> {
+    pub fn new(storage_mountpoint: PathBuf, nodes_to_start: u64) -> Result<Self> {
         debug!("Drive Mountpoint in Config: {:?}", storage_mountpoint);
         Ok(ChangeDrivePopup {
-            active: false,
             state: ChangeDriveState::Selection,
             items: None,
             drive_selection: DriveItem::default(),
@@ -166,7 +163,12 @@ impl ChangeDrivePopup {
         f: &mut crate::tui::Frame<'_>,
         layer_zero: Rect,
         layer_one: Rc<[Rect]>,
-    ) -> Paragraph<'_> {
+    ) -> Result<Paragraph<'_>> {
+        if self.items.is_none() {
+            error!("Drive items not initialized, not drawing the popup");
+            return Ok(Paragraph::new("Drive items not initialized"));
+        }
+
         let pop_up_border = Paragraph::new("").block(
             Block::default()
                 .borders(Borders::ALL)
@@ -195,7 +197,7 @@ impl ChangeDrivePopup {
         let items: Vec<ListItem> = self
             .items
             .as_ref()
-            .unwrap()
+            .ok_or_eyre("Drive items not initialized")?
             .items
             .iter()
             .enumerate()
@@ -207,7 +209,15 @@ impl ChangeDrivePopup {
             .highlight_style(Style::default().bg(INDIGO))
             .highlight_spacing(HighlightSpacing::Always);
 
-        f.render_stateful_widget(items, layer_two[0], &mut self.items.clone().unwrap().state);
+        f.render_stateful_widget(
+            items,
+            layer_two[0],
+            &mut self
+                .items
+                .clone()
+                .ok_or_eyre("Drive items not initialized")?
+                .state,
+        );
 
         // Dash
         let dash = Block::new()
@@ -252,7 +262,7 @@ impl ChangeDrivePopup {
             buttons_layer[1],
         );
 
-        pop_up_border
+        Ok(pop_up_border)
     }
 
     // Draws the Confirmation screen
@@ -372,9 +382,13 @@ impl ChangeDrivePopup {
 }
 
 impl Component for ChangeDrivePopup {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         let send_back: Vec<Action> = match &self.state {
             ChangeDriveState::Selection => {
@@ -437,10 +451,22 @@ impl Component for ChangeDrivePopup {
                     self.drive_selection = self.return_selection();
                     match get_launchpad_nodes_data_dir_path(&self.drive_selection.mountpoint, true)
                     {
-                        Ok(_path) => {
-                            // TODO: probably delete the old data directory before switching
-                            // Taking in account if it's the default mountpoint
-                            // (were the executable is)
+                        Ok(new_path) => {
+                            // Log the need for old data directory cleanup
+                            if let Ok(current_data_dir) =
+                                get_launchpad_nodes_data_dir_path(&self.storage_mountpoint, false)
+                                && current_data_dir != new_path
+                            {
+                                debug!(
+                                    "Note: Old data directory at {:?} may need cleanup",
+                                    current_data_dir
+                                );
+                                // Future implementation should:
+                                // 1. Add confirmation dialog asking user if they want to delete old data
+                                // 2. Stop all running nodes before cleanup
+                                // 3. Safely remove old directory with error handling
+                                // 4. Handle cases where old directory is default mountpoint
+                            }
                             vec![
                                 Action::StoreStorageDrive(
                                     self.drive_selection.mountpoint.clone(),
@@ -475,25 +501,27 @@ impl Component for ChangeDrivePopup {
                 }
             },
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::ChangeDrivePopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::ChangeDrivePopUp => {
-                    self.active = true;
-                    self.can_select = false;
-                    self.state = ChangeDriveState::Selection;
-                    let _ = self.update_drive_items();
-                    self.select_drive();
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::ChangeDrivePopUp) => {
+                self.can_select = false;
+                self.state = ChangeDriveState::Selection;
+                let _ = self.update_drive_items();
+                self.select_drive();
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             // Useful when the user has selected a drive but didn't confirm it
             Action::OptionsActions(OptionsActions::UpdateStorageDrive(mountpoint, drive_name)) => {
                 self.drive_selection.mountpoint = mountpoint;
@@ -502,7 +530,7 @@ impl Component for ChangeDrivePopup {
                 None
             }
             // We need to refresh the list of available drives because of the space
-            Action::StoreNodesToStart(ref nodes_to_start) => {
+            Action::StoreRunningNodeCount(ref nodes_to_start) => {
                 self.nodes_to_start = *nodes_to_start;
                 let _ = self.update_drive_items();
                 None
@@ -520,10 +548,6 @@ impl Component for ChangeDrivePopup {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
@@ -540,7 +564,7 @@ impl Component for ChangeDrivePopup {
         .split(layer_zero);
 
         let pop_up_border: Paragraph = match self.state {
-            ChangeDriveState::Selection => self.draw_selection_state(f, layer_zero, layer_one),
+            ChangeDriveState::Selection => self.draw_selection_state(f, layer_zero, layer_one)?,
             ChangeDriveState::ConfirmChange => {
                 self.draw_confirm_change_state(f, layer_zero, layer_one)
             }
@@ -549,6 +573,14 @@ impl Component for ChangeDrivePopup {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
     }
 }
 
@@ -650,5 +682,129 @@ impl DriveItem {
         };
 
         ListItem::new(line)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use tempfile::{TempDir, tempdir};
+
+    fn build_popup() -> (TempDir, ChangeDrivePopup) {
+        let temp_path = tempdir().expect("failed to create temp directory");
+        let path = temp_path.path().to_path_buf();
+        (
+            temp_path,
+            ChangeDrivePopup::new(path, 1).expect("popup created"),
+        )
+    }
+
+    fn drive(name: &str, mount: &str, status: DriveStatus) -> (TempDir, DriveItem) {
+        let temp_dir = tempdir().expect("failed to create temp directory");
+        let path = temp_dir.path().to_path_buf();
+        let mount_path = if mount == "/" {
+            path.join("test-primary")
+        } else {
+            path.join(mount.trim_start_matches('/'))
+        };
+        (
+            temp_dir,
+            DriveItem {
+                name: name.into(),
+                mountpoint: mount_path,
+                size: "100 GB".into(),
+                status,
+            },
+        )
+    }
+
+    #[test]
+    fn assign_drive_selection_marks_item_selected() {
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, selected) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = selected.clone();
+        popup.items = Some(StatefulList::with_items(vec![
+            selected.clone(),
+            other.clone(),
+        ]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(1));
+        }
+
+        popup.assign_drive_selection();
+
+        assert_eq!(popup.drive_selection.mountpoint, other.mountpoint);
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.items[0].status, DriveStatus::NotSelected);
+        assert_eq!(items.items[1].status, DriveStatus::Selected);
+    }
+
+    #[test]
+    fn select_drive_highlights_current_selection() {
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = other.clone();
+        popup.items = Some(StatefulList::with_items(vec![
+            current.clone(),
+            other.clone(),
+        ]));
+        popup.select_drive();
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.state.selected(), Some(1));
+        assert_eq!(items.items[1].status, DriveStatus::Selected);
+    }
+
+    #[test]
+    fn handle_key_events_updates_selection_and_can_select() {
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_dir_drive2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotSelected);
+        popup.drive_selection = current.clone();
+        popup.items = Some(StatefulList::with_items(vec![current, other]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(0));
+        }
+
+        let focus_manager = FocusManager::new(FocusTarget::ChangeDrivePopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Down, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+        let items = popup.items.as_ref().unwrap();
+        assert_eq!(items.state.selected(), Some(1));
+        assert!(popup.can_select);
+    }
+
+    #[test]
+    fn can_select_prevents_unavailable_drive_selection() {
+        let (_temp_dir, mut popup) = build_popup();
+        let (_temp_dir_drive, current) = drive("Primary", "/", DriveStatus::Selected);
+        let (_temp_drive_2, other) =
+            drive("Secondary", "/mnt/secondary", DriveStatus::NotEnoughSpace);
+        popup.drive_selection = current.clone();
+        popup.items = Some(StatefulList::with_items(vec![current, other]));
+        if let Some(ref mut items) = popup.items {
+            items.state.select(Some(1));
+        }
+
+        let focus_manager = FocusManager::new(FocusTarget::ChangeDrivePopup);
+        popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Down, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(!popup.can_select);
     }
 }

@@ -50,3 +50,31 @@ impl WidgetRef for Hyperlink<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[test]
+    fn renders_hyperlink_chunks_across_area() {
+        let backend = TestBackend::new(10, 1);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|f| {
+                Hyperlink::new("link", "https://example.com").render_ref(f.area(), f.buffer_mut());
+            })
+            .expect("draw");
+        let buffer = terminal.backend().buffer();
+        let rendered: Vec<_> = buffer
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_string())
+            .collect();
+        assert!(
+            rendered
+                .iter()
+                .any(|symbol| symbol.contains("https://example.com"))
+        );
+    }
+}
