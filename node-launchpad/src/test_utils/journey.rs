@@ -508,6 +508,11 @@ impl JourneyBuilder {
         self
     }
 
+    /// Alias for `expect_text` to match tests that use an assertion phrasing.
+    pub fn assert_text(self, text: &str) -> Self {
+        self.expect_text(text)
+    }
+
     /// Assert that the entire buffer matches the provided reference screen.
     /// Precede with `.wait` to allow rendering to settle before capturing output.
     pub fn expect_screen(mut self, screen: &[&str]) -> Self {

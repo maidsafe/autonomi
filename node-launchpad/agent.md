@@ -42,6 +42,14 @@ Autonomi Node Launchpad is a terminal user interface that orchestrates node life
 
 - `Ctrl+T` (or the footer shortcut) opens the Logs popup for the currently selected node.
 - `Action::NodeTableActions::TriggerNodeLogs` identifies the target service, and `Action::SetNodeLogsTarget { node_name, log_dir }` instructs the popup to stream log lines from the registry-reported directory. Errors surface through `Action::LogsLoadError` so the UI can present troubleshooting feedback.
+- During tests you can bypass filesystem log files by exporting `ANT_LOG_DEST=stdout`. This is particularly handy when running journey tests, for example:
+
+  ```bash
+  ANT_LOG_DEST=stdout CARGO_TARGET_DIR=target \
+    cargo test -p node-launchpad --test node_logs_journey_tests \
+    -- journey_viewing_node_logs_supports_navigation_and_copy --exact --show-output
+  ```
+  The same override works for any binary or integration test that pulls in `ant-logging`.
 
 ## Keyboard Highlights
 

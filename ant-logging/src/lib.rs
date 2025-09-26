@@ -340,22 +340,42 @@ impl LogBuilder {
         let sanitized_crate_name = crate_name.replace("::", "-").replace(" ", "-");
         let sanitized_test_name = test_name.replace("::", "-").replace(" ", "-");
 
-        let output_dest = match dirs_next::data_dir() {
-            Some(dir) => {
-                // Get the current timestamp and format it to be human readable
-                let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
-                // Create unique filename using test name and timestamp
-                let path = dir
-                    .join("autonomi")
-                    .join("client")
-                    .join("logs")
-                    .join(format!(
-                        "log-{timestamp}-{sanitized_crate_name}-{sanitized_test_name}.log"
-                    ));
-                LogOutputDest::Path(path)
+        let override_dest = std::env::var("ANT_LOG_DEST")
+            .ok()
+            .and_then(|raw| {
+                let value = raw.trim();
+                if value.is_empty() {
+                    return None;
+                }
+                match LogOutputDest::parse_from_str(value) {
+                    Ok(dest) => Some(dest),
+                    Err(err) => {
+                        eprintln!(
+                            "ANT_LOG_DEST='{value}' is invalid ({err}). Falling back to default test log destination."
+                        );
+                        None
+                    }
+                }
+            });
+
+        let output_dest = override_dest.unwrap_or_else(|| {
+            match dirs_next::data_dir() {
+                Some(dir) => {
+                    // Get the current timestamp and format it to be human readable
+                    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+                    // Create unique filename using test name and timestamp
+                    let path = dir
+                        .join("autonomi")
+                        .join("client")
+                        .join("logs")
+                        .join(format!(
+                            "log-{timestamp}-{sanitized_crate_name}-{sanitized_test_name}.log"
+                        ));
+                    LogOutputDest::Path(path)
+                }
+                None => LogOutputDest::Stdout,
             }
-            None => LogOutputDest::Stdout,
-        };
+        });
 
         println!(
             "Logging test {test_name:?} from {test_file_name:?} (crate {crate_name:?}) to {output_dest:?}"

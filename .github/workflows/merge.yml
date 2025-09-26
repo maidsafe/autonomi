@@ -182,6 +182,8 @@ jobs:
           cargo test --release --package node-launchpad --test node_transitions_tests -- --no-capture
           echo "Running journey_failure_tests"
           cargo test --release --package node-launchpad --test journey_failure_tests -- --no-capture
+          echo "Running node_logs_journey_tests"
+          cargo test --release --package node-launchpad --test node_logs_journey_tests -- --no-capture
         env:
           RUST_BACKTRACE: full
           RUST_LOG: debug
