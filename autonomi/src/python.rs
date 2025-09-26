@@ -4141,6 +4141,29 @@ impl PyGraphEntry {
             inner: self.inner.address(),
         }
     }
+
+    /// Returns the content of the graph entry.
+    pub fn content(&self) -> [u8; 32] {
+        self.inner.content
+    }
+
+    /// Returns the parents' public keys.
+    pub fn parents(&self) -> Vec<PyPublicKey> {
+        self.inner
+            .parents
+            .iter()
+            .map(|&p| PyPublicKey { inner: p })
+            .collect()
+    }
+
+    /// Returns the descendants as (public_key, content) pairs.
+    pub fn descendants(&self) -> Vec<(PyPublicKey, [u8; 32])> {
+        self.inner
+            .descendants
+            .iter()
+            .map(|&(pk, c)| (PyPublicKey { inner: pk }, c))
+            .collect()
+    }
 }
 
 /// Scratchpad, a mutable space for encrypted data on the Network
