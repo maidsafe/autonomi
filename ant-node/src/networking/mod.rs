@@ -12,7 +12,6 @@
 mod circular_vec;
 mod driver;
 mod error;
-mod external_address;
 mod interface;
 mod log_markers;
 #[cfg(feature = "open-metrics")]
@@ -41,7 +40,6 @@ use libp2p::{
     kad::{KBucketDistance, KBucketKey},
     multiaddr::Protocol,
 };
-use std::net::IpAddr;
 
 /// Sort the provided peers by their distance to the given `KBucketKey`.
 /// Return with the closest expected number of entries it has.
@@ -87,33 +85,6 @@ pub fn sort_peers_by_key<T>(
 /// A list of addresses of a peer in the routing table.
 #[derive(Clone, Debug, Default)]
 pub struct Addresses(pub Vec<Multiaddr>);
-
-/// Verifies if `Multiaddr` contains IPv4 address that is not global.
-/// This is used to filter out unroutable addresses from the Kademlia routing table.
-pub(crate) fn multiaddr_is_global(multiaddr: &Multiaddr) -> bool {
-    !multiaddr.iter().any(|addr| match addr {
-        Protocol::Ip4(ip) => {
-            // Based on the nightly `is_global` method (`Ipv4Addrs::is_global`), only using what is available in stable.
-            // Missing `is_shared`, `is_benchmarking` and `is_reserved`.
-            ip.is_unspecified()
-                | ip.is_private()
-                | ip.is_loopback()
-                | ip.is_link_local()
-                | ip.is_documentation()
-                | ip.is_broadcast()
-        }
-        _ => false,
-    })
-}
-
-/// Get the `IpAddr` from the `Multiaddr`
-pub(crate) fn multiaddr_get_ip(addr: &Multiaddr) -> Option<IpAddr> {
-    addr.iter().find_map(|p| match p {
-        Protocol::Ip4(addr) => Some(IpAddr::V4(addr)),
-        Protocol::Ip6(addr) => Some(IpAddr::V6(addr)),
-        _ => None,
-    })
-}
 
 pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
     addr.iter().find_map(|p| match p {

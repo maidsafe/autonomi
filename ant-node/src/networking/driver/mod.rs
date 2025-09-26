@@ -19,8 +19,7 @@ use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
     Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore, circular_vec::CircularVec,
-    driver::kad::U256, error::Result, external_address::ExternalAddressManager,
-    log_markers::Marker, replication_fetcher::ReplicationFetcher,
+    driver::kad::U256, error::Result, log_markers::Marker, replication_fetcher::ReplicationFetcher,
 };
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::PaymentQuote;
@@ -108,7 +107,6 @@ pub(crate) struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap: Bootstrap,
-    pub(crate) external_address_manager: Option<ExternalAddressManager>,
     /// The peers that are closer to our PeerId. Includes self.
     pub(crate) replication_fetcher: ReplicationFetcher,
     #[cfg(feature = "open-metrics")]
