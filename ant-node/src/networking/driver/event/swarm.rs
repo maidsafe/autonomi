@@ -21,7 +21,6 @@ use itertools::Itertools;
 use libp2p::metrics::Recorder;
 use libp2p::{
     Multiaddr, TransportError,
-    core::ConnectedPoint,
     multiaddr::Protocol,
     swarm::{ConnectionId, DialError, SwarmEvent},
 };
@@ -100,37 +99,18 @@ impl SwarmDriver {
                 self.handle_identify_event(*event);
             }
             SwarmEvent::NewListenAddr {
-                mut address,
+                address,
                 listener_id,
             } => {
                 event_string = "new listen addr";
-
-                info!("Local node is listening {listener_id:?} on {address:?}");
-
+                info!(
+                    "Local node is listening {listener_id:?} on {address:?}, adding it to external address."
+                );
+                let mut address = address;
                 let local_peer_id = *self.swarm.local_peer_id();
-                // Make sure the address ends with `/p2p/<local peer ID>`. In case of relay, `/p2p` is already there.
                 if address.iter().last() != Some(Protocol::P2p(local_peer_id)) {
                     address.push(Protocol::P2p(local_peer_id));
                 }
-
-                if self.local {
-                    // all addresses are effectively external here...
-                    // this is needed for Kad Mode::Server
-                    self.swarm.add_external_address(address.clone());
-                    if let Err(err) = self.add_sync_and_flush_cache(address.clone()) {
-                        warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
-                    }
-                } else if let Some(external_address_manager) =
-                    self.external_address_manager.as_mut()
-                {
-                    external_address_manager.on_new_listen_addr(address.clone(), &mut self.swarm);
-                } else {
-                    // just for future reference.
-                    warn!(
-                        "External address manager is not enabled for a public node. This should not happen."
-                    );
-                }
-
                 if tracing::level_enabled!(tracing::Level::DEBUG) {
                     let all_external_addresses = self.swarm.external_addresses().collect_vec();
                     let all_listeners = self.swarm.listeners().collect_vec();
@@ -138,6 +118,13 @@ impl SwarmDriver {
                     debug!("All our external addresses: {all_external_addresses:?}");
                 }
 
+                self.swarm.add_external_address(address.clone());
+
+                if self.local
+                    && let Err(err) = self.add_sync_and_flush_cache(address.clone())
+                {
+                    warn!("Failed to sync and flush cache during NewListenAddr: {err:?}");
+                }
                 self.initial_bootstrap_trigger.listen_addr_obtained = true;
 
                 self.send_event(NetworkEvent::NewListenAddr(address));
@@ -179,12 +166,6 @@ impl SwarmDriver {
                     &mut self.swarm,
                     self.peers_in_rt,
                 );
-
-                if let Some(external_address_manager) = self.external_address_manager.as_mut()
-                    && let ConnectedPoint::Listener { local_addr, .. } = &endpoint
-                {
-                    external_address_manager.on_established_incoming_connection(local_addr.clone());
-                }
 
                 let _ = self.live_connected_peers.insert(
                     connection_id,
@@ -438,10 +419,6 @@ impl SwarmDriver {
             SwarmEvent::NewExternalAddrCandidate { address } => {
                 event_string = "NewExternalAddrCandidate";
                 debug!("New external address candidate: {address:?}");
-                if let Some(external_address_manager) = self.external_address_manager.as_mut() {
-                    external_address_manager
-                        .add_external_address_candidate(address, &mut self.swarm);
-                }
             }
             SwarmEvent::ExternalAddrConfirmed { address } => {
                 event_string = "ExternalAddrConfirmed";
@@ -457,9 +434,6 @@ impl SwarmDriver {
             } => {
                 event_string = "ExpiredListenAddr";
                 info!("Listen address has expired. {listener_id:?} on {address:?}");
-                if let Some(external_address_manager) = self.external_address_manager.as_mut() {
-                    external_address_manager.on_expired_listen_addr(address, &self.swarm);
-                }
             }
             SwarmEvent::ListenerError { listener_id, error } => {
                 event_string = "ListenerError";

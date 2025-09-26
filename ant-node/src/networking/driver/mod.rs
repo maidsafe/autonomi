@@ -22,7 +22,6 @@ use crate::networking::{
     circular_vec::CircularVec,
     driver::{behaviour::upnp, kad::U256},
     error::Result,
-    external_address::ExternalAddressManager,
     log_markers::Marker,
     replication_fetcher::ReplicationFetcher,
 };
@@ -109,7 +108,6 @@ pub(crate) struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
-    pub(crate) external_address_manager: Option<ExternalAddressManager>,
     /// The peers that are closer to our PeerId. Includes self.
     pub(crate) replication_fetcher: ReplicationFetcher,
     #[cfg(feature = "open-metrics")]
