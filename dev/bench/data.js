@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759159117376,
+  "lastUpdate": 1759159119083,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5778,6 +5778,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory usage w/ upload",
             "value": 20,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc1786ef9a31743ff288aeb7194ef8aa25f52d56",
+          "message": "Merge pull request #3212 from oetyng/feat-python-extend-graphentry-methods\n\nfeat(python): extend graphentry methods",
+          "timestamp": "2025-09-29T15:59:58+01:00",
+          "tree_id": "ccd37cc0bba022917ed3ab8775de427e8bdd05fe",
+          "url": "https://github.com/maidsafe/autonomi/commit/cc1786ef9a31743ff288aeb7194ef8aa25f52d56"
+        },
+        "date": 1759159118524,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 17,
             "unit": "MB"
           },
           {
