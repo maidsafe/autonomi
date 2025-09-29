@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759160038894,
+  "lastUpdate": 1759160040969,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8139,6 +8139,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23242,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79fc0b1c344f41166e88ce4d3eee7fdc9b3abb46",
+          "message": "Merge pull request #3215 from maqi/avoid_unrecognized_DM_result_in_hanging\n\nfix: avoid unrecognized req/rsp DM result in hanging",
+          "timestamp": "2025-09-29T16:16:05+01:00",
+          "tree_id": "c6c8846960b3d7c2a2b9e2196549d484199b39a8",
+          "url": "https://github.com/maidsafe/autonomi/commit/79fc0b1c344f41166e88ce4d3eee7fdc9b3abb46"
+        },
+        "date": 1759160040211,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10251,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21842,
             "unit": "ms"
           },
           {
