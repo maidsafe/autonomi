@@ -6,12 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::networking::{
-    Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
-    driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
-    error::{NetworkError, Result},
-    interface::{LocalSwarmCmd, NetworkSwarmCmd, TerminateNodeReason},
-    log_markers::Marker,
+use crate::{
+    event::TerminateNodeReason,
+    networking::{
+        Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
+        driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
+        error::{NetworkError, Result},
+        interface::{LocalSwarmCmd, NetworkSwarmCmd},
+        log_markers::Marker,
+    },
 };
 use ant_evm::PaymentQuote;
 use ant_protocol::{
@@ -19,6 +22,7 @@ use ant_protocol::{
     messages::{Cmd, Request},
     storage::{DataTypes, RecordHeader, RecordKind, ValidationType},
 };
+use libp2p::multiaddr::Protocol;
 use libp2p::{
     Multiaddr, PeerId,
     kad::{
@@ -416,7 +420,20 @@ impl SwarmDriver {
                 let current_state = SwarmLocalState {
                     connected_peers: self.swarm.connected_peers().cloned().collect(),
                     peers_in_routing_table: self.peers_in_rt,
-                    listeners: self.swarm.listeners().cloned().collect(),
+                    listeners: self
+                        .swarm
+                        .listeners()
+                        .cloned()
+                        .map(|mut addr| {
+                            if !addr
+                                .iter()
+                                .any(|protocol| matches!(protocol, Protocol::P2p(_)))
+                            {
+                                addr.push(Protocol::P2p(self.self_peer_id));
+                            }
+                            addr
+                        })
+                        .collect(),
                 };
 
                 sender

@@ -56,17 +56,41 @@ pub fn centered_rect_fixed(x: u16, y: u16, r: Rect) -> Rect {
 ///
 /// A `Result` indicating the success or failure of the operation.
 pub fn open_logs(node_name: Option<String>) -> Result<(), eyre::Report> {
-    let service_path = get_service_log_dir_path(ReleaseType::NodeLaunchpad, None, None)?
-        .to_string_lossy()
-        .into_owned();
+    let mut path = get_service_log_dir_path(ReleaseType::AntNode, None, None)?;
 
-    let folder = if let Some(node_name) = node_name {
-        format!("{service_path}/{node_name}")
-    } else {
-        service_path.to_string()
-    };
+    if let Some(node_name) = node_name {
+        path = path.join(node_name);
+    }
+
+    let folder = path.to_string_lossy().into_owned();
+
     if let Err(e) = system::open_folder(&folder) {
         error!("Failed to open folder: {}", e);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn centered_rect_produces_expected_size() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rect = centered_rect(50, 40, area);
+        assert_eq!(rect.width, 50);
+        assert_eq!(rect.height, 20);
+        assert_eq!(rect.x, 25);
+        assert_eq!(rect.y, 15);
+    }
+
+    #[test]
+    fn centered_rect_fixed_produces_expected_size() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rect = centered_rect_fixed(40, 10, area);
+        assert_eq!(rect.width, 40);
+        assert_eq!(rect.height, 10);
+        assert_eq!(rect.x, 30);
+        assert_eq!(rect.y, 20);
+    }
 }

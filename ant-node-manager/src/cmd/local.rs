@@ -26,14 +26,28 @@ use color_eyre::{Help, Report, Result, eyre::eyre};
 use std::{
     path::PathBuf,
     process::{Command, Stdio},
+    sync::Arc,
 };
 use sysinfo::System;
 use tokio::time::{Duration, sleep};
 
+#[tracing::instrument(
+    skip(
+        metrics_port,
+        node_path,
+        node_port,
+        _peers_args,
+        log_format,
+        rpc_port,
+        rewards_address,
+        evm_network,
+        node_version
+    ),
+    err
+)]
 pub async fn join(
     build: bool,
     count: u16,
-    enable_metrics_server: bool,
     interval: u64,
     metrics_port: Option<PortRange>,
     node_path: Option<PathBuf>,
@@ -52,8 +66,7 @@ pub async fn join(
     }
     info!("Joining local network");
 
-    if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
-    {
+    if metrics_port.is_some() && !cfg!(feature = "open-metrics") && build {
         return Err(eyre!(
             "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
         ));
@@ -76,7 +89,6 @@ pub async fn join(
 
     let options = LocalNetworkOptions {
         antnode_bin_path,
-        enable_metrics_server,
         interval,
         join: true,
         metrics_port,
@@ -97,6 +109,7 @@ pub async fn join(
     Ok(())
 }
 
+#[tracing::instrument(err)]
 pub async fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<()> {
     let local_reg_path = &get_local_node_registry_path()?;
     let local_node_registry = NodeRegistryManager::load(local_reg_path).await?;
@@ -115,11 +128,23 @@ pub async fn kill(keep_directories: bool, verbosity: VerbosityLevel) -> Result<(
     Ok(())
 }
 
+#[tracing::instrument(
+    skip(
+        metrics_port,
+        node_path,
+        node_port,
+        node_version,
+        log_format,
+        rpc_port,
+        rewards_address,
+        evm_network
+    ),
+    err
+)]
 pub async fn run(
     build: bool,
     clean: bool,
     count: u16,
-    enable_metrics_server: bool,
     interval: u64,
     metrics_port: Option<PortRange>,
     node_path: Option<PathBuf>,
@@ -132,8 +157,7 @@ pub async fn run(
     skip_validation: bool,
     verbosity: VerbosityLevel,
 ) -> Result<(), Report> {
-    if (enable_metrics_server || metrics_port.is_some()) && !cfg!(feature = "open-metrics") && build
-    {
+    if metrics_port.is_some() && !cfg!(feature = "open-metrics") && build {
         return Err(eyre!(
             "Metrics server is not available. Please enable the open-metrics feature flag. Run the command with the --features open-metrics"
         ));
@@ -190,7 +214,6 @@ pub async fn run(
 
     let options = LocalNetworkOptions {
         antnode_bin_path,
-        enable_metrics_server,
         join: false,
         interval,
         metrics_port,
@@ -278,6 +301,7 @@ fn get_evm_testnet_bin_path(build: bool, verbosity: VerbosityLevel) -> Result<Pa
 }
 
 /// Spawn the evm-testnet binary as a child process
+#[tracing::instrument(err)]
 async fn spawn_evm_testnet(build: bool, verbosity: VerbosityLevel) -> Result<()> {
     let evm_testnet_path = get_evm_testnet_bin_path(build, verbosity)?;
 
@@ -321,6 +345,7 @@ fn check_evm_testnet_running() -> bool {
 }
 
 /// Ensure an EVM testnet is running, starting one if necessary
+#[tracing::instrument(err)]
 async fn ensure_evm_testnet_running(build: bool, verbosity: VerbosityLevel) -> Result<()> {
     if check_evm_testnet_running() {
         if verbosity != VerbosityLevel::Minimal {
@@ -351,6 +376,7 @@ async fn ensure_evm_testnet_running(build: bool, verbosity: VerbosityLevel) -> R
     Ok(())
 }
 
+#[tracing::instrument(err)]
 pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
     let local_node_registry = NodeRegistryManager::load(&get_local_node_registry_path()?).await?;
     if !json {
@@ -358,13 +384,13 @@ pub async fn status(details: bool, fail: bool, json: bool) -> Result<()> {
     }
     status_report(
         &local_node_registry,
-        &ServiceController {},
+        Arc::new(ServiceController {}),
         details,
         json,
         fail,
         true,
+        true,
     )
     .await?;
-    local_node_registry.save().await?;
     Ok(())
 }

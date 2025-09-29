@@ -29,7 +29,6 @@ node.run(
     initial_peers=[],  # List of multiaddresses for initial peers
     local=True,       # Run in local mode
     root_dir=None,    # Custom root directory (optional)
-    relay=False # Run on home network
 )
 ```
 
@@ -42,7 +41,7 @@ Creates a new instance of the AntNode.
 
 ### Node Operations
 
-#### `run(rewards_address: str, evm_network: str, ip: str = "0.0.0.0", port: int = 0, initial_peers: List[str] = [], local: bool = False, root_dir: Optional[str] = None, relay: bool = False) -> None`
+#### `run(rewards_address: str, evm_network: str, ip: str = "0.0.0.0", port: int = 0, initial_peers: List[str] = [], local: bool = False, root_dir: Optional[str] = None) -> None`
 Start the node with the given configuration.
 
 - **Parameters:**
@@ -53,7 +52,6 @@ Start the node with the given configuration.
   - `initial_peers`: List of multiaddresses for initial peers
   - `local`: Run in local mode
   - `root_dir`: Custom root directory path (optional)
-  - `relay`: Connect to the network via relay nodes
 
 #### `peer_id() -> str`
 Get the node's PeerId as a string.

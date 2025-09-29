@@ -7,12 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{
-    Addresses, NetworkEvent, multiaddr_get_port,
-    network::connection_action_logging,
-    relay_manager::{RelayManager, is_a_relayed_peer},
+    Addresses, NetworkEvent, multiaddr_get_port, network::connection_action_logging,
 };
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
-use itertools::Itertools;
 use libp2p::Multiaddr;
 use libp2p::identify::Info;
 use libp2p::kad::K_VALUE;
@@ -23,7 +20,7 @@ use std::time::{Duration, Instant};
 /// The delay before we dial back a peer after receiving an identify event.
 /// 180s will most likely remove the UDP tuple from the remote's NAT table.
 /// This will make sure that the peer is reachable and that we can add it to the routing table.
-const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
+pub(crate) const DIAL_BACK_DELAY: Duration = Duration::from_secs(180);
 
 use super::SwarmDriver;
 
@@ -123,27 +120,13 @@ impl SwarmDriver {
         }
 
         let has_dialed = self.dialed_peers.contains(&peer_id);
-        let is_relayed_peer = is_a_relayed_peer(info.listen_addrs.iter());
-        let addrs = if !is_relayed_peer {
-            let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
-            let Some(addr) = addr else {
-                warn!("identify: no valid multiaddr found for {peer_id:?} on {connection_id:?}");
-                return;
-            };
-            debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
-            vec![addr]
-        } else {
-            let p2p_addrs = info
-                .listen_addrs
-                .iter()
-                .filter_map(|addr| RelayManager::craft_relay_address(addr, None))
-                .unique()
-                .collect::<Vec<_>>();
-            debug!(
-                "Peer {peer_id:?} is a relayed peer. Using p2p addr from identify directly: {p2p_addrs:?}"
-            );
-            p2p_addrs
+        let addr = craft_valid_multiaddr_without_p2p(addr_fom_connection);
+        let Some(addr) = addr else {
+            warn!("identify: no valid multiaddr found for {peer_id:?} on {connection_id:?}");
+            return;
         };
+        debug!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
+        let addrs = vec![addr];
 
         // return early for reachability-check-peer / clients
         if info.agent_version.contains("reachability-check-peer") {
@@ -162,15 +145,6 @@ impl SwarmDriver {
         } else if info.agent_version.contains("client") {
             debug!("Peer {peer_id:?} is a client. Not dialing or adding to RT.");
             return;
-        }
-
-        // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
-        if !is_relayed_peer
-            && !self.initial_bootstrap.is_bootstrap_peer(&peer_id)
-            && let Some(relay_manager) = self.relay_manager.as_mut()
-        {
-            debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");
-            relay_manager.add_potential_candidates(&peer_id, &addrs, &info.protocols);
         }
 
         let (kbucket_full, already_present_in_rt, ilog2) =
@@ -196,7 +170,7 @@ impl SwarmDriver {
             debug!(
                 "Received identify for {peer_id:?} that is already part of the RT. Checking if the addresses {addrs:?} are new."
             );
-            self.update_pre_existing_peer(peer_id, &addrs, is_relayed_peer);
+            self.update_pre_existing_peer(peer_id, &addrs);
         } else if !self.local && !has_dialed {
             // When received an identify from un-dialed peer, try to dial it
             // The dial shall trigger the same identify to be sent again and confirm
@@ -257,23 +231,6 @@ impl SwarmDriver {
                             debug!("Already have addr {addr:?} in dial queue for {peer_id:?}.");
                         }
                     }
-
-                    if is_relayed_peer {
-                        let mut removed = false;
-                        old_addrs.0.retain(|addr| {
-                            if addr.iter().any(|seg| matches!(seg, Protocol::P2pCircuit)) {
-                                true
-                            } else {
-                                removed = true;
-                                false
-                            }
-                        });
-                        if removed {
-                            debug!(
-                                "Removed non-p2p addr from dial queue for {peer_id:?}. Remaining addrs: {old_addrs:?}"
-                            );
-                        }
-                    }
                 }
                 hash_map::Entry::Vacant(entry) => {
                     debug!("Adding new addr {addrs:?} to dial queue for {peer_id:?}");
@@ -316,14 +273,7 @@ impl SwarmDriver {
     }
 
     /// If the peer is part already of the RT, try updating the addresses based on the new push info.
-    ///
-    /// new_addrs will not contain non-p2p-circuit (non-relayed) addresses if the peer is a relayed peer.
-    fn update_pre_existing_peer(
-        &mut self,
-        peer_id: libp2p::PeerId,
-        new_addrs: &[Multiaddr],
-        is_relayed_peer: bool,
-    ) {
+    fn update_pre_existing_peer(&mut self, peer_id: libp2p::PeerId, new_addrs: &[Multiaddr]) {
         if let Some(kbucket) = self.swarm.behaviour_mut().kademlia.kbucket(peer_id) {
             let new_addrs = new_addrs.iter().cloned().collect::<HashSet<_>>();
             let mut addresses_to_add = Vec::new();
@@ -335,6 +285,7 @@ impl SwarmDriver {
                 warn!("Peer {peer_id:?} is not part of the RT. Cannot update addresses.");
                 return;
             };
+
             let existing_addrs = entry
                 .node
                 .value
@@ -342,25 +293,6 @@ impl SwarmDriver {
                 .map(multiaddr_strip_p2p)
                 .collect::<HashSet<_>>();
             addresses_to_add.extend(new_addrs.difference(&existing_addrs));
-
-            // remove addresses only for relayed peers.
-            if is_relayed_peer {
-                let mut addresses_to_remove = Vec::new();
-                addresses_to_remove.extend(existing_addrs.difference(&new_addrs));
-
-                if !addresses_to_remove.is_empty() {
-                    debug!(
-                        "Removing addresses from RT for {peer_id:?} (relayed) as the new identify does not contain them: {addresses_to_remove:?}"
-                    );
-                    for multiaddr in addresses_to_remove {
-                        let _routing_update = self
-                            .swarm
-                            .behaviour_mut()
-                            .kademlia
-                            .remove_address(&peer_id, multiaddr);
-                    }
-                }
-            }
 
             if !addresses_to_add.is_empty() {
                 debug!(
@@ -388,8 +320,12 @@ fn does_the_peer_support_dnd(info: &Info) -> bool {
 }
 
 /// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
-/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
 fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
+    if addr.iter().any(|p| matches!(p, Protocol::P2pCircuit)) {
+        debug!("Skipping crafting multiaddr for relay node: {addr:?}");
+        return None;
+    }
+
     let mut new_multiaddr = Multiaddr::empty();
     let ip = addr.iter().find_map(|p| match p {
         Protocol::Ip4(addr) => Some(addr),
@@ -405,29 +341,9 @@ fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
 }
 
 /// Build a `Multiaddr` with the p2p protocol filtered out.
-/// If it is a relayed address, then the relay's P2P address is preserved.
 fn multiaddr_strip_p2p(multiaddr: &Multiaddr) -> Multiaddr {
-    let is_relayed = multiaddr.iter().any(|p| matches!(p, Protocol::P2pCircuit));
-
-    if is_relayed {
-        // Do not add any PeerId after we've found the P2PCircuit protocol. The prior one is the relay's PeerId which
-        // we should preserve.
-        let mut before_relay_protocol = true;
-        let mut new_multi_addr = Multiaddr::empty();
-        for p in multiaddr.iter() {
-            if matches!(p, Protocol::P2pCircuit) {
-                before_relay_protocol = false;
-            }
-            if matches!(p, Protocol::P2p(_)) && !before_relay_protocol {
-                continue;
-            }
-            new_multi_addr.push(p);
-        }
-        new_multi_addr
-    } else {
-        multiaddr
-            .iter()
-            .filter(|p| !matches!(p, Protocol::P2p(_)))
-            .collect()
-    }
+    multiaddr
+        .iter()
+        .filter(|p| !matches!(p, Protocol::P2p(_)))
+        .collect()
 }
