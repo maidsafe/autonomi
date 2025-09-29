@@ -225,7 +225,7 @@ impl ServiceControl for ServiceController {
         }
 
         error!(
-            "No process was located with a path at {} or matching executable name",
+            "No process was located with a path at {}",
             bin_path.to_string_lossy()
         );
         Err(Error::ServiceProcessNotFound(
