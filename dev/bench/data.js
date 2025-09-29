@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759160040969,
+  "lastUpdate": 1759180628393,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2261,6 +2261,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.28182374111258,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "937eb522c11f652a5291d84751fbf259c6a255f5",
+          "message": "Merge pull request #3219 from jacderida/chore-revert_3032_2\n\nRevert #3032",
+          "timestamp": "2025-09-29T22:06:31+01:00",
+          "tree_id": "79855ea9dea2e2ca1336307b5f3e5363cb3d96a3",
+          "url": "https://github.com/maidsafe/autonomi/commit/937eb522c11f652a5291d84751fbf259c6a255f5"
+        },
+        "date": 1759180619351,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.1629975644350012,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.452743089011648,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.06192903806882,
             "unit": "MiB/s"
           }
         ]
