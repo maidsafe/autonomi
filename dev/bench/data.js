@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1758887726635,
+  "lastUpdate": 1759159041644,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2183,6 +2183,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 22.301484244278676,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "cc1786ef9a31743ff288aeb7194ef8aa25f52d56",
+          "message": "Merge pull request #3212 from oetyng/feat-python-extend-graphentry-methods\n\nfeat(python): extend graphentry methods",
+          "timestamp": "2025-09-29T15:59:58+01:00",
+          "tree_id": "ccd37cc0bba022917ed3ab8775de427e8bdd05fe",
+          "url": "https://github.com/maidsafe/autonomi/commit/cc1786ef9a31743ff288aeb7194ef8aa25f52d56"
+        },
+        "date": 1759159034266,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.296895557010668,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.692924220150886,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.043950846495882,
             "unit": "MiB/s"
           }
         ]
