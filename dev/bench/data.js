@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759336712720,
+  "lastUpdate": 1759336715276,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8562,6 +8562,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 21372,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "42e4500a3bc4f9531e686a2890abb6e61b26c149",
+          "message": "Merge pull request #3226 from maidsafe/chore-alloy_publish_issue\n\nchore: bump `evmlib` to `0.4.4`",
+          "timestamp": "2025-10-01T17:21:22+01:00",
+          "tree_id": "545682b99c70573f11874ee52a83afe9e090f1cc",
+          "url": "https://github.com/maidsafe/autonomi/commit/42e4500a3bc4f9531e686a2890abb6e61b26c149"
+        },
+        "date": 1759336714177,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9931,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20700,
             "unit": "ms"
           },
           {
