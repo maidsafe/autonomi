@@ -25,7 +25,7 @@ pub static SELECTED_WALLET_ADDRESS: OnceLock<String> = OnceLock::new();
 
 /// Creates the wallets folder if it is missing and returns the folder path.
 pub(crate) fn get_client_wallet_dir_path() -> Result<PathBuf> {
-    let mut home_dirs = crate::access::data_dir::get_client_data_dir_path()
+    let mut home_dirs = crate::access::data_dir::get_client_data_dir_base()
         .wrap_err("Failed to get wallet directory")?;
     home_dirs.push("wallets");
 

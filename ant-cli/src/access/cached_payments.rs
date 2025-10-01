@@ -18,7 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const PAYMENT_EXPIRATION_SECS: u64 = 3600 * 24 * 30;
 
 pub fn get_payments_dir() -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()?;
+    let dir = super::data_dir::get_client_data_dir_base()?;
     let payments_dir = dir.join("payments");
     std::fs::create_dir_all(&payments_dir)
         .wrap_err("Could not create cached payments directory")?;

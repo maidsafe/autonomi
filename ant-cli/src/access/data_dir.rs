@@ -26,8 +26,8 @@ pub enum DataDirError {
     NoExistingUserDirFound,
 }
 
-/// Get the base client data directory path
-pub(crate) fn get_client_data_dir_base() -> Result<PathBuf> {
+/// Get the client data directory path. This is the directory that contains the user data for ALL users.
+pub fn get_client_data_dir_base() -> Result<PathBuf> {
     let mut home_dirs = dirs_next::data_dir()
         .ok_or_else(|| eyre!("Failed to obtain data dir, your OS might not be supported."))?;
     home_dirs.push("autonomi");
@@ -35,12 +35,13 @@ pub(crate) fn get_client_data_dir_base() -> Result<PathBuf> {
     Ok(home_dirs)
 }
 
-/// Get the client data directory path
+/// Get the client data directory path. This is the directory that contains the user data for a SINGLE user.
+/// For the general data directory case, use [`get_client_data_dir_base`] instead.
 /// Automatically detects the wallet directory to use:
 /// - If only one wallet directory exists, uses it
 /// - If multiple wallet directories exist, try to get wallet from environment else returns error
 /// - If no wallet directories exist, tries to get wallet from environment else returns error
-pub fn get_client_data_dir_path() -> Result<PathBuf> {
+pub fn get_client_user_data_dir() -> Result<PathBuf> {
     let base_dir = get_client_data_dir_base()?;
 
     // Check if there are any existing accounts user data directories
@@ -102,6 +103,21 @@ fn get_existing_user_dirs() -> Result<Vec<String>> {
     }
 
     Ok(wallet_dirs)
+}
+
+/// Get all existing account data directory paths
+/// Returns a vector of (wallet_address, path) tuples
+pub fn get_all_client_data_dir_paths() -> Result<Vec<(String, PathBuf)>> {
+    let base_dir = get_client_data_dir_base()?;
+    let existing_users = get_existing_user_dirs()?;
+
+    let mut paths = Vec::new();
+    for user in existing_users {
+        let path = base_dir.join(&user);
+        paths.push((user, path));
+    }
+
+    Ok(paths)
 }
 
 fn get_wallet_pk() -> Result<String> {

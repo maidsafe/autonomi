@@ -21,7 +21,7 @@ use autonomi::{
 use color_eyre::eyre::Context;
 use color_eyre::eyre::Result;
 
-use super::data_dir::get_client_data_dir_path;
+use super::data_dir::{get_all_client_data_dir_paths, get_client_user_data_dir};
 
 use serde::{Deserialize, Serialize};
 
@@ -72,8 +72,9 @@ pub fn get_local_user_data() -> Result<UserData> {
     Ok(user_data)
 }
 
-pub fn get_local_private_file_archives() -> Result<HashMap<PrivateArchiveDataMap, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_private_file_archives_from_path(
+    data_dir: &std::path::Path,
+) -> Result<HashMap<PrivateArchiveDataMap, String>> {
     let user_data_path = data_dir.join("user_data");
     let private_file_archives_path = user_data_path.join("private_file_archives");
     std::fs::create_dir_all(&private_file_archives_path)?;
@@ -93,8 +94,13 @@ pub fn get_local_private_file_archives() -> Result<HashMap<PrivateArchiveDataMap
     Ok(private_file_archives)
 }
 
+pub fn get_local_private_file_archives() -> Result<HashMap<PrivateArchiveDataMap, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_private_file_archives_from_path(&data_dir)
+}
+
 pub fn get_local_private_archive_access(local_addr: &str) -> Result<PrivateArchiveDataMap> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let private_file_archives_path = user_data_path.join("private_file_archives");
     let file_path = private_file_archives_path.join(local_addr);
@@ -106,7 +112,7 @@ pub fn get_local_private_archive_access(local_addr: &str) -> Result<PrivateArchi
 }
 
 pub fn get_local_private_file_access(local_addr: &str) -> Result<DataMapChunk> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let private_files_path = user_data_path.join("private_files");
     let file_path = private_files_path.join(local_addr);
@@ -116,8 +122,7 @@ pub fn get_local_private_file_access(local_addr: &str) -> Result<DataMapChunk> {
     Ok(private_file_access)
 }
 
-pub fn get_local_registers() -> Result<HashMap<RegisterAddress, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_registers_from_path(data_dir: &std::path::Path) -> Result<HashMap<RegisterAddress, String>> {
     let user_data_path = data_dir.join("user_data");
     let registers_path = user_data_path.join("registers");
     std::fs::create_dir_all(&registers_path)?;
@@ -137,8 +142,13 @@ pub fn get_local_registers() -> Result<HashMap<RegisterAddress, String>> {
     Ok(registers)
 }
 
+pub fn get_local_registers() -> Result<HashMap<RegisterAddress, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_registers_from_path(&data_dir)
+}
+
 pub fn get_name_of_local_register_with_address(address: &RegisterAddress) -> Result<String> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let registers_path = user_data_path.join("registers");
     let file_path = registers_path.join(address.to_hex());
@@ -146,8 +156,9 @@ pub fn get_name_of_local_register_with_address(address: &RegisterAddress) -> Res
     Ok(file_content)
 }
 
-pub fn get_local_public_file_archives() -> Result<HashMap<ArchiveAddress, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_public_file_archives_from_path(
+    data_dir: &std::path::Path,
+) -> Result<HashMap<ArchiveAddress, String>> {
     let user_data_path = data_dir.join("user_data");
     let file_archives_path = user_data_path.join("file_archives");
     std::fs::create_dir_all(&file_archives_path)?;
@@ -164,6 +175,11 @@ pub fn get_local_public_file_archives() -> Result<HashMap<ArchiveAddress, String
         file_archives.insert(file_archive_address, file_archive_name);
     }
     Ok(file_archives)
+}
+
+pub fn get_local_public_file_archives() -> Result<HashMap<ArchiveAddress, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_public_file_archives_from_path(&data_dir)
 }
 
 pub fn write_local_user_data(user_data: &UserData) -> Result<()> {
@@ -226,7 +242,7 @@ pub fn write_local_user_data(user_data: &UserData) -> Result<()> {
 }
 
 pub fn write_local_register(register: &RegisterAddress, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let registers_path = user_data_path.join("registers");
     std::fs::create_dir_all(&registers_path)?;
@@ -235,7 +251,7 @@ pub fn write_local_register(register: &RegisterAddress, name: &str) -> Result<()
 }
 
 pub fn write_local_public_file_archive(archive: String, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let file_archives_path = user_data_path.join("file_archives");
     std::fs::create_dir_all(&file_archives_path)?;
@@ -248,7 +264,7 @@ pub fn write_local_private_file_archive(
     local_addr: String,
     name: &str,
 ) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let private_file_archives_path = user_data_path.join("private_file_archives");
     std::fs::create_dir_all(&private_file_archives_path)?;
@@ -262,7 +278,7 @@ pub fn write_local_private_file_archive(
 }
 
 pub fn write_local_private_file(datamap_hex: String, local_addr: String, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let private_files_path = user_data_path.join("private_files");
     std::fs::create_dir_all(&private_files_path)?;
@@ -275,8 +291,9 @@ pub fn write_local_private_file(datamap_hex: String, local_addr: String, name: &
     Ok(())
 }
 
-pub fn get_local_private_files() -> Result<HashMap<PrivateArchiveDataMap, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_private_files_from_path(
+    data_dir: &std::path::Path,
+) -> Result<HashMap<PrivateArchiveDataMap, String>> {
     let user_data_path = data_dir.join("user_data");
     let private_files_path = user_data_path.join("private_files");
     let mut files = HashMap::new();
@@ -307,8 +324,13 @@ pub fn get_local_private_files() -> Result<HashMap<PrivateArchiveDataMap, String
     Ok(files)
 }
 
+pub fn get_local_private_files() -> Result<HashMap<PrivateArchiveDataMap, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_private_files_from_path(&data_dir)
+}
+
 pub fn write_local_public_file(data_address: String, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let public_files_path = user_data_path.join("public_files");
     std::fs::create_dir_all(&public_files_path)?;
@@ -321,8 +343,7 @@ pub fn write_local_public_file(data_address: String, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn get_local_public_files() -> Result<HashMap<DataAddress, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_public_files_from_path(data_dir: &std::path::Path) -> Result<HashMap<DataAddress, String>> {
     let user_data_path = data_dir.join("user_data");
     let public_files_path = user_data_path.join("public_files");
     let mut files = HashMap::new();
@@ -343,8 +364,13 @@ pub fn get_local_public_files() -> Result<HashMap<DataAddress, String>> {
     Ok(files)
 }
 
+pub fn get_local_public_files() -> Result<HashMap<DataAddress, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_public_files_from_path(&data_dir)
+}
+
 pub fn write_local_scratchpad(address: ScratchpadAddress, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let scratchpads_path = user_data_path.join("scratchpads");
     std::fs::create_dir_all(&scratchpads_path)?;
@@ -352,8 +378,7 @@ pub fn write_local_scratchpad(address: ScratchpadAddress, name: &str) -> Result<
     Ok(())
 }
 
-pub fn get_local_scratchpads() -> Result<HashMap<String, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_scratchpads_from_path(data_dir: &std::path::Path) -> Result<HashMap<String, String>> {
     let user_data_path = data_dir.join("user_data");
     let scratchpads_path = user_data_path.join("scratchpads");
     std::fs::create_dir_all(&scratchpads_path)?;
@@ -371,8 +396,13 @@ pub fn get_local_scratchpads() -> Result<HashMap<String, String>> {
     Ok(scratchpads)
 }
 
+pub fn get_local_scratchpads() -> Result<HashMap<String, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_scratchpads_from_path(&data_dir)
+}
+
 pub fn write_local_pointer(address: PointerAddress, name: &str) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let pointers_path = user_data_path.join("pointers");
     std::fs::create_dir_all(&pointers_path)?;
@@ -380,8 +410,7 @@ pub fn write_local_pointer(address: PointerAddress, name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn get_local_pointers() -> Result<HashMap<String, String>> {
-    let data_dir = get_client_data_dir_path()?;
+fn get_pointers_from_path(data_dir: &std::path::Path) -> Result<HashMap<String, String>> {
     let user_data_path = data_dir.join("user_data");
     let pointers_path = user_data_path.join("pointers");
     std::fs::create_dir_all(&pointers_path)?;
@@ -399,9 +428,14 @@ pub fn get_local_pointers() -> Result<HashMap<String, String>> {
     Ok(pointers)
 }
 
+pub fn get_local_pointers() -> Result<HashMap<String, String>> {
+    let data_dir = get_client_user_data_dir()?;
+    get_pointers_from_path(&data_dir)
+}
+
 /// Write a pointer value to local user data for caching
 pub fn write_local_pointer_value(name: &str, pointer: &Pointer) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let pointer_values_path = user_data_path.join("pointer_values");
     std::fs::create_dir_all(&pointer_values_path)?;
@@ -414,7 +448,7 @@ pub fn write_local_pointer_value(name: &str, pointer: &Pointer) -> Result<()> {
 
 /// Get cached pointer value from local storage
 pub fn get_local_pointer_value(name: &str) -> Result<Pointer> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let pointer_values_path = user_data_path.join("pointer_values");
     std::fs::create_dir_all(&pointer_values_path)?;
@@ -427,7 +461,7 @@ pub fn get_local_pointer_value(name: &str) -> Result<Pointer> {
 
 /// Get cached pointer values from local storage
 pub fn get_local_pointer_values() -> Result<std::collections::HashMap<String, Pointer>> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let pointer_values_path = user_data_path.join("pointer_values");
     std::fs::create_dir_all(&pointer_values_path)?;
@@ -450,7 +484,7 @@ pub fn get_local_pointer_values() -> Result<std::collections::HashMap<String, Po
 
 /// Write a scratchpad value to local user data for caching
 pub fn write_local_scratchpad_value(name: &str, scratchpad: &Scratchpad) -> Result<()> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let scratchpad_values_path = user_data_path.join("scratchpad_values");
     std::fs::create_dir_all(&scratchpad_values_path)?;
@@ -463,7 +497,7 @@ pub fn write_local_scratchpad_value(name: &str, scratchpad: &Scratchpad) -> Resu
 
 /// Get cached scratchpad value from local storage
 pub fn get_local_scratchpad_value(name: &str) -> Result<Scratchpad> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let scratchpad_values_path = user_data_path.join("scratchpad_values");
     std::fs::create_dir_all(&scratchpad_values_path)?;
@@ -476,7 +510,7 @@ pub fn get_local_scratchpad_value(name: &str) -> Result<Scratchpad> {
 
 /// Get cached scratchpad values from local storage
 pub fn get_local_scratchpad_values() -> Result<std::collections::HashMap<String, Scratchpad>> {
-    let data_dir = get_client_data_dir_path()?;
+    let data_dir = get_client_user_data_dir()?;
     let user_data_path = data_dir.join("user_data");
     let scratchpad_values_path = user_data_path.join("scratchpad_values");
     std::fs::create_dir_all(&scratchpad_values_path)?;
@@ -495,4 +529,100 @@ pub fn get_local_scratchpad_values() -> Result<std::collections::HashMap<String,
         }
     }
     Ok(scratchpad_values)
+}
+
+// ============ Multi-account support functions ============
+
+/// Get all registers from all accounts
+pub fn get_all_local_registers() -> Result<Vec<(String, HashMap<RegisterAddress, String>)>> {
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let registers = get_registers_from_path(&path)?;
+        results.push((account, registers));
+    }
+
+    Ok(results)
+}
+
+/// Get all private file archives from all accounts
+pub fn get_all_local_private_file_archives()
+-> Result<Vec<(String, HashMap<PrivateArchiveDataMap, String>)>> {
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let archives = get_private_file_archives_from_path(&path)?;
+        results.push((account, archives));
+    }
+
+    Ok(results)
+}
+
+/// Get all public file archives from all accounts
+pub fn get_all_local_public_file_archives() -> Result<Vec<(String, HashMap<ArchiveAddress, String>)>>
+{
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let archives = get_public_file_archives_from_path(&path)?;
+        results.push((account, archives));
+    }
+
+    Ok(results)
+}
+
+/// Get all scratchpads from all accounts
+pub fn get_all_local_scratchpads() -> Result<Vec<(String, HashMap<String, String>)>> {
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let scratchpads = get_scratchpads_from_path(&path)?;
+        results.push((account, scratchpads));
+    }
+
+    Ok(results)
+}
+
+/// Get all pointers from all accounts
+pub fn get_all_local_pointers() -> Result<Vec<(String, HashMap<String, String>)>> {
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let pointers = get_pointers_from_path(&path)?;
+        results.push((account, pointers));
+    }
+
+    Ok(results)
+}
+
+/// Get all private files from all accounts
+pub fn get_all_local_private_files() -> Result<Vec<(String, HashMap<PrivateArchiveDataMap, String>)>>
+{
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let files = get_private_files_from_path(&path)?;
+        results.push((account, files));
+    }
+
+    Ok(results)
+}
+
+/// Get all public files from all accounts
+pub fn get_all_local_public_files() -> Result<Vec<(String, HashMap<DataAddress, String>)>> {
+    let accounts_data = get_all_client_data_dir_paths()?;
+    let mut results = Vec::new();
+
+    for (account, path) in accounts_data {
+        let files = get_public_files_from_path(&path)?;
+        results.push((account, files));
+    }
+
+    Ok(results)
 }
