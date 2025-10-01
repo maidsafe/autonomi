@@ -64,6 +64,7 @@ pub enum SubCmd {
     },
 
     /// Operations related to data analysis.
+    #[command(alias = "analyse")]
     Analyze {
         /// The address of the data to analyse.
         addr: String,
