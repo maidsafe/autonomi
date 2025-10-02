@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759417061943,
+  "lastUpdate": 1759420675886,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2417,6 +2417,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 21.696637887673877,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bf53f974caad2723f533b8835e23d727f1ce5009",
+          "message": "Merge pull request #3228 from mickvandijke/add-get-raw-quote-from-peer\n\nfeat(autonomi): add get raw quote from peer",
+          "timestamp": "2025-10-02T14:58:54Z",
+          "tree_id": "1ff42a0a53f8236ecf87205b1a1d95183c763bbf",
+          "url": "https://github.com/maidsafe/autonomi/commit/bf53f974caad2723f533b8835e23d727f1ce5009"
+        },
+        "date": 1759420668604,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.333494310371732,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 8.798147046322304,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.03259599996107,
             "unit": "MiB/s"
           }
         ]
