@@ -64,7 +64,7 @@ pyo3-async-runtimes = { version = "0.23", optional = true, features = ["tokio-ru
 rand = "0.8.5"
 rayon = "1.8.0"
 rmp-serde = "1.1.1"
-self_encryption = { version = "0.34.0" }
+self_encryption = { version = "0.34.1" }
 # Older version of self_encryption for backward compatibility
 self_encryption_old = { package = "self_encryption", version = "0.30.0" }
 serde = { version = "1.0.133", features = ["derive", "rc"] }

@@ -1684,7 +1684,7 @@ dependencies = [
  "rayon",
  "rmp-serde",
  "self_encryption 0.30.0",
- "self_encryption 0.34.0",
+ "self_encryption 0.34.1",
  "serde",
  "serial_test",
  "sha2",
@@ -5951,7 +5951,7 @@ dependencies = [
  "rcgen",
  "ring 0.17.14",
  "rustls 0.23.32",
- "rustls-webpki 0.103.6",
+ "rustls-webpki 0.103.7",
  "thiserror 2.0.17",
  "x509-parser",
  "yasna",
@@ -8450,7 +8450,7 @@ dependencies = [
  "once_cell",
  "ring 0.17.14",
  "rustls-pki-types",
- "rustls-webpki 0.103.6",
+ "rustls-webpki 0.103.7",
  "subtle",
  "zeroize",
 ]
@@ -8486,9 +8486,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.6"
+version = "0.103.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8572f3c2cb9934231157b45499fc41e1f58c589fdfb81a844ba873265e80f8eb"
+checksum = "e10b3f4191e8a80e6b43eebabfac91e5dcecebb27a71f04e820c47ec41d314bf"
 dependencies = [
  "ring 0.17.14",
  "rustls-pki-types",
@@ -8674,9 +8674,9 @@ dependencies = [
 
 [[package]]
 name = "self_encryption"
-version = "0.34.0"
+version = "0.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43f85a17897458dccae05b1339088f0efb4ac04333b9e749264fd437443ffd36"
+checksum = "636a9d557a649b7c30068e270212eb42967384034de9fa8250fbbc55b65b43a7"
 dependencies = [
  "aes",
  "bincode",
