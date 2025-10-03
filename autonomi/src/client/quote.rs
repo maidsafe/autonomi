@@ -20,6 +20,16 @@ use libp2p::PeerId;
 use std::collections::HashMap;
 use xor_name::XorName;
 
+/// Payment strategy for uploads
+#[derive(Debug, Clone, Copy, Default)]
+pub enum PaymentMode {
+    /// Default mode: Pay 3 nodes
+    #[default]
+    Standard,
+    /// Alternative mode: Pay only the highest priced node with 3x the quoted amount
+    SingleNode,
+}
+
 // todo: limit depends per RPC endpoint. We should make this configurable
 // todo: test the limit for the Arbitrum One public RPC endpoint
 // Working limit of the Arbitrum Sepolia public RPC endpoint
@@ -227,41 +237,135 @@ impl Client {
             entry.sort_by_key(|(_, _, _, price)| *price);
         }
 
-        let mut quotes_to_pay_per_addr = HashMap::new();
+        let quotes_to_pay_per_addr = self.process_quotes_by_payment_mode(quotes_per_addr)?;
 
+        Ok(StoreQuote(quotes_to_pay_per_addr))
+    }
+
+    /// Process quotes according to the payment mode
+    fn process_quotes_by_payment_mode(
+        &self,
+        quotes_per_addr: HashMap<XorName, Vec<(PeerId, Addresses, PaymentQuote, Amount)>>,
+    ) -> Result<HashMap<XorName, QuoteForAddress>, CostError> {
+        match self.payment_mode {
+            PaymentMode::Standard => self.process_standard_payment_quotes(quotes_per_addr),
+            PaymentMode::SingleNode => self.process_single_node_payment_quotes(quotes_per_addr),
+        }
+    }
+
+    /// Process quotes for standard payment mode (pay 3 nodes)
+    fn process_standard_payment_quotes(
+        &self,
+        quotes_per_addr: HashMap<XorName, Vec<(PeerId, Addresses, PaymentQuote, Amount)>>,
+    ) -> Result<HashMap<XorName, QuoteForAddress>, CostError> {
         const MINIMUM_QUOTES_TO_PAY: usize = 5;
+        let mut quotes_to_pay_per_addr = HashMap::new();
 
         for (content_addr, quotes) in quotes_per_addr {
             if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
-                let (p1, q1, a1, _) = &quotes[0];
-                let (p2, q2, a2, _) = &quotes[1];
-
-                let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
-                trace!("Peers to pay for {content_addr}: {peer_ids:?}");
-                quotes_to_pay_per_addr.insert(
-                    content_addr,
-                    QuoteForAddress(vec![
-                        (*p1, q1.clone(), a1.clone(), Amount::ZERO),
-                        (*p2, q2.clone(), a2.clone(), Amount::ZERO),
-                        quotes[2].clone(),
-                        quotes[3].clone(),
-                        quotes[4].clone(),
-                    ]),
-                );
+                let quote_for_addr = self.create_standard_quote_payment(&quotes, content_addr);
+                quotes_to_pay_per_addr.insert(content_addr, quote_for_addr);
             } else {
-                error!(
-                    "Not enough quotes for content_addr: {content_addr}, got: {} and need at least {MINIMUM_QUOTES_TO_PAY}",
-                    quotes.len()
-                );
-                return Err(CostError::NotEnoughNodeQuotes {
+                return Err(self.create_insufficient_quotes_error(
                     content_addr,
-                    got: quotes.len(),
-                    required: MINIMUM_QUOTES_TO_PAY,
-                });
+                    quotes.len(),
+                    MINIMUM_QUOTES_TO_PAY,
+                ));
             }
         }
 
-        Ok(StoreQuote(quotes_to_pay_per_addr))
+        Ok(quotes_to_pay_per_addr)
+    }
+
+    /// Process quotes for single node payment mode (pay only highest priced node with 3x amount)
+    fn process_single_node_payment_quotes(
+        &self,
+        quotes_per_addr: HashMap<XorName, Vec<(PeerId, Addresses, PaymentQuote, Amount)>>,
+    ) -> Result<HashMap<XorName, QuoteForAddress>, CostError> {
+        const MINIMUM_QUOTES_TO_PAY: usize = 5;
+        let mut quotes_to_pay_per_addr = HashMap::new();
+
+        for (content_addr, mut quotes) in quotes_per_addr {
+            if quotes.len() >= MINIMUM_QUOTES_TO_PAY {
+                let quote_for_addr =
+                    self.create_single_node_quote_payment(&mut quotes, content_addr);
+                quotes_to_pay_per_addr.insert(content_addr, quote_for_addr);
+            } else {
+                return Err(self.create_insufficient_quotes_error(
+                    content_addr,
+                    quotes.len(),
+                    MINIMUM_QUOTES_TO_PAY,
+                ));
+            }
+        }
+
+        Ok(quotes_to_pay_per_addr)
+    }
+
+    /// Create a payment structure for standard mode (pay nodes at indices 2, 3, 4)
+    fn create_standard_quote_payment(
+        &self,
+        quotes: &[(PeerId, Addresses, PaymentQuote, Amount)],
+        content_addr: XorName,
+    ) -> QuoteForAddress {
+        let (p1, a1, q1, _) = &quotes[0];
+        let (p2, a2, q2, _) = &quotes[1];
+
+        let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
+        trace!("Peers to pay for {content_addr}: {peer_ids:?}");
+
+        QuoteForAddress(vec![
+            (*p1, a1.clone(), q1.clone(), Amount::ZERO),
+            (*p2, a2.clone(), q2.clone(), Amount::ZERO),
+            quotes[2].clone(),
+            quotes[3].clone(),
+            quotes[4].clone(),
+        ])
+    }
+
+    /// Create a payment structure for single node mode (pay only the highest priced node with 3x the amount)
+    fn create_single_node_quote_payment(
+        &self,
+        quotes: &mut [(PeerId, Addresses, PaymentQuote, Amount)],
+        content_addr: XorName,
+    ) -> QuoteForAddress {
+        // Get the highest priced node (index 4 after already sorting by price)
+        let (p5, a5, q5, highest_price) = &quotes[4];
+        let enhanced_price = *highest_price * Amount::from(3u64);
+
+        trace!(
+            "Single peer to pay for {content_addr}: {p5:?} with price {enhanced_price} (3x of {highest_price})"
+        );
+
+        let (p1, a1, q1, _) = &quotes[0];
+        let (p2, a2, q2, _) = &quotes[1];
+        let (p3, a3, q3, _) = &quotes[2];
+        let (p4, a4, q4, _) = &quotes[3];
+
+        QuoteForAddress(vec![
+            (*p1, a1.clone(), q1.clone(), Amount::ZERO),
+            (*p2, a2.clone(), q2.clone(), Amount::ZERO),
+            (*p3, a3.clone(), q3.clone(), Amount::ZERO),
+            (*p4, a4.clone(), q4.clone(), Amount::ZERO),
+            (*p5, a5.clone(), q5.clone(), enhanced_price),
+        ])
+    }
+
+    /// Create error for insufficient quotes
+    fn create_insufficient_quotes_error(
+        &self,
+        content_addr: XorName,
+        got: usize,
+        required: usize,
+    ) -> CostError {
+        error!(
+            "Not enough quotes for content_addr: {content_addr}, got: {got} and need at least {required}"
+        );
+        CostError::NotEnoughNodeQuotes {
+            content_addr,
+            got,
+            required,
+        }
     }
 }
 
