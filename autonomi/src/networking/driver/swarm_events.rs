@@ -191,7 +191,11 @@ impl NetworkDriver {
                 // Unrecoganized req/rsp DM indicates peer is in an incorrect version
                 // For such case, it shall be counted as a failure.
                 // Using ranodom id as place holder.
-                self.pending_tasks.terminate_query(request_id, PeerId::random(), OutboundFailure::UnsupportedProtocols)?;
+                self.pending_tasks.terminate_query(
+                    request_id,
+                    PeerId::random(),
+                    OutboundFailure::UnsupportedProtocols,
+                )?;
             }
         }
 
