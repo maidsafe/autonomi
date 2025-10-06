@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759762994474,
+  "lastUpdate": 1759762996313,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9267,6 +9267,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 19048,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d634944e6843b76cba4a1791679c03a7931ffe9a",
+          "message": "Merge pull request #3223 from grumbach/analyse_alias\n\nchore: cli analyse alias and clippy fixes",
+          "timestamp": "2025-10-06T15:51:03+01:00",
+          "tree_id": "5983b18f2f84c402ec0e6429dc7960a3de3d0e39",
+          "url": "https://github.com/maidsafe/autonomi/commit/d634944e6843b76cba4a1791679c03a7931ffe9a"
+        },
+        "date": 1759762995745,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9798,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20454,
             "unit": "ms"
           },
           {
