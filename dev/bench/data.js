@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759439316216,
+  "lastUpdate": 1759759054977,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2495,6 +2495,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 21.955635899803365,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fbbb95e6909287c0e3764fb1aa767d148cd31881",
+          "message": "Merge pull request #3227 from jacderida/chore-upgrade_self_encryption\n\nchore: upgrade `self_encryption` to `0.34.1`",
+          "timestamp": "2025-10-06T14:46:54+01:00",
+          "tree_id": "745b0a12cbe20c6fcad735d266fef54fedd94303",
+          "url": "https://github.com/maidsafe/autonomi/commit/fbbb95e6909287c0e3764fb1aa767d148cd31881"
+        },
+        "date": 1759759047208,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 2.2152893697747684,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 9.278632071345259,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 22.268650061728074,
             "unit": "MiB/s"
           }
         ]
