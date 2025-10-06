@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1759759132494,
+  "lastUpdate": 1759759134793,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9126,6 +9126,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 22657,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fbbb95e6909287c0e3764fb1aa767d148cd31881",
+          "message": "Merge pull request #3227 from jacderida/chore-upgrade_self_encryption\n\nchore: upgrade `self_encryption` to `0.34.1`",
+          "timestamp": "2025-10-06T14:46:54+01:00",
+          "tree_id": "745b0a12cbe20c6fcad735d266fef54fedd94303",
+          "url": "https://github.com/maidsafe/autonomi/commit/fbbb95e6909287c0e3764fb1aa767d148cd31881"
+        },
+        "date": 1759759133911,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9281,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19048,
             "unit": "ms"
           },
           {
