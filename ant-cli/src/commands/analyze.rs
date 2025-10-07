@@ -153,8 +153,12 @@ async fn print_closest_nodes(client: &autonomi::Client, addr: &str, verbose: boo
         ));
     };
 
-    println!("Found {} closest peers to {}:", peers.len(), addr);
-    for (i, peer) in peers.iter().enumerate() {
+    // Sort peers by peer_id for consistent output
+    let mut sorted_peers = peers;
+    sorted_peers.sort_by(|a, b| a.peer_id.cmp(&b.peer_id));
+
+    println!("Found {} closest peers to {}:", sorted_peers.len(), addr);
+    for (i, peer) in sorted_peers.iter().enumerate() {
         println!("{}. Peer ID: {}", i + 1, peer.peer_id);
         if verbose {
             println!("   Addresses:");
