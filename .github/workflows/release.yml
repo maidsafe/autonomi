@@ -215,7 +215,7 @@ jobs:
       SM_LOG_FILE: ${{ github.workspace }}\smctl-signing.log
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Download unsigned Windows binaries from build job
       - uses: actions/download-artifact@master
