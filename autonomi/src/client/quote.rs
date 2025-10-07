@@ -302,24 +302,24 @@ impl Client {
         Ok(quotes_to_pay_per_addr)
     }
 
-    /// Create a payment structure for standard mode (pay nodes at indices 2, 3, 4)
+    /// Create a payment structure for standard mode (pay nodes at indices 1, 2, 3)
     fn create_standard_quote_payment(
         &self,
         quotes: &[(PeerId, Addresses, PaymentQuote, Amount)],
         content_addr: XorName,
     ) -> QuoteForAddress {
         let (p1, a1, q1, _) = &quotes[0];
-        let (p2, a2, q2, _) = &quotes[1];
+        let (p5, a5, q5, _) = &quotes[4];
 
-        let peer_ids = vec![quotes[2].0, quotes[3].0, quotes[4].0];
+        let peer_ids = vec![quotes[1].0, quotes[2].0, quotes[3].0];
         trace!("Peers to pay for {content_addr}: {peer_ids:?}");
 
         QuoteForAddress(vec![
             (*p1, a1.clone(), q1.clone(), Amount::ZERO),
-            (*p2, a2.clone(), q2.clone(), Amount::ZERO),
+            quotes[1].clone(),
             quotes[2].clone(),
             quotes[3].clone(),
-            quotes[4].clone(),
+            (*p5, a5.clone(), q5.clone(), Amount::ZERO),
         ])
     }
 
