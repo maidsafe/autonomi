@@ -68,6 +68,9 @@ pub enum SubCmd {
     Analyze {
         /// The address of the data to analyse.
         addr: String,
+        /// Show closest nodes to this address instead of analyzing it.
+        #[arg(long)]
+        closest_nodes: bool,
         /// Verbose output. Detailed description of the analysis.
         #[arg(short, long)]
         verbose: bool,
@@ -642,9 +645,11 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             WalletCmd::Export => wallet::export(),
             WalletCmd::Balance => wallet::balance(network_context).await,
         },
-        Some(SubCmd::Analyze { addr, verbose }) => {
-            analyze::analyze(&addr, verbose, network_context).await
-        }
+        Some(SubCmd::Analyze {
+            addr,
+            closest_nodes,
+            verbose,
+        }) => analyze::analyze(&addr, closest_nodes, verbose, network_context).await,
         None => {
             // If no subcommand is given, default to clap's error behaviour.
             Opt::command()

@@ -11,7 +11,12 @@ use autonomi::{Multiaddr, RewardsAddress, SecretKey, Wallet, client::analyze::An
 use color_eyre::eyre::Result;
 use std::str::FromStr;
 
-pub async fn analyze(addr: &str, verbose: bool, network_context: NetworkContext) -> Result<()> {
+pub async fn analyze(
+    addr: &str,
+    closest_nodes: bool,
+    verbose: bool,
+    network_context: NetworkContext,
+) -> Result<()> {
     macro_rules! println_if_verbose {
         ($($arg:tt)*) => {
             if verbose {
@@ -25,6 +30,10 @@ pub async fn analyze(addr: &str, verbose: bool, network_context: NetworkContext)
     let client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
+
+    if closest_nodes {
+        return print_closest_nodes(&client, addr, verbose).await;
+    }
 
     let analysis = client.analyze_address(addr, verbose).await;
     match analysis {
@@ -103,4 +112,58 @@ fn try_other_types(addr: &str, verbose: bool) {
     }
 
     println!("⚠️ Unrecognized input");
+}
+
+async fn print_closest_nodes(client: &autonomi::Client, addr: &str, verbose: bool) -> Result<()> {
+    use autonomi::PublicKey;
+    use autonomi::chunk::ChunkAddress;
+    use autonomi::graph::GraphEntryAddress;
+
+    macro_rules! println_if_verbose {
+        ($($arg:tt)*) => {
+            if verbose {
+                println!($($arg)*);
+            }
+        };
+    }
+
+    let hex_addr = addr.trim_start_matches("0x");
+
+    println_if_verbose!("Querying closest peers to address...");
+
+    // Try parsing as ChunkAddress (XorName) first
+    let peers = if let Ok(chunk_addr) = ChunkAddress::from_hex(addr) {
+        println_if_verbose!("Identified as ChunkAddress");
+        client
+            .get_closest_to_address(chunk_addr)
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to get closest peers: {e}"))?
+    // Try parsing as PublicKey (could be GraphEntry, Pointer, or Scratchpad)
+    } else if let Ok(public_key) = PublicKey::from_hex(hex_addr) {
+        println_if_verbose!("Identified as PublicKey, using GraphEntryAddress");
+        // Default to GraphEntryAddress for public keys
+        let graph_entry_address = GraphEntryAddress::new(public_key);
+        client
+            .get_closest_to_address(graph_entry_address)
+            .await
+            .map_err(|e| color_eyre::eyre::eyre!("Failed to get closest peers: {e}"))?
+    } else {
+        return Err(color_eyre::eyre::eyre!(
+            "Could not parse address. Expected a hex-encoded ChunkAddress or PublicKey"
+        ));
+    };
+
+    println!("Found {} closest peers to {}:", peers.len(), addr);
+    for (i, peer) in peers.iter().enumerate() {
+        println!("{}. Peer ID: {}", i + 1, peer.peer_id);
+        if verbose {
+            println!("   Addresses:");
+            for addr in &peer.addrs {
+                println!("     - {addr}");
+            }
+            println!();
+        }
+    }
+
+    Ok(())
 }
