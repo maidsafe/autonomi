@@ -12,7 +12,7 @@ use atomic_write_file::AtomicWriteFile;
 use libp2p::{Multiaddr, PeerId};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     fs::{self, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -32,46 +32,39 @@ impl CacheData {
     /// This has to be bumped whenever the cache data format changes to ensure compatibility.
     pub const CACHE_DATA_VERSION: u32 = 1;
 
-    /// Sync the self cache with another cache. Self peers (newer) are preserved.
+    /// Sync the self cache with another cache. Self peers (newer) are preserved by pushing
+    /// other peers to the back.
     pub fn sync(&mut self, other: &CacheData, max_addrs_per_peer: usize, max_peers: usize) {
         let old_len = self.peers.len();
-        let other_len = other.peers.len();
+        let mut other_peers = other.peers.iter().cloned().collect::<HashMap<_, _>>();
 
-        for (other_peer, other_addrs) in other.peers.iter() {
-            if other_addrs.is_empty() {
-                continue;
-            }
-
-            let mut found_existing = false;
-            for (peer, addrs) in self.peers.iter_mut() {
-                if peer == other_peer {
-                    for addr in other_addrs.iter() {
-                        if !addrs.contains(addr) {
-                            addrs.push_back(addr.clone());
-                        }
+        for (peer, addrs) in self.peers.iter_mut() {
+            if let Some(other_addrs) = other_peers.get(peer) {
+                for other_addr in other_addrs.iter() {
+                    // push the other addr to the back if we don't already have it
+                    if !addrs.contains(other_addr) {
+                        addrs.push_back(other_addr.clone());
                     }
-                    while addrs.len() > max_addrs_per_peer {
-                        addrs.pop_front();
-                    }
-                    found_existing = true;
-                    break;
+                }
+                // remove excess addrs from the back (oldest) if we exceed max_addrs_per_peer
+                while addrs.len() > max_addrs_per_peer {
+                    addrs.pop_back();
                 }
             }
-
-            if !found_existing {
-                self.peers.push_back((*other_peer, other_addrs.clone()));
-            }
-
-            // break if limit reached
-            if self.peers.len() >= max_peers {
-                break;
-            }
+            // remove from other_peers to avoid re-processing
+            other_peers.remove(peer);
         }
 
         // Apply max_peers limit by removing from back (oldest from other)
         while self.peers.len() > max_peers {
             self.peers.pop_back();
         }
+
+        // Now add any remaining peers from other_peers
+        let required_len = max_peers.saturating_sub(self.peers.len());
+        let other_len = other_peers.len();
+        let other_peers = other_peers.into_iter().take(required_len);
+        self.peers.extend(other_peers);
 
         let new_len = self.peers.len();
 
@@ -82,7 +75,7 @@ impl CacheData {
         self.last_updated = SystemTime::now();
     }
 
-    /// Add a peer to the cachse data
+    /// Add a peer to front of the cache as the newest, pruning old from tail
     pub fn add_peer<'a>(
         &mut self,
         peer_id: PeerId,
@@ -93,14 +86,14 @@ impl CacheData {
         if let Some((_, present_addrs)) = self.peers.iter_mut().find(|(id, _)| id == &peer_id) {
             for addr in addrs {
                 if !present_addrs.contains(addr) {
-                    present_addrs.push_back(addr.clone());
+                    present_addrs.push_front(addr.clone());
                 }
             }
             while present_addrs.len() > max_addrs_per_peer {
-                present_addrs.pop_front();
+                present_addrs.pop_back();
             }
         } else {
-            self.peers.push_back((
+            self.peers.push_front((
                 peer_id,
                 addrs
                     .into_iter()
@@ -111,7 +104,7 @@ impl CacheData {
         }
 
         while self.peers.len() > max_peers {
-            self.peers.pop_front();
+            self.peers.pop_back();
         }
     }
 

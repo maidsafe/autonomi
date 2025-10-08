@@ -108,7 +108,7 @@ impl BootstrapCacheStore {
         ) {
             Ok(mut data) => {
                 while data.peers.len() > cfg.max_peers {
-                    data.peers.pop_front();
+                    data.peers.pop_back();
                 }
                 return Ok(data);
             }
@@ -126,7 +126,7 @@ impl BootstrapCacheStore {
                 warn!("Loaded cache data from older version, upgrading to latest version");
                 let mut data: CacheDataLatest = data.into();
                 while data.peers.len() > cfg.max_peers {
-                    data.peers.pop_front();
+                    data.peers.pop_back();
                 }
 
                 Ok(data)
