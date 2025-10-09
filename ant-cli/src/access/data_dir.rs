@@ -38,29 +38,17 @@ pub fn get_client_data_dir_base() -> Result<PathBuf> {
 /// Get the client data directory path. This is the directory that contains the user data for a SINGLE user.
 /// For the general data directory case, use [`get_client_data_dir_base`] instead.
 /// Automatically detects the wallet directory to use:
-/// - If only one wallet directory exists, uses it
-/// - If multiple wallet directories exist, try to get wallet from environment else returns error
-/// - If no wallet directories exist, tries to get wallet from environment else returns error
+/// - if the SECRET_KEY is available, uses it to get the wallet address
+/// - if only one user directory exists, uses it
+/// - if multiple user directories exist, returns error
+/// - if no user directories exist, returns error
 pub fn get_client_user_data_dir() -> Result<PathBuf> {
     let base_dir = get_client_data_dir_base()?;
 
-    // Check if there are any existing accounts user data directories
-    let existing_users = get_existing_user_dirs()?;
-
-    let wallet_addr = match &existing_users[..] {
-        // Exactly one account exists, use it
-        [one] => one.clone(),
-        // No accounts exist yet, try to get address from current environment
-        // First try from SECRET_KEY env var
-        [] => match get_wallet_pk() {
-            Ok(pk) => pk,
-            Err(_) => return Err(DataDirError::NoExistingUserDirFound.into()),
-        },
-        // Multiple wallets exist, try SECRET_KEY env var else return error
-        [_, ..] => match get_wallet_pk() {
-            Ok(pk) => pk,
-            Err(_) => return Err(DataDirError::MultipleAccounts(existing_users).into()),
-        },
+    // Get the wallet address to use
+    let wallet_addr = match get_wallet_pk() {
+        Ok(pk) => pk,
+        Err(_) => get_wallet_addr_from_existing_user_dirs()?,
     };
 
     // Migrate legacy data if needed (user data stored directly under client/ without wallet address)
@@ -78,6 +66,21 @@ pub fn get_client_user_data_dir() -> Result<PathBuf> {
         })?;
 
     Ok(wallet_dir)
+}
+
+fn get_wallet_addr_from_existing_user_dirs() -> Result<String> {
+    // Check if there are any existing accounts user data directories
+    let existing_users = get_existing_user_dirs()?;
+
+    match &existing_users[..] {
+        // Exactly one account exists, use it
+        [one] => Ok(one.clone()),
+        // No accounts exist yet, try to get address from current environment
+        // First try from SECRET_KEY env var
+        [] => Err(DataDirError::NoExistingUserDirFound.into()),
+        // Multiple wallets exist, try SECRET_KEY env var else return error
+        [_, ..] => Err(DataDirError::MultipleAccounts(existing_users).into()),
+    }
 }
 
 /// Get existing wallet directories under the client data dir
