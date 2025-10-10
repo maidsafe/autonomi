@@ -29,6 +29,8 @@ use crate::networking::Addresses;
 pub(crate) enum NodeIssue {
     /// Some connections might be considered to be critical and should be tracked.
     ConnectionIssue,
+    /// Peer responded with an unexpected PeerId
+    WrongPeerId,
     /// Data Replication failed
     ReplicationFailure,
     /// Close nodes have reported this peer as bad
@@ -44,6 +46,7 @@ impl std::fmt::Display for NodeIssue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             NodeIssue::ConnectionIssue => write!(f, "CriticalConnectionIssue"),
+            NodeIssue::WrongPeerId => write!(f, "WrongPeerId"),
             NodeIssue::ReplicationFailure => write!(f, "ReplicationFailure"),
             NodeIssue::CloseNodesShunning => write!(f, "CloseNodesShunning"),
             NodeIssue::BadQuoting => write!(f, "BadQuoting"),

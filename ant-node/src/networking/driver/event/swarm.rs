@@ -372,7 +372,7 @@ impl SwarmDriver {
                 );
 
                 // we need to decide if this was a critical error and if we should report it to the Issue tracker
-                let is_critical_error = match &error {
+                let issue_to_record = match &error {
                     DialError::Transport(errors) => {
                         // as it's an outgoing error, if it's transport based we can assume it is _our_ fault
                         //
@@ -443,28 +443,32 @@ impl SwarmDriver {
                             );
                             there_is_a_serious_issue = true;
                         }
-                        there_is_a_serious_issue
+                        if there_is_a_serious_issue {
+                            Some(NodeIssue::ConnectionIssue)
+                        } else {
+                            None
+                        }
                     }
                     DialError::NoAddresses => {
                         // We provided no address, and while we can't really blame the peer
                         // we also can't connect, so we opt to cleanup...
                         debug!("OutgoingConnectionError: No address provided");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                     DialError::Aborted => {
                         // not their fault
                         debug!("OutgoingConnectionError: Aborted");
-                        false
+                        None
                     }
                     DialError::DialPeerConditionFalse(_) => {
                         // we could not dial due to an internal condition, so not their issue
                         debug!("OutgoingConnectionError: DialPeerConditionFalse");
-                        false
+                        None
                     }
                     DialError::LocalPeerId { address } => {
                         // This is actually _us_ So we should remove this from the RT
                         debug!("OutgoingConnectionError: LocalPeerId: {address}");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                     DialError::WrongPeerId { obtained, address } => {
                         // The peer id we attempted to dial was not the one we expected
@@ -472,21 +476,22 @@ impl SwarmDriver {
                         debug!(
                             "OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}"
                         );
-                        true
+                        Some(NodeIssue::WrongPeerId)
                     }
                     DialError::Denied { cause } => {
                         // The peer denied our connection
                         // cleanup
                         debug!("OutgoingConnectionError: Denied: {cause:?}");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                 };
 
-                if is_critical_error {
+                if let Some(issue) = issue_to_record {
+                    let issue_for_logging = issue.clone();
                     warn!(
-                        "Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an issue. Error: {error:?}"
+                        "Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an {issue_for_logging:?}. Error: {error:?}"
                     );
-                    self.record_node_issue(failed_peer_id, NodeIssue::ConnectionIssue);
+                    self.record_node_issue(failed_peer_id, issue);
                 }
             }
             SwarmEvent::IncomingConnectionError {
