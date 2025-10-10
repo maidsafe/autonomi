@@ -63,7 +63,7 @@ async fn test_streaming_large_blob() -> Result<()> {
     // init client
     let client = Client::init_local().await?;
     let wallet = get_funded_wallet();
-    let data = gen_random_data(1024 * 1024 * 50); // 50MB test data
+    let data = gen_random_data(1024 * 1024 * 100); // 100MB test data
 
     // put data
     let (_cost, data_addr) = client.data_put_public(data.clone(), wallet.into()).await?;
@@ -72,7 +72,7 @@ async fn test_streaming_large_blob() -> Result<()> {
     let get_result = client.data_get_public(&data_addr).await;
     assert!(
         get_result.is_err(),
-        "data_get_public should fail for 50MB file"
+        "data_get_public should fail for 100MB file"
     );
 
     // download data with stream - this should work for large files

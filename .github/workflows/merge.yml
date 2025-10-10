@@ -171,6 +171,8 @@ jobs:
   e2e:
     name: E2E tests
     runs-on: ${{ matrix.os }}
+    env:
+      MAX_CHUNK_SIZE: 4194304
     strategy:
       matrix:
         include:
