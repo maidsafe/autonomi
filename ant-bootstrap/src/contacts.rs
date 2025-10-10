@@ -109,13 +109,8 @@ impl ContactsFetcher {
         self.ignore_peer_id = ignore_peer_id;
     }
 
-    /// Fetch the list of bootstrap addresses from all configured endpoints
+    /// Fetch the list of bootstrap multiaddrs from all configured endpoints
     pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<Multiaddr>> {
-        Ok(self.fetch_addrs().await?.into_iter().collect())
-    }
-
-    /// Fetch the list of multiaddrs from all configured endpoints
-    pub async fn fetch_addrs(&self) -> Result<Vec<Multiaddr>> {
         info!(
             "Starting peer fetcher from {} endpoints: {:?}",
             self.endpoints.len(),
