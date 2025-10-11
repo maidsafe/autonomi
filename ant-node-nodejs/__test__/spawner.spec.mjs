@@ -8,7 +8,8 @@ test('construct NetworkSpawner', async (t) => {
     const bootstrapConfig = {
         local: true,
         disableCacheReading: true,
-        disableCacheWriting: true
+        disableCacheWriting: true,
+        disableEnvPeers: true
     };
 
     console.log('\n=== Bootstrap Config (JavaScript) ===');
@@ -82,7 +83,8 @@ test('construct NodeSpawner', async (t) => {
             local: true,
             first: true,
             disableCacheReading: true,
-            disableCacheWriting: true
+            disableCacheWriting: true,
+            disableEnvPeers: true
         }
     }, Network.fromString('evm-arbitrum-one'));
     const runningNode = await spawner.spawn();

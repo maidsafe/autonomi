@@ -81,6 +81,9 @@ fn convert_bootstrap_config(config: BootstrapConfigFields) -> Result<BootstrapCo
     if let Some(disable_cache_reading) = config.disable_cache_reading {
         bootstrap_config.disable_cache_reading = disable_cache_reading;
     }
+    if let Some(disable_env_peers) = config.disable_env_peers {
+        bootstrap_config.disable_env_peers = disable_env_peers;
+    }
     if let Some(first) = config.first {
         bootstrap_config = bootstrap_config.with_first(first);
     }
@@ -324,6 +327,7 @@ pub struct BootstrapConfigFields {
     pub cache_save_scaling_factor: Option<u32>,
     pub disable_cache_writing: Option<bool>,
     pub disable_cache_reading: Option<bool>,
+    pub disable_env_peers: Option<bool>,
     pub first: Option<bool>,
     pub initial_peers: Option<Vec<String>>,
     pub local: Option<bool>,

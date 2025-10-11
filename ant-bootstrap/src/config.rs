@@ -105,6 +105,8 @@ pub struct BootstrapConfig {
     pub disable_cache_writing: bool,
     /// Flag to disable reading from the cache file
     pub disable_cache_reading: bool,
+    /// Flag to disable reading peers from the ANT_PEERS environment variable
+    pub disable_env_peers: bool,
     /// Indicate that this is the first node in a new network.
     pub first: bool,
     /// The initial peers that are used to bootstrap/connect the network.
@@ -134,6 +136,7 @@ impl Default for BootstrapConfig {
             cache_save_scaling_factor: 2,
             disable_cache_writing: false,
             disable_cache_reading: false,
+            disable_env_peers: false,
             first: false,
             initial_peers: vec![],
             local: false,
@@ -217,6 +220,12 @@ impl BootstrapConfig {
     /// Sets the flag to disable reading from the cache file
     pub fn with_disable_cache_reading(mut self, disable: bool) -> Self {
         self.disable_cache_reading = disable;
+        self
+    }
+
+    /// Sets the flag to disable reading peers from the ANT_PEERS environment variable
+    pub fn with_disable_env_peers(mut self, disable: bool) -> Self {
+        self.disable_env_peers = disable;
         self
     }
 

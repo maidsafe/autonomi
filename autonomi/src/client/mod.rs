@@ -340,16 +340,11 @@ pub struct UploadSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ant_bootstrap::ANT_PEERS_ENV;
     use ant_logging::LogBuilder;
 
     #[tokio::test]
     async fn test_init_fails() {
         let _guard = LogBuilder::init_single_threaded_tokio_test();
-        #[allow(unsafe_code)]
-        unsafe {
-            std::env::remove_var(ANT_PEERS_ENV);
-        }
 
         let initial_peers = vec![
             "/ip4/127.0.0.1/udp/1/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
@@ -360,6 +355,7 @@ mod tests {
             BootstrapConfig::default()
                 .with_initial_peers(initial_peers)
                 .with_disable_cache_reading(true)
+                .with_disable_env_peers(true)
                 .with_local(true),
         )
         .await

@@ -77,8 +77,12 @@ impl Bootstrap {
         let mut addrs_queue = VecDeque::new();
         let mut bootstrap_peer_ids = HashSet::new();
         if !config.first {
-            for addr in Self::fetch_from_env() {
-                Self::push_addr(&mut addrs_queue, &mut bootstrap_peer_ids, addr);
+            if !config.disable_env_peers {
+                for addr in Self::fetch_from_env() {
+                    Self::push_addr(&mut addrs_queue, &mut bootstrap_peer_ids, addr);
+                }
+            } else {
+                info!("Skipping ANT_PEERS environment variable as per configuration");
             }
 
             for addr in config.initial_peers.drain(..) {
@@ -813,7 +817,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn loads_addresses_from_cache_when_initial_queue_is_empty() {
         let _env_guard = env_lock().await;
-        remove_env_var(ANT_PEERS_ENV);
         let cache_addr: Multiaddr =
             "/ip4/127.0.0.1/tcp/1202/p2p/12D3KooWKGt8umjJQ4sDzFXo2UcHBaF33rqmFcWtXM6nbryL5G4J"
                 .parse()
@@ -834,7 +837,9 @@ mod tests {
             bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
             ..Default::default()
         };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
         let mut flow = Bootstrap::new(config).await.unwrap();
 
         let got = expect_next_addr(&mut flow).await.unwrap();
@@ -847,7 +852,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_first_flag_behavior() {
         let _env_guard = env_lock().await;
-        remove_env_var(ANT_PEERS_ENV);
 
         let mock_server = MockServer::start().await;
         Mock::given(method("GET"))
@@ -871,7 +875,9 @@ mod tests {
                 bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
                 ..Default::default()
             };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
         let mut flow = Bootstrap::new(config).await.unwrap();
 
         let err = expect_err(&mut flow).await;
@@ -885,7 +891,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_multiple_network_contacts() {
         let _env_guard = env_lock().await;
-        remove_env_var(ANT_PEERS_ENV);
 
         let mock_server = MockServer::start().await;
 
@@ -920,7 +925,9 @@ mod tests {
             ],
             ..Default::default()
         };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
         let mut flow = Bootstrap::new(config).await.unwrap();
 
         let first = expect_next_addr(&mut flow).await.unwrap();
@@ -936,8 +943,6 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert_eq!(requests[0].url.path(), "/first");
         assert_eq!(requests[1].url.path(), "/second");
-
-        remove_env_var(ANT_PEERS_ENV);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

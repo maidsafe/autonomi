@@ -9,6 +9,7 @@ export interface BootstrapConfigFields {
   cacheSaveScalingFactor?: number
   disableCacheWriting?: boolean
   disableCacheReading?: boolean
+  disableEnvPeers?: boolean
   first?: boolean
   initialPeers?: Array<string>
   local?: boolean
