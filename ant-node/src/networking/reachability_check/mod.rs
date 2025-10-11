@@ -360,7 +360,11 @@ impl ReachabilityCheckSwarmDriver {
                                 "Received identify info from incoming connection {connection_id:?}. Trying to add the observed address to our list."
                             );
                             if self.dial_manager.on_successful_dial_back_identify(&peer_id) {
-                                self.insert_observed_address(info.observed_addr, connection_id);
+                                self.insert_observed_address(
+                                    info.observed_addr,
+                                    connection_id,
+                                    peer_id,
+                                );
                             } else {
                                 debug!("We did not track the observed address for {peer_id:?}.");
                             }
@@ -516,7 +520,12 @@ impl ReachabilityCheckSwarmDriver {
         }
     }
 
-    fn insert_observed_address(&mut self, address: Multiaddr, connection_id: ConnectionId) {
+    fn insert_observed_address(
+        &mut self,
+        address: Multiaddr,
+        connection_id: ConnectionId,
+        remote_peer_id: PeerId,
+    ) {
         let Some(socket_addr) = multiaddr_get_socket_addr(&address) else {
             warn!("Unable to get socket address from: {address:?}");
             return;
@@ -526,10 +535,10 @@ impl ReachabilityCheckSwarmDriver {
             .dial_manager
             .dialer
             .identify_observed_external_addr
-            .insert(connection_id, socket_addr)
+            .insert(connection_id, (socket_addr, remote_peer_id))
         {
             warn!(
-                "Overwriting existing observed external address {addr:?} for connection id {connection_id:?} with new address {socket_addr:?}. This should not happen."
+                "Overwriting existing observed external address {addr:?} for connection id {connection_id:?} from {remote_peer_id:?} with new address {socket_addr:?}. This should not happen."
             );
         }
     }
@@ -639,7 +648,7 @@ impl ReachabilityCheckSwarmDriver {
         );
 
         let mut external_addr_local_adapter_map: Vec<(SocketAddr, SocketAddr)> = Vec::new();
-        for (connection_id, external_addr) in
+        for (connection_id, (external_addr, remote_peer_id)) in
             &self.dial_manager.dialer.identify_observed_external_addr
         {
             if let Some(local_adapter_addr) = self
@@ -649,18 +658,18 @@ impl ReachabilityCheckSwarmDriver {
                 .get(connection_id)
             {
                 info!(
-                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?}"
+                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?} from {remote_peer_id:?}"
                 );
                 println!(
-                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?}"
+                    "External address {external_addr:?} obtained via Local adapter {local_adapter_addr:?} on {connection_id:?} from {remote_peer_id:?}"
                 );
                 external_addr_local_adapter_map.push((*external_addr, *local_adapter_addr));
             } else {
                 warn!(
-                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?}"
+                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?} from {remote_peer_id:?}"
                 );
                 println!(
-                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?}"
+                    "Unable to get Local adapter address for External address {external_addr:?} on {connection_id:?} from {remote_peer_id:?}"
                 );
             }
         }

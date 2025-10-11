@@ -39,7 +39,7 @@ pub(crate) struct Dialer {
     // Critical field, should only be managed by the DialManager. Don't try to access it directly.
     ongoing_dial_attempts: HashMap<PeerId, DialState>,
     /// The addresses that a remote peer has observed us from.
-    pub(super) identify_observed_external_addr: HashMap<ConnectionId, SocketAddr>,
+    pub(super) identify_observed_external_addr: HashMap<ConnectionId, (SocketAddr, PeerId)>,
     pub(super) incoming_connection_ids: HashSet<ConnectionId>,
     /// The local adapter that was used to establish the incoming connection.
     pub(super) incoming_connection_local_adapter_map: HashMap<ConnectionId, SocketAddr>,
