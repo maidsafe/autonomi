@@ -16,7 +16,7 @@ mod utils;
 pub mod version;
 
 use crate::client::CONNECT_TIMEOUT_SECS;
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore};
+use ant_bootstrap::bootstrap::Bootstrap;
 // export the utils
 pub(crate) use utils::multiaddr_is_global;
 
@@ -158,40 +158,9 @@ impl Network {
     /// Create a new network client
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub fn new(
-        initial_contacts: Vec<Multiaddr>,
-        bootstrap_cache_config: Option<BootstrapCacheConfig>,
-    ) -> Result<Self, NoKnownPeers> {
+    pub fn new(bootstrap: Bootstrap) -> Result<Self, NoKnownPeers> {
         let (task_sender, task_receiver) = mpsc::channel(100);
-        let bootstrap_cache_store = if let Some(config) = bootstrap_cache_config {
-            if config.disable_cache_writing {
-                warn!("Bootstrap cache writing is disabled, the cache will not be saved to disk");
-                None
-            } else {
-                match BootstrapCacheStore::new(config) {
-                    Ok(store) => {
-                        info!(
-                            "Bootstrap cache writing is enabled, the cache will be saved to disk"
-                        );
-                        Some(store)
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to create bootstrap cache store, cache will not be saved to disk: {err}"
-                        );
-                        None
-                    }
-                }
-            }
-        } else {
-            info!("Bootstrap cache config not provided, cache will not be written to disk");
-            None
-        };
-
-        let mut driver = NetworkDriver::new(bootstrap_cache_store, task_receiver);
-
-        // Bootstrap here so we can early detect a failure
-        driver.connect_to_peers(initial_contacts)?;
+        let driver = NetworkDriver::new(bootstrap, task_receiver);
 
         // run the network driver in a background task
         tokio::spawn(async move {

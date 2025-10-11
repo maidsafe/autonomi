@@ -251,7 +251,8 @@ impl SwarmDriver {
                 event_string = "ConnectionEstablished";
                 debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
-                self.initial_bootstrap.on_connection_established(
+                self.bootstrap.on_connection_established(
+                    &peer_id,
                     &endpoint,
                     &mut self.swarm,
                     self.peers_in_rt,
@@ -333,7 +334,7 @@ impl SwarmDriver {
 
                 self.record_connection_metrics();
 
-                self.initial_bootstrap.on_outgoing_connection_error(
+                self.bootstrap.on_outgoing_connection_error(
                     None,
                     &mut self.swarm,
                     self.peers_in_rt,
@@ -365,7 +366,7 @@ impl SwarmDriver {
                 let _ = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
 
-                self.initial_bootstrap.on_outgoing_connection_error(
+                self.bootstrap.on_outgoing_connection_error(
                     Some(failed_peer_id),
                     &mut self.swarm,
                     self.peers_in_rt,
@@ -414,8 +415,8 @@ impl SwarmDriver {
                                         "HandshakeTimedOut",
                                     ];
 
-                                    if self.initial_bootstrap.is_bootstrap_peer(&failed_peer_id)
-                                        && !self.initial_bootstrap.has_terminated()
+                                    if self.bootstrap.is_bootstrap_peer(&failed_peer_id)
+                                        && !self.bootstrap.has_terminated()
                                     {
                                         debug!(
                                             "OutgoingConnectionError: On bootstrap peer {failed_peer_id:?}, while still in bootstrap mode, ignoring"

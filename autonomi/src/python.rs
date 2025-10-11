@@ -15,7 +15,7 @@ use std::{
 };
 
 // External dependencies
-use ant_bootstrap::BootstrapCacheConfig;
+use ant_bootstrap::{Bootstrap, BootstrapConfig};
 use ant_evm::{PaymentQuote, QuotingMetrics, RewardsAddress};
 use ant_protocol::storage::DataTypes;
 use bls::{PK_SIZE, PublicKey, SecretKey};
@@ -1975,124 +1975,188 @@ impl PyGraphEntryAddress {
 
 /// Configuration for the bootstrap cache
 #[pyclass(name = "BootstrapCacheConfig")]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct PyBootstrapCacheConfig {
-    pub(crate) inner: BootstrapCacheConfig,
+    pub(crate) inner: BootstrapConfig,
 }
 
 #[pymethods]
 impl PyBootstrapCacheConfig {
-    /// Creates a new BootstrapCacheConfig with default settings
-    /// When `local` is set to true, a different cache file name is used.
-    /// I.e. the file name will include `_local_` in the name.
+    /// Creates a new BootstrapCacheConfig with default settings.
     #[new]
-    fn new(local: bool) -> PyResult<Self> {
-        let config = BootstrapCacheConfig::new(local).map_err(|e| {
-            PyRuntimeError::new_err(format!("Failed to create default config: {e}"))
-        })?;
-        Ok(Self { inner: config })
-    }
-
-    /// Creates a new BootstrapCacheConfig with empty settings
-    #[staticmethod]
-    fn empty() -> Self {
+    fn new(local: bool) -> Self {
         Self {
-            inner: BootstrapCacheConfig::empty(),
+            inner: BootstrapConfig::new(local),
         }
     }
 
-    /// Set a new addr expiry duration in seconds
-    fn with_addr_expiry_duration(&self, seconds: u64) -> Self {
-        Self {
-            inner: self
-                .inner
-                .clone()
-                .with_addr_expiry_duration(Duration::from_secs(seconds)),
-        }
-    }
-
-    /// Update the config with a custom cache directory
+    /// Update the config with a custom cache directory.
     fn with_cache_dir(&self, path: PathBuf) -> Self {
         Self {
             inner: self.inner.clone().with_cache_dir(path),
         }
     }
 
-    /// Sets the maximum number of peers
+    /// Sets the maximum number of peers.
     fn with_max_peers(&self, max_peers: usize) -> Self {
         Self {
             inner: self.inner.clone().with_max_peers(max_peers),
         }
     }
 
-    /// Sets the maximum number of addresses for a single peer
+    /// Sets the maximum number of addresses for a single peer.
     fn with_addrs_per_peer(&self, max_addrs: usize) -> Self {
         Self {
             inner: self.inner.clone().with_addrs_per_peer(max_addrs),
         }
     }
 
-    /// Sets the flag to disable writing to the cache file
+    /// Sets the flag to disable writing to the cache file.
     fn with_disable_cache_writing(&self, disable: bool) -> Self {
         Self {
             inner: self.inner.clone().with_disable_cache_writing(disable),
         }
     }
 
-    /// Get the address expiry duration in seconds
-    #[getter]
-    fn addr_expiry_duration(&self) -> u64 {
-        self.inner.addr_expiry_duration.as_secs()
+    /// Sets the flag to disable reading from the cache file.
+    fn with_disable_cache_reading(&self, disable: bool) -> Self {
+        Self {
+            inner: self.inner.clone().with_disable_cache_reading(disable),
+        }
     }
 
-    /// Get the maximum number of peers
+    /// Sets whether backwards-compatible cache writes are enabled.
+    fn with_backwards_compatible_writes(&self, enable: bool) -> Self {
+        Self {
+            inner: self.inner.clone().with_backwards_compatible_writes(enable),
+        }
+    }
+
+    /// Sets the minimum cache save duration in seconds.
+    fn with_min_cache_save_duration(&self, seconds: u64) -> Self {
+        Self {
+            inner: self
+                .inner
+                .clone()
+                .with_min_cache_save_duration(Duration::from_secs(seconds)),
+        }
+    }
+
+    /// Sets the maximum cache save duration in seconds.
+    fn with_max_cache_save_duration(&self, seconds: u64) -> Self {
+        Self {
+            inner: self
+                .inner
+                .clone()
+                .with_max_cache_save_duration(Duration::from_secs(seconds)),
+        }
+    }
+
+    /// Sets the cache save scaling factor.
+    fn with_cache_save_scaling_factor(&self, factor: u32) -> Self {
+        Self {
+            inner: self.inner.clone().with_cache_save_scaling_factor(factor),
+        }
+    }
+
+    /// Sets the list of network contact URLs.
+    fn with_network_contacts_url(&self, urls: Vec<String>) -> Self {
+        Self {
+            inner: self.inner.clone().with_network_contacts_url(urls),
+        }
+    }
+
+    /// Sets whether this config represents the first node in the network.
+    fn with_first(&self, first: bool) -> Self {
+        Self {
+            inner: self.inner.clone().with_first(first),
+        }
+    }
+
+    /// Sets the initial peers that should be used for bootstrapping.
+    fn with_initial_peers(&self, peers: Vec<String>) -> PyResult<Self> {
+        let parsed = peers
+            .into_iter()
+            .map(|addr| addr.parse::<Multiaddr>())
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|err| PyValueError::new_err(format!("Invalid multiaddr: {err}")))?;
+        Ok(Self {
+            inner: self.inner.clone().with_initial_peers(parsed),
+        })
+    }
+
+    /// Get the maximum number of peers.
     #[getter]
     fn max_peers(&self) -> usize {
         self.inner.max_peers
     }
 
-    /// Get the maximum number of addresses per peer
+    /// Get the maximum number of addresses per peer.
     #[getter]
     fn max_addrs_per_peer(&self) -> usize {
         self.inner.max_addrs_per_peer
     }
 
-    /// Get the cache directory
+    /// Get the cache directory.
     #[getter]
     fn cache_dir(&self) -> PathBuf {
         self.inner.cache_dir.clone()
     }
 
-    /// Get whether cache writing is disabled
+    /// Get whether cache writing is disabled.
     #[getter]
     fn disable_cache_writing(&self) -> bool {
         self.inner.disable_cache_writing
     }
 
-    /// Get the minimum cache save duration in seconds
+    /// Get whether cache reading is disabled.
+    #[getter]
+    fn disable_cache_reading(&self) -> bool {
+        self.inner.disable_cache_reading
+    }
+
+    /// Get whether backwards-compatible cache writes are enabled.
+    #[getter]
+    fn backwards_compatible_writes(&self) -> bool {
+        self.inner.backwards_compatible_writes
+    }
+
+    /// Get the minimum cache save duration in seconds.
     #[getter]
     fn min_cache_save_duration(&self) -> u64 {
         self.inner.min_cache_save_duration.as_secs()
     }
 
-    /// Get the maximum cache save duration in seconds
+    /// Get the maximum cache save duration in seconds.
     #[getter]
     fn max_cache_save_duration(&self) -> u64 {
         self.inner.max_cache_save_duration.as_secs()
     }
 
-    /// Get the cache save scaling factor
+    /// Get the cache save scaling factor.
     #[getter]
     fn cache_save_scaling_factor(&self) -> u32 {
         self.inner.cache_save_scaling_factor
     }
 
-    /// Return a string representation
+    /// Get the configured network contact URLs.
+    #[getter]
+    fn network_contacts_url(&self) -> Vec<String> {
+        self.inner.network_contacts_url.clone()
+    }
+
+    /// Get whether this config is marked as local.
+    #[getter]
+    fn local(&self) -> bool {
+        self.inner.local
+    }
+
+    /// Return a string representation.
     fn __str__(&self) -> String {
         format!("{:?}", self.inner)
     }
 
-    /// Return a debug representation
+    /// Return a debug representation.
     fn __repr__(&self) -> String {
         self.__str__()
     }
@@ -2187,32 +2251,10 @@ impl PyInitialPeersConfig {
         self.inner.bootstrap_cache_dir = dir;
     }
 
-    /// Get bootstrap addresses
-    #[pyo3(signature = (count=None))]
-    fn get_bootstrap_addr<'a>(
-        &self,
-        py: Python<'a>,
-        count: Option<usize>,
-    ) -> PyResult<Bound<'a, PyAny>> {
-        let inner_config = self.inner.clone();
-
-        future_into_py(py, async move {
-            match inner_config.get_bootstrap_addr(count).await {
-                Ok(addrs) => Ok(addrs
-                    .into_iter()
-                    .map(|addr| addr.to_string())
-                    .collect::<Vec<String>>()),
-                Err(e) => Err(PyRuntimeError::new_err(format!(
-                    "Failed to get bootstrap addresses: {e}"
-                ))),
-            }
-        })
-    }
-
     /// Read bootstrap addresses from the ANT_PEERS environment variable
     #[staticmethod]
     fn read_bootstrap_addr_from_env() -> Vec<String> {
-        InitialPeersConfig::read_bootstrap_addr_from_env()
+        Bootstrap::fetch_from_env()
             .into_iter()
             .map(|addr| addr.to_string())
             .collect()
@@ -4316,13 +4358,13 @@ impl PyClientConfig {
     /// Whether we're expected to connect to a local network.
     #[getter]
     fn get_local(&self) -> bool {
-        self.inner.init_peers_config.local
+        self.inner.bootstrap_config.local
     }
 
     /// Whether we're expected to connect to a local network.
     #[setter]
     fn set_local(&mut self, value: bool) {
-        self.inner.init_peers_config.local = value;
+        self.inner.bootstrap_config.local = value;
     }
 
     /// List of peers to connect to.
@@ -4331,8 +4373,8 @@ impl PyClientConfig {
     #[getter]
     fn get_peers(&self) -> Vec<String> {
         self.inner
-            .init_peers_config
-            .addrs
+            .bootstrap_config
+            .initial_peers
             .iter()
             .map(|p| p.to_string())
             .collect()
@@ -4351,7 +4393,7 @@ impl PyClientConfig {
             .collect::<Result<_, _>>()
             .map_err(|e| PyValueError::new_err(format!("Failed to parse peers: {e}")))?;
 
-        self.inner.init_peers_config.addrs = peers;
+        self.inner.bootstrap_config.initial_peers = peers;
         Ok(())
     }
 

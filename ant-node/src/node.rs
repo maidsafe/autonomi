@@ -15,7 +15,7 @@ use crate::metrics::NodeMetricsRecorder;
 use crate::networking::MetricsRegistries;
 use crate::networking::{Addresses, Network, NetworkConfig, NetworkError, NetworkEvent, NodeIssue};
 use crate::{PutValidationError, RunningNode};
-use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
 use ant_protocol::{
@@ -82,10 +82,9 @@ const TIME_STEP: usize = 20;
 /// Helper to build and run a Node
 pub struct NodeBuilder {
     addr: SocketAddr,
-    bootstrap_cache: Option<BootstrapCacheStore>,
+    bootstrap: Bootstrap,
     evm_address: RewardsAddress,
     evm_network: EvmNetwork,
-    initial_peers: Vec<Multiaddr>,
     identity_keypair: Keypair,
     local: bool,
     #[cfg(feature = "open-metrics")]
@@ -101,7 +100,7 @@ impl NodeBuilder {
     /// or fetched from the bootstrap cache set using `bootstrap_cache` method.
     pub fn new(
         identity_keypair: Keypair,
-        initial_peers: Vec<Multiaddr>,
+        bootstrap_flow: Bootstrap,
         evm_address: RewardsAddress,
         evm_network: EvmNetwork,
         addr: SocketAddr,
@@ -109,10 +108,9 @@ impl NodeBuilder {
     ) -> Self {
         Self {
             addr,
-            bootstrap_cache: None,
+            bootstrap: bootstrap_flow,
             evm_address,
             evm_network,
-            initial_peers,
             identity_keypair,
             local: false,
             #[cfg(feature = "open-metrics")]
@@ -132,11 +130,6 @@ impl NodeBuilder {
     /// Set the port for the OpenMetrics server. Defaults to a random port if not set
     pub fn metrics_server_port(&mut self, port: Option<u16>) {
         self.metrics_server_port = port;
-    }
-
-    /// Set the initialized bootstrap cache.
-    pub fn bootstrap_cache(&mut self, cache: BootstrapCacheStore) {
-        self.bootstrap_cache = Some(cache);
     }
 
     /// Set the flag to make the node act as a relay client
@@ -181,11 +174,10 @@ impl NodeBuilder {
         let network_config = NetworkConfig {
             keypair: self.identity_keypair,
             local: self.local,
-            initial_contacts: self.initial_peers,
             listen_addr: self.addr,
             root_dir: self.root_dir.clone(),
             shutdown_rx: shutdown_rx.clone(),
-            bootstrap_cache: self.bootstrap_cache,
+            bootstrap: self.bootstrap,
             no_upnp: self.no_upnp,
             relay_client: self.relay_client,
             custom_request_timeout: None,

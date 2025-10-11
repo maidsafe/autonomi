@@ -109,13 +109,8 @@ impl ContactsFetcher {
         self.ignore_peer_id = ignore_peer_id;
     }
 
-    /// Fetch the list of bootstrap addresses from all configured endpoints
+    /// Fetch the list of bootstrap multiaddrs from all configured endpoints
     pub async fn fetch_bootstrap_addresses(&self) -> Result<Vec<Multiaddr>> {
-        Ok(self.fetch_addrs().await?.into_iter().collect())
-    }
-
-    /// Fetch the list of multiaddrs from all configured endpoints
-    pub async fn fetch_addrs(&self) -> Result<Vec<Multiaddr>> {
         info!(
             "Starting peer fetcher from {} endpoints: {:?}",
             self.endpoints.len(),
@@ -308,11 +303,112 @@ impl ContactsFetcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use libp2p::Multiaddr;
+    use crate::cache_store::{cache_data_v0, cache_data_v1};
+    use libp2p::{Multiaddr, PeerId};
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::SystemTime,
+    };
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path},
     };
+
+    #[tokio::test]
+    async fn test_network_contacts_formats() {
+        let mock_server = MockServer::start().await;
+        let peer_id = PeerId::random();
+        let addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .parse()
+            .unwrap();
+
+        let mut v0 = cache_data_v0::CacheData {
+            peers: Default::default(),
+            last_updated: SystemTime::now(),
+            network_version: crate::get_network_version(),
+        };
+        v0.peers.insert(
+            peer_id,
+            cache_data_v0::BootstrapAddresses(vec![cache_data_v0::BootstrapAddr {
+                addr: addr.clone(),
+                success_count: 1,
+                failure_count: 0,
+                last_seen: SystemTime::now(),
+            }]),
+        );
+        let v0_json = serde_json::to_string(&v0).unwrap();
+
+        let mut v1 = cache_data_v1::CacheData::default();
+        v1.add_peer(peer_id, [addr.clone()].iter(), 10, 10);
+        let v1_json = serde_json::to_string(&v1).unwrap();
+
+        Mock::given(method("GET"))
+            .and(path("/v0"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(v0_json))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(v1_json))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/text"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE\n",
+            ))
+            .mount(&mock_server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/malformed"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("this is not valid data"))
+            .mount(&mock_server)
+            .await;
+
+        for endpoint in ["/v0", "/v1", "/text"] {
+            let url = format!("{}{}", mock_server.uri(), endpoint)
+                .parse()
+                .unwrap();
+            let fetcher = ContactsFetcher::with_endpoints(vec![url]).unwrap();
+            let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
+            assert!(!addrs.is_empty(), "should fetch addresses from {endpoint}");
+            assert_eq!(addrs[0].to_string(), addr.to_string());
+        }
+
+        let malformed = format!("{}/malformed", mock_server.uri()).parse().unwrap();
+        let fetcher = ContactsFetcher::with_endpoints(vec![malformed]).unwrap();
+        let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
+        assert!(
+            addrs.is_empty(),
+            "malformed responses should return empty list"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_network_contacts_retries() {
+        let mock_server = MockServer::start().await;
+        let counter = AtomicUsize::new(0);
+
+        Mock::given(method("GET"))
+            .and(path("/retry"))
+            .respond_with(move |_: &wiremock::Request| {
+                let count = counter.fetch_add(1, Ordering::SeqCst);
+                if count < 2 {
+                    ResponseTemplate::new(500)
+                } else {
+                    ResponseTemplate::new(200).set_body_string(
+                        "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                    )
+                }
+            })
+            .mount(&mock_server)
+            .await;
+
+        let url = format!("{}/retry", mock_server.uri()).parse().unwrap();
+        let fetcher = ContactsFetcher::with_endpoints(vec![url]).unwrap();
+        let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
+        assert_eq!(addrs.len(), 1);
+    }
 
     #[tokio::test]
     async fn test_fetch_addrs() {
@@ -383,6 +479,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_network_failure_recovery() {
+        let bad_url: Url = "http://does-not-exist.example.invalid".parse().unwrap();
+
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/valid"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            ))
+            .mount(&mock_server)
+            .await;
+        let valid_url = format!("{}/valid", mock_server.uri()).parse().unwrap();
+
+        let failing = ContactsFetcher::with_endpoints(vec![bad_url.clone()]).unwrap();
+        let empty = failing.fetch_bootstrap_addresses().await.unwrap();
+        assert!(
+            empty.is_empty(),
+            "all failing endpoints should yield empty set"
+        );
+
+        let mixed = ContactsFetcher::with_endpoints(vec![bad_url, valid_url]).unwrap();
+        let addrs = mixed.fetch_bootstrap_addresses().await.unwrap();
+        assert!(
+            !addrs.is_empty(),
+            "mix of failing and working endpoints should return addresses"
+        );
+    }
+
+    #[tokio::test]
     async fn test_invalid_multiaddr() {
         let mock_server = MockServer::start().await;
 
@@ -408,6 +533,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_empty_response_handling() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/empty"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(""))
+            .mount(&mock_server)
+            .await;
+
+        let url = format!("{}/empty", mock_server.uri()).parse().unwrap();
+        let fetcher = ContactsFetcher::with_endpoints(vec![url]).unwrap();
+        let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
+        assert!(
+            addrs.is_empty(),
+            "empty HTTP response should produce no addresses"
+        );
+    }
+
+    #[tokio::test]
     async fn test_whitespace_and_empty_lines() {
         let mock_server = MockServer::start().await;
 
@@ -430,6 +573,26 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(addrs[0], addr);
+    }
+
+    #[tokio::test]
+    async fn test_fetch_max_addresses() {
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/multiple"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE\n\
+                 /ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5\n\
+                 /ip4/127.0.0.3/udp/8082/quic-v1/p2p/12D3KooWCKCeqLPSgMnDjyFsJuWqREDtKNHx1JEBiwxME7Zdw68n",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let url = format!("{}/multiple", mock_server.uri()).parse().unwrap();
+        let mut fetcher = ContactsFetcher::with_endpoints(vec![url]).unwrap();
+        fetcher.set_max_addrs(2);
+        let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
+        assert_eq!(addrs.len(), 2, "max_addrs should limit returned addresses");
     }
 
     #[tokio::test]

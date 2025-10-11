@@ -8,6 +8,8 @@
 
 use thiserror::Error;
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Failed to obtain any bootstrap peers")]
@@ -16,8 +18,6 @@ pub enum Error {
     FailedToParseCacheData,
     #[error("Could not obtain data directory")]
     CouldNotObtainDataDir,
-    #[error("Invalid bootstrap cache directory")]
-    InvalidBootstrapCacheDir,
     #[error("Could not obtain bootstrap addresses from {0} after {1} retries")]
     FailedToObtainAddrsFromUrl(String, usize),
     #[error("Failed to parse Url")]
@@ -31,5 +31,3 @@ pub enum Error {
     #[error("Lock error")]
     LockError,
 }
-
-pub type Result<T> = std::result::Result<T, Error>;

@@ -11,23 +11,18 @@ pub(crate) mod cmd;
 pub(crate) mod event;
 pub(crate) mod network_discovery;
 
+use ant_bootstrap::BootstrapCacheStore;
 use event::NodeEvent;
 use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
 
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
-    Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore,
-    bootstrap::{INITIAL_BOOTSTRAP_CHECK_INTERVAL, InitialBootstrap, InitialBootstrapTrigger},
-    circular_vec::CircularVec,
-    driver::kad::U256,
-    error::Result,
-    external_address::ExternalAddressManager,
-    log_markers::Marker,
-    relay_manager::RelayManager,
-    replication_fetcher::ReplicationFetcher,
+    Addresses, CLOSE_GROUP_SIZE, NodeIssue, NodeRecordStore, circular_vec::CircularVec,
+    driver::kad::U256, error::Result, external_address::ExternalAddressManager,
+    log_markers::Marker, relay_manager::RelayManager, replication_fetcher::ReplicationFetcher,
 };
-use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::PaymentQuote;
 use ant_protocol::messages::ConnectionInfo;
 use ant_protocol::{
@@ -69,6 +64,11 @@ pub(crate) const RELAY_MANAGER_RESERVATION_INTERVAL: Duration = Duration::from_s
 
 /// Interval over which we check if we could dial any peer in the dial queue.
 const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Periodically check if the initial bootstrap process should be triggered.
+/// This happens only once after the conditions for triggering the initial bootstrap process are met.
+pub(crate) const INITIAL_BOOTSTRAP_CHECK_INTERVAL: std::time::Duration =
+    std::time::Duration::from_secs(1);
 
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
@@ -112,10 +112,9 @@ pub(crate) struct SwarmDriver {
     #[cfg(feature = "open-metrics")]
     pub(crate) close_group: Vec<PeerId>,
     pub(crate) peers_in_rt: usize,
-    pub(crate) initial_bootstrap: InitialBootstrap,
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
-    pub(crate) bootstrap_cache: Option<BootstrapCacheStore>,
+    pub(crate) bootstrap: Bootstrap,
     pub(crate) external_address_manager: Option<ExternalAddressManager>,
     pub(crate) relay_manager: Option<RelayManager>,
     /// The peers that are using our relay service.
@@ -179,12 +178,6 @@ impl SwarmDriver {
             Some(interval(INITIAL_BOOTSTRAP_CHECK_INTERVAL));
         let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
         let _ = dial_queue_check_interval.tick().await; // first tick completes immediately
-
-        if let Some(cache) = &self.bootstrap_cache {
-            // start the periodic cache sync and flush task
-            #[allow(clippy::let_underscore_future)]
-            let _ = cache.sync_and_flush_periodically();
-        }
 
         let mut round_robin_index = 0;
         loop {
@@ -262,7 +255,7 @@ impl SwarmDriver {
                 Some(()) = conditional_interval(&mut initial_bootstrap_trigger_check_interval) => {
                     if self.initial_bootstrap_trigger.should_trigger_initial_bootstrap() {
                         info!("Triggering initial bootstrap process. This is a one-time operation.");
-                        self.initial_bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
+                        self.bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.peers_in_rt);
                         // we will not call this loop anymore, once the initial bootstrap is triggered.
                         // It should run on its own and complete.
                         initial_bootstrap_trigger_check_interval = None;
@@ -516,25 +509,25 @@ impl SwarmDriver {
 
     /// Sync and flush the bootstrap cache to disk.
     ///
-    /// This function creates a new cache and saves the old one to disk.
+    /// This function creates a new cache store to ensure that any new data added after spawning the task is not lost.
+    /// It then spawns a new asynchronous task to add the provided address to the cache and flush it to disk.
     fn add_sync_and_flush_cache(&mut self, addr: Multiaddr) -> Result<()> {
-        if let Some(bootstrap_cache) = self.bootstrap_cache.as_mut() {
-            let config = bootstrap_cache.config().clone();
-            let old_cache = bootstrap_cache.clone();
-
-            if let Ok(new) = BootstrapCacheStore::new(config) {
-                self.bootstrap_cache = Some(new);
-
-                // Save cache to disk.
-                #[allow(clippy::let_underscore_future)]
-                let _ = tokio::spawn(async move {
-                    old_cache.add_addr(addr).await;
-                    if let Err(err) = old_cache.sync_and_flush_to_disk().await {
-                        error!("Failed to save bootstrap cache: {err}");
-                    }
-                });
-            }
+        let old_cache = self.bootstrap.cache_store().clone();
+        // This is important to ensure that sync_and_flush_to_disk's clear of in-memory data does not
+        // wipe out any new data added after we spawn the task.
+        if let Ok(cache) = BootstrapCacheStore::new(old_cache.config().clone()) {
+            *self.bootstrap.cache_store_mut() = cache;
+            // Save cache to disk.
+            #[allow(clippy::let_underscore_future)]
+            let _ = tokio::spawn(async move {
+                info!("Adding address to bootstrap cache and sync,flush to disk: {addr:?}");
+                old_cache.add_addr(addr).await;
+                if let Err(err) = old_cache.sync_and_flush_to_disk().await {
+                    error!("Failed to save bootstrap cache: {err}");
+                }
+            });
         }
+
         Ok(())
     }
 }
@@ -547,5 +540,39 @@ async fn conditional_interval(i: &mut Option<Interval>) -> Option<()> {
             Some(())
         }
         None => None,
+    }
+}
+
+/// This is used to track the conditions that are required to trigger the initial bootstrap process once.
+pub(crate) struct InitialBootstrapTrigger {
+    pub(crate) upnp: bool,
+    pub(crate) upnp_gateway_result_obtained: bool,
+    pub(crate) listen_addr_obtained: bool,
+}
+
+impl InitialBootstrapTrigger {
+    pub(crate) fn new(upnp: bool) -> Self {
+        Self {
+            upnp,
+            upnp_gateway_result_obtained: false,
+            listen_addr_obtained: false,
+        }
+    }
+
+    /// Used to check if we can trigger the initial bootstrap process.
+    ///
+    /// - If we are a client, we should trigger the initial bootstrap process immediately.
+    /// - If we have set upnp flag and if we have obtained the upnp gateway result, we should trigger the initial bootstrap process.
+    /// - If we don't have upnp enabled, then we should trigger the initial bootstrap process only if we have a listen address available.
+    pub(crate) fn should_trigger_initial_bootstrap(&self) -> bool {
+        if self.upnp {
+            return self.upnp_gateway_result_obtained;
+        }
+
+        if self.listen_addr_obtained {
+            return true;
+        }
+
+        false
     }
 }

@@ -41,7 +41,7 @@ pub async fn run_nat_detection(
             contacts_fetcher.ignore_peer_id(true);
             contacts_fetcher.insert_endpoint(NAT_DETECTION_SERVERS_LIST_URL.parse()?);
 
-            let fetched = contacts_fetcher.fetch_addrs().await?;
+            let fetched = contacts_fetcher.fetch_bootstrap_addresses().await?;
             fetched
                 .choose_multiple(&mut rand::thread_rng(), 10)
                 .cloned()

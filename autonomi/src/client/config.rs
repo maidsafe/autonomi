@@ -7,7 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
-pub use ant_bootstrap::{BootstrapCacheConfig, InitialPeersConfig, error::Error as BootstrapError};
+pub use ant_bootstrap::{
+    Bootstrap, BootstrapConfig, InitialPeersConfig, error::Error as BootstrapError,
+};
 use ant_evm::EvmNetwork;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use std::{num::NonZero, sync::LazyLock};
@@ -110,15 +112,11 @@ pub(crate) static UPLOAD_FLOW_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 /// Configuration for the [`crate::Client`] which can be provided through: [`crate::Client::init_with_config`].
 #[derive(Debug, Clone, Default)]
 pub struct ClientConfig {
-    /// Configuration for the Bootstrap Cache.
-    pub bootstrap_cache_config: Option<BootstrapCacheConfig>,
+    /// Configuration for bootstrapping into the network and caching peers.
+    pub bootstrap_config: BootstrapConfig,
 
     /// EVM network to use for quotations and payments.
     pub evm_network: EvmNetwork,
-
-    /// Configurations to fetch the initial peers which is used to bootstrap the network.
-    /// Also contains the configurations to the bootstrap cache.
-    pub init_peers_config: InitialPeersConfig,
 
     /// The network ID to use for the client.
     /// This is used to differentiate between different networks.

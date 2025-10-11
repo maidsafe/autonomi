@@ -10,19 +10,13 @@
 #![allow(clippy::expect_used)]
 #![allow(clippy::panic)]
 
-use ant_bootstrap::InitialPeersConfig;
+use ant_node::BootstrapConfig;
 use ant_node::spawn::node_spawner::NodeSpawner;
 
 #[tokio::main]
 async fn main() {
-    let args = InitialPeersConfig::default();
-    let bootstrap_addrs = args
-        .get_bootstrap_addr(Some(5))
-        .await
-        .expect("Failed to get bootstrap addrs");
-
     let running_node = NodeSpawner::new()
-        .with_initial_peers(bootstrap_addrs)
+        .with_bootstrap_config(BootstrapConfig::default())
         .spawn()
         .await
         .expect("Failed to spawn node");

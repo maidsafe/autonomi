@@ -77,6 +77,13 @@ impl NetworkDriver {
                     (peer_id, endpoint.get_remote_address().clone()),
                 );
                 self.connections_made += 1;
+                let peers_in_rt = self.current_routing_table_size();
+                self.bootstrap.on_connection_established(
+                    &peer_id,
+                    &endpoint,
+                    &mut self.swarm,
+                    peers_in_rt,
+                );
                 Ok(())
             }
             SwarmEvent::ConnectionClosed {
@@ -98,6 +105,9 @@ impl NetworkDriver {
             } => {
                 debug!("OutgoingConnectionError to {peer_id:?} on {connection_id:?} - {error:?}");
                 let _ = self.live_connected_peers.remove(&connection_id);
+                let peers_in_rt = self.current_routing_table_size();
+                self.bootstrap
+                    .on_outgoing_connection_error(peer_id, &mut self.swarm, peers_in_rt);
 
                 Ok(())
             }
@@ -245,8 +255,8 @@ impl NetworkDriver {
                 addr.push(Protocol::P2p(*peer_id));
                 trace!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
 
-                if !banned && let Some(bootstrap_cache) = &self.bootstrap_cache {
-                    let bootstrap_cache = bootstrap_cache.clone();
+                if !banned {
+                    let bootstrap_cache = self.bootstrap.cache_store().clone();
                     #[allow(clippy::let_underscore_future)]
                     let _ = tokio::spawn(async move { bootstrap_cache.add_addr(addr).await });
                 }
