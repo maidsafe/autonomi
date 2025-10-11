@@ -6,8 +6,6 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::error::{Error, Result};
-
 use ant_evm::AttoTokens;
 use ant_protocol::{NetworkAddress, storage::ChunkAddress};
 use serde::{Deserialize, Serialize};
@@ -63,17 +61,28 @@ pub enum NodeEvent {
     /// One of the sub event channel closed and unrecoverable.
     ChannelClosed,
     /// Terminates the node
-    TerminateNode(String),
+    TerminateNode(TerminateNodeReason),
 }
 
-impl NodeEvent {
-    /// Convert NodeEvent to bytes
-    pub fn to_bytes(&self) -> Result<Vec<u8>> {
-        rmp_serde::to_vec(&self).map_err(|_| Error::NodeEventParsingFailed)
-    }
+/// Terminate node for the following reason
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TerminateNodeReason {
+    HardDiskWriteError,
+    UpnpGatewayNotFound,
+}
 
-    /// Get NodeEvent from bytes
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        rmp_serde::from_slice(bytes).map_err(|_| Error::NodeEventParsingFailed)
+impl std::fmt::Display for TerminateNodeReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TerminateNodeReason::HardDiskWriteError => {
+                write!(f, "HardDiskWriteError")
+            }
+            TerminateNodeReason::UpnpGatewayNotFound => {
+                write!(
+                    f,
+                    "UPnP gateway not found. Enable UPnP on your router to allow incoming connections or manually port forward."
+                )
+            }
+        }
     }
 }

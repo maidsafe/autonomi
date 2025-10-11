@@ -6,11 +6,10 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-pub mod daemon;
 pub mod local;
-pub mod nat_detection;
 pub mod node;
 
+use crate::error::{Error, Result};
 use crate::{
     VerbosityLevel,
     helpers::{download_and_extract_release, get_bin_version},
@@ -18,14 +17,15 @@ use crate::{
 };
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
 use ant_service_management::UpgradeResult;
-use color_eyre::{Result, eyre::eyre};
 use colored::Colorize;
 use semver::Version;
 use std::{
+    collections::HashMap,
     path::PathBuf,
     process::{Command, Stdio},
 };
 
+#[tracing::instrument(skip(custom_bin_path, url), fields(release_type = ?release_type, verbosity = ?verbosity, has_custom_bin = custom_bin_path.is_some()), err)]
 pub async fn download_and_get_upgrade_bin_path(
     custom_bin_path: Option<PathBuf>,
     release_type: ReleaseType,
@@ -45,7 +45,16 @@ pub async fn download_and_get_upgrade_bin_path(
             );
         }
         let bin_version = get_bin_version(&path)?;
-        return Ok((path, bin_version.parse()?));
+        return Ok((
+            path,
+            bin_version
+                .parse()
+                .map_err(|err: semver::Error| Error::VersionParsingFailed {
+                    version: bin_version.clone(),
+                    context: "custom binary version".to_string(),
+                    reason: err.to_string(),
+                })?,
+        ));
     }
 
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
@@ -60,7 +69,14 @@ pub async fn download_and_get_upgrade_bin_path(
             None,
         )
         .await?;
-        Ok((upgrade_bin_path, Version::parse(&version)?))
+        Ok((
+            upgrade_bin_path,
+            Version::parse(&version).map_err(|err| Error::VersionParsingFailed {
+                version: version.clone(),
+                context: "download release version string".to_string(),
+                reason: err.to_string(),
+            })?,
+        ))
     } else if let Some(url) = url {
         debug!("Downloading {release_type} from url: {url}");
         let (upgrade_bin_path, version) = download_and_extract_release(
@@ -72,13 +88,25 @@ pub async fn download_and_get_upgrade_bin_path(
             None,
         )
         .await?;
-        Ok((upgrade_bin_path, Version::parse(&version)?))
+        Ok((
+            upgrade_bin_path,
+            Version::parse(&version).map_err(|err| Error::VersionParsingFailed {
+                version: version.clone(),
+                context: "URL download release version".to_string(),
+                reason: err.to_string(),
+            })?,
+        ))
     } else {
         if verbosity != VerbosityLevel::Minimal {
             println!("Retrieving latest version of {release_type}...");
         }
         debug!("Retrieving latest version of {release_type}...");
-        let latest_version = release_repo.get_latest_version(&release_type).await?;
+        let latest_version = release_repo
+            .get_latest_version(&release_type)
+            .await
+            .map_err(|err| Error::AntReleasesError {
+                reason: format!("Failed to get latest version for {release_type}: {err}"),
+            })?;
         if verbosity != VerbosityLevel::Minimal {
             println!("Latest version is {latest_version}");
         }
@@ -97,7 +125,7 @@ pub async fn download_and_get_upgrade_bin_path(
     }
 }
 
-pub fn print_upgrade_summary(upgrade_summary: Vec<(String, UpgradeResult)>) {
+pub fn print_upgrade_summary(upgrade_summary: HashMap<String, UpgradeResult>) {
     println!("Upgrade summary:");
     for (service_name, upgrade_result) in upgrade_summary {
         match upgrade_result {
@@ -132,6 +160,7 @@ pub fn print_upgrade_summary(upgrade_summary: Vec<(String, UpgradeResult)>) {
     }
 }
 
+#[tracing::instrument(skip(path, release_repo, version), fields(release_type = ?release_type, build = build, verbosity = ?verbosity), err)]
 pub async fn get_bin_path(
     build: bool,
     path: Option<PathBuf>,
@@ -206,11 +235,17 @@ fn build_binary(bin_type: &ReleaseType) -> Result<PathBuf> {
     let build_result = build_result
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
-        .output()?;
+        .output()
+        .map_err(|err| Error::ProcessSpawnFailed {
+            binary_path: PathBuf::from("cargo"),
+            reason: err.to_string(),
+        })?;
 
     if !build_result.status.success() {
         error!("Failed to build binaries {bin_name}");
-        return Err(eyre!("Failed to build binaries"));
+        return Err(Error::FailedToBuildBinary {
+            bin_name: bin_name.to_string(),
+        });
     }
 
     Ok(target_dir)

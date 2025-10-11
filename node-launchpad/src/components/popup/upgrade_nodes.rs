@@ -9,23 +9,22 @@
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
-    action::{Action, OptionsActions},
+    action::{Action, NodeManagementCommand, NodeTableActions},
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
-    node_mgmt,
+    node_management,
     style::{EUCALYPTUS, GHOST_WHITE, LIGHT_PERIWINKLE, VIVID_SKY_BLUE, clear_area},
 };
 use color_eyre::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{prelude::*, widgets::*};
+use std::any::Any;
 
-pub struct UpgradeNodesPopUp {
-    /// Whether the component is active right now, capturing keystrokes + draw things.
-    active: bool,
-}
+pub struct UpgradeNodesPopUp {}
 
 impl UpgradeNodesPopUp {
     pub fn new() -> Self {
-        Self { active: false }
+        Self {}
     }
 }
 
@@ -36,16 +35,22 @@ impl Default for UpgradeNodesPopUp {
 }
 
 impl Component for UpgradeNodesPopUp {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back = match key.code {
             KeyCode::Enter => {
                 debug!("Got Enter, Upgrading nodes...");
                 vec![
-                    Action::OptionsActions(OptionsActions::UpdateNodes),
+                    Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                        NodeManagementCommand::UpgradeNodes,
+                    )),
                     Action::SwitchScene(Scene::Status),
                 ]
             }
@@ -55,31 +60,29 @@ impl Component for UpgradeNodesPopUp {
             }
             _ => vec![],
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::UpgradeNodesPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
-            Action::SwitchScene(scene) => match scene {
-                Scene::UpgradeNodesPopUp => {
-                    self.active = true;
-                    Some(Action::SwitchInputMode(InputMode::Entry))
-                }
-                _ => {
-                    self.active = false;
-                    None
-                }
-            },
+            Action::SwitchScene(Scene::UpgradeNodesPopUp) => {
+                Some(Action::SwitchInputMode(InputMode::Entry))
+            }
             _ => None,
         };
         Ok(send_back)
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
@@ -137,7 +140,7 @@ impl Component for UpgradeNodesPopUp {
             Line::from(Span::styled(
                 format!(
                     "Upgrade time is {:.1?} seconds per node",
-                    node_mgmt::FIXED_INTERVAL / 1_000,
+                    node_management::config::FIXED_INTERVAL / 1_000,
                 ),
                 Style::default().fg(LIGHT_PERIWINKLE),
             )),
@@ -189,5 +192,82 @@ impl Component for UpgradeNodesPopUp {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::KeyModifiers;
+
+    #[test]
+    fn handle_key_events_requires_focus() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::Status);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert!(actions.is_empty());
+        assert_eq!(result, EventResult::Ignored);
+    }
+
+    #[test]
+    fn enter_triggers_upgrade_command() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeNodesPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::NodeTableActions(NodeTableActions::NodeManagementCommand(
+                NodeManagementCommand::UpgradeNodes
+            ))
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[test]
+    fn esc_returns_to_options() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let focus_manager = FocusManager::new(FocusTarget::UpgradeNodesPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert_eq!(actions, vec![Action::SwitchScene(Scene::Options)]);
+    }
+
+    #[test]
+    fn update_switch_scene_requests_entry_mode() {
+        let mut popup = UpgradeNodesPopUp::default();
+        let action = popup
+            .update(Action::SwitchScene(Scene::UpgradeNodesPopUp))
+            .expect("update")
+            .expect("action");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Entry));
     }
 }

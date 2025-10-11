@@ -229,9 +229,7 @@ impl NetworkDriver {
                     return Ok(());
                 };
                 if is_a_relayed_peer(info.listen_addrs.iter()) {
-                    debug!(
-                        "identify: peer {peer_id:?} is a relayed peer, skipping adding to cache."
-                    );
+                    debug!("identify: peer {peer_id:?} is a relayed peer, skipping adding to RT.");
                     return Ok(());
                 }
 
@@ -322,7 +320,6 @@ fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
 }
 
 /// Craft valid multiaddr like /ip4/68.183.39.80/udp/31055/quic-v1
-/// RelayManager::craft_relay_address for relayed addr. This is for non-relayed addr.
 fn craft_valid_multiaddr_without_p2p(addr: &Multiaddr) -> Option<Multiaddr> {
     let mut new_multiaddr = Multiaddr::empty();
     let ip = addr.iter().find_map(|p| match p {

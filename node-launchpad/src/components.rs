@@ -9,17 +9,19 @@
 use color_eyre::eyre::Result;
 use crossterm::event::{KeyEvent, MouseEvent};
 use ratatui::layout::Rect;
+use std::any::Any;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     action::Action,
-    config::Config,
+    focus::{EventResult, FocusManager, FocusTarget},
     tui::{Event, Frame},
 };
 
 pub mod footer;
 pub mod header;
 pub mod help;
+pub mod node_table;
 pub mod options;
 pub mod popup;
 pub mod status;
@@ -28,7 +30,7 @@ pub mod utils;
 /// `Component` is a trait that represents a visual and interactive element of the user interface.
 /// Implementors of this trait can be registered with the main application loop and will be able to receive events,
 /// update state, and be rendered on the screen.
-pub trait Component {
+pub trait Component: Any {
     /// Register an action handler that can send actions for processing if necessary.
     ///
     /// # Arguments
@@ -40,19 +42,6 @@ pub trait Component {
     /// * `Result<()>` - An Ok result or an error.
     #[expect(unused_variables)]
     fn register_action_handler(&mut self, tx: UnboundedSender<Action>) -> Result<()> {
-        Ok(())
-    }
-    /// Register a configuration handler that provides configuration settings if necessary.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Configuration settings.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<()>` - An Ok result or an error.
-    #[expect(unused_variables)]
-    fn register_config_handler(&mut self, config: Config) -> Result<()> {
         Ok(())
     }
     /// Initialize the component with a specified area if necessary.
@@ -72,43 +61,60 @@ pub trait Component {
     /// # Arguments
     ///
     /// * `event` - An optional event to be processed.
+    /// * `focus_manager` - The focus manager to check if this component has focus.
     ///
     /// # Returns
     ///
-    /// * `Result<Option<Action>>` - An action to be processed or none.
-    fn handle_events(&mut self, event: Option<Event>) -> Result<Vec<Action>> {
-        let r = match event {
-            Some(Event::Key(key_event)) => self.handle_key_events(key_event)?,
-            Some(Event::Mouse(mouse_event)) => self.handle_mouse_events(mouse_event)?,
-            _ => vec![],
+    /// * `Result<(Vec<Action>, EventResult)>` - Actions and whether the event was consumed.
+    fn handle_events(
+        &mut self,
+        event: Option<Event>,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        let (actions, result) = match event {
+            Some(Event::Key(key_event)) => self.handle_key_events(key_event, focus_manager)?,
+            Some(Event::Mouse(mouse_event)) => {
+                self.handle_mouse_events(mouse_event, focus_manager)?
+            }
+            _ => (vec![], EventResult::Ignored),
         };
-        Ok(r)
+        Ok((actions, result))
     }
     /// Handle key events and produce actions if necessary.
     ///
     /// # Arguments
     ///
     /// * `key` - A key event to be processed.
+    /// * `focus_manager` - The focus manager to check if this component has focus.
     ///
     /// # Returns
     ///
-    /// * `Result<Option<Action>>` - An action to be processed or none.
+    /// * `Result<(Vec<Action>, EventResult)>` - Actions and whether the event was consumed.
     #[expect(unused_variables)]
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        Ok(vec![])
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        Ok((vec![], EventResult::Ignored))
     }
     /// Handle mouse events and produce actions if necessary.
     ///
     /// # Arguments
     ///
     /// * `mouse` - A mouse event to be processed.
+    /// * `focus_manager` - The focus manager to check if this component has focus.
     ///
     /// # Returns
     ///
-    /// * `Result<Option<Action>>` - An action to be processed or none.
+    /// * `Result<(Vec<Action>, EventResult)>` - Actions and whether the event was consumed.
     #[expect(unused_variables)]
-    fn handle_mouse_events(&mut self, mouse: MouseEvent) -> Result<Vec<Action>> {
-        Ok(vec![])
+    fn handle_mouse_events(
+        &mut self,
+        mouse: MouseEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        Ok((vec![], EventResult::Ignored))
     }
     /// Update the state of the component based on a received action. (REQUIRED)
     ///
@@ -134,4 +140,17 @@ pub trait Component {
     ///
     /// * `Result<()>` - An Ok result or an error.
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()>;
+
+    /// Get the focus target for this component.
+    ///
+    /// # Returns
+    ///
+    /// * `FocusTarget` - The focus target for this component.
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::Status // Default to Status, components should override this
+    }
+
+    fn as_any(&self) -> &dyn Any;
+
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

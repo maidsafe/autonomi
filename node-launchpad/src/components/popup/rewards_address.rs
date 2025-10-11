@@ -9,30 +9,30 @@
 use super::super::Component;
 use super::super::utils::centered_rect_fixed;
 use crate::{
-    action::{Action, OptionsActions},
+    action::Action,
+    focus::{EventResult, FocusManager, FocusTarget},
     mode::{InputMode, Scene},
     style::{EUCALYPTUS, GHOST_WHITE, INDIGO, LIGHT_PERIWINKLE, RED, VIVID_SKY_BLUE, clear_area},
     widgets::hyperlink::Hyperlink,
 };
+use ant_evm::EvmAddress;
 use arboard::Clipboard;
 use color_eyre::Result;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{prelude::*, widgets::*};
-use regex::Regex;
+use std::any::Any;
 use tui_input::{Input, backend::crossterm::EventHandler};
 
 const INPUT_SIZE_REWARDS_ADDRESS: u16 = 42; // Etherum address plus 0x
 const INPUT_AREA_REWARDS_ADDRESS: u16 = INPUT_SIZE_REWARDS_ADDRESS + 2; // +2 for the padding
 
-pub struct RewardsAddress {
-    /// Whether the component is active right now, capturing keystrokes + draw things.
-    active: bool,
+pub struct RewardsAddressPopup {
     state: RewardsAddressState,
     rewards_address_input_field: Input,
+    rewards_address: Option<EvmAddress>,
     // cache the old value incase user presses Esc.
     old_value: String,
     back_to: Scene,
-    can_save: bool,
 }
 
 enum RewardsAddressState {
@@ -41,53 +41,48 @@ enum RewardsAddressState {
     AcceptTCsAndEnterRewardsAddress,
 }
 
-impl RewardsAddress {
-    pub fn new(rewards_address: String) -> Self {
-        let state = if rewards_address.is_empty() {
+impl RewardsAddressPopup {
+    pub fn new(rewards_address: Option<EvmAddress>) -> Self {
+        let state = if rewards_address.is_none() {
             RewardsAddressState::ShowTCs
         } else {
             RewardsAddressState::RewardsAddressAlreadySet
         };
+        let rewards_address_str = match rewards_address {
+            Some(addr) => addr.to_string(),
+            None => "".to_string(),
+        };
         Self {
-            active: false,
             state,
-            rewards_address_input_field: Input::default().with_value(rewards_address),
+            rewards_address_input_field: Input::default().with_value(rewards_address_str),
+            rewards_address,
             old_value: Default::default(),
             back_to: Scene::Status,
-            can_save: false,
         }
     }
 
-    pub fn validate(&mut self) {
-        if self.rewards_address_input_field.value().is_empty() {
-            self.can_save = false;
-        } else {
-            let re = Regex::new(r"^0x[a-fA-F0-9]{40}$").expect("Failed to compile regex");
-            self.can_save = re.is_match(self.rewards_address_input_field.value());
-        }
+    fn validate(&mut self) {
+        self.rewards_address = self
+            .rewards_address_input_field
+            .value()
+            .parse::<EvmAddress>()
+            .ok();
     }
 
     fn capture_inputs(&mut self, key: KeyEvent) -> Vec<Action> {
         match key.code {
             KeyCode::Enter => {
                 self.validate();
-                if self.can_save {
-                    let rewards_address = self
-                        .rewards_address_input_field
-                        .value()
-                        .to_string()
-                        .to_lowercase();
-                    self.rewards_address_input_field = rewards_address.clone().into();
+
+                if let Some(validated_address) = self.rewards_address {
+                    self.rewards_address_input_field = validated_address.to_string().into();
 
                     debug!(
-                        "Got Enter, saving the rewards address {rewards_address:?}  and switching to RewardsAddressAlreadySet, and Home Scene",
+                        "Got Enter, saving the rewards address {validated_address:?}  and switching to RewardsAddressAlreadySet, and Home Scene",
                     );
                     self.state = RewardsAddressState::RewardsAddressAlreadySet;
                     return vec![
-                        Action::StoreRewardsAddress(rewards_address.clone()),
-                        Action::OptionsActions(OptionsActions::UpdateRewardsAddress(
-                            rewards_address,
-                        )),
+                        Action::StoreRewardsAddress(validated_address),
                         Action::SwitchScene(Scene::Status),
                     ];
                 }
@@ -113,19 +108,17 @@ impl RewardsAddress {
                 self.validate();
                 vec![]
             }
-            KeyCode::Char('v') => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    let mut clipboard = match Clipboard::new() {
-                        Ok(clipboard) => clipboard,
-                        Err(e) => {
-                            error!("Error reading Clipboard : {:?}", e);
-                            return vec![];
-                        }
-                    };
-                    if let Ok(content) = clipboard.get_text() {
-                        self.rewards_address_input_field =
-                            self.rewards_address_input_field.clone().with_value(content);
+            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let mut clipboard = match Clipboard::new() {
+                    Ok(clipboard) => clipboard,
+                    Err(e) => {
+                        error!("Error reading Clipboard : {:?}", e);
+                        return vec![];
                     }
+                };
+                if let Ok(content) = clipboard.get_text() {
+                    self.rewards_address_input_field =
+                        self.rewards_address_input_field.clone().with_value(content);
                 }
                 vec![]
             }
@@ -143,10 +136,14 @@ impl RewardsAddress {
     }
 }
 
-impl Component for RewardsAddress {
-    fn handle_key_events(&mut self, key: KeyEvent) -> Result<Vec<Action>> {
-        if !self.active {
-            return Ok(vec![]);
+impl Component for RewardsAddressPopup {
+    fn handle_key_events(
+        &mut self,
+        key: KeyEvent,
+        focus_manager: &FocusManager,
+    ) -> Result<(Vec<Action>, EventResult)> {
+        if !focus_manager.has_focus(&self.focus_target()) {
+            return Ok((vec![], EventResult::Ignored));
         }
         // while in entry mode, keybinds are not captured, so gotta exit entry mode from here
         let send_back = match &self.state {
@@ -177,14 +174,22 @@ impl Component for RewardsAddress {
             },
             RewardsAddressState::AcceptTCsAndEnterRewardsAddress => self.capture_inputs(key),
         };
-        Ok(send_back)
+        let result = if send_back.is_empty() {
+            EventResult::Ignored
+        } else {
+            EventResult::Consumed
+        };
+        Ok((send_back, result))
+    }
+
+    fn focus_target(&self) -> FocusTarget {
+        FocusTarget::RewardsAddressPopup
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
         let send_back = match action {
             Action::SwitchScene(scene) => match scene {
                 Scene::StatusRewardsAddressPopUp | Scene::OptionsRewardsAddressPopUp => {
-                    self.active = true;
                     self.old_value = self.rewards_address_input_field.value().to_string();
                     if scene == Scene::StatusRewardsAddressPopUp {
                         self.back_to = Scene::Status;
@@ -195,10 +200,7 @@ impl Component for RewardsAddress {
                     // so by default if this scene is active, we capture inputs.
                     Some(Action::SwitchInputMode(InputMode::Entry))
                 }
-                _ => {
-                    self.active = false;
-                    None
-                }
+                _ => None,
             },
             _ => None,
         };
@@ -206,10 +208,6 @@ impl Component for RewardsAddress {
     }
 
     fn draw(&mut self, f: &mut crate::tui::Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-
         let layer_zero = centered_rect_fixed(52, 15, area);
 
         let layer_one = Layout::new(
@@ -239,7 +237,6 @@ impl Component for RewardsAddress {
 
         match self.state {
             RewardsAddressState::RewardsAddressAlreadySet => {
-                self.validate(); // FIXME: maybe this should be somewhere else
                 // split into 4 parts, for the prompt, input, text, dash , and buttons
                 let layer_two = Layout::new(
                     Direction::Vertical,
@@ -275,14 +272,18 @@ impl Component for RewardsAddress {
                 let input = Paragraph::new(Span::styled(
                     format!("{}{} ", spaces, self.rewards_address_input_field.value()),
                     Style::default()
-                        .fg(if self.can_save { VIVID_SKY_BLUE } else { RED })
+                        .fg(if self.rewards_address.is_some() {
+                            VIVID_SKY_BLUE
+                        } else {
+                            RED
+                        })
                         .bg(INDIGO)
                         .underlined(),
                 ))
                 .alignment(Alignment::Center);
                 f.render_widget(input, layer_two[1]);
 
-                let text = Paragraph::new(Text::from(if self.can_save {
+                let text = Paragraph::new(Text::from(if self.rewards_address.is_some() {
                     vec![
                         Line::raw("Changing your Wallet will reset and restart"),
                         Line::raw("all your nodes."),
@@ -322,7 +323,7 @@ impl Component for RewardsAddress {
 
                 let button_yes = Line::from(vec![Span::styled(
                     "Change Wallet [Enter]",
-                    if self.can_save {
+                    if self.rewards_address.is_some() {
                         Style::default().fg(EUCALYPTUS)
                     } else {
                         Style::default().fg(LIGHT_PERIWINKLE)
@@ -468,7 +469,7 @@ impl Component for RewardsAddress {
                 f.render_widget(button_no, buttons_layer[0]);
                 let button_yes = Paragraph::new(Line::from(vec![Span::styled(
                     "Save Wallet [Enter]  ",
-                    if self.can_save {
+                    if self.rewards_address.is_some() {
                         Style::default().fg(EUCALYPTUS)
                     } else {
                         Style::default().fg(LIGHT_PERIWINKLE)
@@ -482,5 +483,140 @@ impl Component for RewardsAddress {
         f.render_widget(pop_up_border, layer_zero);
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::focus::FocusManager;
+    use crossterm::event::{KeyCode, KeyModifiers};
+
+    fn sample_address() -> &'static str {
+        "0x1234567890123456789012345678901234567890"
+    }
+
+    #[tokio::test]
+    async fn accept_terms_and_store_address() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+            .expect("update")
+            .expect("action");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+
+        // Accept terms
+        let _ = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("terms handled");
+
+        // Type address and submit
+        for ch in sample_address().chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.iter().any(|a| matches!(
+            a,
+            Action::StoreRewardsAddress(address) if address == &sample_address().parse::<EvmAddress>().unwrap()
+        )));
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::SwitchScene(Scene::Status)))
+        );
+    }
+
+    #[tokio::test]
+    async fn escape_returns_to_previous_scene() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::OptionsRewardsAddressPopUp))
+            .expect("update")
+            .expect("entry mode");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+        let (actions, result) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("handled");
+        assert_eq!(result, EventResult::Consumed);
+        assert!(actions.contains(&Action::SwitchScene(Scene::Options)));
+    }
+
+    #[tokio::test]
+    async fn typed_address_must_be_valid() {
+        let mut popup = RewardsAddressPopup::new(None);
+        popup
+            .update(Action::SwitchScene(Scene::StatusRewardsAddressPopUp))
+            .expect("update")
+            .expect("entry");
+        let focus_manager = FocusManager::new(FocusTarget::RewardsAddressPopup);
+        let _ = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Char('y'), KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("accepted");
+
+        for ch in "invalid".chars() {
+            let _ = popup
+                .handle_key_events(
+                    KeyEvent::new(KeyCode::Char(ch), KeyModifiers::empty()),
+                    &focus_manager,
+                )
+                .expect("char handled");
+        }
+        let (actions, _) = popup
+            .handle_key_events(
+                KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()),
+                &focus_manager,
+            )
+            .expect("enter handled");
+
+        // Comprehensive error state validation
+        assert!(
+            actions.is_empty(),
+            "invalid address should not store or switch scenes"
+        );
+        assert!(
+            popup.rewards_address.is_none(),
+            "rewards_address should remain None for invalid input"
+        );
+        assert_eq!(
+            popup.rewards_address_input_field.value(),
+            "invalid",
+            "input field should retain invalid value"
+        );
+        assert!(
+            matches!(
+                popup.state,
+                RewardsAddressState::AcceptTCsAndEnterRewardsAddress
+            ),
+            "state should remain in address entry mode after invalid input"
+        );
     }
 }

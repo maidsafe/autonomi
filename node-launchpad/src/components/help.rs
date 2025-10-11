@@ -6,7 +6,15 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+use super::Component;
 use super::header::SelectedMenuItem;
+use crate::{
+    action::Action,
+    components::header::Header,
+    mode::{InputMode, Scene},
+    style::{COOL_GREY, GHOST_WHITE, VIVID_SKY_BLUE},
+    widgets::hyperlink::Hyperlink,
+};
 use color_eyre::eyre::Result;
 use ratatui::{
     Frame,
@@ -15,29 +23,17 @@ use ratatui::{
     text::Span,
     widgets::{Block, Borders, Padding},
 };
+use std::any::Any;
 use tokio::sync::mpsc::UnboundedSender;
-
-use super::Component;
-use crate::{
-    action::Action,
-    components::header::Header,
-    mode::{InputMode, Scene},
-    style::{COOL_GREY, GHOST_WHITE, VIVID_SKY_BLUE},
-    widgets::hyperlink::Hyperlink,
-};
 
 #[derive(Clone)]
 pub struct Help {
-    pub active: bool,
     pub action_tx: Option<UnboundedSender<Action>>,
 }
 
 impl Help {
-    pub async fn new() -> Result<Self> {
-        Ok(Self {
-            active: false,
-            action_tx: None,
-        })
+    pub fn new() -> Result<Self> {
+        Ok(Self { action_tx: None })
     }
 }
 
@@ -47,10 +43,6 @@ impl Component for Help {
     }
 
     fn draw(&mut self, f: &mut Frame<'_>, area: Rect) -> Result<()> {
-        if !self.active {
-            return Ok(());
-        }
-        // We define a layout, top and down box.
         let layout = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Length(1), Constraint::Length(9)])
@@ -173,15 +165,59 @@ impl Component for Help {
     }
 
     fn update(&mut self, action: Action) -> Result<Option<Action>> {
-        if let Action::SwitchScene(scene) = action {
-            if let Scene::Help = scene {
-                self.active = true;
-                // make sure we're in navigation mode
-                return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
-            } else {
-                self.active = false;
-            }
+        if let Action::SwitchScene(Scene::Help) = action {
+            // make sure we're in navigation mode
+            return Ok(Some(Action::SwitchInputMode(InputMode::Navigation)));
         }
         Ok(None)
+    }
+
+    fn focus_target(&self) -> crate::focus::FocusTarget {
+        crate::focus::FocusTarget::Help
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{Terminal, backend::TestBackend};
+
+    #[tokio::test]
+    async fn update_switch_scene_returns_navigation_mode() {
+        let mut help = Help::new().unwrap();
+        let action = help
+            .update(Action::SwitchScene(Scene::Help))
+            .expect("update processed")
+            .expect("action produced");
+        assert_eq!(action, Action::SwitchInputMode(InputMode::Navigation));
+    }
+
+    #[test]
+    fn draw_contains_expected_hyperlinks() {
+        let mut help = Help::new().unwrap();
+        let backend = TestBackend::new(120, 12);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+        terminal
+            .draw(|f| {
+                help.draw(f, f.area()).expect("draw help");
+            })
+            .expect("draw");
+        let content: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(content.contains("autonomi.com/getstarted"));
+        assert!(content.contains("autonomi.com/support"));
     }
 }
