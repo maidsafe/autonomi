@@ -306,19 +306,63 @@ impl Client {
             Err(e) => return Err(e.into()),
         };
 
-        let network = Network::new(initial_peers, config.bootstrap_cache_config)?;
+        let network = Network::new(initial_peers, config.bootstrap_cache_config.clone())?;
 
         // Wait for the network to be ready with enough peers
-        network.wait_for_connectivity().await?;
+        match network.wait_for_connectivity().await {
+            Ok(()) => {
+                Ok(Self {
+                    network,
+                    client_event_sender: None,
+                    evm_network: config.evm_network,
+                    config: config.strategy,
+                    retry_failed: 0,
+                    payment_mode: PaymentMode::Standard,
+                })
+            }
+            Err(e) => {
+                // If connection failed and we have a bootstrap cache config, try to wipe the cache and retry once
+                if let Some(ref bootstrap_config) = config.bootstrap_cache_config {
+                    warn!("Initial connection failed: {e:?}. Attempting to delete bootstrap cache and retry...");
 
-        Ok(Self {
-            network,
-            client_event_sender: None,
-            evm_network: config.evm_network,
-            config: config.strategy,
-            retry_failed: 0,
-            payment_mode: PaymentMode::Standard,
-        })
+                    // Try to delete the cache file
+                    if let Err(delete_err) = ant_bootstrap::BootstrapCacheStore::delete_cache_file(bootstrap_config) {
+                        warn!("Failed to delete bootstrap cache: {delete_err}");
+                    }
+
+                    // Retry getting bootstrap addresses without cache
+                    let mut retry_config = config.init_peers_config.clone();
+                    retry_config.ignore_cache = true;
+
+                    let retry_peers = match retry_config.get_bootstrap_addr(Some(50)).await {
+                        Ok(peers) => peers,
+                        Err(retry_err) => {
+                            error!("Failed to get bootstrap addresses on retry: {retry_err}");
+                            return Err(e);
+                        }
+                    };
+
+                    info!("Retrying connection with {} fresh bootstrap peers", retry_peers.len());
+                    let retry_network = Network::new(retry_peers, config.bootstrap_cache_config.clone())?;
+
+                    // Try to connect again
+                    retry_network.wait_for_connectivity().await?;
+
+                    info!("Successfully connected after wiping bootstrap cache");
+                    Ok(Self {
+                        network: retry_network,
+                        client_event_sender: None,
+                        evm_network: config.evm_network,
+                        config: config.strategy,
+                        retry_failed: 0,
+                        payment_mode: PaymentMode::Standard,
+                    })
+                } else {
+                    // No bootstrap cache config, just return the error
+                    Err(e)
+                }
+            }
+        }
     }
 
     /// Set the `ClientOperatingStrategy` for the client.

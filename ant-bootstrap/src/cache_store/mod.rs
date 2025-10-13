@@ -206,6 +206,27 @@ impl BootstrapCacheStore {
         }
     }
 
+    /// Delete the bootstrap cache file from disk
+    pub fn delete_cache_file(cfg: &BootstrapCacheConfig) -> Result<()> {
+        let filename = Self::cache_file_name(cfg.local);
+        // Cache files are stored in a version subdirectory
+        let cache_path = cfg.cache_dir
+            .join(format!("version_{}", CacheDataLatest::CACHE_DATA_VERSION))
+            .join(&filename);
+
+        if cache_path.exists() {
+            info!("Deleting bootstrap cache file at: {:?}", cache_path);
+            fs::remove_file(&cache_path).inspect_err(|err| {
+                error!("Failed to delete bootstrap cache file at {:?}: {err}", cache_path);
+            })?;
+            info!("Successfully deleted bootstrap cache file");
+        } else {
+            info!("Bootstrap cache file does not exist at: {:?}", cache_path);
+        }
+
+        Ok(())
+    }
+
     /// Runs the sync_and_flush_to_disk method periodically
     /// This is useful for keeping the cache up-to-date without blocking the main thread.
     pub fn sync_and_flush_periodically(&self) -> tokio::task::JoinHandle<()> {
