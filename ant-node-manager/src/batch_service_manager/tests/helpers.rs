@@ -27,10 +27,7 @@ use service_manager::ServiceInstallCtx;
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{
-        Arc,
-        atomic::{AtomicU8, Ordering},
-    },
+    sync::Arc,
 };
 use tokio::sync::RwLock;
 
@@ -162,10 +159,9 @@ pub fn create_test_services_with_mocks(count: usize) -> Result<Vec<NodeService>>
         let mut mock_fs_client = MockFileSystemClient::new();
         let mut mock_metrics_client = MockMetricsClient::new();
 
-        // Set up mock expectations
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(2)
+            .times(1..)
             .returning(move || {
                 Ok(NodeMetrics {
                     reachability_status: ReachabilityStatusValues {
@@ -233,190 +229,90 @@ pub fn create_test_services_simple(count: usize) -> Vec<NodeService> {
         .collect()
 }
 
-/// Represents different progress scenarios for testing
-#[derive(Debug, Clone)]
-pub enum MockMetricsProgressScenario {
-    /// Immediate completion (100% from start)
-    Immediate,
-    /// Incremental progress: starts at 0%, increases by increment each call
-    Incremental { start: u8, increment: u8, max: u8 },
-    /// Multiple stages with different progress values
-    Staged(Vec<u8>),
-    /// Never called - for services that fail to start and never reach progress monitoring
-    NeverCalled,
-    /// Gets stuck at a specific progress value
-    StuckAt(f64),
-}
-
-/// Helper function to create test services with progressive metrics mocking
-pub fn create_test_services_with_progressive_mocks(
-    count: usize,
-    progress_scenarios: Vec<MockMetricsProgressScenario>,
-) -> Result<Vec<NodeService>> {
-    let peer_ids = (1..=count)
-        .map(|i| get_test_peer_id(i - 1))
-        .collect::<Vec<_>>();
-
-    let mut services = Vec::new();
-
-    for i in 1..=count {
-        let peer_ids_clone = peer_ids.clone();
-        let mut mock_fs_client = MockFileSystemClient::new();
-        let mut mock_metrics_client = MockMetricsClient::new();
-
-        let scenario = progress_scenarios
-            .get(i - 1)
-            .unwrap_or(&MockMetricsProgressScenario::Immediate)
-            .clone();
-
-        // Set up file system mock
-        mock_fs_client
-            .expect_listen_addrs()
-            .times(0..=1)
-            .returning(move |_root_dir| {
-                Ok(vec![
-                    Multiaddr::from_str(&format!("/ip4/127.0.0.1/udp/600{i}")).unwrap(),
-                ])
-            });
-
-        match &scenario {
-            MockMetricsProgressScenario::StuckAt(_) => {
-                mock_metrics_client
-                    .expect_get_node_metadata_extended()
-                    .times(0);
-            }
-            MockMetricsProgressScenario::NeverCalled => {
-                mock_metrics_client
-                    .expect_get_node_metadata_extended()
-                    .times(0);
-            }
-            _ => {
-                mock_metrics_client
-                    .expect_get_node_metadata_extended()
-                    .times(0..=1)
-                    .returning(move || {
-                        Ok(NodeMetadataExtended {
-                            pid: 1000 + i as u32,
-                            peer_id: peer_ids_clone[i - 1],
-                            root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
-                            log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
-                        })
-                    });
-            }
-        }
-
-        // Set up metrics mock based on scenario
-        setup_metrics_mock_for_scenario(&mut mock_metrics_client, scenario);
-
-        let service_data = create_test_service_data(i as u16);
-        let service_data = Arc::new(RwLock::new(service_data));
-
-        let service = NodeService::new(
-            service_data,
-            Box::new(mock_fs_client),
-            Box::new(mock_metrics_client),
-        );
-
-        services.push(service);
-    }
-
-    Ok(services)
-}
-
-/// Sets up metrics mock expectations based on the progress scenario
-fn setup_metrics_mock_for_scenario(
+// Helper function to setup incremental progress mock for get_node_metrics
+// Progress starts at `initial_progress` and increments by `increment` each call until 100
+pub fn setup_incremental_progress_mock(
     mock_metrics_client: &mut MockMetricsClient,
-    scenario: MockMetricsProgressScenario,
+    initial_progress: u8,
+    increment: u8,
 ) {
-    match scenario {
-        MockMetricsProgressScenario::Immediate => {
-            mock_metrics_client
-                .expect_get_node_metrics()
-                .times(1..)
-                .returning(|| {
-                    Ok(NodeMetrics {
-                        reachability_status: ReachabilityStatusValues {
-                            progress: ReachabilityProgress::Complete,
-                            upnp: false,
-                            public: true,
-                            private: false,
-                        },
-                        connected_peers: 10,
-                    })
-                });
-        }
-        MockMetricsProgressScenario::Incremental {
-            start,
-            increment,
-            max,
-        } => {
-            let progress = Arc::new(AtomicU8::new(start));
-            mock_metrics_client
-                .expect_get_node_metrics()
-                .times(1..)
-                .returning(move || {
-                    let current = progress.load(Ordering::Relaxed);
-                    let next = if current + increment >= max {
-                        max
-                    } else {
-                        current + increment
-                    };
-                    progress.store(next, Ordering::Relaxed);
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    };
 
-                    Ok(NodeMetrics {
-                        reachability_status: ReachabilityStatusValues {
-                            progress: ReachabilityProgress::from(current as f64),
-                            upnp: false,
-                            public: true,
-                            private: false,
-                        },
-                        connected_peers: 10,
-                    })
-                });
-        }
-        MockMetricsProgressScenario::Staged(stages) => {
-            let call_count = Arc::new(AtomicU8::new(0));
-            let stages = Arc::new(stages);
-            mock_metrics_client
-                .expect_get_node_metrics()
-                .times(1..)
-                .returning(move || {
-                    let count = call_count.fetch_add(1, Ordering::Relaxed) as usize;
-                    let progress = stages
-                        .get(count)
-                        .copied()
-                        .unwrap_or(*stages.last().unwrap());
+    let progress = Arc::new(AtomicU8::new(initial_progress));
+    mock_metrics_client
+        .expect_get_node_metrics()
+        .times(1..)
+        .returning(move || {
+            let current = progress.load(Ordering::Relaxed);
+            let next = if current + increment >= 100 {
+                100
+            } else {
+                current + increment
+            };
+            progress.store(next, Ordering::Relaxed);
 
-                    Ok(NodeMetrics {
-                        reachability_status: ReachabilityStatusValues {
-                            progress: ReachabilityProgress::from(progress as f64),
-                            upnp: false,
-                            public: true,
-                            private: false,
-                        },
-                        connected_peers: 10,
-                    })
-                });
-        }
-        MockMetricsProgressScenario::NeverCalled => {
-            // Don't set up any expectations - this mock should never be called
-        }
+            Ok(NodeMetrics {
+                reachability_status: ReachabilityStatusValues {
+                    progress: ReachabilityProgress::from(current as f64),
+                    upnp: false,
+                    public: true,
+                    private: false,
+                },
+                connected_peers: 10,
+            })
+        });
+}
 
-        MockMetricsProgressScenario::StuckAt(progress) => {
-            mock_metrics_client
-                .expect_get_node_metrics()
-                .times(1..)
-                .returning(move || {
-                    Ok(NodeMetrics {
-                        reachability_status: ReachabilityStatusValues {
-                            progress: ReachabilityProgress::from(progress),
-                            upnp: false,
-                            public: true,
-                            private: false,
-                        },
-                        connected_peers: 10,
-                    })
-                });
-        }
-    }
+// Helper function to setup staged progress mock for get_node_metrics
+// Progress follows predefined stages, staying at final stage once reached
+pub fn setup_staged_progress_mock(mock_metrics_client: &mut MockMetricsClient, stages: Vec<u8>) {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicU8, Ordering},
+    };
+
+    let call_count = Arc::new(AtomicU8::new(0));
+    let stages = Arc::new(stages);
+    mock_metrics_client
+        .expect_get_node_metrics()
+        .times(1..)
+        .returning(move || {
+            let count = call_count.fetch_add(1, Ordering::Relaxed) as usize;
+            let progress = stages
+                .get(count)
+                .copied()
+                .unwrap_or(*stages.last().unwrap());
+
+            Ok(NodeMetrics {
+                reachability_status: ReachabilityStatusValues {
+                    progress: ReachabilityProgress::from(progress as f64),
+                    upnp: false,
+                    public: true,
+                    private: false,
+                },
+                connected_peers: 10,
+            })
+        });
+}
+
+// Helper function to setup stuck progress mock for get_node_metrics
+// Progress always returns the same value (stuck at a specific percentage)
+pub fn setup_stuck_progress_mock(mock_metrics_client: &mut MockMetricsClient, stuck_at: u8) {
+    mock_metrics_client
+        .expect_get_node_metrics()
+        .times(1..)
+        .returning(move || {
+            Ok(NodeMetrics {
+                reachability_status: ReachabilityStatusValues {
+                    progress: ReachabilityProgress::InProgress(stuck_at),
+                    upnp: false,
+                    public: true,
+                    private: false,
+                },
+                connected_peers: 10,
+            })
+        });
 }

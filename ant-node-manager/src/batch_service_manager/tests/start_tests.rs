@@ -11,12 +11,12 @@ use crate::batch_service_manager::{BatchServiceManager, VerbosityLevel};
 use ant_service_management::error::Error;
 use ant_service_management::{
     NodeService, ReachabilityProgress, ServiceStateActions, ServiceStatus,
+    metric::{NodeMetadataExtended, NodeMetrics, ReachabilityStatusValues},
 };
 use assert_matches::assert_matches;
 use color_eyre::eyre::Result;
 use mockall::predicate::*;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tokio::time::Instant;
 
@@ -65,7 +65,7 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
             .with(eq(PathBuf::from(format!(
                 "/var/antctl/services/antnode{i}"
             ))))
-            .times(1)
+            .times(1..=2)
             .returning(|_| Ok(vec![]));
 
         mock_metrics_client
@@ -85,7 +85,7 @@ async fn start_all_should_start_newly_installed_services() -> Result<()> {
 
         mock_metrics_client
             .expect_get_node_metadata_extended()
-            .times(1)
+            .times(1..=2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i,
@@ -349,7 +349,7 @@ async fn start_all_should_start_services_marked_as_running_but_had_since_stopped
         .times(1)
         .returning(|_| Ok(1002));
 
-    // Create services with proper mock setup and set them to running state
+    // Create services - they're marked as running but are restarted, so full metrics expected
     let services = create_test_services_with_mocks(2)?;
     for service in &services {
         let mut service_data = service.service_data.write().await;
@@ -410,11 +410,38 @@ async fn start_all_should_return_error_if_processes_not_found() -> Result<()> {
         .times(1)
         .returning(|_| Err(Error::ServiceProcessNotFound("antnode2".to_string())));
 
-    let scenarios = vec![
-        MockMetricsProgressScenario::Immediate,
-        MockMetricsProgressScenario::Immediate,
-    ];
-    let services = create_test_services_with_progressive_mocks(2, scenarios)?;
+    // Create services - they start but PID lookup fails, so get_node_metrics is still called during monitoring
+    let mut services = Vec::new();
+    for i in 1..=2 {
+        let mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        // No listen_addrs expectation - PID lookup fails before this
+        // But get_node_metrics is called during progress monitoring
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(0..)
+            .returning(|| {
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        let service_data = create_test_service_data(i);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
 
     let batch_manager = BatchServiceManager::new(
         services,
@@ -516,12 +543,73 @@ async fn start_all_should_monitor_progress_until_all_services_complete() -> Resu
         .times(2)
         .returning(|_| ());
 
-    // First service completes quickly, second takes multiple steps
-    let scenarios = vec![
-        MockMetricsProgressScenario::Staged(vec![50, 100]), // 2 steps
-        MockMetricsProgressScenario::Staged(vec![10, 30, 60, 80, 95, 100]), // 6 steps
-    ];
-    let services = create_test_services_with_progressive_mocks(2, scenarios)?;
+    let mut services = Vec::new();
+
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1..=2)
+            .returning(|_| Ok(vec![]));
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1..=2)
+            .returning(|| {
+                Ok(NodeMetadataExtended {
+                    pid: 1001,
+                    peer_id: get_test_peer_id(0),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode1"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode1"),
+                })
+            });
+
+        setup_staged_progress_mock(&mut mock_metrics_client, vec![50, 100]);
+
+        let service_data = create_test_service_data(1);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1..=2)
+            .returning(|_| Ok(vec![]));
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1..=2)
+            .returning(|| {
+                Ok(NodeMetadataExtended {
+                    pid: 1002,
+                    peer_id: get_test_peer_id(1),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode2"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode2"),
+                })
+            });
+
+        setup_staged_progress_mock(&mut mock_metrics_client, vec![10, 30, 60, 80, 95, 100]);
+
+        let service_data = create_test_service_data(2);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
 
     let batch_manager = BatchServiceManager::new(
         services,
@@ -570,13 +658,7 @@ async fn start_all_should_respect_fixed_intervals() -> Result<()> {
         .times(3)
         .returning(|_| ());
 
-    // Create services with immediate completion for timing tests
-    let scenarios = vec![
-        MockMetricsProgressScenario::Immediate,
-        MockMetricsProgressScenario::Immediate,
-        MockMetricsProgressScenario::Immediate,
-    ];
-    let services = create_test_services_with_progressive_mocks(3, scenarios)?;
+    let services = create_test_services_with_mocks(3)?;
 
     let batch_manager = BatchServiceManager::new(
         services,
@@ -628,13 +710,7 @@ async fn start_all_should_handle_services_starting_at_different_rates() -> Resul
         .times(3)
         .returning(|_| ());
 
-    // Create services with different startup characteristics
-    let scenarios = vec![
-        MockMetricsProgressScenario::Immediate, // Fast starter
-        MockMetricsProgressScenario::Staged(vec![0, 25, 50, 75, 100]), // Gradual starter
-        MockMetricsProgressScenario::Staged(vec![0, 0, 0, 100]), // Slow starter
-    ];
-    let services = create_test_services_with_progressive_mocks(3, scenarios)?;
+    let services = create_test_services_with_mocks(3)?;
 
     let batch_manager = BatchServiceManager::new(
         services,
@@ -693,12 +769,72 @@ async fn start_all_should_continue_with_other_services_when_one_fails() -> Resul
         .times(2) // Only for successful services
         .returning(|_| ());
 
-    let scenarios = vec![
-        MockMetricsProgressScenario::NeverCalled, // First service fails to start, so progress monitoring never begins
-        MockMetricsProgressScenario::Immediate,
-        MockMetricsProgressScenario::Immediate,
-    ];
-    let services = create_test_services_with_progressive_mocks(3, scenarios)?;
+    // Manually create services: first fails, so no metrics expected
+    let mut services = Vec::new();
+
+    // Service 1: fails at start, no metrics expected
+    {
+        let mock_fs_client = MockFileSystemClient::new();
+        let mock_metrics_client = MockMetricsClient::new();
+        // No expectations - service never gets to metrics collection
+
+        let service_data = create_test_service_data(1);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    // Services 2 and 3: succeed, so metrics are expected
+    for i in 2..=3 {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1..=2)
+            .returning(|_| Ok(vec![]));
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1..)
+            .returning(|| {
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        let peer_id = get_test_peer_id((i - 1) as usize);
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1..=2)
+            .returning(move || {
+                Ok(NodeMetadataExtended {
+                    pid: 1000 + i,
+                    peer_id,
+                    root_dir: PathBuf::from(format!("/var/antctl/services/antnode{i}")),
+                    log_dir: PathBuf::from(format!("/var/log/antnode/antnode{i}")),
+                })
+            });
+
+        let service_data = create_test_service_data(i as u16);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
 
     let batch_manager = BatchServiceManager::new(
         services,
@@ -770,7 +906,7 @@ async fn start_all_should_handle_mixed_user_and_system_modes() -> Result<()> {
             .with(eq(PathBuf::from(format!(
                 "/var/antctl/services/antnode{i}"
             ))))
-            .times(1)
+            .times(1..=2)
             .returning(|_| Ok(vec![]));
 
         mock_metrics_client
@@ -790,7 +926,7 @@ async fn start_all_should_handle_mixed_user_and_system_modes() -> Result<()> {
 
         mock_metrics_client
             .expect_get_node_metadata_extended()
-            .times(1)
+            .times(1..=2)
             .returning(move || {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1000 + i,
@@ -861,17 +997,72 @@ async fn start_all_should_skip_already_running_services_and_start_others() -> Re
         .times(1)
         .returning(|_| Ok(1002));
 
-    let scenarios = vec![
-        MockMetricsProgressScenario::NeverCalled, // First service is already running, so progress monitoring never begins
-        MockMetricsProgressScenario::Immediate,
-    ];
-    let services = create_test_services_with_progressive_mocks(2, scenarios)?;
+    // Manually create services: first is already running (no metrics), second starts normally
+    let mut services = Vec::new();
 
-    // Set first service to running
+    // Service 1: already running, will be skipped
     {
-        let mut service_data = services[0].service_data.write().await;
+        let mock_fs_client = MockFileSystemClient::new();
+        let mock_metrics_client = MockMetricsClient::new();
+        // No expectations - service is already running and skipped
+
+        let mut service_data = create_test_service_data(1);
         service_data.status = ServiceStatus::Running;
         service_data.pid = Some(1001);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
+    }
+
+    // Service 2: needs to be started, metrics expected
+    {
+        let mut mock_fs_client = MockFileSystemClient::new();
+        let mut mock_metrics_client = MockMetricsClient::new();
+
+        mock_fs_client
+            .expect_listen_addrs()
+            .times(1..=2)
+            .returning(|_| Ok(vec![]));
+
+        mock_metrics_client
+            .expect_get_node_metrics()
+            .times(1..)
+            .returning(|| {
+                Ok(NodeMetrics {
+                    reachability_status: ReachabilityStatusValues {
+                        progress: ReachabilityProgress::Complete,
+                        upnp: false,
+                        public: true,
+                        private: false,
+                    },
+                    connected_peers: 10,
+                })
+            });
+
+        mock_metrics_client
+            .expect_get_node_metadata_extended()
+            .times(1..=2)
+            .returning(|| {
+                Ok(NodeMetadataExtended {
+                    pid: 1002,
+                    peer_id: get_test_peer_id(1),
+                    root_dir: PathBuf::from("/var/antctl/services/antnode2"),
+                    log_dir: PathBuf::from("/var/log/antnode/antnode2"),
+                })
+            });
+
+        let service_data = create_test_service_data(2);
+        let service_data = Arc::new(RwLock::new(service_data));
+        let service = NodeService::new(
+            service_data,
+            Box::new(mock_fs_client),
+            Box::new(mock_metrics_client),
+        );
+        services.push(service);
     }
 
     let batch_manager = BatchServiceManager::new(
@@ -949,7 +1140,7 @@ async fn start_all_should_record_critical_failure_in_registry() -> Result<()> {
 
         mock_metrics_client
             .expect_get_node_metadata_extended()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1001,
@@ -961,7 +1152,7 @@ async fn start_all_should_record_critical_failure_in_registry() -> Result<()> {
 
         mock_fs_client
             .expect_listen_addrs()
-            .times(1)
+            .times(1..=2)
             .returning(|_| Ok(vec![]));
 
         let service_data = create_test_service_data(1);
@@ -981,7 +1172,7 @@ async fn start_all_should_record_critical_failure_in_registry() -> Result<()> {
 
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -997,7 +1188,7 @@ async fn start_all_should_record_critical_failure_in_registry() -> Result<()> {
         mock_fs_client
             .expect_critical_failure()
             .with(eq(PathBuf::from("/var/antctl/services/antnode2")))
-            .times(1)
+            .times(1..=2)
             .returning(|_| {
                 Ok(Some(ant_service_management::fs::CriticalFailure {
                     date_time: chrono::Utc::now(),
@@ -1088,7 +1279,7 @@ async fn start_all_should_clear_critical_failure_on_success() -> Result<()> {
 
     mock_metrics_client
         .expect_get_node_metadata_extended()
-        .times(1)
+        .times(1..=2)
         .returning(|| {
             Ok(ant_service_management::metric::NodeMetadataExtended {
                 pid: 1001,
@@ -1100,7 +1291,7 @@ async fn start_all_should_clear_critical_failure_on_success() -> Result<()> {
 
     mock_fs_client
         .expect_listen_addrs()
-        .times(1)
+        .times(1..=2)
         .returning(|_| Ok(vec![]));
 
     let mut service_data = create_test_service_data(1);
@@ -1190,7 +1381,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -1206,7 +1397,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
         mock_fs_client
             .expect_critical_failure()
             .with(eq(PathBuf::from("/var/antctl/services/antnode1")))
-            .times(1)
+            .times(1..=2)
             .returning(|_| {
                 Ok(Some(ant_service_management::fs::CriticalFailure {
                     date_time: chrono::Utc::now(),
@@ -1216,7 +1407,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_metrics_client
             .expect_get_node_metadata_extended()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1234,
@@ -1228,7 +1419,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_fs_client
             .expect_listen_addrs()
-            .times(1)
+            .times(1..=2)
             .returning(|_| Ok(vec![]));
 
         let mut service_data = create_test_service_data(1);
@@ -1257,7 +1448,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_metrics_client
             .expect_get_node_metrics()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetrics {
                     reachability_status: ant_service_management::metric::ReachabilityStatusValues {
@@ -1272,7 +1463,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_metrics_client
             .expect_get_node_metadata_extended()
-            .times(1)
+            .times(1..=2)
             .returning(|| {
                 Ok(ant_service_management::metric::NodeMetadataExtended {
                     pid: 1235,
@@ -1284,7 +1475,7 @@ async fn start_all_should_update_critical_failure_during_full_refresh() -> Resul
 
         mock_fs_client
             .expect_listen_addrs()
-            .times(1)
+            .times(1..=2)
             .returning(|_| Ok(vec![]));
 
         let mut service_data = create_test_service_data(2);
