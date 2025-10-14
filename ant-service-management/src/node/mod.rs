@@ -16,7 +16,7 @@ mod node_service_data_v3;
 pub use node_service_data::{NODE_SERVICE_DATA_SCHEMA_LATEST, NodeServiceData};
 
 const CRITICAL_FAILURE_POLL_ATTEMPTS: usize = 4;
-const CRITICAL_FAILURE_POLL_DELAY_MS: u64 = 250;
+const CRITICAL_FAILURE_POLL_DELAY_MS: u64 = 500;
 
 use crate::{
     ReachabilityProgress, ServiceStartupStatus, ServiceStateActions, ServiceStatus, UpgradeOptions,
@@ -232,80 +232,86 @@ impl ServiceStateActions for NodeService {
 
     async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
         let service_name = self.service_data.read().await.service_name.clone();
-        let (reachability_progress, connected_peers, pid, peer_id, last_critical_failure) =
-            if full_refresh {
-                let node_metrics =
-                    self.metrics_action
-                        .get_node_metrics()
-                        .await
-                        .inspect_err(|err| {
-                            error!("Error obtaining node_metrics via metrics actions: {err:?}")
-                        })?;
 
-                let node_metadata_extended = self
-                    .metrics_action
-                    .get_node_metadata_extended()
-                    .await
-                    .inspect_err(|err| {
-                        error!("Error obtaining metadata_extended via metrics actions: {err:?}")
-                    })?;
+        if full_refresh {
+            debug!("Performing full refresh for {service_name}");
+            self.collect_and_update_runtime_metrics().await?;
+        } else {
+            debug!("Performing partial refresh for {service_name}");
+            debug!("Previously assigned data will be used, only updating PID if provided");
+            if let Some(pid) = pid {
+                self.service_data.write().await.pid = Some(pid);
+            }
+        }
 
-                let root_dir = self.service_data.read().await.data_dir_path.clone();
-
-                let listen_addrs = self.fs_actions.listen_addrs(&root_dir).inspect_err(|err| {
-                    error!(
-                        "Error obtaining listen addresses via fs actions on path {:?}: {err:?}",
-                        node_metadata_extended.root_dir
-                    )
-                })?;
-
-                self.service_data.write().await.listen_addr = Some(listen_addrs.clone());
-
-                let reachability_status = node_metrics.reachability_status.clone();
-                let failure_log = if reachability_status.indicates_unreachable() {
-                    info!(
-                        "Reachability status indicates unreachable, attempting to read critical failure log"
-                    );
-                    self.read_critical_failure_with_retry().await
-                } else {
-                    None
-                };
-
-                (
-                    reachability_status.progress,
-                    node_metrics.connected_peers,
-                    Some(node_metadata_extended.pid),
-                    Some(node_metadata_extended.peer_id),
-                    failure_log,
-                )
-            } else {
-                debug!("Performing partial refresh for {service_name}");
-                debug!("Previously assigned data will be used");
-                let service_data = self.service_data.read().await;
-                (
-                    service_data.reachability_progress.clone(),
-                    service_data.connected_peers,
-                    pid,
-                    service_data.peer_id,
-                    service_data.last_critical_failure.clone(),
-                )
-            };
-
-        let mut service_data = self.service_data.write().await;
-        debug!(
-            "Writing new state for {service_name}, pid: {pid:?}, connected_peers: {connected_peers}, reachability_progress: {reachability_progress:?}, last_critical_failure: {last_critical_failure:?}"
-        );
-        service_data.connected_peers = connected_peers;
-        service_data.peer_id = peer_id;
-        service_data.pid = pid;
-        service_data.status = ServiceStatus::Running;
-        service_data.reachability_progress = reachability_progress;
-        service_data.last_critical_failure = last_critical_failure;
-
+        self.service_data.write().await.status = ServiceStatus::Running;
         Ok(())
     }
 
-    async fn startup_status(&self) -> ServiceStartupStatus {
+    async fn collect_and_update_runtime_metrics(&self) -> Result<()> {
+        let service_name = self.service_data.read().await.service_name.clone();
+        debug!("Collecting runtime metrics for {service_name}");
+
+        let node_metrics = self
+            .metrics_action
+            .get_node_metrics()
+            .await
+            .inspect_err(|err| {
+                error!("Error obtaining node_metrics via metrics actions: {err:?}")
+            })?;
+
+        let node_metadata_extended = self
+            .metrics_action
+            .get_node_metadata_extended()
+            .await
+            .inspect_err(|err| {
+                error!("Error obtaining metadata_extended via metrics actions: {err:?}")
+            })?;
+
+        let root_dir = self.service_data.read().await.data_dir_path.clone();
+
+        let listen_addrs = self.fs_actions.listen_addrs(&root_dir).inspect_err(|err| {
+            error!(
+                "Error obtaining listen addresses via fs actions on path {:?}: {err:?}",
+                node_metadata_extended.root_dir
+            )
+        })?;
+
+        let reachability_status = node_metrics.reachability_status.clone();
+        let failure_log = if reachability_status.indicates_unreachable() {
+            info!(
+                "Reachability status indicates unreachable, attempting to read critical failure log"
+            );
+            self.read_critical_failure_with_retry().await
+        } else {
+            None
+        };
+
+        let mut service_data = self.service_data.write().await;
+        debug!(
+            "Updating service data for {service_name}, pid: {}, peer_id: {}, connected_peers: {}, reachability_progress: {:?}",
+            node_metadata_extended.pid,
+            node_metadata_extended.peer_id,
+            node_metrics.connected_peers,
+            reachability_status.progress
+        );
+
+        service_data.connected_peers = node_metrics.connected_peers;
+        service_data.peer_id = Some(node_metadata_extended.peer_id);
+        service_data.pid = Some(node_metadata_extended.pid);
+        service_data.reachability_progress = reachability_status.progress;
+        service_data.last_critical_failure = failure_log;
+        service_data.listen_addr = Some(listen_addrs);
+
+        debug!("Successfully collected runtime metrics for {service_name}");
+        Ok(())
+    }
+
+    async fn has_runtime_metrics_collected(&self) -> bool {
+        self.service_data.read().await.peer_id.is_some()
+    }
+
+    async fn check_and_update_startup_status(&self) -> ServiceStartupStatus {
         let service_name = self.service_data.read().await.service_name.clone();
 
         let node_metrics = self.metrics_action.get_node_metrics().await;
@@ -317,7 +323,7 @@ impl ServiceStateActions for NodeService {
                     let reason = failure_log
                         .as_ref()
                         .map(|log| log.reason.clone())
-                        .unwrap_or_else(|| "ReachabilityCheckFailed".to_string());
+                        .unwrap_or_else(|| "Unreachable".to_string());
                     self.service_data.write().await.last_critical_failure = failure_log;
                     ServiceStartupStatus::Failed { reason }
                 } else {

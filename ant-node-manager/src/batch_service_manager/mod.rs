@@ -555,10 +555,26 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
                 }
 
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                match service.startup_status().await {
+                match service.check_and_update_startup_status().await {
                     ServiceStartupStatus::InProgress(progress) => {
                         info!("The reachability check progress for {service_name} is {progress}%");
                         all_complete = false;
+
+                        // Collect runtime metrics on first InProgress to capture PeerId, PID etc.
+                        // even if startup ultimately fails
+                        if !service.has_runtime_metrics_collected().await {
+                            debug!(
+                                "First progress update for {service_name}, collecting runtime metrics"
+                            );
+                            if service.collect_and_update_runtime_metrics().await.is_ok() {
+                                debug!("Successfully collected runtime metrics for {service_name}");
+                            } else {
+                                debug!(
+                                    "Failed to collect runtime metrics for {service_name}, will retry later"
+                                );
+                            }
+                        }
+
                         if let Some(pb) = progress_bars.get(&service_name) {
                             pb.set_position(progress as u64);
                             pb.set_message("◔ Reachability Check".to_string());
