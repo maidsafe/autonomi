@@ -478,20 +478,18 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
         if let Some(ref mp) = multi_progress {
             for service in &self.services {
                 let service_name = service.name().await;
-                if !batch_result.contains_errors(&service_name) {
-                    let pb = mp.add(ProgressBar::new(100));
-                    #[allow(clippy::expect_used)]
-                    pb.set_style(
-                        ProgressStyle::with_template(
-                            "{prefix:>15} [{bar:40.cyan/blue}] {pos:>3}% {msg}",
-                        )
-                        .expect("Failed to create progress bar template")
-                        .progress_chars("##-"),
-                    );
-                    pb.set_prefix(service_name.clone());
-                    pb.set_message("Node starting, running reachability check...");
-                    progress_bars.insert(service_name, pb);
-                }
+                let pb = mp.add(ProgressBar::new(100));
+                #[allow(clippy::expect_used)]
+                pb.set_style(
+                    ProgressStyle::with_template(
+                        "{prefix:>15} [{bar:40.cyan/blue}] {pos:>3}% {msg}",
+                    )
+                    .expect("Failed to create progress bar template")
+                    .progress_chars("##-"),
+                );
+                pb.set_prefix(service_name.clone());
+                pb.set_message("Node starting, running reachability check...");
+                progress_bars.insert(service_name, pb);
             }
         }
 
@@ -545,12 +543,30 @@ impl<T: ServiceStateActions + Send> BatchServiceManager<T> {
 
             for service in &self.services {
                 let service_name = service.name().await;
-                if skip_services.contains(&service_name)
-                    || batch_result.contains_errors(&service_name)
-                {
+
+                // Handle services that were skipped from the start
+                if skip_services.contains(&service_name) {
                     debug!(
-                        "Skipping service (progress) {service_name} as it is marked to be skipped"
+                        "Service {service_name} was skipped, finishing progress bar. Also skipping further checks."
                     );
+                    if let Some(pb) = progress_bars.get(&service_name)
+                        && !pb.is_finished()
+                    {
+                        pb.finish_with_message("Already running ✓".green().to_string());
+                    }
+                    continue;
+                }
+
+                // Handle services that have errors from earlier stages
+                if batch_result.contains_errors(&service_name) {
+                    debug!(
+                        "Service {service_name} has errors, finishing progress bar. Also skipping further checks."
+                    );
+                    if let Some(pb) = progress_bars.get(&service_name)
+                        && !pb.is_finished()
+                    {
+                        pb.finish_with_message("Failed ✗".red().to_string());
+                    }
                     continue;
                 }
 
