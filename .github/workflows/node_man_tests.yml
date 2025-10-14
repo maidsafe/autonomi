@@ -80,7 +80,7 @@ jobs:
 
       - shell: bash
         run: |
-          cargo test --package ant-node-manager --release --test e2e -- --nocapture
+          cargo test --package ant-node-manager --release --test e2e -- --ignored --nocapture
 
       - name: Stop the local network and upload logs
         if: always()
@@ -137,7 +137,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: |
           ${{ matrix.elevated }} rustup default stable
-          ${{ matrix.elevated }} cargo test --package ant-node-manager --release --test e2e -- --nocapture
+          ${{ matrix.elevated }} cargo test --package ant-node-manager --release --test e2e -- --ignored --nocapture
 
       # Powershell step runs as admin by default.
       - name: run integration test in powershell
@@ -150,7 +150,7 @@ jobs:
           Move-Item -Path WinSW.exe -Destination "$env:GITHUB_WORKSPACE\bin"
           $env:PATH += ";$env:GITHUB_WORKSPACE\bin"
 
-          cargo test --release --package ant-node-manager --test e2e -- --nocapture
+          cargo test --release --package ant-node-manager --test e2e -- --ignored --nocapture
 
       - name: Stop the local network and upload logs
         if: always()

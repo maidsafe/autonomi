@@ -31,7 +31,12 @@ const ANTNODE_BIN_NAME: &str = "antnode.exe";
 /// the process. However, there seems to be some sort of issue with adding user accounts on the GHA
 /// build agent, so we will just tell it to use the `runner` user, which is the account for the
 /// build agent.
+///
+/// This test is ignored by default to prevent accidental execution on developer machines.
+/// In CI, it runs via `cargo test -- --ignored` (see .github/workflows/node_man_tests.yml).
+/// Developers can run it manually with `cargo test --test e2e -- --ignored` if needed.
 #[test]
+#[ignore]
 fn cross_platform_service_install_and_control() {
     let antnode_path = PathBuf::from("..")
         .join("target")
