@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1760548028312,
+  "lastUpdate": 1760955737088,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2690,6 +2690,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.048500882907564,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "60474b090ebbaddb150dddeedb21c7bf591279cb",
+          "message": "Merge pull request #3255 from maidsafe/dependabot/cargo/alloy-dyn-abi-1.4.1\n\nchore(deps): bump alloy-dyn-abi from 1.4.0 to 1.4.1",
+          "timestamp": "2025-10-20T09:06:04Z",
+          "tree_id": "d5b8a114a4eccd81f01eafecca5740fc7fb8a50e",
+          "url": "https://github.com/maidsafe/autonomi/commit/60474b090ebbaddb150dddeedb21c7bf591279cb"
+        },
+        "date": 1760955730140,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1163741265007887,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.395297297638518,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.030506648526078,
             "unit": "MiB/s"
           }
         ]
