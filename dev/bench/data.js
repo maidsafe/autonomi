@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1760955814588,
+  "lastUpdate": 1760955815994,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9831,6 +9831,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 17170,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "60474b090ebbaddb150dddeedb21c7bf591279cb",
+          "message": "Merge pull request #3255 from maidsafe/dependabot/cargo/alloy-dyn-abi-1.4.1\n\nchore(deps): bump alloy-dyn-abi from 1.4.0 to 1.4.1",
+          "timestamp": "2025-10-20T09:06:04Z",
+          "tree_id": "d5b8a114a4eccd81f01eafecca5740fc7fb8a50e",
+          "url": "https://github.com/maidsafe/autonomi/commit/60474b090ebbaddb150dddeedb21c7bf591279cb"
+        },
+        "date": 1760955815613,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 13169,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23950,
             "unit": "ms"
           },
           {
