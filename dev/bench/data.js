@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1760955815994,
+  "lastUpdate": 1760958311412,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2729,6 +2729,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.030506648526078,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "70f7cc6aeaf14d31a94e3b171472d259d12f5160",
+          "message": "Merge pull request #3238 from maidsafe/dependabot/github_actions/github/codeql-action-4\n\nchore(deps): bump github/codeql-action from 3 to 4",
+          "timestamp": "2025-10-20T09:57:18Z",
+          "tree_id": "02d2f7ed326da6c0201fff731c503c2844ddb9ba",
+          "url": "https://github.com/maidsafe/autonomi/commit/70f7cc6aeaf14d31a94e3b171472d259d12f5160"
+        },
+        "date": 1760958304022,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1137912923785067,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.427035475273617,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.030572696715744,
             "unit": "MiB/s"
           }
         ]
