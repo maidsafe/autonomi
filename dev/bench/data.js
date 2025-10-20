@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1760962970394,
+  "lastUpdate": 1760963044718,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4868,6 +4868,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 220,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "68eb45d2b8e0a8bef6588f6330a8cda92f411b6b",
+          "message": "Merge pull request #3237 from maidsafe/dependabot/github_actions/astral-sh/setup-uv-7\n\nchore(deps): bump astral-sh/setup-uv from 6 to 7",
+          "timestamp": "2025-10-20T11:00:45Z",
+          "tree_id": "82f98b03ccfb3be26f274fada34d6a0b684eed17",
+          "url": "https://github.com/maidsafe/autonomi/commit/68eb45d2b8e0a8bef6588f6330a8cda92f411b6b"
+        },
+        "date": 1760963044186,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 215,
             "unit": "MB"
           }
         ]
