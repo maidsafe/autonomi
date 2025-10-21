@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761054295521,
+  "lastUpdate": 1761054298044,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7507,6 +7507,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/67735e4b1f06ed65a56394f7f0c3f49aee548cb4"
         },
         "date": 1760966251566,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "41c3da093c9181a9d30693185118f3bcc8cc6c9c",
+          "message": "Merge pull request #3259 from happybeing/fix-upload-symlink-3258\n\nFix upload symlink 3258",
+          "timestamp": "2025-10-21T12:39:29Z",
+          "tree_id": "8ac02e33406dcc8468efa2808aa16300a2e76dfa",
+          "url": "https://github.com/maidsafe/autonomi/commit/41c3da093c9181a9d30693185118f3bcc8cc6c9c"
+        },
+        "date": 1761054296973,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
