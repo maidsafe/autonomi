@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761054298044,
+  "lastUpdate": 1761054300703,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10395,6 +10395,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20728,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "41c3da093c9181a9d30693185118f3bcc8cc6c9c",
+          "message": "Merge pull request #3259 from happybeing/fix-upload-symlink-3258\n\nFix upload symlink 3258",
+          "timestamp": "2025-10-21T12:39:29Z",
+          "tree_id": "8ac02e33406dcc8468efa2808aa16300a2e76dfa",
+          "url": "https://github.com/maidsafe/autonomi/commit/41c3da093c9181a9d30693185118f3bcc8cc6c9c"
+        },
+        "date": 1761054299591,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10622,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19511,
             "unit": "ms"
           },
           {
