@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1760966254353,
+  "lastUpdate": 1761054215933,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2846,6 +2846,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.02683610997243,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "41c3da093c9181a9d30693185118f3bcc8cc6c9c",
+          "message": "Merge pull request #3259 from happybeing/fix-upload-symlink-3258\n\nFix upload symlink 3258",
+          "timestamp": "2025-10-21T12:39:29Z",
+          "tree_id": "8ac02e33406dcc8468efa2808aa16300a2e76dfa",
+          "url": "https://github.com/maidsafe/autonomi/commit/41c3da093c9181a9d30693185118f3bcc8cc6c9c"
+        },
+        "date": 1761054207807,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1389401557142194,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.1502504449326425,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.024603841362613,
             "unit": "MiB/s"
           }
         ]
