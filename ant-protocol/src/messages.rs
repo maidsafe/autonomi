@@ -10,6 +10,7 @@
 mod chunk_proof;
 mod cmd;
 mod connection_info;
+mod merkle_tree;
 mod node_id;
 mod query;
 mod response;
@@ -18,6 +19,10 @@ pub use self::{
     chunk_proof::{ChunkProof, Nonce},
     cmd::Cmd,
     connection_info::ConnectionInfo,
+    merkle_tree::{
+        BadMerkleProof, MerkleBranch, MerkleTree, MerkleTreeError, RewardCandidatePool,
+        verify_merkle_proof,
+    },
     node_id::NodeId,
     query::Query,
     response::{CmdResponse, QueryResponse},
