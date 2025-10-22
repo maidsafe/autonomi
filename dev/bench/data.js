@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761149839206,
+  "lastUpdate": 1761149913446,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5072,6 +5072,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 188,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e466569113f8f532914ec0a3d2412c5bbcd1d3f0",
+          "message": "Merge pull request #3256 from RolandSherwin/bootstrap_fixx\n\nfix(bootstrap): drive the dialing process via external loop",
+          "timestamp": "2025-10-22T15:10:13Z",
+          "tree_id": "8bbcfe2bae3b44039848dd692e89d5e912927150",
+          "url": "https://github.com/maidsafe/autonomi/commit/e466569113f8f532914ec0a3d2412c5bbcd1d3f0"
+        },
+        "date": 1761149912882,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 199,
             "unit": "MB"
           }
         ]
