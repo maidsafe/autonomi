@@ -8285,6 +8285,7 @@ dependencies = [
 [[package]]
 name = "rs_merkle"
 version = "1.5.0"
+source = "git+https://github.com/maidsafe/rs-merkle.git?branch=master#fa7ae1a911226e77164d3530a75709011283b5b9"
 dependencies = [
  "sha2",
 ]
