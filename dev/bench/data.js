@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761149915152,
+  "lastUpdate": 1761149916918,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10536,6 +10536,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 19511,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e466569113f8f532914ec0a3d2412c5bbcd1d3f0",
+          "message": "Merge pull request #3256 from RolandSherwin/bootstrap_fixx\n\nfix(bootstrap): drive the dialing process via external loop",
+          "timestamp": "2025-10-22T15:10:13Z",
+          "tree_id": "8bbcfe2bae3b44039848dd692e89d5e912927150",
+          "url": "https://github.com/maidsafe/autonomi/commit/e466569113f8f532914ec0a3d2412c5bbcd1d3f0"
+        },
+        "date": 1761149916341,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9714,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 17705,
             "unit": "ms"
           },
           {
