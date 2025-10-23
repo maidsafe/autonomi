@@ -127,7 +127,6 @@ pub async fn add(
         enable_metrics_server,
         evm_network: evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         env_variables,
-        relay: false,
         log_format,
         max_archived_log_files,
         max_log_files,

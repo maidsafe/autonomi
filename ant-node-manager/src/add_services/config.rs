@@ -88,7 +88,6 @@ pub struct InstallNodeServiceCtxBuilder {
     pub node_port: Option<u16>,
     pub init_peers_config: InitialPeersConfig,
     pub rewards_address: RewardsAddress,
-    pub relay: bool,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
     pub write_older_cache_files: bool,
@@ -196,7 +195,6 @@ pub struct AddNodeServiceOptions {
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<PortRange>,
     pub no_upnp: bool,
-    pub relay: bool,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
@@ -232,7 +230,6 @@ mod tests {
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
             evm_network: EvmNetwork::ArbitrumOne,
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -269,7 +266,6 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -307,7 +303,6 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: Some(10),
@@ -402,7 +397,6 @@ mod tests {
     fn build_should_assign_expected_values_when_all_options_are_enabled() {
         let mut builder = create_builder_with_all_options_enabled();
         builder.alpha = true;
-        builder.relay = true;
         builder.log_format = Some(LogFormat::Json);
         builder.no_upnp = true;
         builder.node_ip = Some(Ipv4Addr::new(192, 168, 1, 1));
