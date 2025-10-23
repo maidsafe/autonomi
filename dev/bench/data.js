@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761203772947,
+  "lastUpdate": 1761203774482,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10677,6 +10677,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 17705,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "RolandSherwin@protonmail.com",
+            "name": "RolandSherwin",
+            "username": "RolandSherwin"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71",
+          "message": "Merge pull request #3263 from RolandSherwin/client_concurrent_tasks\n\nfix(autonomi): download/upload tasks in parallel",
+          "timestamp": "2025-10-23T06:08:10Z",
+          "tree_id": "db8a9cd1e2320410f9a7c206d36ebd064abaeb97",
+          "url": "https://github.com/maidsafe/autonomi/commit/8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71"
+        },
+        "date": 1761203774082,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10102,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18371,
             "unit": "ms"
           },
           {
