@@ -48,7 +48,7 @@ pub struct ContactsFetcher {
     endpoints: Vec<Url>,
     /// Reqwest Client
     request_client: Client,
-    /// Ignore PeerId in the multiaddr if not present. This is only useful for fetching nat detection contacts
+    /// Ignore PeerId in the multiaddr if not present.
     ignore_peer_id: bool,
 }
 

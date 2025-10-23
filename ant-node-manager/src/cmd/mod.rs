@@ -8,7 +8,6 @@
 
 pub mod daemon;
 pub mod local;
-pub mod nat_detection;
 pub mod node;
 
 use crate::{

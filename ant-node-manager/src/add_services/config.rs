@@ -191,7 +191,6 @@ pub struct AddNodeServiceOptions {
     pub antnode_dir_path: PathBuf,
     pub antnode_src_path: PathBuf,
     pub auto_restart: bool,
-    pub auto_set_nat_flags: bool,
     pub count: Option<u16>,
     pub delete_antnode_src: bool,
     pub enable_metrics_server: bool,
