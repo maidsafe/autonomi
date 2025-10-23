@@ -132,7 +132,6 @@ pub async fn add(
         evm_network: evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         env_variables,
         init_peers_config,
-        relay: false,
         log_format,
         max_archived_log_files,
         max_log_files,

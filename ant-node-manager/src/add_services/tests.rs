@@ -124,7 +124,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -164,7 +163,6 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -338,7 +336,6 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -423,7 +420,6 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -519,7 +515,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -577,7 +572,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
         log_format: None,
         max_archived_log_files: None,
@@ -635,7 +629,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_format: None,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode3"),
         max_archived_log_files: None,
@@ -676,7 +669,6 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -829,7 +821,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -869,7 +860,6 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: env_variables.clone(),
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1032,7 +1022,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
         log_format: None,
         max_archived_log_files: None,
@@ -1073,7 +1062,6 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1243,7 +1231,6 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1405,7 +1392,6 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1562,7 +1548,6 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1723,7 +1708,6 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -1880,7 +1864,6 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2038,7 +2021,6 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             init_peers_config: initial_peers_config.clone(),
             log_format: None,
             max_archived_log_files: None,
@@ -2190,7 +2172,6 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2340,7 +2321,6 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2434,7 +2414,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -2475,7 +2454,6 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2736,7 +2714,6 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2862,7 +2839,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -2983,7 +2959,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -3058,7 +3033,6 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -3138,7 +3112,6 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -3284,7 +3257,6 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
             delete_antnode_src: true,
             enable_metrics_server: true,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -3427,7 +3399,6 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: Some(20),
             max_log_files: None,
@@ -3571,7 +3542,6 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: Some(20),
@@ -3848,7 +3818,6 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -3972,7 +3941,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4094,7 +4062,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4339,7 +4306,6 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4473,7 +4439,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4595,7 +4560,6 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4646,7 +4610,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
 }
 
 #[tokio::test]
-async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Result<()> {
+async fn add_node_should_disable_upnp_if_nat_status_is_public() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
@@ -4692,7 +4656,6 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -4732,7 +4695,6 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: true,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4827,7 +4789,6 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -4867,7 +4828,6 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: true,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -4911,275 +4871,6 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
     let node0 = node_registry.nodes.read().await[0].read().await.clone();
     assert!(!node0.no_upnp);
     assert!(!node0.relay);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
-    let mut mock_service_control = MockServiceControl::new();
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let node_data_dir = temp_dir.child("data");
-    node_data_dir.create_dir_all()?;
-    let node_logs_dir = temp_dir.child("logs");
-    node_logs_dir.create_dir_all()?;
-    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
-    antnode_download_path.write_binary(b"fake antnode bin")?;
-
-    let mut seq = Sequence::new();
-
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(12001))
-        .in_sequence(&mut seq);
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(13000))
-        .in_sequence(&mut seq);
-
-    let install_ctx = InstallNodeServiceCtxBuilder {
-        alpha: false,
-        autostart: false,
-        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
-        env_variables: None,
-        evm_network: EvmNetwork::Custom(CustomNetwork {
-            rpc_url_http: "http://localhost:8545".parse()?,
-            payment_token_address: RewardsAddress::from_str(
-                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-            )?,
-            data_payments_address: RewardsAddress::from_str(
-                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-            )?,
-            merkle_payments_address: None,
-        }),
-        relay: true,
-        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
-        log_format: None,
-        max_archived_log_files: None,
-        max_log_files: None,
-        metrics_port: None,
-        network_id: None,
-        name: "antnode1".to_string(),
-        node_ip: None,
-        node_port: Some(13000),
-        init_peers_config: InitialPeersConfig::default(),
-        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
-        antnode_path: node_data_dir
-            .to_path_buf()
-            .join("antnode1")
-            .join(ANTNODE_FILE_NAME),
-        service_user: Some(get_username()),
-        no_upnp: true,
-        write_older_cache_files: false,
-        restart_policy,
-        stop_on_upgrade: true,
-    }
-    .build()?;
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(eq(install_ctx), eq(false))
-        .returning(|_, _| Ok(()))
-        .in_sequence(&mut seq);
-
-    add_node(
-        AddNodeServiceOptions {
-            alpha: false,
-            auto_restart: false,
-            auto_set_nat_flags: true,
-            count: None,
-            delete_antnode_src: true,
-            enable_metrics_server: false,
-            env_variables: None,
-            relay: false,
-            log_format: None,
-            max_archived_log_files: None,
-            max_log_files: None,
-            metrics_port: None,
-            network_id: None,
-            node_ip: None,
-            node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
-            rpc_address: None,
-            rpc_port: None,
-            antnode_dir_path: temp_dir.to_path_buf(),
-            antnode_src_path: antnode_download_path.to_path_buf(),
-            service_data_dir_path: node_data_dir.to_path_buf(),
-            service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
-            user: Some(get_username()),
-            user_mode: false,
-            version: latest_version.to_string(),
-            evm_network: EvmNetwork::Custom(CustomNetwork {
-                rpc_url_http: "http://localhost:8545".parse()?,
-                payment_token_address: RewardsAddress::from_str(
-                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                )?,
-                data_payments_address: RewardsAddress::from_str(
-                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-                )?,
-                merkle_payments_address: None,
-            }),
-            rewards_address: RewardsAddress::from_str(
-                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
-            )?,
-            write_older_cache_files: false,
-            restart_policy,
-        },
-        node_registry.clone(),
-        &mock_service_control,
-        VerbosityLevel::Normal,
-    )
-    .await?;
-
-    let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert!(node0.no_upnp);
-    assert!(node0.relay);
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_set_nat_flags_is_enabled()
--> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
-    let mut mock_service_control = MockServiceControl::new();
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-    *node_registry.nat_status.write().await = None;
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let node_data_dir = temp_dir.child("data");
-    node_data_dir.create_dir_all()?;
-    let node_logs_dir = temp_dir.child("logs");
-    node_logs_dir.create_dir_all()?;
-    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
-    antnode_download_path.write_binary(b"fake antnode bin")?;
-
-    let mut seq = Sequence::new();
-
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(12001))
-        .in_sequence(&mut seq);
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(13000))
-        .in_sequence(&mut seq);
-    let install_ctx = InstallNodeServiceCtxBuilder {
-        alpha: false,
-        autostart: false,
-        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
-        env_variables: None,
-        evm_network: EvmNetwork::Custom(CustomNetwork {
-            rpc_url_http: "http://localhost:8545".parse()?,
-            payment_token_address: RewardsAddress::from_str(
-                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-            )?,
-            data_payments_address: RewardsAddress::from_str(
-                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-            )?,
-            merkle_payments_address: None,
-        }),
-        relay: true,
-        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
-        log_format: None,
-        max_archived_log_files: None,
-        max_log_files: None,
-        metrics_port: None,
-        network_id: None,
-        name: "antnode1".to_string(),
-        node_ip: None,
-        node_port: Some(13000),
-        init_peers_config: InitialPeersConfig::default(),
-        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 12001),
-        antnode_path: node_data_dir
-            .to_path_buf()
-            .join("antnode1")
-            .join(ANTNODE_FILE_NAME),
-        service_user: Some(get_username()),
-        no_upnp: true,
-        write_older_cache_files: false,
-        restart_policy,
-        stop_on_upgrade: true,
-    }
-    .build()?;
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(eq(install_ctx), eq(false))
-        .returning(|_, _| Ok(()))
-        .in_sequence(&mut seq);
-
-    let _ = add_node(
-        AddNodeServiceOptions {
-            alpha: false,
-            auto_restart: false,
-            auto_set_nat_flags: true,
-            count: None,
-            delete_antnode_src: true,
-            enable_metrics_server: false,
-            env_variables: None,
-            relay: true,
-            log_format: None,
-            max_archived_log_files: None,
-            max_log_files: None,
-            metrics_port: None,
-            network_id: None,
-            node_ip: None,
-            node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
-            rpc_address: None,
-            rpc_port: None,
-            antnode_dir_path: temp_dir.to_path_buf(),
-            antnode_src_path: antnode_download_path.to_path_buf(),
-            service_data_dir_path: node_data_dir.to_path_buf(),
-            service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
-            user: Some(get_username()),
-            user_mode: false,
-            version: latest_version.to_string(),
-            evm_network: EvmNetwork::Custom(CustomNetwork {
-                rpc_url_http: "http://localhost:8545".parse()?,
-                payment_token_address: RewardsAddress::from_str(
-                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                )?,
-                data_payments_address: RewardsAddress::from_str(
-                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-                )?,
-                merkle_payments_address: None,
-            }),
-            rewards_address: RewardsAddress::from_str(
-                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
-            )?,
-            write_older_cache_files: false,
-            restart_policy,
-        },
-        node_registry.clone(),
-        &mock_service_control,
-        VerbosityLevel::Normal,
-    )
-    .await;
-
-    let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert!(node0.no_upnp);
-    assert!(node0.relay);
 
     Ok(())
 }
@@ -5368,7 +5059,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5409,7 +5099,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -5451,142 +5140,6 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
     .await?;
 
     antnode_download_path.assert(predicate::path::is_file());
-
-    Ok(())
-}
-
-#[tokio::test]
-async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
-    let tmp_data_dir = assert_fs::TempDir::new()?;
-    let node_reg_path = tmp_data_dir.child("node_reg.json");
-
-    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
-    let mut mock_service_control = MockServiceControl::new();
-
-    let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
-
-    let latest_version = "0.96.4";
-    let temp_dir = assert_fs::TempDir::new()?;
-    let node_data_dir = temp_dir.child("data");
-    node_data_dir.create_dir_all()?;
-    let node_logs_dir = temp_dir.child("logs");
-    node_logs_dir.create_dir_all()?;
-    let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
-    antnode_download_path.write_binary(b"fake antnode bin")?;
-
-    let mut seq = Sequence::new();
-
-    // Expected calls for first installation
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(8081))
-        .in_sequence(&mut seq);
-    mock_service_control
-        .expect_get_available_port()
-        .times(1)
-        .returning(|| Ok(13000))
-        .in_sequence(&mut seq);
-
-    let install_ctx = InstallNodeServiceCtxBuilder {
-        alpha: false,
-        autostart: false,
-        data_dir_path: node_data_dir.to_path_buf().join("antnode1"),
-        env_variables: None,
-        relay: true,
-        evm_network: EvmNetwork::Custom(CustomNetwork {
-            rpc_url_http: "http://localhost:8545".parse()?,
-            payment_token_address: RewardsAddress::from_str(
-                "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-            )?,
-            data_payments_address: RewardsAddress::from_str(
-                "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-            )?,
-            merkle_payments_address: None,
-        }),
-        log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
-        log_format: None,
-        max_archived_log_files: None,
-        max_log_files: None,
-        metrics_port: None,
-        network_id: None,
-        name: "antnode1".to_string(),
-        node_ip: None,
-        node_port: Some(13000),
-        init_peers_config: InitialPeersConfig::default(),
-        rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")?,
-        rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8081),
-        antnode_path: node_data_dir
-            .to_path_buf()
-            .join("antnode1")
-            .join(ANTNODE_FILE_NAME),
-        service_user: Some(get_username()),
-        no_upnp: false,
-        write_older_cache_files: false,
-        restart_policy,
-        stop_on_upgrade: true,
-    }
-    .build()?;
-
-    mock_service_control
-        .expect_install()
-        .times(1)
-        .with(eq(install_ctx), eq(false))
-        .returning(|_, _| Ok(()))
-        .in_sequence(&mut seq);
-
-    add_node(
-        AddNodeServiceOptions {
-            alpha: false,
-            auto_restart: false,
-            auto_set_nat_flags: false,
-            count: Some(1),
-            delete_antnode_src: false,
-            enable_metrics_server: false,
-            env_variables: None,
-            relay: true,
-            log_format: None,
-            max_archived_log_files: None,
-            max_log_files: None,
-            metrics_port: None,
-            network_id: None,
-            node_ip: None,
-            node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
-            rpc_address: None,
-            rpc_port: None,
-            antnode_dir_path: temp_dir.to_path_buf(),
-            antnode_src_path: antnode_download_path.to_path_buf(),
-            service_data_dir_path: node_data_dir.to_path_buf(),
-            service_log_dir_path: node_logs_dir.to_path_buf(),
-            no_upnp: false,
-            user: Some(get_username()),
-            user_mode: false,
-            version: latest_version.to_string(),
-            evm_network: EvmNetwork::Custom(CustomNetwork {
-                rpc_url_http: "http://localhost:8545".parse()?,
-                payment_token_address: RewardsAddress::from_str(
-                    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-                )?,
-                data_payments_address: RewardsAddress::from_str(
-                    "0x8464135c8F25Da09e49BC8782676a84730C318bC",
-                )?,
-                merkle_payments_address: None,
-            }),
-            rewards_address: RewardsAddress::from_str(
-                "0x03B770D9cD32077cC0bF330c13C114a87643B124",
-            )?,
-            write_older_cache_files: false,
-            restart_policy,
-        },
-        node_registry.clone(),
-        &mock_service_control,
-        VerbosityLevel::Normal,
-    )
-    .await?;
-
-    let node0 = node_registry.nodes.read().await[0].read().await.clone();
-    assert!(node0.relay);
 
     Ok(())
 }
@@ -5639,7 +5192,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             )?,
             merkle_payments_address: None,
         }),
-        relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5680,7 +5232,6 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: true,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -5771,7 +5322,6 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
             )?,
             merkle_payments_address: None,
         }),
-        relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -5812,7 +5362,6 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: true,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -5953,7 +5502,6 @@ async fn add_node_should_auto_restart() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -6047,7 +5595,6 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             )?,
             merkle_payments_address: None,
         }),
-        relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
         max_archived_log_files: None,
@@ -6088,7 +5635,6 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             delete_antnode_src: false,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,
@@ -6240,7 +5786,6 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
             delete_antnode_src: true,
             enable_metrics_server: false,
             env_variables: None,
-            relay: false,
             log_format: None,
             max_archived_log_files: None,
             max_log_files: None,

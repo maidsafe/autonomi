@@ -39,6 +39,8 @@ impl<'de> Deserialize<'de> for ConnectionMode {
             "UPnP" => Ok(ConnectionMode::UPnP),
             "Custom Ports" => Ok(ConnectionMode::CustomPorts),
             "Automatic" => Ok(ConnectionMode::Automatic),
+            // Legacy value persisted by older app_data.json versions.
+            "Home Network" => Ok(ConnectionMode::Automatic),
             _ => Err(serde::de::Error::custom(format!(
                 "Invalid ConnectionMode: {s:?}"
             ))),
