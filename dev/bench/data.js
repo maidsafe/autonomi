@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761203771418,
+  "lastUpdate": 1761203772947,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7711,6 +7711,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/e466569113f8f532914ec0a3d2412c5bbcd1d3f0"
         },
         "date": 1761149914585,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "RolandSherwin@protonmail.com",
+            "name": "RolandSherwin",
+            "username": "RolandSherwin"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71",
+          "message": "Merge pull request #3263 from RolandSherwin/client_concurrent_tasks\n\nfix(autonomi): download/upload tasks in parallel",
+          "timestamp": "2025-10-23T06:08:10Z",
+          "tree_id": "db8a9cd1e2320410f9a7c206d36ebd064abaeb97",
+          "url": "https://github.com/maidsafe/autonomi/commit/8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71"
+        },
+        "date": 1761203772525,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
