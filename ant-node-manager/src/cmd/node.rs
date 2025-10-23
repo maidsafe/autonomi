@@ -43,7 +43,6 @@ use tracing::debug;
 pub async fn add(
     alpha: bool,
     auto_restart: bool,
-    auto_set_nat_flags: bool,
     count: Option<u16>,
     data_dir_path: Option<PathBuf>,
     enable_metrics_server: bool,
@@ -121,7 +120,6 @@ pub async fn add(
     let options = AddNodeServiceOptions {
         alpha,
         auto_restart,
-        auto_set_nat_flags,
         count,
         delete_antnode_src: src_path.is_none(),
         enable_metrics_server,
@@ -596,7 +594,6 @@ pub async fn upgrade(
 pub async fn maintain_n_running_nodes(
     alpha: bool,
     auto_restart: bool,
-    auto_set_nat_flags: bool,
     connection_timeout_s: u64,
     max_nodes_to_run: u16,
     data_dir_path: Option<PathBuf>,
@@ -711,7 +708,6 @@ pub async fn maintain_n_running_nodes(
                     let added_service = add(
                         alpha,
                         auto_restart,
-                        auto_set_nat_flags,
                         Some(1),
                         data_dir_path.clone(),
                         enable_metrics_server,

@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::error::{Error, Result};
-use crate::{DaemonServiceData, NatDetectionStatus, NodeServiceData};
+use crate::{DaemonServiceData, NodeServiceData};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::{
@@ -24,7 +24,6 @@ use tokio::sync::RwLock;
 pub struct NodeRegistryManager {
     pub daemon: Arc<RwLock<Option<Arc<RwLock<DaemonServiceData>>>>>,
     pub environment_variables: Arc<RwLock<Option<Vec<(String, String)>>>>,
-    pub nat_status: Arc<RwLock<Option<NatDetectionStatus>>>,
     pub nodes: Arc<RwLock<Vec<Arc<RwLock<NodeServiceData>>>>>,
     pub save_path: PathBuf,
 }
@@ -36,7 +35,6 @@ impl From<NodeRegistry> for NodeRegistryManager {
                 registry.daemon.map(|daemon| Arc::new(RwLock::new(daemon))),
             )),
             environment_variables: Arc::new(RwLock::new(registry.environment_variables)),
-            nat_status: Arc::new(RwLock::new(registry.nat_status)),
             nodes: Arc::new(RwLock::new(
                 registry
                     .nodes
@@ -57,7 +55,6 @@ impl NodeRegistryManager {
         NodeRegistryManager {
             daemon: Arc::new(RwLock::new(None)),
             environment_variables: Arc::new(RwLock::new(None)),
-            nat_status: Arc::new(RwLock::new(None)),
             nodes: Arc::new(RwLock::new(Vec::new())),
             save_path,
         }
@@ -92,7 +89,6 @@ impl NodeRegistryManager {
         NodeRegistry {
             daemon,
             environment_variables: self.environment_variables.read().await.clone(),
-            nat_status: self.nat_status.read().await.clone(),
             nodes,
             save_path: self.save_path.clone(),
         }
@@ -131,7 +127,6 @@ impl NodeRegistryManager {
 struct NodeRegistry {
     daemon: Option<DaemonServiceData>,
     environment_variables: Option<Vec<(String, String)>>,
-    nat_status: Option<NatDetectionStatus>,
     nodes: Vec<NodeServiceData>,
     save_path: PathBuf,
 }
@@ -170,7 +165,6 @@ impl NodeRegistry {
             return Ok(NodeRegistry {
                 daemon: None,
                 environment_variables: None,
-                nat_status: None,
                 nodes: vec![],
                 save_path: path.to_path_buf(),
             });
@@ -190,7 +184,6 @@ impl NodeRegistry {
             return Ok(NodeRegistry {
                 daemon: None,
                 environment_variables: None,
-                nat_status: None,
                 nodes: vec![],
                 save_path: path.to_path_buf(),
             });
