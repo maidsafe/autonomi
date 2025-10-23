@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761149916918,
+  "lastUpdate": 1761203692180,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2924,6 +2924,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.039549685183863,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "RolandSherwin@protonmail.com",
+            "name": "RolandSherwin",
+            "username": "RolandSherwin"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71",
+          "message": "Merge pull request #3263 from RolandSherwin/client_concurrent_tasks\n\nfix(autonomi): download/upload tasks in parallel",
+          "timestamp": "2025-10-23T06:08:10Z",
+          "tree_id": "db8a9cd1e2320410f9a7c206d36ebd064abaeb97",
+          "url": "https://github.com/maidsafe/autonomi/commit/8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71"
+        },
+        "date": 1761203685040,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1350459837306044,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.175489013772917,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.68339477752678,
             "unit": "MiB/s"
           }
         ]
