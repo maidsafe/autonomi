@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761306576087,
+  "lastUpdate": 1761306577460,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7813,6 +7813,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/8e2ac27f9aa397791a4b1b1bd6d63b0a14df8b71"
         },
         "date": 1761203772525,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a2d43c109f7881c11b12a4eeaaa3cc6a84111599",
+          "message": "Merge pull request #3265 from RolandSherwin/lp_auto_elevate_permissions_for_windows\n\nfeat(launchpad): auto elevate permissions for windows",
+          "timestamp": "2025-10-24T10:31:47Z",
+          "tree_id": "b2c7fda6247a04e04fbad155c9da18396bb963d7",
+          "url": "https://github.com/maidsafe/autonomi/commit/a2d43c109f7881c11b12a4eeaaa3cc6a84111599"
+        },
+        "date": 1761306577098,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
