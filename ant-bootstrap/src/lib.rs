@@ -47,8 +47,8 @@ pub const ANT_PEERS_ENV: &str = "ANT_PEERS";
 
 /// Craft a proper address to avoid any ill formed addresses
 ///
-/// ignore_peer_id is only used for nat-detection contact list
-pub fn craft_valid_multiaddr(addr: &Multiaddr, ignore_peer_id: bool) -> Option<Multiaddr> {
+/// PeerId is optional, if not present, it will be ignored.
+pub fn craft_valid_multiaddr(addr: &Multiaddr) -> Option<Multiaddr> {
     let peer_id = addr
         .iter()
         .find(|protocol| matches!(protocol, Protocol::P2p(_)));
@@ -91,20 +91,20 @@ pub fn craft_valid_multiaddr(addr: &Multiaddr, ignore_peer_id: bool) -> Option<M
 
     if let Some(peer_id) = peer_id {
         output_address.push(peer_id);
-    } else if !ignore_peer_id {
-        return None;
     }
 
     Some(output_address)
 }
 
-/// ignore_peer_id is only used for nat-detection contact list
-pub fn craft_valid_multiaddr_from_str(addr_str: &str, ignore_peer_id: bool) -> Option<Multiaddr> {
+/// Craft a proper address to avoid any ill formed addresses
+///
+/// PeerId is optional, if not present, it will be ignored.
+pub fn craft_valid_multiaddr_from_str(addr_str: &str) -> Option<Multiaddr> {
     let Ok(addr) = addr_str.parse::<Multiaddr>() else {
         warn!("Failed to parse multiaddr from str {addr_str}");
         return None;
     };
-    craft_valid_multiaddr(&addr, ignore_peer_id)
+    craft_valid_multiaddr(&addr)
 }
 
 pub fn multiaddr_get_peer_id(addr: &Multiaddr) -> Option<PeerId> {
@@ -151,7 +151,7 @@ mod tests {
 
         for (addr, should_be_valid) in variants {
             let parsed: Multiaddr = addr.parse().unwrap();
-            let result = craft_valid_multiaddr(&parsed, false);
+            let result = craft_valid_multiaddr(&parsed);
 
             if should_be_valid {
                 let crafted = result.unwrap_or_else(|| panic!("Expected valid multiaddr: {addr}"));
@@ -165,21 +165,21 @@ mod tests {
     #[test]
     fn test_craft_valid_multiaddr_from_str() {
         let valid = "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
-        assert!(craft_valid_multiaddr_from_str(valid, false).is_some());
+        assert!(craft_valid_multiaddr_from_str(valid).is_some());
 
         let invalid = "not a multiaddr";
-        assert!(craft_valid_multiaddr_from_str(invalid, false).is_none());
+        assert!(craft_valid_multiaddr_from_str(invalid).is_none());
 
         let missing_peer = "/ip4/127.0.0.1/tcp/8080";
-        assert!(craft_valid_multiaddr_from_str(missing_peer, false).is_none());
-        assert!(craft_valid_multiaddr_from_str(missing_peer, true).is_some());
+        assert!(craft_valid_multiaddr_from_str(missing_peer).is_none());
+        assert!(craft_valid_multiaddr_from_str(missing_peer).is_some());
     }
 
     #[test]
     fn test_craft_valid_multiaddr_ignore_peer_id() {
         let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
-        assert!(craft_valid_multiaddr(&addr_without_peer, false).is_none());
-        assert!(craft_valid_multiaddr(&addr_without_peer, true).is_some());
+        assert!(craft_valid_multiaddr(&addr_without_peer).is_none());
+        assert!(craft_valid_multiaddr(&addr_without_peer).is_some());
     }
 
     #[test]

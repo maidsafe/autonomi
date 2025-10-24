@@ -79,7 +79,9 @@ pub struct Bootstrap {
 }
 
 impl Bootstrap {
-    pub async fn new(mut config: BootstrapConfig) -> Result<Self> {
+    /// Create a new Bootstrap manager with the given configuration.
+    /// Use `new_with_preloaded_addrs` to ensure that the struct contains at least MIN_INITIAL_ADDRS addresses immediately.
+    pub fn new(config: BootstrapConfig) -> Result<Self> {
         let contacts_progress = Self::build_contacts_progress(&config)?;
 
         let mut addrs_queue = VecDeque::new();
@@ -93,8 +95,8 @@ impl Bootstrap {
                 info!("Skipping ANT_PEERS environment variable as per configuration");
             }
 
-            for addr in config.initial_peers.drain(..) {
-                if let Some(addr) = craft_valid_multiaddr(&addr, false) {
+            for addr in config.initial_peers.iter() {
+                if let Some(addr) = craft_valid_multiaddr(addr) {
                     info!("Adding addr from arguments: {addr}");
                     Self::push_addr(&mut addrs_queue, &mut bootstrap_peer_ids, addr);
                 } else {
@@ -117,7 +119,7 @@ impl Bootstrap {
         let cache_store = BootstrapCacheStore::new(config.clone())?;
 
         let mut bootstrap = Self {
-            cache_store,
+            cache_store: cache_store.clone(),
             addrs: addrs_queue,
             cache_pending,
             contacts_progress,
@@ -135,10 +137,21 @@ impl Bootstrap {
         bootstrap.cache_task = Some(cache_task);
 
         if config.first {
-            info!("First node in network; clearing any existing cache");
-            bootstrap.cache_store.write().await?;
-            return Ok(bootstrap);
+            tokio::spawn(async move {
+                if let Err(err) = cache_store.write().await {
+                    error!("Failed to clear bootstrap cache for first node: {err}");
+                } else {
+                    info!("Bootstrap cache cleared for first node");
+                }
+            });
         }
+
+        Ok(bootstrap)
+    }
+
+    /// Create a new Bootstrap manager and ensure it has at least MIN_INITIAL_ADDRS addresses preloaded.
+    pub async fn new_with_preloaded_addrs(config: BootstrapConfig) -> Result<Self> {
+        let mut bootstrap = Self::new(config)?;
 
         // ensure the initial queue is not empty by fetching from cache/contacts if needed
         //
@@ -250,6 +263,29 @@ impl Bootstrap {
         }
     }
 
+    /// Check if the address queue is empty without consuming an address.
+    /// Returns `Some(true)` if empty, `Some(false)` if not empty, and `None` if still fetching or has cache or contacts
+    /// sources pending.
+    pub fn is_addr_queue_empty(&self) -> Option<bool> {
+        if !self.addrs.is_empty() {
+            return Some(false);
+        }
+
+        if self.fetch_in_progress.is_some() {
+            return None;
+        }
+
+        if self.cache_pending {
+            return None;
+        }
+
+        if self.contacts_progress.is_some() {
+            return None;
+        }
+
+        Some(true)
+    }
+
     fn process_events(&mut self) {
         while let Ok(event) = self.event_rx.try_recv() {
             match event {
@@ -306,18 +342,6 @@ impl Bootstrap {
         }
     }
 
-    fn try_next_dial_addr(&mut self) -> Result<Option<Multiaddr>> {
-        match self.next_addr() {
-            Ok(Some(addr)) => Ok(Some(addr)),
-            Ok(None) => Ok(None),
-            Err(Error::NoBootstrapPeersFound) => {
-                self.bootstrap_completed = true;
-                Err(Error::NoBootstrapPeersFound)
-            }
-            Err(err) => Err(err),
-        }
-    }
-
     /// Return true if the bootstrapping process has completed or if we have run out of addresses, otherwise false.
     fn has_bootstrap_completed(&self, contacted_peers: usize) -> bool {
         if self.bootstrap_completed {
@@ -370,7 +394,7 @@ impl Bootstrap {
         }
 
         while self.ongoing_dials.len() < self.cache_store.config().max_concurrent_dials {
-            match self.try_next_dial_addr() {
+            match self.next_addr() {
                 Ok(Some(mut addr)) => {
                     let addr_clone = addr.clone();
                     let peer_id = Self::pop_p2p(&mut addr);
@@ -438,6 +462,7 @@ impl Bootstrap {
                 }
                 Err(Error::NoBootstrapPeersFound) => {
                     info!("No more bootstrap peers available to dial.");
+                    self.bootstrap_completed = true;
                     break;
                 }
                 Err(err) => {
@@ -644,7 +669,7 @@ impl Bootstrap {
         // Read from ANT_PEERS environment variable if present
         if let Ok(addrs) = std::env::var(ANT_PEERS_ENV) {
             for addr_str in addrs.split(',') {
-                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str, false) {
+                if let Some(addr) = craft_valid_multiaddr_from_str(addr_str) {
                     info!("Adding addr from environment variable: {addr}");
                     bootstrap_addresses.push(addr);
                 } else {
@@ -825,7 +850,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let first_two = vec![
             expect_next_addr(&mut flow).await.unwrap(),
@@ -891,7 +916,7 @@ mod tests {
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let got = expect_next_addr(&mut flow).await.unwrap();
         assert_eq!(got, cache_addr);
@@ -929,7 +954,7 @@ mod tests {
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let err = expect_err(&mut flow).await;
         assert!(matches!(err, Error::NoBootstrapPeersFound));
@@ -979,7 +1004,7 @@ mod tests {
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let first = expect_next_addr(&mut flow).await.unwrap();
         assert_eq!(first, contact_one);
@@ -1088,7 +1113,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let initial_results = vec![
             expect_next_addr(&mut flow).await.unwrap(),
@@ -1145,7 +1170,7 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
         assert!(
             result.is_err(),
             "Should error when env peers are disabled and no other sources available"
@@ -1181,7 +1206,7 @@ mod tests {
         config.disable_env_peers = true;
         config.disable_cache_reading = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
         assert!(
             result.is_err(),
             "Should error when cache reading is disabled and no other sources available"
@@ -1199,7 +1224,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).await.unwrap();
+        let flow = Bootstrap::new(config).unwrap();
 
         assert!(
             flow.has_terminated(),
@@ -1215,7 +1240,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).await.unwrap();
+        let flow = Bootstrap::new(config).unwrap();
 
         assert!(
             !flow.has_terminated(),
@@ -1244,7 +1269,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).await.unwrap();
+        let flow = Bootstrap::new(config).unwrap();
 
         assert!(
             flow.is_bootstrap_peer(&env_peer_id),
@@ -1280,7 +1305,7 @@ mod tests {
 
         config.initial_peers.push(invalid_addr);
 
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let first = expect_next_addr(&mut flow).await.unwrap();
         assert_eq!(first, valid_addr, "Should get the valid address");
@@ -1321,7 +1346,7 @@ mod tests {
         config.disable_env_peers = true;
 
         let addr_from_config = config.initial_peers[0].clone();
-        let mut flow = Bootstrap::new(config).await.unwrap();
+        let mut flow = Bootstrap::new(config).unwrap();
 
         let first = expect_next_addr(&mut flow).await.unwrap();
         assert_eq!(
@@ -1358,7 +1383,7 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
 
         assert!(
             result.is_err(),
@@ -1401,7 +1426,7 @@ mod tests {
             ..Default::default()
         };
         let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let _flow = Bootstrap::new(config).await.unwrap();
+        let _flow = Bootstrap::new(config).unwrap();
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -1438,7 +1463,7 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
 
         assert!(
             result.is_ok(),
@@ -1486,7 +1511,7 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
         assert!(
             result.is_ok(),
             "Should succeed with few contacts (< 50 but > 0)"
@@ -1532,7 +1557,7 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config).await;
+        let result = Bootstrap::new(config);
 
         assert!(
             result.is_err(),
