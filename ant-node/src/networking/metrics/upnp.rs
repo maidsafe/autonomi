@@ -6,7 +6,9 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
+use crate::networking::driver::behaviour::upnp;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::encoding::EncodeLabelValue;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct UpnpEventLabels {
@@ -21,19 +23,19 @@ enum EventType {
     NonRoutableGateway,
 }
 
-impl From<&libp2p::upnp::Event> for EventType {
-    fn from(event: &libp2p::upnp::Event) -> Self {
+impl From<&upnp::behaviour::Event> for EventType {
+    fn from(event: &upnp::behaviour::Event) -> Self {
         match event {
-            libp2p::upnp::Event::NewExternalAddr { .. } => EventType::NewExternalAddr,
-            libp2p::upnp::Event::ExpiredExternalAddr { .. } => EventType::ExpiredExternalAddr,
-            libp2p::upnp::Event::GatewayNotFound => EventType::GatewayNotFound,
-            libp2p::upnp::Event::NonRoutableGateway => EventType::NonRoutableGateway,
+            upnp::behaviour::Event::NewExternalAddr { .. } => EventType::NewExternalAddr,
+            upnp::behaviour::Event::ExpiredExternalAddr { .. } => EventType::ExpiredExternalAddr,
+            upnp::behaviour::Event::GatewayNotFound => EventType::GatewayNotFound,
+            upnp::behaviour::Event::NonRoutableGateway => EventType::NonRoutableGateway,
         }
     }
 }
 
-impl super::Recorder<libp2p::upnp::Event> for super::NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::upnp::Event) {
+impl super::Recorder<upnp::behaviour::Event> for super::NetworkMetricsRecorder {
+    fn record(&self, event: &upnp::behaviour::Event) {
         let _ = self
             .upnp_events
             .get_or_create(&UpnpEventLabels {
