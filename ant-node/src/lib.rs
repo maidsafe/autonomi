@@ -44,6 +44,8 @@ pub mod spawn;
 #[allow(missing_docs)]
 pub mod utils;
 
+pub use self::networking::ReachabilityIssue;
+pub use self::networking::ReachabilityStatus;
 pub use self::{
     error::{Error, PutValidationError},
     event::{NodeEvent, NodeEventsChannel, NodeEventsReceiver},

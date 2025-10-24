@@ -91,6 +91,8 @@ pub struct NodeBuilder {
     /// Set to Some to enable the metrics server
     metrics_server_port: Option<u16>,
     no_upnp: bool,
+    /// Perform reachability check on the node and auto set networking flags if needed.
+    pub reachability_check: bool,
     relay_client: bool,
     root_dir: PathBuf,
 }
@@ -116,9 +118,16 @@ impl NodeBuilder {
             #[cfg(feature = "open-metrics")]
             metrics_server_port: None,
             no_upnp: false,
+            reachability_check: false,
             relay_client: false,
             root_dir,
         }
+    }
+
+    /// Enabling this would run external reachability check before starting the node.
+    /// This would override some of the networking flags, like `no_upnp` `ip` etc.
+    pub fn with_reachability_check(&mut self, enable: bool) {
+        self.reachability_check = enable;
     }
 
     /// Set the flag to indicate if the node is running in local mode
@@ -181,6 +190,7 @@ impl NodeBuilder {
             no_upnp: self.no_upnp,
             relay_client: self.relay_client,
             custom_request_timeout: None,
+            reachability_status: None,
             #[cfg(feature = "open-metrics")]
             metrics_registries,
             #[cfg(feature = "open-metrics")]
