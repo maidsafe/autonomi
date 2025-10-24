@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761203774482,
+  "lastUpdate": 1761306499510,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -2963,6 +2963,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.68339477752678,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a2d43c109f7881c11b12a4eeaaa3cc6a84111599",
+          "message": "Merge pull request #3265 from RolandSherwin/lp_auto_elevate_permissions_for_windows\n\nfeat(launchpad): auto elevate permissions for windows",
+          "timestamp": "2025-10-24T10:31:47Z",
+          "tree_id": "b2c7fda6247a04e04fbad155c9da18396bb963d7",
+          "url": "https://github.com/maidsafe/autonomi/commit/a2d43c109f7881c11b12a4eeaaa3cc6a84111599"
+        },
+        "date": 1761306492463,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1350781350299362,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.415833513164362,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.027284730513591,
             "unit": "MiB/s"
           }
         ]
