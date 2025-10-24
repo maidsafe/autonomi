@@ -300,7 +300,7 @@ fn main() -> Result<()> {
 
     let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
         .with_backwards_compatible_writes(opt.write_older_cache_files);
-    let bootstrap = rt.block_on(Bootstrap::new(bootstrap_config))?;
+    let bootstrap = Bootstrap::new(bootstrap_config)?;
 
     let msg = format!(
         "Running {} v{}",
