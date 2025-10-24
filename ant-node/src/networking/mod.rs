@@ -17,6 +17,7 @@ mod log_markers;
 #[cfg(feature = "open-metrics")]
 mod metrics;
 mod network;
+mod reachability_check;
 mod record_store;
 mod replication_fetcher;
 mod transport;
@@ -91,4 +92,38 @@ pub(crate) fn multiaddr_get_port(addr: &Multiaddr) -> Option<u16> {
         Protocol::Udp(port) => Some(port),
         _ => None,
     })
+}
+
+/// Helper function to print formatted connection role info.
+pub(crate) fn endpoint_str(endpoint: &libp2p::core::ConnectedPoint) -> String {
+    match endpoint {
+        libp2p::core::ConnectedPoint::Dialer { address, .. } => {
+            format!("outgoing ({address})")
+        }
+        libp2p::core::ConnectedPoint::Listener { send_back_addr, .. } => {
+            format!("incoming ({send_back_addr})")
+        }
+    }
+}
+
+pub(crate) fn multiaddr_pop_p2p(addr: &mut Multiaddr) -> Option<PeerId> {
+    if let Some(Protocol::P2p(peer_id)) = addr.iter().last() {
+        let _ = addr.pop();
+        Some(peer_id)
+    } else {
+        None
+    }
+}
+
+pub(crate) fn multiaddr_get_p2p(addr: &Multiaddr) -> Option<PeerId> {
+    addr.iter().find_map(|p| match p {
+        Protocol::P2p(peer_id) => Some(peer_id),
+        _ => None,
+    })
+}
+
+pub(crate) fn multiaddr_get_socket_addr(addr: &Multiaddr) -> Option<std::net::SocketAddr> {
+    let ip = multiaddr_get_ip(addr)?;
+    let port = multiaddr_get_port(addr)?;
+    Some(std::net::SocketAddr::new(ip, port))
 }

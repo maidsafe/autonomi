@@ -11,6 +11,8 @@ mod kad;
 mod request_response;
 mod swarm;
 
+pub(crate) use identify::DIAL_BACK_DELAY;
+
 use crate::networking::NetworkEvent;
 use crate::networking::{Addresses, driver::SwarmDriver, error::Result};
 use ant_protocol::messages::ConnectionInfo;
