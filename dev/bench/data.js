@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761306577460,
+  "lastUpdate": 1761306578818,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10818,6 +10818,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18371,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "a2d43c109f7881c11b12a4eeaaa3cc6a84111599",
+          "message": "Merge pull request #3265 from RolandSherwin/lp_auto_elevate_permissions_for_windows\n\nfeat(launchpad): auto elevate permissions for windows",
+          "timestamp": "2025-10-24T10:31:47Z",
+          "tree_id": "b2c7fda6247a04e04fbad155c9da18396bb963d7",
+          "url": "https://github.com/maidsafe/autonomi/commit/a2d43c109f7881c11b12a4eeaaa3cc6a84111599"
+        },
+        "date": 1761306578479,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9321,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 17111,
             "unit": "ms"
           },
           {
