@@ -24,6 +24,8 @@ mod transport;
 
 // re-export arch dependent deps for use in the crate, or above
 pub use self::interface::SwarmLocalState;
+pub use self::reachability_check::ReachabilityIssue;
+pub use self::reachability_check::ReachabilityStatus;
 pub(crate) use self::{
     error::NetworkError,
     interface::{NetworkEvent, NodeIssue},

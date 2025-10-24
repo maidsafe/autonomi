@@ -30,6 +30,9 @@ pub enum NetworkError {
     #[error("Dial Error")]
     DialError(#[from] DialError),
 
+    #[error("Bootstrap Error: {0}")]
+    BootstrapError(#[from] ant_bootstrap::Error),
+
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 
@@ -47,6 +50,15 @@ pub enum NetworkError {
 
     #[error("Failed to sign the message with the PeerId keypair")]
     SigningFailed(#[from] libp2p::identity::SigningError),
+
+    #[error("No listen addresses found")]
+    NoListenAddressesFound,
+
+    #[error("Failed to cleanup listener resources")]
+    ListenerCleanupFailed,
+
+    #[error("Failed to listen on address: {0}")]
+    ListenFailed(libp2p::core::multiaddr::Multiaddr),
 
     // ---------- Record Errors
     #[error("Record not stored by nodes, it could be invalid, else you should retry: {0:?}")]
