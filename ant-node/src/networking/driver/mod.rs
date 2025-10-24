@@ -17,6 +17,7 @@ use event::NodeEvent;
 use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
 use rand::Rng;
 
+use crate::networking::driver::behaviour::upnp;
 use crate::networking::driver::network_wide_replication::NetworkWideReplication;
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
@@ -99,7 +100,7 @@ pub(super) struct NodeBehaviour {
         libp2p::allow_block_list::Behaviour<libp2p::allow_block_list::BlockedPeers>,
     pub(super) do_not_disturb: behaviour::do_not_disturb::Behaviour,
     pub(super) identify: libp2p::identify::Behaviour,
-    pub(super) upnp: Toggle<libp2p::upnp::tokio::Behaviour>,
+    pub(super) upnp: Toggle<upnp::behaviour::Behaviour>,
     pub(super) kademlia: kad::Behaviour<NodeRecordStore>,
     pub(super) request_response: request_response::cbor::Behaviour<Request, Response>,
 }

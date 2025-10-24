@@ -18,6 +18,7 @@ use custom_debug::Debug as CustomDebug;
 use libp2p::kad::K_VALUE;
 use libp2p::{PeerId, request_response::ResponseChannel as PeerResponseChannel};
 
+use super::behaviour::upnp;
 use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::{
     NetworkAddress,
@@ -54,7 +55,7 @@ impl KBucketStatus {
 /// NodeEvent enum
 #[derive(CustomDebug)]
 pub(crate) enum NodeEvent {
-    Upnp(libp2p::upnp::Event),
+    Upnp(upnp::behaviour::Event),
     MsgReceived(libp2p::request_response::Event<Request, Response>),
     Kademlia(libp2p::kad::Event),
     Identify(Box<libp2p::identify::Event>),
@@ -62,8 +63,8 @@ pub(crate) enum NodeEvent {
     Void(void::Void),
 }
 
-impl From<libp2p::upnp::Event> for NodeEvent {
-    fn from(event: libp2p::upnp::Event) -> Self {
+impl From<upnp::behaviour::Event> for NodeEvent {
+    fn from(event: upnp::behaviour::Event) -> Self {
         NodeEvent::Upnp(event)
     }
 }
