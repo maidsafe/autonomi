@@ -253,11 +253,12 @@ impl Client {
             }
             Err(err) => {
                 return if retry_on_failure {
-                    error!("Quoting or payment error encountered, retry scheduled {err:?}");
-                    println!("Quoting or payment error encountered, retry scheduled.");
+                    error!("Quoting or payment error encountered, retry scheduled {err}");
+                    #[cfg(feature = "loud")]
+                    println!("Quoting or payment error encountered, retry scheduled: {err}.");
                     (batch, vec![], 0, None)
                 } else {
-                    error!("Quoting or payment error encountered, no retry scheduled {err:?}");
+                    error!("Quoting or payment error encountered, no retry scheduled {err}");
                     (vec![], vec![], 0, Some(PutError::from(err)))
                 };
             }

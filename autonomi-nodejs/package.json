@@ -1,6 +1,6 @@
 {
   "name": "@withautonomi/autonomi",
-  "version": "0.6.0",
+  "version": "0.6.3",
   "description": "NodeJS bindings for Autonomi client",
   "main": "index.js",
   "types": "index.d.ts",

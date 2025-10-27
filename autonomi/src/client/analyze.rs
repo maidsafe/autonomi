@@ -323,7 +323,7 @@ async fn analyze_chunk(
     // check if it's an old datamap
     if let Ok(_data_map) = rmp_serde::from_slice::<DataMapLevel>(chunk.value()) {
         println_if_verbose!("Identified chunk content as an old DataMap...");
-        return analyze_datamap(Some(*chunk_addr), &chunk.into(), client, verbose).await;
+        return analyze_datamap_old(Some(*chunk_addr), &chunk.into(), client, verbose).await;
     }
 
     Ok(Analysis::Chunk(chunk))
@@ -632,12 +632,16 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::Bytes;
-    use crate::chunk::{ChunkAddress, DataMapChunk};
+    use crate::chunk::{Chunk, ChunkAddress, DataMapChunk};
     use crate::data::DataAddress;
     use crate::files::{Metadata, PrivateArchive, PublicArchive};
+    use crate::self_encryption::DataMapLevel;
     use crate::{PublicKey, SecretKey};
     use eyre::Result;
+    use self_encryption::{ChunkInfo, DataMap};
+    use self_encryption_old::DataMap as OldDataMap;
     use serial_test::serial;
+    use xor_name::XorName;
 
     // this test confirms that a xorname and a public key are different and can't be confused for each other
     #[tokio::test]
@@ -708,5 +712,117 @@ mod tests {
         assert_eq!(bytes, deserialized_as_bytes);
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_analyze_new_datamap_format() {
+        // Create a mock new format DataMap
+        let chunk_identifiers = vec![
+            ChunkInfo {
+                index: 0,
+                dst_hash: XorName::random(&mut rand::thread_rng()),
+                src_hash: XorName::random(&mut rand::thread_rng()),
+                src_size: 1024,
+            },
+            ChunkInfo {
+                index: 1,
+                dst_hash: XorName::random(&mut rand::thread_rng()),
+                src_hash: XorName::random(&mut rand::thread_rng()),
+                src_size: 1024,
+            },
+        ];
+
+        let data_map = DataMap {
+            chunk_identifiers,
+            child: None,
+        };
+
+        // Serialize the DataMap
+        let serialized = rmp_serde::to_vec_named(&data_map).unwrap();
+        let chunk = Chunk::new(Bytes::from(serialized));
+        let _chunk_addr = *chunk.address();
+
+        // Test that we can identify it as a new DataMap
+        let datamap_chunk = DataMapChunk(chunk.clone());
+        let deserialized: Result<DataMap, _> = rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            deserialized.is_ok(),
+            "Should deserialize as new DataMap format"
+        );
+
+        // Tests that we should not be able to deserialize it as an old DataMap
+        let old_format_result: Result<OldDataMap, _> =
+            rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            old_format_result.is_err(),
+            "Should NOT deserialize as old DataMap format"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_analyze_old_datamap_format() {
+        // Create a mock old format DataMap (DataMapLevel::First)
+        let old_data_map = OldDataMap::new(vec![]);
+
+        let data_map_level = DataMapLevel::First(old_data_map);
+
+        // Serialize the old format DataMapLevel
+        let serialized = rmp_serde::to_vec_named(&data_map_level).unwrap();
+        let chunk = Chunk::new(Bytes::from(serialized));
+        let _chunk_addr = *chunk.address();
+
+        // Test that we can identify it as an old DataMap
+        let datamap_chunk = DataMapChunk(chunk.clone());
+
+        // It should NOT deserialize as new format
+        let new_format_result: Result<DataMap, _> = rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            new_format_result.is_err(),
+            "Should NOT deserialize as new DataMap format"
+        );
+
+        // It SHOULD deserialize as old format
+        let old_format_result: Result<DataMapLevel, _> =
+            rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            old_format_result.is_ok(),
+            "Should deserialize as old DataMapLevel format"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_analyze_old_datamap_additional_level() {
+        // Create a mock old format DataMap (DataMapLevel::Additional)
+        let old_data_map = OldDataMap::new(vec![]);
+
+        let data_map_level = DataMapLevel::Additional(old_data_map);
+
+        // Serialize the old format DataMapLevel
+        let serialized = rmp_serde::to_vec_named(&data_map_level).unwrap();
+        let chunk = Chunk::new(Bytes::from(serialized));
+
+        // Test that we can identify it as an old DataMap with additional level
+        let datamap_chunk = DataMapChunk(chunk.clone());
+
+        // It should NOT deserialize as new format
+        let new_format_result: Result<DataMap, _> = rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            new_format_result.is_err(),
+            "Should NOT deserialize as new DataMap format"
+        );
+
+        // It SHOULD deserialize as old format
+        let old_format_result: Result<DataMapLevel, _> =
+            rmp_serde::from_slice(datamap_chunk.0.value());
+        assert!(
+            old_format_result.is_ok(),
+            "Should deserialize as old DataMapLevel format"
+        );
+
+        // Verify it's an Additional level
+        match old_format_result.unwrap() {
+            DataMapLevel::Additional(_) => {}
+            _ => panic!("Expected DataMapLevel::Additional"),
+        }
     }
 }

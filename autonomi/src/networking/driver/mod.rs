@@ -15,7 +15,7 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::networking::NetworkError;
 use crate::networking::interface::NetworkTask;
-use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::bootstrap::Bootstrap;
 use ant_protocol::NetworkAddress;
 use ant_protocol::version::IDENTIFY_PROTOCOL_STR;
 use ant_protocol::{
@@ -23,8 +23,8 @@ use ant_protocol::{
     version::REQ_RESPONSE_VERSION_STR,
 };
 use futures::future::Either;
-use libp2p::kad::NoKnownPeers;
 use libp2p::kad::store::MemoryStoreConfig;
+use libp2p::multiaddr::Protocol;
 use libp2p::swarm::ConnectionId;
 use libp2p::{
     Multiaddr, PeerId, StreamProtocol, Swarm, Transport,
@@ -32,7 +32,6 @@ use libp2p::{
     futures::StreamExt,
     identity::Keypair,
     kad::{self, store::MemoryStore},
-    multiaddr::Protocol,
     quic::tokio::Transport as QuicTransport,
     request_response::{self, ProtocolSupport, cbor::codec::Codec as CborCodec},
     swarm::NetworkBehaviour,
@@ -58,6 +57,8 @@ const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600); // todo: t
 const PEER_CACHE_SIZE: usize = 2_000;
 /// Client with poor connection requires a longer time to transmit large sized recrod to production network, via put_record_to
 const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
+/// Periodically trigger the bootstrap process to try connect to more peers in the network.
+const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Driver for the Autonomi Client Network
 ///
@@ -68,8 +69,8 @@ const CLIENT_SUBSTREAMS_TIMEOUT_S: Duration = Duration::from_secs(30);
 ///
 /// Please read the doc comment above
 pub(crate) struct NetworkDriver {
-    /// The bootstrap cache store.
-    bootstrap_cache: Option<BootstrapCacheStore>,
+    /// Bootstrap flow responsible for fetching peers and coordinating initial dials.
+    bootstrap: Bootstrap,
     /// The list of currently connected peers and their addresses.
     live_connected_peers: BTreeMap<ConnectionId, (PeerId, Multiaddr)>,
     /// libp2p interaction through the swarm and its events
@@ -94,10 +95,7 @@ pub(crate) struct AutonomiClientBehaviour {
 
 impl NetworkDriver {
     /// Create a new network runner
-    pub fn new(
-        bootstrap_cache: Option<BootstrapCacheStore>,
-        task_receiver: mpsc::Receiver<NetworkTask>,
-    ) -> Self {
+    pub fn new(bootstrap: Bootstrap, task_receiver: mpsc::Receiver<NetworkTask>) -> Self {
         // random new client id
         let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
@@ -196,23 +194,23 @@ impl NetworkDriver {
 
         let task_handler = TaskHandler::new();
 
-        Self {
-            bootstrap_cache,
+        let mut driver = Self {
+            bootstrap,
             live_connected_peers: Default::default(),
             swarm,
             task_receiver,
             pending_tasks: task_handler,
             connections_made: 0,
-        }
+        };
+
+        driver.bootstrap_network();
+
+        driver
     }
 
     /// Run the network runner, loops forever waiting for tasks and processing them
     pub async fn run(mut self) {
-        if let Some(cache) = &self.bootstrap_cache {
-            // start the periodic cache sync and flush task
-            #[allow(clippy::let_underscore_future)]
-            let _ = cache.sync_and_flush_periodically();
-        }
+        let mut bootstrap_interval = Some(tokio::time::interval(BOOTSTRAP_CHECK_INTERVAL));
         loop {
             tokio::select! {
                 // tasks sent by client
@@ -231,8 +229,54 @@ impl NetworkDriver {
                         error!("Error processing swarm event: {e}");
                     }
                 }
+                // Only call the async closure IF bootstrap_interval is Some. This prevents the tokio::select! from
+                // executing this branch once bootstrap_interval is set to None.
+                _ = async {
+                    #[allow(clippy::unwrap_used)]
+                    bootstrap_interval.as_mut().expect("bootstrap interval is checked before executing").tick().await
+                }, if bootstrap_interval.is_some() => {
+                    let completed = self.bootstrap.trigger_bootstrapping_process(&mut self.swarm, self.connections_made);
+                    if completed {
+                        info!("Initial bootstrap process completed. Marking bootstrap_interval as None.");
+                        bootstrap_interval = None;
+                    }
+                }
             }
         }
+    }
+
+    /// Bootstrap to the network by triggering the bootstrapping process
+    ///
+    /// We also "optionally" add some peers directly to the routing table to make sure we have a large
+    /// sample of peers to query from.
+    fn bootstrap_network(&mut self) {
+        let mut peers = Vec::new();
+
+        while let Ok(Some(addr)) = self.bootstrap.next_addr() {
+            if peers.len() >= 50 {
+                break;
+            }
+
+            peers.push(addr);
+        }
+
+        for contact in peers {
+            let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
+                Some(Protocol::P2p(id)) => id,
+                _ => {
+                    debug!("Bootstrap peer {contact} has no peer ID, skipping adding to kad");
+                    continue;
+                }
+            };
+
+            self.swarm
+                .behaviour_mut()
+                .kademlia
+                .add_address(&contact_id, contact);
+        }
+
+        self.bootstrap
+            .trigger_bootstrapping_process(&mut self.swarm, 0);
     }
 
     /// Shorthand for kad behaviour mut
@@ -243,23 +287,6 @@ impl NetworkDriver {
     /// Shorthand for request response behaviour mut
     fn req(&mut self) -> &mut request_response::cbor::Behaviour<Request, Response> {
         &mut self.swarm.behaviour_mut().request_response
-    }
-
-    /// Add peers to our routing table
-    pub(crate) fn connect_to_peers(&mut self, peers: Vec<Multiaddr>) -> Result<(), NoKnownPeers> {
-        for contact in peers {
-            let contact_id = match contact.iter().find(|p| matches!(p, Protocol::P2p(_))) {
-                Some(Protocol::P2p(id)) => id,
-                _ => panic!("No peer id found in contact"),
-            };
-
-            self.swarm
-                .behaviour_mut()
-                .kademlia
-                .add_address(&contact_id, contact);
-        }
-
-        self.swarm.behaviour_mut().kademlia.bootstrap().map(|_| ())
     }
 
     /// Process a task sent by the client, start the query on kad and add it to the pending tasks
@@ -364,6 +391,16 @@ impl NetworkDriver {
                         resp,
                     },
                 );
+            }
+            NetworkTask::GetVersion { peer, resp } => {
+                let req = Request::Query(Query::GetVersion(NetworkAddress::from(peer.peer_id)));
+
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&peer.peer_id, req, peer.addrs.clone());
+
+                self.pending_tasks
+                    .insert_query(req_id, NetworkTask::GetVersion { peer, resp });
             }
             NetworkTask::ConnectionsMade { resp } => {
                 // Send the current count of connections made

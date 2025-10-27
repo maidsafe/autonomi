@@ -8,6 +8,7 @@
 
 use crate::RunningNode;
 use crate::spawn::node_spawner::NodeSpawner;
+use ant_bootstrap::BootstrapConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use libp2p::Multiaddr;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -15,14 +16,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct NetworkSpawner {
+    /// Bootstrap configuration for all nodes in the network.
+    bootstrap_config: Option<BootstrapConfig>,
     /// The EVM network to which the spawned nodes will connect.
     evm_network: EvmNetwork,
     /// The address that will receive rewards from the spawned nodes.
     rewards_address: RewardsAddress,
-    /// Specifies whether the network will operate in local mode and sets the listen address.
-    /// - `true`: Nodes listen on the local loopback address (`127.0.0.1`).
-    /// - `false`: Nodes listen on all available interfaces (`0.0.0.0`).
-    local: bool,
     /// Disables UPnP on the node (automatic port forwarding).
     no_upnp: bool,
     /// Optional root directory to store node data and configurations.
@@ -35,9 +34,9 @@ impl NetworkSpawner {
     /// Creates a new `NetworkSpawner` with default configurations.
     ///
     /// Default values:
+    /// - `bootstrap_config`: `None`
     /// - `evm_network`: `EvmNetwork::default()`
     /// - `rewards_address`: `RewardsAddress::default()`
-    /// - `local`: `false`
     /// - `no_upnp`: `false`
     /// - `root_dir`: `None`
     /// - `size`: `5`
@@ -45,10 +44,10 @@ impl NetworkSpawner {
         Self {
             evm_network: Default::default(),
             rewards_address: Default::default(),
-            local: false,
             no_upnp: false,
             root_dir: None,
             size: 5,
+            bootstrap_config: None,
         }
     }
 
@@ -72,14 +71,13 @@ impl NetworkSpawner {
         self
     }
 
-    /// Configures the local mode for the network.
+    /// Sets the bootstrap configuration for all nodes in the network.
     ///
     /// # Arguments
     ///
-    /// * `value` - If set to `true`, nodes will operate in local mode and listen only on `127.0.0.1`.
-    ///   Otherwise, they listen on all interfaces (`0.0.0.0`).
-    pub fn with_local(mut self, value: bool) -> Self {
-        self.local = value;
+    /// * `bootstrap_config` - Bootstrap configuration including peer addresses, cache settings, etc.
+    pub fn with_bootstrap_config(mut self, bootstrap_config: BootstrapConfig) -> Self {
+        self.bootstrap_config = Some(bootstrap_config);
         self
     }
 
@@ -123,10 +121,10 @@ impl NetworkSpawner {
         spawn_network(
             self.evm_network,
             self.rewards_address,
-            self.local,
             self.no_upnp,
             self.root_dir,
             self.size,
+            self.bootstrap_config,
         )
         .await
     }
@@ -172,12 +170,15 @@ impl RunningNetwork {
 async fn spawn_network(
     evm_network: EvmNetwork,
     rewards_address: RewardsAddress,
-    local: bool,
     no_upnp: bool,
     root_dir: Option<PathBuf>,
     size: usize,
+    bootstrap_config: Option<BootstrapConfig>,
 ) -> eyre::Result<RunningNetwork> {
     let mut running_nodes: Vec<RunningNode> = vec![];
+
+    // Extract local flag from bootstrap_config, default to false
+    let local = bootstrap_config.as_ref().map(|c| c.local).unwrap_or(false);
 
     for i in 0..size {
         let ip = match local {
@@ -196,12 +197,17 @@ async fn spawn_network(
             }
         }
 
+        // Merge bootstrap_config with node-specific config
+        let mut node_bootstrap_config = bootstrap_config.clone().unwrap_or_default();
+        node_bootstrap_config.initial_peers.extend(initial_peers);
+        node_bootstrap_config.first = running_nodes.is_empty();
+        node_bootstrap_config.local = local;
+
         let node = NodeSpawner::new()
             .with_socket_addr(socket_addr)
             .with_evm_network(evm_network.clone())
             .with_rewards_address(rewards_address)
-            .with_initial_peers(initial_peers)
-            .with_local(local)
+            .with_bootstrap_config(node_bootstrap_config)
             .with_no_upnp(no_upnp)
             .with_root_dir(root_dir.clone())
             .spawn()
@@ -231,9 +237,13 @@ mod tests {
     async fn test_spawn_network() {
         let network_size = 20;
 
+        let bootstrap_config = BootstrapConfig::new(true)
+            .with_disable_cache_reading(true)
+            .with_disable_env_peers(true);
+
         let running_network = NetworkSpawner::new()
             .with_evm_network(Default::default())
-            .with_local(true)
+            .with_bootstrap_config(bootstrap_config)
             .with_no_upnp(true)
             .with_size(network_size)
             .spawn()
@@ -254,7 +264,12 @@ mod tests {
                 .peers_in_routing_table;
 
             assert!(
-                peers_in_routing_table >= network_size - 2 && peers_in_routing_table < network_size
+                peers_in_routing_table >= network_size - 2 && peers_in_routing_table < network_size,
+                "Node with PeerId {} has {} peers in its routing table, expected between {} and {}",
+                node.peer_id(),
+                peers_in_routing_table,
+                network_size - 2,
+                network_size - 1
             );
         }
 

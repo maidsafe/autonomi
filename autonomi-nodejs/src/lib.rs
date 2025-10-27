@@ -116,6 +116,16 @@ impl Client {
         Network(self.0.evm_network().clone())
     }
 
+    /// Set the payment mode for uploads.
+    #[napi]
+    pub fn with_payment_mode(&self, payment_mode: PaymentMode) -> Self {
+        let mode = match payment_mode {
+            PaymentMode::Standard => autonomi::PaymentMode::Standard,
+            PaymentMode::SingleNode => autonomi::PaymentMode::SingleNode,
+        };
+        Self(self.0.clone().with_payment_mode(mode))
+    }
+
     // Chunks
 
     /// Get a chunk from the network.
@@ -1603,6 +1613,15 @@ impl TransactionConfig {
             max_fee_per_gas: autonomi::MaxFeePerGas::Custom(value),
         }))
     }
+}
+
+/// Payment strategy for uploads
+#[napi]
+pub enum PaymentMode {
+    /// Default mode: Pay 3 nodes
+    Standard,
+    /// Alternative mode: Pay only the median priced node with 3x the quoted amount
+    SingleNode,
 }
 
 /// Options for making payments on the network

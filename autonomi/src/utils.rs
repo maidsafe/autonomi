@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::client::PutError;
-use futures::stream::{FuturesUnordered, StreamExt};
+use futures::stream::{self, StreamExt};
 use std::future::Future;
 
 pub(crate) async fn process_tasks_with_max_concurrency<I, R>(tasks: I, batch_size: usize) -> Vec<R>
@@ -16,25 +16,15 @@ where
     I::Item: Future<Output = R> + Send,
     R: Send,
 {
-    let mut futures = FuturesUnordered::new();
-    let mut results = Vec::new();
-
-    for task in tasks.into_iter() {
-        futures.push(task);
-
-        if futures.len() >= batch_size
-            && let Some(result) = futures.next().await
-        {
-            results.push(result);
-        }
-    }
-
-    // Process remaining tasks
-    while let Some(result) = futures.next().await {
-        results.push(result);
-    }
-
-    results
+    let tasks: Vec<_> = tasks.into_iter().collect();
+    info!(
+        "Processing {} tasks with max concurrency of {batch_size}",
+        tasks.len()
+    );
+    stream::iter(tasks)
+        .buffer_unordered(batch_size)
+        .collect()
+        .await
 }
 
 /// Extracts gas fee values from an error message string.

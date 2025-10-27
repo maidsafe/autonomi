@@ -14,7 +14,7 @@ use bytes::Bytes;
 use self_encryption::MAX_CHUNK_SIZE;
 use std::path::PathBuf;
 use std::time::Instant;
-use tokio::sync::oneshot;
+use tokio::{sync::oneshot, task::spawn_blocking};
 
 use crate::client::config::{FILE_ENCRYPT_BATCH_SIZE, IN_MEMORY_ENCRYPTION_MAX_SIZE};
 use crate::client::data::DataAddress;
@@ -197,7 +197,7 @@ impl EncryptionStream {
         let file_path_clone = file_path.clone();
 
         // Spawn a task to handle streaming encryption
-        tokio::spawn(async move {
+        spawn_blocking(move || {
             // encrypt the file and send chunks in a chunk channel
             let path = PathBuf::from(&file_path_clone);
             let result = self_encryption::streaming_encrypt_from_file(&path, |_xorname, bytes| {
@@ -271,7 +271,8 @@ pub(crate) async fn encrypt_directory_files(
     for entry in walkdir::WalkDir::new(&dir_path) {
         let entry = entry?;
 
-        if entry.file_type().is_dir() {
+        if !entry.file_type().is_file() {
+            // Skip directories and symbolic links
             continue;
         }
 

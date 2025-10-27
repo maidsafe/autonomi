@@ -18,7 +18,7 @@ nightly = []
 
 [dependencies]
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.8" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
 clap = { version = "4.5.4", features = ["derive"] }
 clap-verbosity-flag = "2.2.0"
 color-eyre = { version = "0.6", default-features = false }

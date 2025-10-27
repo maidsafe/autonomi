@@ -29,14 +29,14 @@ tcp = []
 websockets = []
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.7" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.10" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.8" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
 ant-releases = { version = "0.4.1" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.16" }
-evmlib = { path = "../evmlib", version = "0.4.3" }
+evmlib = { path = "../evmlib", version = "0.4.5" }
 chrono = "~0.4.19"
 clap = { version = "4.4.6", features = ["derive", "env"] }
 colored = "2.0.4"

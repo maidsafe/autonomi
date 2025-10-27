@@ -175,15 +175,13 @@ impl SwarmDriver {
 
         kbucket_status.log();
 
-        if let Some(bootstrap_cache) = &self.bootstrap_cache {
-            let bootstrap_cache = bootstrap_cache.clone();
-            #[allow(clippy::let_underscore_future)]
-            let _ = tokio::spawn(async move {
-                for addr in addresses.0.into_iter() {
-                    bootstrap_cache.add_addr(addr).await
-                }
-            });
-        }
+        let cache_store = self.bootstrap.cache_store().clone();
+        #[allow(clippy::let_underscore_future)]
+        let _ = tokio::spawn(async move {
+            for addr in addresses.0.into_iter() {
+                cache_store.add_addr(addr).await
+            }
+        });
 
         self.send_event(NetworkEvent::PeerAdded(added_peer, self.peers_in_rt));
 
@@ -213,14 +211,12 @@ impl SwarmDriver {
 
         self.send_event(NetworkEvent::PeerRemoved(removed_peer, self.peers_in_rt));
 
-        if let Some(bootstrap_cache) = &self.bootstrap_cache {
-            let removed_peer_clone = removed_peer;
-            let bootstrap_cache = bootstrap_cache.clone();
-            #[allow(clippy::let_underscore_future)]
-            let _ = tokio::spawn(async move {
-                bootstrap_cache.remove_peer(&removed_peer_clone).await;
-            });
-        }
+        let cache_store = self.bootstrap.cache_store().clone();
+        let removed_peer_clone = removed_peer;
+        #[allow(clippy::let_underscore_future)]
+        let _ = tokio::spawn(async move {
+            cache_store.queue_remove_peer(&removed_peer_clone).await;
+        });
 
         kbucket_status.log();
 

@@ -7,6 +7,212 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-10-15
+
+### Bootstrapping
+
+#### Fixed
+
+- Provide a timeout in the bootstrapping process that prevents indefinite waiting to fetch contacts,
+  which in turn could result in a timeout error. We will also now complete bootstrapping when we've
+  obtained five addresses. This fix will apply to both the `antnode` and `ant` binaries.
+
+## 2025-10-06
+
+### Language Bindings
+
+#### Added
+
+**Python:**
+- `Client` class: `with_payment_mode` method for setting the payment mode.
+- `PaymentMode` enum for defining the available payment modes.
+
+**NodeJS:**
+- `Client` class: `with_payment_mode` method for setting the payment mode.
+- `PaymentMode` enum for defining the available payment modes.
+
+### Network
+
+### Changed
+
+- Nodes now use the `Bootstrap` struct to drive the initial bootstrapping process and the bootstrap
+  cache.
+- Nodes now evict peers immediately if they notice their peer ID has changed. This allows the
+  network to flush out old peers much quicker. This should resolve some performance issues we've seen
+  on the production network that have been the result of node operators who are over-provisioning and
+  pulling large numbers of nodes in short time periods.
+
+### Bootstrapping
+
+#### Added
+
+- A new `Bootstrap` struct is introduced that provides a single interface to bootstrap a `Node` or
+  `Client` to the network.
+- The `BootstrapConfig` allows the user to modify various configurations for bootstrapping to the
+  network. Some options include providing a manual address, setting a custom bootstrap cache
+  directory, disabling bootstrap cache reading, setting custom network contacts url and so on.
+- The `Bootstrap` struct dials peers from all provided sources before terminating: environment
+  variables, CLI arguments, bootstrap cache, and network contact URLs. This solves the major issue of
+  using an outdated bootstrap cache to dial the network.
+- Implement file locking for bootstrap cache such that concurrent accesses do not error out or
+  produce empty values.
+
+#### Changed
+
+- The old method of obtaining the bootstrap peers as `Vec<MultiAddress>` using
+  `InitialPeersConfig::get_bootstrap_addrs()` has now been removed in favour of the automated
+  bootstrapping process.
+
+### API
+
+#### Added
+
+- Introduce a new payment mode: single node. This reduces gas fees by making a single transaction to
+  the median-priced node with 3x the quote amount, rather than 3 separate transactions to 3
+  highest nodes.
+- `PaymentMode` enum for controlling upload payment strategy with `Standard` (pay 3 nodes) and
+  `SingleNode` (pay 1 node with 3x amount) variants.
+- `Client::with_payment_mode()` method for setting the payment mode on the client.
+- `Client::get_raw_quote_from_peer()` method for obtaining quotes from specific peers without
+  market prices. This is useful for testing and obtaining reward addresses.
+- `Client::get_node_version()` async method for requesting the node version of a specific peer on
+  the network.
+
+#### Changed
+
+- `self_encryption` dependency upgraded to version `0.34.1` for improved encryption performance.
+- `ClientConfig::bootstrap_cache_config` and `ClientConfig::init_peers_config` has been
+  deprecated in favour of `ClientConfig::bootstrap_config`. This new config combines all the options
+  from the deprecated fields.
+
+### Payments
+
+#### Changed
+
+- Payment vault smart contract upgraded from V2 to V6. This upgrade supports the new single-node
+  payment verification logic while maintaining backward compatibility.
+
+### Ant Client
+
+#### Added
+
+- The `file cost` command provides a `--disable-single-node-payment` flag to switch from the
+  default single-node payment mode to the multi-node payment mode.
+- The `file upload` command provides a `--disable-single-node-payment` flag to switch from the
+  default single-node payment mode to the multi-node payment mode.
+- The `analyze` command now has an `analyse` alias for British English spelling preference.
+- The `analyze` command now supports a `--closest-nodes` flag argument that will display the closest 
+  nodes to the address being analysed.
+
+#### Changed
+
+- Single-node payment is now enabled by default for both the `file cost` and `file upload` commands,
+  reducing gas fees for users. The previous behaviour can be restored using the
+  `--disable-single-node-payment` flag.
+- The `NetworkDriver` now uses the `Boostrap` struct to drive the initial bootstrapping process and
+  the bootstrap cache.
+
+### General
+
+#### Changed
+
+- Various nightly CI workflows have been removed as they were not being actively used.
+- GitHub Actions `setup-python` upgraded from v5 to v6.
+
+## 2025-09-29
+
+### API
+
+#### Added
+
+- `DataStream` struct with streaming data access methods:
+  - `data_size()` returns the original data size
+  - `get_range(start, len)` decrypts and returns a specific byte range
+  - `range(range)` convenience method using Range syntax
+  - `range_from(start)` gets range from starting position to end
+  - `range_to(end)` gets range from beginning to end position
+  - `range_full()` gets the entire file content
+  - `range_inclusive(start, end)` gets an inclusive range
+- `data_stream(&DataMapChunk)` async method on `Client` for creating streaming access to private
+  data.
+- `data_stream_public(&DataAddress)` async method on `Client` for creating streaming access to
+  public data.
+- `scratchpad_put_update` async method for wallet-free scratchpad updates with caller-controlled
+  management.
+- `print_fork_analysis` function for detailed scratchpad fork error analysis and display.
+- `vault_expand_capacity` async method for expanding vault storage capacity.
+- `vault_claimed_capacity` async method for checking claimed vault capacity.
+- `vault_split_bytes` function for splitting bytes for vault storage.
+
+#### Changed
+
+- Client initialization now includes automatic network connectivity verification via
+  `wait_for_connectivity()` during the `init` process, improving reliability and error diagnostics.
+- Scratchpad error handling enhanced with fork resolution capabilities in update operations, solving
+  code duplication issues.
+- Vault function names updated for consistency:
+  - `fetch_and_decrypt_vault` → `vault_get` (deprecated function retained for compatibility)
+  - `write_bytes_to_vault` → `vault_put` (deprecated function retained for compatibility)
+  - `app_name_to_vault_content_type` → `vault_content_type_from_app_name` (deprecated function
+    retained for compatibility)
+- Code organization improved by moving encryption and utility modules out of the client module to
+  top-level `self_encryption` and `utils` modules.
+
+#### Fixed
+
+- Analyze functionality now properly handles old datamap format types for backward compatibility.
+- Scratchpad fork display and resolution issues resolved across all API operations.
+- Streaming operations now validate destination paths before processing to prevent errors.
+
+### Language Bindings
+
+#### Added
+
+**Python:**
+- `GraphEntry` class methods for member access:
+  - `content()` returns the entry content
+  - `parents()` returns parent entry references
+  - `descendants()` returns descendant entry references
+- Data streaming bindings providing Python access to the new streaming data APIs.
+- Enhanced fork error display functionality for scratchpad operations with comprehensive error
+  details.
+- Comprehensive test coverage for all Python binding functionality including address format
+  validation.
+
+**Node.js:**
+- Updated vault operation support with new function names matching the renamed API standards.
+
+#### Fixed
+
+- Python binding tests updated to handle 96-character address hex format and proper `from_hex`
+  round-trip conversions.
+- `GraphEntry` bindings now properly expose all member access methods with correct error handling.
+
+### Ant Client
+
+#### Added
+
+- Enhanced `scratchpad` command functionality with improved fork error handling and resolution
+  capabilities.
+- Better error reporting for scratchpad operations with detailed fork analysis output.
+- The `download` command has improved error handling to immediately fail if the chosen download path
+  cannot be used.
+
+#### Fixed
+
+- Scratchpad fork display and resolution functionality now works correctly across all client command
+  operations.
+- Get record operations now only perform early returns when unique content is received from
+  sufficient peers, improving data retrieval reliability.
+- The `analyze` command now properly handles file references in the old datamap format.
+
+### Launchpad
+
+#### Fixed
+
+- Node storage size handling corrected for ARM v7 architecture devices.
+- Node addition process on Windows now functions properly without configuration conflicts.
+
 ## 2025-09-02
 
 ### API

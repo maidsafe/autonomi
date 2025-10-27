@@ -19,7 +19,10 @@ use libp2p::{
     Multiaddr, TransportError,
     core::ConnectedPoint,
     multiaddr::Protocol,
-    swarm::{ConnectionId, DialError, SwarmEvent},
+    swarm::{
+        ConnectionId, DialError, SwarmEvent,
+        dial_opts::{DialOpts, PeerCondition},
+    },
 };
 use std::time::Instant;
 use tokio::time::Duration;
@@ -251,11 +254,8 @@ impl SwarmDriver {
                 event_string = "ConnectionEstablished";
                 debug!(%peer_id, num_established, ?concurrent_dial_errors, "ConnectionEstablished ({connection_id:?}) in {established_in:?}: {}", endpoint_str(&endpoint));
 
-                self.initial_bootstrap.on_connection_established(
-                    &endpoint,
-                    &mut self.swarm,
-                    self.peers_in_rt,
-                );
+                self.bootstrap
+                    .on_connection_established(&peer_id, &endpoint);
 
                 if let Some(external_address_manager) = self.external_address_manager.as_mut()
                     && let ConnectedPoint::Listener { local_addr, .. } = &endpoint
@@ -333,11 +333,7 @@ impl SwarmDriver {
 
                 self.record_connection_metrics();
 
-                self.initial_bootstrap.on_outgoing_connection_error(
-                    None,
-                    &mut self.swarm,
-                    self.peers_in_rt,
-                );
+                self.bootstrap.on_outgoing_connection_error(None);
             }
             SwarmEvent::OutgoingConnectionError {
                 peer_id: Some(failed_peer_id),
@@ -365,14 +361,12 @@ impl SwarmDriver {
                 let _ = self.live_connected_peers.remove(&connection_id);
                 self.record_connection_metrics();
 
-                self.initial_bootstrap.on_outgoing_connection_error(
-                    Some(failed_peer_id),
-                    &mut self.swarm,
-                    self.peers_in_rt,
-                );
+                self.bootstrap
+                    .on_outgoing_connection_error(Some(failed_peer_id));
 
+                let mut redial = None;
                 // we need to decide if this was a critical error and if we should report it to the Issue tracker
-                let is_critical_error = match &error {
+                let issue_to_record = match &error {
                     DialError::Transport(errors) => {
                         // as it's an outgoing error, if it's transport based we can assume it is _our_ fault
                         //
@@ -414,8 +408,8 @@ impl SwarmDriver {
                                         "HandshakeTimedOut",
                                     ];
 
-                                    if self.initial_bootstrap.is_bootstrap_peer(&failed_peer_id)
-                                        && !self.initial_bootstrap.has_terminated()
+                                    if self.bootstrap.is_bootstrap_peer(&failed_peer_id)
+                                        && !self.bootstrap.has_terminated()
                                     {
                                         debug!(
                                             "OutgoingConnectionError: On bootstrap peer {failed_peer_id:?}, while still in bootstrap mode, ignoring"
@@ -443,28 +437,32 @@ impl SwarmDriver {
                             );
                             there_is_a_serious_issue = true;
                         }
-                        there_is_a_serious_issue
+                        if there_is_a_serious_issue {
+                            Some(NodeIssue::ConnectionIssue)
+                        } else {
+                            None
+                        }
                     }
                     DialError::NoAddresses => {
                         // We provided no address, and while we can't really blame the peer
                         // we also can't connect, so we opt to cleanup...
                         debug!("OutgoingConnectionError: No address provided");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                     DialError::Aborted => {
                         // not their fault
                         debug!("OutgoingConnectionError: Aborted");
-                        false
+                        None
                     }
                     DialError::DialPeerConditionFalse(_) => {
                         // we could not dial due to an internal condition, so not their issue
                         debug!("OutgoingConnectionError: DialPeerConditionFalse");
-                        false
+                        None
                     }
                     DialError::LocalPeerId { address } => {
                         // This is actually _us_ So we should remove this from the RT
                         debug!("OutgoingConnectionError: LocalPeerId: {address}");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                     DialError::WrongPeerId { obtained, address } => {
                         // The peer id we attempted to dial was not the one we expected
@@ -472,21 +470,44 @@ impl SwarmDriver {
                         debug!(
                             "OutgoingConnectionError: WrongPeerId: obtained: {obtained:?}, address: {address:?}"
                         );
-                        true
+                        let mut address = address.clone();
+                        if matches!(address.iter().last(), Some(Protocol::P2p(_))) {
+                            let _ = address.pop();
+                            address.push(Protocol::P2p(*obtained));
+                            redial = Some((address, *obtained));
+                            info!("Redial WrongPeerId address with correct PeerId: {redial:?}");
+                        }
+
+                        Some(NodeIssue::WrongPeerId)
                     }
                     DialError::Denied { cause } => {
                         // The peer denied our connection
                         // cleanup
                         debug!("OutgoingConnectionError: Denied: {cause:?}");
-                        true
+                        Some(NodeIssue::ConnectionIssue)
                     }
                 };
 
-                if is_critical_error {
+                if let Some(issue) = issue_to_record {
+                    let issue_for_logging = issue.clone();
                     warn!(
-                        "Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an issue. Error: {error:?}"
+                        "Outgoing Connection error to {failed_peer_id:?} is considered as critical. Marking it as an {issue_for_logging:?}. Error: {error:?}"
                     );
-                    self.record_node_issue(failed_peer_id, NodeIssue::ConnectionIssue);
+                    self.record_node_issue(failed_peer_id, issue);
+                }
+
+                if let Some((addr, remote_peer_id)) = redial {
+                    info!("Attempting to redial {failed_peer_id:?} at {addr:?}");
+
+                    if let Err(err) = self.swarm.dial(
+                        DialOpts::peer_id(remote_peer_id)
+                            // If we have a peer ID, we can prevent simultaneous dials.
+                            .condition(PeerCondition::NotDialing)
+                            .addresses(vec![addr.clone()])
+                            .build(),
+                    ) {
+                        warn!("Failed to redial {failed_peer_id:?} at {addr:?}: {err:?}");
+                    }
                 }
             }
             SwarmEvent::IncomingConnectionError {

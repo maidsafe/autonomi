@@ -43,10 +43,6 @@ build-release-artifacts arch nightly="false":
   mkdir artifacts
   cargo clean
 
-  if [ -n "$MAX_CHUNK_SIZE" ]; then
-    echo "Overriding chunk size to $MAX_CHUNK_SIZE bytes"
-  fi
-
   nightly_feature=""
   if [[ "$nightly" == "true" ]]; then
     nightly_feature="--features nightly"
@@ -54,23 +50,41 @@ build-release-artifacts arch nightly="false":
 
   if [[ $arch == arm* || $arch == armv7* || $arch == aarch64* ]]; then
     cargo binstall --no-confirm cross
-    cross build --release --target $arch --bin nat-detection $nightly_feature
-    cross build --release --target $arch --bin node-launchpad $nightly_feature
-    cross build --release --target $arch --bin ant $nightly_feature --features loud
-    cross build --release --target $arch --bin antnode $nightly_feature
-    cross build --release --target $arch --bin antctl $nightly_feature
-    cross build --release --target $arch --bin antctld $nightly_feature
-    cross build --release --target $arch --bin antnode_rpc_client $nightly_feature
-    cross build --release --target $arch --bin evm-testnet $nightly_feature
+    build_cmd="cross build --release --target $arch"
   else
-    cargo build --release --target $arch --bin nat-detection $nightly_feature
-    cargo build --release --target $arch --bin node-launchpad $nightly_feature
-    cargo build --release --target $arch --bin ant $nightly_feature --features loud
-    cargo build --release --target $arch --bin antnode $nightly_feature
-    cargo build --release --target $arch --bin antctl $nightly_feature
-    cargo build --release --target $arch --bin antctld $nightly_feature
-    cargo build --release --target $arch --bin antnode_rpc_client $nightly_feature
-    cargo build --release --target $arch --bin evm-testnet $nightly_feature
+    build_cmd="cargo build --release --target $arch"
+  fi
+
+  if [[ "${BUILD_NAT_DETECTION:-true}" == "true" ]]; then
+    $build_cmd --bin nat-detection $nightly_feature
+  fi
+
+  if [[ "${BUILD_NODE_LAUNCHPAD:-true}" == "true" ]]; then
+    $build_cmd --bin node-launchpad $nightly_feature
+  fi
+
+  if [[ "${BUILD_ANT:-true}" == "true" ]]; then
+    $build_cmd --bin ant $nightly_feature --features loud
+  fi
+
+  if [[ "${BUILD_ANTNODE:-true}" == "true" ]]; then
+    $build_cmd --bin antnode $nightly_feature
+  fi
+
+  if [[ "${BUILD_ANTCTL:-true}" == "true" ]]; then
+    $build_cmd --bin antctl $nightly_feature
+  fi
+
+  if [[ "${BUILD_ANTCTLD:-true}" == "true" ]]; then
+    $build_cmd --bin antctld $nightly_feature
+  fi
+
+  if [[ "${BUILD_ANTNODE_RPC_CLIENT:-true}" == "true" ]]; then
+    $build_cmd --bin antnode_rpc_client $nightly_feature
+  fi
+
+  if [[ "${BUILD_EVM_TESTNET:-true}" == "true" ]]; then
+    $build_cmd --bin evm-testnet $nightly_feature
   fi
 
   find target/$arch/release -maxdepth 1 -type f -exec cp '{}' artifacts \;

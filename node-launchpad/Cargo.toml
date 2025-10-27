@@ -2,7 +2,7 @@
 authors = ["MaidSafe Developers <dev@maidsafe.net>"]
 description = "TUI for running nodes on the Autonomi network"
 name = "node-launchpad"
-version = "0.5.10"
+version = "0.5.11"
 edition = "2024"
 license = "GPL-3.0"
 homepage = "https://maidsafe.net"
@@ -18,11 +18,12 @@ path = "src/bin/tui/main.rs"
 nightly = []
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.7" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.10" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
+ant-logging = { path = "../ant-logging", version = "0.2.52" }
 ant-node-manager = { version = "0.13.3", path = "../ant-node-manager" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.8" }
+ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
 ant-releases = { version = "0.4.1" }
 ant-service-management = { version = "0.4.16", path = "../ant-service-management" }
 arboard = "3.4.1"
@@ -77,6 +78,9 @@ tracing-error = "0.2.0"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "serde"] }
 tui-input = "0.8.0"
 which = "6.0.1"
+
+[target.'cfg(windows)'.dependencies]
+runas = "1.2.0"
 
 [lints]
 workspace = true

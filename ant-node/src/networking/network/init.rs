@@ -10,9 +10,10 @@ use ant_protocol::constants::{KAD_STREAM_PROTOCOL_ID, MAX_PACKET_SIZE, REPLICATI
 
 use crate::networking::{
     CLOSE_GROUP_SIZE, NetworkEvent,
-    bootstrap::{InitialBootstrap, InitialBootstrapTrigger},
     circular_vec::CircularVec,
-    driver::{NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery},
+    driver::{
+        InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery,
+    },
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
@@ -24,7 +25,7 @@ use crate::networking::{
 use crate::networking::{
     MetricsRegistries, metrics::NetworkMetricsRecorder, metrics::service::run_metrics_server,
 };
-use ant_bootstrap::BootstrapCacheStore;
+use ant_bootstrap::bootstrap::Bootstrap;
 use ant_protocol::{
     NetworkAddress, PrettyPrintKBucketKey,
     messages::{Request, Response},
@@ -74,11 +75,10 @@ const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
 pub(crate) struct NetworkConfig {
     pub keypair: Keypair,
     pub local: bool,
-    pub initial_contacts: Vec<Multiaddr>,
     pub listen_addr: SocketAddr,
     pub root_dir: PathBuf,
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
-    pub bootstrap_cache: Option<BootstrapCacheStore>,
+    pub bootstrap: Bootstrap,
     pub no_upnp: bool,
     pub relay_client: bool,
     pub custom_request_timeout: Option<Duration>,
@@ -409,9 +409,8 @@ fn init_swarm_driver(
         #[cfg(feature = "open-metrics")]
         close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
         peers_in_rt: 0,
-        initial_bootstrap: InitialBootstrap::new(config.initial_contacts),
         initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
-        bootstrap_cache: config.bootstrap_cache,
+        bootstrap: config.bootstrap,
         relay_manager,
         connected_relay_clients: Default::default(),
         external_address_manager,

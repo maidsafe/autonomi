@@ -15,7 +15,7 @@ test-utils = []
 
 [dependencies]
 custom_debug = "~0.6.1"
-evmlib = { path = "../evmlib", version = "0.4.3" }
+evmlib = { path = "../evmlib", version = "0.4.5" }
 hex = "~0.4.3"
 libp2p = { version = "0.56.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }

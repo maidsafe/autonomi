@@ -25,21 +25,25 @@
 #[macro_use]
 extern crate tracing;
 
+pub mod bootstrap;
 pub mod cache_store;
 pub mod config;
-pub mod contacts;
+pub mod contacts_fetcher;
 pub mod error;
-mod initial_peers;
 
 use ant_protocol::version::{get_network_id_str, get_truncate_version_str};
 use libp2p::{Multiaddr, PeerId, multiaddr::Protocol};
 use thiserror::Error;
 
+pub use bootstrap::Bootstrap;
 pub use cache_store::BootstrapCacheStore;
-pub use config::BootstrapCacheConfig;
-pub use contacts::ContactsFetcher;
+pub use config::BootstrapConfig;
+pub use config::InitialPeersConfig;
+pub use contacts_fetcher::ContactsFetcher;
 pub use error::{Error, Result};
-pub use initial_peers::{ANT_PEERS_ENV, InitialPeersConfig};
+
+/// The name of the environment variable that can be used to pass peers to the node.
+pub const ANT_PEERS_ENV: &str = "ANT_PEERS";
 
 /// Craft a proper address to avoid any ill formed addresses
 ///
@@ -112,4 +116,81 @@ pub fn multiaddr_get_peer_id(addr: &Multiaddr) -> Option<PeerId> {
 
 pub fn get_network_version() -> String {
     format!("{}_{}", get_network_id_str(), get_truncate_version_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use libp2p::Multiaddr;
+
+    #[test]
+    fn test_transport_protocol_variants() {
+        let variants = [
+            (
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                true,
+            ),
+            (
+                "/ip4/127.0.0.1/tcp/8080/ws/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                true,
+            ),
+            (
+                "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                true,
+            ),
+            ("/ip4/127.0.0.1/tcp/8080", false),
+            (
+                "/ip4/127.0.0.1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                false,
+            ),
+            (
+                "/ip4/127.0.0.1/wss/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+                false,
+            ),
+        ];
+
+        for (addr, should_be_valid) in variants {
+            let parsed: Multiaddr = addr.parse().unwrap();
+            let result = craft_valid_multiaddr(&parsed, false);
+
+            if should_be_valid {
+                let crafted = result.unwrap_or_else(|| panic!("Expected valid multiaddr: {addr}"));
+                assert_eq!(crafted.to_string(), parsed.to_string());
+            } else {
+                assert!(result.is_none(), "Expected invalid multiaddr: {addr}");
+            }
+        }
+    }
+
+    #[test]
+    fn test_craft_valid_multiaddr_from_str() {
+        let valid = "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE";
+        assert!(craft_valid_multiaddr_from_str(valid, false).is_some());
+
+        let invalid = "not a multiaddr";
+        assert!(craft_valid_multiaddr_from_str(invalid, false).is_none());
+
+        let missing_peer = "/ip4/127.0.0.1/tcp/8080";
+        assert!(craft_valid_multiaddr_from_str(missing_peer, false).is_none());
+        assert!(craft_valid_multiaddr_from_str(missing_peer, true).is_some());
+    }
+
+    #[test]
+    fn test_craft_valid_multiaddr_ignore_peer_id() {
+        let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        assert!(craft_valid_multiaddr(&addr_without_peer, false).is_none());
+        assert!(craft_valid_multiaddr(&addr_without_peer, true).is_some());
+    }
+
+    #[test]
+    fn test_multiaddr_get_peer_id() {
+        let addr_with_peer: Multiaddr =
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+                .parse()
+                .unwrap();
+        assert!(multiaddr_get_peer_id(&addr_with_peer).is_some());
+
+        let addr_without_peer: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
+        assert!(multiaddr_get_peer_id(&addr_without_peer).is_none());
+    }
 }

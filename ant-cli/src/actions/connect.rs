@@ -6,10 +6,12 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::exit_code::{ExitCodeError, connect_error_exit_code, evm_util_error_exit_code};
+use crate::exit_code::{
+    ExitCodeError, bootstrap_error_exit_code, connect_error_exit_code, evm_util_error_exit_code,
+};
 use crate::opt::{ALPHA_NETWORK_ID, LOCAL_NETWORK_ID, MAIN_NETWORK_ID, NetworkId};
 use autonomi::client::config::ClientOperatingStrategy;
-use autonomi::{Client, ClientConfig, InitialPeersConfig, get_evm_network};
+use autonomi::{BootstrapConfig, Client, ClientConfig, InitialPeersConfig, get_evm_network};
 use color_eyre::eyre::eyre;
 use indicatif::ProgressBar;
 use std::time::Duration;
@@ -73,18 +75,17 @@ pub async fn connect_to_network_with_config(
                 (err.into(), exit_code)
             })?;
 
-            let bootstrap_cache_config = autonomi::BootstrapCacheConfig::new(false)
-                .inspect_err(|err| {
-                    warn!("Failed to create bootstrap cache config: {err}");
-                })
-                .ok();
+            let bootstrap_config =
+                BootstrapConfig::try_from(&network_context.peers).map_err(|err| {
+                    let exit_code = bootstrap_error_exit_code(&err);
+                    (err.into(), exit_code)
+                })?;
 
             let config = ClientConfig {
-                init_peers_config: network_context.peers,
+                bootstrap_config,
                 evm_network,
                 strategy: operating_strategy.clone(),
                 network_id: Some(network_context.network_id.as_u8()),
-                bootstrap_cache_config,
             };
 
             Client::init_with_config(config).await

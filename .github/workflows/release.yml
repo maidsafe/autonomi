@@ -3,10 +3,46 @@ name: release
 on:
   workflow_dispatch:
     inputs:
-      chunk-size:
-        description: Specify the chunk size in bytes. If not used, the current default is 1048576.
-        type: number
+      build-nat-detection:
+        description: Build nat-detection binary
+        type: boolean
         required: false
+        default: true
+      build-node-launchpad:
+        description: Build node-launchpad binary
+        type: boolean
+        required: false
+        default: true
+      build-ant:
+        description: Build ant binary
+        type: boolean
+        required: false
+        default: true
+      build-antnode:
+        description: Build antnode binary
+        type: boolean
+        required: false
+        default: true
+      build-antctl:
+        description: Build antctl binary
+        type: boolean
+        required: false
+        default: true
+      build-antctld:
+        description: Build antctld binary
+        type: boolean
+        required: false
+        default: true
+      build-antnode-rpc-client:
+        description: Build antnode_rpc_client binary
+        type: boolean
+        required: false
+        default: true
+      build-evm-testnet:
+        description: Build evm-testnet binary
+        type: boolean
+        required: false
+        default: true
 
 env:
   WORKFLOW_URL: https://github.com/maidsafe/autonomi/actions/runs
@@ -44,16 +80,96 @@ jobs:
       - shell: bash
         run: cargo binstall --no-confirm just
 
-      - name: Set chunk size if applicable
-        if: ${{ inputs.chunk-size != '' }}
-        shell: bash
-        run: |
-          echo "MAX_CHUNK_SIZE=${{ inputs.chunk-size }}" >> $GITHUB_ENV
-
       - name: build release artifacts
         shell: bash
         run: |
+          export BUILD_NAT_DETECTION="${{ inputs.build-nat-detection }}"
+          export BUILD_NODE_LAUNCHPAD="${{ inputs.build-node-launchpad }}"
+          export BUILD_ANT="${{ inputs.build-ant }}"
+          export BUILD_ANTNODE="${{ inputs.build-antnode }}"
+          export BUILD_ANTCTL="${{ inputs.build-antctl }}"
+          export BUILD_ANTCTLD="${{ inputs.build-antctld }}"
+          export BUILD_ANTNODE_RPC_CLIENT="${{ inputs.build-antnode-rpc-client }}"
+          export BUILD_EVM_TESTNET="${{ inputs.build-evm-testnet }}"
+
           just build-release-artifacts "${{ matrix.target }}"
+
+      - name: Download previous binaries from S3
+        shell: bash
+        run: |
+          arch="${{ matrix.target }}"
+
+          get_version() {
+            local crate_dir=$1
+            grep "^version" < "$crate_dir/Cargo.toml" | head -n 1 | awk '{ print $3 }' | sed 's/"//g'
+          }
+
+          download_from_s3() {
+            local bin_name=$1
+            local crate_dir=$2
+            local s3_bucket=$3
+
+            version=$(get_version "$crate_dir")
+
+            if [[ "$arch" == *"windows"* ]]; then
+              archive_name="${bin_name}-${version}-${arch}.zip"
+              binary_name="${bin_name}.exe"
+            else
+              archive_name="${bin_name}-${version}-${arch}.tar.gz"
+              binary_name="${bin_name}"
+            fi
+
+            echo "Downloading ${archive_name} from S3..."
+            if ! curl -f -L -o "${archive_name}" "https://${s3_bucket}.s3.eu-west-2.amazonaws.com/${archive_name}"; then
+              echo "Failed to download ${archive_name}"
+              return 1
+            fi
+
+            temp_dir=$(mktemp -d)
+            if [[ "$arch" == *"windows"* ]]; then
+              unzip -q "${archive_name}" -d "$temp_dir"
+            else
+              tar -xzf "${archive_name}" -C "$temp_dir"
+            fi
+
+            cp "$temp_dir/${binary_name}" "artifacts/${binary_name}"
+            chmod +x "artifacts/${binary_name}"
+            rm -rf "$temp_dir" "${archive_name}"
+
+            echo "Downloaded ${bin_name} version ${version} from S3"
+          }
+
+          if [[ "${{ inputs.build-nat-detection }}" != "true" ]]; then
+            download_from_s3 "nat-detection" "nat-detection" "nat-detection"
+          fi
+
+          if [[ "${{ inputs.build-node-launchpad }}" != "true" ]]; then
+            download_from_s3 "node-launchpad" "node-launchpad" "node-launchpad"
+          fi
+
+          if [[ "${{ inputs.build-ant }}" != "true" ]]; then
+            download_from_s3 "ant" "ant-cli" "autonomi-cli"
+          fi
+
+          if [[ "${{ inputs.build-antnode }}" != "true" ]]; then
+            download_from_s3 "antnode" "ant-node" "antnode"
+          fi
+
+          if [[ "${{ inputs.build-antctl }}" != "true" ]]; then
+            download_from_s3 "antctl" "ant-node-manager" "antctl"
+          fi
+
+          if [[ "${{ inputs.build-antctld }}" != "true" ]]; then
+            download_from_s3 "antctld" "ant-node-manager" "antctl"
+          fi
+
+          if [[ "${{ inputs.build-antnode-rpc-client }}" != "true" ]]; then
+            download_from_s3 "antnode_rpc_client" "ant-node-rpc-client" "antnode-rpc-client"
+          fi
+
+          if [[ "${{ inputs.build-evm-testnet }}" != "true" ]]; then
+            download_from_s3 "evm-testnet" "evm-testnet" "evm-testnet"
+          fi
 
       - uses: actions/upload-artifact@main
         with:

@@ -15,16 +15,17 @@ mod terminal;
 extern crate tracing;
 
 use ant_bootstrap::InitialPeersConfig;
+use ant_logging::LogBuilder;
 #[cfg(target_os = "windows")]
 use ant_node_manager::config::is_running_as_root;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use node_launchpad::{
     app::App,
-    config::configure_winsw,
-    utils::{initialize_logging, initialize_panic_handler},
+    config::{configure_winsw, get_launchpad_data_dir_path},
 };
-use std::{env, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
+use tracing::{Level, error};
 
 #[derive(Parser, Debug)]
 #[command(disable_version_flag = true)]
@@ -78,8 +79,9 @@ fn is_running_in_terminal() -> bool {
 
 fn main() -> Result<()> {
     let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
+    let _log_handle = get_log_builder()?.initialize()?;
     let result: Result<()> = rt.block_on(async {
-        initialize_logging()?;
+        ensure_admin_privileges()?;
         configure_winsw().await?;
 
         if !is_running_in_terminal() {
@@ -91,21 +93,9 @@ fn main() -> Result<()> {
                 .inspect_err(|err| error!("Error while launching terminal: {err:?}"))?;
             return Ok(());
         } else {
-            // Windows spawns the terminal directly, so the check for root has to happen here as well.
             debug!("Running inside a terminal!");
-            #[cfg(target_os = "windows")]
-            if !is_running_as_root() {
-                {
-                    // TODO: There is no terminal to show this error message when double clicking on the exe.
-                    error!("Admin privileges required to run on Windows. Exiting.");
-                    color_eyre::eyre::bail!(
-                        "Admin privileges required to run on Windows. Exiting."
-                    );
-                }
-            }
         }
 
-        initialize_panic_handler()?;
         let args = Cli::parse();
 
         if args.version {
@@ -150,5 +140,102 @@ fn main() -> Result<()> {
     info!("Shutting down runtime");
     rt.shutdown_timeout(Duration::from_millis(100));
 
+    Ok(())
+}
+
+pub fn get_log_builder() -> Result<LogBuilder> {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S").to_string();
+    let log_path = get_launchpad_data_dir_path()?
+        .join("logs")
+        .join(format!("launchpad_{timestamp}.log"));
+
+    let logging_targets = vec![
+        ("ant_bootstrap".to_string(), Level::DEBUG),
+        ("evmlib".to_string(), Level::DEBUG),
+        ("ant_node_manager".to_string(), Level::DEBUG),
+        ("ant_service_management".to_string(), Level::DEBUG),
+        ("service-manager".to_string(), Level::DEBUG),
+        ("node_launchpad".to_string(), Level::DEBUG),
+    ];
+    let mut log_builder = LogBuilder::new(logging_targets);
+    log_builder.output_dest(ant_logging::LogOutputDest::Path(log_path));
+    log_builder.print_updates_to_stdout(false);
+    Ok(log_builder)
+}
+
+#[cfg(target_os = "windows")]
+fn ensure_admin_privileges() -> Result<()> {
+    use std::io::{self, Write};
+
+    if is_running_as_root() {
+        return Ok(());
+    }
+
+    println!("Administrator privileges are required to manage Autonomi node services on Windows.");
+    println!(
+        "Requesting elevation. Please approve the Windows User Account Control prompt to continue..."
+    );
+    io::stdout().flush().ok();
+
+    let exe = std::env::current_exe()?;
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+
+    // Get exe name before moving exe
+    let exe_name = exe
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("node-launchpad")
+        .to_string();
+
+    let mut cmd = runas::Command::new(exe);
+    for arg in args {
+        cmd.arg(arg);
+    }
+
+    // Launch elevation in background
+    std::thread::spawn(move || {
+        let _ = cmd.status();
+    });
+
+    println!("Waiting for UAC approval and elevated process to start...");
+
+    let start_time = std::time::Instant::now();
+    let max_wait = std::time::Duration::from_secs(300);
+
+    loop {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        // Check if an elevated version of our process is running
+        if is_elevated_process_running(&exe_name) {
+            println!("Elevated process is now running with administrator privileges.");
+            println!("You can close this window.");
+            break;
+        }
+
+        if start_time.elapsed() > max_wait {
+            color_eyre::eyre::bail!(
+                "Timeout waiting for elevated process. Please try running from an elevated terminal."
+            );
+        }
+    }
+
+    std::process::exit(0)
+}
+
+#[cfg(target_os = "windows")]
+fn is_elevated_process_running(exe_name: &str) -> bool {
+    use sysinfo::System;
+
+    let system = System::new_all();
+
+    // Count processes with our executable name
+    let count = system.processes_by_name(exe_name).count();
+
+    // If more than 1 instance, elevated version likely started
+    count > 1
+}
+
+#[cfg(not(target_os = "windows"))]
+fn ensure_admin_privileges() -> Result<()> {
     Ok(())
 }

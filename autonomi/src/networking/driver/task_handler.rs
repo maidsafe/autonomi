@@ -45,6 +45,7 @@ pub(crate) struct TaskHandler {
         ),
     >,
     get_record_req: HashMap<OutboundRequestId, OneShotTaskResult<Option<Vec<u8>>>>,
+    get_version: HashMap<OutboundRequestId, OneShotTaskResult<String>>,
 }
 
 impl TaskHandler {
@@ -55,6 +56,7 @@ impl TaskHandler {
             put_record_req: Default::default(),
             get_cost: Default::default(),
             get_record_req: Default::default(),
+            get_version: Default::default(),
         }
     }
 
@@ -66,6 +68,7 @@ impl TaskHandler {
         self.get_cost.contains_key(id)
             || self.put_record_req.contains_key(id)
             || self.get_record_req.contains_key(id)
+            || self.get_version.contains_key(id)
     }
 
     pub fn insert_task(&mut self, id: QueryId, task: NetworkTask) {
@@ -97,6 +100,9 @@ impl TaskHandler {
             }
             NetworkTask::GetRecordReq { resp, .. } => {
                 self.get_record_req.insert(id, resp);
+            }
+            NetworkTask::GetVersion { resp, .. } => {
+                self.get_version.insert(id, resp);
             }
             _ => {}
         }
@@ -284,6 +290,25 @@ impl TaskHandler {
                 Ok(())
             }
         }
+    }
+
+    pub fn update_get_version(
+        &mut self,
+        id: OutboundRequestId,
+        version: String,
+    ) -> Result<(), TaskHandlerError> {
+        let responder = self
+            .get_version
+            .remove(&id)
+            .ok_or(TaskHandlerError::UnknownQuery(format!(
+                "OutboundRequestId {id:?}"
+            )))?;
+
+        trace!("OutboundRequestId({id}): got version: {version}");
+        responder
+            .send(Ok(version))
+            .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
+        Ok(())
     }
 
     pub fn terminate_query(

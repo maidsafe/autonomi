@@ -11,7 +11,7 @@ use super::resolve_split_records;
 use crate::{
     Amount, AttoTokens, Client,
     client::{
-        GetError, PutError,
+        PutError,
         payment::{PayError, PaymentOption},
         quote::CostError,
     },
@@ -36,10 +36,13 @@ const SCRATCHPAD_MAX_SIZE: usize = Scratchpad::MAX_SIZE;
 pub enum ScratchpadError {
     #[error("Failed to put scratchpad: {0}")]
     PutError(#[from] PutError),
-    #[error("Payment failure occurred during scratchpad creation.")]
+    #[error("Payment failure occurred during scratchpad creation: {0}")]
     Pay(#[from] PayError),
-    #[error(transparent)]
-    GetError(#[from] GetError),
+    /// Failed to get scratchpad due to network reasons. This excludes Fork, Corrupt, NotFound errors
+    #[error("Failed to get scratchpad: {0}")]
+    GetError(String),
+    #[error("Scratchpad not found at this address: {0:?}")]
+    NotFound(ScratchpadAddress),
     #[error("Scratchpad found at {0:?} was not a valid record.")]
     Corrupt(ScratchpadAddress),
     #[error("Serialization error")]
@@ -136,7 +139,7 @@ impl Client {
             .await
         {
             Ok(maybe_record) => {
-                let record = maybe_record.ok_or(GetError::RecordNotFound)?;
+                let record = maybe_record.ok_or(ScratchpadError::NotFound(*address))?;
                 debug!("Got scratchpad for {scratch_key:?}");
                 return try_deserialize_record::<Scratchpad>(&record)
                     .map_err(|_| ScratchpadError::Corrupt(*address));
@@ -163,7 +166,7 @@ impl Client {
             }
             Err(e) => {
                 warn!("Failed to fetch scratchpad {network_address:?} from network: {e}");
-                return Err(ScratchpadError::GetError(e.into()));
+                return Err(ScratchpadError::GetError(e.to_string()));
             }
         };
 
@@ -189,7 +192,7 @@ impl Client {
             Ok(Some(_)) => Ok(true),
             Ok(None) => Ok(false),
             Err(NetworkError::SplitRecord(..)) => Ok(true),
-            Err(err) => Err(ScratchpadError::GetError(err.into()))
+            Err(err) => Err(ScratchpadError::GetError(err.to_string()))
                 .inspect_err(|err| error!("Error checking scratchpad existence: {err:?}")),
         }
     }
@@ -344,14 +347,8 @@ impl Client {
         let address = ScratchpadAddress::new(owner.public_key());
         let current = match self.scratchpad_get(&address).await {
             Ok(scratchpad) => Some(scratchpad),
-            Err(ScratchpadError::GetError(GetError::RecordNotFound)) => None,
+            Err(ScratchpadError::NotFound(..)) => None,
             // forks should not stop updates as updates are here to resolve forks, hence the max_by_key
-            Err(ScratchpadError::GetError(GetError::Network(NetworkError::SplitRecord(
-                result_map,
-            )))) => result_map
-                .values()
-                .filter_map(|record| try_deserialize_record::<Scratchpad>(record).ok())
-                .max_by_key(|scratchpad: &Scratchpad| scratchpad.counter()),
             Err(ScratchpadError::Fork(scratchpads)) => scratchpads
                 .into_iter()
                 .max_by_key(|scratchpad: &Scratchpad| scratchpad.counter()),

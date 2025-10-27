@@ -77,6 +77,8 @@ impl NetworkDriver {
                     (peer_id, endpoint.get_remote_address().clone()),
                 );
                 self.connections_made += 1;
+                self.bootstrap
+                    .on_connection_established(&peer_id, &endpoint);
                 Ok(())
             }
             SwarmEvent::ConnectionClosed {
@@ -98,6 +100,7 @@ impl NetworkDriver {
             } => {
                 debug!("OutgoingConnectionError to {peer_id:?} on {connection_id:?} - {error:?}");
                 let _ = self.live_connected_peers.remove(&connection_id);
+                self.bootstrap.on_outgoing_connection_error(peer_id);
 
                 Ok(())
             }
@@ -178,12 +181,19 @@ impl NetworkDriver {
             Response::Query(QueryResponse::GetReplicatedRecord(result)) => {
                 self.pending_tasks.update_get_record_req(request_id, result)?;
             }
+            Response::Query(QueryResponse::GetVersion { peer: _, version }) => {
+                self.pending_tasks.update_get_version(request_id, version)?;
+            }
             _ => {
                 info!("Other request response event({request_id:?}): {response:?}");
                 // Unrecoganized req/rsp DM indicates peer is in an incorrect version
                 // For such case, it shall be counted as a failure.
                 // Using ranodom id as place holder.
-                self.pending_tasks.terminate_query(request_id, PeerId::random(), OutboundFailure::UnsupportedProtocols)?;
+                self.pending_tasks.terminate_query(
+                    request_id,
+                    PeerId::random(),
+                    OutboundFailure::UnsupportedProtocols,
+                )?;
             }
         }
 
@@ -233,8 +243,8 @@ impl NetworkDriver {
                 addr.push(Protocol::P2p(*peer_id));
                 trace!("Peer {peer_id:?} is a normal peer, crafted valid multiaddress : {addr:?}.");
 
-                if !banned && let Some(bootstrap_cache) = &self.bootstrap_cache {
-                    let bootstrap_cache = bootstrap_cache.clone();
+                if !banned {
+                    let bootstrap_cache = self.bootstrap.cache_store().clone();
                     #[allow(clippy::let_underscore_future)]
                     let _ = tokio::spawn(async move { bootstrap_cache.add_addr(addr).await });
                 }

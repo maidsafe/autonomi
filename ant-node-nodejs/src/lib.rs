@@ -3,6 +3,7 @@
 //! This library provides Node.js bindings for the ant-node library, which
 //! provides network spawning capabilities and convergent encryption on file-based data.
 
+use ant_node::BootstrapConfig;
 use ant_node::spawn::node_spawner::Multiaddr;
 use napi::bindgen_prelude::*;
 use napi::tokio::sync::Mutex;
@@ -11,6 +12,7 @@ use napi_derive::napi;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::str::FromStr as _;
+use std::time::Duration;
 
 // Convert Rust errors to JavaScript errors
 fn map_error<E>(err: E) -> napi::Error
@@ -43,6 +45,71 @@ fn _try_from_big_int<T: TryFrom<u64>>(value: BigInt, arg: &str) -> Result<T> {
     ))
 }
 
+// Convert BootstrapConfigFields to BootstrapConfig
+fn convert_bootstrap_config(config: BootstrapConfigFields) -> Result<BootstrapConfig> {
+    let initial_peers = if let Some(peers) = config.initial_peers {
+        peers
+            .iter()
+            .map(|peer| {
+                peer.parse::<Multiaddr>().map_err(|e| {
+                    napi::Error::new(
+                        Status::InvalidArg,
+                        format!("Invalid initial peer address format: {e}"),
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        vec![]
+    };
+
+    let mut bootstrap_config = BootstrapConfig::new(config.local.unwrap_or(false));
+
+    if let Some(backwards_compatible_writes) = config.backwards_compatible_writes {
+        bootstrap_config =
+            bootstrap_config.with_backwards_compatible_writes(backwards_compatible_writes);
+    }
+    if let Some(cache_dir) = config.cache_dir {
+        bootstrap_config = bootstrap_config.with_cache_dir(PathBuf::from(cache_dir));
+    }
+    if let Some(cache_save_scaling_factor) = config.cache_save_scaling_factor {
+        bootstrap_config.cache_save_scaling_factor = cache_save_scaling_factor;
+    }
+    if let Some(disable_cache_writing) = config.disable_cache_writing {
+        bootstrap_config.disable_cache_writing = disable_cache_writing;
+    }
+    if let Some(disable_cache_reading) = config.disable_cache_reading {
+        bootstrap_config.disable_cache_reading = disable_cache_reading;
+    }
+    if let Some(disable_env_peers) = config.disable_env_peers {
+        bootstrap_config.disable_env_peers = disable_env_peers;
+    }
+    if let Some(first) = config.first {
+        bootstrap_config = bootstrap_config.with_first(first);
+    }
+    if !initial_peers.is_empty() {
+        bootstrap_config = bootstrap_config.with_initial_peers(initial_peers);
+    }
+    if let Some(max_cached_peers) = config.max_cached_peers {
+        bootstrap_config = bootstrap_config.with_max_cached_peers(max_cached_peers as usize);
+    }
+    if let Some(max_addrs_per_cached_peer) = config.max_addrs_per_cached_peer {
+        bootstrap_config =
+            bootstrap_config.with_max_addrs_per_cached_peer(max_addrs_per_cached_peer as usize);
+    }
+    if let Some(min_duration_ms) = config.min_cache_save_duration_ms {
+        bootstrap_config.min_cache_save_duration = Duration::from_millis(min_duration_ms as u64);
+    }
+    if let Some(max_duration_ms) = config.max_cache_save_duration_ms {
+        bootstrap_config.max_cache_save_duration = Duration::from_millis(max_duration_ms as u64);
+    }
+    if let Some(network_contacts_url) = config.network_contacts_url {
+        bootstrap_config.network_contacts_url = network_contacts_url;
+    }
+
+    Ok(bootstrap_config)
+}
+
 #[napi]
 pub struct SwarmLocalState(ant_node::SwarmLocalState);
 
@@ -58,8 +125,8 @@ impl SwarmLocalState {
     }
 
     #[napi(getter)]
-    pub fn peers_in_routing_table(&self) -> usize {
-        self.0.peers_in_routing_table
+    pub fn peers_in_routing_table(&self) -> u32 {
+        self.0.peers_in_routing_table as u32
     }
 
     #[napi(getter)]
@@ -219,11 +286,12 @@ pub struct NetworkSpawner(ant_node::spawn::network_spawner::NetworkSpawner);
 #[napi]
 impl NetworkSpawner {
     #[napi(constructor)]
-    pub fn new(args: Option<NetworkSpawnerFields>) -> Self {
+    pub fn new(args: Option<NetworkSpawnerFields>) -> Result<Self> {
         let mut spawner = ant_node::spawn::network_spawner::NetworkSpawner::new();
         if let Some(args) = args {
-            if let Some(local) = args.local {
-                spawner = spawner.with_local(local);
+            if let Some(bootstrap_config) = args.bootstrap_config {
+                let config = convert_bootstrap_config(bootstrap_config)?;
+                spawner = spawner.with_bootstrap_config(config);
             }
             if let Some(no_upnp) = args.no_upnp {
                 spawner = spawner.with_no_upnp(no_upnp);
@@ -236,7 +304,7 @@ impl NetworkSpawner {
             }
         }
 
-        Self(spawner)
+        Ok(Self(spawner))
     }
 
     /// Spawns the network with the configured parameters.
@@ -254,13 +322,31 @@ impl NetworkSpawner {
 }
 
 #[napi(object)]
+pub struct BootstrapConfigFields {
+    pub backwards_compatible_writes: Option<bool>,
+    pub cache_dir: Option<String>,
+    pub cache_save_scaling_factor: Option<u32>,
+    pub disable_cache_writing: Option<bool>,
+    pub disable_cache_reading: Option<bool>,
+    pub disable_env_peers: Option<bool>,
+    pub first: Option<bool>,
+    pub initial_peers: Option<Vec<String>>,
+    pub local: Option<bool>,
+    pub max_cached_peers: Option<u32>,
+    pub max_addrs_per_cached_peer: Option<u32>,
+    pub min_cache_save_duration_ms: Option<u32>,
+    pub max_cache_save_duration_ms: Option<u32>,
+    pub network_contacts_url: Option<Vec<String>>,
+}
+
+#[napi(object)]
 pub struct NetworkSpawnerFields {
     // pub evm_network: Option<ant_node::spawn::node_spawner::EvmNetwork>,
     // pub rewards_address: Option<RewardsAddress>,
-    pub local: Option<bool>,
     pub no_upnp: Option<bool>,
     pub root_dir: Option<Option<String>>,
     pub size: Option<u32>,
+    pub bootstrap_config: Option<BootstrapConfigFields>,
 }
 
 #[napi(object)]
@@ -268,10 +354,9 @@ pub struct NodeSpawnerFields {
     pub evm_network: Option<String>,
     pub socket_addr: Option<String>,
     pub rewards_address: Option<String>,
-    pub initial_peers: Option<Vec<String>>,
-    pub local: Option<bool>,
     pub no_upnp: Option<bool>,
     pub root_dir: Option<Option<String>>,
+    pub bootstrap_config: Option<BootstrapConfigFields>,
 }
 
 /// A spawner for creating local SAFE networks for testing and development.
@@ -289,35 +374,27 @@ impl NodeSpawner {
             }
             if let Some(socket_addr) = args.socket_addr {
                 spawner =
-                    spawner.with_socket_addr(SocketAddr::from_str(&socket_addr).map_err(|_| {
-                        napi::Error::new(Status::InvalidArg, "Invalid socket address format")
+                    spawner.with_socket_addr(SocketAddr::from_str(&socket_addr).map_err(|e| {
+                        napi::Error::new(
+                            Status::InvalidArg,
+                            format!("Invalid socket address format: {e}"),
+                        )
                     })?);
             }
             if let Some(rewards_address) = args.rewards_address {
                 spawner = spawner.with_rewards_address(
                     ant_node::spawn::node_spawner::RewardsAddress::from_str(&rewards_address)
-                        .map_err(|_| {
-                            napi::Error::new(Status::InvalidArg, "Invalid rewards address format")
+                        .map_err(|e| {
+                            napi::Error::new(
+                                Status::InvalidArg,
+                                format!("Invalid rewards address format: {e:?}"),
+                            )
                         })?,
                 );
             }
-            if let Some(initial_peers) = args.initial_peers {
-                spawner = spawner.with_initial_peers(
-                    initial_peers
-                        .iter()
-                        .map(|peer| {
-                            peer.parse::<Multiaddr>().map_err(|_| {
-                                napi::Error::new(
-                                    Status::InvalidArg,
-                                    "Invalid initial peer address format",
-                                )
-                            })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
-            }
-            if let Some(local) = args.local {
-                spawner = spawner.with_local(local);
+            if let Some(bootstrap_config) = args.bootstrap_config {
+                let config = convert_bootstrap_config(bootstrap_config)?;
+                spawner = spawner.with_bootstrap_config(config);
             }
             if let Some(no_upnp) = args.no_upnp {
                 spawner = spawner.with_no_upnp(no_upnp);

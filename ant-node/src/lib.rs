@@ -51,6 +51,7 @@ pub use self::{
     networking::sort_peers_by_key,
     node::{NodeBuilder, PERIODIC_REPLICATION_INTERVAL_MAX_S},
 };
+pub use ant_bootstrap::{Bootstrap, BootstrapCacheStore, BootstrapConfig, InitialPeersConfig};
 
 use crate::error::Result;
 

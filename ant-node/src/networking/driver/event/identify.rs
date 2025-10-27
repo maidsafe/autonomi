@@ -166,7 +166,7 @@ impl SwarmDriver {
 
         // Do not use an `already relayed` or a `bootstrap` peer as `potential relay candidate`.
         if !is_relayed_peer
-            && !self.initial_bootstrap.is_bootstrap_peer(&peer_id)
+            && !self.bootstrap.is_bootstrap_peer(&peer_id)
             && let Some(relay_manager) = self.relay_manager.as_mut()
         {
             debug!("Adding candidate relay server {peer_id:?}, it's not a bootstrap node");

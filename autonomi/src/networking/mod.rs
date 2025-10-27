@@ -13,9 +13,10 @@ mod driver;
 mod interface;
 mod retries;
 mod utils;
+pub mod version;
 
 use crate::client::CONNECT_TIMEOUT_SECS;
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore};
+use ant_bootstrap::bootstrap::Bootstrap;
 // export the utils
 pub(crate) use utils::multiaddr_is_global;
 
@@ -30,6 +31,7 @@ pub use libp2p::{
 };
 
 // internal needs
+use crate::networking::version::PackageVersion;
 use ant_protocol::{CLOSE_GROUP_SIZE, PrettyPrintRecordKey};
 use driver::NetworkDriver;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -156,40 +158,9 @@ impl Network {
     /// Create a new network client
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
-    pub fn new(
-        initial_contacts: Vec<Multiaddr>,
-        bootstrap_cache_config: Option<BootstrapCacheConfig>,
-    ) -> Result<Self, NoKnownPeers> {
+    pub fn new(bootstrap: Bootstrap) -> Result<Self, NoKnownPeers> {
         let (task_sender, task_receiver) = mpsc::channel(100);
-        let bootstrap_cache_store = if let Some(config) = bootstrap_cache_config {
-            if config.disable_cache_writing {
-                warn!("Bootstrap cache writing is disabled, the cache will not be saved to disk");
-                None
-            } else {
-                match BootstrapCacheStore::new(config) {
-                    Ok(store) => {
-                        info!(
-                            "Bootstrap cache writing is enabled, the cache will be saved to disk"
-                        );
-                        Some(store)
-                    }
-                    Err(err) => {
-                        warn!(
-                            "Failed to create bootstrap cache store, cache will not be saved to disk: {err}"
-                        );
-                        None
-                    }
-                }
-            }
-        } else {
-            info!("Bootstrap cache config not provided, cache will not be written to disk");
-            None
-        };
-
-        let mut driver = NetworkDriver::new(bootstrap_cache_store, task_receiver);
-
-        // Bootstrap here so we can early detect a failure
-        driver.connect_to_peers(initial_contacts)?;
+        let driver = NetworkDriver::new(bootstrap, task_receiver);
 
         // run the network driver in a background task
         tokio::spawn(async move {
@@ -651,6 +622,26 @@ impl Network {
             errors_len,
             errors,
         })
+    }
+
+    /// Request the node version of a peer on the network.
+    /// Requires the node address(es) to be passed if the node is not in the local routing table.
+    pub async fn get_node_version(&self, peer: PeerInfo) -> Result<PackageVersion, String> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetVersion { peer, resp: tx };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| "Network driver offline".to_string())?;
+
+        let version_string = rx
+            .await
+            .map_err(|e| format!("Failed to receive version: {e}"))?;
+
+        match version_string {
+            Ok(version_str) => PackageVersion::try_from(version_str),
+            Err(e) => Err(format!("Network error: {e}")),
+        }
     }
 
     /// Get information about the routing table

@@ -19,7 +19,7 @@ use crate::{
     helpers::{download_and_extract_release, get_bin_version},
     print_banner, refresh_node_registry, status_report,
 };
-use ant_bootstrap::InitialPeersConfig;
+use ant_bootstrap::{Bootstrap, InitialPeersConfig};
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_releases::{AntReleaseRepoActions, ReleaseType};
@@ -116,9 +116,7 @@ pub async fn add(
 
     debug!("Parsing peers from PeersArgs");
 
-    init_peers_config
-        .addrs
-        .extend(InitialPeersConfig::read_bootstrap_addr_from_env());
+    init_peers_config.addrs.extend(Bootstrap::fetch_from_env());
     init_peers_config.bootstrap_cache_dir = bootstrap_cache_dir;
 
     let options = AddNodeServiceOptions {

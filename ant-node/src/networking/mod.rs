@@ -9,7 +9,6 @@
 #![allow(clippy::large_enum_variant)]
 #![allow(clippy::result_large_err)]
 
-mod bootstrap;
 mod circular_vec;
 mod driver;
 mod error;
@@ -106,26 +105,6 @@ pub(crate) fn multiaddr_is_global(multiaddr: &Multiaddr) -> bool {
         }
         _ => false,
     })
-}
-
-/// Pop off the `/p2p/<peer_id>`. This mutates the `Multiaddr` and returns the `PeerId` if it exists.
-pub(crate) fn multiaddr_pop_p2p(multiaddr: &mut Multiaddr) -> Option<PeerId> {
-    if let Some(Protocol::P2p(peer_id)) = multiaddr.iter().last() {
-        // Only actually strip the last protocol if it's indeed the peer ID.
-        let _ = multiaddr.pop();
-        Some(peer_id)
-    } else {
-        None
-    }
-}
-
-/// Return the last `PeerId` from the `Multiaddr` if it exists.
-pub(crate) fn multiaddr_get_p2p(multiaddr: &Multiaddr) -> Option<PeerId> {
-    if let Some(Protocol::P2p(peer_id)) = multiaddr.iter().last() {
-        Some(peer_id)
-    } else {
-        None
-    }
 }
 
 /// Get the `IpAddr` from the `Multiaddr`

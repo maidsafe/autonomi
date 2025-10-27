@@ -8,6 +8,7 @@
 
 use crate::Client;
 use crate::networking::NetworkError;
+use crate::networking::version::PackageVersion;
 use ant_protocol::NetworkAddress;
 use libp2p::kad::PeerInfo;
 
@@ -20,5 +21,9 @@ impl Client {
         self.network
             .get_closest_peers_with_retries(network_address.into())
             .await
+    }
+
+    pub async fn get_node_version(&self, peer: PeerInfo) -> Result<PackageVersion, String> {
+        self.network.get_node_version(peer).await
     }
 }

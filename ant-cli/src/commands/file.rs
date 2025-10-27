@@ -17,17 +17,29 @@ use autonomi::client::analyze::Analysis;
 use autonomi::client::payment::PaymentOption;
 use autonomi::files::UploadError;
 use autonomi::networking::{Quorum, RetryStrategy};
-use autonomi::{Client, ClientOperatingStrategy, TransactionConfig};
+use autonomi::{Client, ClientOperatingStrategy, PaymentMode, TransactionConfig};
 use color_eyre::Section;
 use color_eyre::eyre::{Context, Result, eyre};
 use std::path::PathBuf;
 
 const MAX_ADDRESSES_TO_PRINT: usize = 3;
 
-pub async fn cost(file: &str, network_context: NetworkContext) -> Result<()> {
-    let client = crate::actions::connect_to_network(network_context)
+pub async fn cost(
+    file: &str,
+    network_context: NetworkContext,
+    use_standard_payment: bool,
+) -> Result<()> {
+    let mut client = crate::actions::connect_to_network(network_context)
         .await
         .map_err(|(err, _)| err)?;
+
+    // Configure payment mode - default is SingleNode, only override if Standard is requested
+    if use_standard_payment {
+        client = client.with_payment_mode(PaymentMode::Standard);
+        println!("💳 Using standard payment mode (pays 3 nodes individually)");
+    } else {
+        println!("🎯 Using single node payment mode (default - saves gas fees)");
+    }
 
     println!("Getting upload cost...");
     info!("Calculating cost for file: {file}");
@@ -49,6 +61,7 @@ pub async fn upload(
     network_context: NetworkContext,
     max_fee_per_gas_param: Option<MaxFeePerGasParam>,
     retry_failed: u64,
+    use_standard_payment: bool,
 ) -> Result<(), ExitCodeError> {
     let config = ClientOperatingStrategy::new();
 
@@ -61,6 +74,14 @@ pub async fn upload(
         println!(
             "🔄 Retry mode enabled - will retry failed chunks until successful or exceeds the limit."
         );
+    }
+
+    // Configure payment mode - default is SingleNode, only override if Standard is requested
+    if use_standard_payment {
+        client = client.with_payment_mode(PaymentMode::Standard);
+        println!("💳 Using standard payment mode (pays 3 nodes individually)");
+    } else {
+        println!("🎯 Using single node payment mode (default - saves gas fees)");
     }
 
     let mut wallet = load_wallet(client.evm_network()).map_err(|err| (err, IO_ERROR))?;

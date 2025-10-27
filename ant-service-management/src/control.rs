@@ -183,49 +183,18 @@ impl ServiceControl for ServiceController {
             bin_path.to_string_lossy()
         );
         let system = System::new_all();
-
-        // First, try exact path matching (existing behavior)
         for (pid, process) in system.processes() {
             if let Some(path) = process.exe()
                 && bin_path == path
             {
-                trace!("Found process {bin_path:?} with exact path match, PID: {pid}");
+                // There does not seem to be any easy way to get the process ID from the `Pid`
+                // type. Probably something to do with representing it in a cross-platform way.
+                trace!("Found process {bin_path:?} with PID: {pid}");
                 return Ok(pid.to_string().parse::<u32>()?);
             }
         }
-
-        // If exact path matching fails, try matching by executable name
-        // This handles cases where nodes are started from external USB or different paths
-        if let Some(expected_name) = bin_path.file_name() {
-            debug!(
-                "Exact path match failed, trying executable name matching for: {}",
-                expected_name.to_string_lossy()
-            );
-
-            for (pid, process) in system.processes() {
-                if let Some(path) = process.exe()
-                    && let Some(actual_name) = path.file_name()
-                    && expected_name == actual_name
-                {
-                    debug!(
-                        "Found process with matching executable name {} at path {}, PID: {pid}",
-                        expected_name.to_string_lossy(),
-                        path.to_string_lossy()
-                    );
-                    // Additional verification: check if this is likely an antnode process
-                    // by examining command line arguments if available
-                    if process.cmd().iter().any(|arg| arg.contains("antnode"))
-                        || expected_name.to_string_lossy().contains("antnode")
-                    {
-                        trace!("Confirmed antnode process with name match, PID: {pid}");
-                        return Ok(pid.to_string().parse::<u32>()?);
-                    }
-                }
-            }
-        }
-
         error!(
-            "No process was located with a path at {} or matching executable name",
+            "No process was located with a path at {}",
             bin_path.to_string_lossy()
         );
         Err(Error::ServiceProcessNotFound(

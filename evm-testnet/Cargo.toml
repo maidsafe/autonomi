@@ -12,7 +12,7 @@ version = "0.1.16"
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 clap = { version = "4.5", features = ["derive"] }
 dirs-next = "~2.0.0"
-evmlib = { path = "../evmlib", version = "0.4.3" }
+evmlib = { path = "../evmlib", version = "0.4.5" }
 tokio = { version = "1.43", features = ["rt-multi-thread", "signal"] }
 
 [lints]

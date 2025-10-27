@@ -7,6 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::compile_protos("./src/antctl_proto/antctl.proto")?;
+    tonic_build::configure()
+        .format(false) // Disable rustfmt formatting
+        .compile(
+            &["./src/antctl_proto/antctl.proto"],
+            &["./src/antctl_proto"],
+        )?;
     Ok(())
 }

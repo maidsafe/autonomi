@@ -19,7 +19,9 @@ mod subcommands;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
-use ant_bootstrap::{BootstrapCacheConfig, BootstrapCacheStore, InitialPeersConfig};
+use ant_bootstrap::BootstrapConfig;
+use ant_bootstrap::InitialPeersConfig;
+use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
@@ -296,14 +298,9 @@ fn main() -> Result<()> {
     // another process with these args.
     let rt = Runtime::new()?;
 
-    let mut bootstrap_config = BootstrapCacheConfig::try_from(&opt.peers)?;
-    bootstrap_config.backwards_compatible_writes = opt.write_older_cache_files;
-    let bootstrap_cache = BootstrapCacheStore::new(bootstrap_config)?;
-
-    if opt.peers.first {
-        info!("First node in network, writing empty cache to disk");
-        rt.block_on(bootstrap_cache.write())?;
-    }
+    let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
+        .with_backwards_compatible_writes(opt.write_older_cache_files);
+    let bootstrap = rt.block_on(Bootstrap::new(bootstrap_config))?;
 
     let msg = format!(
         "Running {} v{}",
@@ -321,12 +318,10 @@ fn main() -> Result<()> {
     if opt.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
-    let initial_peers = rt.block_on(opt.peers.get_bootstrap_addr(Some(100)))?;
-    info!("Initial peers len: {:?}", initial_peers.len());
     let restart_options = rt.block_on(async move {
         let mut node_builder = NodeBuilder::new(
             keypair,
-            initial_peers,
+            bootstrap,
             rewards_address,
             evm_network,
             node_socket_addr,
@@ -334,7 +329,6 @@ fn main() -> Result<()> {
         );
         node_builder.local(opt.peers.local);
         node_builder.no_upnp(opt.no_upnp);
-        node_builder.bootstrap_cache(bootstrap_cache);
         node_builder.relay_client(opt.relay);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;

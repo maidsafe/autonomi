@@ -10,10 +10,10 @@ repository = "https://github.com/maidsafe/autonomi"
 version = "0.4.16"
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.7" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.10" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
-ant-protocol = { path = "../ant-protocol", version = "1.0.8", features = ["rpc"] }
+ant-protocol = { path = "../ant-protocol", version = "1.0.9", features = ["rpc"] }
 async-trait = "0.1"
 dirs-next = "2.0.0"
 libp2p = { version = "0.56.0", features = ["kad"] }

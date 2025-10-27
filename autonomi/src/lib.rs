@@ -108,12 +108,12 @@ pub use client::{
     // Client
     Client,
     // Client Configs
-    config::BootstrapCacheConfig,
+    config::Bootstrap,
+    config::BootstrapConfig,
     config::BootstrapError,
     config::ClientConfig,
     config::ClientOperatingStrategy,
     config::InitialPeersConfig,
-
     // Native data types
     data_types::chunk::Chunk,
     data_types::chunk::ChunkAddress,
@@ -123,6 +123,8 @@ pub use client::{
     data_types::pointer::PointerAddress,
     data_types::scratchpad::Scratchpad,
     data_types::scratchpad::ScratchpadAddress,
+    // Payment
+    quote::PaymentMode,
 };
 
 #[cfg(feature = "extension-module")]

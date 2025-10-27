@@ -520,7 +520,7 @@ impl SwarmDriver {
         info!("Peer {peer_id:?} is reported as having issue {issue:?}");
         let (issue_vec, is_bad) = self.bad_nodes.entry(peer_id).or_default();
         let mut new_bad_behaviour = None;
-        let mut is_connection_issue = false;
+        let mut eviction_issue: Option<NodeIssue> = None;
 
         // If being considered as bad already, skip certain operations
         if !(*is_bad) {
@@ -548,23 +548,33 @@ impl SwarmDriver {
             }
 
             // Only consider candidate as a bad node when:
-            //   accumulated THREE same kind issues within certain period
+            //   accumulated enough occurrences of the same issue within certain period.
             for (issue, _timestamp) in issue_vec.iter() {
+                let threshold = match issue {
+                    NodeIssue::WrongPeerId => 1,
+                    _ => 3,
+                };
                 let issue_counts = issue_vec
                     .iter()
                     .filter(|(i, _timestamp)| *issue == *i)
                     .count();
-                if issue_counts >= 3 {
-                    // If it is a connection issue, we don't need to consider it as a bad node
-                    if matches!(issue, NodeIssue::ConnectionIssue) {
-                        is_connection_issue = true;
+                if issue_counts >= threshold {
+                    match issue {
+                        NodeIssue::ConnectionIssue => {
+                            eviction_issue = Some(issue.clone());
+                        }
+                        NodeIssue::WrongPeerId => {
+                            eviction_issue = Some(issue.clone());
+                        }
+                        _ => {
+                            // TODO: disable black_list currently.
+                            //       re-enable once got more statistics from large scaled network
+                            // else {
+                            //     *is_bad = true;
+                            // }
+                            new_bad_behaviour = Some(issue.clone());
+                        }
                     }
-                    // TODO: disable black_list currently.
-                    //       re-enable once got more statistics from large scaled network
-                    // else {
-                    //     *is_bad = true;
-                    // }
-                    new_bad_behaviour = Some(issue.clone());
                     info!(
                         "Peer {peer_id:?} accumulated {issue_counts} times of issue {issue:?}. Consider it as a bad node now."
                     );
@@ -574,11 +584,20 @@ impl SwarmDriver {
             }
         }
 
-        // Give the faulty connection node more chances by removing the issue from the list. It is still evicted from
-        // the routing table.
-        if is_connection_issue {
-            issue_vec.retain(|(issue, _timestamp)| !matches!(issue, NodeIssue::ConnectionIssue));
-            info!("Evicting bad peer {peer_id:?} due to connection issue from RT.");
+        // Give the faulty peer more chances by removing the issue-specific entries before evicting it from the routing table.
+        if let Some(eviction_issue) = eviction_issue {
+            issue_vec.retain(|(issue, _timestamp)| issue != &eviction_issue);
+            match eviction_issue {
+                NodeIssue::ConnectionIssue => {
+                    info!("Evicting bad peer {peer_id:?} due to connection issue from RT.");
+                }
+                NodeIssue::WrongPeerId => {
+                    warn!(
+                        "Evicting peer {peer_id:?} from RT due to WrongPeerId response. Removing immediately."
+                    );
+                }
+                _ => {}
+            }
             if let Some(dead_peer) = self.swarm.behaviour_mut().kademlia.remove_peer(&peer_id) {
                 self.update_on_peer_removal(*dead_peer.node.key.preimage());
             }

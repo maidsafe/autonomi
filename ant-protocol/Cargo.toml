@@ -7,7 +7,7 @@ license = "GPL-3.0"
 name = "ant-protocol"
 readme = "README.md"
 repository = "https://github.com/maidsafe/autonomi"
-version = "1.0.8"
+version = "1.0.9"
 
 [features]
 default = []
