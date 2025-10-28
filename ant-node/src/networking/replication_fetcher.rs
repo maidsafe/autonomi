@@ -333,45 +333,57 @@ impl ReplicationFetcher {
         holder: &PeerId,
         incoming_keys: Vec<(NetworkAddress, ValidationType)>,
         locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
-        closest_k_peers: Vec<NetworkAddress>,
+        closest_peers: Vec<NetworkAddress>,
     ) -> Vec<(PeerId, NetworkAddress, ValidationType)> {
-        match self.is_peer_trustworthy(holder) {
-            Some(true) => {
-                debug!("Replication source {holder:?} is trustworthy.");
-                let new_incoming_keys = self.in_range_new_keys(
-                    holder,
-                    incoming_keys,
-                    locally_stored_keys,
-                    closest_k_peers,
-                );
-                new_incoming_keys
-                    .into_iter()
-                    .map(|(addr, val_type)| (*holder, addr, val_type))
-                    .collect()
-            }
-            Some(false) => {
-                debug!("Replication source {holder:?} is not trustworthy.");
-                vec![]
-            }
-            None => {
-                debug!("Not having enough network knowledge, using majority scheme instead.");
-                // Whenever we had enough scoring knowledge of peers,
-                // we shall no longer use the `majority copies` approach.
-                // This can prevent malicious neighbouring farming targeting existing nodes.
-                if self.had_enough_scoring_knowledge() {
-                    // The replication source is probably a `new peer`.
-                    // Just wait for the scoring knowledge to be built up.
-                    return vec![];
-                }
-                let new_incoming_keys = self.in_range_new_keys(
-                    holder,
-                    incoming_keys,
-                    locally_stored_keys,
-                    closest_k_peers,
-                );
-                self.initial_majority_replicates(holder, new_incoming_keys)
-            }
-        }
+        // Always trust the holder
+        let new_incoming_keys = self.in_range_new_keys(
+            holder,
+            incoming_keys,
+            locally_stored_keys,
+            closest_peers,
+        );
+        new_incoming_keys
+            .into_iter()
+            .map(|(addr, val_type)| (*holder, addr, val_type))
+            .collect()
+
+        // match self.is_peer_trustworthy(holder) {
+        //     Some(true) => {
+        //         debug!("Replication source {holder:?} is trustworthy.");
+        //         let new_incoming_keys = self.in_range_new_keys(
+        //             holder,
+        //             incoming_keys,
+        //             locally_stored_keys,
+        //             closest_k_peers,
+        //         );
+        //         new_incoming_keys
+        //             .into_iter()
+        //             .map(|(addr, val_type)| (*holder, addr, val_type))
+        //             .collect()
+        //     }
+        //     Some(false) => {
+        //         warn!("Replication source {holder:?} is not trustworthy.");
+        //         vec![]
+        //     }
+        //     None => {
+        //         debug!("Not having enough network knowledge, using majority scheme instead.");
+        //         // Whenever we had enough scoring knowledge of peers,
+        //         // we shall no longer use the `majority copies` approach.
+        //         // This can prevent malicious neighbouring farming targeting existing nodes.
+        //         if self.had_enough_scoring_knowledge() {
+        //             // The replication source is probably a `new peer`.
+        //             // Just wait for the scoring knowledge to be built up.
+        //             return vec![];
+        //         }
+        //         let new_incoming_keys = self.in_range_new_keys(
+        //             holder,
+        //             incoming_keys,
+        //             locally_stored_keys,
+        //             closest_k_peers,
+        //         );
+        //         self.initial_majority_replicates(holder, new_incoming_keys)
+        //     }
+        // }
     }
 
     fn had_enough_scoring_knowledge(&self) -> bool {
@@ -384,6 +396,7 @@ impl ReplicationFetcher {
 
     // Accumulates initial replicates when doesn't have enough knowledge of peers scores.
     // Returns with entries that reached majority copies.
+    #[allow(dead_code)]
     fn initial_majority_replicates(
         &mut self,
         holder: &PeerId,
@@ -427,11 +440,11 @@ impl ReplicationFetcher {
         holder: &PeerId,
         incoming_keys: Vec<(NetworkAddress, ValidationType)>,
         locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
-        mut closest_k_peers: Vec<NetworkAddress>,
+        mut closest_peers: Vec<NetworkAddress>,
     ) -> Vec<(NetworkAddress, ValidationType)> {
         // Pre-calculate self_address since it's used multiple times
         let self_address = NetworkAddress::from(self.self_peer_id);
-        closest_k_peers.push(self_address.clone());
+        closest_peers.push(self_address.clone());
         let total_incoming_keys = incoming_keys.len();
 
         // Avoid multiple allocations by using with_capacity
@@ -451,44 +464,42 @@ impl ReplicationFetcher {
                 continue;
             }
 
-            // Check distance constraints
-            if let Some(farthest_distance) = self.farthest_acceptable_distance
-                && self_address.distance(&addr) > farthest_distance
-            {
-                out_of_range_keys.push(addr);
-                continue;
-            }
-
             new_incoming_keys.push((addr, record_type));
         }
 
+        // Sort closest_peers by distance to self
+        closest_peers.sort_by_key(|peer| self_address.distance(peer));
+        
+        // Get the distance to the farthest peer in closest_peers
+        let farthest_peer_distance = closest_peers
+            .last()
+            .map(|peer| self_address.distance(peer));
+        
         // Filter out those out_of_range ones among the incoming_keys.
-        if let Some(ref distance_range) = self.distance_range {
+        // A key is in range if it's closer to self than the farthest peer in closest_peers
+        if let Some(max_distance) = farthest_peer_distance {
             new_incoming_keys.retain(|(addr, _record_type)| {
-                let distance = &self_address.distance(addr);
+                let distance = self_address.distance(addr);
                 debug!(
-                    "Distance to target {addr:?} is {distance:?}, against range {distance_range:?}"
+                    "Distance to target {addr:?} is {distance:?}, max peer distance: {max_distance:?}"
                 );
-                let mut is_in_range = distance <= distance_range;
-                // For middle-range records, they could be farther than distance_range,
-                // but still supposed to be held by the closest group to us.
-                if !is_in_range && distance.0 - distance_range.0 < distance_range.0 {
-                    closest_k_peers.sort_by_key(|key| key.distance(addr));
-                    let closest_group: HashSet<_> = closest_k_peers.iter().take(CLOSE_GROUP_SIZE + 2).collect();
-                    if closest_group.contains(&self_address) {
-                        debug!("Record {addr:?} has a far distance but still among {} closest within {} neighbourd.",
-                            CLOSE_GROUP_SIZE + 2, closest_k_peers.len());
-                        is_in_range = true;
-                    }
-                }
+                let is_in_range = distance <= max_distance;
+                
                 if !is_in_range {
                     out_of_range_keys.push(addr.clone());
+                    debug!(
+                        "Record {addr:?} is out of range (distance: {distance:?} > {max_distance:?})"
+                    );
+                } else {
+                    debug!(
+                        "Record {addr:?} is in range (distance: {distance:?} <= {max_distance:?})"
+                    );
                 }
                 is_in_range
             });
         }
 
-        if !out_of_range_keys.is_empty() && !new_incoming_keys.is_empty() {
+        if !out_of_range_keys.is_empty() || !new_incoming_keys.is_empty() {
             info!(
                 "Among {total_incoming_keys} incoming replications from {holder:?}, {} new records and {} out of range",
                 new_incoming_keys.len(),
@@ -498,11 +509,88 @@ impl ReplicationFetcher {
 
         new_incoming_keys
     }
+    // fn in_range_new_keys(
+    //     &mut self,
+    //     holder: &PeerId,
+    //     incoming_keys: Vec<(NetworkAddress, ValidationType)>,
+    //     locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
+    //     mut closest_peers: Vec<NetworkAddress>,
+    // ) -> Vec<(NetworkAddress, ValidationType)> {
+    //     // Pre-calculate self_address since it's used multiple times
+    //     let self_address = NetworkAddress::from(self.self_peer_id);
+    //     closest_peers.push(self_address.clone());
+    //     let total_incoming_keys = incoming_keys.len();
+
+    //     // Avoid multiple allocations by using with_capacity
+    //     let mut new_incoming_keys = Vec::with_capacity(incoming_keys.len());
+    //     let mut out_of_range_keys = Vec::new();
+
+    //     // Single pass filtering instead of multiple retain() calls
+    //     for (addr, record_type) in incoming_keys {
+    //         let key = addr.to_record_key();
+
+    //         // Skip if locally stored or already pending fetch
+    //         if locally_stored_keys.contains_key(&key)
+    //             || self
+    //                 .to_be_fetched
+    //                 .contains_key(&(key.clone(), record_type.clone(), *holder))
+    //         {
+    //             continue;
+    //         }
+
+    //         // Check distance constraints
+    //         if let Some(farthest_distance) = self.farthest_acceptable_distance
+    //             && self_address.distance(&addr) > farthest_distance
+    //         {
+    //             out_of_range_keys.push(addr);
+    //             continue;
+    //         }
+
+    //         new_incoming_keys.push((addr, record_type));
+    //     }
+
+    //     // Filter out those out_of_range ones among the incoming_keys.
+    //     if let Some(ref distance_range) = self.distance_range {
+    //         new_incoming_keys.retain(|(addr, _record_type)| {
+    //             let distance = &self_address.distance(addr);
+    //             debug!(
+    //                 "Distance to target {addr:?} is {distance:?}, against range {distance_range:?}"
+    //             );
+    //             let mut is_in_range = distance <= distance_range;
+    //             // For middle-range records, they could be farther than distance_range,
+    //             // but still supposed to be held by the closest group to us.
+    //             if !is_in_range && distance.0 - distance_range.0 < distance_range.0 {
+    //                 closest_peers.sort_by_key(|key| key.distance(addr));
+    //                 let closest_group: HashSet<_> = closest_peers.iter().take(CLOSE_GROUP_SIZE + 2).collect();
+    //                 if closest_group.contains(&self_address) {
+    //                     info!("Record {addr:?} has a far distance but still among {} closest within {} neighbourd.",
+    //                         CLOSE_GROUP_SIZE + 2, closest_peers.len());
+    //                     is_in_range = true;
+    //                 }
+    //             }
+    //             if !is_in_range {
+    //                 out_of_range_keys.push(addr.clone());
+    //             }
+    //             is_in_range
+    //         });
+    //     }
+
+    //     if !out_of_range_keys.is_empty() || !new_incoming_keys.is_empty() {
+    //         info!(
+    //             "Among {total_incoming_keys} incoming replications from {holder:?}, {} new records and {} out of range",
+    //             new_incoming_keys.len(),
+    //             out_of_range_keys.len()
+    //         );
+    //     }
+
+    //     new_incoming_keys
+    // }
 
     // Check whether the peer is a trustworthy replication source.
     //   * Some(true)  : peer is trustworthy
     //   * Some(false) : peer is not trustworthy
-    //   * None        : not having enough know to tell
+    //   * None        : not having enough knowledge to tell
+    #[allow(dead_code)]
     fn is_peer_trustworthy(&self, holder: &PeerId) -> Option<bool> {
         if let Some((scores, _last_seen)) = self.peers_scores.get(holder) {
             if scores.len() > 1 {
@@ -606,11 +694,11 @@ impl ReplicationFetcher {
 #[cfg(test)]
 mod tests {
     use super::{FETCH_TIMEOUT, MAX_PARALLEL_FETCH, ReplicationFetcher};
-    use ant_protocol::{NetworkAddress, constants::CLOSE_GROUP_SIZE, storage::ValidationType};
+    use ant_protocol::{NetworkAddress, storage::ValidationType};
     use eyre::Result;
     use libp2p::{PeerId, kad::RecordKey};
     use std::{
-        collections::{HashMap, HashSet},
+        collections::HashMap,
         time::Duration,
     };
     use tokio::{sync::mpsc, time::sleep};
@@ -619,14 +707,26 @@ mod tests {
     async fn verify_max_parallel_fetches() -> Result<()> {
         //random peer_id
         let peer_id = PeerId::random();
+        let self_addr = NetworkAddress::from(peer_id);
         let (event_sender, _event_receiver) = mpsc::channel(4);
         let mut replication_fetcher = ReplicationFetcher::new(peer_id, event_sender);
         let locally_stored_keys = HashMap::new();
 
+        // using single random peer to simulate the closest group
+        let farthest_peer = NetworkAddress::from(PeerId::random());
+        let distance_range = self_addr.distance(&farthest_peer);
+
         let mut incoming_keys = Vec::new();
         (0..MAX_PARALLEL_FETCH * 2).for_each(|_| {
-            let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-            let key = NetworkAddress::from(&RecordKey::from(random_data));
+            // Repeatedly generate a key until its distance to self_addr is lower than distance_range
+            let key = loop {
+                let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
+                let candidate_key = NetworkAddress::from(&RecordKey::from(random_data));
+                let distance = self_addr.distance(&candidate_key);
+                if distance < distance_range {
+                    break candidate_key;
+                }
+            };
             incoming_keys.push((key, ValidationType::Chunk));
         });
 
@@ -639,7 +739,7 @@ mod tests {
             incoming_keys,
             &locally_stored_keys,
             false,
-            vec![],
+            vec![farthest_peer.clone()],
         );
         assert_eq!(keys_to_fetch.len(), MAX_PARALLEL_FETCH);
 
@@ -647,10 +747,22 @@ mod tests {
         replication_fetcher.add_peer_scores(vec![(replication_src_1, true)]);
         replication_fetcher.add_peer_scores(vec![(replication_src_1, true)]);
         // we should not fetch anymore keys
-        let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key_1 = NetworkAddress::from(&RecordKey::from(random_data));
-        let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key_2 = NetworkAddress::from(&RecordKey::from(random_data));
+        let key_1 = loop {
+            let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
+            let candidate_key = NetworkAddress::from(&RecordKey::from(random_data));
+            let distance = self_addr.distance(&candidate_key);
+            if distance < distance_range {
+                break candidate_key;
+            }
+        };
+        let key_2 = loop {
+            let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
+            let candidate_key = NetworkAddress::from(&RecordKey::from(random_data));
+            let distance = self_addr.distance(&candidate_key);
+            if distance < distance_range {
+                break candidate_key;
+            }
+        };
         let keys_to_fetch = replication_fetcher.add_keys(
             replication_src_1,
             vec![
@@ -659,13 +771,19 @@ mod tests {
             ],
             &locally_stored_keys,
             false,
-            vec![],
+            vec![farthest_peer],
         );
         assert!(keys_to_fetch.is_empty());
 
         // Fresh replication shall be fetched immediately
-        let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
-        let key = NetworkAddress::from(&RecordKey::from(random_data));
+        let key = loop {
+            let random_data: Vec<u8> = (0..50).map(|_| rand::random::<u8>()).collect();
+            let candidate_key = NetworkAddress::from(&RecordKey::from(random_data));
+            let distance = self_addr.distance(&candidate_key);
+            if distance < distance_range {
+                break candidate_key;
+            }
+        };
         let keys_to_fetch = replication_fetcher.add_keys(
             replication_src,
             vec![(key, ValidationType::Chunk)],
@@ -696,15 +814,18 @@ mod tests {
         let (event_sender, _event_receiver) = mpsc::channel(4);
         let mut replication_fetcher = ReplicationFetcher::new(peer_id, event_sender);
 
-        // Set distance range
-        let distance_target = NetworkAddress::from(PeerId::random());
-        let distance_range = self_address.distance(&distance_target);
-        replication_fetcher.set_replication_distance_range(distance_range);
-
         let mut closest_k_peers = vec![];
         (0..19).for_each(|_| {
             closest_k_peers.push(NetworkAddress::from(PeerId::random()));
         });
+
+        // Sort closest_peers by distance to self
+        closest_k_peers.sort_by_key(|peer| self_address.distance(peer));
+        
+        // Get the distance to the farthest peer in closest_peers
+        let distance_range = closest_k_peers
+            .last()
+            .map(|peer| self_address.distance(peer)).unwrap();
 
         let mut incoming_keys = Vec::new();
         let mut in_range_keys = 0;
@@ -717,15 +838,6 @@ mod tests {
             let distance = key.distance(&self_address);
             if distance <= distance_range {
                 in_range_keys += 1;
-            } else if distance.0 - distance_range.0 < distance_range.0 {
-                closest_k_peers_include_self.sort_by_key(|addr| key.distance(addr));
-                let closest_group: HashSet<_> = closest_k_peers_include_self
-                    .iter()
-                    .take(CLOSE_GROUP_SIZE + 2)
-                    .collect();
-                if closest_group.contains(&self_address) {
-                    in_range_keys += 1;
-                }
             }
 
             incoming_keys.push((key, ValidationType::Chunk));

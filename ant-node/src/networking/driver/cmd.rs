@@ -8,7 +8,7 @@
 
 use crate::networking::{
     Addresses, CLOSE_GROUP_SIZE, NetworkEvent, NodeIssue, SwarmLocalState,
-    driver::{PendingGetClosestType, SwarmDriver, event::MsgResponder},
+    driver::{K_VALUE, PendingGetClosestType, SwarmDriver, event::MsgResponder},
     error::{NetworkError, Result},
     interface::{LocalSwarmCmd, NetworkSwarmCmd, TerminateNodeReason},
     log_markers::Marker,
@@ -407,7 +407,7 @@ impl SwarmDriver {
             }
             LocalSwarmCmd::GetKCloseLocalPeersToTarget { key, sender } => {
                 cmd_string = "GetKCloseLocalPeersToTarget";
-                let closest_peers = self.get_closest_k_local_peers_to_target(&key, true);
+                let closest_peers = self.get_closest_local_peers_to_target(&key, true, K_VALUE.get());
 
                 let _ = sender.send(closest_peers);
             }
@@ -781,7 +781,7 @@ impl SwarmDriver {
         };
 
         // Get closest peers from buckets
-        let closest_k_peers = self.get_closest_k_local_peers_to_target(target, false);
+        let closest_k_peers = self.get_closest_local_peers_to_target(target, false, K_VALUE.get());
 
         if let Some(responsible_range) = self
             .swarm
