@@ -153,16 +153,22 @@ async fn print_closest_nodes(client: &autonomi::Client, addr: &str, verbose: boo
             .await
             .map_err(|e| color_eyre::eyre::eyre!("Failed to get closest peers: {e}"))?;
 
-    // Sort peers by peer_id for consistent output
+    // Sort peers by distance to target address
     let mut sorted_peers = peers;
-    sorted_peers.sort_by(|a, b| a.peer_id.cmp(&b.peer_id));
+    sorted_peers.sort_by_key(|peer| {
+        let peer_addr = NetworkAddress::from(peer.peer_id);
+        target_addr.distance(&peer_addr)
+    });
 
     println!("Found {} closest peers to {}:", sorted_peers.len(), addr);
     println!();
 
     // Check holding status for each peer
     for (i, peer) in sorted_peers.iter().enumerate() {
-        println!("{}. Peer ID: {}", i + 1, peer.peer_id);
+        let peer_addr = NetworkAddress::from(peer.peer_id);
+        let distance = target_addr.distance(&peer_addr);
+        
+        println!("{}. Peer ID: {} (distance: {distance:?}[{:?}])", i + 1, peer.peer_id, distance.ilog2());
         
         // Query the peer directly to check if it holds the record
         match client.get_record_from_peer(target_addr.clone(), peer.clone()).await {
@@ -181,6 +187,43 @@ async fn print_closest_nodes(client: &autonomi::Client, addr: &str, verbose: boo
             println!("   Addresses:");
             for addr in &peer.addrs {
                 println!("     - {addr}");
+            }
+        }
+        println!();
+    }
+
+    // Print 2-D distance matrix among sorted peers
+    println!("\n{}", "=".repeat(80));
+    println!("Distance Matrix Among Closest Peers:");
+    println!("{}", "=".repeat(80));
+    println!();
+
+    // Print header row with peer indices
+    print!("     ");
+    for i in 0..sorted_peers.len() {
+        print!("Peer {:2} ", i + 1);
+    }
+    println!();
+    print!("     ");
+    for _ in 0..sorted_peers.len() {
+        print!("{} ", "-".repeat(7));
+    }
+    println!();
+
+    // Print each row of the distance matrix
+    for (i, peer_i) in sorted_peers.iter().enumerate() {
+        print!("P{:2}  ", i + 1);
+        let addr_i = NetworkAddress::from(peer_i.peer_id);
+        
+        for peer_j in &sorted_peers {
+            let addr_j = NetworkAddress::from(peer_j.peer_id);
+            let distance = addr_i.distance(&addr_j);
+            
+            // Display distance with ilog2 for readability
+            if addr_i == addr_j {
+                print!("   -    ");
+            } else {
+                print!("{:?} ", distance.ilog2());
             }
         }
         println!();
