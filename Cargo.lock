@@ -894,6 +894,7 @@ dependencies = [
 name = "ant-evm"
 version = "0.1.17"
 dependencies = [
+ "blake2",
  "custom_debug",
  "evmlib",
  "hex",
@@ -901,6 +902,7 @@ dependencies = [
  "rand 0.8.5",
  "ring 0.17.14",
  "rmp-serde",
+ "rs_merkle",
  "serde",
  "serde_json",
  "tempfile",

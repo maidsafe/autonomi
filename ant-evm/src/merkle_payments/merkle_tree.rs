@@ -12,18 +12,40 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use xor_name::XorName;
 
-/// Maximum tree depth (supports 65,536 chunks = 256GB)
+/// Maximum tree depth (supports 65,536 addresses = 256GB)
 pub const MAX_MERKLE_DEPTH: u8 = 16;
 
-/// Minimum number of leaves (chunks) for a Merkle tree
+/// Minimum number of leaves (addresses) for a Merkle tree
 pub const MIN_LEAVES: usize = 2;
 
 /// Maximum number of leaves (2^16)
 pub const MAX_LEAVES: usize = 1 << MAX_MERKLE_DEPTH;
 
 /// Maximum age of a Merkle payment (one week in seconds)
-/// Payments older than this are considered expired and nodes will reject chunks
+/// Payments older than this are considered expired and nodes will reject addresses
 pub const MERKLE_PAYMENT_EXPIRATION: u64 = 7 * 24 * 60 * 60; // 7 days
+
+/// Calculate the expected number of reward candidate pools for a given tree depth
+///
+/// This is used throughout the payment system to determine how many candidate pools
+/// should exist for a Merkle tree of a given depth.
+///
+/// # Formula
+/// Number of pools = 2^ceil(depth/2)
+///
+/// # Examples
+/// - depth 4 → ceil(4/2) = 2 → 2^2 = 4 pools
+/// - depth 7 → ceil(7/2) = 4 → 2^4 = 16 pools
+/// - depth 8 → ceil(8/2) = 4 → 2^4 = 16 pools
+///
+/// # Arguments
+/// * `depth` - The depth of the Merkle tree
+///
+/// # Returns
+/// The expected number of reward candidate pools
+pub fn expected_reward_pools(depth: u8) -> usize {
+    1 << midpoint_proof_depth(depth)
+}
 
 /// Errors that can occur when working with Merkle trees
 #[derive(Debug, Error)]
@@ -44,14 +66,14 @@ pub enum MerkleTreeError {
 
 pub type Result<T> = std::result::Result<T, MerkleTreeError>;
 
-/// A Merkle tree built from XorNames (chunk addresses)
+/// A Merkle tree built from XorNames (content addresses)
 ///
 /// Used for batch payment system where:
-/// - Build tree from chunk XorNames (min: 2, max: 65,536)
+/// - Build tree from XorNames (min: 2, max: 65,536)
 /// - Tree is automatically padded to next power of 2
 /// - Root is committed on-chain for payment
 /// - Intersections at level depth/2 determine candidate pools
-/// - Individual chunk proofs verify chunks belong to paid batch
+/// - Individual address proofs verify addresses belong to paid batch
 pub struct MerkleTree {
     /// The underlying rs_merkle tree
     inner: rs_merkle::MerkleTree<Blake2bHasher>,
@@ -66,7 +88,7 @@ pub struct MerkleTree {
     root: XorName,
 
     /// Salts for each original leaf
-    /// Used to compute salted hashes: hash(chunk || salt)
+    /// Used to compute salted hashes: hash(address || salt)
     salts: Vec<[u8; 32]>,
 }
 
@@ -75,7 +97,7 @@ impl MerkleTree {
     ///
     /// # Arguments
     ///
-    /// * `leaves` - Vector of XorNames (chunk addresses). Min: 2, Max: 65,536
+    /// * `leaves` - Vector of XorNames (address addresses). Min: 2, Max: 65,536
     ///
     /// # Returns
     ///
@@ -89,13 +111,13 @@ impl MerkleTree {
     /// # Example
     ///
     /// ```ignore
-    /// let chunks: Vec<XorName> = vec![
-    ///     XorName::from_content(b"chunk1"),
-    ///     XorName::from_content(b"chunk2"),
-    ///     XorName::from_content(b"chunk3"),
+    /// let addresses: Vec<XorName> = vec![
+    ///     XorName::from_content(b"address1"),
+    ///     XorName::from_content(b"address2"),
+    ///     XorName::from_content(b"address3"),
     /// ];
     ///
-    /// let tree = MerkleTree::from_xornames(chunks)?;
+    /// let tree = MerkleTree::from_xornames(addresses)?;
     /// println!("Root: {:?}", tree.root());
     /// println!("Depth: {}", tree.depth());
     /// ```
@@ -121,17 +143,17 @@ impl MerkleTree {
             .collect();
 
         // Calculate depth and pad to next power of 2
-        let depth = calculate_depth(leaf_count);
+        let depth = tree_depth(leaf_count);
         let padded_size = 1 << depth;
 
-        // Apply salt to each real leaf: hash(chunk || salt)
+        // Apply salt to each real leaf: hash(address || salt)
         let mut salted_leaves: Vec<[u8; 32]> = leaves
             .iter()
             .zip(&salts)
-            .map(|(chunk, salt)| {
-                // Compute hash(chunk || salt)
+            .map(|(address, salt)| {
+                // Compute hash(address || salt)
                 let mut data = Vec::with_capacity(64);
-                data.extend_from_slice(chunk.as_ref());
+                data.extend_from_slice(address.as_ref());
                 data.extend_from_slice(salt);
                 Blake2bHasher::hash(&data)
             })
@@ -186,14 +208,14 @@ impl MerkleTree {
     ///
     /// Note: Users typically don't need this directly - use `reward_candidates()` instead.
     fn midpoints(&self) -> Result<Vec<MerkleMidpoint>> {
-        let midpoint_level = (self.depth / 2) as usize;
+        let level = midpoint_level(self.depth);
 
-        let nodes =
-            self.inner
-                .get_nodes_at_level(midpoint_level)
-                .ok_or(MerkleTreeError::Internal(
-                    "Midpoint level must exist".to_string(),
-                ))?;
+        let nodes = self
+            .inner
+            .get_nodes_at_level(level)
+            .ok_or(MerkleTreeError::Internal(
+                "Midpoint level must exist".to_string(),
+            ))?;
 
         let midpoints: Vec<MerkleMidpoint> = nodes
             .into_iter()
@@ -208,14 +230,14 @@ impl MerkleTree {
 
     /// Get reward candidates for batch payment
     ///
-    /// Computes candidate addresses as hash(midpoint_hash || root || tx_timestamp).
+    /// Computes candidate addresses as hash(midpoint_hash || root || merkle_payment_timestamp).
     /// Network nodes closest to these addresses are eligible for payment rewards.
     /// Each candidate contains a proof that the midpoint belongs to the tree.
     /// Returns 2^ceil(depth/2) reward candidates.
     ///
     /// # Arguments
     ///
-    /// * `tx_timestamp` - Unix timestamp of the transaction (seconds since epoch)
+    /// * `merkle_payment_timestamp` - Unix timestamp of the transaction (seconds since epoch)
     ///
     /// # Returns
     ///
@@ -224,20 +246,23 @@ impl MerkleTree {
     /// # Example
     ///
     /// ```ignore
-    /// let tree = MerkleTree::from_xornames(chunks)?;
-    /// let tx_timestamp = SystemTime::now()
+    /// let tree = MerkleTree::from_xornames(addresses)?;
+    /// let merkle_payment_timestamp = SystemTime::now()
     ///     .duration_since(UNIX_EPOCH)
     ///     .expect("Failed to get current time")
     ///     .as_secs();
     ///
-    /// let candidates = tree.reward_candidates(tx_timestamp)?;
+    /// let candidates = tree.reward_candidates(merkle_payment_timestamp)?;
     ///
     /// // Each candidate's branch can be verified independently
     /// for candidate in candidates {
     ///     assert!(candidate.branch.verify());
     /// }
     /// ```
-    pub fn reward_candidates(&self, tx_timestamp: u64) -> Result<Vec<RewardCandidatePool>> {
+    pub fn reward_candidates(
+        &self,
+        merkle_payment_timestamp: u64,
+    ) -> Result<Vec<RewardCandidatePool>> {
         let midpoints = self.midpoints()?;
 
         midpoints
@@ -248,23 +273,23 @@ impl MerkleTree {
 
                 Ok(RewardCandidatePool {
                     branch,
-                    tx_timestamp,
+                    merkle_payment_timestamp,
                 })
             })
             .collect()
     }
 
-    /// Generate a proof that a chunk belongs to this tree
+    /// Generate a proof that a address belongs to this tree
     ///
     /// # Arguments
     ///
-    /// * `chunk_index` - Index of the chunk (0-based, must be < leaf_count)
-    /// * `chunk_hash` - The XorName hash of the chunk data
+    /// * `address_index` - Index of the address (0-based, must be < leaf_count)
+    /// * `address_hash` - The XorName hash of the address data
     ///
     /// # Important: Index vs Hash
     ///
     /// Both the **index** and **hash** are required:
-    /// - **Index**: Tells us the chunk's position in the tree (which leaf)
+    /// - **Index**: Tells us the address's position in the tree (which leaf)
     /// - **Hash**: The actual XorName we're proving belongs at that position
     ///
     /// The proof verifies: "This specific hash is at this specific index in the tree"
@@ -272,21 +297,21 @@ impl MerkleTree {
     /// # Example
     ///
     /// ```ignore
-    /// // You have chunks with their original order preserved
-    /// let chunks: Vec<XorName> = vec![
-    ///     XorName::from_content(b"chunk 0 data"),
-    ///     XorName::from_content(b"chunk 1 data"),
-    ///     XorName::from_content(b"chunk 2 data"),
+    /// // You have addresses with their original order preserved
+    /// let addresses: Vec<XorName> = vec![
+    ///     XorName::from_content(b"address 0 data"),
+    ///     XorName::from_content(b"address 1 data"),
+    ///     XorName::from_content(b"address 2 data"),
     /// ];
     ///
-    /// // Build tree from the chunks
-    /// let tree = MerkleTree::from_xornames(chunks.clone())?;
+    /// // Build tree from the addresses
+    /// let tree = MerkleTree::from_xornames(addresses.clone())?;
     ///
-    /// // Generate proofs for all chunks
-    /// for (index, chunk_hash) in chunks.iter().enumerate() {
+    /// // Generate proofs for all addresses
+    /// for (index, address_hash) in addresses.iter().enumerate() {
     ///     // index: position in the tree (0, 1, 2)
-    ///     // chunk_hash: the actual XorName at that position
-    ///     let proof = tree.generate_chunk_proof(index, *chunk_hash)?;
+    ///     // address_hash: the actual XorName at that position
+    ///     let proof = tree.generate_address_proof(index, *address_hash)?;
     ///
     ///     // Each proof can be verified independently
     ///     assert!(proof.verify());
@@ -295,24 +320,24 @@ impl MerkleTree {
     ///
     /// # Returns
     ///
-    /// A `MerkleBranch` proof from chunk to root
+    /// A `MerkleBranch` proof from address to root
     ///
     /// # Errors
     ///
     /// - `InvalidLeafIndex` if index >= leaf_count
-    pub fn generate_chunk_proof(
+    pub fn generate_address_proof(
         &self,
-        chunk_index: usize,
-        chunk_hash: XorName,
+        address_index: usize,
+        address_hash: XorName,
     ) -> Result<MerkleBranch> {
-        if chunk_index >= self.leaf_count {
+        if address_index >= self.leaf_count {
             return Err(MerkleTreeError::InvalidLeafIndex {
-                index: chunk_index,
+                index: address_index,
                 leaf_count: self.leaf_count,
             });
         }
 
-        let indices = vec![chunk_index];
+        let indices = vec![address_index];
         let proof = self.inner.proof(&indices);
 
         // Padded size is 2^depth
@@ -320,14 +345,14 @@ impl MerkleTree {
 
         let root = self.root();
 
-        // Get the salt for this chunk
-        let salt = self.salts[chunk_index];
+        // Get the salt for this address
+        let salt = self.salts[address_index];
 
         Ok(MerkleBranch::from_rs_merkle_proof(
             proof,
-            chunk_index,
+            address_index,
             padded_size,
-            chunk_hash,
+            address_hash,
             root,
             Some(salt),
         ))
@@ -355,8 +380,8 @@ impl MerkleTree {
         midpoint_hash: XorName,
     ) -> Result<MerkleBranch> {
         // Midpoints are at level depth/2, giving us 2^ceil(depth/2) nodes
-        let midpoint_level = (self.depth / 2) as usize;
-        let midpoint_count = 1 << self.depth.div_ceil(2);
+        let level = midpoint_level(self.depth);
+        let midpoint_count = expected_reward_pools(self.depth);
 
         if midpoint_index >= midpoint_count {
             return Err(MerkleTreeError::InvalidMidpointIndex {
@@ -367,7 +392,7 @@ impl MerkleTree {
 
         let proof = self
             .inner
-            .proof_from_node(midpoint_level, midpoint_index)
+            .proof_from_node(level, midpoint_index)
             .ok_or_else(|| {
                 MerkleTreeError::Internal("Failed to generate midpoint proof".to_string())
             })?;
@@ -403,7 +428,7 @@ struct MerkleMidpoint {
 
 /// A reward candidate derived from a midpoint
 ///
-/// The candidate address is computed as hash(midpoint_hash || root || tx_timestamp).
+/// The candidate address is computed as hash(midpoint_hash || root || merkle_payment_timestamp).
 /// Network nodes closest to this address are eligible for batch payment rewards.
 /// Contains everything needed to verify the candidate is valid.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -411,8 +436,9 @@ pub struct RewardCandidatePool {
     /// Proof that the midpoint belongs to the Merkle tree
     pub branch: MerkleBranch,
 
-    /// Transaction timestamp used to compute the candidate address
-    pub tx_timestamp: u64,
+    /// Merkle payment timestamp provided by client (used to compute candidate address)
+    /// This is the timestamp that all nodes in the pool must use for their quotes
+    pub merkle_payment_timestamp: u64,
 }
 
 impl RewardCandidatePool {
@@ -425,40 +451,65 @@ impl RewardCandidatePool {
 
     /// Get the candidate address for this pool
     ///
-    /// The address is computed as hash(midpoint_hash || root || tx_timestamp).
+    /// The address is computed as hash(midpoint_hash || root || merkle_payment_timestamp).
     /// Network nodes closest to this address are eligible for batch payment rewards.
     pub fn address(&self) -> XorName {
         let mut data = Vec::with_capacity(32 + 32 + 8);
         data.extend_from_slice(self.branch.leaf_hash().as_ref());
         data.extend_from_slice(self.branch.root().as_ref());
-        data.extend_from_slice(&self.tx_timestamp.to_le_bytes());
+        data.extend_from_slice(&self.merkle_payment_timestamp.to_le_bytes());
         XorName::from_content(&data)
     }
 
-    /// Hash the entire pool struct for smart contract storage
+    /// Compute deterministic hash for storage/verification
     ///
-    /// This uses deterministic serialization (MessagePack) followed by hashing.
+    /// This constructs a deterministic byte representation and hashes it.
     /// The smart contract stores this hash to commit to the winner pool.
-    pub fn hash(&self) -> std::result::Result<XorName, rmp_serde::encode::Error> {
-        let bytes = rmp_serde::to_vec(self)?;
-        Ok(XorName::from_content(&bytes))
+    ///
+    /// Uses fixed-width encoding (u64) for numeric fields to ensure
+    /// architecture-independent hashing across 32-bit and 64-bit platforms.
+    pub fn hash(&self) -> XorName {
+        let mut bytes = Vec::new();
+
+        // Serialize MerkleBranch fields
+        for proof_hash in &self.branch.proof_hashes {
+            bytes.extend_from_slice(proof_hash);
+        }
+
+        // usize fields - cast to u64 for fixed-width encoding
+        bytes.extend_from_slice(&(self.branch.leaf_index as u64).to_le_bytes());
+        bytes.extend_from_slice(&(self.branch.total_leaves_count as u64).to_le_bytes());
+
+        bytes.extend_from_slice(self.branch.unsalted_leaf_hash.as_ref());
+        bytes.extend_from_slice(self.branch.root.as_ref());
+        if let Some(salt) = &self.branch.salt {
+            bytes.push(1); // Option::Some marker
+            bytes.extend_from_slice(salt);
+        } else {
+            bytes.push(0); // Option::None marker
+        }
+
+        // Add timestamp (u64 - native width)
+        bytes.extend_from_slice(&self.merkle_payment_timestamp.to_le_bytes());
+
+        XorName::from_content(&bytes)
     }
 }
 
 /// A Merkle branch (proof) from a leaf or midpoint to the root
 ///
-/// Used to prove that a chunk or midpoint belongs to a paid batch.
+/// Used to prove that a address or midpoint belongs to a paid batch.
 /// Contains everything needed for verification - just call `verify()` with no arguments.
 ///
 /// For leaf proofs:
-/// - leaf_index is the chunk index
+/// - leaf_index is the address index
 /// - total_leaves_count is the padded tree size (2^depth)
-/// - salt is included for privacy (prevents chunk content from being revealed)
+/// - salt is included for privacy (prevents address content from being revealed)
 ///
 /// For midpoint proofs:
 /// - leaf_index is the midpoint index at its level
 /// - total_leaves_count is the number of midpoints
-/// - salt is None (midpoints are intermediate hashes, not raw chunks)
+/// - salt is None (midpoints are intermediate hashes, not raw addresses)
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct MerkleBranch {
     /// The proof hashes (sibling hashes only) from leaf/midpoint to root
@@ -472,16 +523,16 @@ pub struct MerkleBranch {
     /// - For midpoint proofs: number of midpoints
     total_leaves_count: usize,
 
-    /// The unsalted leaf hash (chunk or midpoint) being proven
-    /// For chunk proofs: this is the chunk XorName (before salting)
+    /// The unsalted leaf hash (address or midpoint) being proven
+    /// For address proofs: this is the address XorName (before salting)
     /// For midpoint proofs: this is the midpoint hash
     unsalted_leaf_hash: XorName,
 
     /// The expected Merkle root
     root: XorName,
 
-    /// Salt used for chunk privacy (None for midpoint proofs)
-    /// For chunk proofs: random salt applied as hash(unsalted_leaf_hash || salt)
+    /// Salt used for address privacy (None for midpoint proofs)
+    /// For address proofs: random salt applied as hash(unsalted_leaf_hash || salt)
     /// For midpoint proofs: None (intermediate hashes don't need salting)
     salt: Option<[u8; 32]>,
 }
@@ -507,8 +558,8 @@ impl MerkleBranch {
         }
     }
 
-    /// Get the unsalted leaf hash (chunk or intersection) being proven
-    /// For chunk proofs: returns the chunk XorName (before salting)
+    /// Get the unsalted leaf hash (address or intersection) being proven
+    /// For address proofs: returns the address XorName (before salting)
     /// For midpoint proofs: returns the midpoint hash
     pub fn leaf_hash(&self) -> &XorName {
         &self.unsalted_leaf_hash
@@ -528,7 +579,7 @@ impl MerkleBranch {
     /// # Example
     ///
     /// ```ignore
-    /// let proof = tree.generate_chunk_proof(0)?;
+    /// let proof = tree.generate_address_proof(0)?;
     ///
     /// // The proof contains everything needed for verification
     /// println!("Proving leaf: {:?}", proof.leaf_hash());
@@ -539,7 +590,7 @@ impl MerkleBranch {
     pub fn verify(&self) -> bool {
         // Compute the hash to verify
         let hash = if let Some(salt) = &self.salt {
-            // For chunk proofs: compute hash(unsalted_leaf_hash || salt)
+            // For address proofs: compute hash(unsalted_leaf_hash || salt)
             let mut data = Vec::with_capacity(64);
             data.extend_from_slice(self.unsalted_leaf_hash.as_ref());
             data.extend_from_slice(salt);
@@ -574,7 +625,7 @@ impl MerkleBranch {
 }
 
 /// Calculate tree depth from leaf count: ceil(log2(n))
-fn calculate_depth(leaf_count: usize) -> u8 {
+pub fn tree_depth(leaf_count: usize) -> u8 {
     if leaf_count <= 1 {
         return 0;
     }
@@ -588,26 +639,51 @@ fn calculate_depth(leaf_count: usize) -> u8 {
     depth
 }
 
+/// Calculate the proof depth from midpoint to root: ceil(depth/2)
+pub fn midpoint_proof_depth(depth: u8) -> u8 {
+    depth.div_ceil(2)
+}
+
+/// Calculate the level in the tree where midpoints are located: floor(depth/2)
+fn midpoint_level(depth: u8) -> usize {
+    (depth / 2) as usize
+}
+
 /// Errors that can occur when verifying a Merkle proof for batch payments
 ///
-/// Nodes verify chunk proofs without access to the original Merkle tree,
+/// Nodes verify address proofs without access to the original Merkle tree,
 /// using only the proof data and information stored on the smart contract.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum BadMerkleProof {
-    #[error("Chunk proof failed Merkle verification")]
-    InvalidChunkProof,
-    #[error("Winner/intersection proof failed Merkle verification")]
-    InvalidWinnerProof,
-    #[error("Chunk proof depth mismatch: expected {expected}, got {got}")]
-    ChunkProofDepthMismatch { expected: usize, got: usize },
+    #[error("Address branch proof failed Merkle verification")]
+    InvalidAddressBranchProof,
+    #[error("Winner/intersection branch proof failed Merkle verification")]
+    InvalidWinnerBranchProof,
+    #[error("Address proof depth mismatch: expected {expected}, got {got}")]
+    AddressProofDepthMismatch { expected: usize, got: usize },
     #[error("Winner proof depth mismatch: expected {expected}, got {got}")]
     WinnerProofDepthMismatch { expected: usize, got: usize },
-    #[error("Chunk proof root doesn't match smart contract root")]
-    RootMismatch,
-    #[error("Winner proof root doesn't match smart contract root")]
-    WinnerRootMismatch,
-    #[error("Winner pool hash verification failed: {0}")]
-    BadWinnerHash(String),
+    #[error(
+        "Address branch root doesn't match smart contract root: smart_contract={smart_contract_root}, branch={branch_root}"
+    )]
+    AddressBranchRootMismatch {
+        smart_contract_root: XorName,
+        branch_root: XorName,
+    },
+    #[error(
+        "Winner branch root doesn't match smart contract root: smart_contract={smart_contract_root}, branch={branch_root}"
+    )]
+    WinnerBranchRootMismatch {
+        smart_contract_root: XorName,
+        branch_root: XorName,
+    },
+    #[error(
+        "Winner pool hash doesn't match smart contract commitment: smart_contract={smart_contract}, winner_pool={winner_pool}"
+    )]
+    WinnerPoolDoesNotMatchSmartContractCommitment {
+        smart_contract: XorName,
+        winner_pool: XorName,
+    },
     #[error(
         "Payment timestamp {payment_timestamp} is in the future (current time: {current_time})"
     )]
@@ -632,8 +708,8 @@ pub enum BadMerkleProof {
         pool_timestamp: u64,
         contract_timestamp: u64,
     },
-    #[error("Chunk hash mismatch: expected {expected:?}, got {got:?}")]
-    ChunkHashMismatch { expected: XorName, got: XorName },
+    #[error("Address hash not matching branch leaf: leaf={leaf}, address={address}")]
+    AddressHashNotBranchLeaf { leaf: XorName, address: XorName },
 }
 
 /// Validate payment timestamp against current time
@@ -648,7 +724,7 @@ fn validate_payment_timestamp(
 ) -> std::result::Result<(), BadMerkleProof> {
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| BadMerkleProof::SystemTimeError(format!("Failed to get current time: {e}")))?
+        .map_err(|e| BadMerkleProof::SystemTimeError(e.to_string()))?
         .as_secs();
 
     // Verify timestamp is not in the future
@@ -680,20 +756,20 @@ fn validate_payment_timestamp(
     Ok(())
 }
 
-/// Verify a chunk proof against smart contract payment data
+/// Verify a address proof against smart contract payment data
 ///
-/// This is the complete verification flow that nodes perform when receiving chunks.
+/// This is the complete verification flow that nodes perform when receiving addresses.
 /// Nodes don't have access to the tree, only the proofs and on-chain data.
 ///
 /// # Security
 ///
 /// - Validates proof depths BEFORE calling expensive verify() to prevent DoS
-/// - Verifies chunk hash matches the provided chunk bytes to prevent malicious data storage
+/// - Verifies address hash matches the provided address bytes to prevent malicious data storage
 ///
 /// # Arguments
 ///
-/// * `chunk_hash` - The actual hash of the chunk being stored
-/// * `chunk_branch` - Merkle proof for the chunk (leaf to root)
+/// * `address_hash` - The actual hash of the address being stored
+/// * `address_branch` - Merkle proof for the address (leaf to root)
 /// * `winner_pool` - The winner candidate pool with proof and timestamp
 /// * `smart_contract_winner_pool_hash` - Hash of the winner pool address from smart contract
 /// * `smart_contract_depth` - Tree depth claimed on smart contract
@@ -707,12 +783,12 @@ fn validate_payment_timestamp(
 /// # Example
 ///
 /// ```ignore
-/// // Node receives chunk and proofs from client
+/// // Node receives address and proofs from client
 /// let contract_data = contract.get_merkle_root_payment(root).await?;
 ///
 /// verify_merkle_proof(
-///     &chunk_hash,
-///     &chunk_proof,
+///     &address_hash,
+///     &address_proof,
 ///     &winner_pool,
 ///     &contract_data.winner_pool_hash,
 ///     contract_data.depth,
@@ -720,11 +796,11 @@ fn validate_payment_timestamp(
 ///     contract_data.timestamp,
 /// )?;
 ///
-/// // If we get here, chunk is verified - store it
+/// // If we get here, address is verified - store it
 /// ```
 pub fn verify_merkle_proof(
-    chunk_hash: &XorName,
-    chunk_branch: &MerkleBranch,
+    address_hash: &XorName,
+    address_branch: &MerkleBranch,
     winner_pool: &RewardCandidatePool,
     smart_contract_winner_pool_hash: &XorName,
     smart_contract_depth: u8,
@@ -732,22 +808,24 @@ pub fn verify_merkle_proof(
     smart_contract_timestamp: u64,
 ) -> std::result::Result<(), BadMerkleProof> {
     // Validate payment timestamp
-    validate_payment_timestamp(smart_contract_timestamp, winner_pool.tx_timestamp)?;
+    validate_payment_timestamp(
+        smart_contract_timestamp,
+        winner_pool.merkle_payment_timestamp,
+    )?;
 
-    // Verify chunk proof depth matches smart contract claimed depth
-    let chunk_depth = chunk_branch.depth();
-    let expected_chunk_depth = smart_contract_depth as usize;
-    if chunk_depth != expected_chunk_depth {
-        return Err(BadMerkleProof::ChunkProofDepthMismatch {
-            expected: expected_chunk_depth,
-            got: chunk_depth,
+    // Verify address proof depth matches smart contract claimed depth
+    let address_depth = address_branch.depth();
+    let expected_address_depth = smart_contract_depth as usize;
+    if address_depth != expected_address_depth {
+        return Err(BadMerkleProof::AddressProofDepthMismatch {
+            expected: expected_address_depth,
+            got: address_depth,
         });
     }
 
-    // Verify winner proof depth matches expected for midpoint
+    // Verify winner proof depth matches expected for midpoint (ceil(depth/2))
     let winner_depth = winner_pool.branch.depth();
-    let midpoint_level = smart_contract_depth / 2;
-    let expected_winner_depth = (smart_contract_depth - midpoint_level) as usize;
+    let expected_winner_depth = midpoint_proof_depth(smart_contract_depth) as usize;
     if winner_depth != expected_winner_depth {
         return Err(BadMerkleProof::WinnerProofDepthMismatch {
             expected: expected_winner_depth,
@@ -755,41 +833,50 @@ pub fn verify_merkle_proof(
         });
     }
 
-    // Verify Merkle inclusion (chunk belongs to tree)
-    if !chunk_branch.verify() {
-        return Err(BadMerkleProof::InvalidChunkProof);
+    // Verify Merkle inclusion (address belongs to tree)
+    if !address_branch.verify() {
+        return Err(BadMerkleProof::InvalidAddressBranchProof);
     }
 
     // Verify winner pool (intersection legitimacy)
     if !winner_pool.branch.verify() {
-        return Err(BadMerkleProof::InvalidWinnerProof);
+        return Err(BadMerkleProof::InvalidWinnerBranchProof);
     }
 
-    // Verify chunk hash matches the provided chunk bytes
-    if chunk_hash != chunk_branch.leaf_hash() {
-        return Err(BadMerkleProof::ChunkHashMismatch {
-            expected: *chunk_branch.leaf_hash(),
-            got: *chunk_hash,
+    // Verify address hash matches the provided address bytes
+    if address_hash != address_branch.leaf_hash() {
+        return Err(BadMerkleProof::AddressHashNotBranchLeaf {
+            leaf: *address_branch.leaf_hash(),
+            address: *address_hash,
         });
     }
 
-    // Verify chunk proof root matches on-chain root
-    if chunk_branch.root() != smart_contract_root {
-        return Err(BadMerkleProof::RootMismatch);
+    // Verify address proof root matches on-chain root
+    if address_branch.root() != smart_contract_root {
+        return Err(BadMerkleProof::AddressBranchRootMismatch {
+            smart_contract_root: *smart_contract_root,
+            branch_root: *address_branch.root(),
+        });
     }
 
     // Verify winner proof root matches on-chain root
     if winner_pool.branch.root() != smart_contract_root {
-        return Err(BadMerkleProof::WinnerRootMismatch);
+        return Err(BadMerkleProof::WinnerBranchRootMismatch {
+            smart_contract_root: *smart_contract_root,
+            branch_root: *winner_pool.branch.root(),
+        });
     }
 
     // Verify winner pool hash matches on-chain commitment
-    let winner_pool_hash = winner_pool
-        .hash()
-        .map_err(|e| BadMerkleProof::BadWinnerHash(format!("Serialization failed: {e}")))?;
+    let winner_pool_hash = winner_pool.hash();
 
     if &winner_pool_hash != smart_contract_winner_pool_hash {
-        return Err(BadMerkleProof::BadWinnerHash("Hash mismatch".to_string()));
+        return Err(
+            BadMerkleProof::WinnerPoolDoesNotMatchSmartContractCommitment {
+                smart_contract: *smart_contract_winner_pool_hash,
+                winner_pool: winner_pool_hash,
+            },
+        );
     }
 
     Ok(())
@@ -843,6 +930,98 @@ mod tests {
     }
 
     #[test]
+    fn test_reward_candidate_pool_hash_fixed_width_encoding() {
+        // Test that RewardCandidatePool::hash uses fixed-width encoding
+        let leaves = make_test_leaves(16);
+        let tree = MerkleTree::from_xornames(leaves).unwrap();
+        let timestamp = 1234567890u64;
+        let pools = tree.reward_candidates(timestamp).unwrap();
+        let pool = &pools[0];
+
+        // Get the hash
+        let hash1 = pool.hash();
+
+        // Manually reconstruct the hash with explicit u64 encoding to verify
+        let mut bytes = Vec::new();
+        for proof_hash in &pool.branch.proof_hashes {
+            bytes.extend_from_slice(proof_hash);
+        }
+        bytes.extend_from_slice(&(pool.branch.leaf_index as u64).to_le_bytes());
+        bytes.extend_from_slice(&(pool.branch.total_leaves_count as u64).to_le_bytes());
+        bytes.extend_from_slice(pool.branch.unsalted_leaf_hash.as_ref());
+        bytes.extend_from_slice(pool.branch.root.as_ref());
+        if let Some(salt) = &pool.branch.salt {
+            bytes.push(1);
+            bytes.extend_from_slice(salt);
+        } else {
+            bytes.push(0);
+        }
+        bytes.extend_from_slice(&pool.merkle_payment_timestamp.to_le_bytes());
+
+        let hash2 = XorName::from_content(&bytes);
+
+        assert_eq!(
+            hash1, hash2,
+            "RewardCandidatePool::hash should match manual u64-encoded hash"
+        );
+    }
+
+    #[test]
+    fn test_reward_candidate_pool_hash_architecture_independence() {
+        // Create a pool with maximum usize values to test encoding
+        let leaves = make_test_leaves(4);
+        let tree = MerkleTree::from_xornames(leaves).unwrap();
+        let timestamp = u64::MAX;
+        let pools = tree.reward_candidates(timestamp).unwrap();
+
+        // Get hashes for all pools - they should be deterministic
+        let hash1 = pools[0].hash();
+        let hash2 = pools[0].hash();
+
+        assert_eq!(hash1, hash2, "Same pool should produce identical hash");
+
+        // Verify that the serialization uses 8 bytes for usize fields
+        let pool = &pools[0];
+        let mut bytes = Vec::new();
+        for proof_hash in &pool.branch.proof_hashes {
+            bytes.extend_from_slice(proof_hash);
+        }
+
+        let start_offset = bytes.len();
+        bytes.extend_from_slice(&(pool.branch.leaf_index as u64).to_le_bytes());
+        bytes.extend_from_slice(&(pool.branch.total_leaves_count as u64).to_le_bytes());
+
+        // Verify 8 bytes were written for each usize field
+        assert_eq!(
+            bytes.len() - start_offset,
+            16, // 2 * 8 bytes
+            "Should use 8 bytes per usize field regardless of platform"
+        );
+
+        // Verify values are preserved correctly
+        let leaf_index_bytes = &bytes[start_offset..start_offset + 8];
+        let leaf_index = u64::from_le_bytes(leaf_index_bytes.try_into().unwrap());
+        assert_eq!(
+            leaf_index, pool.branch.leaf_index as u64,
+            "leaf_index should be preserved in u64 encoding"
+        );
+    }
+
+    #[test]
+    fn test_expected_reward_pools() {
+        // Test the formula: 2^ceil(depth/2)
+        assert_eq!(expected_reward_pools(1), 2); // ceil(1/2) = 1 → 2^1 = 2
+        assert_eq!(expected_reward_pools(2), 2); // ceil(2/2) = 1 → 2^1 = 2
+        assert_eq!(expected_reward_pools(3), 4); // ceil(3/2) = 2 → 2^2 = 4
+        assert_eq!(expected_reward_pools(4), 4); // ceil(4/2) = 2 → 2^2 = 4
+        assert_eq!(expected_reward_pools(5), 8); // ceil(5/2) = 3 → 2^3 = 8
+        assert_eq!(expected_reward_pools(6), 8); // ceil(6/2) = 3 → 2^3 = 8
+        assert_eq!(expected_reward_pools(7), 16); // ceil(7/2) = 4 → 2^4 = 16
+        assert_eq!(expected_reward_pools(8), 16); // ceil(8/2) = 4 → 2^4 = 16
+        assert_eq!(expected_reward_pools(16), 256); // ceil(16/2) = 8 → 2^8 = 256
+    }
+
+    #[test]
     fn test_blake2b_output_size() {
         // Verify that Blake2b::<U32> produces 32-byte (256-bit) hashes
         let hash1 = Blake2bHasher::hash(b"test data");
@@ -881,12 +1060,12 @@ mod tests {
         assert_eq!(seen.len(), candidates.len());
 
         // Verify our hash() method is deterministic
-        let hash1 = candidates[0].hash().unwrap();
-        let hash2 = candidates[0].hash().unwrap();
+        let hash1 = candidates[0].hash();
+        let hash2 = candidates[0].hash();
         assert_eq!(hash1, hash2, "Hash should be deterministic");
 
         // Verify different candidates have different hashes
-        let hash3 = candidates[1].hash().unwrap();
+        let hash3 = candidates[1].hash();
         assert_ne!(
             hash1, hash3,
             "Different candidates should have different hashes"
@@ -949,8 +1128,8 @@ mod tests {
         let leaves = make_test_leaves(1024);
         let tree = MerkleTree::from_xornames(leaves).unwrap();
 
-        let tx_timestamp = 1234567890u64;
-        let candidates = tree.reward_candidates(tx_timestamp).unwrap();
+        let merkle_payment_timestamp = 1234567890u64;
+        let candidates = tree.reward_candidates(merkle_payment_timestamp).unwrap();
 
         // Should have same number as midpoints
         assert_eq!(candidates.len(), 32);
@@ -970,11 +1149,13 @@ mod tests {
         }
 
         // Verify deterministic - same timestamp gives same candidates
-        let candidates2 = tree.reward_candidates(tx_timestamp).unwrap();
+        let candidates2 = tree.reward_candidates(merkle_payment_timestamp).unwrap();
         assert_eq!(candidates, candidates2);
 
         // Different timestamp gives different candidates
-        let candidates3 = tree.reward_candidates(tx_timestamp + 1).unwrap();
+        let candidates3 = tree
+            .reward_candidates(merkle_payment_timestamp + 1)
+            .unwrap();
         assert_ne!(candidates[0].address(), candidates3[0].address());
 
         // But they should still be valid
@@ -993,7 +1174,7 @@ mod tests {
         let mut data = Vec::with_capacity(32 + 32 + 8);
         data.extend_from_slice(candidates[0].branch.leaf_hash().as_ref());
         data.extend_from_slice(tree_root.as_ref());
-        data.extend_from_slice(&tx_timestamp.to_le_bytes());
+        data.extend_from_slice(&merkle_payment_timestamp.to_le_bytes());
         let manually_computed = XorName::from_content(&data);
         assert_eq!(expected_address, manually_computed);
 
@@ -1001,7 +1182,10 @@ mod tests {
         assert!(candidates[0].branch.verify());
 
         // Verify direct field access
-        assert_eq!(candidates[0].tx_timestamp, tx_timestamp);
+        assert_eq!(
+            candidates[0].merkle_payment_timestamp,
+            merkle_payment_timestamp
+        );
         assert_eq!(candidates[0].address(), candidates[0].address()); // Address calculation
         assert_eq!(candidates[0].branch.root(), &tree_root);
         assert_eq!(
@@ -1011,30 +1195,30 @@ mod tests {
     }
 
     #[test]
-    fn test_chunk_proof_generation_and_verification() {
+    fn test_address_proof_generation_and_verification() {
         let leaves = make_test_leaves(100);
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
 
-        // Test proof for first chunk
-        let proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        // Test proof for first address
+        let proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         assert!(proof.verify());
 
-        // Test proof for last chunk
-        let proof = tree.generate_chunk_proof(99, leaves[99]).unwrap();
+        // Test proof for last address
+        let proof = tree.generate_address_proof(99, leaves[99]).unwrap();
         assert!(proof.verify());
 
-        // Test proof for middle chunk
-        let proof = tree.generate_chunk_proof(50, leaves[50]).unwrap();
+        // Test proof for middle address
+        let proof = tree.generate_address_proof(50, leaves[50]).unwrap();
         assert!(proof.verify());
     }
 
     #[test]
-    fn test_invalid_chunk_index() {
+    fn test_invalid_address_index() {
         let leaves = make_test_leaves(100);
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
 
         let dummy_hash = leaves[0]; // Just need any hash for this test
-        let result = tree.generate_chunk_proof(100, dummy_hash);
+        let result = tree.generate_address_proof(100, dummy_hash);
         assert!(matches!(
             result,
             Err(MerkleTreeError::InvalidLeafIndex { .. })
@@ -1064,9 +1248,9 @@ mod tests {
         let leaves = make_test_leaves(16);
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
 
-        // Chunk proof should go from leaf to root (depth 4)
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
-        assert_eq!(chunk_proof.depth(), 4);
+        // Address proof should go from leaf to root (depth 4)
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
+        assert_eq!(address_proof.depth(), 4);
 
         // Midpoint proof should go from depth/2 to root (depth 2)
         let midpoints = tree.midpoints().unwrap();
@@ -1077,7 +1261,7 @@ mod tests {
     #[test]
     fn test_non_deterministic_root_due_to_salts() {
         // With random salts, the same leaves produce different roots
-        // This is a privacy feature - prevents chunk content from being revealed
+        // This is a privacy feature - prevents address content from being revealed
         let leaves = make_test_leaves(100);
 
         let tree1 = MerkleTree::from_xornames(leaves.clone()).unwrap();
@@ -1098,7 +1282,7 @@ mod tests {
 
         // Wrong leaf should fail - create new proof with wrong leaf hash
         let wrong_leaf = XorName::from_content(b"wrong");
-        let wrong_proof = tree.generate_chunk_proof(0, wrong_leaf).unwrap();
+        let wrong_proof = tree.generate_address_proof(0, wrong_leaf).unwrap();
         assert!(!wrong_proof.verify());
 
         // Wrong root should fail - we can't easily test this with the new API
@@ -1115,10 +1299,10 @@ mod tests {
         println!("Tree depth: {}", tree.depth());
         println!("Tree leaf count: {}", tree.leaf_count());
 
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         println!(
-            "Chunk proof depth (proof_hashes.len()): {}",
-            chunk_proof.depth()
+            "Address proof depth (proof_hashes.len()): {}",
+            address_proof.depth()
         );
 
         let midpoints = tree.midpoints().unwrap();
@@ -1131,9 +1315,9 @@ mod tests {
         // Verify expectations
         assert_eq!(tree.depth(), 4);
         assert_eq!(
-            chunk_proof.depth(),
+            address_proof.depth(),
             4,
-            "Chunk proof should have 4 siblings (levels 0->1->2->3->4)"
+            "Address proof should have 4 siblings (levels 0->1->2->3->4)"
         );
         assert_eq!(
             midpoint_proof.depth(),
@@ -1148,28 +1332,28 @@ mod tests {
         let leaves = make_test_leaves(16); // 16 = 2^4, depth = 4
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
 
-        println!("Testing chunk proof verification...");
+        println!("Testing address proof verification...");
 
-        // Test chunk proof for first leaf
-        let proof_0 = tree.generate_chunk_proof(0, leaves[0]).unwrap();
-        println!("Chunk 0 proof depth: {}", proof_0.depth());
+        // Test address proof for first leaf
+        let proof_0 = tree.generate_address_proof(0, leaves[0]).unwrap();
+        println!("Address 0 proof depth: {}", proof_0.depth());
         let valid = proof_0.verify();
-        println!("Chunk 0 verification: {valid}");
-        assert!(valid, "Proof for chunk 0 should be valid");
+        println!("Address 0 verification: {valid}");
+        assert!(valid, "Proof for address 0 should be valid");
 
-        // Test chunk proof for last leaf
-        let proof_15 = tree.generate_chunk_proof(15, leaves[15]).unwrap();
-        println!("Chunk 15 proof depth: {}", proof_15.depth());
+        // Test address proof for last leaf
+        let proof_15 = tree.generate_address_proof(15, leaves[15]).unwrap();
+        println!("Address 15 proof depth: {}", proof_15.depth());
         let valid = proof_15.verify();
-        println!("Chunk 15 verification: {valid}");
-        assert!(valid, "Proof for chunk 15 should be valid");
+        println!("Address 15 verification: {valid}");
+        assert!(valid, "Proof for address 15 should be valid");
 
-        // Test chunk proof for middle leaf
-        let proof_7 = tree.generate_chunk_proof(7, leaves[7]).unwrap();
-        println!("Chunk 7 proof depth: {}", proof_7.depth());
+        // Test address proof for middle leaf
+        let proof_7 = tree.generate_address_proof(7, leaves[7]).unwrap();
+        println!("Address 7 proof depth: {}", proof_7.depth());
         let valid = proof_7.verify();
-        println!("Chunk 7 verification: {valid}");
-        assert!(valid, "Proof for chunk 7 should be valid");
+        println!("Address 7 verification: {valid}");
+        assert!(valid, "Proof for address 7 should be valid");
 
         println!("\nTesting midpoint proof verification...");
 
@@ -1193,13 +1377,13 @@ mod tests {
 
         // Test wrong leaf hash fails - create proof with wrong hash
         let wrong_leaf = XorName::from_content(b"wrong_leaf");
-        let wrong_proof = tree.generate_chunk_proof(0, wrong_leaf).unwrap();
+        let wrong_proof = tree.generate_address_proof(0, wrong_leaf).unwrap();
         let valid = wrong_proof.verify();
         println!("Wrong leaf verification: {valid}");
         assert!(!valid, "Proof with wrong leaf should fail");
 
         // Test using proof for wrong leaf index fails
-        let wrong_index_proof = tree.generate_chunk_proof(0, leaves[1]).unwrap();
+        let wrong_index_proof = tree.generate_address_proof(0, leaves[1]).unwrap();
         let valid = wrong_index_proof.verify();
         println!("Wrong leaf index verification: {valid}");
         assert!(!valid, "Proof for leaf 0 with hash from leaf 1 should fail");
@@ -1214,8 +1398,8 @@ mod tests {
         // 2. Client extracts midpoints (intersections)
         // 3. Client generates reward candidates for payment
         // 4. Winner pool is selected (simulated)
-        // 5. Client uploads chunks with proofs
-        // 6. Nodes verify chunks belong to paid batch
+        // 5. Client uploads addresses with proofs
+        // 6. Nodes verify addresses belong to paid batch
 
         println!("\n=== SIMULATING COMPLETE MERKLE BATCH PAYMENT FLOW ===\n");
 
@@ -1225,10 +1409,10 @@ mod tests {
         println!("PHASE 1: CLIENT PREPARES DATA");
         println!("------------------------------");
 
-        // Simulate uploading 100 chunks (self-encrypted file)
-        let real_chunk_count = 100;
-        let chunks = make_test_leaves(real_chunk_count);
-        println!("✓ Generated {real_chunk_count} real chunks from self-encryption");
+        // Simulate uploading 100 addresses (self-encrypted file)
+        let real_address_count = 100;
+        let addresses = make_test_leaves(real_address_count);
+        println!("✓ Generated {real_address_count} real addresses from self-encryption");
 
         // ==================================================================
         // PHASE 2: CLIENT BUILDS MERKLE TREE
@@ -1236,15 +1420,15 @@ mod tests {
         println!("\nPHASE 2: CLIENT BUILDS MERKLE TREE");
         println!("----------------------------------");
 
-        let tree = MerkleTree::from_xornames(chunks.clone()).unwrap();
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
         let depth = tree.depth();
         let root = tree.root();
         let leaf_count = tree.leaf_count();
 
         println!("✓ Tree depth: {depth}");
-        println!("✓ Real chunks: {leaf_count}");
+        println!("✓ Real addresses: {leaf_count}");
         println!("✓ Padded size: {} (2^{})", 1 << depth, depth);
-        println!("✓ Dummy chunks added: {}", (1 << depth) - leaf_count);
+        println!("✓ Dummy addresses added: {}", (1 << depth) - leaf_count);
         println!("✓ Merkle root: {root:?}");
 
         assert_eq!(depth, 7); // ceil(log2(100)) = 7
@@ -1257,28 +1441,22 @@ mod tests {
         println!("---------------------------------------");
 
         // Simulate payment timestamp (use current time for realistic test)
-        let tx_timestamp = SystemTime::now()
+        let merkle_payment_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Failed to get current time")
             .as_secs();
-        println!("✓ Transaction timestamp: {tx_timestamp}");
+        println!("✓ Transaction timestamp: {merkle_payment_timestamp}");
 
         // Get all reward candidates (this represents all candidate pools)
-        let candidates = tree.reward_candidates(tx_timestamp).unwrap();
-        let desired_midpoint_count_bits = depth.div_ceil(2); // Round up
-        let midpoint_count = 1 << desired_midpoint_count_bits;
-        let actual_midpoint_level = depth - desired_midpoint_count_bits;
+        let candidates = tree.reward_candidates(merkle_payment_timestamp).unwrap();
+        let midpoint_count = expected_reward_pools(depth);
+        let level = midpoint_level(depth);
+        let proof_depth = midpoint_proof_depth(depth);
 
-        println!("✓ Midpoint count bits (rounded up): (depth+1)/2 = {desired_midpoint_count_bits}");
-        println!(
-            "✓ Midpoint level in tree: depth - {desired_midpoint_count_bits} = {actual_midpoint_level}"
-        );
-        println!(
-            "✓ Number of candidate pools: {} (2^{})",
-            candidates.len(),
-            desired_midpoint_count_bits
-        );
-        println!("✓ Nodes per pool (depth): {depth}");
+        println!("✓ Midpoint level: {level}");
+        println!("✓ Midpoint proof depth: {proof_depth}");
+        println!("✓ Number of midpoint nodes (candidate pools): {midpoint_count}");
+        println!("✓ Tree depth: {depth}");
         println!(
             "✓ Total nodes queried: {} × {} = {}",
             candidates.len(),
@@ -1300,7 +1478,10 @@ mod tests {
         println!("\n  Example candidate #0:");
         println!("    Midpoint hash: {midpoint_hash:?}");
         println!("    Root: {candidate_root:?}");
-        println!("    Timestamp: {}", first_candidate.tx_timestamp);
+        println!(
+            "    Timestamp: {}",
+            first_candidate.merkle_payment_timestamp
+        );
         println!("    Address: {:?}", first_candidate.address());
         println!("    (Address = hash(midpoint || root || timestamp))");
 
@@ -1319,7 +1500,7 @@ mod tests {
         // Smart contract stores this data on-chain for nodes to verify against
         let smart_contract_root = root;
         let smart_contract_depth = depth;
-        let smart_contract_timestamp = tx_timestamp;
+        let smart_contract_timestamp = merkle_payment_timestamp;
 
         println!("✓ Smart contract received payment");
         println!("✓ Stored root: {smart_contract_root:?}");
@@ -1332,7 +1513,7 @@ mod tests {
         let winner_candidate = &candidates[winner_pool_index];
 
         // Smart contract stores hash of the entire winner pool for nodes to verify
-        let smart_contract_winner_pool_hash = winner_candidate.hash().unwrap();
+        let smart_contract_winner_pool_hash = winner_candidate.hash();
 
         println!("✓ Winner pool selected: index {winner_pool_index}");
         println!("✓ Winner pool hash stored: {smart_contract_winner_pool_hash:?}");
@@ -1344,18 +1525,18 @@ mod tests {
         println!("\nPHASE 5: CLIENT UPLOADS CHUNKS WITH PROOFS");
         println!("-------------------------------------------");
 
-        // Generate proofs for all real chunks (not dummies)
-        let mut chunk_proofs = Vec::new();
-        for (i, chunk_hash) in chunks.iter().enumerate() {
-            let proof = tree.generate_chunk_proof(i, *chunk_hash).unwrap();
-            chunk_proofs.push(proof);
+        // Generate proofs for all real addresses (not dummies)
+        let mut address_proofs = Vec::new();
+        for (i, address_hash) in addresses.iter().enumerate() {
+            let proof = tree.generate_address_proof(i, *address_hash).unwrap();
+            address_proofs.push(proof);
         }
 
-        println!("✓ Generated {} chunk proofs", chunk_proofs.len());
+        println!("✓ Generated {} address proofs", address_proofs.len());
         println!("✓ Each proof includes:");
         println!("  - Merkle proof (siblings from leaf to root)");
         println!("  - Salt (for privacy)");
-        println!("  - Node hash (chunk being proven)");
+        println!("  - Node hash (address being proven)");
         println!("  - Root (expected Merkle root)");
 
         // ==================================================================
@@ -1364,22 +1545,22 @@ mod tests {
         println!("\nPHASE 6: NODES VERIFY AND STORE CHUNKS");
         println!("---------------------------------------");
 
-        // Simulate node verification for each chunk
-        // Nodes receive from client: chunk, chunk_proof, winner_proof
+        // Simulate node verification for each address
+        // Nodes receive from client: address, address_proof, winner_proof
         // Nodes query smart contract for: root, depth, winner_hash, timestamp
         // verify_merkle_proof() automatically checks current system time
 
         let mut verified_count = 0;
-        for (i, chunk_proof) in chunk_proofs.iter().enumerate() {
-            // In reality, client sends the chunk hash
-            // The node receives the chunk data and hashes it to get chunk_hash
-            let chunk_hash = &chunks[i];
+        for (i, address_proof) in address_proofs.iter().enumerate() {
+            // In reality, client sends the address hash
+            // The node receives the address data and hashes it to get address_hash
+            let address_hash = &addresses[i];
 
             // Node uses the complete verification function
             // This performs all 10 verification steps from the spec
             let result = verify_merkle_proof(
-                chunk_hash,
-                chunk_proof,
+                address_hash,
+                address_proof,
                 winner_candidate,
                 &smart_contract_winner_pool_hash,
                 smart_contract_depth,
@@ -1389,7 +1570,7 @@ mod tests {
 
             assert!(
                 result.is_ok(),
-                "Chunk {} verification failed: {:?}",
+                "Address {} verification failed: {:?}",
                 i,
                 result.err()
             );
@@ -1403,16 +1584,16 @@ mod tests {
             verified_count += 1;
         }
 
-        println!("✓ All {verified_count} chunks verified using verify_merkle_proof()");
+        println!("✓ All {verified_count} addresses verified using verify_merkle_proof()");
         println!("✓ Complete verification includes:");
         println!("  1. Timestamp not in future");
         println!("  2. Payment not expired (< {MERKLE_PAYMENT_EXPIRATION} seconds old)");
         println!("  3. Winner pool timestamp matches smart contract timestamp");
-        println!("  4. Chunk Merkle proof valid (chunk ∈ tree)");
+        println!("  4. Address Merkle proof valid (address ∈ tree)");
         println!("  5. Winner Merkle proof valid (intersection ∈ tree)");
-        println!("  6. Chunk proof depth matches on-chain depth");
+        println!("  6. Address proof depth matches on-chain depth");
         println!("  7. Winner proof depth matches expected for midpoint");
-        println!("  8. Chunk proof root matches on-chain root");
+        println!("  8. Address proof root matches on-chain root");
         println!("  9. Winner proof root matches on-chain root");
         println!("  10. Winner hash matches on-chain commitment");
 
@@ -1422,41 +1603,32 @@ mod tests {
         println!("\nPHASE 7: VERIFY PROOF STRUCTURE");
         println!("--------------------------------");
 
-        // Check first chunk proof structure (using claimed depth, not tree)
-        let first_proof = &chunk_proofs[0];
+        // Check first address proof structure (using claimed depth, not tree)
+        let first_proof = &address_proofs[0];
         let claimed_depth = depth; // From on-chain
-        let expected_chunk_depth = claimed_depth as usize;
-        println!("✓ Chunk proof depth: {}", first_proof.depth());
+        let expected_address_depth = claimed_depth as usize;
+        println!("✓ Address proof depth: {}", first_proof.depth());
         println!(
-            "✓ Expected chunk proof depth (from claimed depth {claimed_depth}): {expected_chunk_depth}"
+            "✓ Expected address proof depth (from claimed depth {claimed_depth}): {expected_address_depth}"
         );
         println!("✓ Number of sibling hashes: {}", first_proof.depth());
         println!("✓ Has salt: {}", first_proof.salt.is_some());
 
         assert_eq!(
             first_proof.depth(),
-            expected_chunk_depth,
+            expected_address_depth,
             "Proof depth should match expected"
         );
 
         // Verify winner candidate's branch to midpoint (using claimed depth, not tree)
         let winner_branch = &winner_candidate.branch;
-        let midpoint_level = claimed_depth / 2;
-        let expected_midpoint_depth = (claimed_depth - midpoint_level) as usize;
+        let expected_midpoint_depth = midpoint_proof_depth(claimed_depth) as usize;
+        let level = midpoint_level(claimed_depth);
 
         println!("\n✓ Winner midpoint proof depth: {}", winner_branch.depth());
-        println!(
-            "✓ Expected midpoint proof depth (from claimed depth {claimed_depth}): {expected_midpoint_depth}"
-        );
-        println!(
-            "✓ Midpoint is at level {actual_midpoint_level} (depth {depth} - {desired_midpoint_count_bits} bits)"
-        );
-        println!(
-            "✓ Proof from level {} to root (level {}) = {} steps",
-            actual_midpoint_level,
-            depth,
-            winner_branch.depth()
-        );
+        println!("✓ Expected midpoint proof depth: {expected_midpoint_depth}");
+        println!("✓ Midpoint level: {level}");
+        println!("✓ Tree depth: {claimed_depth}");
         println!("✓ No salt (midpoints are intermediate hashes)");
 
         assert_eq!(
@@ -1475,8 +1647,8 @@ mod tests {
         println!("\nPHASE 8: VERIFY PRIVACY PROPERTIES");
         println!("-----------------------------------");
 
-        // Each chunk has a unique salt
-        let salts: Vec<_> = chunk_proofs.iter().map(|p| p.salt.unwrap()).collect();
+        // Each address has a unique salt
+        let salts: Vec<_> = address_proofs.iter().map(|p| p.salt.unwrap()).collect();
 
         let unique_salts: std::collections::HashSet<_> = salts.iter().collect();
         assert_eq!(
@@ -1484,13 +1656,13 @@ mod tests {
             salts.len(),
             "All salts should be unique"
         );
-        println!("✓ All {} chunks have unique salts", salts.len());
+        println!("✓ All {} addresses have unique salts", salts.len());
 
-        // Different trees from same chunks have different roots (due to random salts)
-        let tree2 = MerkleTree::from_xornames(chunks.clone()).unwrap();
+        // Different trees from same addresses have different roots (due to random salts)
+        let tree2 = MerkleTree::from_xornames(addresses.clone()).unwrap();
         assert_ne!(tree.root(), tree2.root(), "Different salt → different root");
         println!("✓ Random salts ensure non-deterministic roots");
-        println!("✓ Privacy: chunk content cannot be inferred from tree structure");
+        println!("✓ Privacy: address content cannot be inferred from tree structure");
 
         // ==================================================================
         // PHASE 9: COST COMPARISON
@@ -1498,11 +1670,13 @@ mod tests {
         println!("\nPHASE 9: COST COMPARISON");
         println!("-------------------------");
 
-        let old_payments = real_chunk_count * 3; // 3 nodes per chunk
+        let old_payments = real_address_count * 3; // 3 nodes per address
         let new_payments = depth as usize; // Only winner pool paid
 
-        println!("Old system (per-chunk payment):");
-        println!("  {real_chunk_count} chunks × 3 nodes = {old_payments} payment transactions");
+        println!("Old system (per-address payment):");
+        println!(
+            "  {real_address_count} addresses × 3 nodes = {old_payments} payment transactions"
+        );
 
         println!("\nNew system (Merkle batch payment):");
         println!("  1 batch payment → {new_payments} winner nodes");
@@ -1522,11 +1696,11 @@ mod tests {
         // SUMMARY
         // ==================================================================
         println!("\n=== FLOW COMPLETE ===");
-        println!("✓ {real_chunk_count} real chunks uploaded");
-        println!("✓ {} dummy chunks padded", (1 << depth) - leaf_count);
+        println!("✓ {real_address_count} real addresses uploaded");
+        println!("✓ {} dummy addresses padded", (1 << depth) - leaf_count);
         println!("✓ {} candidate pools formed", candidates.len());
         println!("✓ 1 winner pool paid ({depth} nodes)");
-        println!("✓ All chunks verified and stored");
+        println!("✓ All addresses verified and stored");
         println!("✓ Privacy preserved with random salts");
         println!("✓ {savings_pct:.1}% gas cost reduction achieved\n");
     }
@@ -1536,7 +1710,7 @@ mod tests {
         // Verify that our padded tree has the correct number of nodes at each level
         println!("\n=== TESTING OUR PADDED TREE STRUCTURE ===\n");
 
-        let leaves = make_test_leaves(100); // 100 real chunks
+        let leaves = make_test_leaves(100); // 100 real addresses
         let tree = MerkleTree::from_xornames(leaves).unwrap();
 
         let depth = tree.depth();
@@ -1556,11 +1730,11 @@ mod tests {
                 println!("  Expected: {} nodes (2^{})", expected_count, depth - level);
                 println!("  Actual: {actual_count} nodes");
 
-                if level as usize == depth as usize / 2 {
+                if level as usize == midpoint_level(depth) {
                     println!("  >>> MIDPOINT LEVEL <<<");
                     println!(
                         "  Our workaround takes: {} nodes",
-                        std::cmp::min(actual_count, 1 << (depth as usize / 2))
+                        std::cmp::min(actual_count, 1 << midpoint_proof_depth(depth))
                     );
                 }
 
@@ -1582,9 +1756,9 @@ mod tests {
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
         assert_eq!(tree.depth(), 4);
 
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         // From leaf (level 0) to root (level 4) = 4 hashing steps = 4 siblings
-        assert_eq!(chunk_proof.depth(), 4);
+        assert_eq!(address_proof.depth(), 4);
 
         let midpoints = tree.midpoints().unwrap();
         let midpoint_proof = tree.generate_midpoint_proof(0, midpoints[0].hash).unwrap();
@@ -1596,9 +1770,9 @@ mod tests {
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
         assert_eq!(tree.depth(), 10);
 
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         // From leaf (level 0) to root (level 10) = 10 hashing steps = 10 siblings
-        assert_eq!(chunk_proof.depth(), 10);
+        assert_eq!(address_proof.depth(), 10);
 
         let midpoints = tree.midpoints().unwrap();
         let midpoint_proof = tree.generate_midpoint_proof(0, midpoints[0].hash).unwrap();
@@ -1610,9 +1784,9 @@ mod tests {
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
         assert_eq!(tree.depth(), 7);
 
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         // From leaf (level 0) to root (level 7) = 7 hashing steps = 7 siblings
-        assert_eq!(chunk_proof.depth(), 7);
+        assert_eq!(address_proof.depth(), 7);
 
         let midpoints = tree.midpoints().unwrap();
         let midpoint_proof = tree.generate_midpoint_proof(0, midpoints[0].hash).unwrap();
@@ -1626,84 +1800,95 @@ mod tests {
 
         let leaves = make_test_leaves(16);
         let tree = MerkleTree::from_xornames(leaves.clone()).unwrap();
-        let tx_timestamp = SystemTime::now()
+        let merkle_payment_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let candidates = tree.reward_candidates(tx_timestamp).unwrap();
+        let candidates = tree.reward_candidates(merkle_payment_timestamp).unwrap();
         let winner_pool = &candidates[0];
-        let chunk_proof = tree.generate_chunk_proof(0, leaves[0]).unwrap();
+        let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         let root = tree.root();
         let depth = tree.depth();
 
         // Compute hash of winner pool for smart contract
-        let winner_pool_hash = winner_pool.hash().unwrap();
+        let winner_pool_hash = winner_pool.hash();
 
-        // Test 1: Invalid chunk proof (wrong root)
+        // Test 1: Invalid address proof (wrong root)
         let wrong_root = XorName::from_content(b"wrong root");
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             winner_pool,
             &winner_pool_hash,
             depth,
             &wrong_root,
-            tx_timestamp,
+            merkle_payment_timestamp,
         );
-        assert!(matches!(result, Err(BadMerkleProof::RootMismatch)));
+        assert!(matches!(
+            result,
+            Err(BadMerkleProof::AddressBranchRootMismatch { .. })
+        ));
 
-        // Test 2: Chunk proof depth mismatch
+        // Test 2: Address proof depth mismatch
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             winner_pool,
             &winner_pool_hash,
             depth + 1, // Wrong depth
             &root,
-            tx_timestamp,
+            merkle_payment_timestamp,
         );
         assert!(matches!(
             result,
-            Err(BadMerkleProof::ChunkProofDepthMismatch { .. })
+            Err(BadMerkleProof::AddressProofDepthMismatch { .. })
         ));
 
         // Test 3: Winner proof root mismatch
         let mut wrong_winner = winner_pool.clone();
         // Create a different proof with wrong root
         let wrong_tree = MerkleTree::from_xornames(make_test_leaves(16)).unwrap();
-        let wrong_candidates = wrong_tree.reward_candidates(tx_timestamp).unwrap();
+        let wrong_candidates = wrong_tree
+            .reward_candidates(merkle_payment_timestamp)
+            .unwrap();
         wrong_winner.branch = wrong_candidates[0].branch.clone();
 
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             &wrong_winner,
             &winner_pool_hash,
             depth,
             &root,
-            tx_timestamp,
+            merkle_payment_timestamp,
         );
-        assert!(matches!(result, Err(BadMerkleProof::WinnerRootMismatch)));
+        assert!(matches!(
+            result,
+            Err(BadMerkleProof::WinnerBranchRootMismatch { .. })
+        ));
 
         // Test 4: Winner hash mismatch
         let wrong_hash = XorName::from_content(b"wrong winner hash");
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             winner_pool,
             &wrong_hash,
             depth,
             &root,
-            tx_timestamp,
+            merkle_payment_timestamp,
         );
-        assert!(matches!(result, Err(BadMerkleProof::BadWinnerHash(_))));
+        assert!(matches!(
+            result,
+            Err(BadMerkleProof::WinnerPoolDoesNotMatchSmartContractCommitment { .. })
+        ));
 
         // Test 5: Timestamp in future
-        let future_timestamp = tx_timestamp + 1000;
+        let future_timestamp = merkle_payment_timestamp + 1000;
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             winner_pool,
             &winner_pool_hash,
             depth,
@@ -1716,12 +1901,12 @@ mod tests {
         ));
 
         // Test 6: Payment expired
-        let old_timestamp = tx_timestamp - MERKLE_PAYMENT_EXPIRATION - 1;
+        let old_timestamp = merkle_payment_timestamp - MERKLE_PAYMENT_EXPIRATION - 1;
         let old_candidates = tree.reward_candidates(old_timestamp).unwrap();
-        let old_pool_hash = old_candidates[0].hash().unwrap();
+        let old_pool_hash = old_candidates[0].hash();
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             &old_candidates[0],
             &old_pool_hash,
             depth,
@@ -1732,10 +1917,10 @@ mod tests {
 
         // Test 7: Timestamp mismatch between pool and contract
         // Use a different timestamp that's still valid (not future, not expired)
-        let different_timestamp = tx_timestamp - 100;
+        let different_timestamp = merkle_payment_timestamp - 100;
         let result = verify_merkle_proof(
             &leaves[0],
-            &chunk_proof,
+            &address_proof,
             winner_pool,
             &winner_pool_hash,
             depth,
