@@ -14,6 +14,7 @@ external-signer = ["evmlib/external-signer"]
 test-utils = []
 
 [dependencies]
+blake2 = "0.10"
 custom_debug = "~0.6.1"
 evmlib = { path = "../evmlib", version = "0.4.5" }
 hex = "~0.4.3"
@@ -21,6 +22,7 @@ libp2p = { version = "0.56.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }
 ring = "0.17.12"
 rmp-serde = "1.1.1"
+rs_merkle = { git = "https://github.com/maidsafe/rs-merkle.git", branch = "master" }
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 serde_json = "1.0.108"
 tempfile = "3.10.1"
