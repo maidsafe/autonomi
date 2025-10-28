@@ -402,7 +402,7 @@ mod tests {
             .and(path("/"))
             .respond_with(
                 ResponseTemplate::new(200)
-                    .set_body_string("/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE\n/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"),
+                    .set_body_string("/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE\n/ip4/127.0.0.2/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"),
             )
             .mount(&mock_server)
             .await;
@@ -414,11 +414,11 @@ mod tests {
         assert_eq!(addrs.len(), 2);
 
         let addr1: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
                 .parse()
                 .unwrap();
         let addr2: Multiaddr =
-            "/ip4/127.0.0.2/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
+            "/ip4/127.0.0.2/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
         assert!(addrs.iter().any(|p| p == &addr1));
@@ -441,7 +441,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_string(
-                "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
             ))
             .mount(&mock_server2)
             .await;
@@ -456,7 +456,7 @@ mod tests {
         assert_eq!(addrs.len(), 1);
 
         let addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
         assert_eq!(addrs[0], addr);
@@ -497,7 +497,9 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/"))
-            .respond_with(ResponseTemplate::new(200).set_body_string("/ip4/127.0.0.1/tcp/8080"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string("/ip4/127.0.0.1/udp/8080/quic-v1"),
+            )
             .mount(&mock_server)
             .await;
 
@@ -506,7 +508,7 @@ mod tests {
 
         let addrs = fetcher.fetch_bootstrap_addresses().await.unwrap();
 
-        let valid_addr: Multiaddr = "/ip4/127.0.0.1/tcp/8080".parse().unwrap();
+        let valid_addr: Multiaddr = "/ip4/127.0.0.1/udp/8080/quic-v1".parse().unwrap();
         assert_eq!(addrs[0], valid_addr);
     }
 
@@ -535,7 +537,7 @@ mod tests {
         Mock::given(method("GET"))
             .and(path("/"))
             .respond_with(
-                ResponseTemplate::new(200).set_body_string("\n  \n/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5\n  \n"),
+                ResponseTemplate::new(200).set_body_string("\n  \n/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5\n  \n"),
             )
             .mount(&mock_server)
             .await;
@@ -547,7 +549,7 @@ mod tests {
         assert_eq!(addrs.len(), 1);
 
         let addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
                 .parse()
                 .unwrap();
         assert_eq!(addrs[0], addr);
