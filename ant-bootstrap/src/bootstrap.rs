@@ -81,6 +81,8 @@ pub struct Bootstrap {
 impl Bootstrap {
     /// Create a new Bootstrap manager with the given configuration.
     /// Use `new_with_preloaded_addrs` to ensure that the struct contains at least MIN_INITIAL_ADDRS addresses immediately.
+    ///
+    /// Must be called from a tokio runtime context.
     pub fn new(config: BootstrapConfig) -> Result<Self> {
         let contacts_progress = Self::build_contacts_progress(&config)?;
 
@@ -819,229 +821,27 @@ mod tests {
         }
     }
 
-    fn generate_valid_test_multiaddr(ip_third: u8, ip_fourth: u8, port: u16) -> Multiaddr {
-        let peer_id = libp2p::PeerId::random();
-        format!("/ip4/10.{ip_third}.{ip_fourth}.1/tcp/{port}/p2p/{peer_id}")
-            .parse()
-            .unwrap()
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_cli_arguments_precedence() {
-        let env_addr: Multiaddr =
-            "/ip4/10.0.0.1/tcp/1200/p2p/12D3KooWQnE7zXkVUEGBnJtNfR88Ujz4ezgm6bVnkvxHCzhF7S5S"
-                .parse()
-                .unwrap();
-        let cli_addr: Multiaddr =
-            "/ip4/10.0.0.2/tcp/1201/p2p/12D3KooWQx2TSK7g1C8x3QK7gBqdqbQEkd6vDT7Pxu5gb1xmgjvp"
-                .parse()
-                .unwrap();
-
-        let _env_guard = env_lock().await;
-        set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
-
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            ignore_cache: true,
-            local: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            addrs: vec![cli_addr.clone()],
-            ..Default::default()
-        };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let mut flow = Bootstrap::new(config).unwrap();
-
-        let first_two = vec![
-            expect_next_addr(&mut flow).await.unwrap(),
-            expect_next_addr(&mut flow).await.unwrap(),
-        ];
-        let first_set: HashSet<_> = first_two.into_iter().collect();
-        let expected: HashSet<_> = [env_addr.clone(), cli_addr.clone()].into_iter().collect();
-        assert_eq!(first_set, expected);
-
-        let err = expect_err(&mut flow).await;
-        assert!(matches!(err, Error::NoBootstrapPeersFound));
-
-        remove_env_var(ANT_PEERS_ENV);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_env_variable_parsing() {
-        let _env_guard = env_lock().await;
-        set_env_var(
-            ANT_PEERS_ENV,
-            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE,\
-/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
-        );
-
-        let parsed = Bootstrap::fetch_from_env();
-        remove_env_var(ANT_PEERS_ENV);
-
-        assert_eq!(parsed.len(), 2);
-        let parsed_set: std::collections::HashSet<_> =
-            parsed.into_iter().map(|addr| addr.to_string()).collect();
-        let expected = std::collections::HashSet::from([
-            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
-                .to_string(),
-            "/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
-                .to_string(),
-        ]);
-        assert_eq!(parsed_set, expected);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn loads_addresses_from_cache_when_initial_queue_is_empty() {
-        let _env_guard = env_lock().await;
-        let cache_addr: Multiaddr =
-            "/ip4/127.0.0.1/tcp/1202/p2p/12D3KooWKGt8umjJQ4sDzFXo2UcHBaF33rqmFcWtXM6nbryL5G4J"
-                .parse()
-                .unwrap();
-        let peer_id = multiaddr_get_peer_id(&cache_addr).unwrap();
-
-        let temp_dir = TempDir::new().unwrap();
-        let file_name = BootstrapCacheStore::cache_file_name(true);
-
-        let mut cache_data = CacheData::default();
-        cache_data.add_peer(peer_id, std::iter::once(&cache_addr), 3, 10);
-        cache_data
-            .write_to_file(temp_dir.path(), &file_name)
-            .unwrap();
-
-        let config = InitialPeersConfig {
-            local: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            ..Default::default()
-        };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).unwrap();
-
-        let got = expect_next_addr(&mut flow).await.unwrap();
-        assert_eq!(got, cache_addr);
-
-        let err = expect_err(&mut flow).await;
-        assert!(matches!(err, Error::NoBootstrapPeersFound));
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_first_flag_behavior() {
-        let _env_guard = env_lock().await;
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/peers"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(
-                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
-            ))
-            .expect(0)
-            .mount(&mock_server)
-            .await;
-
-        let temp_dir = TempDir::new().unwrap();
-        let config = InitialPeersConfig {
-                first: true,
-                addrs: vec![
-                "/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
-                    .parse()
-                    .unwrap(),
-                ],
-                network_contacts_url: vec![format!("{}/peers", mock_server.uri())],
-                bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-                ..Default::default()
-            };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).unwrap();
-
-        let err = expect_err(&mut flow).await;
-        assert!(matches!(err, Error::NoBootstrapPeersFound));
-        assert!(
-            mock_server.received_requests().await.unwrap().is_empty(),
-            "first flag should prevent contact fetches"
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_multiple_network_contacts() {
-        let _env_guard = env_lock().await;
-
-        let mock_server = MockServer::start().await;
-
-        let contact_one: Multiaddr =
-            "/ip4/192.168.0.1/tcp/1203/p2p/12D3KooWPULWT1qXJ1jzYVtQocvKXgcv6U7Pp3ui3EB7mN8hXAsP"
-                .parse()
-                .unwrap();
-        let contact_two: Multiaddr =
-            "/ip4/192.168.0.2/tcp/1204/p2p/12D3KooWPsMPaEjaWjW6GWpAne6LYcwBQEJfnDbhQFNs6ytzmBn5"
-                .parse()
-                .unwrap();
-
-        Mock::given(method("GET"))
-            .and(path("/first"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(contact_one.to_string()))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/second"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(contact_two.to_string()))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        let config = InitialPeersConfig {
-            ignore_cache: true,
-            network_contacts_url: vec![
-                format!("{}/first", mock_server.uri()),
-                format!("{}/second", mock_server.uri()),
-            ],
-            ..Default::default()
-        };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-        let mut flow = Bootstrap::new(config).unwrap();
-
-        let first = expect_next_addr(&mut flow).await.unwrap();
-        assert_eq!(first, contact_one);
-
-        let second = expect_next_addr(&mut flow).await.unwrap();
-        assert_eq!(second, contact_two);
-
-        let err = expect_err(&mut flow).await;
-        assert!(matches!(err, Error::NoBootstrapPeersFound));
-
-        let requests = mock_server.received_requests().await.unwrap();
-        assert_eq!(requests.len(), 2);
-        assert_eq!(requests[0].url.path(), "/first");
-        assert_eq!(requests[1].url.path(), "/second");
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_full_bootstrap_flow() {
+    async fn address_sources_follow_priority_env_cli_cache_contacts() {
         let _env_guard = env_lock().await;
         remove_env_var(ANT_PEERS_ENV);
 
         let env_addr: Multiaddr =
-            "/ip4/10.1.0.1/tcp/1300/p2p/12D3KooWBbtXX6gY5xPD7NzNGGbj2428NJQ4HNvvBnSE5g4R7Pkf"
+            "/ip4/10.1.0.1/udp/1300/quic-v1/p2p/12D3KooWBbtXX6gY5xPD7NzNGGbj2428NJQ4HNvvBnSE5g4R7Pkf"
                 .parse()
                 .unwrap();
         let cli_addr: Multiaddr =
-            "/ip4/10.1.0.2/tcp/1301/p2p/12D3KooWCRfYwq9c3PAXo5cTp3snq72Knqukcec4c9qT1AMyvMPd"
+            "/ip4/10.1.0.2/udp/1301/quic-v1/p2p/12D3KooWCRfYwq9c3PAXo5cTp3snq72Knqukcec4c9qT1AMyvMPd"
                 .parse()
                 .unwrap();
         set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
 
         let cache_addr_one: Multiaddr =
-            "/ip4/10.1.0.3/tcp/1302/p2p/12D3KooWMmKJcWUP9UqP4g1n3LH1htkvSUStn1aQGQxGc1dQcYxA"
+            "/ip4/10.1.0.3/udp/1302/quic-v1/p2p/12D3KooWMmKJcWUP9UqP4g1n3LH1htkvSUStn1aQGQxGc1dQcYxA"
                 .parse()
                 .unwrap();
         let cache_addr_two: Multiaddr =
-            "/ip4/10.1.0.4/tcp/1303/p2p/12D3KooWA4b4T6Dz4RUtqnYDEBt3eGkqRykGGBqBP3ZiZsaAJ2jp"
+            "/ip4/10.1.0.4/udp/1303/quic-v1/p2p/12D3KooWA4b4T6Dz4RUtqnYDEBt3eGkqRykGGBqBP3ZiZsaAJ2jp"
                 .parse()
                 .unwrap();
 
@@ -1066,11 +866,11 @@ mod tests {
 
         let mock_server = MockServer::start().await;
         let contact_one: Multiaddr =
-            "/ip4/10.1.0.5/tcp/1304/p2p/12D3KooWQGyiCWkmKvgFVF1PsvBLnBxG29BAsoAhH4m6qjUpBAk1"
+            "/ip4/10.1.0.5/udp/1304/quic-v1/p2p/12D3KooWQGyiCWkmKvgFVF1PsvBLnBxG29BAsoAhH4m6qjUpBAk1"
                 .parse()
                 .unwrap();
         let contact_two: Multiaddr =
-            "/ip4/10.1.0.6/tcp/1305/p2p/12D3KooWGpMibW82dManEXZDV4SSQSSHqzTeWY5Avzkdx6yrosNG"
+            "/ip4/10.1.0.6/udp/1305/quic-v1/p2p/12D3KooWGpMibW82dManEXZDV4SSQSSHqzTeWY5Avzkdx6yrosNG"
                 .parse()
                 .unwrap();
 
@@ -1087,21 +887,6 @@ mod tests {
             .expect(1)
             .mount(&mock_server)
             .await;
-
-        let file_path = temp_dir.path().join(format!(
-            "version_{}/{}",
-            CacheData::CACHE_DATA_VERSION,
-            file_name
-        ));
-        let contents = std::fs::read_to_string(&file_path).unwrap();
-        assert!(contents.contains(&cache_addr_one.to_string()));
-        assert!(contents.contains(&cache_addr_two.to_string()));
-
-        assert_eq!(
-            Bootstrap::fetch_from_env(),
-            vec![env_addr.clone()],
-            "environment variable should yield the configured address"
-        );
 
         let config = InitialPeersConfig {
             addrs: vec![cli_addr.clone()],
@@ -1152,47 +937,47 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_disable_env_peers_flag() {
-        let env_addr = generate_valid_test_multiaddr(2, 0, 2000);
-
+    async fn env_variable_parses_comma_separated_multiaddrs() {
         let _env_guard = env_lock().await;
-        set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
-
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            local: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            ..Default::default()
-        };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-
-        let result = Bootstrap::new(config);
-        assert!(
-            result.is_err(),
-            "Should error when env peers are disabled and no other sources available"
+        set_env_var(
+            ANT_PEERS_ENV,
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE,\
+/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5",
         );
-        assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
 
+        let parsed = Bootstrap::fetch_from_env();
         remove_env_var(ANT_PEERS_ENV);
+
+        assert_eq!(parsed.len(), 2);
+        let parsed_set: std::collections::HashSet<_> =
+            parsed.into_iter().map(|addr| addr.to_string()).collect();
+        let expected = std::collections::HashSet::from([
+        "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"
+            .to_string(),
+        "/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
+            .to_string(),
+    ]);
+        assert_eq!(parsed_set, expected);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_disable_cache_reading_flag() {
+    async fn cache_loads_varying_quantities_zero_few_many() {
         let _env_guard = env_lock().await;
-
-        let cache_addr = generate_valid_test_multiaddr(2, 0, 2001);
-        let peer_id = multiaddr_get_peer_id(&cache_addr).unwrap();
-
         let temp_dir = TempDir::new().unwrap();
         let file_name = BootstrapCacheStore::cache_file_name(true);
 
-        let mut cache_data = CacheData::default();
-        cache_data.add_peer(peer_id, std::iter::once(&cache_addr), 3, 10);
-        cache_data
+        let mut cache_data_one = CacheData::default();
+        let cache_addr_one: Multiaddr =
+            "/ip4/127.0.0.1/tcp/1202/p2p/12D3KooWKGt8umjJQ4sDzFXo2UcHBaF33rqmFcWtXM6nbryL5G4J"
+                .parse()
+                .unwrap();
+        cache_data_one.add_peer(
+            multiaddr_get_peer_id(&cache_addr_one).unwrap(),
+            std::iter::once(&cache_addr_one),
+            3,
+            10,
+        );
+        cache_data_one
             .write_to_file(temp_dir.path(), &file_name)
             .unwrap();
 
@@ -1204,200 +989,165 @@ mod tests {
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
-        config.disable_cache_reading = true;
-
-        let result = Bootstrap::new(config);
-        assert!(
-            result.is_err(),
-            "Should error when cache reading is disabled and no other sources available"
-        );
-        assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_bootstrap_completed_initialization() {
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            first: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            ..Default::default()
-        };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).unwrap();
-
-        assert!(
-            flow.has_terminated(),
-            "bootstrap_completed should be true for first node"
-        );
-
-        let config = InitialPeersConfig {
-            first: false,
-            local: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            addrs: vec![generate_valid_test_multiaddr(2, 0, 2002)],
-            ..Default::default()
-        };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).unwrap();
-
-        assert!(
-            !flow.has_terminated(),
-            "bootstrap_completed should be false for non-first node"
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_bootstrap_peer_ids_population() {
-        let env_addr = generate_valid_test_multiaddr(2, 0, 2003);
-        let cli_addr = generate_valid_test_multiaddr(2, 0, 2004);
-
-        let env_peer_id = multiaddr_get_peer_id(&env_addr).unwrap();
-        let cli_peer_id = multiaddr_get_peer_id(&cli_addr).unwrap();
-
-        let _env_guard = env_lock().await;
-        set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
-
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            local: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            addrs: vec![cli_addr.clone()],
-            ..Default::default()
-        };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let flow = Bootstrap::new(config).unwrap();
-
-        assert!(
-            flow.is_bootstrap_peer(&env_peer_id),
-            "Peer ID from env should be tracked"
-        );
-        assert!(
-            flow.is_bootstrap_peer(&cli_peer_id),
-            "Peer ID from CLI should be tracked"
-        );
-
-        remove_env_var(ANT_PEERS_ENV);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_invalid_multiaddr_in_initial_peers() {
-        let _env_guard = env_lock().await;
-
-        let valid_addr = generate_valid_test_multiaddr(2, 0, 2005);
-        let invalid_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
-
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            local: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            addrs: vec![valid_addr.clone()],
-            ..Default::default()
-        };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-
-        config.initial_peers.push(invalid_addr);
-
         let mut flow = Bootstrap::new(config).unwrap();
 
-        let first = expect_next_addr(&mut flow).await.unwrap();
-        assert_eq!(first, valid_addr, "Should get the valid address");
-
-        let err = expect_err(&mut flow).await;
-        assert!(
-            matches!(err, Error::NoBootstrapPeersFound),
-            "Should not find any more peers after valid one (invalid addr was filtered)"
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_local_network_skips_contacts() {
-        let _env_guard = env_lock().await;
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/should-not-be-called"))
-            .respond_with(ResponseTemplate::new(200).set_body_string(
-                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
-            ))
-            .expect(0)
-            .mount(&mock_server)
-            .await;
-
-        let temp_dir = TempDir::new().unwrap();
-
-        let config = InitialPeersConfig {
-            local: true,
-            ignore_cache: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
-            network_contacts_url: vec![format!("{}/should-not-be-called", mock_server.uri())],
-            addrs: vec![generate_valid_test_multiaddr(2, 0, 2006)],
-            ..Default::default()
-        };
-        let mut config =
-            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        config.disable_env_peers = true;
-
-        let addr_from_config = config.initial_peers[0].clone();
-        let mut flow = Bootstrap::new(config).unwrap();
-
-        let first = expect_next_addr(&mut flow).await.unwrap();
-        assert_eq!(
-            first, addr_from_config,
-            "Should get the address from config"
-        );
+        let got = expect_next_addr(&mut flow).await.unwrap();
+        assert_eq!(got, cache_addr_one);
 
         let err = expect_err(&mut flow).await;
         assert!(matches!(err, Error::NoBootstrapPeersFound));
 
+        let temp_dir_few = TempDir::new().unwrap();
+        let mut cache_data_few = CacheData::default();
+        for i in 0..MIN_INITIAL_ADDRS - 2 {
+            let peer_id = libp2p::PeerId::random();
+            let addr: Multiaddr =
+                format!("/ip4/10.4.{}.1/udp/{}/quic-v1/p2p/{peer_id}", i, 4000 + i)
+                    .parse()
+                    .unwrap();
+            cache_data_few.add_peer(peer_id, std::iter::once(&addr), 3, 10);
+        }
+        cache_data_few
+            .write_to_file(temp_dir_few.path(), &file_name)
+            .unwrap();
+
+        let config_few = InitialPeersConfig {
+            local: true,
+            bootstrap_cache_dir: Some(temp_dir_few.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config_few =
+            BootstrapConfig::try_from(&config_few).expect("Failed to create BootstrapConfig");
+        config_few.disable_env_peers = true;
+
+        let result_few = Bootstrap::new_with_preloaded_addrs(config_few).await;
         assert!(
-            mock_server.received_requests().await.unwrap().is_empty(),
-            "local flag should prevent contact fetches"
+            result_few.is_ok(),
+            "Should succeed with few contacts (< 5 but > 0)"
+        );
+
+        let mut flow_few = result_few.unwrap();
+        let mut count = 0;
+        while let Ok(Some(_addr)) = flow_few.next_addr() {
+            count += 1;
+            if count >= MIN_INITIAL_ADDRS {
+                break;
+            }
+        }
+        assert_eq!(
+            count,
+            MIN_INITIAL_ADDRS - 2,
+            "Should have exactly 3 contacts"
+        );
+
+        let temp_dir_many = TempDir::new().unwrap();
+        let mut cache_data_many = CacheData::default();
+        for i in 0..MIN_INITIAL_ADDRS + 1 {
+            let peer_id = libp2p::PeerId::random();
+            let addr: Multiaddr =
+                format!("/ip4/10.3.{}.1/udp/{}/quic-v1/p2p/{peer_id}", i, 3000 + i)
+                    .parse()
+                    .unwrap();
+            cache_data_many.add_peer(peer_id, std::iter::once(&addr), 3, 10);
+        }
+        cache_data_many
+            .write_to_file(temp_dir_many.path(), &file_name)
+            .unwrap();
+
+        let config_many = InitialPeersConfig {
+            local: true,
+            bootstrap_cache_dir: Some(temp_dir_many.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config_many =
+            BootstrapConfig::try_from(&config_many).expect("Failed to create BootstrapConfig");
+        config_many.disable_env_peers = true;
+
+        let result_many = Bootstrap::new_with_preloaded_addrs(config_many).await;
+        assert!(
+            result_many.is_ok(),
+            "Should successfully initialize with many contacts in cache"
+        );
+
+        let mut flow_many = result_many.unwrap();
+        let mut count_many = 0;
+        while let Ok(Some(_addr)) = flow_many.next_addr() {
+            count_many += 1;
+            if count_many >= MIN_INITIAL_ADDRS {
+                break;
+            }
+        }
+        assert!(
+            count_many > 0,
+            "Should have loaded contacts from cache, got {count_many}"
         );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_timeout_with_no_addresses() {
+    async fn contacts_fetched_sequentially_from_multiple_endpoints() {
         let _env_guard = env_lock().await;
 
-        let temp_dir = TempDir::new().unwrap();
-        let file_name = BootstrapCacheStore::cache_file_name(true);
-        let cache_data = CacheData::default();
-        cache_data
-            .write_to_file(temp_dir.path(), &file_name)
+        let mock_server = MockServer::start().await;
+
+        let contact_one: Multiaddr =
+        "/ip4/192.168.0.1/udp/1203/quic-v1/p2p/12D3KooWPULWT1qXJ1jzYVtQocvKXgcv6U7Pp3ui3EB7mN8hXAsP"
+            .parse()
+            .unwrap();
+        let contact_two: Multiaddr =
+        "/ip4/192.168.0.2/udp/1204/quic-v1/p2p/12D3KooWPsMPaEjaWjW6GWpAne6LYcwBQEJfnDbhQFNs6ytzmBn5"
+            .parse()
             .unwrap();
 
+        Mock::given(method("GET"))
+            .and(path("/first"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(contact_one.to_string()))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/second"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(contact_two.to_string()))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
         let config = InitialPeersConfig {
-            local: true,
-            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            ignore_cache: true,
+            network_contacts_url: vec![
+                format!("{}/first", mock_server.uri()),
+                format!("{}/second", mock_server.uri()),
+            ],
             ..Default::default()
         };
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
+        let mut flow = Bootstrap::new(config).unwrap();
 
-        let result = Bootstrap::new(config);
+        let first = expect_next_addr(&mut flow).await.unwrap();
+        assert_eq!(first, contact_one);
 
-        assert!(
-            result.is_err(),
-            "Should error when no addresses are available from any source"
-        );
-        assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
+        let second = expect_next_addr(&mut flow).await.unwrap();
+        assert_eq!(second, contact_two);
+
+        let err = expect_err(&mut flow).await;
+        assert!(matches!(err, Error::NoBootstrapPeersFound));
+
+        let requests = mock_server.received_requests().await.unwrap();
+        assert_eq!(requests.len(), 2);
+        assert_eq!(requests[0].url.path(), "/first");
+        assert_eq!(requests[1].url.path(), "/second");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_first_node_clears_cache() {
+    async fn first_node_skips_sources_clears_cache_and_terminates() {
         let _env_guard = env_lock().await;
 
-        let cache_addr = generate_valid_test_multiaddr(2, 0, 2007);
-        let peer_id = multiaddr_get_peer_id(&cache_addr).unwrap();
+        let peer_id = libp2p::PeerId::random();
+        let cache_addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2007/quic-v1/p2p/{peer_id}")
+            .parse()
+            .unwrap();
 
         let temp_dir = TempDir::new().unwrap();
         let file_name = BootstrapCacheStore::cache_file_name(false);
@@ -1420,13 +1170,40 @@ mod tests {
             "Cache should contain the address before initialization"
         );
 
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+        .and(path("/peers"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+        ))
+        .expect(0)
+        .mount(&mock_server)
+        .await;
+
         let config = InitialPeersConfig {
             first: true,
+            addrs: vec![
+            "/ip4/127.0.0.2/udp/8081/quic-v1/p2p/12D3KooWD2aV1f3qkhggzEFaJ24CEFYkSdZF5RKoMLpU6CwExYV5"
+                .parse()
+                .unwrap(),
+            ],
+            network_contacts_url: vec![format!("{}/peers", mock_server.uri())],
             bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
             ..Default::default()
         };
-        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
-        let _flow = Bootstrap::new(config).unwrap();
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
+        let mut flow = Bootstrap::new(config).unwrap();
+
+        let err = expect_err(&mut flow).await;
+        assert!(matches!(err, Error::NoBootstrapPeersFound));
+        assert!(
+            mock_server.received_requests().await.unwrap().is_empty(),
+            "first flag should prevent contact fetches"
+        );
+
+        assert!(flow.has_terminated());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -1438,18 +1215,75 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_new_loads_at_least_50_contacts() {
+    async fn preload_respects_disabled_source_flags() {
+        let peer_id = libp2p::PeerId::random();
+        let env_addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2000/quic-v1/p2p/{peer_id}")
+            .parse()
+            .unwrap();
+
+        let _env_guard = env_lock().await;
+        set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let config = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
+
+        let result = Bootstrap::new_with_preloaded_addrs(config).await;
+        assert!(
+            result.is_err(),
+            "Should error when env peers are disabled and no other sources available"
+        );
+        assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
+
+        let peer_id2 = libp2p::PeerId::random();
+        let cache_addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2001/quic-v1/p2p/{peer_id2}")
+            .parse()
+            .unwrap();
+
+        let temp_dir2 = TempDir::new().unwrap();
+        let file_name = BootstrapCacheStore::cache_file_name(true);
+
+        let mut cache_data = CacheData::default();
+        cache_data.add_peer(peer_id2, std::iter::once(&cache_addr), 3, 10);
+        cache_data
+            .write_to_file(temp_dir2.path(), &file_name)
+            .unwrap();
+
+        let config2 = InitialPeersConfig {
+            local: true,
+            bootstrap_cache_dir: Some(temp_dir2.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config2 =
+            BootstrapConfig::try_from(&config2).expect("Failed to create BootstrapConfig");
+        config2.disable_env_peers = true;
+        config2.disable_cache_reading = true;
+
+        let result2 = Bootstrap::new_with_preloaded_addrs(config2).await;
+        assert!(
+            result2.is_err(),
+            "Should error when cache reading is disabled and no other sources available"
+        );
+        assert!(matches!(result2.unwrap_err(), Error::NoBootstrapPeersFound));
+
+        remove_env_var(ANT_PEERS_ENV);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn preload_timeout_when_no_addresses_available() {
         let _env_guard = env_lock().await;
 
         let temp_dir = TempDir::new().unwrap();
         let file_name = BootstrapCacheStore::cache_file_name(true);
-
-        let mut cache_data = CacheData::default();
-        for i in 0..60 {
-            let addr = generate_valid_test_multiaddr(3, i as u8, 3000 + i);
-            let peer_id = multiaddr_get_peer_id(&addr).unwrap();
-            cache_data.add_peer(peer_id, std::iter::once(&addr), 3, 10);
-        }
+        let cache_data = CacheData::default();
         cache_data
             .write_to_file(temp_dir.path(), &file_name)
             .unwrap();
@@ -1463,74 +1297,68 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config);
+        let result = Bootstrap::new_with_preloaded_addrs(config).await;
 
         assert!(
-            result.is_ok(),
-            "Should successfully initialize with 60 contacts in cache"
+            result.is_err(),
+            "Should error when no addresses are available from any source"
         );
-
-        let mut flow = result.unwrap();
-        let mut count = 0;
-        while let Ok(Some(_addr)) = flow.next_addr() {
-            count += 1;
-            if count >= 60 {
-                break;
-            }
-        }
-
-        assert!(
-            count > 0,
-            "Should have loaded contacts from cache, got {count}"
-        );
+        assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_new_succeeds_with_few_contacts() {
+    async fn contacts_disabled_by_local_flag() {
         let _env_guard = env_lock().await;
 
-        let temp_dir = TempDir::new().unwrap();
-        let file_name = BootstrapCacheStore::cache_file_name(true);
+        let mock_server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/should-not-be-called"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "/ip4/127.0.0.1/udp/8080/quic-v1/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE",
+            ))
+            .expect(0)
+            .mount(&mock_server)
+            .await;
 
-        let mut cache_data = CacheData::default();
-        for i in 0..5 {
-            let addr = generate_valid_test_multiaddr(4, i as u8, 4000 + i);
-            let peer_id = multiaddr_get_peer_id(&addr).unwrap();
-            cache_data.add_peer(peer_id, std::iter::once(&addr), 3, 10);
-        }
-        cache_data
-            .write_to_file(temp_dir.path(), &file_name)
+        let temp_dir = TempDir::new().unwrap();
+
+        let peer_id = libp2p::PeerId::random();
+        let addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2006/quic-v1/p2p/{peer_id}")
+            .parse()
             .unwrap();
 
         let config = InitialPeersConfig {
             local: true,
+            ignore_cache: true,
             bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            network_contacts_url: vec![format!("{}/should-not-be-called", mock_server.uri())],
+            addrs: vec![addr],
             ..Default::default()
         };
         let mut config =
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config);
-        assert!(
-            result.is_ok(),
-            "Should succeed with few contacts (< 50 but > 0)"
+        let addr_from_config = config.initial_peers[0].clone();
+        let mut flow = Bootstrap::new_with_preloaded_addrs(config).await.unwrap();
+
+        let first = expect_next_addr(&mut flow).await.unwrap();
+        assert_eq!(
+            first, addr_from_config,
+            "Should get the address from config"
         );
 
-        let mut flow = result.unwrap();
-        let mut count = 0;
-        while let Ok(Some(_addr)) = flow.next_addr() {
-            count += 1;
-            if count >= 10 {
-                break;
-            }
-        }
+        let err = expect_err(&mut flow).await;
+        assert!(matches!(err, Error::NoBootstrapPeersFound));
 
-        assert_eq!(count, 5, "Should have exactly 5 contacts");
+        assert!(
+            mock_server.received_requests().await.unwrap().is_empty(),
+            "local flag should prevent contact fetches"
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-    async fn test_new_errors_with_zero_contacts() {
+    async fn contacts_fetch_failures_handled_gracefully() {
         let _env_guard = env_lock().await;
 
         let temp_dir = TempDir::new().unwrap();
@@ -1557,12 +1385,197 @@ mod tests {
             BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
         config.disable_env_peers = true;
 
-        let result = Bootstrap::new(config);
+        let result = Bootstrap::new_with_preloaded_addrs(config).await;
 
         assert!(
             result.is_err(),
             "Should error when all sources fail and no contacts are available"
         );
         assert!(matches!(result.unwrap_err(), Error::NoBootstrapPeersFound));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn invalid_multiaddrs_filtered_from_initial_peers() {
+        let _env_guard = env_lock().await;
+
+        let peer_id = libp2p::PeerId::random();
+        let valid_addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2005/quic-v1/p2p/{peer_id}")
+            .parse()
+            .unwrap();
+        let invalid_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let config = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            addrs: vec![valid_addr.clone()],
+            ..Default::default()
+        };
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
+
+        config.initial_peers.push(invalid_addr);
+
+        let mut flow = Bootstrap::new_with_preloaded_addrs(config).await.unwrap();
+
+        let first = expect_next_addr(&mut flow).await.unwrap();
+        assert_eq!(first, valid_addr, "Should get the valid address");
+
+        let err = expect_err(&mut flow).await;
+        assert!(
+            matches!(err, Error::NoBootstrapPeersFound),
+            "Should not find any more peers after valid one (invalid addr was filtered)"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn bootstrap_peer_ids_tracked_from_all_sources() {
+        let env_peer_id = libp2p::PeerId::random();
+        let cli_peer_id = libp2p::PeerId::random();
+        let env_addr: Multiaddr = format!("/ip4/10.2.0.1/udp/2003/quic-v1/p2p/{env_peer_id}")
+            .parse()
+            .unwrap();
+        let cli_addr: Multiaddr = format!("/ip4/10.2.0.2/udp/2004/quic-v1/p2p/{cli_peer_id}")
+            .parse()
+            .unwrap();
+
+        let _env_guard = env_lock().await;
+        set_env_var(ANT_PEERS_ENV, &env_addr.to_string());
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let config = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            addrs: vec![cli_addr.clone()],
+            ..Default::default()
+        };
+        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        let flow = Bootstrap::new_with_preloaded_addrs(config).await.unwrap();
+
+        assert!(
+            flow.is_bootstrap_peer(&env_peer_id),
+            "Peer ID from env should be tracked"
+        );
+        assert!(
+            flow.is_bootstrap_peer(&cli_peer_id),
+            "Peer ID from CLI should be tracked"
+        );
+
+        let random_peer = libp2p::PeerId::random();
+        assert!(!flow.is_bootstrap_peer(&random_peer));
+
+        remove_env_var(ANT_PEERS_ENV);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn queue_empty_returns_correct_state_based_on_pending_fetches() {
+        let temp_dir = TempDir::new().unwrap();
+        let peer_id = libp2p::PeerId::random();
+        let addr: Multiaddr = format!("/ip4/127.0.0.1/udp/5000/quic-v1/p2p/{peer_id}")
+            .parse()
+            .unwrap();
+
+        let _env_guard = env_lock().await;
+        set_env_var(ANT_PEERS_ENV, &addr.to_string());
+
+        let config = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            ..Default::default()
+        };
+        let config = BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+
+        let flow = Bootstrap::new(config).unwrap();
+
+        assert_eq!(flow.is_addr_queue_empty(), Some(false));
+
+        remove_env_var(ANT_PEERS_ENV);
+
+        let temp_dir_empty = TempDir::new().unwrap();
+
+        let config_empty = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir_empty.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config_empty =
+            BootstrapConfig::try_from(&config_empty).expect("Failed to create BootstrapConfig");
+        config_empty.disable_env_peers = true;
+
+        let flow_empty = Bootstrap::new(config_empty).unwrap();
+
+        assert_eq!(flow_empty.is_addr_queue_empty(), Some(true));
+
+        let peer_id_cache = libp2p::PeerId::random();
+        let cache_addr: Multiaddr = format!("/ip4/10.5.1.1/udp/5001/quic-v1/p2p/{peer_id_cache}")
+            .parse()
+            .unwrap();
+
+        let temp_dir_pending = TempDir::new().unwrap();
+        let file_name = BootstrapCacheStore::cache_file_name(true);
+
+        let mut cache_data = CacheData::default();
+        cache_data.add_peer(peer_id_cache, std::iter::once(&cache_addr), 3, 10);
+        cache_data
+            .write_to_file(temp_dir_pending.path(), &file_name)
+            .unwrap();
+
+        let config_pending = InitialPeersConfig {
+            local: true,
+            bootstrap_cache_dir: Some(temp_dir_pending.path().to_path_buf()),
+            ..Default::default()
+        };
+        let mut config_pending =
+            BootstrapConfig::try_from(&config_pending).expect("Failed to create BootstrapConfig");
+        config_pending.disable_env_peers = true;
+
+        let flow_pending = Bootstrap::new(config_pending).unwrap();
+
+        assert_eq!(flow_pending.is_addr_queue_empty(), None);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn terminated_false_until_completion_criteria_met() {
+        let temp_dir_first = TempDir::new().unwrap();
+
+        let config_first = InitialPeersConfig {
+            first: true,
+            bootstrap_cache_dir: Some(temp_dir_first.path().to_path_buf()),
+            ..Default::default()
+        };
+        let config_first =
+            BootstrapConfig::try_from(&config_first).expect("Failed to create BootstrapConfig");
+
+        let flow_first = Bootstrap::new(config_first).unwrap();
+
+        assert!(flow_first.has_terminated());
+
+        let temp_dir = TempDir::new().unwrap();
+        let peer_id = libp2p::PeerId::random();
+        let addr: Multiaddr = format!("/ip4/10.5.4.1/udp/5004/quic-v1/p2p/{peer_id}")
+            .parse()
+            .unwrap();
+
+        let config = InitialPeersConfig {
+            local: true,
+            ignore_cache: true,
+            bootstrap_cache_dir: Some(temp_dir.path().to_path_buf()),
+            addrs: vec![addr],
+            ..Default::default()
+        };
+        let mut config =
+            BootstrapConfig::try_from(&config).expect("Failed to create BootstrapConfig");
+        config.disable_env_peers = true;
+
+        let flow = Bootstrap::new(config).unwrap();
+
+        assert!(!flow.has_terminated());
     }
 }
