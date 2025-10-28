@@ -134,14 +134,6 @@ impl NetworkDriver {
                 trace!("GetClosestPeers: {:?}", res);
                 self.pending_tasks.update_closest_peers(id, res)?;
             }
-            QueryResult::GetRecord(res) => {
-                // The result here is not logged because it can produce megabytes of text.
-                trace!("GetRecord event occurred");
-                let finished = self.pending_tasks.update_get_record(id, res)?;
-                if finished && let Some(mut query) = self.kad().query_mut(&id) {
-                    query.finish();
-                }
-            }
             QueryResult::PutRecord(res) => {
                 trace!("PutRecord: {:?}", res);
                 self.pending_tasks.update_put_record_kad(id, res)?;
@@ -185,6 +177,9 @@ impl NetworkDriver {
             }) => {
                 self.pending_tasks
                     .update_put_record_req(request_id, result)?;
+            }
+            Response::Query(QueryResponse::GetReplicatedRecord(result)) => {
+                self.pending_tasks.update_get_record_req(request_id, result)?;
             }
             Response::Query(QueryResponse::GetVersion { peer: _, version }) => {
                 self.pending_tasks.update_get_version(request_id, version)?;

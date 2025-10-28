@@ -8,7 +8,7 @@
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
 pub use ant_bootstrap::{
-    Bootstrap, BootstrapConfig, InitialPeersConfig, error::Error as BootstrapError,
+    error::Error as BootstrapError, Bootstrap, BootstrapConfig, InitialPeersConfig,
 };
 use ant_evm::EvmNetwork;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
@@ -33,7 +33,10 @@ pub static CHUNK_DOWNLOAD_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
     let batch_size = std::env::var("CHUNK_DOWNLOAD_BATCH_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(1);
+        // With the network fetch switched from kad::get_record to req/rsp DM,
+        // which use much less memory and traffic each individual network query,
+        // the default parallism can now be increased from 1 to 4.
+        .unwrap_or(4);
     info!("Chunk download batch size: {}", batch_size);
     batch_size
 });

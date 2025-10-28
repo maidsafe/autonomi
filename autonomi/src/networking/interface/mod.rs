@@ -9,10 +9,7 @@
 use crate::networking::OneShotTaskResult;
 use ant_evm::PaymentQuote;
 use ant_protocol::NetworkAddress;
-use libp2p::{
-    PeerId,
-    kad::{PeerInfo, Quorum, Record},
-};
+use libp2p::kad::{PeerInfo, Quorum, Record};
 use std::num::NonZeroUsize;
 
 /// Task for the underlying network driver
@@ -33,12 +30,12 @@ pub(super) enum NetworkTask {
         resp: OneShotTaskResult<Vec<PeerInfo>>,
         n: NonZeroUsize,
     },
-    /// cf [`crate::driver::task_handler::TaskHandler::update_get_record`]
-    GetRecord {
+    /// cf [`crate::driver::task_handler::TaskHandler::update_get_record_req`]
+    GetRecordReq {
         addr: NetworkAddress,
-        quorum: Quorum,
+        from: PeerInfo,
         #[debug(skip)]
-        resp: OneShotTaskResult<(Option<Record>, Vec<PeerId>)>,
+        resp: OneShotTaskResult<Option<Vec<u8>>>,
     },
     /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad`]
     PutRecordKad {
@@ -50,7 +47,7 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<()>,
     },
-    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_kad_req`]
+    /// cf [`crate::driver::task_handler::TaskHandler::update_put_record_req`]
     PutRecordReq {
         #[debug(skip)]
         record: Record,
