@@ -76,7 +76,7 @@ pub type Result<T> = std::result::Result<T, MerkleTreeError>;
 /// - Individual address proofs verify addresses belong to paid batch
 pub struct MerkleTree {
     /// The underlying rs_merkle tree
-    inner: rs_merkle::MerkleTree<Blake2bHasher>,
+    inner: rs_merkle::MerkleTree<XorNameHasher>,
 
     /// Original leaf count (before padding)
     leaf_count: usize,
@@ -155,7 +155,7 @@ impl MerkleTree {
                 let mut data = Vec::with_capacity(64);
                 data.extend_from_slice(address.as_ref());
                 data.extend_from_slice(salt);
-                Blake2bHasher::hash(&data)
+                XorNameHasher::hash(&data)
             })
             .collect();
 
@@ -169,7 +169,7 @@ impl MerkleTree {
         }
 
         // Build rs_merkle tree from salted hashes
-        let inner = rs_merkle::MerkleTree::<Blake2bHasher>::from_leaves(&salted_leaves);
+        let inner = rs_merkle::MerkleTree::<XorNameHasher>::from_leaves(&salted_leaves);
 
         let root = inner.root().ok_or(MerkleTreeError::Internal(
             "Tree must have root after construction".to_string(),
@@ -540,7 +540,7 @@ pub struct MerkleBranch {
 impl MerkleBranch {
     /// Create from rs_merkle proof
     fn from_rs_merkle_proof(
-        proof: rs_merkle::MerkleProof<Blake2bHasher>,
+        proof: rs_merkle::MerkleProof<XorNameHasher>,
         leaf_index: usize,
         total_leaves_count: usize,
         unsalted_leaf_hash: XorName,
@@ -594,7 +594,7 @@ impl MerkleBranch {
             let mut data = Vec::with_capacity(64);
             data.extend_from_slice(self.unsalted_leaf_hash.as_ref());
             data.extend_from_slice(salt);
-            Blake2bHasher::hash(&data)
+            XorNameHasher::hash(&data)
         } else {
             // For midpoint proofs: use unsalted_leaf_hash directly
             let leaf_bytes = self.unsalted_leaf_hash.as_ref();
@@ -609,7 +609,7 @@ impl MerkleBranch {
 
         // Use rs_merkle's verify for both leaves and midpoints
         // For midpoints, we treat nodes at that level as "leaves" of a smaller tree
-        let proof = rs_merkle::MerkleProof::<Blake2bHasher>::new(self.proof_hashes.clone());
+        let proof = rs_merkle::MerkleProof::<XorNameHasher>::new(self.proof_hashes.clone());
         proof.verify(
             expected_root,
             &[self.leaf_index],
@@ -882,36 +882,25 @@ pub fn verify_merkle_proof(
     Ok(())
 }
 
-/// Blake2b hasher for rs_merkle
+/// XorName hasher for rs_merkle
 ///
-/// Uses Blake2b-256 (32-byte output) for hashing, consistent with Autonomi network
+/// Uses XorNameHasher (32-byte output) for hashing, consistent with Autonomi network
 #[derive(Clone)]
-struct Blake2bHasher;
+struct XorNameHasher;
 
-impl rs_merkle::Hasher for Blake2bHasher {
+impl rs_merkle::Hasher for XorNameHasher {
     type Hash = [u8; 32];
 
     fn hash(data: &[u8]) -> Self::Hash {
-        use blake2::Blake2b;
-        use blake2::digest::Digest;
-        use blake2::digest::consts::U32;
-
-        let mut hasher = Blake2b::<U32>::new();
-        hasher.update(data);
-        hasher.finalize().into()
+        XorName::from_content(data).0
     }
 
     fn concat_and_hash(left: &Self::Hash, right: Option<&Self::Hash>) -> Self::Hash {
-        use blake2::Blake2b;
-        use blake2::digest::Digest;
-        use blake2::digest::consts::U32;
-
-        let mut hasher = Blake2b::<U32>::new();
-        hasher.update(left);
-        if let Some(right_hash) = right {
-            hasher.update(right_hash);
+        if let Some(right) = right {
+            XorName::from_content_parts(&[left, right]).0
+        } else {
+            XorName::from_content(left).0
         }
-        hasher.finalize().into()
     }
 
     fn hash_size() -> usize {
@@ -1024,8 +1013,8 @@ mod tests {
     #[test]
     fn test_blake2b_output_size() {
         // Verify that Blake2b::<U32> produces 32-byte (256-bit) hashes
-        let hash1 = Blake2bHasher::hash(b"test data");
-        let hash2 = Blake2bHasher::concat_and_hash(&hash1, Some(&hash1));
+        let hash1 = XorNameHasher::hash(b"test data");
+        let hash2 = XorNameHasher::concat_and_hash(&hash1, Some(&hash1));
 
         // These should compile - proving the type is [u8; 32]
         assert_eq!(hash1.len(), 32, "Hash should be 32 bytes (256 bits)");
@@ -1036,7 +1025,7 @@ mod tests {
         );
 
         // Verify hashes are different for different inputs
-        let hash3 = Blake2bHasher::hash(b"different data");
+        let hash3 = XorNameHasher::hash(b"different data");
         assert_ne!(
             hash1, hash3,
             "Different inputs should produce different hashes"

@@ -14,7 +14,6 @@ external-signer = ["evmlib/external-signer"]
 test-utils = []
 
 [dependencies]
-blake2 = "0.10"
 custom_debug = "~0.6.1"
 evmlib = { path = "../evmlib", version = "0.4.5" }
 hex = "~0.4.3"
