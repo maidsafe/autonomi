@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761678664013,
+  "lastUpdate": 1761678665895,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8119,6 +8119,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/57da1110b80777120e6eac7b926a7191fdca55a2"
         },
         "date": 1761588935050,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f3c9a24ad3b3ea696e976946dfaaeb141a1be09f",
+          "message": "Merge pull request #3275 from RolandSherwin/3273_with_extended_close_group\n\nchecking close group record holding status",
+          "timestamp": "2025-10-28T17:53:35Z",
+          "tree_id": "d298214d0bd90c7851506ab94f965421d242445d",
+          "url": "https://github.com/maidsafe/autonomi/commit/f3c9a24ad3b3ea696e976946dfaaeb141a1be09f"
+        },
+        "date": 1761678665238,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
