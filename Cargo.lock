@@ -894,7 +894,6 @@ dependencies = [
 name = "ant-evm"
 version = "0.1.17"
 dependencies = [
- "blake2",
  "custom_debug",
  "evmlib",
  "hex",
