@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761761905481,
+  "lastUpdate": 1761761906994,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11664,6 +11664,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 13105,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "9f5582b69c9434884a3fa52b452b9a8481c9dd82",
+          "message": "Merge pull request #3278 from RolandSherwin/analyze_recursive\n\nfeat(ant): recursively analyze addresses",
+          "timestamp": "2025-10-29T17:06:35Z",
+          "tree_id": "8525e273b16aad7a19e44292db09e804d1f30a08",
+          "url": "https://github.com/maidsafe/autonomi/commit/9f5582b69c9434884a3fa52b452b9a8481c9dd82"
+        },
+        "date": 1761761906584,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9588,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 16873,
             "unit": "ms"
           },
           {
