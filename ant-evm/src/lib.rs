@@ -36,18 +36,11 @@ pub use evmlib::wallet::Wallet as EvmWallet;
 mod amount;
 mod data_payments;
 mod error;
-mod merkle_payments;
+
+pub mod merkle_payments;
 
 pub use data_payments::{ClientProofOfPayment, EncodedPeerId, PaymentQuote, ProofOfPayment};
 pub use evmlib::quoting_metrics::QuotingMetrics;
-
-pub use merkle_payments::{
-    BadMerkleProof, CANDIDATES_PER_POOL, DiskMerklePaymentContract, MAX_MERKLE_DEPTH, MerkleBranch,
-    MerklePaymentCandidateNode, MerklePaymentCandidatePool, MerklePaymentProof,
-    MerklePaymentVerificationError, MerkleTree, MerkleTreeError, OnChainPaymentInfo,
-    PoolCommitment, RewardCandidatePool, SmartContractError, expected_reward_pools,
-    verify_merkle_proof,
-};
 
 /// Types used in the public API
 pub use amount::{Amount, AttoTokens};

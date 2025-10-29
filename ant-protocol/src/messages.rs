@@ -24,10 +24,7 @@ pub use self::{
 };
 
 // Re-export merkle types from ant-evm
-pub use ant_evm::{
-    BadMerkleProof, MerkleBranch, MerkleTree, MerkleTreeError, RewardCandidatePool,
-    verify_merkle_proof,
-};
+pub use ant_evm::merkle_payments;
 
 use super::NetworkAddress;
 

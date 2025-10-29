@@ -84,6 +84,20 @@ pub enum Query {
         /// Address of the record.
         address: NetworkAddress,
     },
+    /// Get a Merkle payment candidate quote from a node
+    ///
+    /// Node signs its current state (metrics + reward address) with the
+    /// provided timestamp, creating a commitment that cryptographically
+    /// proves the binding between PeerId and RewardsAddress.
+    GetMerkleCandidateQuote {
+        /// Target address for topology verification
+        /// Client queries the 20 closest nodes to this target
+        /// target = hash(intersection_hash, root, timestamp)
+        key: NetworkAddress,
+        /// Merkle payment timestamp (unix seconds)
+        /// Node verifies this is not expired/future, then signs its state with it
+        merkle_payment_timestamp: u64,
+    },
 }
 
 impl Query {
@@ -96,7 +110,8 @@ impl Query {
             Query::GetStoreQuote { key, .. }
             | Query::GetReplicatedRecord { key, .. }
             | Query::GetChunkExistenceProof { key, .. }
-            | Query::GetClosestPeers { key, .. } => key.clone(),
+            | Query::GetClosestPeers { key, .. }
+            | Query::GetMerkleCandidateQuote { key, .. } => key.clone(),
             Query::PutRecord { holder, .. } => holder.clone(),
         }
     }
@@ -158,6 +173,15 @@ impl std::fmt::Display for Query {
                     "Cmd::PutRecord(To {:?}, with record {address:?} has {} data_size)",
                     holder.as_peer_id(),
                     serialized_record.len()
+                )
+            }
+            Query::GetMerkleCandidateQuote {
+                key,
+                merkle_payment_timestamp,
+            } => {
+                write!(
+                    f,
+                    "Query::GetMerkleCandidateQuote({key:?} timestamp={merkle_payment_timestamp})"
                 )
             }
         }
