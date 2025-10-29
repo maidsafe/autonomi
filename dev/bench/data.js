@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761749616300,
+  "lastUpdate": 1761749618018,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8323,6 +8323,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/79a0f31530d13486bc169b9007a27b4021230f96"
         },
         "date": 1761733222952,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6af65480a6fa1490850e5ba04c44dbaf3c72b959",
+          "message": "Merge pull request #3277 from grumbach/analyze_holders\n\nfeat: analyze holders",
+          "timestamp": "2025-10-29T13:43:33Z",
+          "tree_id": "01782395fbd2e5c8eb4ba98fd017123572a05d49",
+          "url": "https://github.com/maidsafe/autonomi/commit/6af65480a6fa1490850e5ba04c44dbaf3c72b959"
+        },
+        "date": 1761749617453,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
