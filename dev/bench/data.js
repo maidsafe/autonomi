@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761733221894,
+  "lastUpdate": 1761733223503,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8221,6 +8221,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/f3c9a24ad3b3ea696e976946dfaaeb141a1be09f"
         },
         "date": 1761678665238,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "79a0f31530d13486bc169b9007a27b4021230f96",
+          "message": "Merge pull request #3271 from mickvandijke/feat-pub-stream-encryption-methods\n\nfeat(autonomi): make encryption structs and functions pub",
+          "timestamp": "2025-10-29T09:08:24Z",
+          "tree_id": "9eb45cb0f48c41d5736945c822cbe0fcfc6055c8",
+          "url": "https://github.com/maidsafe/autonomi/commit/79a0f31530d13486bc169b9007a27b4021230f96"
+        },
+        "date": 1761733222952,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
