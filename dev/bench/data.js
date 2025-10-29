@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761733225244,
+  "lastUpdate": 1761749537681,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3158,6 +3158,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.093402659844096,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6af65480a6fa1490850e5ba04c44dbaf3c72b959",
+          "message": "Merge pull request #3277 from grumbach/analyze_holders\n\nfeat: analyze holders",
+          "timestamp": "2025-10-29T13:43:33Z",
+          "tree_id": "01782395fbd2e5c8eb4ba98fd017123572a05d49",
+          "url": "https://github.com/maidsafe/autonomi/commit/6af65480a6fa1490850e5ba04c44dbaf3c72b959"
+        },
+        "date": 1761749529095,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0348809039079994,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.149799533148903,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.0612490736508935,
             "unit": "MiB/s"
           }
         ]
