@@ -902,6 +902,7 @@ dependencies = [
  "rand 0.8.5",
  "ring 0.17.14",
  "rmp-serde",
+ "rs_merkle",
  "serde",
  "serde_json",
  "tempfile",
@@ -1102,6 +1103,7 @@ dependencies = [
  "ant-build-info",
  "ant-evm",
  "bincode",
+ "blake2",
  "blsttc",
  "bytes",
  "color-eyre",
@@ -1114,6 +1116,7 @@ dependencies = [
  "prost 0.9.0",
  "rand 0.8.5",
  "rmp-serde",
+ "rs_merkle",
  "serde",
  "serde_json",
  "sha2",
@@ -8272,6 +8275,14 @@ dependencies = [
  "libc",
  "rtoolbox",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rs_merkle"
+version = "1.5.0"
+source = "git+https://github.com/maidsafe/rs-merkle.git?branch=master#fa7ae1a911226e77164d3530a75709011283b5b9"
+dependencies = [
+ "sha2",
 ]
 
 [[package]]

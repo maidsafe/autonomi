@@ -23,6 +23,12 @@ pub use self::{
     response::{CmdResponse, QueryResponse},
 };
 
+// Re-export merkle types from ant-evm
+pub use ant_evm::{
+    BadMerkleProof, MerkleBranch, MerkleTree, MerkleTreeError, RewardCandidatePool,
+    verify_merkle_proof,
+};
+
 use super::NetworkAddress;
 
 use serde::{Deserialize, Serialize};
