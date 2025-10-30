@@ -166,28 +166,21 @@ pub async fn add_node(
             match nat_status.as_ref() {
                 Some(NatDetectionStatus::Public) => {
                     options.no_upnp = true; // UPnP not needed
-                    options.relay = false;
                 }
                 Some(NatDetectionStatus::UPnP) => {
                     options.no_upnp = false;
-                    options.relay = false;
                 }
                 Some(NatDetectionStatus::Private) => {
                     options.no_upnp = true;
-                    options.relay = true;
                 }
                 None => {
                     // Fallback to private defaults
                     options.no_upnp = true;
-                    options.relay = true;
-                    debug!("NAT status not set; defaulting to no_upnp=true and relay=true");
+                    debug!("NAT status not set; defaulting to no_upnp=true");
                 }
             }
 
-            debug!(
-                "Auto-setting NAT flags: no_upnp={}, relay={}",
-                options.no_upnp, options.relay
-            );
+            debug!("Auto-setting NAT flags: no_upnp={}", options.no_upnp);
         }
 
         let install_ctx = InstallNodeServiceCtxBuilder {
@@ -196,7 +189,6 @@ pub async fn add_node(
             data_dir_path: service_data_dir_path.clone(),
             env_variables: options.env_variables.clone(),
             evm_network: options.evm_network.clone(),
-            relay: options.relay,
             log_dir_path: service_log_dir_path.clone(),
             log_format: options.log_format,
             max_archived_log_files: options.max_archived_log_files,
@@ -235,7 +227,7 @@ pub async fn add_node(
                         connected_peers: None,
                         data_dir_path: service_data_dir_path.clone(),
                         evm_network: options.evm_network.clone(),
-                        relay: options.relay,
+                        relay: false,
                         initial_peers_config: options.init_peers_config.clone(),
                         listen_addr: None,
                         log_dir_path: service_log_dir_path.clone(),
