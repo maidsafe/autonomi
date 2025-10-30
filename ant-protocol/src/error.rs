@@ -73,6 +73,14 @@ pub enum Error {
     #[error("Outdated record: with counter {counter}, expected any above {expected}")]
     OutdatedRecordCounter { counter: u64, expected: u64 },
 
+    // ---------- Merkle payment errors
+    #[error("There was an error getting the Merkle candidate quote: {0}")]
+    GetMerkleCandidateQuoteFailed(String),
+    #[error("Failed to sign Merkle candidate node: {0}")]
+    FailedToSignMerkleCandidate(String),
+    #[error("Merkle payment verification failed: {0}")]
+    MerklePaymentVerificationFailed(String),
+
     // Dev Note: add new variants above this one for backward compatibility with older protocol versions
     // ---------- Unknown/fallback variant for retro compatibility
     /// Unknown error variant (for backward compatibility with newer protocol versions)

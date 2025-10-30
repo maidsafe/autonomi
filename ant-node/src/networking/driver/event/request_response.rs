@@ -72,6 +72,9 @@ impl SwarmDriver {
                             ant_protocol::messages::Query::GetVersion(..) => {
                                 "Request::Query::GetVersion"
                             }
+                            ant_protocol::messages::Query::GetMerkleCandidateQuote { .. } => {
+                                "Request::Query::GetMerkleCandidateQuote"
+                            }
                         },
                     };
                     connection_action_logging(
@@ -201,6 +204,14 @@ impl SwarmDriver {
                             }
                             ant_protocol::messages::QueryResponse::GetVersion { .. } => {
                                 "Response::Query::GetVersion".to_string()
+                            }
+                            ant_protocol::messages::QueryResponse::GetMerkleCandidateQuote(
+                                result,
+                            ) => {
+                                format!(
+                                    "Response::Query::GetMerkleCandidateQuote::{}",
+                                    result_to_str(result)
+                                )
                             }
                         },
                     };

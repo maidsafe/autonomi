@@ -658,7 +658,17 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             holders,
             verbose,
             recursive,
-        }) => analyze::analyze(&addr, closest_nodes, holders, recursive, verbose, network_context).await,
+        }) => {
+            analyze::analyze(
+                &addr,
+                closest_nodes,
+                holders,
+                recursive,
+                verbose,
+                network_context,
+            )
+            .await
+        }
         None => {
             // If no subcommand is given, default to clap's error behaviour.
             Opt::command()

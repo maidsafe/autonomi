@@ -18,6 +18,7 @@ use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
+use ant_evm::merkle_payments::MERKLE_PAYMENT_EXPIRATION;
 use ant_protocol::{
     CLOSE_GROUP_SIZE, NetworkAddress, PrettyPrintRecordKey,
     error::Error as ProtocolError,
@@ -745,6 +746,22 @@ impl Node {
                     record_addr: address,
                 }
             }
+            Query::GetMerkleCandidateQuote {
+                key,
+                data_type,
+                data_size,
+                merkle_payment_timestamp,
+            } => {
+                Self::respond_merkle_candidate_quote(
+                    network,
+                    key,
+                    data_type,
+                    data_size,
+                    merkle_payment_timestamp,
+                    payment_address,
+                )
+                .await
+            }
         };
         Response::Query(resp)
     }
@@ -812,6 +829,97 @@ impl Node {
             }
             (None, None) => vec![],
         }
+    }
+
+    /// Handle GetMerkleCandidateQuote query
+    /// Returns a signed MerklePaymentCandidateNode containing the node's current quoting metrics,
+    /// reward address, and timestamp commitment
+    async fn respond_merkle_candidate_quote(
+        network: &Network,
+        key: NetworkAddress,
+        data_type: u32,
+        data_size: usize,
+        merkle_payment_timestamp: u64,
+        payment_address: RewardsAddress,
+    ) -> QueryResponse {
+        debug!(
+            "Got GetMerkleCandidateQuote for target {key:?} with timestamp {merkle_payment_timestamp}"
+        );
+
+        // Validate timestamp before signing to prevent committing to invalid times.
+        // Nodes will reject proofs with expired/future timestamps during payment verification,
+        // so signing such timestamps would create useless quotes that can't be used.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        // Reject future timestamps
+        if merkle_payment_timestamp > now {
+            let error_msg = format!(
+                "Rejected future timestamp {merkle_payment_timestamp} (current time: {now})"
+            );
+            warn!("{error_msg} for {key:?}");
+            return QueryResponse::GetMerkleCandidateQuote(Err(
+                ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+            ));
+        }
+
+        // Reject expired timestamps
+        let age = now.saturating_sub(merkle_payment_timestamp);
+        if age > MERKLE_PAYMENT_EXPIRATION {
+            let error_msg = format!(
+                "Rejected expired timestamp {merkle_payment_timestamp} (age: {age}s, max: {MERKLE_PAYMENT_EXPIRATION}s)",
+            );
+            warn!("{error_msg} for {key:?}");
+            return QueryResponse::GetMerkleCandidateQuote(Err(
+                ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+            ));
+        }
+
+        // Get node's current quoting metrics
+        let record_key = key.to_record_key();
+        let (quoting_metrics, _is_already_stored) = match network
+            .get_local_quoting_metrics(record_key, data_type, data_size)
+            .await
+        {
+            Ok(metrics) => metrics,
+            Err(err) => {
+                let error_msg = format!("Failed to get quoting metrics for {key:?}: {err}");
+                warn!("{error_msg}");
+                return QueryResponse::GetMerkleCandidateQuote(Err(
+                    ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+                ));
+            }
+        };
+
+        // Create the MerklePaymentCandidateNode with node's signed commitment
+        let pub_key = network.get_pub_key();
+        let reward_address = payment_address;
+        let bytes = ant_evm::merkle_payments::MerklePaymentCandidateNode::bytes_to_sign(
+            &quoting_metrics,
+            &reward_address,
+            merkle_payment_timestamp,
+        );
+        let signature = match network.sign(&bytes) {
+            Ok(sig) => sig,
+            Err(e) => {
+                let error_msg = format!("Failed to sign candidate node for {key:?}: {e}");
+                error!("{error_msg}");
+                return QueryResponse::GetMerkleCandidateQuote(Err(
+                    ProtocolError::FailedToSignMerkleCandidate(error_msg),
+                ));
+            }
+        };
+
+        let candidate = ant_evm::merkle_payments::MerklePaymentCandidateNode {
+            quoting_metrics,
+            reward_address,
+            merkle_payment_timestamp,
+            pub_key,
+            signature,
+        };
+        QueryResponse::GetMerkleCandidateQuote(Ok(candidate))
     }
 
     // Nodes only check ChunkProof each other, to avoid `multi-version` issue

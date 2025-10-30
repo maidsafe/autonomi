@@ -64,9 +64,21 @@ pub struct OnChainPaymentInfo {
 }
 
 impl DiskMerklePaymentContract {
-    pub fn new(storage_path: PathBuf) -> Result<Self, SmartContractError> {
+    pub fn new_with_path(storage_path: PathBuf) -> Result<Self, SmartContractError> {
         std::fs::create_dir_all(&storage_path)?;
         Ok(Self { storage_path })
+    }
+
+    /// Create a new contract with the default storage path
+    /// Uses: DATA_DIR/autonomi/merkle_payments/
+    pub fn new() -> Result<Self, SmartContractError> {
+        let storage_path = if let Some(data_dir) = dirs_next::data_dir() {
+            data_dir.join("autonomi").join("merkle_payments")
+        } else {
+            // Fallback to current directory if data_dir is not available
+            PathBuf::from(".autonomi").join("merkle_payments")
+        };
+        Self::new_with_path(storage_path)
     }
 
     /// Submit batch payment (simulates smart contract logic)

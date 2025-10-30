@@ -942,7 +942,8 @@ mod tests {
             .collect();
 
         let temp_dir = TempDir::new().unwrap();
-        let contract = DiskMerklePaymentContract::new(temp_dir.path().to_path_buf()).unwrap();
+        let contract =
+            DiskMerklePaymentContract::new_with_path(temp_dir.path().to_path_buf()).unwrap();
 
         let winner_pool_hash = contract
             .pay_for_merkle_tree(depth, pool_commitments.clone(), merkle_payment_timestamp)

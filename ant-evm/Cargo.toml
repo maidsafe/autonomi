@@ -15,6 +15,7 @@ test-utils = []
 
 [dependencies]
 custom_debug = "~0.6.1"
+dirs-next = "~2.0" # NB TODO: remove this dependency once we have the real smart contract!
 evmlib = { path = "../evmlib", version = "0.4.5" }
 hex = "~0.4.3"
 libp2p = { version = "0.56.0", features = ["identify", "kad"] }

@@ -11,6 +11,7 @@ use std::collections::BTreeSet;
 use crate::error::PutValidationError;
 use crate::{Marker, Result, node::Node};
 use ant_evm::ProofOfPayment;
+use ant_evm::merkle_payments::CANDIDATES_PER_POOL;
 use ant_evm::payment_vault::verify_data_payment;
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
@@ -150,12 +151,7 @@ impl Node {
                 // So that when the replicate target asking for the copy,
                 // the node can have a higher chance to respond.
                 let store_scratchpad_result = self
-                    .validate_and_store_scratchpad_record(
-                        scratchpad,
-                        record_key.clone(),
-                        true,
-                        Some(payment),
-                    )
+                    .validate_and_store_scratchpad_record(scratchpad, record_key.clone(), true)
                     .await;
 
                 match store_scratchpad_result {
@@ -201,7 +197,7 @@ impl Node {
                 }
 
                 // store the scratchpad
-                self.validate_and_store_scratchpad_record(scratchpad, key, true, None)
+                self.validate_and_store_scratchpad_record(scratchpad, key, true)
                     .await
             }
             RecordKind::DataOnly(DataTypes::GraphEntry) => {
@@ -308,7 +304,7 @@ impl Node {
                 }
 
                 let res = self
-                    .validate_and_store_pointer_record(pointer, record.key.clone(), true, None)
+                    .validate_and_store_pointer_record(pointer, record.key.clone(), true)
                     .await;
                 if res.is_ok() {
                     let content_hash = XorName::from_content(&record.value);
@@ -359,12 +355,7 @@ impl Node {
                 }
 
                 let res = self
-                    .validate_and_store_pointer_record(
-                        pointer,
-                        record.key.clone(),
-                        true,
-                        Some(payment),
-                    )
+                    .validate_and_store_pointer_record(pointer, record.key.clone(), true)
                     .await;
                 if res.is_ok() {
                     let content_hash = XorName::from_content(&record.value);
@@ -377,6 +368,11 @@ impl Node {
                     );
                 }
                 res
+            }
+            // Merkle payment records
+            RecordKind::DataWithMerklePayment(data_type) => {
+                self.validate_and_store_merkle_payment_record(record, data_type)
+                    .await
             }
         }
     }
@@ -396,6 +392,13 @@ impl Node {
             // A separate flow handles record with payment
             RecordKind::DataWithPayment(_) => {
                 warn!("Prepaid record came with Payment, which should be handled in another flow");
+                Err(PutValidationError::UnexpectedRecordWithPayment(
+                    PrettyPrintRecordKey::from(&record.key).into_owned(),
+                ))
+            }
+            // Merkle payment records should not be replicated with payment proof
+            RecordKind::DataWithMerklePayment(_) => {
+                warn!("Record came with Merkle Payment, which should be handled in another flow");
                 Err(PutValidationError::UnexpectedRecordWithPayment(
                     PrettyPrintRecordKey::from(&record.key).into_owned(),
                 ))
@@ -428,7 +431,7 @@ impl Node {
                         PrettyPrintRecordKey::from(&record.key).into_owned(),
                     )
                 })?;
-                self.validate_and_store_scratchpad_record(scratchpad, key, false, None)
+                self.validate_and_store_scratchpad_record(scratchpad, key, false)
                     .await
             }
             RecordKind::DataOnly(DataTypes::GraphEntry) => {
@@ -449,7 +452,7 @@ impl Node {
                     )
                 })?;
                 let key = record.key.clone();
-                self.validate_and_store_pointer_record(pointer, key, false, None)
+                self.validate_and_store_pointer_record(pointer, key, false)
                     .await
             }
         }
@@ -548,7 +551,6 @@ impl Node {
         scratchpad: Scratchpad,
         record_key: RecordKey,
         is_client_put: bool,
-        _payment: Option<ProofOfPayment>,
     ) -> Result<(), PutValidationError> {
         // owner PK is defined herein, so as long as record key and this match, we're good
         let addr = scratchpad.address();
@@ -950,7 +952,6 @@ impl Node {
         pointer: Pointer,
         key: RecordKey,
         is_client_put: bool,
-        _payment: Option<ProofOfPayment>,
     ) -> Result<(), PutValidationError> {
         // Verify the pointer's signature
         if !pointer.verify_signature() {
@@ -1013,6 +1014,243 @@ impl Node {
         // }
 
         info!("Successfully stored Pointer record at {key:?}");
+        Ok(())
+    }
+
+    /// Validate and store a record with Merkle batch payment
+    async fn validate_and_store_merkle_payment_record(
+        &self,
+        record: Record,
+        data_type: DataTypes,
+    ) -> Result<(), PutValidationError> {
+        use ant_evm::merkle_payments::MerklePaymentProof;
+
+        let record_key = record.key.clone();
+        let pretty_key = PrettyPrintRecordKey::from(&record_key);
+
+        match data_type {
+            DataTypes::Chunk => {
+                let (proof, chunk) = try_deserialize_record::<(MerklePaymentProof, Chunk)>(&record)
+                    .map_err(|_| {
+                        PutValidationError::InvalidRecord(pretty_key.clone().into_owned())
+                    })?;
+                let net_addr = chunk.network_address();
+
+                // Check if already exists
+                let already_exists = self
+                    .validate_key_and_existence(&net_addr, &record_key)
+                    .await?;
+                if already_exists {
+                    debug!(
+                        "Chunk at {net_addr:?} already exists, skipping Merkle payment verification"
+                    );
+                    self.network()
+                        .notify_fetch_completed(record_key, ValidationType::Chunk);
+                    return Ok(());
+                }
+
+                // Verify Merkle payment
+                self.verify_merkle_payment(&proof, &net_addr).await?;
+
+                // Store chunk
+                let result = self.store_chunk(&chunk, true);
+                if result.is_ok() {
+                    Marker::ValidPaidChunkPutFromClient(&pretty_key).log();
+                    self.network()
+                        .notify_fetch_completed(record_key, ValidationType::Chunk);
+                }
+                result
+            }
+            DataTypes::Scratchpad => {
+                let (proof, scratchpad) =
+                    try_deserialize_record::<(MerklePaymentProof, Scratchpad)>(&record).map_err(
+                        |_| PutValidationError::InvalidRecord(pretty_key.clone().into_owned()),
+                    )?;
+                let net_addr = scratchpad.network_address();
+
+                // Verify Merkle payment
+                self.verify_merkle_payment(&proof, &net_addr).await?;
+
+                // Store scratchpad
+                let result = self
+                    .validate_and_store_scratchpad_record(scratchpad, record_key.clone(), true)
+                    .await;
+                if result.is_ok() {
+                    let content_hash = XorName::from_content(&record.value);
+                    Marker::ValidScratchpadRecordPutFromClient(&pretty_key).log();
+                    self.network()
+                        .notify_fetch_completed(record_key, ValidationType::NonChunk(content_hash));
+                }
+                result
+            }
+            DataTypes::GraphEntry => {
+                let (proof, graph_entry) =
+                    try_deserialize_record::<(MerklePaymentProof, GraphEntry)>(&record).map_err(
+                        |_| PutValidationError::InvalidRecord(pretty_key.clone().into_owned()),
+                    )?;
+                let net_addr = NetworkAddress::from(graph_entry.address());
+
+                // Verify Merkle payment
+                self.verify_merkle_payment(&proof, &net_addr).await?;
+
+                // Store graph entry
+                let result = self
+                    .validate_merge_and_store_graphentries(vec![graph_entry], &record_key, true)
+                    .await;
+                if result.is_ok() {
+                    let content_hash = XorName::from_content(&record.value);
+                    Marker::ValidGraphEntryPutFromClient(&pretty_key).log();
+                    self.network()
+                        .notify_fetch_completed(record_key, ValidationType::NonChunk(content_hash));
+                }
+                result
+            }
+            DataTypes::Pointer => {
+                let (proof, pointer) = try_deserialize_record::<(MerklePaymentProof, Pointer)>(
+                    &record,
+                )
+                .map_err(|_| PutValidationError::InvalidRecord(pretty_key.clone().into_owned()))?;
+                let net_addr = NetworkAddress::from(pointer.address());
+
+                // Verify Merkle payment
+                self.verify_merkle_payment(&proof, &net_addr).await?;
+
+                // Store pointer
+                let result = self
+                    .validate_and_store_pointer_record(pointer, record_key.clone(), true)
+                    .await;
+                if result.is_ok() {
+                    let content_hash = XorName::from_content(&record.value);
+                    Marker::ValidPointerPutFromClient(&pretty_key).log();
+                    self.network()
+                        .notify_fetch_completed(record_key, ValidationType::NonChunk(content_hash));
+                }
+                result
+            }
+        }
+    }
+
+    /// Verify Merkle batch payment for a data address
+    ///
+    /// This performs:
+    /// 1. Query smart contract to get payment info
+    /// 2. Verify Merkle proof structure and signatures
+    /// 3. Verify network topology (paid nodes among closest 20)
+    async fn verify_merkle_payment(
+        &self,
+        proof: &ant_evm::merkle_payments::MerklePaymentProof,
+        target_address: &NetworkAddress,
+    ) -> Result<(), PutValidationError> {
+        use ant_evm::merkle_payments::DiskMerklePaymentContract;
+        use std::collections::HashSet;
+
+        let record_key = target_address.to_record_key();
+        let pretty_key = PrettyPrintRecordKey::from(&record_key);
+
+        // Step 1: Query smart contract FIRST to get payment info
+        let winner_pool_hash = proof.winner_pool_hash();
+
+        let contract = DiskMerklePaymentContract::new().map_err(|e| {
+            let error_msg = format!("Failed to create DiskMerklePaymentContract: {e:?}");
+            error!("{error_msg}");
+            PutValidationError::MerklePaymentVerificationFailed {
+                record_key: pretty_key.clone().into_owned(),
+                error: error_msg,
+            }
+        })?;
+
+        let payment_info = contract.get_payment_info(winner_pool_hash).map_err(|e| {
+            let error_msg = format!(
+                "Failed to get payment info for winner pool hash {}: {e:?}",
+                hex::encode(winner_pool_hash)
+            );
+            warn!("{error_msg}");
+            PutValidationError::MerklePaymentVerificationFailed {
+                record_key: pretty_key.clone().into_owned(),
+                error: error_msg,
+            }
+        })?;
+
+        debug!(
+            "Got payment info from smart contract: depth={}, timestamp={}, paid_nodes={}",
+            payment_info.depth,
+            payment_info.merkle_payment_timestamp,
+            payment_info.paid_node_addresses.len()
+        );
+
+        // Step 2: Verify Merkle proof structure using smart contract data
+        let paid_addresses: HashSet<_> = payment_info.paid_node_addresses.iter().copied().collect();
+
+        proof
+            .verify(
+                payment_info.depth,
+                payment_info.merkle_payment_timestamp,
+                &winner_pool_hash,
+                &paid_addresses,
+            )
+            .map_err(|e| {
+                let error_msg = format!("Merkle proof verification failed: {e:?}");
+                warn!("{error_msg} for {pretty_key:?}");
+                PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: error_msg,
+                }
+            })?;
+
+        debug!("Merkle proof structure verified successfully for {pretty_key:?}");
+
+        // Step 3: Verify network topology (>50% of paid nodes in closest 20)
+        // Get 20 closest peers to the target address
+        let closest_peers = match self
+            .network()
+            .get_n_closest_peers(target_address, CANDIDATES_PER_POOL)
+            .await
+        {
+            Ok(peers) => peers,
+            Err(e) => {
+                warn!("Failed to get closest peers for topology verification: {e:?}");
+                return Err(PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: format!(
+                        "Failed to get {CANDIDATES_PER_POOL} closest peers to {target_address:?}: {e:?}"
+                    ),
+                });
+            }
+        };
+
+        // Compare the two sets of peer ids
+        let closest_peer_ids: HashSet<_> =
+            closest_peers.iter().map(|(peer_id, _)| *peer_id).collect();
+        let paid_peers_ids: HashSet<_> = proof
+            .winner_pool
+            .candidate_nodes
+            .iter()
+            .filter_map(|node| node.peer_id().ok())
+            .collect();
+        let paid_nodes_that_are_closest: HashSet<_> =
+            paid_peers_ids.intersection(&closest_peer_ids).collect();
+
+        let legitimate_paid_nodes = paid_nodes_that_are_closest.len();
+        let paid_nodes_count = payment_info.paid_node_addresses.len();
+        let validity_threshold = paid_nodes_count / 2;
+        let reached_validity_threshold = legitimate_paid_nodes > validity_threshold;
+
+        if !reached_validity_threshold {
+            let error_msg = format!(
+                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {CANDIDATES_PER_POOL} (need >50%)",
+            );
+            warn!("{error_msg} for {pretty_key:?}");
+            return Err(PutValidationError::MerklePaymentVerificationFailed {
+                record_key: pretty_key.clone().into_owned(),
+                error: error_msg,
+            });
+        }
+
+        debug!(
+            "Network topology verified: {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {CANDIDATES_PER_POOL} for {pretty_key:?}",
+        );
+
+        info!("Merkle payment verified successfully for {pretty_key:?}");
         Ok(())
     }
 }

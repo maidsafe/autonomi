@@ -897,6 +897,7 @@ name = "ant-evm"
 version = "0.1.17"
 dependencies = [
  "custom_debug",
+ "dirs-next",
  "evmlib",
  "hex",
  "libp2p",

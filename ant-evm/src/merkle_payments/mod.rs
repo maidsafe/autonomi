@@ -16,6 +16,6 @@ pub use merkle_payment::{
     MerklePaymentProof, MerklePaymentVerificationError, PoolCommitment,
 };
 pub use merkle_tree::{
-    BadMerkleProof, MerkleBranch, MerkleTree, MerkleTreeError, RewardCandidatePool,
-    expected_reward_pools, verify_merkle_proof,
+    BadMerkleProof, MERKLE_PAYMENT_EXPIRATION, MerkleBranch, MerkleTree, MerkleTreeError,
+    RewardCandidatePool, expected_reward_pools, verify_merkle_proof,
 };
