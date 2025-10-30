@@ -180,7 +180,7 @@ impl Network {
 
         receiver
             .await
-            .map_err(|_e| NetworkError::InternalMsgChannelDropped)
+            .map_err(|e| NetworkError::EventChannelFailure(format!("{e:?}")))
     }
 
     /// Whether the target peer is considered blacklisted by self

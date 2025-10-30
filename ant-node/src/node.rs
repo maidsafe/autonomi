@@ -660,15 +660,19 @@ impl Node {
             }
             Query::GetReplicatedRecord { requester: _, key } => {
                 let our_address = NetworkAddress::from(network.peer_id());
-                let mut result = Err(ProtocolError::ReplicatedRecordNotFound {
-                    holder: Box::new(our_address.clone()),
-                    key: Box::new(key.clone()),
-                });
                 let record_key = key.to_record_key();
 
-                if let Ok(Some(record)) = network.get_local_record(&record_key).await {
-                    result = Ok((our_address, Bytes::from(record.value)));
-                }
+                let result = match network.get_local_record(&record_key).await {
+                    Ok(Some(record)) => Ok((our_address, Bytes::from(record.value))),
+                    Ok(None) => Err(ProtocolError::ReplicatedRecordNotFound {
+                        holder: Box::new(our_address),
+                        key: Box::new(key.clone()),
+                    }),
+                    // Use `PutRecordFailed` as place holder
+                    Err(err) => Err(ProtocolError::PutRecordFailed(
+                        format!("Error to fetch local record for GetReplicatedRecord {err:?}")
+                    )),
+                };
 
                 QueryResponse::GetReplicatedRecord(result)
             }
