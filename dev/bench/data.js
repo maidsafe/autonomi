@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761761906994,
+  "lastUpdate": 1761830602249,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3236,6 +3236,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.049387632787648,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6a2904f9639426a97a0f6e59b1cd50b1e1fe6772",
+          "message": "Merge pull request #3279 from RolandSherwin/analyze_json\n\nfeat(ant): implement analyze json output",
+          "timestamp": "2025-10-30T12:13:59Z",
+          "tree_id": "f37f7c49b357c6e11b4ebbad818206c0111aaea1",
+          "url": "https://github.com/maidsafe/autonomi/commit/6a2904f9639426a97a0f6e59b1cd50b1e1fe6772"
+        },
+        "date": 1761830594561,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1548820082733837,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.333006337850043,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.025898265005438,
             "unit": "MiB/s"
           }
         ]
