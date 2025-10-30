@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761830685032,
+  "lastUpdate": 1761830687035,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11805,6 +11805,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 16873,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6a2904f9639426a97a0f6e59b1cd50b1e1fe6772",
+          "message": "Merge pull request #3279 from RolandSherwin/analyze_json\n\nfeat(ant): implement analyze json output",
+          "timestamp": "2025-10-30T12:13:59Z",
+          "tree_id": "f37f7c49b357c6e11b4ebbad818206c0111aaea1",
+          "url": "https://github.com/maidsafe/autonomi/commit/6a2904f9639426a97a0f6e59b1cd50b1e1fe6772"
+        },
+        "date": 1761830686347,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10143,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18161,
             "unit": "ms"
           },
           {
