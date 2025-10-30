@@ -15,7 +15,6 @@ use strum::{Display, EnumIter};
 pub enum ConnectionMode {
     #[default]
     Automatic,
-    HomeNetwork,
     UPnP,
     CustomPorts,
 }
@@ -23,7 +22,6 @@ pub enum ConnectionMode {
 impl Display for ConnectionMode {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
-            ConnectionMode::HomeNetwork => write!(f, "Home Network"),
             ConnectionMode::UPnP => write!(f, "UPnP"),
             ConnectionMode::CustomPorts => write!(f, "Custom Ports"),
             ConnectionMode::Automatic => write!(f, "Automatic"),
@@ -38,7 +36,6 @@ impl<'de> Deserialize<'de> for ConnectionMode {
     {
         let s = String::deserialize(deserializer)?;
         match s.as_str() {
-            "Home Network" => Ok(ConnectionMode::HomeNetwork),
             "UPnP" => Ok(ConnectionMode::UPnP),
             "Custom Ports" => Ok(ConnectionMode::CustomPorts),
             "Automatic" => Ok(ConnectionMode::Automatic),
@@ -55,7 +52,6 @@ impl Serialize for ConnectionMode {
         S: serde::Serializer,
     {
         let s = match self {
-            ConnectionMode::HomeNetwork => "Home Network",
             ConnectionMode::UPnP => "UPnP",
             ConnectionMode::CustomPorts => "Custom Ports",
             ConnectionMode::Automatic => "Automatic",

@@ -14,35 +14,9 @@ pub(crate) struct RelayClientEventLabels {
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelValue)]
+#[allow(dead_code)] // DEPRECATED: These variants are no longer used after relay removal
 enum EventType {
     ReservationReqAccepted,
     OutboundCircuitEstablished,
     InboundCircuitEstablished,
-}
-
-impl From<&libp2p::relay::client::Event> for EventType {
-    fn from(event: &libp2p::relay::client::Event) -> Self {
-        match event {
-            libp2p::relay::client::Event::ReservationReqAccepted { .. } => {
-                EventType::ReservationReqAccepted
-            }
-            libp2p::relay::client::Event::OutboundCircuitEstablished { .. } => {
-                EventType::OutboundCircuitEstablished
-            }
-            libp2p::relay::client::Event::InboundCircuitEstablished { .. } => {
-                EventType::InboundCircuitEstablished
-            }
-        }
-    }
-}
-
-impl super::Recorder<libp2p::relay::client::Event> for super::NetworkMetricsRecorder {
-    fn record(&self, event: &libp2p::relay::client::Event) {
-        let _ = self
-            .relay_client_events
-            .get_or_create(&RelayClientEventLabels {
-                event: event.into(),
-            })
-            .inc();
-    }
 }
