@@ -21,7 +21,6 @@ use ant_node_manager::{
 use ant_service_management::NodeRegistryManager;
 use clap::{Parser, Subcommand};
 use color_eyre::{Result, eyre::eyre};
-use libp2p::Multiaddr;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tracing::Level;
 
@@ -88,15 +87,6 @@ pub enum SubCmd {
         /// and they will need to be explicitly started again.
         #[clap(long, default_value_t = false)]
         auto_restart: bool,
-        /// Auto set NAT flags (--no-upnp or --relay) if our NAT status has been obtained by
-        /// running the NAT detection command.
-        ///
-        /// Using the argument will cause an error if the NAT detection command has not already
-        /// ran.
-        ///
-        /// This will override any --no-upnp or --relay options.
-        #[clap(long, default_value_t = false)]
-        auto_set_nat_flags: bool,
         /// The number of service instances.
         ///
         /// If the --first argument is used, the count has to be one, so --count and --first are
@@ -131,9 +121,6 @@ pub enum SubCmd {
         /// Specify what EVM network to use for payments.
         #[command(subcommand)]
         evm_network: EvmNetworkCommand,
-        /// Set this flag if UPnP doesn't work, and you are not able to manually port forward.
-        #[clap(long)]
-        relay: bool,
         /// Provide the path for the log directory for the installed node.
         ///
         /// This path is a prefix. Each installed node will have its own directory underneath it.
@@ -270,8 +257,6 @@ pub enum SubCmd {
     Daemon(DaemonSubCmd),
     #[clap(subcommand)]
     Local(LocalSubCmd),
-    #[clap(subcommand)]
-    NatDetection(NatDetectionSubCmd),
     /// Remove antnode service(s).
     ///
     /// If no peer ID(s) or service name(s) are supplied, all services will be removed.
@@ -521,45 +506,6 @@ pub enum DaemonSubCmd {
     /// This command must run as the root/administrative user.
     #[clap(name = "stop")]
     Stop {},
-}
-
-/// Manage NAT detection.
-#[derive(Subcommand, Debug, Clone)]
-pub enum NatDetectionSubCmd {
-    /// Use NAT detection to determine NAT status.
-    ///
-    /// The status can be used with the '--auto-set-nat-flags' argument on the 'add' command.
-    Run {
-        /// Provide a path for the NAT detection binary to be used.
-        ///
-        /// Useful for running NAT detection using a custom built binary.
-        #[clap(long)]
-        path: Option<PathBuf>,
-        /// Provide NAT servers in the form of a multiaddr or an address/port pair. If no servers are provided,
-        /// the default servers will be used.
-        ///
-        /// We attempt to establish connections to these servers to determine our own NAT status.
-        ///
-        /// The argument can be used multiple times.
-        #[clap(long, value_delimiter = ',')]
-        servers: Option<Vec<Multiaddr>>,
-        /// Provide a NAT detection binary using a URL.
-        ///
-        /// The binary must be inside a zip or gzipped tar archive.
-        ///
-        /// This option can be used to test a nat detection binary that has been built from a forked
-        /// branch and uploaded somewhere. A typical use case would be for a developer who launches
-        /// a testnet to test some changes they have on a fork.
-        #[clap(long, conflicts_with = "version")]
-        url: Option<String>,
-        /// Provide a specific version of the NAT detection to be installed.
-        ///
-        /// The version number should be in the form X.Y.Z, with no 'v' prefix.
-        ///
-        /// The binary will be downloaded.
-        #[clap(long, default_value = "0.1.0")]
-        version: Option<String>,
-    },
 }
 
 /// Manage local networks.
@@ -830,13 +776,11 @@ async fn main() -> Result<()> {
         Some(SubCmd::Add {
             alpha,
             auto_restart,
-            auto_set_nat_flags,
             count,
             data_dir_path,
             enable_metrics_server,
             env_variables,
             evm_network,
-            relay,
             log_dir_path,
             log_format,
             max_archived_log_files,
@@ -859,7 +803,6 @@ async fn main() -> Result<()> {
             cmd::node::add(
                 alpha,
                 auto_restart,
-                auto_set_nat_flags,
                 count,
                 data_dir_path,
                 enable_metrics_server,
@@ -875,7 +818,6 @@ async fn main() -> Result<()> {
                 node_port,
                 node_registry,
                 peers,
-                relay,
                 rewards_address,
                 rpc_address,
                 rpc_port,
@@ -992,15 +934,6 @@ async fn main() -> Result<()> {
                 json,
             } => cmd::local::status(details, fail, json).await,
         },
-        Some(SubCmd::NatDetection(NatDetectionSubCmd::Run {
-            path,
-            servers,
-            url,
-            version,
-        })) => {
-            cmd::nat_detection::run_nat_detection(servers, true, path, url, version, verbosity)
-                .await
-        }
         Some(SubCmd::Remove {
             keep_directories,
             peer_id: peer_ids,

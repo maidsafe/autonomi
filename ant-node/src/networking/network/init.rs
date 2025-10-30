@@ -17,7 +17,6 @@ use crate::networking::{
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
     record_store::{NodeRecordStore, NodeRecordStoreConfig},
-    relay_manager::RelayManager,
     replication_fetcher::ReplicationFetcher,
     transport,
 };
@@ -31,7 +30,6 @@ use ant_protocol::{
     messages::{Request, Response},
     version::{IDENTIFY_PROTOCOL_STR, REQ_RESPONSE_VERSION_STR, get_network_id_str},
 };
-use futures::future::Either;
 use libp2p::Transport as _;
 use libp2p::{
     Multiaddr, PeerId,
@@ -43,7 +41,6 @@ use libp2p::{
     },
     swarm::{StreamProtocol, Swarm},
 };
-use libp2p::{core::muxing::StreamMuxerBox, relay};
 #[cfg(feature = "open-metrics")]
 use prometheus_client::metrics::info::Info;
 use std::time::Instant;
@@ -80,7 +77,6 @@ pub(crate) struct NetworkConfig {
     pub shutdown_rx: tokio::sync::watch::Receiver<bool>,
     pub bootstrap: Bootstrap,
     pub no_upnp: bool,
-    pub relay_client: bool,
     pub custom_request_timeout: Option<Duration>,
     #[cfg(feature = "open-metrics")]
     pub metrics_registries: MetricsRegistries,
@@ -224,24 +220,6 @@ fn init_swarm_driver(
         main_transport
     };
 
-    let (relay_transport, relay_behaviour) =
-        libp2p::relay::client::new(config.keypair.public().to_peer_id());
-    let relay_transport = relay_transport
-        .upgrade(libp2p::core::upgrade::Version::V1Lazy)
-        .authenticate(
-            libp2p::noise::Config::new(&config.keypair)
-                .expect("Signing libp2p-noise static DH keypair failed."),
-        )
-        .multiplex(libp2p::yamux::Config::default())
-        .or_transport(transport);
-
-    let transport = relay_transport
-        .map(|either_output, _| match either_output {
-            Either::Left((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-            Either::Right((peer_id, muxer)) => (peer_id, StreamMuxerBox::new(muxer)),
-        })
-        .boxed();
-
     #[cfg(feature = "open-metrics")]
     let metrics_recorder = if let Some(port) = config.metrics_server_port {
         let metrics_recorder = NetworkMetricsRecorder::new(&mut metrics_registries);
@@ -333,7 +311,7 @@ fn init_swarm_driver(
         libp2p::identify::Behaviour::new(cfg)
     };
 
-    let upnp = if !config.local && !config.no_upnp && !config.relay_client {
+    let upnp = if !config.local && !config.no_upnp {
         debug!("Enabling UPnP port opening behavior");
         Some(libp2p::upnp::tokio::Behaviour::default())
     } else {
@@ -341,29 +319,9 @@ fn init_swarm_driver(
     }
     .into(); // Into `Toggle<T>`
 
-    let relay_server = if !config.relay_client {
-        let relay_server_cfg = relay::Config {
-            max_reservations: 128,             // Amount of peers we are relaying for
-            max_circuits: 1024, // The total amount of relayed connections at any given moment.
-            max_circuits_per_peer: 256, // Amount of relayed connections per peer (both dst and src)
-            circuit_src_rate_limiters: vec![], // No extra rate limiting for now
-            // We should at least be able to relay packets with chunks etc.
-            max_circuit_bytes: MAX_PACKET_SIZE as u64,
-            ..Default::default()
-        };
-        Some(libp2p::relay::Behaviour::new(peer_id, relay_server_cfg))
-    } else {
-        None
-    }
-    .into();
-
     let behaviour = NodeBehaviour {
         blocklist: libp2p::allow_block_list::Behaviour::default(),
         do_not_disturb: crate::networking::driver::behaviour::do_not_disturb::Behaviour::default(),
-        // `Relay client Behaviour` is enabled for all nodes. This is required for normal nodes to connect to relay
-        // clients.
-        relay_client: relay_behaviour,
-        relay_server,
         upnp,
         request_response,
         kademlia,
@@ -377,26 +335,11 @@ fn init_swarm_driver(
 
     let replication_fetcher = ReplicationFetcher::new(peer_id, network_event_sender.clone());
 
-    // Enable relay manager to allow the node to act as a relay client and connect via relay servers to the network
-    let relay_manager = if config.relay_client {
-        let relay_manager = RelayManager::new(peer_id);
-        #[cfg(feature = "open-metrics")]
-        let mut relay_manager = relay_manager;
-        #[cfg(feature = "open-metrics")]
-        if let Some(metrics_recorder) = &metrics_recorder {
-            relay_manager
-                .set_reservation_health_metrics(metrics_recorder.relay_reservation_health.clone());
-        }
-        Some(relay_manager)
-    } else {
-        info!("Relay manager is disabled for this node.");
-        None
-    };
-    // Enable external address manager for public nodes and not behind nat
-    let external_address_manager = if !config.local && !config.relay_client {
+    // Enable external address manager for public nodes
+    let external_address_manager = if !config.local {
         Some(ExternalAddressManager::new(peer_id))
     } else {
-        info!("External address manager is disabled for this node.");
+        info!("External address manager is disabled for local nodes.");
         None
     };
 
@@ -405,14 +348,11 @@ fn init_swarm_driver(
         swarm,
         self_peer_id: peer_id,
         local: config.local,
-        is_relay_client: config.relay_client,
         #[cfg(feature = "open-metrics")]
         close_group: Vec::with_capacity(CLOSE_GROUP_SIZE),
         peers_in_rt: 0,
         initial_bootstrap_trigger: InitialBootstrapTrigger::new(is_upnp_enabled),
         bootstrap: config.bootstrap,
-        relay_manager,
-        connected_relay_clients: Default::default(),
         external_address_manager,
         replication_fetcher,
         #[cfg(feature = "open-metrics")]
