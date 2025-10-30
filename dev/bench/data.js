@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761830683088,
+  "lastUpdate": 1761830685032,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8527,6 +8527,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/9f5582b69c9434884a3fa52b452b9a8481c9dd82"
         },
         "date": 1761761905093,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "6a2904f9639426a97a0f6e59b1cd50b1e1fe6772",
+          "message": "Merge pull request #3279 from RolandSherwin/analyze_json\n\nfeat(ant): implement analyze json output",
+          "timestamp": "2025-10-30T12:13:59Z",
+          "tree_id": "f37f7c49b357c6e11b4ebbad818206c0111aaea1",
+          "url": "https://github.com/maidsafe/autonomi/commit/6a2904f9639426a97a0f6e59b1cd50b1e1fe6772"
+        },
+        "date": 1761830684375,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
