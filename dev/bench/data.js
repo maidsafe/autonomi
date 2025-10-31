@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761830687035,
+  "lastUpdate": 1761932853703,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3275,6 +3275,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.025898265005438,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e727e4bcab310e32971cbe8b1dc853cc2ba2355",
+          "message": "Merge pull request #3284 from RolandSherwin/analyze_public_archive\n\nfeat(client): extract chunk address from public archive during analysis",
+          "timestamp": "2025-10-31T16:34:25Z",
+          "tree_id": "0fb29fbf9c6798213560b48690c6cb720337937e",
+          "url": "https://github.com/maidsafe/autonomi/commit/4e727e4bcab310e32971cbe8b1dc853cc2ba2355"
+        },
+        "date": 1761932846310,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1219634180840867,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.459086335939611,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.044217052807979,
             "unit": "MiB/s"
           }
         ]
