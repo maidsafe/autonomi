@@ -17,5 +17,5 @@ pub use merkle_payment::{
 };
 pub use merkle_tree::{
     BadMerkleProof, MERKLE_PAYMENT_EXPIRATION, MerkleBranch, MerkleTree, MerkleTreeError,
-    RewardCandidatePool, expected_reward_pools, verify_merkle_proof,
+    MidpointProof, expected_reward_pools, verify_merkle_proof,
 };

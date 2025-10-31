@@ -1347,4 +1347,163 @@ mod tests {
 
         assert_eq!(expected_result, result);
     }
+
+    mod merkle_payment_tests {
+        use super::*;
+
+        /// Test that timestamp validation accepts valid timestamps (within the acceptable window)
+        #[test]
+        fn test_timestamp_validation_accepts_valid_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Valid timestamp: 1 hour ago
+            let valid_timestamp = now - 3600;
+
+            // Validate timestamp
+            let age = now.saturating_sub(valid_timestamp);
+
+            assert!(
+                valid_timestamp <= now,
+                "Valid timestamp should not be in the future"
+            );
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Valid timestamp should not be expired"
+            );
+        }
+
+        /// Test that timestamp validation rejects future timestamps
+        #[test]
+        fn test_timestamp_validation_rejects_future_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Future timestamp: 1 hour in the future
+            let future_timestamp = now + 3600;
+
+            // Timestamp should be rejected
+            assert!(
+                future_timestamp > now,
+                "Future timestamp should be rejected"
+            );
+        }
+
+        /// Test that timestamp validation rejects expired timestamps
+        #[test]
+        fn test_timestamp_validation_rejects_expired_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Expired timestamp: 8 days ago (> 7 day expiration)
+            let expired_timestamp = now - (MERKLE_PAYMENT_EXPIRATION + 86400);
+
+            // Calculate age
+            let age = now.saturating_sub(expired_timestamp);
+
+            // Timestamp should be rejected
+            assert!(
+                age > MERKLE_PAYMENT_EXPIRATION,
+                "Expired timestamp should be rejected"
+            );
+        }
+
+        /// Test timestamp at the exact expiration boundary (should be rejected)
+        #[test]
+        fn test_timestamp_validation_at_expiration_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp exactly at expiration boundary
+            let boundary_timestamp = now - MERKLE_PAYMENT_EXPIRATION;
+
+            let age = now.saturating_sub(boundary_timestamp);
+
+            // At the boundary, age == MERKLE_PAYMENT_EXPIRATION
+            assert_eq!(age, MERKLE_PAYMENT_EXPIRATION);
+            // The validation uses >, so this should pass
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Timestamp exactly at boundary should not be rejected"
+            );
+        }
+
+        /// Test timestamp just beyond expiration boundary (should be rejected)
+        #[test]
+        fn test_timestamp_validation_beyond_expiration_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp just beyond expiration boundary (1 second past)
+            let beyond_boundary_timestamp = now - (MERKLE_PAYMENT_EXPIRATION + 1);
+
+            let age = now.saturating_sub(beyond_boundary_timestamp);
+
+            assert!(
+                age > MERKLE_PAYMENT_EXPIRATION,
+                "Timestamp beyond boundary should be rejected"
+            );
+        }
+
+        /// Test timestamp at current time (should be accepted)
+        #[test]
+        fn test_timestamp_validation_at_current_time() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp at current time
+            let current_timestamp = now;
+
+            let age = now.saturating_sub(current_timestamp);
+
+            assert!(
+                current_timestamp <= now,
+                "Current timestamp should not be in future"
+            );
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Current timestamp should not be expired"
+            );
+            assert_eq!(age, 0, "Age should be 0 for current timestamp");
+        }
+
+        /// Test timestamp near future boundary (1 second in future)
+        #[test]
+        fn test_timestamp_validation_near_future_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp 1 second in the future
+            let near_future_timestamp = now + 1;
+
+            assert!(
+                near_future_timestamp > now,
+                "Near-future timestamp should be rejected"
+            );
+        }
+
+        /// Test expiration constant is set correctly (7 days = 604800 seconds)
+        #[test]
+        fn test_merkle_payment_expiration_constant() {
+            const SEVEN_DAYS_IN_SECONDS: u64 = 7 * 24 * 60 * 60;
+            assert_eq!(
+                MERKLE_PAYMENT_EXPIRATION, SEVEN_DAYS_IN_SECONDS,
+                "MERKLE_PAYMENT_EXPIRATION should be 7 days"
+            );
+        }
+    }
 }

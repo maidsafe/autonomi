@@ -1179,14 +1179,12 @@ impl Node {
         );
 
         // Step 2: Verify Merkle proof structure using smart contract data
-        let paid_addresses: HashSet<_> = payment_info.paid_node_addresses.iter().copied().collect();
-
         proof
             .verify(
                 payment_info.depth,
                 payment_info.merkle_payment_timestamp,
                 &winner_pool_hash,
-                &paid_addresses,
+                &payment_info.paid_node_addresses,
             )
             .map_err(|e| {
                 let error_msg = format!("Merkle proof verification failed: {e:?}");
@@ -1200,10 +1198,12 @@ impl Node {
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
 
         // Step 3: Verify network topology (>50% of paid nodes in closest 20)
-        // Get 20 closest peers to the target address
+        // Get 20 closest peers to the reward pool address
+        let reward_pool_hash = proof.winner_pool_hash();
+        let reward_pool_address = NetworkAddress::from(reward_pool_hash);
         let closest_peers = match self
             .network()
-            .get_n_closest_peers(target_address, CANDIDATES_PER_POOL)
+            .get_n_closest_peers(&reward_pool_address, CANDIDATES_PER_POOL)
             .await
         {
             Ok(peers) => peers,
@@ -1217,20 +1217,27 @@ impl Node {
                 });
             }
         };
-
-        // Compare the two sets of peer ids
         let closest_peer_ids: HashSet<_> =
             closest_peers.iter().map(|(peer_id, _)| *peer_id).collect();
-        let paid_peers_ids: HashSet<_> = proof
-            .winner_pool
-            .candidate_nodes
-            .iter()
-            .filter_map(|node| node.peer_id().ok())
-            .collect();
-        let paid_nodes_that_are_closest: HashSet<_> =
-            paid_peers_ids.intersection(&closest_peer_ids).collect();
 
-        let legitimate_paid_nodes = paid_nodes_that_are_closest.len();
+        // Get the peer ids of the PAID nodes using their indices from the smart contract.
+        // The indices allow us to identify exact nodes even if multiple nodes share the same reward address.
+        let paid_peer_ids = proof
+            .corresponding_peer_ids(&payment_info.paid_node_addresses)
+            .map_err(|e| {
+                let error_msg = format!("Failed to get paid node peer ids: {e:?}");
+                warn!("{error_msg}");
+                PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: error_msg,
+                }
+            })?;
+
+        // Compare the two sets of peer ids: how many PAID nodes are in the closest 20?
+        let legitimate_paid_nodes = paid_peer_ids
+            .iter()
+            .filter(|peer_id| closest_peer_ids.contains(peer_id))
+            .count();
         let paid_nodes_count = payment_info.paid_node_addresses.len();
         let validity_threshold = paid_nodes_count / 2;
         let reached_validity_threshold = legitimate_paid_nodes > validity_threshold;

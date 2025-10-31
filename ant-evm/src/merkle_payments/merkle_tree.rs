@@ -259,10 +259,7 @@ impl MerkleTree {
     ///     assert!(candidate.branch.verify());
     /// }
     /// ```
-    pub fn reward_candidates(
-        &self,
-        merkle_payment_timestamp: u64,
-    ) -> Result<Vec<RewardCandidatePool>> {
+    pub fn reward_candidates(&self, merkle_payment_timestamp: u64) -> Result<Vec<MidpointProof>> {
         let midpoints = self.midpoints()?;
 
         midpoints
@@ -271,7 +268,7 @@ impl MerkleTree {
                 // Generate proof for this midpoint
                 let branch = self.generate_midpoint_proof(midpoint.index, midpoint.hash)?;
 
-                Ok(RewardCandidatePool {
+                Ok(MidpointProof {
                     branch,
                     merkle_payment_timestamp,
                 })
@@ -428,11 +425,11 @@ struct MerkleMidpoint {
 
 /// A reward candidate derived from a midpoint
 ///
-/// The candidate address is computed as hash(midpoint_hash || root || merkle_payment_timestamp).
+/// The candidate pool address is computed as hash(midpoint_hash || root || merkle_payment_timestamp).
 /// Network nodes closest to this address are eligible for batch payment rewards.
 /// Contains everything needed to verify the candidate is valid.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct RewardCandidatePool {
+pub struct MidpointProof {
     /// Proof that the midpoint belongs to the Merkle tree
     pub branch: MerkleBranch,
 
@@ -441,7 +438,7 @@ pub struct RewardCandidatePool {
     pub merkle_payment_timestamp: u64,
 }
 
-impl RewardCandidatePool {
+impl MidpointProof {
     /// Get the Merkle root from the candidate pool's branch
     ///
     /// Returns the root hash that the branch proves membership in.
@@ -462,9 +459,6 @@ impl RewardCandidatePool {
     }
 
     /// Compute deterministic hash for storage/verification
-    ///
-    /// This constructs a deterministic byte representation and hashes it.
-    /// The smart contract stores this hash to commit to the winner pool.
     ///
     /// Uses fixed-width encoding (u64) for numeric fields to ensure
     /// architecture-independent hashing across 32-bit and 64-bit platforms.
@@ -678,13 +672,6 @@ pub enum BadMerkleProof {
         branch_root: XorName,
     },
     #[error(
-        "Winner pool hash doesn't match smart contract commitment: smart_contract={smart_contract}, winner_pool={winner_pool}"
-    )]
-    WinnerPoolDoesNotMatchSmartContractCommitment {
-        smart_contract: XorName,
-        winner_pool: XorName,
-    },
-    #[error(
         "Payment timestamp {payment_timestamp} is in the future (current time: {current_time})"
     )]
     TimestampInFuture {
@@ -770,8 +757,7 @@ fn validate_payment_timestamp(
 ///
 /// * `address_hash` - The actual hash of the address being stored
 /// * `address_branch` - Merkle proof for the address (leaf to root)
-/// * `winner_pool` - The winner candidate pool with proof and timestamp
-/// * `smart_contract_winner_pool_hash` - Hash of the winner pool address from smart contract
+/// * `winner_pool_midpoint_proof` - The winner midpoint proof with timestamp
 /// * `smart_contract_depth` - Tree depth claimed on smart contract
 /// * `smart_contract_root` - Merkle root from smart contract payment
 /// * `smart_contract_timestamp` - Payment timestamp from smart contract (Unix seconds)
@@ -784,13 +770,10 @@ fn validate_payment_timestamp(
 ///
 /// ```ignore
 /// // Node receives address and proofs from client
-/// let contract_data = contract.get_merkle_root_payment(root).await?;
-///
 /// verify_merkle_proof(
 ///     &address_hash,
 ///     &address_proof,
-///     &winner_pool,
-///     &contract_data.winner_pool_hash,
+///     &winner_pool_midpoint_proof,
 ///     contract_data.depth,
 ///     &contract_data.root,
 ///     contract_data.timestamp,
@@ -801,8 +784,7 @@ fn validate_payment_timestamp(
 pub fn verify_merkle_proof(
     address_hash: &XorName,
     address_branch: &MerkleBranch,
-    winner_pool: &RewardCandidatePool,
-    smart_contract_winner_pool_hash: &XorName,
+    winner_pool_midpoint_proof: &MidpointProof,
     smart_contract_depth: u8,
     smart_contract_root: &XorName,
     smart_contract_timestamp: u64,
@@ -810,7 +792,7 @@ pub fn verify_merkle_proof(
     // Validate payment timestamp
     validate_payment_timestamp(
         smart_contract_timestamp,
-        winner_pool.merkle_payment_timestamp,
+        winner_pool_midpoint_proof.merkle_payment_timestamp,
     )?;
 
     // Verify address proof depth matches smart contract claimed depth
@@ -824,7 +806,7 @@ pub fn verify_merkle_proof(
     }
 
     // Verify winner proof depth matches expected for midpoint (ceil(depth/2))
-    let winner_depth = winner_pool.branch.depth();
+    let winner_depth = winner_pool_midpoint_proof.branch.depth();
     let expected_winner_depth = midpoint_proof_depth(smart_contract_depth) as usize;
     if winner_depth != expected_winner_depth {
         return Err(BadMerkleProof::WinnerProofDepthMismatch {
@@ -839,7 +821,7 @@ pub fn verify_merkle_proof(
     }
 
     // Verify winner pool (intersection legitimacy)
-    if !winner_pool.branch.verify() {
+    if !winner_pool_midpoint_proof.branch.verify() {
         return Err(BadMerkleProof::InvalidWinnerBranchProof);
     }
 
@@ -860,23 +842,11 @@ pub fn verify_merkle_proof(
     }
 
     // Verify winner proof root matches on-chain root
-    if winner_pool.branch.root() != smart_contract_root {
+    if winner_pool_midpoint_proof.branch.root() != smart_contract_root {
         return Err(BadMerkleProof::WinnerBranchRootMismatch {
             smart_contract_root: *smart_contract_root,
-            branch_root: *winner_pool.branch.root(),
+            branch_root: *winner_pool_midpoint_proof.branch.root(),
         });
-    }
-
-    // Verify winner pool hash matches on-chain commitment
-    let winner_pool_hash = winner_pool.hash();
-
-    if &winner_pool_hash != smart_contract_winner_pool_hash {
-        return Err(
-            BadMerkleProof::WinnerPoolDoesNotMatchSmartContractCommitment {
-                smart_contract: *smart_contract_winner_pool_hash,
-                winner_pool: winner_pool_hash,
-            },
-        );
     }
 
     Ok(())
@@ -1498,14 +1468,14 @@ mod tests {
         println!("✓ Stored {} candidate pools", candidates.len());
 
         // Smart contract randomly selects winner pool
-        let winner_pool_index = 0; // In reality this is random
-        let winner_candidate = &candidates[winner_pool_index];
+        let winner_pool_midpoint_proof_index = 0; // In reality this is random
+        let winner_candidate = &candidates[winner_pool_midpoint_proof_index];
 
         // Smart contract stores hash of the entire winner pool for nodes to verify
-        let smart_contract_winner_pool_hash = winner_candidate.hash();
+        let smart_contract_winner_pool_midpoint_proof_hash = winner_candidate.hash();
 
-        println!("✓ Winner pool selected: index {winner_pool_index}");
-        println!("✓ Winner pool hash stored: {smart_contract_winner_pool_hash:?}");
+        println!("✓ Winner pool selected: index {winner_pool_midpoint_proof_index}");
+        println!("✓ Winner pool hash stored: {smart_contract_winner_pool_midpoint_proof_hash:?}");
         println!("✓ Payment distributed to {depth} nodes (depth)");
 
         // ==================================================================
@@ -1551,7 +1521,6 @@ mod tests {
                 address_hash,
                 address_proof,
                 winner_candidate,
-                &smart_contract_winner_pool_hash,
                 smart_contract_depth,
                 &smart_contract_root,
                 smart_contract_timestamp,
@@ -1574,17 +1543,17 @@ mod tests {
         }
 
         println!("✓ All {verified_count} addresses verified using verify_merkle_proof()");
-        println!("✓ Complete verification includes:");
+        println!("✓ Core Merkle verification includes:");
         println!("  1. Timestamp not in future");
         println!("  2. Payment not expired (< {MERKLE_PAYMENT_EXPIRATION} seconds old)");
         println!("  3. Winner pool timestamp matches smart contract timestamp");
         println!("  4. Address Merkle proof valid (address ∈ tree)");
-        println!("  5. Winner Merkle proof valid (intersection ∈ tree)");
+        println!("  5. Winner Merkle proof valid (midpoint ∈ tree)");
         println!("  6. Address proof depth matches on-chain depth");
         println!("  7. Winner proof depth matches expected for midpoint");
         println!("  8. Address proof root matches on-chain root");
         println!("  9. Winner proof root matches on-chain root");
-        println!("  10. Winner hash matches on-chain commitment");
+        println!("  Note: Winner pool hash verification happens in MerklePaymentProof::verify()");
 
         // ==================================================================
         // PHASE 7: VERIFY PROOF STRUCTURE AND PROPERTIES
@@ -1795,21 +1764,17 @@ mod tests {
             .as_secs();
 
         let candidates = tree.reward_candidates(merkle_payment_timestamp).unwrap();
-        let winner_pool = &candidates[0];
+        let winner_pool_midpoint_proof = &candidates[0];
         let address_proof = tree.generate_address_proof(0, leaves[0]).unwrap();
         let root = tree.root();
         let depth = tree.depth();
-
-        // Compute hash of winner pool for smart contract
-        let winner_pool_hash = winner_pool.hash();
 
         // Test 1: Invalid address proof (wrong root)
         let wrong_root = XorName::from_content(b"wrong root");
         let result = verify_merkle_proof(
             &leaves[0],
             &address_proof,
-            winner_pool,
-            &winner_pool_hash,
+            winner_pool_midpoint_proof,
             depth,
             &wrong_root,
             merkle_payment_timestamp,
@@ -1823,8 +1788,7 @@ mod tests {
         let result = verify_merkle_proof(
             &leaves[0],
             &address_proof,
-            winner_pool,
-            &winner_pool_hash,
+            winner_pool_midpoint_proof,
             depth + 1, // Wrong depth
             &root,
             merkle_payment_timestamp,
@@ -1835,7 +1799,7 @@ mod tests {
         ));
 
         // Test 3: Winner proof root mismatch
-        let mut wrong_winner = winner_pool.clone();
+        let mut wrong_winner = winner_pool_midpoint_proof.clone();
         // Create a different proof with wrong root
         let wrong_tree = MerkleTree::from_xornames(make_test_leaves(16)).unwrap();
         let wrong_candidates = wrong_tree
@@ -1847,7 +1811,6 @@ mod tests {
             &leaves[0],
             &address_proof,
             &wrong_winner,
-            &winner_pool_hash,
             depth,
             &root,
             merkle_payment_timestamp,
@@ -1857,29 +1820,12 @@ mod tests {
             Err(BadMerkleProof::WinnerBranchRootMismatch { .. })
         ));
 
-        // Test 4: Winner hash mismatch
-        let wrong_hash = XorName::from_content(b"wrong winner hash");
-        let result = verify_merkle_proof(
-            &leaves[0],
-            &address_proof,
-            winner_pool,
-            &wrong_hash,
-            depth,
-            &root,
-            merkle_payment_timestamp,
-        );
-        assert!(matches!(
-            result,
-            Err(BadMerkleProof::WinnerPoolDoesNotMatchSmartContractCommitment { .. })
-        ));
-
-        // Test 5: Timestamp in future
+        // Test 4: Timestamp in future
         let future_timestamp = merkle_payment_timestamp + 1000;
         let result = verify_merkle_proof(
             &leaves[0],
             &address_proof,
-            winner_pool,
-            &winner_pool_hash,
+            winner_pool_midpoint_proof,
             depth,
             &root,
             future_timestamp,
@@ -1889,29 +1835,26 @@ mod tests {
             Err(BadMerkleProof::TimestampInFuture { .. })
         ));
 
-        // Test 6: Payment expired
+        // Test 5: Payment expired
         let old_timestamp = merkle_payment_timestamp - MERKLE_PAYMENT_EXPIRATION - 1;
         let old_candidates = tree.reward_candidates(old_timestamp).unwrap();
-        let old_pool_hash = old_candidates[0].hash();
         let result = verify_merkle_proof(
             &leaves[0],
             &address_proof,
             &old_candidates[0],
-            &old_pool_hash,
             depth,
             &root,
             old_timestamp,
         );
         assert!(matches!(result, Err(BadMerkleProof::PaymentExpired { .. })));
 
-        // Test 7: Timestamp mismatch between pool and contract
+        // Test 6: Timestamp mismatch between pool and contract
         // Use a different timestamp that's still valid (not future, not expired)
         let different_timestamp = merkle_payment_timestamp - 100;
         let result = verify_merkle_proof(
             &leaves[0],
             &address_proof,
-            winner_pool,
-            &winner_pool_hash,
+            winner_pool_midpoint_proof,
             depth,
             &root,
             different_timestamp,

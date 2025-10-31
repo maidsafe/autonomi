@@ -8,7 +8,7 @@
 
 use std::collections::HashSet;
 
-use super::merkle_tree::{BadMerkleProof, MerkleBranch, RewardCandidatePool};
+use super::merkle_tree::{BadMerkleProof, MerkleBranch, MidpointProof};
 use crate::RewardsAddress;
 use evmlib::quoting_metrics::QuotingMetrics;
 use libp2p::{
@@ -49,6 +49,31 @@ pub enum MerklePaymentVerificationError {
     },
     #[error("Pool commitment does not match the pool")]
     CommitmentDoesNotMatchPool,
+    #[error("Paid node index {index} is out of bounds for pool size {pool_size}")]
+    PaidNodeIndexOutOfBounds { index: usize, pool_size: usize },
+    #[error("Address mismatch at index {index}: expected {expected}, got {actual}")]
+    PaidAddressMismatch {
+        index: usize,
+        expected: RewardsAddress,
+        actual: RewardsAddress,
+    },
+    #[error("Invalid node peer id for address {address} at index {index}")]
+    InvalidNodePeerId {
+        index: usize,
+        address: RewardsAddress,
+    },
+    #[error("Data type mismatch: expected {expected}, got {got} at node {address}")]
+    DataTypeMismatch {
+        address: RewardsAddress,
+        expected: u32,
+        got: u32,
+    },
+    #[error("Data size mismatch: expected {expected}, got {got} at node {address}")]
+    DataSizeMismatch {
+        address: RewardsAddress,
+        expected: usize,
+        got: usize,
+    },
 }
 
 /// Number of candidate nodes per pool (provides redundancy)
@@ -158,11 +183,11 @@ impl MerklePaymentCandidateNode {
     }
 }
 
-/// One candidate pool: intersection + nodes who could store addresses
+/// One candidate pool: midpoint proof + nodes who could store addresses
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MerklePaymentCandidatePool {
-    /// The intersection proof from ant-evm's merkle_tree module
-    pub pool: RewardCandidatePool,
+    /// The midpoint proof from ant-evm's merkle_tree module
+    pub midpoint_proof: MidpointProof,
 
     /// Candidate nodes for this pool (should be 20 nodes)
     /// Provides redundancy - only 'depth' of these will be selected as winners
@@ -174,8 +199,8 @@ impl MerklePaymentCandidatePool {
     pub fn hash(&self) -> XorName {
         let mut bytes = Vec::new();
 
-        // Hash of the RewardCandidatePool
-        bytes.extend_from_slice(self.pool.hash().as_ref());
+        // Hash of the intersection proof
+        bytes.extend_from_slice(self.midpoint_proof.hash().as_ref());
 
         // Number of candidate nodes
         bytes.extend_from_slice(&(self.candidate_nodes.len() as u32).to_le_bytes());
@@ -214,6 +239,7 @@ impl MerklePaymentCandidatePool {
     /// 1. Correct number of candidate nodes [`CANDIDATES_PER_POOL`]
     /// 2. All node signatures are valid
     /// 3. All timestamps match the merkle payment timestamp
+    /// 4. All nodes quote the same data_type and data_size
     ///
     /// It does not verify the pool branch proof.
     pub fn verify_signatures(
@@ -248,6 +274,31 @@ impl MerklePaymentCandidatePool {
             }
         }
 
+        // Verify all nodes are quoting for the same data_type and data_size
+        // All nodes in a pool should be providing quotes for the same data
+        if let Some(first_node) = self.candidate_nodes.first() {
+            let expected_data_type = first_node.quoting_metrics.data_type;
+            let expected_data_size = first_node.quoting_metrics.data_size;
+
+            for node in &self.candidate_nodes[..] {
+                if node.quoting_metrics.data_type != expected_data_type {
+                    return Err(MerklePaymentVerificationError::DataTypeMismatch {
+                        address: node.reward_address,
+                        expected: expected_data_type,
+                        got: node.quoting_metrics.data_type,
+                    });
+                }
+
+                if node.quoting_metrics.data_size != expected_data_size {
+                    return Err(MerklePaymentVerificationError::DataSizeMismatch {
+                        address: node.reward_address,
+                        expected: expected_data_size,
+                        got: node.quoting_metrics.data_size,
+                    });
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -256,7 +307,7 @@ impl MerklePaymentCandidatePool {
 /// Contains only what's needed on-chain, with cryptographic commitment to full off-chain data
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PoolCommitment {
-    /// Hash of the full MerklePaymentCandidatePool (cryptographic commitment)
+    /// Hash of the full [MerklePaymentCandidatePool] (cryptographic commitment)
     /// This commits to the intersection proof and all node signatures
     pub pool_hash: XorName,
 
@@ -319,19 +370,69 @@ impl MerklePaymentProof {
         self.winner_pool.hash()
     }
 
+    /// Get the corresponding peer ids for the paid nodes using their indices in the winner pool
+    ///
+    /// This uses the indices from the smart contract to identify exactly which nodes were paid.
+    /// This is necessary because multiple nodes can share the same reward address.
+    ///
+    /// # Arguments
+    /// * `paid_nodes` - The (address, index) pairs from the smart contract
+    ///
+    /// # Returns
+    /// * `Ok(Vec<PeerId>)` - PeerIds of the paid nodes, in the same order as the input
+    /// * `Err(PaidNodeIndexOutOfBounds)` - If any index is out of bounds
+    /// * `Err(InvalidNodePeerId)` - If any paid node has an invalid public key
+    /// * `Err(PaidAddressMismatch)` - If address at index doesn't match expected address
+    pub fn corresponding_peer_ids(
+        &self,
+        paid_nodes: &[(RewardsAddress, usize)],
+    ) -> Result<Vec<PeerId>, MerklePaymentVerificationError> {
+        let mut peer_ids = Vec::with_capacity(paid_nodes.len());
+
+        for (expected_address, index) in paid_nodes {
+            let node = self.winner_pool.candidate_nodes.get(*index).ok_or(
+                MerklePaymentVerificationError::PaidNodeIndexOutOfBounds {
+                    index: *index,
+                    pool_size: self.winner_pool.candidate_nodes.len(),
+                },
+            )?;
+
+            // Verify the address at this index matches what the smart contract says
+            if node.reward_address != *expected_address {
+                return Err(MerklePaymentVerificationError::PaidAddressMismatch {
+                    index: *index,
+                    expected: *expected_address,
+                    actual: node.reward_address,
+                });
+            }
+
+            // Derive the PeerId from the node's public key
+            let peer_id =
+                node.peer_id()
+                    .map_err(|_| MerklePaymentVerificationError::InvalidNodePeerId {
+                        address: node.reward_address,
+                        index: *index,
+                    })?;
+
+            peer_ids.push(peer_id);
+        }
+
+        Ok(peer_ids)
+    }
+
     /// Verify the payment proof against the smart contract payment info
     ///
     /// # Arguments
     /// * `smart_contract_depth` - The depth value stored in the smart contract
     /// * `smart_contract_timestamp` - The merkle payment timestamp stored in the smart contract
     /// * `smart_contract_pool_hash` - The hash of the winner pool stored in the smart contract
-    /// * `paid_node_addresses` - The addresses of the nodes that were paid
+    /// * `smart_contract_paid_nodes` - The (address, index) pairs of paid nodes from the smart contract
     pub fn verify(
         &self,
         smart_contract_depth: u8,
         smart_contract_timestamp: u64,
         smart_contract_pool_hash: &XorName,
-        smart_contract_paid_node_addresses: &HashSet<RewardsAddress>,
+        smart_contract_paid_nodes: &[(RewardsAddress, usize)],
     ) -> Result<(), MerklePaymentVerificationError> {
         // Verify the winner pool signatures and timestamps first
         self.winner_pool
@@ -345,38 +446,29 @@ impl MerklePaymentProof {
                 got: actual_hash,
             });
         }
-        let smart_contract_root = self.winner_pool.pool.root();
+        let smart_contract_root = self.winner_pool.midpoint_proof.root();
 
         // Verify the core Merkle proof using the tree-level verification
         crate::merkle_payments::verify_merkle_proof(
             &self.address,
             &self.data_proof,
-            &self.winner_pool.pool,
-            smart_contract_pool_hash,
+            &self.winner_pool.midpoint_proof,
             smart_contract_depth,
             smart_contract_root,
             smart_contract_timestamp,
         )?;
 
-        // Verify the paid node addresses are a subset of the winner pool candidates
-        let candidate_addresses = self.winner_pool.candidate_nodes_addresses();
-        if !smart_contract_paid_node_addresses.is_subset(&candidate_addresses) {
-            return Err(MerklePaymentVerificationError::PaidAddressesNotSubset {
-                smart_contract_paid_node_addresses: smart_contract_paid_node_addresses
-                    .iter()
-                    .copied()
-                    .collect(),
-                candidate_addresses: candidate_addresses.iter().copied().collect(),
+        // Verify the correct number of nodes were paid (should equal depth)
+        if smart_contract_paid_nodes.len() != smart_contract_depth as usize {
+            return Err(MerklePaymentVerificationError::WrongPaidAddressCount {
+                expected: smart_contract_depth as usize,
+                got: smart_contract_paid_nodes.len(),
             });
         }
 
-        // Verify the correct number of nodes were paid (should equal depth)
-        if smart_contract_paid_node_addresses.len() != smart_contract_depth as usize {
-            return Err(MerklePaymentVerificationError::WrongPaidAddressCount {
-                expected: smart_contract_depth as usize,
-                got: smart_contract_paid_node_addresses.len(),
-            });
-        }
+        // Verify all paid node (address, index) pairs are valid
+        // This also verifies addresses match what's at those indices
+        self.corresponding_peer_ids(smart_contract_paid_nodes)?;
 
         Ok(())
     }
@@ -562,7 +654,7 @@ mod tests {
         }
 
         let pool = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: candidate_nodes.clone(),
         };
 
@@ -669,7 +761,7 @@ mod tests {
         }
 
         let pool = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: candidate_nodes.clone(),
         };
 
@@ -715,7 +807,7 @@ mod tests {
 
         // Test 6: Empty pool should fail
         let empty_pool = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: vec![],
         };
         assert!(
@@ -752,7 +844,7 @@ mod tests {
         }
 
         let pool = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: candidate_nodes.clone(),
         };
 
@@ -848,12 +940,12 @@ mod tests {
         let reward_pool = &reward_candidates[0];
 
         let pool1 = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: vec![node1.clone(); CANDIDATES_PER_POOL],
         };
 
         let pool2 = MerklePaymentCandidatePool {
-            pool: reward_pool.clone(),
+            midpoint_proof: reward_pool.clone(),
             candidate_nodes: vec![node2.clone(); CANDIDATES_PER_POOL],
         };
 
@@ -862,6 +954,447 @@ mod tests {
             pool2.hash(),
             "Identical pools should produce identical hashes"
         );
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_happy_path() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create 20 candidate nodes with different addresses and PeerIds
+        let mut candidate_nodes = Vec::new();
+        let mut expected_peer_ids = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let peer_id = keypair.public().to_peer_id();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+            expected_peer_ids.push((RewardsAddress::from([i as u8; 20]), peer_id));
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: Get PeerIds using (address, index) pairs
+        let paid_nodes = vec![
+            (RewardsAddress::from([0; 20]), 0),
+            (RewardsAddress::from([1; 20]), 1),
+            (RewardsAddress::from([2; 20]), 2),
+        ];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(
+            result.is_ok(),
+            "Should succeed when indices and addresses match"
+        );
+
+        let peer_ids = result.unwrap();
+        assert_eq!(peer_ids.len(), 3, "Should return 3 PeerIds");
+
+        // Verify returned PeerIds match expected (in order)
+        for (i, (_addr, expected_peer_id)) in expected_peer_ids.iter().take(3).enumerate() {
+            assert_eq!(
+                peer_ids[i], *expected_peer_id,
+                "Should return PeerId at index {i} in correct order"
+            );
+        }
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_index_out_of_bounds() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create 20 candidate nodes
+        let mut candidate_nodes = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: Index out of bounds (attack scenario)
+        let paid_nodes = vec![
+            (RewardsAddress::from([0; 20]), 0),   // valid
+            (RewardsAddress::from([99; 20]), 99), // index 99 is out of bounds!
+        ];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(result.is_err(), "Should fail when index is out of bounds");
+
+        match result {
+            Err(MerklePaymentVerificationError::PaidNodeIndexOutOfBounds { index, pool_size }) => {
+                assert_eq!(index, 99);
+                assert_eq!(pool_size, CANDIDATES_PER_POOL);
+            }
+            _ => panic!("Expected PaidNodeIndexOutOfBounds error"),
+        }
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_address_mismatch() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create 20 candidate nodes
+        let mut candidate_nodes = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: Address doesn't match what's at the index (attack scenario)
+        let paid_nodes = vec![
+            (RewardsAddress::from([99; 20]), 0), // index 0 has address [0;20], not [99;20]!
+        ];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(
+            result.is_err(),
+            "Should fail when address doesn't match index"
+        );
+
+        match result {
+            Err(MerklePaymentVerificationError::PaidAddressMismatch {
+                index,
+                expected,
+                actual,
+            }) => {
+                assert_eq!(index, 0);
+                assert_eq!(expected, RewardsAddress::from([99; 20]));
+                assert_eq!(actual, RewardsAddress::from([0; 20]));
+            }
+            _ => panic!("Expected PaidAddressMismatch error"),
+        }
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_multiple_nodes_same_address() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create candidate nodes where MULTIPLE nodes share the SAME reward address
+        let shared_address = RewardsAddress::from([42; 20]);
+        let mut candidate_nodes = Vec::new();
+        let mut peer_ids_for_shared_address = Vec::new();
+
+        // First 3 nodes share the same address
+        for i in 0..3 {
+            let keypair = Keypair::generate_ed25519();
+            let peer_id = keypair.public().to_peer_id();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                shared_address, // Same address!
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+            peer_ids_for_shared_address.push(peer_id);
+        }
+
+        // Remaining nodes have unique addresses
+        for i in 3..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: When nodes at specific indices are paid (even with shared address),
+        // we can distinguish them by index
+        let paid_nodes = vec![
+            (shared_address, 0), // First node with shared address
+            (shared_address, 1), // Second node with shared address
+        ];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(
+            result.is_ok(),
+            "Should succeed when indices and addresses match"
+        );
+
+        let peer_ids = result.unwrap();
+        assert_eq!(
+            peer_ids.len(),
+            2,
+            "Should return exactly 2 PeerIds for the 2 paid indices"
+        );
+
+        // Verify the specific PeerIds at indices 0 and 1 are returned (in order)
+        assert_eq!(peer_ids[0], peer_ids_for_shared_address[0]);
+        assert_eq!(peer_ids[1], peer_ids_for_shared_address[1]);
+
+        // Test: Paying index 2 (third node with same address)
+        let paid_nodes = vec![(shared_address, 2)];
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(result.is_ok());
+        let peer_ids = result.unwrap();
+        assert_eq!(peer_ids[0], peer_ids_for_shared_address[2]);
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_invalid_public_key() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create candidate nodes
+        let mut candidate_nodes = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+        }
+
+        // Corrupt the pub_key of one node
+        candidate_nodes[5].pub_key = vec![0xFF; 10];
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Try to get PeerIds for the corrupted node's address
+        let paid_nodes = vec![(RewardsAddress::from([5; 20]), 5)];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(
+            result.is_err(),
+            "Should fail when candidate has invalid pub_key"
+        );
+
+        match result {
+            Err(MerklePaymentVerificationError::InvalidNodePeerId { address, index }) => {
+                assert_eq!(address, RewardsAddress::from([5; 20]));
+                assert_eq!(index, 5);
+            }
+            _ => panic!("Expected InvalidNodePeerId error"),
+        }
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_empty_input() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create candidate nodes
+        let mut candidate_nodes = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: Empty paid nodes
+        let paid_nodes: Vec<(RewardsAddress, usize)> = vec![];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(result.is_ok(), "Should succeed with empty input");
+
+        let peer_ids = result.unwrap();
+        assert_eq!(peer_ids.len(), 0, "Should return empty Vec for empty input");
+    }
+
+    #[test]
+    fn test_corresponding_peer_ids_partial_payment() {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        // Create a merkle tree and get a reward pool
+        let addresses = make_test_addresses(10);
+        let tree = MerkleTree::from_xornames(addresses.clone()).unwrap();
+        let reward_candidates = tree.reward_candidates(timestamp).unwrap();
+        let reward_pool = &reward_candidates[0];
+
+        // Create 20 candidate nodes
+        let mut candidate_nodes = Vec::new();
+        let mut all_peer_ids = Vec::new();
+        for i in 0..CANDIDATES_PER_POOL {
+            let keypair = Keypair::generate_ed25519();
+            let peer_id = keypair.public().to_peer_id();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            candidate_nodes.push(node);
+            all_peer_ids.push(peer_id);
+        }
+
+        let proof = MerklePaymentProof::new(
+            addresses[0],
+            tree.generate_address_proof(0, addresses[0]).unwrap(),
+            MerklePaymentCandidatePool {
+                midpoint_proof: reward_pool.clone(),
+                candidate_nodes,
+            },
+        );
+
+        // Test: Only subset of candidates were paid (depth=7, so only 7 out of 20 paid)
+        let paid_nodes = vec![
+            (RewardsAddress::from([0; 20]), 0),
+            (RewardsAddress::from([1; 20]), 1),
+            (RewardsAddress::from([2; 20]), 2),
+            (RewardsAddress::from([3; 20]), 3),
+            (RewardsAddress::from([4; 20]), 4),
+            (RewardsAddress::from([5; 20]), 5),
+            (RewardsAddress::from([6; 20]), 6),
+        ];
+
+        let result = proof.corresponding_peer_ids(&paid_nodes);
+        assert!(
+            result.is_ok(),
+            "Should succeed when indices and addresses match"
+        );
+
+        let peer_ids = result.unwrap();
+        assert_eq!(
+            peer_ids.len(),
+            7,
+            "Should return only 7 PeerIds for the 7 paid nodes"
+        );
+
+        // Verify only the paid nodes' PeerIds are returned (in order)
+        for i in 0..7 {
+            assert_eq!(
+                peer_ids[i], all_peer_ids[i],
+                "Should return PeerId at index {i} in correct order"
+            );
+        }
     }
 
     #[test]
@@ -929,7 +1462,7 @@ mod tests {
             }
 
             let pool = MerklePaymentCandidatePool {
-                pool: reward_pool.clone(),
+                midpoint_proof: reward_pool.clone(),
                 candidate_nodes,
             };
             all_candidate_pools.push(pool);
@@ -992,19 +1525,18 @@ mod tests {
                 .expect("Payment should be found");
 
             // Node verifies the payment proof using the smart contract data
+            let verification_result = payment_proof.verify(
+                payment.depth,
+                payment.merkle_payment_timestamp,
+                &winner_to_fetch,
+                &payment.paid_node_addresses,
+            );
+            if let Err(e) = &verification_result {
+                eprintln!("Verification failed: {e:?}");
+            }
             assert!(
-                payment_proof
-                    .verify(
-                        payment.depth,
-                        payment.merkle_payment_timestamp,
-                        &winner_to_fetch,
-                        &payment
-                            .paid_node_addresses
-                            .into_iter()
-                            .collect::<HashSet<_>>(),
-                    )
-                    .is_ok(),
-                "Payment proof should verify against smart contract data"
+                verification_result.is_ok(),
+                "Payment proof should verify against smart contract data: {verification_result:?}"
             );
 
             // Node verifies the closest nodes to winner pool include majority of paid nodes (this is done node side)

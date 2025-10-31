@@ -59,8 +59,8 @@ pub struct OnChainPaymentInfo {
     /// This is the timestamp that all nodes in the pool used for their quotes
     pub merkle_payment_timestamp: u64,
 
-    /// Addresses of the 'depth' nodes that were paid
-    pub paid_node_addresses: Vec<RewardsAddress>,
+    /// Addresses of the 'depth' nodes that were paid along with their indices in the winner pool
+    pub paid_node_addresses: Vec<(RewardsAddress, usize)>,
 }
 
 impl DiskMerklePaymentContract {
@@ -150,22 +150,25 @@ impl DiskMerklePaymentContract {
             winner_node_indices.len()
         );
 
-        // Extract paid node addresses
-        let mut paid_addresses = Vec::new();
+        // Extract paid node addresses, along with their indices
+        let mut paid_node_addresses = Vec::new();
         for (i, &node_idx) in winner_node_indices.iter().enumerate() {
             let addr = winner_pool.candidate_addresses[node_idx];
-            paid_addresses.push(addr);
+            paid_node_addresses.push((addr, node_idx));
             println!("  Node {}: {}", i + 1, addr);
         }
 
-        println!("\nSimulating payment to {} nodes...", paid_addresses.len());
+        println!(
+            "\nSimulating payment to {} nodes...",
+            paid_node_addresses.len()
+        );
         println!("=========================\n");
 
         // Store payment info on 'blockchain' (indexed by winner_pool_hash)
         let info = OnChainPaymentInfo {
             depth,
             merkle_payment_timestamp,
-            paid_node_addresses: paid_addresses,
+            paid_node_addresses,
         };
 
         let file_path = self
