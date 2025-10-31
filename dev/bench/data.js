@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761932932360,
+  "lastUpdate": 1761932934145,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11946,6 +11946,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18161,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e727e4bcab310e32971cbe8b1dc853cc2ba2355",
+          "message": "Merge pull request #3284 from RolandSherwin/analyze_public_archive\n\nfeat(client): extract chunk address from public archive during analysis",
+          "timestamp": "2025-10-31T16:34:25Z",
+          "tree_id": "0fb29fbf9c6798213560b48690c6cb720337937e",
+          "url": "https://github.com/maidsafe/autonomi/commit/4e727e4bcab310e32971cbe8b1dc853cc2ba2355"
+        },
+        "date": 1761932933581,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10406,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18839,
             "unit": "ms"
           },
           {
