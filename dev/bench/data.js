@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1761932930699,
+  "lastUpdate": 1761932932360,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8629,6 +8629,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/6a2904f9639426a97a0f6e59b1cd50b1e1fe6772"
         },
         "date": 1761830684375,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e727e4bcab310e32971cbe8b1dc853cc2ba2355",
+          "message": "Merge pull request #3284 from RolandSherwin/analyze_public_archive\n\nfeat(client): extract chunk address from public archive during analysis",
+          "timestamp": "2025-10-31T16:34:25Z",
+          "tree_id": "0fb29fbf9c6798213560b48690c6cb720337937e",
+          "url": "https://github.com/maidsafe/autonomi/commit/4e727e4bcab310e32971cbe8b1dc853cc2ba2355"
+        },
+        "date": 1761932931796,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
