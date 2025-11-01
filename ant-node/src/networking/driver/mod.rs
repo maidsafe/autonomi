@@ -390,21 +390,28 @@ impl SwarmDriver {
     /// Get K closest peers to self, from our local RoutingTable.
     /// Always includes self in.
     pub(crate) fn get_closest_k_local_peers_to_self(&mut self) -> Vec<(PeerId, Addresses)> {
-        self.get_closest_k_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true)
+        self.get_closest_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true, K_VALUE.get())
+    }
+
+    /// Get 40 closest peers to self, from our local RoutingTable.
+    /// Always includes self in.
+    pub(crate) fn get_closest_40_local_peers_to_self(&mut self) -> Vec<(PeerId, Addresses)> {
+        self.get_closest_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true, 40)
     }
 
     /// Get K closest peers to the target, from our local RoutingTable.
     /// Sorted for closeness to the target
     /// If requested, self will be added as the first entry.
-    pub(crate) fn get_closest_k_local_peers_to_target(
+    pub(crate) fn get_closest_local_peers_to_target(
         &mut self,
         target: &NetworkAddress,
         include_self: bool,
+        num_peers: usize,
     ) -> Vec<(PeerId, Addresses)> {
         let num_peers = if include_self {
-            K_VALUE.get() - 1
+            num_peers - 1
         } else {
-            K_VALUE.get()
+            num_peers
         };
 
         let peer_ids: Vec<_> = self
