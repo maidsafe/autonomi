@@ -268,34 +268,44 @@ fn output_json(
     let json_str = serde_json::to_string(&json_output)?;
     let mut writer = json::JsonWriter::new(output_path)?;
     writer.write_json(&json_str)?;
-    
+
     // Also write the transformed JSON output in parallel
     writer.write_transformed_json(&json_output)?;
-    
+
     println!("JSON output written to: {}", output_path.display());
-    
+
     // Print transformed output location
     if output_path.is_dir() {
-        println!("Transformed JSON output written to: {}", output_path.join("transformedJson.json").display());
+        println!(
+            "Transformed JSON output written to: {}",
+            output_path.join("transformedJson.json").display()
+        );
     } else {
         let transformed_path = if let Some(parent) = output_path.parent() {
-            let file_name = output_path.file_stem()
+            let file_name = output_path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("analyze");
-            let ext = output_path.extension()
+            let ext = output_path
+                .extension()
                 .and_then(|s| s.to_str())
                 .unwrap_or("json");
             parent.join(format!("{file_name}Transformed.{ext}"))
         } else {
-            let file_name = output_path.file_stem()
+            let file_name = output_path
+                .file_stem()
                 .and_then(|s| s.to_str())
                 .unwrap_or("analyze");
-            let ext = output_path.extension()
+            let ext = output_path
+                .extension()
                 .and_then(|s| s.to_str())
                 .unwrap_or("json");
             Path::new(&format!("{file_name}Transformed.{ext}")).to_path_buf()
         };
-        println!("Transformed JSON output written to: {}", transformed_path.display());
+        println!(
+            "Transformed JSON output written to: {}",
+            transformed_path.display()
+        );
     }
 
     Ok(())

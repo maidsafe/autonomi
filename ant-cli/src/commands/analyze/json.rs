@@ -445,7 +445,7 @@ impl JsonWriter {
                 #[cfg(unix)]
                 None,
             );
-            
+
             let transformed_file_path = path.join("analyze_transformed.json");
             let transformed_rotate = FileRotate::new(
                 transformed_file_path,
@@ -455,44 +455,45 @@ impl JsonWriter {
                 #[cfg(unix)]
                 None,
             );
-            
-            (WriterType::Rotating(file_rotate), WriterType::Rotating(transformed_rotate))
+
+            (
+                WriterType::Rotating(file_rotate),
+                WriterType::Rotating(transformed_rotate),
+            )
         } else {
             // File: use simple append mode
             // Create parent directory if it doesn't exist
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            
+
             let file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(path)?;
-            
+
             // Create transformed file path by inserting "_transformed" before extension
             let transformed_path = if let Some(parent) = path.parent() {
-                let file_name = path.file_stem()
+                let file_name = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("analyze");
-                let ext = path.extension()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("json");
+                let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("json");
                 parent.join(format!("{file_name}_transformed.{ext}"))
             } else {
-                let file_name = path.file_stem()
+                let file_name = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("analyze");
-                let ext = path.extension()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("json");
+                let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("json");
                 Path::new(&format!("{file_name}_transformed.{ext}")).to_path_buf()
             };
-            
+
             let transformed_file = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(transformed_path)?;
-            
+
             (WriterType::File(file), WriterType::File(transformed_file))
         };
 
@@ -502,7 +503,7 @@ impl JsonWriter {
             .map(|d| d.as_nanos())
             .unwrap_or(0);
 
-        Ok(Self { 
+        Ok(Self {
             writer,
             transformed_writer,
             current_timestamp_base_ns,
@@ -536,10 +537,20 @@ impl JsonWriter {
                 QueryStatus::Success => "Success",
                 QueryStatus::Error => "Error",
             };
-            let kad_address_type = analyzed_addr.kad_method.analysis_query.address_type.as_deref();
+            let kad_address_type = analyzed_addr
+                .kad_method
+                .analysis_query
+                .address_type
+                .as_deref();
 
             // Flatten holder_query peers
-            for (idx, holder) in analyzed_addr.kad_method.holder_query.holders.iter().enumerate() {
+            for (idx, holder) in analyzed_addr
+                .kad_method
+                .holder_query
+                .holders
+                .iter()
+                .enumerate()
+            {
                 let entry = FlattenedEntry::from_holder_query(
                     &analyzed_addr.target_address,
                     idx,
