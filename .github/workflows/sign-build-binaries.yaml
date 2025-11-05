@@ -1,12 +1,7 @@
 name: Build & Sign Autonomi (Windows, Keypair-only)
 
 on:
-  # Run on every PR to main branch
-  pull_request:
-    branches: [ main ]
-    types: [opened, synchronize, reopened]
-
-  # Manual trigger from Actions tab or API/CLI
+  # Manual trigger only (disabled automatic PR trigger)
   workflow_dispatch:
     inputs:
       bins:
