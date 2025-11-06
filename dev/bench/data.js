@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1762445901522,
+  "lastUpdate": 1762470773672,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3392,6 +3392,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.009015834576557,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "ebf1b1073befc8277f7859d77ad502edff4d5907",
+          "message": "Merge pull request #3291 from maidsafe/fix-ant_bootstrap_version\n\nchore: bump `ant-bootstrap` version",
+          "timestamp": "2025-11-06T22:58:04Z",
+          "tree_id": "f6538ba04994ef1407f3a4fda4d7a3b1dd5ac8ad",
+          "url": "https://github.com/maidsafe/autonomi/commit/ebf1b1073befc8277f7859d77ad502edff4d5907"
+        },
+        "date": 1762470766782,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1189572114144404,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.24605900807909,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.014577218604858,
             "unit": "MiB/s"
           }
         ]
