@@ -6,18 +6,48 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-//! Disk-based Merkle payment contract (placeholder for smart contract)
+//! Merkle batch payment types and disk-based mock smart contract
 //!
-//! This implements the same logic that will be in the smart contract.
-//! When the real smart contract is ready, replace this with actual contract calls.
+//! This module contains the minimal types needed for Merkle batch payments and a disk-based
+//! mock implementation of the smart contract. When the real smart contract is ready, the
+//! disk contract will be replaced with actual on-chain calls.
 
-use super::merkle_payment::{CANDIDATES_PER_POOL, PoolCommitment};
-use super::merkle_tree::{MAX_MERKLE_DEPTH, expected_reward_pools};
-use crate::RewardsAddress;
+use crate::common::Address as RewardsAddress;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
-use xor_name::XorName;
+
+/// Pool hash type (32 bytes) - compatible with XorName without the dependency
+pub type PoolHash = [u8; 32];
+
+/// Number of candidate nodes per pool (provides redundancy)
+pub const CANDIDATES_PER_POOL: usize = 20;
+
+/// Maximum supported Merkle tree depth
+pub const MAX_MERKLE_DEPTH: u8 = 16;
+
+/// Calculate expected number of reward pools for a given tree depth
+///
+/// Formula: 2^ceil(depth/2)
+pub fn expected_reward_pools(depth: u8) -> usize {
+    let half_depth = (depth + 1) / 2;
+    1 << half_depth
+}
+
+/// Minimal pool commitment for smart contract submission
+///
+/// Contains only what's needed on-chain, with cryptographic commitment to full off-chain data.
+/// This is sent to the smart contract as part of the batch payment transaction.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PoolCommitment {
+    /// Hash of the full MerklePaymentCandidatePool (cryptographic commitment)
+    /// This commits to the midpoint proof and all node signatures
+    pub pool_hash: PoolHash,
+
+    /// Reward addresses of candidate nodes (20 nodes per pool)
+    /// Smart contract selects winners from these addresses
+    pub candidate_addresses: Vec<RewardsAddress>,
+}
 
 /// Errors that can occur during smart contract operations
 #[derive(Debug, Error)]
@@ -41,14 +71,6 @@ pub enum SmartContractError {
     JsonError(#[from] serde_json::Error),
 }
 
-/// Disk-based Merkle payment contract (temporary implementation)
-///
-/// This simulates smart contract behavior by storing payment data to disk.
-/// Replace this entire file with a real smart contract implementation when ready.
-pub struct DiskMerklePaymentContract {
-    storage_path: PathBuf, // ~/.autonomi/merkle_payments/
-}
-
 /// What's stored on-chain (or disk) - indexed by winner_pool_hash
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OnChainPaymentInfo {
@@ -63,7 +85,16 @@ pub struct OnChainPaymentInfo {
     pub paid_node_addresses: Vec<(RewardsAddress, usize)>,
 }
 
+/// Disk-based Merkle payment contract (temporary implementation)
+///
+/// This simulates smart contract behavior by storing payment data to disk.
+/// Replace this entire implementation with a real smart contract when ready.
+pub struct DiskMerklePaymentContract {
+    storage_path: PathBuf, // ~/.autonomi/merkle_payments/
+}
+
 impl DiskMerklePaymentContract {
+    /// Create a new contract with a specific storage path
     pub fn new_with_path(storage_path: PathBuf) -> Result<Self, SmartContractError> {
         std::fs::create_dir_all(&storage_path)?;
         Ok(Self { storage_path })
@@ -95,7 +126,7 @@ impl DiskMerklePaymentContract {
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
-    ) -> Result<XorName, SmartContractError> {
+    ) -> Result<PoolHash, SmartContractError> {
         // Validate: depth is within supported range
         if depth > MAX_MERKLE_DEPTH {
             return Err(SmartContractError::DepthTooLarge {
@@ -155,7 +186,7 @@ impl DiskMerklePaymentContract {
         for (i, &node_idx) in winner_node_indices.iter().enumerate() {
             let addr = winner_pool.candidate_addresses[node_idx];
             paid_node_addresses.push((addr, node_idx));
-            println!("  Node {}: {}", i + 1, addr);
+            println!("  Node {}: {addr}", i + 1);
         }
 
         println!(
@@ -185,7 +216,7 @@ impl DiskMerklePaymentContract {
     /// Get payment info by winner pool hash
     pub fn get_payment_info(
         &self,
-        winner_pool_hash: XorName,
+        winner_pool_hash: PoolHash,
     ) -> Result<OnChainPaymentInfo, SmartContractError> {
         let file_path = self
             .storage_path

@@ -11,6 +11,7 @@ use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{network_token, payment_vault};
+use crate::merkle_batch_payment::{DiskMerklePaymentContract, PoolCommitment};
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
 use crate::{Network, TX_TIMEOUT};
@@ -40,6 +41,8 @@ pub enum Error {
     NetworkTokenContract(#[from] network_token::Error),
     #[error("Chunk payments contract error: {0}")]
     ChunkPaymentsContract(#[from] payment_vault::error::Error),
+    #[error("Merkle batch payment error: {0}")]
+    MerklePayment(String),
 }
 
 #[derive(Clone, Debug)]
@@ -151,6 +154,43 @@ impl Wallet {
             &self.transaction_config,
         )
         .await
+    }
+
+    /// Pay for a Merkle tree batch using disk-based mock smart contract
+    ///
+    /// # Arguments
+    /// * `depth` - The Merkle tree depth
+    /// * `pool_commitments` - Vector of pool commitments (one per reward pool)
+    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
+    ///
+    /// # Returns
+    /// * The winner pool hash (32 bytes) selected by the contract
+    pub async fn pay_for_merkle_tree(
+        &self,
+        depth: u8,
+        pool_commitments: Vec<PoolCommitment>,
+        merkle_payment_timestamp: u64,
+    ) -> Result<crate::merkle_batch_payment::PoolHash, Error> {
+        info!(
+            "Paying for Merkle tree: depth={depth}, pools={}, timestamp={merkle_payment_timestamp}",
+            pool_commitments.len()
+        );
+
+        // Create disk contract instance
+        let contract = DiskMerklePaymentContract::new()
+            .map_err(|e| Error::MerklePayment(format!("Failed to create contract: {e}")))?;
+
+        // Submit payment to disk contract (synchronous, just disk I/O)
+        let winner_pool_hash = contract
+            .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
+            .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
+
+        info!(
+            "Merkle payment successful, winner pool: {}",
+            hex::encode(winner_pool_hash)
+        );
+
+        Ok(winner_pool_hash)
     }
 
     /// Build a provider using this wallet.

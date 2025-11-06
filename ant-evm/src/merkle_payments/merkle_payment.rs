@@ -10,6 +10,7 @@ use std::collections::HashSet;
 
 use super::merkle_tree::{BadMerkleProof, MerkleBranch, MidpointProof};
 use crate::RewardsAddress;
+use evmlib::merkle_batch_payment::{PoolCommitment, PoolHash};
 use evmlib::quoting_metrics::QuotingMetrics;
 use libp2p::{
     PeerId,
@@ -19,13 +20,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xor_name::XorName;
 
-pub use super::merkle_tree::MAX_MERKLE_DEPTH;
+pub use evmlib::merkle_batch_payment::CANDIDATES_PER_POOL;
 
 /// Errors that can occur during Merkle payment verification
 #[derive(Debug, Error)]
 pub enum MerklePaymentVerificationError {
-    #[error("Winner pool hash mismatch: expected {expected}, got {got}")]
-    WinnerPoolHashMismatch { expected: XorName, got: XorName },
+    #[error("Winner pool hash mismatch: expected {expected:?}, got {got:?}")]
+    WinnerPoolHashMismatch { expected: PoolHash, got: PoolHash },
     #[error("Merkle proof verification failed: {0}")]
     MerkleProofFailed(#[from] BadMerkleProof),
     #[error(
@@ -75,9 +76,6 @@ pub enum MerklePaymentVerificationError {
         got: usize,
     },
 }
-
-/// Number of candidate nodes per pool (provides redundancy)
-pub const CANDIDATES_PER_POOL: usize = 20;
 
 /// A node's signed quote for potential reward eligibility
 ///
@@ -196,7 +194,7 @@ pub struct MerklePaymentCandidatePool {
 
 impl MerklePaymentCandidatePool {
     /// Compute deterministic hash for on-chain storage key
-    pub fn hash(&self) -> XorName {
+    pub fn hash(&self) -> PoolHash {
         let mut bytes = Vec::new();
 
         // Hash of the intersection proof
@@ -210,7 +208,7 @@ impl MerklePaymentCandidatePool {
             bytes.extend_from_slice(&node.to_bytes());
         }
 
-        XorName::from_content(&bytes)
+        XorName::from_content(&bytes).0
     }
 
     /// Convert to minimal commitment for smart contract submission
@@ -303,33 +301,20 @@ impl MerklePaymentCandidatePool {
     }
 }
 
-/// Minimal pool commitment for smart contract submission
-/// Contains only what's needed on-chain, with cryptographic commitment to full off-chain data
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PoolCommitment {
-    /// Hash of the full [MerklePaymentCandidatePool] (cryptographic commitment)
-    /// This commits to the intersection proof and all node signatures
-    pub pool_hash: XorName,
-
-    /// Reward addresses of candidate nodes (20 nodes per pool)
-    /// Smart contract selects winners from these addresses
-    pub candidate_addresses: Vec<RewardsAddress>,
-}
-
-impl PoolCommitment {
-    /// Verify that the commitment matches the pool and that the pool signatures are valid
-    pub fn verify_commitment(
-        &self,
-        pool: &MerklePaymentCandidatePool,
-        merkle_payment_timestamp: u64,
-    ) -> Result<(), MerklePaymentVerificationError> {
-        pool.verify_signatures(merkle_payment_timestamp)?;
-        let commitment = pool.to_commitment();
-        if self != &commitment {
-            return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
-        }
-        Ok(())
+/// Helper function for PoolCommitment verification
+///
+/// This verifies that a commitment matches a pool and that the pool signatures are valid.
+pub fn verify_pool_commitment(
+    commitment: &PoolCommitment,
+    pool: &MerklePaymentCandidatePool,
+    merkle_payment_timestamp: u64,
+) -> Result<(), MerklePaymentVerificationError> {
+    pool.verify_signatures(merkle_payment_timestamp)?;
+    let expected_commitment = pool.to_commitment();
+    if commitment != &expected_commitment {
+        return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
     }
+    Ok(())
 }
 
 /// Data package sent from client to node for data storage and payment verification
@@ -366,7 +351,7 @@ impl MerklePaymentProof {
     }
 
     /// Get the hash of the winner pool (used to query smart contract for payment info)
-    pub fn winner_pool_hash(&self) -> XorName {
+    pub fn winner_pool_hash(&self) -> PoolHash {
         self.winner_pool.hash()
     }
 
@@ -431,7 +416,7 @@ impl MerklePaymentProof {
         &self,
         smart_contract_depth: u8,
         smart_contract_timestamp: u64,
-        smart_contract_pool_hash: &XorName,
+        smart_contract_pool_hash: &PoolHash,
         smart_contract_paid_nodes: &[(RewardsAddress, usize)],
     ) -> Result<(), MerklePaymentVerificationError> {
         // Verify the winner pool signatures and timestamps first

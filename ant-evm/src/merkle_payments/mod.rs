@@ -6,16 +6,21 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-mod disk_contract;
 mod merkle_payment;
 mod merkle_tree;
 
-pub use disk_contract::{DiskMerklePaymentContract, OnChainPaymentInfo, SmartContractError};
+// Re-export types from evmlib (disk contract and minimal types)
+pub use evmlib::merkle_batch_payment::{
+    DiskMerklePaymentContract, OnChainPaymentInfo, PoolCommitment, SmartContractError,
+    CANDIDATES_PER_POOL, MAX_MERKLE_DEPTH, expected_reward_pools,
+};
+
+// Export ant-evm specific types (nodes, pools, proofs with signatures)
 pub use merkle_payment::{
-    CANDIDATES_PER_POOL, MAX_MERKLE_DEPTH, MerklePaymentCandidateNode, MerklePaymentCandidatePool,
-    MerklePaymentProof, MerklePaymentVerificationError, PoolCommitment,
+    MerklePaymentCandidateNode, MerklePaymentCandidatePool, MerklePaymentProof,
+    MerklePaymentVerificationError,
 };
 pub use merkle_tree::{
-    BadMerkleProof, MERKLE_PAYMENT_EXPIRATION, MerkleBranch, MerkleTree, MerkleTreeError,
-    MidpointProof, expected_reward_pools, verify_merkle_proof,
+    BadMerkleProof, MerkleBranch, MerkleTree, MerkleTreeError, MidpointProof,
+    verify_merkle_proof, MERKLE_PAYMENT_EXPIRATION,
 };
