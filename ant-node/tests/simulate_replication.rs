@@ -651,7 +651,7 @@ fn test_replication_simulation() {
         quotes.sort_by_key(|(_, price)| *price);
 
         // Select payment targets based on mode
-        let paid_nodes: Vec<PeerId> = match payment_mode {
+        let _paid_nodes: Vec<PeerId> = match payment_mode {
             PaymentMode::SingleNode => {
                 // Pay node at index 2 (median) with 3x amount
                 vec![quotes[2].0]
@@ -664,7 +664,7 @@ fn test_replication_simulation() {
 
         // Create payment object that will be sent to all 5 nodes
         let payment = SimulatedPayment {
-            payees: paid_nodes.clone(),
+            payees: quotes.iter().map(|(peer, _)| *peer).collect(), // all nodes will get the payment, but the others will get 0 amount
             data_type: DataTypes::Chunk,
         };
 
