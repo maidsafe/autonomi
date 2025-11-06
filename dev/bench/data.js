@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1762445899368,
+  "lastUpdate": 1762445901522,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12228,6 +12228,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 16112,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "765d9cfa373f5eb9587508e9a54e59fc8561723c",
+          "message": "Merge pull request #3290 from maidsafe/rc-2025.11.1\n\nchore(release): stable release `2025.11.1.1`",
+          "timestamp": "2025-11-06T15:55:16Z",
+          "tree_id": "11a7204b3681ff16a1a5a341a4e464cc95b47d1e",
+          "url": "https://github.com/maidsafe/autonomi/commit/765d9cfa373f5eb9587508e9a54e59fc8561723c"
+        },
+        "date": 1762445900683,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11497,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 21291,
             "unit": "ms"
           },
           {
