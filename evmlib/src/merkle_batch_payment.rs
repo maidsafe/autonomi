@@ -30,7 +30,7 @@ pub const MAX_MERKLE_DEPTH: u8 = 16;
 ///
 /// Formula: 2^ceil(depth/2)
 pub fn expected_reward_pools(depth: u8) -> usize {
-    let half_depth = (depth + 1) / 2;
+    let half_depth = depth.div_ceil(2);
     1 << half_depth
 }
 

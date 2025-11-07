@@ -1200,7 +1200,7 @@ impl Node {
         // Step 3: Verify network topology (>50% of paid nodes in closest 20)
         // Get 20 closest peers to the reward pool address
         let reward_pool_hash = proof.winner_pool_hash();
-        let reward_pool_address = NetworkAddress::from(reward_pool_hash);
+        let reward_pool_address = NetworkAddress::from(XorName(reward_pool_hash));
         let closest_peers = match self
             .network()
             .get_n_closest_peers(&reward_pool_address, CANDIDATES_PER_POOL)

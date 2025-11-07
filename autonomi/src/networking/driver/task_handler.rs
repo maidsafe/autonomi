@@ -50,7 +50,8 @@ pub(crate) struct TaskHandler {
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
     get_version: HashMap<OutboundRequestId, OneShotTaskResult<String>>,
     get_record_from_peer: HashMap<OutboundRequestId, OneShotTaskResult<Option<Record>>>,
-    get_merkle_candidate_quote: HashMap<OutboundRequestId, OneShotTaskResult<MerklePaymentCandidateNode>>,
+    get_merkle_candidate_quote:
+        HashMap<OutboundRequestId, OneShotTaskResult<MerklePaymentCandidateNode>>,
 }
 
 impl TaskHandler {

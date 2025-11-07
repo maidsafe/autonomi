@@ -223,6 +223,22 @@ impl MerklePaymentCandidatePool {
         }
     }
 
+    /// Helper function for PoolCommitment verification
+    ///
+    /// This verifies that a commitment matches a pool and that the pool signatures are valid.
+    pub fn verify_commitment(
+        &self,
+        commitment: &PoolCommitment,
+        merkle_payment_timestamp: u64,
+    ) -> Result<(), MerklePaymentVerificationError> {
+        self.verify_signatures(merkle_payment_timestamp)?;
+        let expected_commitment = self.to_commitment();
+        if commitment != &expected_commitment {
+            return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
+        }
+        Ok(())
+    }
+
     /// Get the addresses of the candidate nodes
     pub fn candidate_nodes_addresses(&self) -> HashSet<RewardsAddress> {
         self.candidate_nodes
@@ -299,22 +315,6 @@ impl MerklePaymentCandidatePool {
 
         Ok(())
     }
-}
-
-/// Helper function for PoolCommitment verification
-///
-/// This verifies that a commitment matches a pool and that the pool signatures are valid.
-pub fn verify_pool_commitment(
-    commitment: &PoolCommitment,
-    pool: &MerklePaymentCandidatePool,
-    merkle_payment_timestamp: u64,
-) -> Result<(), MerklePaymentVerificationError> {
-    pool.verify_signatures(merkle_payment_timestamp)?;
-    let expected_commitment = pool.to_commitment();
-    if commitment != &expected_commitment {
-        return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
-    }
-    Ok(())
 }
 
 /// Data package sent from client to node for data storage and payment verification
@@ -462,7 +462,7 @@ impl MerklePaymentProof {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::merkle_payments::disk_contract::DiskMerklePaymentContract;
+    use crate::merkle_payments::DiskMerklePaymentContract;
     use crate::merkle_payments::merkle_tree::MerkleTree;
     use evmlib::quoting_metrics::QuotingMetrics;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -648,7 +648,7 @@ mod tests {
 
         // Verify commitment matches pool
         assert!(
-            commitment.verify_commitment(&pool, timestamp).is_ok(),
+            pool.verify_commitment(&commitment, timestamp).is_ok(),
             "Commitment should verify against original pool"
         );
 
@@ -679,8 +679,8 @@ mod tests {
         let mut tampered_pool = pool.clone();
         tampered_pool.candidate_nodes[0].reward_address = RewardsAddress::from([0xFF; 20]);
         assert!(
-            commitment
-                .verify_commitment(&tampered_pool, timestamp)
+            tampered_pool
+                .verify_commitment(&commitment, timestamp)
                 .is_err(),
             "Commitment should not verify against tampered pool"
         );
@@ -700,8 +700,8 @@ mod tests {
         let mut wrong_count_pool = pool.clone();
         wrong_count_pool.candidate_nodes.pop();
         assert!(
-            commitment
-                .verify_commitment(&wrong_count_pool, timestamp)
+            wrong_count_pool
+                .verify_commitment(&commitment, timestamp)
                 .is_err(),
             "Commitment should not verify pool with wrong candidate count"
         );
@@ -1484,8 +1484,8 @@ mod tests {
             .expect("Winner pool should be found");
 
         assert!(
-            winner_commitment
-                .verify_commitment(winner_pool, merkle_payment_timestamp)
+            winner_pool
+                .verify_commitment(winner_commitment, merkle_payment_timestamp)
                 .is_ok(),
             "Winner commitment should verify against full pool data"
         );

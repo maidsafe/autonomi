@@ -165,7 +165,7 @@ impl Wallet {
     ///
     /// # Returns
     /// * The winner pool hash (32 bytes) selected by the contract
-    pub async fn pay_for_merkle_tree(
+    pub fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
