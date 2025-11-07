@@ -73,6 +73,13 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<String>,
     },
+    /// Get a record directly from a specific peer using request/response
+    GetRecordFromPeer {
+        addr: NetworkAddress,
+        peer: PeerInfo,
+        #[debug(skip)]
+        resp: OneShotTaskResult<Option<Record>>,
+    },
     /// Get information about the amount of connections made
     ConnectionsMade {
         #[debug(skip)]

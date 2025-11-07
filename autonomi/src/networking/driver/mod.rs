@@ -395,6 +395,20 @@ impl NetworkDriver {
                 self.pending_tasks
                     .insert_query(req_id, NetworkTask::GetVersion { peer, resp });
             }
+            NetworkTask::GetRecordFromPeer { addr, peer, resp } => {
+                let req = Request::Query(Query::GetReplicatedRecord {
+                    // using the recipient's address as the requester as a placeholder
+                    requester: NetworkAddress::from(peer.peer_id),
+                    key: addr.clone(),
+                });
+
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&peer.peer_id, req, peer.addrs.clone());
+
+                self.pending_tasks
+                    .insert_query(req_id, NetworkTask::GetRecordFromPeer { addr, peer, resp });
+            }
             NetworkTask::ConnectionsMade { resp } => {
                 // Send the current count of connections made
                 if let Err(e) = resp.send(Ok(self.connections_made)) {

@@ -865,7 +865,26 @@ impl RecordStore for NodeRecordStore {
 
         debug!("GET request for Record key: {key}");
 
-        Self::read_from_disk(&self.encryption_details, k, &self.config.storage_dir)
+        let result = Self::read_from_disk(&self.encryption_details, k, &self.config.storage_dir);
+
+        // In case the indexing cache being out-of-sync with the disk files,
+        // the indexing cache shall be pruned, to allow further replication to be triggered.
+        //
+        // There could be extreme case that if a read happens immediately after a write,
+        // which got indexing_cache populated but disk file written not completed,
+        // then the read fails with and result in the indexing cache pruned the entry by mistake.
+        // For that, the later on replication shall fill the gap, just with a redundant fetch.
+        if result.is_none() {
+            warn!("Pruning record {key:?} from the indexing cache, as the disk file is missing.");
+
+            // The pruning has to be undertaken in an async way.
+            let cloned_cmd_sender = self.local_swarm_cmd_sender.clone();
+            let cmd = LocalSwarmCmd::RemoveFailedLocalRecord { key: k.clone() };
+            
+            send_local_swarm_cmd(cloned_cmd_sender, cmd);
+        }
+
+        result
     }
 
     fn put(&mut self, record: Record) -> Result<()> {

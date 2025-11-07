@@ -71,9 +71,20 @@ pub enum SubCmd {
         /// Show closest nodes to this address instead of analyzing it.
         #[arg(long)]
         closest_nodes: bool,
+        /// Show all holders of the record at this address.
+        #[arg(long)]
+        holders: bool,
+        /// Recursively analyze all discovered addresses (chunks, pointers, etc.)
+        #[arg(short, long)]
+        recursive: bool,
         /// Verbose output. Detailed description of the analysis.
         #[arg(short, long)]
         verbose: bool,
+        /// Output results as JSON to a file. Append-only writing.
+        /// If path is a file, appends to that file.
+        /// If path is a directory, enables file rotations (50MB max per file, 10 files max).
+        #[arg(long)]
+        json: Option<PathBuf>,
     },
 }
 
@@ -649,8 +660,22 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         Some(SubCmd::Analyze {
             addr,
             closest_nodes,
+            holders,
             verbose,
-        }) => analyze::analyze(&addr, closest_nodes, verbose, network_context).await,
+            recursive,
+            json,
+        }) => {
+            analyze::analyze(
+                &addr,
+                closest_nodes,
+                holders,
+                recursive,
+                verbose,
+                network_context,
+                json,
+            )
+            .await
+        }
         None => {
             // If no subcommand is given, default to clap's error behaviour.
             Opt::command()

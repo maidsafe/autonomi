@@ -33,6 +33,8 @@ use autonomi::version;
 use opt::{NetworkId, Opt};
 use tracing::Level;
 
+use crate::commands::SubCmd;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     color_eyre::install().expect("Failed to initialise error handler");
@@ -101,8 +103,14 @@ fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGua
         // bins
         ("ant".to_string(), Level::TRACE),
     ];
+    let mute = opt
+        .command
+        .as_ref()
+        .map(|cmd| matches!(cmd, SubCmd::Analyze { .. }))
+        .unwrap_or(false);
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(opt.log_output_dest.clone());
+    log_builder.print_updates_to_stdout(!mute);
     log_builder.format(opt.log_format.unwrap_or(LogFormat::Default));
     let guards = log_builder.initialize()?;
     Ok(guards)

@@ -189,6 +189,10 @@ impl NetworkDriver {
             Response::Query(QueryResponse::GetVersion { peer: _, version }) => {
                 self.pending_tasks.update_get_version(request_id, version)?;
             }
+            Response::Query(QueryResponse::GetReplicatedRecord(result)) => {
+                self.pending_tasks
+                    .update_get_record_from_peer(request_id, result)?;
+            }
             _ => {
                 info!("Other request response event({request_id:?}): {response:?}");
                 // Unrecoganized req/rsp DM indicates peer is in an incorrect version

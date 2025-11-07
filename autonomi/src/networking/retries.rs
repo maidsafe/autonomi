@@ -123,14 +123,15 @@ impl Network {
         Err(NetworkError::InvalidRetryStrategy)
     }
 
-    /// Get closest peers to an address with retries
+    /// Get closest peers to an address with retries, optionally specifying count of peers to retrieve.
     pub async fn get_closest_peers_with_retries(
         &self,
         addr: NetworkAddress,
+        count: Option<usize>,
     ) -> Result<Vec<PeerInfo>, NetworkError> {
         let mut errors = vec![];
         for duration in RetryStrategy::Once.backoff() {
-            match self.get_closest_peers(addr.clone()).await {
+            match self.get_closest_peers(addr.clone(), count).await {
                 // return success
                 Ok(peers) => return Ok(peers),
                 // return fatal errors

@@ -13,7 +13,7 @@ use crate::wallet::input::request_password;
 use autonomi::{Wallet, get_evm_network};
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
-use prettytable::{Cell, Row, Table};
+use comfy_table::Table;
 
 const WALLET_PASSWORD_REQUIRED: bool = false;
 
@@ -95,17 +95,11 @@ pub async fn balance(network_context: NetworkContext) -> Result<()> {
 
     let mut table = Table::new();
 
-    table.add_row(Row::new(vec![
-        Cell::new("Token Balance"),
-        Cell::new(&token_balance.to_string()),
-    ]));
+    table.add_row(vec!["Token Balance", &token_balance.to_string()]);
 
-    table.add_row(Row::new(vec![
-        Cell::new("Gas Balance"),
-        Cell::new(&gas_balance.to_string()),
-    ]));
+    table.add_row(vec!["Gas Balance", &gas_balance.to_string()]);
 
-    table.printstd();
+    println!("{table}");
 
     Ok(())
 }

@@ -22,14 +22,14 @@ use crate::utils::process_tasks_with_max_concurrency;
 
 const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 100;
 
-enum EncryptionState {
+pub enum EncryptionState {
     InMemory(Vec<Chunk>, DataMapChunk),
     StreamInProgress(StreamProgressState),
     /// StreamDone(DataMapChunk, total_chunk_count)
     StreamDone((DataMapChunk, usize)),
 }
 
-pub(crate) struct EncryptionStream {
+pub struct EncryptionStream {
     pub file_path: String,
     pub relative_path: PathBuf,
     pub metadata: Metadata,
@@ -37,7 +37,7 @@ pub(crate) struct EncryptionStream {
     state: EncryptionState,
 }
 
-struct StreamProgressState {
+pub struct StreamProgressState {
     /// Receiver for chunks
     chunk_receiver: std::sync::mpsc::Receiver<Chunk>,
     /// Receiver for the datamap once the stream is done
@@ -262,7 +262,7 @@ impl EncryptionStream {
 }
 
 /// Encrypts all files in a directory and returns the encryption results (common logic)
-pub(crate) async fn encrypt_directory_files(
+pub async fn encrypt_directory_files(
     dir_path: PathBuf,
     is_public: bool,
 ) -> Result<Vec<Result<EncryptionStream, String>>, walkdir::Error> {

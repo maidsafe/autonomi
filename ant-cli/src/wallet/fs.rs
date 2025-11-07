@@ -12,8 +12,8 @@ use crate::wallet::input::{get_password_input, get_wallet_selection_input};
 use autonomi::{Network, RewardsAddress, Wallet};
 use color_eyre::eyre::{Context, bail, eyre};
 use color_eyre::{Result, Section};
+use comfy_table::Table;
 use const_hex::traits::FromHex;
-use prettytable::{Cell, Row, Table};
 use std::ffi::OsString;
 use std::io::Read;
 use std::path::PathBuf;
@@ -170,23 +170,19 @@ fn list_wallets(wallet_files: &[String]) {
 
     let mut table = Table::new();
 
-    table.add_row(Row::new(vec![
-        Cell::new("Index"),
-        Cell::new("Address"),
-        Cell::new("Encrypted"),
-    ]));
+    table.set_header(vec!["Index", "Address", "Encrypted"]);
 
     for (index, wallet_file) in wallet_files.iter().enumerate() {
         let encrypted = wallet_file.contains(ENCRYPTED_PRIVATE_KEY_EXT);
 
-        table.add_row(Row::new(vec![
-            Cell::new(&(index + 1).to_string()),
-            Cell::new(&filter_wallet_file_extension(wallet_file)),
-            Cell::new(&encrypted.to_string()),
-        ]));
+        table.add_row(vec![
+            &(index + 1).to_string(),
+            &filter_wallet_file_extension(wallet_file),
+            &encrypted.to_string(),
+        ]);
     }
 
-    table.printstd();
+    println!("{table}");
 }
 
 fn get_wallet_files(wallets_folder: &PathBuf) -> Result<Vec<String>> {

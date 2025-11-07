@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *When editing this file, please respect a line length of 100.*
 
+## 2025-11-06
+
+### API
+
+#### Fixed
+
+- An inefficient mechanism was being used when various tasks were being processed in parallel. This
+  has been replaced with a more optimised approach. As a result we can expect to see improved
+  performance in various areas, including file downloads and uploads, and quotations.
+
+### Bootstrapping
+
+#### Fixed
+
+- An issue caused the bootstrap process to halt before being connected to the network. It will now
+  correctly stop either when we are connected to the network or have exhausted all the addresses.
+
 ## 2025-10-15
 
 ### Bootstrapping

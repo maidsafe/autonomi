@@ -277,7 +277,7 @@ impl Client {
             };
             let target_nodes = self
                 .network
-                .get_closest_peers_with_retries(net_addr.clone())
+                .get_closest_peers_with_retries(net_addr.clone(), None)
                 .await
                 .map_err(|e| PutError::Network {
                     address: Box::new(net_addr),
@@ -424,7 +424,7 @@ impl Client {
         // store the scratchpad on the network
         let target_nodes = self
             .network
-            .get_closest_peers_with_retries(net_addr.clone())
+            .get_closest_peers_with_retries(net_addr.clone(), None)
             .await
             .map_err(|e| PutError::Network {
                 address: Box::new(net_addr),

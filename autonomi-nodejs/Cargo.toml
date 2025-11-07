@@ -1,7 +1,7 @@
 [package]
 edition = "2024"
 name = "autonomi-nodejs"
-version = "0.2.3"
+version = "0.2.4"
 description = "NodeJS bindings for the autonomi client"
 license = "GPL-3.0"
 
@@ -9,7 +9,7 @@ license = "GPL-3.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-autonomi = { path = "../autonomi", version = "0.6.3" }
+autonomi = { path = "../autonomi", version = "0.6.4" }
 bytes = { version = "1.0.1", features = ["serde"] }
 eyre = "0.6.12"
 futures = "0.3"

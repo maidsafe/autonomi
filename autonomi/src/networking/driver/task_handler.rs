@@ -49,6 +49,7 @@ pub(crate) struct TaskHandler {
     get_record: HashMap<QueryId, (OneShotTaskResult<RecordAndHolders>, Quorum)>,
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
     get_version: HashMap<OutboundRequestId, OneShotTaskResult<String>>,
+    get_record_from_peer: HashMap<OutboundRequestId, OneShotTaskResult<Option<Record>>>,
 }
 
 impl TaskHandler {
@@ -61,6 +62,7 @@ impl TaskHandler {
             get_record: Default::default(),
             get_record_accumulator: Default::default(),
             get_version: Default::default(),
+            get_record_from_peer: Default::default(),
         }
     }
 
@@ -74,6 +76,7 @@ impl TaskHandler {
         self.get_cost.contains_key(id)
             || self.put_record_req.contains_key(id)
             || self.get_version.contains_key(id)
+            || self.get_record_from_peer.contains_key(id)
     }
 
     pub fn insert_task(&mut self, id: QueryId, task: NetworkTask) {
@@ -108,6 +111,9 @@ impl TaskHandler {
             }
             NetworkTask::GetVersion { resp, .. } => {
                 self.get_version.insert(id, resp);
+            }
+            NetworkTask::GetRecordFromPeer { resp, .. } => {
+                self.get_record_from_peer.insert(id, resp);
             }
             _ => {}
         }
@@ -234,10 +240,12 @@ impl TaskHandler {
         let expected_holders = get_quorum_amount(&quorum);
 
         if holders.len() < expected_holders {
+            let holder_peers: Vec<_> = holders.keys().cloned().collect();
             responder
                 .send(Err(NetworkError::GetRecordQuorumFailed {
                     got_holders: holders.len(),
                     expected_holders,
+                    holders: holder_peers,
                 }))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
 
@@ -403,6 +411,42 @@ impl TaskHandler {
         Ok(())
     }
 
+    pub fn update_get_record_from_peer(
+        &mut self,
+        id: OutboundRequestId,
+        result: Result<(NetworkAddress, bytes::Bytes), ant_protocol::error::Error>,
+    ) -> Result<(), TaskHandlerError> {
+        let responder =
+            self.get_record_from_peer
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
+
+        match result {
+            Ok((holder, record_content)) => {
+                let key = PrettyPrintRecordKey::from(&holder.to_record_key()).into_owned();
+                trace!("OutboundRequestId({id}): got record {key} from holder {holder:?}");
+                let record = Record {
+                    key: holder.to_record_key(),
+                    value: record_content.to_vec(),
+                    publisher: None,
+                    expires: None,
+                };
+                responder
+                    .send(Ok(Some(record)))
+                    .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
+            }
+            Err(e) => {
+                trace!("OutboundRequestId({id}): failed to get record from peer: {e:?}");
+                responder
+                    .send(Ok(None))
+                    .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn terminate_query(
         &mut self,
         id: OutboundRequestId,
@@ -437,6 +481,14 @@ impl TaskHandler {
                     .send(Err(NetworkError::PutRecordRejected(error.to_string())))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
+        // Get record from peer case
+        } else if let Some(responder) = self.get_record_from_peer.remove(&id) {
+            trace!(
+                "OutboundRequestId({id}): get record from peer got fatal error from peer {peer:?}: {error:?}"
+            );
+            responder
+                .send(Ok(None))
+                .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         } else {
             trace!(
                 "OutboundRequestId({id}): trying to terminate unknown query, maybe it was already removed"

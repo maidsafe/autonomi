@@ -29,7 +29,7 @@ tcp = []
 websockets = []
 
 [dependencies]
-ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.10" }
+ant-bootstrap = { path = "../ant-bootstrap", version = "0.2.11" }
 ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.2.52" }
