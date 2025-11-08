@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1762606479493,
+  "lastUpdate": 1762606480758,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12510,6 +12510,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 17624,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01aef5794ab4d33560bc37c8886befb9a4f79a35",
+          "message": "Merge pull request #3296 from RolandSherwin/recursive_analyze_public\n\nfix(ant): obtain the correct public archive addresses",
+          "timestamp": "2025-11-08T12:37:50Z",
+          "tree_id": "5f218c9fb2a81d86e8426aaf585799304afd09e3",
+          "url": "https://github.com/maidsafe/autonomi/commit/01aef5794ab4d33560bc37c8886befb9a4f79a35"
+        },
+        "date": 1762606480428,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10382,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18542,
             "unit": "ms"
           },
           {
