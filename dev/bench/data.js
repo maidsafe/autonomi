@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1762606478252,
+  "lastUpdate": 1762606479493,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9037,6 +9037,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/ebf1b1073befc8277f7859d77ad502edff4d5907"
         },
         "date": 1762470852098,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01aef5794ab4d33560bc37c8886befb9a4f79a35",
+          "message": "Merge pull request #3296 from RolandSherwin/recursive_analyze_public\n\nfix(ant): obtain the correct public archive addresses",
+          "timestamp": "2025-11-08T12:37:50Z",
+          "tree_id": "5f218c9fb2a81d86e8426aaf585799304afd09e3",
+          "url": "https://github.com/maidsafe/autonomi/commit/01aef5794ab4d33560bc37c8886befb9a4f79a35"
+        },
+        "date": 1762606479170,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
