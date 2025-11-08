@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1762470853655,
+  "lastUpdate": 1762606400554,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3431,6 +3431,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.014577218604858,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "01aef5794ab4d33560bc37c8886befb9a4f79a35",
+          "message": "Merge pull request #3296 from RolandSherwin/recursive_analyze_public\n\nfix(ant): obtain the correct public archive addresses",
+          "timestamp": "2025-11-08T12:37:50Z",
+          "tree_id": "5f218c9fb2a81d86e8426aaf585799304afd09e3",
+          "url": "https://github.com/maidsafe/autonomi/commit/01aef5794ab4d33560bc37c8886befb9a4f79a35"
+        },
+        "date": 1762606393653,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1507633618594435,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.171332909336185,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.041081529111454,
             "unit": "MiB/s"
           }
         ]
