@@ -6,6 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+pub mod cached_merkle_payments;
 pub mod cached_payments;
 pub mod data_dir;
 pub mod keys;

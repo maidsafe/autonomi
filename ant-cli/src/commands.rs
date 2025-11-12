@@ -89,10 +89,15 @@ pub enum FileCmd {
     Cost {
         /// The file to estimate cost for.
         file: String,
+        /// Use Merkle batch payment mode instead of standard payment.
+        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
+        #[arg(long)]
+        merkle: bool,
         /// Use standard payment mode instead of single-node payment (default).
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
-        #[arg(long)]
+        /// This flag only applies to standard payment mode (not Merkle).
+        #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
     },
 
@@ -114,11 +119,16 @@ pub enum FileCmd {
         #[arg(long)]
         #[clap(default_value = "0")]
         retry_failed: u64,
+        /// Use Merkle batch payment mode instead of standard payment.
+        /// Merkle mode pays for all chunks in a single transaction, saving gas fees.
+        #[arg(long)]
+        merkle: bool,
         /// Use standard payment mode instead of single-node payment (default).
         /// Standard mode pays 3 nodes individually, which costs more in gas fees.
         /// Single-node payment (default) pays only one node with 3x that amount, saving gas fees.
         /// Data is stored on 5 nodes regardless of payment mode.
-        #[arg(long)]
+        /// This flag only applies to standard payment mode (not Merkle).
+        #[arg(long, conflicts_with = "merkle")]
         disable_single_node_payment: bool,
         #[command(flatten)]
         transaction_opt: TransactionOpt,
@@ -465,13 +475,15 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
         Some(SubCmd::File { command }) => match command {
             FileCmd::Cost {
                 file,
+                merkle,
                 disable_single_node_payment,
-            } => file::cost(&file, network_context, disable_single_node_payment).await,
+            } => file::cost(&file, network_context, merkle, disable_single_node_payment).await,
             FileCmd::Upload {
                 file,
                 public,
                 no_archive,
                 retry_failed,
+                merkle,
                 disable_single_node_payment,
                 transaction_opt,
             } => {
@@ -482,6 +494,7 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                     network_context,
                     transaction_opt.max_fee_per_gas,
                     retry_failed,
+                    merkle,
                     disable_single_node_payment,
                 )
                 .await

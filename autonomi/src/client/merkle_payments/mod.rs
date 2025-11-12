@@ -10,6 +10,6 @@ mod file;
 mod payments;
 mod upload;
 
-pub use file::MerkleFilePutError;
+pub use file::{MerkleFilePutError, MerklePaymentOption};
 pub use payments::{MerklePaymentError, MerklePaymentReceipt};
 pub use upload::MerklePutError;
