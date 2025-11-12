@@ -164,13 +164,13 @@ impl Wallet {
     /// * `merkle_payment_timestamp` - Unix timestamp for the payment
     ///
     /// # Returns
-    /// * The winner pool hash (32 bytes) selected by the contract
+    /// * The winner pool hash (32 bytes) selected by the contract and the amount paid
     pub fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
-    ) -> Result<crate::merkle_batch_payment::PoolHash, Error> {
+    ) -> Result<(crate::merkle_batch_payment::PoolHash, Amount), Error> {
         info!(
             "Paying for Merkle tree: depth={depth}, pools={}, timestamp={merkle_payment_timestamp}",
             pool_commitments.len()
@@ -181,16 +181,17 @@ impl Wallet {
             .map_err(|e| Error::MerklePayment(format!("Failed to create contract: {e}")))?;
 
         // Submit payment to disk contract (synchronous, just disk I/O)
-        let winner_pool_hash = contract
+        let (winner_pool_hash, amount) = contract
             .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
             .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
 
         info!(
-            "Merkle payment successful, winner pool: {}",
-            hex::encode(winner_pool_hash)
+            "Merkle payment successful, winner pool: {}, amount: {}",
+            hex::encode(winner_pool_hash),
+            amount
         );
 
-        Ok(winner_pool_hash)
+        Ok((winner_pool_hash, amount))
     }
 
     /// Build a provider using this wallet.
