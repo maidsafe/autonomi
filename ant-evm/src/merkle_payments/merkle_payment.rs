@@ -1463,7 +1463,7 @@ mod tests {
         let contract =
             DiskMerklePaymentContract::new_with_path(temp_dir.path().to_path_buf()).unwrap();
 
-        let winner_pool_hash = contract
+        let (winner_pool_hash, _amount) = contract
             .pay_for_merkle_tree(depth, pool_commitments.clone(), merkle_payment_timestamp)
             .unwrap();
 

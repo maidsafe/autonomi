@@ -8,7 +8,7 @@
 
 use crate::{Client, networking::NetworkError};
 use ant_evm::{
-    EvmWallet,
+    AttoTokens, EvmWallet,
     merkle_payments::{
         CANDIDATES_PER_POOL, MerklePaymentCandidateNode, MerklePaymentCandidatePool,
         MerklePaymentProof, MerklePaymentVerificationError, MerkleTree, MidpointProof,
@@ -32,6 +32,8 @@ pub struct MerklePaymentReceipt {
     pub proofs: HashMap<XorName, MerklePaymentProof>,
     /// Chunk count for each file path
     pub file_chunk_counts: HashMap<String, usize>,
+    /// Total amount paid for this Merkle batch
+    pub amount_paid: AttoTokens,
 }
 
 /// Errors that can occur during Merkle batch payment operations
@@ -232,12 +234,13 @@ impl Client {
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
-        let winner_pool_hash =
+        let (winner_pool_hash, amount) =
             wallet.pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)?;
+        let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);
         debug!("Unlocked wallet");
 
-        info!("Payment submitted, winner pool: {:?}", winner_pool_hash);
+        info!("Payment submitted, winner pool: {winner_pool_hash:?}, amount: {amount}");
 
         // Phase 5: Generate proofs for all addresses
         let winner_pool = candidate_pools
@@ -268,9 +271,13 @@ impl Client {
         let receipt = MerklePaymentReceipt {
             proofs,
             file_chunk_counts: HashMap::new(),
+            amount_paid: amount,
         };
 
-        info!("Generated {} Merkle payment proofs", receipt.proofs.len());
+        info!(
+            "Generated {} Merkle payment proofs, total amount: {amount}",
+            receipt.proofs.len()
+        );
         Ok(receipt)
     }
 }

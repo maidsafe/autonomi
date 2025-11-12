@@ -13,7 +13,7 @@ use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::files::Metadata;
 use crate::self_encryption::{EncryptionStream, MAX_CHUNK_SIZE, encrypt_directory_files};
-use ant_evm::EvmWallet;
+use ant_evm::{AttoTokens, EvmWallet};
 use ant_protocol::storage::DataTypes;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -119,13 +119,15 @@ impl Client {
     /// * `payment` - The payment option (wallet or cached receipt)
     ///
     /// # Returns
-    /// * `Vec<(PathBuf, DataMapChunk, Metadata)>` - A vector of (relative_path, datamap, metadata) tuples for each uploaded file
+    /// * Tuple of (amount_paid, results) where:
+    ///   - `amount_paid` - Total amount paid for the Merkle batch (in AttoTokens)
+    ///   - `results` - Vector of (relative_path, datamap, metadata) tuples for each uploaded file
     pub async fn files_put_with_merkle_payment(
         &self,
         path: PathBuf,
         is_public: bool,
         payment: MerklePaymentOption<'_>,
-    ) -> Result<Vec<(PathBuf, DataMapChunk, Metadata)>, MerkleFilePutError> {
+    ) -> Result<(AttoTokens, Vec<(PathBuf, DataMapChunk, Metadata)>), MerkleFilePutError> {
         debug!(
             "merkle payment: files_put starting upload for path: {path:?}, is_public: {is_public}"
         );
@@ -196,7 +198,7 @@ impl Client {
         }
 
         debug!("merkle payment: files_put all files uploaded successfully");
-        Ok(results)
+        Ok((receipt.amount_paid, results))
     }
 }
 

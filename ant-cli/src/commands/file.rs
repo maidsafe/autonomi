@@ -339,7 +339,7 @@ async fn upload_dir_merkle(
     };
 
     // Upload files with Merkle payment
-    let results = client
+    let (amount_paid, results) = client
         .files_put_with_merkle_payment(dir_path.clone(), public, payment_option)
         .await
         .map_err(|e| {
@@ -353,6 +353,10 @@ async fn upload_dir_merkle(
                 "Merkle payment error: {e}"
             )))
         })?;
+
+    // Display the Merkle payment cost
+    println!("Total cost: {amount_paid} AttoTokens");
+    info!("Merkle payment cost: {amount_paid}");
 
     // Create payment option for archive uploads
     let payment_option = PaymentOption::Wallet(wallet.clone());

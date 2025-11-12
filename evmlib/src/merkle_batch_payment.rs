@@ -12,7 +12,7 @@
 //! mock implementation of the smart contract. When the real smart contract is ready, the
 //! disk contract will be replaced with actual on-chain calls.
 
-use crate::common::Address as RewardsAddress;
+use crate::common::{Address as RewardsAddress, Amount};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
@@ -121,12 +121,13 @@ impl DiskMerklePaymentContract {
     ///
     /// # Returns
     /// * `winner_pool_hash` - Hash of winner pool (storage key for verification)
+    /// * `amount` - Amount paid for the Merkle tree
     pub fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
-    ) -> Result<PoolHash, SmartContractError> {
+    ) -> Result<(PoolHash, Amount), SmartContractError> {
         // Validate: depth is within supported range
         if depth > MAX_MERKLE_DEPTH {
             return Err(SmartContractError::DepthTooLarge {
@@ -210,7 +211,10 @@ impl DiskMerklePaymentContract {
 
         println!("✓ Stored payment info to: {}", file_path.display());
 
-        Ok(winner_pool_hash)
+        // placeholder amount based on depth
+        let placeholder_amount = Amount::from(2_u64.pow(depth as u32));
+
+        Ok((winner_pool_hash, placeholder_amount))
     }
 
     /// Get payment info by winner pool hash
