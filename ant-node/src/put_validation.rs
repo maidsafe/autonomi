@@ -1133,6 +1133,7 @@ impl Node {
     /// Verify Merkle batch payment for a data address
     ///
     /// This performs:
+    /// 0. Verify proof address matches target address
     /// 1. Query smart contract to get payment info
     /// 2. Verify Merkle proof structure and signatures
     /// 3. Verify network topology (paid nodes among closest 20)
@@ -1147,7 +1148,38 @@ impl Node {
         let record_key = target_address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&record_key);
 
-        // Step 1: Query smart contract FIRST to get payment info
+        // Verify proof address matches target address
+        let target_xorname = match target_address {
+            NetworkAddress::ChunkAddress(addr) => *addr.xorname(),
+            NetworkAddress::ScratchpadAddress(addr) => addr.xorname(),
+            NetworkAddress::GraphEntryAddress(addr) => addr.xorname(),
+            NetworkAddress::PointerAddress(addr) => addr.xorname(),
+            _ => {
+                let error_msg = format!(
+                    "Unsupported network address type for Merkle payment: {target_address:?}"
+                );
+                error!("{error_msg}");
+                return Err(PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error: error_msg,
+                });
+            }
+        };
+
+        if proof.address != target_xorname {
+            let error_msg = format!(
+                "Merkle proof address mismatch: proof is for {:?} but data is at {:?}. \
+                 This prevents reusing a proof paid for one address to store data at another address.",
+                proof.address, target_xorname
+            );
+            warn!("{error_msg}");
+            return Err(PutValidationError::MerklePaymentVerificationFailed {
+                record_key: pretty_key.clone().into_owned(),
+                error: error_msg,
+            });
+        }
+
+        // Query smart contract to get payment info
         let winner_pool_hash = proof.winner_pool_hash();
 
         let contract = DiskMerklePaymentContract::new().map_err(|e| {
@@ -1172,13 +1204,14 @@ impl Node {
         })?;
 
         debug!(
-            "Got payment info from smart contract: depth={}, timestamp={}, paid_nodes={}",
+            "merkle payment: got payment info: depth={}, timestamp={}, paid_nodes={}",
             payment_info.depth,
             payment_info.merkle_payment_timestamp,
             payment_info.paid_node_addresses.len()
         );
 
-        // Step 2: Verify Merkle proof structure using smart contract data
+        // Verify Merkle proof structure using smart contract data
+        debug!("merkle payment: verifying Merkle proof structure");
         proof
             .verify(
                 payment_info.depth,
@@ -1197,7 +1230,7 @@ impl Node {
 
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
 
-        // Step 3: Verify network topology (>50% of paid nodes in closest 20)
+        // Verify network topology (>50% of paid nodes in closest 20)
         // Get 20 closest peers to the reward pool address
         let reward_pool_hash = proof.winner_pool_hash();
         let reward_pool_address = NetworkAddress::from(XorName(reward_pool_hash));

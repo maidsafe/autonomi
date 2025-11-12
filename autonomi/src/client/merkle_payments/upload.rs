@@ -58,9 +58,10 @@ impl Client {
         let mut completed = 0;
 
         // Helper to start an upload task for a chunk
-        let start_upload = |chunk: ant_protocol::storage::Chunk| -> Result<_, MerklePutError> {
+        let start_upload = |chunk: Chunk| -> Result<_, MerklePutError> {
             let xor_name = *chunk.name();
             let proof = receipt
+                .proofs
                 .get(&xor_name)
                 .ok_or(MerklePutError::MissingPaymentProofFor(xor_name))?
                 .clone();

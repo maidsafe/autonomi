@@ -24,9 +24,15 @@ use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use xor_name::XorName;
 
-/// Contains the Merkle payment proofs for each XOR address
+/// Contains the Merkle payment proofs for each XOR address and per-file chunk counts
 /// This is the Merkle payment equivalent of [`Receipt`](crate::client::payment::Receipt)
-pub type MerklePaymentReceipt = HashMap<XorName, MerklePaymentProof>;
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MerklePaymentReceipt {
+    /// Merkle payment proofs for each XOR address
+    pub proofs: HashMap<XorName, MerklePaymentProof>,
+    /// Chunk count for each file path
+    pub file_chunk_counts: HashMap<String, usize>,
+}
 
 /// Errors that can occur during Merkle batch payment operations
 #[derive(Debug, thiserror::Error)]
@@ -244,7 +250,7 @@ impl Client {
                 ))
             })?;
 
-        let mut receipt = MerklePaymentReceipt::new();
+        let mut proofs = HashMap::new();
         for (i, address) in addresses.into_iter().enumerate() {
             // Generate address proof
             let address_proof = tree.generate_address_proof(i, address)?;
@@ -256,10 +262,15 @@ impl Client {
                 winner_pool: winner_pool.clone(),
             };
 
-            receipt.insert(address, payment_proof);
+            proofs.insert(address, payment_proof);
         }
 
-        info!("Generated {} Merkle payment proofs", receipt.len());
+        let receipt = MerklePaymentReceipt {
+            proofs,
+            file_chunk_counts: HashMap::new(),
+        };
+
+        info!("Generated {} Merkle payment proofs", receipt.proofs.len());
         Ok(receipt)
     }
 }
