@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763046757073,
+  "lastUpdate": 1763049803925,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3548,6 +3548,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.0218658876071745,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b891a39b611278e3df0fb6a770b1020956e8b7c5",
+          "message": "Merge pull request #3269 from RolandSherwin/reach/2_logging_changes\n\nfeat(logging): log to file or dir dynamically based on path",
+          "timestamp": "2025-11-13T14:08:24Z",
+          "tree_id": "d35d5bf78ef7ba2466f4f063dfa18ad3b3d76743",
+          "url": "https://github.com/maidsafe/autonomi/commit/b891a39b611278e3df0fb6a770b1020956e8b7c5"
+        },
+        "date": 1763049797043,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.129143419802895,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.24217599029065,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.005886036217923,
             "unit": "MiB/s"
           }
         ]
