@@ -246,12 +246,11 @@ impl TaskHandler {
         let expected_holders = get_quorum_amount(&quorum);
 
         if holders.len() < expected_holders {
-            let holder_peers: Vec<_> = holders.keys().cloned().collect();
             responder
                 .send(Err(NetworkError::GetRecordQuorumFailed {
                     got_holders: holders.len(),
                     expected_holders,
-                    holders: holder_peers,
+                    holders,
                 }))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
 

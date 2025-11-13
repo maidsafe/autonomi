@@ -124,7 +124,7 @@ pub enum NetworkError {
     GetRecordQuorumFailed {
         got_holders: usize,
         expected_holders: usize,
-        holders: Vec<PeerId>,
+        holders: HashMap<PeerId, Record>,
     },
     #[error("Failed to get record: {0}")]
     GetRecordError(String),

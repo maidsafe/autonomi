@@ -12,7 +12,6 @@ mod json;
 pub use error::{AnalysisErrorDisplay, NetworkErrorDisplay};
 
 use crate::actions::NetworkContext;
-use crate::commands::Quorum;
 use crate::wallet::load_wallet;
 use autonomi::PublicKey;
 use autonomi::chunk::ChunkAddress;
@@ -369,6 +368,9 @@ pub async fn analyze(
         map
     };
 
+    // Only being verbose when handling single address
+    let single_addr_verbose = results.len() == 1;
+
     // Pre-compute closest nodes data if needed
     let closest_nodes_data = if closest_nodes {
         println!(
@@ -381,7 +383,7 @@ pub async fn analyze(
             let client = client.clone();
             let addr = addr.clone();
             async move {
-                let result = get_closest_nodes_status(&client, &addr, false).await;
+                let result = get_closest_nodes_status(&client, &addr, single_addr_verbose).await;
                 (addr, result)
             }
         });
@@ -419,7 +421,7 @@ pub async fn analyze(
             let client = client.clone();
             let addr = addr.clone();
             async move {
-                let result = get_holders_status(&client, &addr, false).await;
+                let result = get_holders_status(&client, &addr, single_addr_verbose).await;
                 (addr, result)
             }
         });
@@ -622,30 +624,27 @@ fn try_other_types(addr: &str, verbose: bool) {
     println!("⚠️ Unrecognized input");
 }
 
-/// Get holders (along query path) status for an address
-///
-/// Returns a vector of HolderStatus for the given address
-async fn get_holders_status(
+/// Get record from network with best effort
+async fn get_record_with_best_effort(
     client: &autonomi::Client,
-    addr: &str,
+    addr: NetworkAddress,
     verbose: bool,
-) -> Result<Vec<HolderStatus>> {
-    println_if!(verbose, "Querying holders of record at address...");
+) -> Result<(Option<Record>, Vec<PeerId>)> {
+    println_if!(verbose, "Getting record with best effort at address {addr} ...");
 
-    let network_addr = parse_network_address(addr)?;
-
+    // `Quorum::N(20)` will be better than `Quorum::One` to drain the network to look for the record
     let quorum = std::num::NonZeroUsize::new(KAD_HOLDERS_QUERY_RANGE as usize)
         .map(autonomi::networking::Quorum::N)
         .expect("KAD_HOLDERS_QUERY_RANGE is non-zero");
 
-    let (record, holders) = match client
-        .get_record_and_holders(network_addr.clone(), quorum)
+    match client
+        .get_record_and_holders(addr.clone(), quorum)
         .await
     {
-        Ok((record, holders)) => (record, holders),
+        Ok((record, holders)) => Ok((record, holders)),
         Err(NetworkError::GetRecordTimeout(holders)) => {
             println_if!(verbose, "Request timed out, showing partial results");
-            (None, holders)
+            Ok((None, holders))
         }
         Err(NetworkError::GetRecordQuorumFailed {
             got_holders,
@@ -656,12 +655,25 @@ async fn get_holders_status(
                 verbose,
                 "Quorum not met (got {got_holders}/{expected_holders}), showing partial results"
             );
-            (None, holders)
+            let record = holders.values().next().cloned();
+            Ok((record, holders.keys().cloned().collect()))
         }
         Err(e) => {
-            return Err(color_eyre::eyre::eyre!("Failed to get record holders: {e}"));
+            Err(color_eyre::eyre::eyre!("Failed to get record holders: {e}"))
         }
-    };
+    }
+}
+
+/// Get holders (along query path) status for an address
+///
+/// Returns a vector of HolderStatus for the given address
+async fn get_holders_status(
+    client: &autonomi::Client,
+    addr: &str,
+    verbose: bool,
+) -> Result<Vec<HolderStatus>> {
+    let network_addr = parse_network_address(addr)?;
+    let (record, holders) = get_record_with_best_effort(client, network_addr.clone(), verbose).await?;
 
     let mut holders_status = vec![];
 
@@ -1650,7 +1662,7 @@ async fn perform_network_health_scan(
                     // Try kad query as fallback
                     still_bad += 1;
                     if repair {
-                        match client.get_record_and_holders(health_result.network_address, Quorum::One).await {
+                        match get_record_with_best_effort(client, health_result.network_address, verbose).await {
                             Ok((Some(record), _holders)) => {
                                 if verbose {
                                     println!("   ✅ Retrieved record {} via kad query", health_result.address);
@@ -1856,7 +1868,7 @@ async fn perform_network_health_scan(
                     }
                 } else {
                     // Try to get the record data via kad query
-                    match client.get_record_and_holders(health_result.network_address, Quorum::One).await {
+                    match get_record_with_best_effort(client, health_result.network_address, verbose).await {
                         Ok((Some(record), _holders)) => {
                             if verbose {
                                 println!("   ✅ Retrieved record {} with {} bytes via kad query", health_result.address, record.value.len());
@@ -2119,9 +2131,8 @@ async fn handle_repair(
             // Get target_address from the first entry (all variants have this field)
             if let Some(first_status) = statuses.first() {
                 let target_address = first_status.target_address();
-                
                 // Try to get the record data via kad query
-                match client.get_record_and_holders(target_address.clone(), Quorum::One).await {
+                match get_record_with_best_effort(client, target_address.clone(), verbose).await {
                     Ok((Some(record), _holders)) => {
                         if verbose {
                             println!("   ✅ Retrieved record {addr_str:?} with {} bytes", record.value.len());
