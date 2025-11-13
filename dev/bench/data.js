@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763049803925,
+  "lastUpdate": 1763049888800,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6228,6 +6228,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 206,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b891a39b611278e3df0fb6a770b1020956e8b7c5",
+          "message": "Merge pull request #3269 from RolandSherwin/reach/2_logging_changes\n\nfeat(logging): log to file or dir dynamically based on path",
+          "timestamp": "2025-11-13T14:08:24Z",
+          "tree_id": "d35d5bf78ef7ba2466f4f063dfa18ad3b3d76743",
+          "url": "https://github.com/maidsafe/autonomi/commit/b891a39b611278e3df0fb6a770b1020956e8b7c5"
+        },
+        "date": 1763049888535,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 188,
             "unit": "MB"
           }
         ]
