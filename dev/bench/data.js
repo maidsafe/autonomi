@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763065277521,
+  "lastUpdate": 1763065279745,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9547,6 +9547,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/82396b1cf53f9677a512a4ae4d29c704ce4214bb"
         },
         "date": 1763061387917,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7de463e4415ac5231ef4e4051a06a0c7539f92e0",
+          "message": "Merge pull request #3304 from maqi/rescan_badlist\n\nRescan badlist",
+          "timestamp": "2025-11-13T20:04:27Z",
+          "tree_id": "c7a257f4084390a60c2523f394739e6a738a082d",
+          "url": "https://github.com/maidsafe/autonomi/commit/7de463e4415ac5231ef4e4051a06a0c7539f92e0"
+        },
+        "date": 1763065278862,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
