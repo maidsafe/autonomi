@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763046755037,
+  "lastUpdate": 1763046757073,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12792,6 +12792,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 13825,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "66ec46ce23645a5e6c76f0005044de2a3b848297",
+          "message": "Merge pull request #3299 from maqi/blind_scan\n\nfurther storage tracking facilities from the analyze tool",
+          "timestamp": "2025-11-13T14:56:01Z",
+          "tree_id": "f5d149922289ce9d088f4182af801f233e18e152",
+          "url": "https://github.com/maidsafe/autonomi/commit/66ec46ce23645a5e6c76f0005044de2a3b848297"
+        },
+        "date": 1763046756307,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10174,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18432,
             "unit": "ms"
           },
           {
