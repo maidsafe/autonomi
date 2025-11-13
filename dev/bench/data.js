@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763049891300,
+  "lastUpdate": 1763061303086,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3587,6 +3587,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.005886036217923,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "82396b1cf53f9677a512a4ae4d29c704ce4214bb",
+          "message": "Merge pull request #3303 from RolandSherwin/analyze_large_datamap\n\nfeat(ant): analyze large datamap that do not fit in memory",
+          "timestamp": "2025-11-13T18:07:44Z",
+          "tree_id": "7f0634507c625dc366ec583545826c3e5636cd7b",
+          "url": "https://github.com/maidsafe/autonomi/commit/82396b1cf53f9677a512a4ae4d29c704ce4214bb"
+        },
+        "date": 1763061296046,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.099625758740942,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.2497258698366025,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.021101197278352,
             "unit": "MiB/s"
           }
         ]
