@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763061388251,
+  "lastUpdate": 1763061389577,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13074,6 +13074,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 19032,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "82396b1cf53f9677a512a4ae4d29c704ce4214bb",
+          "message": "Merge pull request #3303 from RolandSherwin/analyze_large_datamap\n\nfeat(ant): analyze large datamap that do not fit in memory",
+          "timestamp": "2025-11-13T18:07:44Z",
+          "tree_id": "7f0634507c625dc366ec583545826c3e5636cd7b",
+          "url": "https://github.com/maidsafe/autonomi/commit/82396b1cf53f9677a512a4ae4d29c704ce4214bb"
+        },
+        "date": 1763061389243,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10731,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19454,
             "unit": "ms"
           },
           {
