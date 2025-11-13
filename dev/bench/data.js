@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763049890052,
+  "lastUpdate": 1763049891300,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12933,6 +12933,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18432,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "83511706+ermineJose@users.noreply.github.com",
+            "name": "ermineJose",
+            "username": "ermineJose"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b891a39b611278e3df0fb6a770b1020956e8b7c5",
+          "message": "Merge pull request #3269 from RolandSherwin/reach/2_logging_changes\n\nfeat(logging): log to file or dir dynamically based on path",
+          "timestamp": "2025-11-13T14:08:24Z",
+          "tree_id": "d35d5bf78ef7ba2466f4f063dfa18ad3b3d76743",
+          "url": "https://github.com/maidsafe/autonomi/commit/b891a39b611278e3df0fb6a770b1020956e8b7c5"
+        },
+        "date": 1763049891022,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10434,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19032,
             "unit": "ms"
           },
           {
