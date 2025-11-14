@@ -170,6 +170,10 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::PaymentReceived);
     }
 
+    pub(crate) fn notify_record_not_at_target_location(&self) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::RecordNotAtTargetLocation);
+    }
+
     /// Get `Record` from the local RecordStore
     pub(crate) async fn get_local_record(&self, key: &RecordKey) -> Result<Option<Record>> {
         let (sender, receiver) = oneshot::channel();
@@ -180,7 +184,7 @@ impl Network {
 
         receiver
             .await
-            .map_err(|_e| NetworkError::InternalMsgChannelDropped)
+            .map_err(|e| NetworkError::EventChannelFailure(format!("{e:?}")))
     }
 
     /// Whether the target peer is considered blacklisted by self

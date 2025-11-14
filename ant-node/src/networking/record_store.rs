@@ -622,6 +622,10 @@ impl NodeRecordStore {
         &self.records
     }
 
+    pub(crate) fn count(&self) -> usize {
+        self.records.len()
+    }
+
     /// The follow up to `put_verified`, this only registers the RecordKey
     /// in the RecordStore records set. After this it should be safe
     /// to return the record as stored.

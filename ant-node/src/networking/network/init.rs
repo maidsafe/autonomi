@@ -13,6 +13,7 @@ use crate::networking::{
     circular_vec::CircularVec,
     driver::{
         InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery,
+        network_wide_replication::NetworkWideReplication,
     },
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
@@ -413,6 +414,7 @@ fn init_swarm_driver(
         bootstrap: config.bootstrap,
         relay_manager,
         connected_relay_clients: Default::default(),
+        network_wide_replication: NetworkWideReplication::new(network_event_sender.clone()),
         external_address_manager,
         replication_fetcher,
         #[cfg(feature = "open-metrics")]

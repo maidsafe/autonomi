@@ -116,6 +116,9 @@ pub enum NetworkError {
 
     #[error("Error setting up behaviour: {0}")]
     BehaviourErr(String),
+
+    #[error("Error with event channel: {0}")]
+    EventChannelFailure(String),
 }
 
 /// Return a list of error strings for the DialError type
