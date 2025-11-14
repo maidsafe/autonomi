@@ -50,7 +50,7 @@ pub fn get_vault_secret_key() -> Result<VaultSecretKey> {
 }
 
 pub fn create_register_signing_key_file(key: RegisterSecretKey) -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory to write key to")?;
     let file_path = dir.join(REGISTER_SIGNING_KEY_FILE);
     fs::write(&file_path, key.to_hex()).wrap_err("Could not write key to file")?;
@@ -76,7 +76,7 @@ pub fn get_register_signing_key() -> Result<RegisterSecretKey> {
     };
 
     // try from data dir
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err(format!("Failed to obtain register signing key from env var: {why_env_failed}, reading from disk also failed as couldn't access data dir"))
         .with_suggestion(|| format!("make sure you've provided the {REGISTER_SIGNING_KEY_ENV} env var"))
         .with_suggestion(|| "you can generate a new secret key with the `register generate-key` subcommand")?;
@@ -93,7 +93,7 @@ pub fn get_register_signing_key() -> Result<RegisterSecretKey> {
 }
 
 pub fn get_register_signing_key_path() -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory for register signing key")?;
     let file_path = dir.join(REGISTER_SIGNING_KEY_FILE);
     Ok(file_path)
@@ -102,7 +102,7 @@ pub fn get_register_signing_key_path() -> Result<PathBuf> {
 // --------- Scratchpad keys ----------
 
 pub fn get_scratchpad_signing_key_path() -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory for scratchpad signing key")?;
     let file_path = dir.join(SCRATCHPAD_SIGNING_KEY_FILE);
     Ok(file_path)
@@ -116,7 +116,7 @@ pub fn get_scratchpad_general_signing_key() -> Result<ScratchpadSecretKey> {
     };
 
     // try from data dir
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err(format!("Failed to obtain scratchpad signing key from env var: {why_env_failed}, reading from disk also failed as couldn't access data dir"))
         .with_suggestion(|| format!("make sure you've provided the {SCRATCHPAD_SIGNING_KEY_ENV} env var"))
         .with_suggestion(|| "you can generate a new secret key with the `scratchpad generate-key` subcommand")?;
@@ -153,7 +153,7 @@ pub fn parse_scratchpad_signing_key(key_hex: &str) -> Result<ScratchpadSecretKey
 }
 
 pub fn create_scratchpad_signing_key_file(key: ScratchpadSecretKey) -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory to write key to")?;
     let file_path = dir.join(SCRATCHPAD_SIGNING_KEY_FILE);
     fs::write(&file_path, key.to_hex()).wrap_err("Could not write key to file")?;
@@ -163,7 +163,7 @@ pub fn create_scratchpad_signing_key_file(key: ScratchpadSecretKey) -> Result<Pa
 // --------- Pointer keys ----------
 
 pub fn get_pointer_signing_key_path() -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory for pointer signing key")?;
     let file_path = dir.join(POINTER_SIGNING_KEY_FILE);
     Ok(file_path)
@@ -177,7 +177,7 @@ pub fn get_pointer_general_signing_key() -> Result<ScratchpadSecretKey> {
     };
 
     // try from data dir
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err(format!("Failed to obtain pointer signing key from env var: {why_env_failed}, reading from disk also failed as couldn't access data dir"))
         .with_suggestion(|| format!("make sure you've provided the {POINTER_SIGNING_KEY_ENV} env var"))
         .with_suggestion(|| "you can generate a new secret key with the `pointer generate-key` subcommand")?;
@@ -214,7 +214,7 @@ pub fn parse_pointer_signing_key(key_hex: &str) -> Result<ScratchpadSecretKey> {
 }
 
 pub fn create_pointer_signing_key_file(key: ScratchpadSecretKey) -> Result<PathBuf> {
-    let dir = super::data_dir::get_client_data_dir_path()
+    let dir = super::data_dir::get_client_user_data_dir()
         .wrap_err("Could not access directory to write key to")?;
     let file_path = dir.join(POINTER_SIGNING_KEY_FILE);
     fs::write(&file_path, key.to_hex()).wrap_err("Could not write key to file")?;
