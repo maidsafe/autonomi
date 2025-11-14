@@ -427,17 +427,13 @@ impl NetworkMetricsRecorder {
                 sender: _,
                 keys_count: _,
                 in_range,
+                network_under_load,
             } => {
-                let in_range_label = if in_range {
-                    replication::InRange::True
-                } else {
-                    replication::InRange::False
-                };
-
                 let _ = self
                     .replication_sender_range
                     .get_or_create(&replication::ReplicationSenderRangeLabels {
-                        in_range: in_range_label,
+                        in_range,
+                        network_under_load,
                     })
                     .inc();
             }

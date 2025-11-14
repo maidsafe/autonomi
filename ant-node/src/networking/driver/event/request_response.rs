@@ -357,6 +357,7 @@ impl SwarmDriver {
                     sender: &holder,
                     keys_count: incoming_keys.len(),
                     in_range: false,
+                    network_under_load: false,
                 });
                 return Ok(());
             }
@@ -383,6 +384,7 @@ impl SwarmDriver {
                     sender: &holder,
                     keys_count: incoming_keys.len(),
                     in_range: false,
+                    network_under_load: true,
                 });
                 return Ok(());
             }
@@ -396,6 +398,7 @@ impl SwarmDriver {
             sender: &holder,
             keys_count: incoming_keys.len(),
             in_range: true,
+            network_under_load: self.network_wide_replication.is_network_under_load(),
         });
 
         // On receive a replication_list from a close up peer, we undertake:

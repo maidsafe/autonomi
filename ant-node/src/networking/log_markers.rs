@@ -35,6 +35,7 @@ pub(crate) enum Marker<'a> {
         sender: &'a PeerId,
         keys_count: usize,
         in_range: bool,
+        network_under_load: bool,
     },
     /// Incoming replication keys statistics
     IncomingReplicationKeysStats {

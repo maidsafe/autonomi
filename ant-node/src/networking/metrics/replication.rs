@@ -23,13 +23,8 @@ pub(crate) enum Range {
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 pub(crate) struct ReplicationSenderRangeLabels {
-    pub(crate) in_range: InRange,
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelValue)]
-pub(crate) enum InRange {
-    True,
-    False,
+    pub(crate) in_range: bool,
+    pub(crate) network_under_load: bool,
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
