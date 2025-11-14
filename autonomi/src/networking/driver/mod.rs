@@ -103,7 +103,9 @@ impl NetworkDriver {
         info!("Client Peer ID: {peer_id}");
 
         // set transport
-        let quic_config = libp2p::quic::Config::new(&keypair);
+        let mut quic_config = libp2p::quic::Config::new(&keypair);
+        // Reduce to 1MB from the default 10MB.
+        quic_config.max_stream_data = 1024 * 1024;
         let transport_gen = QuicTransport::new(quic_config);
         let trans = transport_gen.map(|(peer_id, muxer), _| (peer_id, StreamMuxerBox::new(muxer)));
         let transport = trans.boxed();
