@@ -798,16 +798,26 @@ impl SwarmDriver {
             let peers_in_range = get_peers_in_range(&closest_k_peers, target, responsible_range);
 
             if peers_in_range.len() >= expected_candidates {
+                self.record_metrics(Marker::ReplicateCandidatesObtained {
+                    length: peers_in_range.len(),
+                    within_responsible_distance: true,
+                });
                 return Ok(peers_in_range);
             }
         }
 
         // In case the range is too narrow, fall back to at least expected_candidates peers.
-        Ok(closest_k_peers
+        let closest_k_peers: Vec<(PeerId, Addresses)> = closest_k_peers
             .iter()
             .take(expected_candidates)
             .cloned()
-            .collect())
+            .collect();
+
+        self.record_metrics(Marker::ReplicateCandidatesObtained {
+            length: closest_k_peers.len(),
+            within_responsible_distance: false,
+        });
+        Ok(closest_k_peers)
     }
 }
 

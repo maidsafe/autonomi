@@ -353,6 +353,12 @@ impl SwarmDriver {
                 distance.ilog2()
             );
             if !self.network_wide_replication.is_network_under_load() {
+                self.record_metrics(Marker::ReplicationSenderInRange {
+                    sender: &holder,
+                    keys_count: incoming_keys.len(),
+                    in_range: false,
+                    network_under_load: false,
+                });
                 return Ok(());
             }
 
@@ -373,6 +379,13 @@ impl SwarmDriver {
                     "Holder {holder:?} is not within increased replication range {increased_distance:?}({:?}) during high network load",
                     increased_distance.ilog2()
                 );
+
+                self.record_metrics(Marker::ReplicationSenderInRange {
+                    sender: &holder,
+                    keys_count: incoming_keys.len(),
+                    in_range: false,
+                    network_under_load: true,
+                });
                 return Ok(());
             }
             info!(
@@ -380,6 +393,13 @@ impl SwarmDriver {
                 increased_distance.ilog2()
             );
         }
+
+        self.record_metrics(Marker::ReplicationSenderInRange {
+            sender: &holder,
+            keys_count: incoming_keys.len(),
+            in_range: true,
+            network_under_load: self.network_wide_replication.is_network_under_load(),
+        });
 
         // On receive a replication_list from a close up peer, we undertake:
         //   1, For those keys that we don't have:
@@ -401,6 +421,8 @@ impl SwarmDriver {
                 .iter()
                 .map(|(peer_id, _addrs)| NetworkAddress::from(*peer_id))
                 .collect(),
+            #[cfg(feature = "open-metrics")]
+            self.metrics_recorder.as_ref(),
         );
         if keys_to_fetch.is_empty() {
             debug!("no waiting keys to fetch from the network");

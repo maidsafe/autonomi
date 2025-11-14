@@ -25,13 +25,42 @@ pub(crate) enum Marker<'a> {
     PeerConsideredAsBad { bad_peer: &'a PeerId },
     /// We have been flagged as a bad node by a peer.
     FlaggedAsBadNode { flagged_by: &'a PeerId },
+    /// Replicate candidates obtained
+    ReplicateCandidatesObtained {
+        length: usize,
+        within_responsible_distance: bool,
+    },
+    /// Replication sender range check result
+    ReplicationSenderInRange {
+        sender: &'a PeerId,
+        keys_count: usize,
+        in_range: bool,
+        network_under_load: bool,
+    },
+    /// Incoming replication keys statistics
+    IncomingReplicationKeysStats {
+        holder: PeerId,
+        total_keys: usize,
+        new_keys: usize,
+        out_of_range_keys: usize,
+    },
 }
 
 impl Marker<'_> {
     /// Returns the string representation of the LogMarker.
     pub(crate) fn log(&self) {
-        // Down the line, if some logs are noisier than others, we can
-        // match the type and log a different level.
-        info!("{self:?}");
+        if let Marker::IncomingReplicationKeysStats {
+            holder: _,
+            total_keys: _,
+            new_keys,
+            out_of_range_keys,
+        } = self
+        {
+            if *out_of_range_keys > 0 || *new_keys > 0 {
+                info!("{self:?}");
+            }
+        } else {
+            info!("{self:?}");
+        }
     }
 }

@@ -20,6 +20,7 @@ use libp2p::{
     PeerId,
     kad::{Record, RecordKey},
 };
+use prometheus_client::metrics::histogram::Histogram;
 use tokio::task::spawn;
 
 impl Node {
@@ -250,9 +251,19 @@ impl Node {
         keys: Vec<(NetworkAddress, ValidationType)>,
     ) {
         for (key, val_type) in keys {
+            #[cfg(feature = "open-metrics")]
+            let network_wide_replication_holders = self
+                .metrics_recorder()
+                .map(|recorder| recorder.network_wide_replication_holders.clone());
             let network = self.network().clone();
             let _handle = spawn(async move {
-                Self::network_wide_replication_per_key(network, key, val_type).await;
+                Self::network_wide_replication_per_key(
+                    network,
+                    key,
+                    val_type,
+                    network_wide_replication_holders,
+                )
+                .await;
             });
         }
     }
@@ -261,6 +272,7 @@ impl Node {
         network: Network,
         key: NetworkAddress,
         val_type: ValidationType,
+        #[cfg(feature = "open-metrics")] network_wide_replication_holders: Option<Histogram>,
     ) {
         // get closest to the key
         let peers = match network.get_closest_peers(&key).await {
@@ -325,6 +337,13 @@ impl Node {
                 "Some peers do not have the record {key:?} during network wide replication, notifying the swarm"
             );
             network.notify_record_not_at_target_location();
+        }
+
+        #[cfg(feature = "open-metrics")]
+        if let Some(recorder) = network_wide_replication_holders {
+            let fraction_holders = CLOSE_GROUP_SIZE.saturating_sub(to_replicate.len()) as f64
+                / CLOSE_GROUP_SIZE as f64;
+            recorder.observe(fraction_holders);
         }
 
         for peer in to_replicate {

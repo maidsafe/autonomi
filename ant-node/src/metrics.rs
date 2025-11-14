@@ -9,7 +9,7 @@
 use crate::Marker;
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
-use ant_protocol::storage::DataTypes;
+use ant_protocol::{CLOSE_GROUP_SIZE, storage::DataTypes};
 use prometheus_client::{
     encoding::{EncodeLabelSet, EncodeLabelValue},
     metrics::{
@@ -33,6 +33,7 @@ pub(crate) struct NodeMetricsRecorder {
     /// replication
     replication_triggered: Counter,
     replication_keys_to_fetch: Histogram,
+    pub(crate) network_wide_replication_holders: Histogram,
 
     // routing table
     peer_added_to_routing_table: Counter,
@@ -104,6 +105,19 @@ impl NodeMetricsRecorder {
             replication_keys_to_fetch.clone(),
         );
 
+        let network_wide_replication_holders = Histogram::new([
+            1.0 / CLOSE_GROUP_SIZE as f64,
+            2.0 / CLOSE_GROUP_SIZE as f64,
+            3.0 / CLOSE_GROUP_SIZE as f64,
+            4.0 / CLOSE_GROUP_SIZE as f64,
+            5.0 / CLOSE_GROUP_SIZE as f64,
+        ]);
+        sub_registry.register(
+            "network_wide_replication_holders",
+            "The histogram of fraction of holders for a record during network wide replication. I.e, number of holders / CLOSE_GROUP_SIZE",
+            network_wide_replication_holders.clone(),
+        );
+
         let peer_added_to_routing_table = Counter::default();
         sub_registry.register(
             "peer_added_to_routing_table",
@@ -145,6 +159,7 @@ impl NodeMetricsRecorder {
             put_record_err_v2,
             replication_triggered,
             replication_keys_to_fetch,
+            network_wide_replication_holders,
             peer_added_to_routing_table,
             peer_removed_from_routing_table,
             current_reward_wallet_balance,

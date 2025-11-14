@@ -9,6 +9,7 @@
 // Implementation to record `libp2p::upnp::Event` metrics
 mod bad_node;
 mod relay_client;
+mod replication;
 pub(super) mod service;
 mod upnp;
 
@@ -25,6 +26,7 @@ use prometheus_client::{
 };
 use std::collections::HashMap;
 use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, Mutex};
 use sysinfo::{Pid, ProcessRefreshKind, System};
 use tokio::time::Duration;
 use tokio::time::sleep;
@@ -58,6 +60,15 @@ pub(crate) struct NetworkMetricsRecorder {
     pub(crate) records_stored: Gauge,
     pub(crate) relay_reservation_health: Gauge<f64, AtomicU64>,
     pub(crate) node_versions: Family<VersionLabels, Gauge>,
+
+    // replication metrics
+    pub(crate) replicate_candidates: Family<replication::ReplicateCandidateLabels, Gauge>,
+    pub(crate) replication_sender_range: Family<replication::ReplicationSenderRangeLabels, Counter>,
+    pub(crate) replication_keys_incoming_percentages:
+        Family<replication::IncomingKeysMetricLabels, Gauge<f64, AtomicU64>>,
+    pub(crate) distance_range: Gauge,
+    // Internal state for sliding window (not exposed to Prometheus)
+    replication_stats_window: Arc<Mutex<replication::ReplicationStatsWindow>>,
 
     // quoting metrics
     relevant_records: Gauge,
@@ -199,6 +210,35 @@ impl NetworkMetricsRecorder {
             process_cpu_usage_percentage.clone(),
         );
 
+        // ==== Replication metrics =====
+        let replicate_candidates = Family::default();
+        sub_registry.register(
+            "replicate_candidates",
+            "The number of times a list of peers have been candidates for replication within or outside responsible distance",
+            replicate_candidates.clone(),
+        );
+
+        let replication_sender_range = Family::default();
+        sub_registry.register(
+            "replication_sender_range",
+            "The number of replication requests received from senders within or outside our replication range",
+            replication_sender_range.clone(),
+        );
+
+        let replication_keys_incoming_percentages = Family::default();
+        sub_registry.register(
+            "replication_keys_incoming_percentages",
+            "Percentage of new keys and out-of-range keys in incoming replication requests (calculated over a sliding window of last 50 requests)",
+            replication_keys_incoming_percentages.clone(),
+        );
+
+        let distance_range = Gauge::default();
+        sub_registry.register(
+            "distance_range",
+            "The ilog2 value of the distance range used for replication",
+            distance_range.clone(),
+        );
+
         // quoting metrics
         let relevant_records = Gauge::default();
         sub_registry.register(
@@ -275,6 +315,14 @@ impl NetworkMetricsRecorder {
             received_payment_count,
             live_time,
             node_versions,
+
+            replicate_candidates,
+            replication_sender_range,
+            replication_keys_incoming_percentages,
+            replication_stats_window: Arc::new(Mutex::new(
+                replication::ReplicationStatsWindow::new(),
+            )),
+            distance_range,
 
             bad_peers_count,
             shunned_count_across_time_frames,
@@ -359,6 +407,65 @@ impl NetworkMetricsRecorder {
                     .received_payment_count
                     .set(quoting_metrics.received_payment_count as i64);
                 let _ = self.live_time.set(quoting_metrics.live_time as i64);
+            }
+            Marker::ReplicateCandidatesObtained {
+                length: _,
+                within_responsible_distance,
+            } => {
+                let range = if within_responsible_distance {
+                    replication::Range::WithinResponsibleDistance
+                } else {
+                    replication::Range::OutsideResponsibleDistance
+                };
+
+                let _ = self
+                    .replicate_candidates
+                    .get_or_create(&replication::ReplicateCandidateLabels { range })
+                    .inc();
+            }
+            Marker::ReplicationSenderInRange {
+                sender: _,
+                keys_count: _,
+                in_range,
+                network_under_load,
+            } => {
+                let _ = self
+                    .replication_sender_range
+                    .get_or_create(&replication::ReplicationSenderRangeLabels {
+                        in_range,
+                        network_under_load,
+                    })
+                    .inc();
+            }
+            Marker::IncomingReplicationKeysStats {
+                holder: _,
+                total_keys,
+                new_keys,
+                out_of_range_keys,
+            } => {
+                // Update the sliding window with new data
+                if let Ok(mut window) = self.replication_stats_window.lock() {
+                    window.add_entry(total_keys, new_keys, out_of_range_keys);
+
+                    // Recalculate and update percentages
+                    let new_keys_percent = window.calculate_new_keys_percent();
+                    let out_of_range_percent = window.calculate_out_of_range_percent();
+
+                    // Update metrics
+                    let _ = self
+                        .replication_keys_incoming_percentages
+                        .get_or_create(&replication::IncomingKeysMetricLabels {
+                            metric_type: replication::IncomingMetricType::NewKeysPercent,
+                        })
+                        .set(new_keys_percent);
+
+                    let _ = self
+                        .replication_keys_incoming_percentages
+                        .get_or_create(&replication::IncomingKeysMetricLabels {
+                            metric_type: replication::IncomingMetricType::OutOfRangeKeysPercent,
+                        })
+                        .set(out_of_range_percent);
+                }
             }
             _ => {}
         }

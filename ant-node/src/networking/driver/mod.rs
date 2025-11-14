@@ -350,6 +350,10 @@ impl SwarmDriver {
                     self.swarm.behaviour_mut().kademlia.store_mut().set_responsible_distance_range(distance);
                     // the distance range within the replication_fetcher shall be in sync as well
                     self.replication_fetcher.set_replication_distance_range(distance);
+                    #[cfg(feature = "open-metrics")]
+                    if let Some(metrics_recorder) = &self.metrics_recorder.as_ref() && let Some(ilog2) = distance.ilog2() {
+                        let _ = metrics_recorder.distance_range.set(ilog2 as i64);
+                    }
                 }
                 _ = relay_manager_reservation_interval.tick() => {
                     if let Some(relay_manager) = &mut self.relay_manager {

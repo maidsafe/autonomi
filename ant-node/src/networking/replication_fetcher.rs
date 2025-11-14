@@ -22,6 +22,11 @@ use std::time::Instant;
 use tokio::spawn;
 use tokio::{sync::mpsc, time::Duration};
 
+#[cfg(feature = "open-metrics")]
+use crate::networking::log_markers::Marker;
+#[cfg(feature = "open-metrics")]
+use crate::networking::metrics::NetworkMetricsRecorder;
+
 // Max parallel fetches that can be undertaken at the same time.
 const MAX_PARALLEL_FETCH: usize = 5;
 
@@ -38,7 +43,6 @@ const PENDING_TIMEOUT: Duration = Duration::from_secs(900);
 // The time the entry will be considered as `time out` and to be cleared.
 type ReplicationTimeout = Instant;
 
-#[derive(Debug)]
 pub(crate) struct ReplicationFetcher {
     self_peer_id: PeerId,
     // Pending entries that to be fetched from the target peer.
@@ -93,6 +97,7 @@ impl ReplicationFetcher {
         locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
         is_fresh_replicate: bool,
         closest_k_peers: Vec<NetworkAddress>,
+        #[cfg(feature = "open-metrics")] metrics_recorder: Option<&NetworkMetricsRecorder>,
     ) -> Vec<(PeerId, RecordKey)> {
         let candidates = if is_fresh_replicate {
             incoming_keys
@@ -100,7 +105,14 @@ impl ReplicationFetcher {
                 .map(|(addr, val_type)| (holder, addr, val_type))
                 .collect()
         } else {
-            self.valid_candidates(&holder, incoming_keys, locally_stored_keys, closest_k_peers)
+            self.valid_candidates(
+                &holder,
+                incoming_keys,
+                locally_stored_keys,
+                closest_k_peers,
+                #[cfg(feature = "open-metrics")]
+                metrics_recorder,
+            )
         };
 
         // Remove any outdated entries in `to_be_fetched`
@@ -334,10 +346,17 @@ impl ReplicationFetcher {
         incoming_keys: Vec<(NetworkAddress, ValidationType)>,
         locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
         closest_peers: Vec<NetworkAddress>,
+        #[cfg(feature = "open-metrics")] metrics_recorder: Option<&NetworkMetricsRecorder>,
     ) -> Vec<(PeerId, NetworkAddress, ValidationType)> {
         // Always trust the holder
-        let new_incoming_keys =
-            self.in_range_new_keys(holder, incoming_keys, locally_stored_keys, closest_peers);
+        let new_incoming_keys = self.in_range_new_keys(
+            holder,
+            incoming_keys,
+            locally_stored_keys,
+            closest_peers,
+            #[cfg(feature = "open-metrics")]
+            metrics_recorder,
+        );
 
         // Requiring three replicas
         self.initial_majority_replicates(holder, new_incoming_keys)
@@ -435,6 +454,7 @@ impl ReplicationFetcher {
         incoming_keys: Vec<(NetworkAddress, ValidationType)>,
         locally_stored_keys: &HashMap<RecordKey, (NetworkAddress, ValidationType, DataTypes)>,
         mut closest_peers: Vec<NetworkAddress>,
+        #[cfg(feature = "open-metrics")] metrics_recorder: Option<&NetworkMetricsRecorder>,
     ) -> Vec<(NetworkAddress, ValidationType)> {
         // Pre-calculate self_address since it's used multiple times
         let self_address = NetworkAddress::from(self.self_peer_id);
@@ -490,12 +510,18 @@ impl ReplicationFetcher {
             });
         }
 
-        if !out_of_range_keys.is_empty() || !new_incoming_keys.is_empty() {
-            info!(
-                "Among {total_incoming_keys} incoming replications from {holder:?}, {} new records and {} out of range",
-                new_incoming_keys.len(),
-                out_of_range_keys.len()
-            );
+        let marker = Marker::IncomingReplicationKeysStats {
+            holder: *holder,
+            total_keys: total_incoming_keys,
+            new_keys: new_incoming_keys.len(),
+            out_of_range_keys: out_of_range_keys.len(),
+        };
+        marker.log();
+
+        // Record metrics for incoming replication keys
+        #[cfg(feature = "open-metrics")]
+        if let Some(metrics_recorder) = metrics_recorder {
+            metrics_recorder.record_from_marker(marker);
         }
 
         new_incoming_keys
@@ -732,6 +758,8 @@ mod tests {
                 &locally_stored_keys,
                 false,
                 vec![farthest_peer.clone()],
+                #[cfg(feature = "open-metrics")]
+                None,
             );
             if !keys_to_fetch.is_empty() {
                 break;
@@ -777,6 +805,8 @@ mod tests {
                 &locally_stored_keys,
                 false,
                 vec![farthest_peer.clone()],
+                #[cfg(feature = "open-metrics")]
+                None,
             );
         }
 
@@ -799,6 +829,8 @@ mod tests {
             &locally_stored_keys,
             true,
             vec![],
+            #[cfg(feature = "open-metrics")]
+            None,
         );
         assert_eq!(keys_to_fetch.len(), 1);
 
@@ -867,6 +899,8 @@ mod tests {
                 &Default::default(),
                 false,
                 closest_k_peers.clone(),
+                #[cfg(feature = "open-metrics")]
+                None,
             );
             if !keys_to_fetch.is_empty() {
                 break;
