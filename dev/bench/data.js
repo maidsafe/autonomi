@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763479414011,
+  "lastUpdate": 1763479434904,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3704,6 +3704,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.01300180835316,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8caa4e73ddd5fe3b7bb6bdf30966fac33413495a",
+          "message": "Merge pull request #3309 from maqi/download_with_best_effort\n\nfeat(client): for Chunk, fall back to get from closest_20 if kad query fetch failed",
+          "timestamp": "2025-11-18T15:02:54Z",
+          "tree_id": "8c3316867e43418f6fa144466d2e2c1b8cd44599",
+          "url": "https://github.com/maidsafe/autonomi/commit/8caa4e73ddd5fe3b7bb6bdf30966fac33413495a"
+        },
+        "date": 1763479427252,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1100274596306305,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.151853651545765,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.7001183589805455,
             "unit": "MiB/s"
           }
         ]
