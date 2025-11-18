@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763479520406,
+  "lastUpdate": 1763479522557,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13497,6 +13497,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 19215,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8caa4e73ddd5fe3b7bb6bdf30966fac33413495a",
+          "message": "Merge pull request #3309 from maqi/download_with_best_effort\n\nfeat(client): for Chunk, fall back to get from closest_20 if kad query fetch failed",
+          "timestamp": "2025-11-18T15:02:54Z",
+          "tree_id": "8c3316867e43418f6fa144466d2e2c1b8cd44599",
+          "url": "https://github.com/maidsafe/autonomi/commit/8caa4e73ddd5fe3b7bb6bdf30966fac33413495a"
+        },
+        "date": 1763479521717,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10247,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18973,
             "unit": "ms"
           },
           {
