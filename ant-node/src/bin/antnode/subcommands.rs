@@ -2,6 +2,12 @@ use ant_evm::EvmNetwork;
 use clap::Subcommand;
 
 #[derive(Subcommand, Clone, Debug)]
+pub(crate) enum SubCmd {
+    /// Upgrade the antnode binary to the latest version (Unix only)
+    Upgrade,
+}
+
+#[derive(Subcommand, Clone, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum EvmNetworkCommand {
     /// Use the Arbitrum One network

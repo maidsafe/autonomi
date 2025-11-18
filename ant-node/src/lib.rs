@@ -155,6 +155,26 @@ impl RunningNode {
         Ok(kbuckets)
     }
 
+    /// Returns the estimated network size based on the current kbucket state.
+    pub async fn get_estimated_network_size(&self) -> Result<usize> {
+        let kbuckets = self.get_kbuckets().await?;
+
+        let mut peers_in_non_full_buckets = 0;
+        let mut num_of_full_buckets = 0;
+        const K_VALUE: usize = 20;
+
+        for peers in kbuckets.values() {
+            if peers.len() >= K_VALUE {
+                num_of_full_buckets += 1;
+            } else {
+                peers_in_non_full_buckets += peers.len();
+            }
+        }
+
+        let estimated_size = (peers_in_non_full_buckets + 1) * (2_usize.pow(num_of_full_buckets));
+        Ok(estimated_size)
+    }
+
     /// Returns the node's reward address
     pub fn reward_address(&self) -> &RewardsAddress {
         &self.rewards_address

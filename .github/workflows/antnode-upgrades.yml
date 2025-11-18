@@ -1,0 +1,135 @@
+name: Antnode Upgrade Tests
+
+on:
+  merge_group:
+    branches: [main]
+  pull_request:
+    branches: ["*"]
+
+jobs:
+  upgrade-test:
+    name: Upgrade Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: x86_64-unknown-linux-musl
+          - os: macos-latest
+            platform: x86_64-apple-darwin
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        continue-on-error: true
+
+      - name: Build current antnode binary
+        run: cargo build --release --bin antnode
+        timeout-minutes: 30
+
+      - name: Test binary replacement
+        shell: bash
+        run: |
+          current_repo_commit=$(git rev-parse --short=7 HEAD)
+          echo "Current repository commit: $current_repo_commit"
+
+          test_dir="/tmp/upgrade-test/install"
+          mkdir -p "$test_dir"
+          cp target/release/antnode "$test_dir/antnode"
+
+          original_version=$("$test_dir/antnode" --version 2>&1 || echo "unknown")
+          echo "Original binary version: $original_version"
+
+          original_hash=$(sha256sum "$test_dir/antnode" | awk '{print $1}')
+          echo "Original binary hash: $original_hash"
+
+          original_perms=$(stat -c "%a" "$test_dir/antnode" 2>/dev/null || stat -f "%Lp" "$test_dir/antnode" 2>/dev/null)
+          echo "Original permissions: $original_perms"
+
+          cd "$test_dir"
+          set +e
+          ./antnode upgrade 2>&1 | tee /tmp/upgrade-output.txt
+          upgrade_exit_code=$?
+          set -e
+
+          echo ""
+          echo "Upgrade exit code: $upgrade_exit_code"
+
+          if [ -f "$test_dir/antnode" ]; then
+            echo "✓ Binary still exists at original location"
+
+            if [ -x "$test_dir/antnode" ]; then
+              echo "✓ Binary is still executable"
+            else
+              echo "✗ Binary lost executable permission"
+              exit 1
+            fi
+
+            upgraded_version=$("$test_dir/antnode" --version 2>&1 || echo "unknown")
+            echo "Upgraded binary version: $upgraded_version"
+
+            if echo "$upgraded_version" | grep -q "$current_repo_commit"; then
+              echo "✗ Upgraded binary still has the same commit hash as current repository"
+              echo "Expected: Different commit hash from $current_repo_commit"
+              echo "Got: $upgraded_version"
+              exit 1
+            else
+              echo "✓ Upgraded binary has different commit hash than current repository"
+            fi
+          else
+            echo "✗ Binary was removed during upgrade"
+            exit 1
+          fi
+
+      - name: Test file locking on concurrent upgrades
+        shell: bash
+        run: |
+          mkdir -p /tmp/upgrade-test
+
+          # Start multiple upgrade commands simultaneously
+          for i in {1..3}; do
+            (timeout 30s ./target/release/antnode upgrade > /tmp/upgrade-test/output-$i.txt 2>&1 || true) &
+            pids[$i]=$!
+          done
+
+          # Wait for all to complete
+          echo "Started 3 concurrent upgrade processes"
+          wait
+
+          echo ""
+          echo "Process outputs:"
+          for i in {1..3}; do
+            echo "--- Process $i ---"
+            cat /tmp/upgrade-test/output-$i.txt || true
+            echo ""
+          done
+
+          # Verify that at least one process successfully started the upgrade
+          if grep -q "Checking for updates\|New version detected\|Already running" /tmp/upgrade-test/output-*.txt 2>/dev/null; then
+            echo "✓ At least one upgrade process executed successfully"
+          else
+            echo "✗ No upgrade process produced expected output"
+            exit 1
+          fi
+
+      - name: Verify failed upgrade doesn't break existing binary
+        shell: bash
+        run: |
+          echo "Verifying that failed upgrades don't corrupt the binary..."
+
+          # Use a short timeout to simulate a failure
+          set +e
+          output=$(timeout 1s ./target/release/antnode upgrade 2>&1)
+          exit_code=$?
+          set -e
+
+          if ./target/release/antnode --version; then
+            echo "✓ Binary remains functional after upgrade attempts"
+          else
+            echo "✗ Binary was corrupted"
+            exit 1
+          fi
