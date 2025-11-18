@@ -8,7 +8,7 @@
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
 pub use ant_bootstrap::{
-    error::Error as BootstrapError, Bootstrap, BootstrapConfig, InitialPeersConfig,
+    Bootstrap, BootstrapConfig, InitialPeersConfig, error::Error as BootstrapError,
 };
 use ant_evm::EvmNetwork;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;

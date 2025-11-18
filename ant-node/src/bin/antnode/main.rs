@@ -16,6 +16,7 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
+mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
@@ -26,7 +27,7 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
+use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, RunningNode};
 use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
@@ -35,8 +36,11 @@ use clap::{Parser, command};
 use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+use rand::Rng;
 use std::{
+    collections::hash_map::DefaultHasher,
     env,
+    hash::{Hash, Hasher},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     process::Command,
@@ -48,6 +52,10 @@ use tokio::{
     time::sleep,
 };
 use tracing_appender::non_blocking::WorkerGuard;
+
+/// Default network size estimate used when the actual size cannot be determined.
+/// This represents a baseline network of 100,000 nodes.
+const DEFAULT_NETWORK_SIZE: usize = 100_000;
 
 #[derive(Debug, Clone)]
 pub enum LogOutputDestArg {
@@ -254,7 +262,6 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // evm config
     let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
         "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
     ))?;
@@ -433,6 +440,43 @@ You can check your reward balance by running:
         );
     }
 
+    #[cfg(unix)]
+    {
+        let ctrl_tx_restart = ctrl_tx.clone();
+        let running_node_clone = running_node.clone();
+        tokio::spawn(async move {
+            loop {
+                // 72 hours (259200 seconds) with ±5% randomization to prevent simultaneous upgrades
+                let base_delay = 259200;
+                let variance = rand::thread_rng().gen_range(-12960..=12960);
+                let delay_secs = (base_delay + variance) as u64;
+                sleep(Duration::from_secs(delay_secs)).await;
+                match upgrade::perform_upgrade().await {
+                    Ok(()) => {
+                        info!("Upgrade successful. Triggering restart...");
+
+                        let delay = calculate_restart_delay(&running_node_clone).await;
+                        info!("Calculated restart delay: {delay:?}");
+
+                        if let Err(err) = ctrl_tx_restart
+                            .send(NodeCtrl::Restart {
+                                delay,
+                                retain_peer_id: true,
+                            })
+                            .await
+                        {
+                            error!("Failed to send restart command: {err}");
+                        }
+                        break;
+                    }
+                    Err(e) => {
+                        debug!("Upgrade check: {e}");
+                    }
+                }
+            }
+        });
+    }
+
     // Keep the node and gRPC service (if enabled) running.
     // We'll monitor any NodeCtrl cmd to restart/stop/update,
     loop {
@@ -580,11 +624,10 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
     Ok((output_dest.to_string(), reload_handle, log_appender_guard))
 }
 
-/// Starts a new process running the binary with the same args as
-/// the current process
-/// Optionally provide the node's root dir and listen port to retain it's PeerId
+/// Starts a new process running the binary with the same args as the current process.
+///
+/// Optionally provide the node's root dir and listen port to retain its PeerId.
 fn start_new_node_process(retain_peer_id: bool, root_dir: PathBuf, port: u16) {
-    // Retrieve the current executable's path
     let current_exe = env::current_exe().expect("could not get current executable path");
 
     // Retrieve the command-line arguments passed to this process

@@ -176,6 +176,7 @@ impl AntNode for SafeNodeRpcService {
         let kbuckets: HashMap<u32, k_buckets_response::Peers> =
             match self.running_node.get_kbuckets().await {
                 Ok(kbuckets) => kbuckets
+                    .0
                     .into_iter()
                     .map(|(ilog2_distance, peers)| {
                         let peers = peers.into_iter().map(|peer| peer.to_bytes()).collect();
