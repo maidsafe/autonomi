@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763479518274,
+  "lastUpdate": 1763479520406,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9751,6 +9751,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/51ae6d172e2ff79c3515dc170137d5155aaf8a48"
         },
         "date": 1763479501133,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8caa4e73ddd5fe3b7bb6bdf30966fac33413495a",
+          "message": "Merge pull request #3309 from maqi/download_with_best_effort\n\nfeat(client): for Chunk, fall back to get from closest_20 if kad query fetch failed",
+          "timestamp": "2025-11-18T15:02:54Z",
+          "tree_id": "8c3316867e43418f6fa144466d2e2c1b8cd44599",
+          "url": "https://github.com/maidsafe/autonomi/commit/8caa4e73ddd5fe3b7bb6bdf30966fac33413495a"
+        },
+        "date": 1763479519564,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
