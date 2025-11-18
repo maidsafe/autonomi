@@ -16,6 +16,7 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
+mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
@@ -26,7 +27,7 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
+use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, RunningNode};
 use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
@@ -35,8 +36,11 @@ use clap::{Parser, command};
 use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+use rand::Rng;
 use std::{
+    collections::hash_map::DefaultHasher,
     env,
+    hash::{Hash, Hasher},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     process::Command,
@@ -48,6 +52,10 @@ use tokio::{
     time::sleep,
 };
 use tracing_appender::non_blocking::WorkerGuard;
+
+/// Default network size estimate used when the actual size cannot be determined.
+/// This represents a baseline network of 100,000 nodes.
+const DEFAULT_NETWORK_SIZE: usize = 100_000;
 
 #[derive(Debug, Clone)]
 pub enum LogOutputDestArg {
@@ -226,6 +234,46 @@ struct Opt {
     write_older_cache_files: bool,
 }
 
+/// Calculates a deterministic restart delay based on peer ID and network size.
+///
+/// This algorithm ensures that node upgrades are staggered across the network to prevent
+/// many nodes from restarting simultaneously.
+///
+/// The delay is calculated as follows:
+/// 1. Hash the node's peer ID to get a deterministic value unique to this node
+/// 2. Calculate a time range in hours based on network size: min(72, network_size/100_000 + 1)
+///    - Smaller networks (< 100k nodes) get 1-2 hour windows
+///    - Larger networks get progressively longer windows, capped at 72 hours (3 days)
+/// 3. Use the hash modulo the time range to assign this node a specific delay
+///
+/// This approach provides:
+/// - Deterministic delays: Same peer ID always gets the same delay for a given network size
+/// - Even distribution: Hash modulo spreads nodes uniformly across the time window
+/// - Network-aware scaling: Larger networks get longer upgrade windows
+///
+/// # Arguments
+/// * `running_node` - The node to calculate the restart delay for
+///
+/// # Returns
+/// A `Duration` representing when this node should restart for an upgrade
+async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
+    let peer_id = running_node.peer_id();
+    let est_network_size = running_node
+        .get_estimated_network_size()
+        .await
+        .unwrap_or(DEFAULT_NETWORK_SIZE);
+
+    let mut hasher = DefaultHasher::new();
+    peer_id.hash(&mut hasher);
+    let hash_value = hasher.finish();
+
+    let time_range_hours = std::cmp::min(72, (est_network_size / DEFAULT_NETWORK_SIZE) + 1);
+    let time_range_seconds = time_range_hours * 3600;
+    let upgrade_time_seconds = (hash_value as usize) % time_range_seconds;
+
+    Duration::from_secs(upgrade_time_seconds as u64)
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
     let opt = Opt::parse();
@@ -254,7 +302,6 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // evm config
     let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
         "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
     ))?;
@@ -422,15 +469,54 @@ You can check your reward balance by running:
     });
 
     // Start up gRPC interface if enabled by user
+    let ctrl_tx_rpc = ctrl_tx.clone();
     if let Some(addr) = rpc {
         rpc_service::start_rpc_service(
             addr,
             log_output_dest,
             running_node.clone(),
-            ctrl_tx,
+            ctrl_tx_rpc,
             started_instant,
             log_reload_handle,
         );
+    }
+
+    #[cfg(unix)]
+    {
+        let ctrl_tx_restart = ctrl_tx.clone();
+        let running_node_clone = running_node.clone();
+        tokio::spawn(async move {
+            loop {
+                // 72 hours (259200 seconds) with ±5% randomization to prevent simultaneous upgrades
+                let base_delay = 259200;
+                let variance = rand::thread_rng().gen_range(-12960..=12960);
+                let delay_secs = (base_delay + variance) as u64;
+                sleep(Duration::from_secs(delay_secs)).await;
+                match upgrade::perform_upgrade().await {
+                    Ok(()) => {
+                        info!("Upgrade successful. Triggering restart...");
+
+                        let delay = calculate_restart_delay(&running_node_clone).await;
+                        info!("Calculated restart delay: {delay:?}");
+                        sleep(delay).await;
+
+                        if let Err(err) = ctrl_tx_restart
+                            .send(NodeCtrl::Restart {
+                                delay: Duration::from_secs(0),
+                                retain_peer_id: true,
+                            })
+                            .await
+                        {
+                            error!("Failed to send restart command: {err}");
+                        }
+                        break;
+                    }
+                    Err(e) => {
+                        debug!("Upgrade check: {e}");
+                    }
+                }
+            }
+        });
     }
 
     // Keep the node and gRPC service (if enabled) running.
@@ -580,11 +666,10 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
     Ok((output_dest.to_string(), reload_handle, log_appender_guard))
 }
 
-/// Starts a new process running the binary with the same args as
-/// the current process
-/// Optionally provide the node's root dir and listen port to retain it's PeerId
+/// Starts a new process running the binary with the same args as the current process.
+///
+/// Optionally provide the node's root dir and listen port to retain its PeerId.
 fn start_new_node_process(retain_peer_id: bool, root_dir: PathBuf, port: u16) {
-    // Retrieve the current executable's path
     let current_exe = env::current_exe().expect("could not get current executable path");
 
     // Retrieve the command-line arguments passed to this process

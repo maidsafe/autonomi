@@ -66,7 +66,13 @@ impl Client {
         peer: PeerInfo,
         nonce: u64,
         difficulty: usize,
-    ) -> Result<Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>, NetworkError> {
+    ) -> Result<
+        Vec<(
+            NetworkAddress,
+            Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+        )>,
+        NetworkError,
+    > {
         self.network
             .get_storage_proofs_from_peer(network_address.into(), peer, nonce, difficulty)
             .await
