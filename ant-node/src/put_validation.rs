@@ -10,8 +10,8 @@ use std::collections::BTreeSet;
 
 use crate::error::PutValidationError;
 use crate::{Marker, Result, node::Node};
-use ant_evm::ProofOfPayment;
 use ant_evm::merkle_payments::CANDIDATES_PER_POOL;
+use ant_evm::ProofOfPayment;
 use ant_evm::payment_vault::verify_data_payment;
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
@@ -1142,7 +1142,7 @@ impl Node {
         proof: &ant_evm::merkle_payments::MerklePaymentProof,
         target_address: &NetworkAddress,
     ) -> Result<(), PutValidationError> {
-        use ant_evm::merkle_payments::DiskMerklePaymentContract;
+        use ant_evm::merkle_payment_vault::get_merkle_payment_info;
         use std::collections::HashSet;
 
         let record_key = target_address.to_record_key();
@@ -1182,26 +1182,47 @@ impl Node {
         // Query smart contract to get payment info
         let winner_pool_hash = proof.winner_pool_hash();
 
-        let contract = DiskMerklePaymentContract::new().map_err(|e| {
-            let error_msg = format!("Failed to create DiskMerklePaymentContract: {e:?}");
-            error!("{error_msg}");
-            PutValidationError::MerklePaymentVerificationFailed {
-                record_key: pretty_key.clone().into_owned(),
-                error: error_msg,
-            }
-        })?;
+        let contract_payment_info =
+            if let Ok(info) = get_merkle_payment_info(self.evm_network(), winner_pool_hash).await {
+                info
+            } else {
+                warn!("Failed to get Merkle payment info on the first attempt, retrying...");
+                // Try again, because there could be a possible EVM node desync
+                tokio::time::sleep(std::time::Duration::from_secs(
+                    RETRY_PAYMENT_VERIFICATION_WAIT_TIME_SECS,
+                ))
+                .await;
 
-        let payment_info = contract.get_payment_info(winner_pool_hash).map_err(|e| {
-            let error_msg = format!(
-                "Failed to get payment info for winner pool hash {}: {e:?}",
-                hex::encode(winner_pool_hash)
-            );
-            warn!("{error_msg}");
-            PutValidationError::MerklePaymentVerificationFailed {
-                record_key: pretty_key.clone().into_owned(),
-                error: error_msg,
-            }
-        })?;
+                get_merkle_payment_info(self.evm_network(), winner_pool_hash)
+                    .await
+                    .inspect_err(|e| {
+                        warn!("Failed to get Merkle payment info on the second attempt: {e}");
+                    })
+                    .map_err(|e| {
+                        let error_msg = format!(
+                            "Failed to get payment info for winner pool hash {}: {e:?}",
+                            hex::encode(winner_pool_hash)
+                        );
+                        PutValidationError::MerklePaymentVerificationFailed {
+                            record_key: pretty_key.clone().into_owned(),
+                            error: error_msg,
+                        }
+                    })?
+            };
+
+        // Convert contract payment info to the format expected by the verification code
+        let payment_info = ant_evm::merkle_batch_payment::OnChainPaymentInfo {
+            depth: contract_payment_info.depth,
+            merkle_payment_timestamp: contract_payment_info.merklePaymentTimestamp,
+            paid_node_addresses: contract_payment_info
+                .paidNodeAddresses
+                .into_iter()
+                .map(|paid_node| {
+                    let index = paid_node.poolIndex as usize;
+                    (paid_node.rewardsAddress, index)
+                })
+                .collect(),
+        };
 
         debug!(
             "merkle payment: got payment info: depth={}, timestamp={}, paid_nodes={}",
@@ -1230,26 +1251,27 @@ impl Node {
 
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
 
-        // Verify network topology (>50% of paid nodes in closest 20)
-        // Get 20 closest peers to the reward pool address
+        // Verify network topology (>50% of paid nodes in closest)
+        // Get closest peers to the reward pool address
+        const TOPOLOGY_CHECK_NODE_COUNT: usize = CANDIDATES_PER_POOL * 2;
         let reward_pool_hash = proof.winner_pool_hash();
         let reward_pool_address = NetworkAddress::from(XorName(reward_pool_hash));
-        let closest_peers = match self
-            .network()
-            .get_n_closest_peers(&reward_pool_address, CANDIDATES_PER_POOL)
-            .await
-        {
+        let all_closest_peers = match self.network().get_closest_peers(&reward_pool_address).await {
             Ok(peers) => peers,
             Err(e) => {
                 warn!("Failed to get closest peers for topology verification: {e:?}");
                 return Err(PutValidationError::MerklePaymentVerificationFailed {
                     record_key: pretty_key.clone().into_owned(),
-                    error: format!(
-                        "Failed to get {CANDIDATES_PER_POOL} closest peers to {target_address:?}: {e:?}"
-                    ),
+                    error: format!("Failed to get closest peers to {target_address:?}: {e:?}"),
                 });
             }
         };
+
+        // Take only the 30 closest nodes
+        let closest_peers: Vec<_> = all_closest_peers
+            .into_iter()
+            .take(TOPOLOGY_CHECK_NODE_COUNT)
+            .collect();
         let closest_peer_ids: HashSet<_> =
             closest_peers.iter().map(|(peer_id, _)| *peer_id).collect();
 
@@ -1266,7 +1288,7 @@ impl Node {
                 }
             })?;
 
-        // Compare the two sets of peer ids: how many PAID nodes are in the closest 20?
+        // Compare the two sets of peer ids: how many PAID nodes are in the closest?
         let legitimate_paid_nodes = paid_peer_ids
             .iter()
             .filter(|peer_id| closest_peer_ids.contains(peer_id))
@@ -1277,7 +1299,7 @@ impl Node {
 
         if !reached_validity_threshold {
             let error_msg = format!(
-                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {CANDIDATES_PER_POOL} (need >50%)",
+                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {TOPOLOGY_CHECK_NODE_COUNT} (need >50%)",
             );
             warn!("{error_msg} for {pretty_key:?}");
             return Err(PutValidationError::MerklePaymentVerificationFailed {
@@ -1287,7 +1309,7 @@ impl Node {
         }
 
         debug!(
-            "Network topology verified: {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {CANDIDATES_PER_POOL} for {pretty_key:?}",
+            "Network topology verified: {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {TOPOLOGY_CHECK_NODE_COUNT} for {pretty_key:?}",
         );
 
         info!("Merkle payment verified successfully for {pretty_key:?}");

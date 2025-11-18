@@ -7,11 +7,14 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::common::{Address, Amount, QuoteHash, QuotePayment, TxHash, U256};
+use crate::contract::merkle_payment_vault::{
+    Error as MerkleHandlerError, MerklePaymentVaultHandler, PoolHash,
+};
 use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{network_token, payment_vault};
-use crate::merkle_batch_payment::{DiskMerklePaymentContract, PoolCommitment};
+use crate::merkle_batch_payment::PoolCommitment;
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
 use crate::{Network, TX_TIMEOUT};
@@ -41,6 +44,8 @@ pub enum Error {
     NetworkTokenContract(#[from] network_token::Error),
     #[error("Chunk payments contract error: {0}")]
     ChunkPaymentsContract(#[from] payment_vault::error::Error),
+    #[error("Merkle payment vault contract error: {0}")]
+    MerklePaymentVaultContract(#[from] MerkleHandlerError),
     #[error("Merkle batch payment error: {0}")]
     MerklePayment(String),
 }
@@ -156,42 +161,121 @@ impl Wallet {
         .await
     }
 
-    /// Pay for a Merkle tree batch using disk-based mock smart contract
+    /// Pay for a Merkle tree batch using smart contract
     ///
     /// # Arguments
     /// * `depth` - The Merkle tree depth
-    /// * `pool_commitments` - Vector of pool commitments (one per reward pool)
+    /// * `pool_commitments` - Vector of pool commitments with metrics (one per reward pool)
     /// * `merkle_payment_timestamp` - Unix timestamp for the payment
     ///
     /// # Returns
     /// * The winner pool hash (32 bytes) selected by the contract and the amount paid
-    pub fn pay_for_merkle_tree(
+    pub async fn pay_for_merkle_tree(
         &self,
         depth: u8,
         pool_commitments: Vec<PoolCommitment>,
         merkle_payment_timestamp: u64,
-    ) -> Result<(crate::merkle_batch_payment::PoolHash, Amount), Error> {
+    ) -> Result<(PoolHash, Amount), Error> {
         info!(
             "Paying for Merkle tree: depth={depth}, pools={}, timestamp={merkle_payment_timestamp}",
             pool_commitments.len()
         );
 
-        // Create disk contract instance
-        let contract = DiskMerklePaymentContract::new()
-            .map_err(|e| Error::MerklePayment(format!("Failed to create contract: {e}")))?;
+        // Get accurate cost estimate from smart contract (0 gas view function)
+        let estimated_amount = self
+            .estimate_merkle_payment_cost(depth, &pool_commitments, merkle_payment_timestamp)
+            .await?;
 
-        // Submit payment to disk contract (synchronous, just disk I/O)
-        let (winner_pool_hash, amount) = contract
-            .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
+        info!("Estimated Merkle payment cost: {estimated_amount}");
+
+        // Get current wallet token balance
+        let wallet_balance = self.balance_of_tokens().await?;
+
+        // Check if wallet contains enough payment tokens
+        if wallet_balance < estimated_amount {
+            return Err(Error::InsufficientTokensForQuotes(
+                wallet_balance,
+                estimated_amount,
+            ));
+        }
+
+        // Get current allowance for Merkle payment vault
+        let merkle_vault_address = *self
+            .network
+            .merkle_payments_address()
+            .ok_or_else(|| Error::MerklePayment("Merkle payments address not configured for this network. Set MERKLE_PAYMENTS_ADDRESS environment variable.".to_string()))?;
+        let allowance = self.token_allowance(merkle_vault_address).await?;
+
+        // Check if allowance is sufficient, if not approve
+        if allowance < estimated_amount {
+            info!("Approving Merkle payment vault to spend tokens");
+            self.approve_to_spend_tokens(merkle_vault_address, U256::MAX)
+                .await?;
+        }
+
+        // Create provider with wallet
+        let provider = self.to_provider();
+
+        // Create Merkle payment vault handler
+        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
+
+        // Submit payment to smart contract
+        let (winner_pool_hash, amount) = handler
+            .pay_for_merkle_tree(
+                depth,
+                pool_commitments,
+                merkle_payment_timestamp,
+                &self.transaction_config,
+            )
+            .await
             .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
 
         info!(
-            "Merkle payment successful, winner pool: {}, amount: {}",
-            hex::encode(winner_pool_hash),
-            amount
+            "Merkle payment successful, winner pool: {}, amount: {amount}",
+            hex::encode(winner_pool_hash)
         );
 
         Ok((winner_pool_hash, amount))
+    }
+
+    /// Estimate the cost of a Merkle tree batch using smart contract
+    ///
+    /// This calls the smart contract's view function (0 gas) which runs the exact same
+    /// pricing logic as the actual payment, ensuring accurate cost estimation.
+    ///
+    /// # Arguments
+    /// * `depth` - The Merkle tree depth
+    /// * `pool_commitments` - Vector of pool commitments with metrics (one per reward pool)
+    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
+    ///
+    /// # Returns
+    /// * Estimated total cost in AttoTokens
+    pub async fn estimate_merkle_payment_cost(
+        &self,
+        depth: u8,
+        pool_commitments: &[PoolCommitment],
+        merkle_payment_timestamp: u64,
+    ) -> Result<Amount, Error> {
+        if pool_commitments.is_empty() {
+            return Ok(Amount::ZERO);
+        }
+
+        // Create provider (no wallet needed for view calls)
+        let provider = http_provider(self.network.rpc_url().clone());
+
+        // Create Merkle payment vault handler
+        let merkle_vault_address = *self
+            .network
+            .merkle_payments_address()
+            .ok_or_else(|| Error::MerklePayment("Merkle payments address not configured for this network. Set MERKLE_PAYMENTS_ADDRESS environment variable.".to_string()))?;
+        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
+
+        // Call the contract's view function for accurate cost estimation
+        let total_amount = handler
+            .estimate_merkle_tree_cost(depth, pool_commitments.to_vec(), merkle_payment_timestamp)
+            .await?;
+
+        Ok(total_amount)
     }
 
     /// Build a provider using this wallet.
