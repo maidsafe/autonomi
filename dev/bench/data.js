@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763479500095,
+  "lastUpdate": 1763479501512,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9688,6 +9688,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/7de463e4415ac5231ef4e4051a06a0c7539f92e0"
         },
         "date": 1763065278862,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "51ae6d172e2ff79c3515dc170137d5155aaf8a48",
+          "message": "Merge pull request #3308 from maqi/reduce_max_stream_data_to_1MB\n\nReduce max stream data to 1 mb",
+          "timestamp": "2025-11-18T15:02:00Z",
+          "tree_id": "0533b8cd4117cde23f9dcd50fc9437787b6626c7",
+          "url": "https://github.com/maidsafe/autonomi/commit/51ae6d172e2ff79c3515dc170137d5155aaf8a48"
+        },
+        "date": 1763479501133,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
