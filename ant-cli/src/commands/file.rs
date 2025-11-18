@@ -14,6 +14,8 @@ use crate::utils::collect_upload_summary;
 use crate::wallet::load_wallet;
 use autonomi::client::PutError;
 use autonomi::client::analyze::Analysis;
+use autonomi::client::data::DataAddress;
+use autonomi::client::files::{PrivateArchive, PublicArchive};
 use autonomi::client::merkle_payments::{MerkleFilePutError, MerklePaymentOption};
 use autonomi::client::payment::PaymentOption;
 use autonomi::files::UploadError;
@@ -35,8 +37,19 @@ pub async fn cost(
         .await
         .map_err(|(err, _)| err)?;
 
-    if merkle {
+    let cost = if merkle {
         println!("🌳 Estimating cost with Merkle batch payment mode");
+        println!("Getting upload cost...");
+        info!("Calculating Merkle cost for file: {file}");
+
+        // Load wallet for Merkle cost estimation
+        let wallet = load_wallet(client.evm_network()).map_err(|err| eyre!(err))?;
+
+        // Use the new Merkle cost estimation
+        client
+            .file_cost_merkle(PathBuf::from(file), false, &wallet)
+            .await
+            .wrap_err("Failed to calculate Merkle cost for file")?
     } else {
         // Configure payment mode - default is SingleNode, only override if Standard is requested
         if use_standard_payment {
@@ -45,14 +58,14 @@ pub async fn cost(
         } else {
             println!("🎯 Using single node payment mode (default - saves gas fees)");
         }
-    }
 
-    println!("Getting upload cost...");
-    info!("Calculating cost for file: {file}");
-    let cost = client
-        .file_cost(&PathBuf::from(file))
-        .await
-        .wrap_err("Failed to calculate cost for file")?;
+        println!("Getting upload cost...");
+        info!("Calculating cost for file: {file}");
+        client
+            .file_cost(&PathBuf::from(file))
+            .await
+            .wrap_err("Failed to calculate cost for file")?
+    };
 
     println!("Estimate cost to upload file: {file}");
     println!("Total cost: {cost}");
@@ -318,16 +331,13 @@ async fn upload_dir_merkle(
     public: bool,
     no_archive: bool,
 ) -> Result<(String, String), UploadError> {
-    use autonomi::client::data::DataAddress;
-    use autonomi::client::files::{PrivateArchive, PublicArchive};
-
     let is_single_file = dir_path.is_file();
 
     // Try to load cached receipt, otherwise use wallet
     let path_str = dir_path.to_string_lossy().to_string();
     let payment_option = match cached_merkle_payments::load_merkle_payment_for_file(&path_str)
         .map_err(|e| {
-            UploadError::PutError(autonomi::client::PutError::Serialization(format!(
+            UploadError::IoError(std::io::Error::other(format!(
                 "Failed to load cached payment: {e}"
             )))
         })? {
@@ -349,9 +359,7 @@ async fn upload_dir_merkle(
                 let res = cached_merkle_payments::save_merkle_payment(&path_str, receipt);
                 println!("Cached Merkle payment to local disk for {path_str}: {res:?}");
             }
-            UploadError::PutError(autonomi::client::PutError::Serialization(format!(
-                "Merkle payment error: {e}"
-            )))
+            UploadError::PutError(PutError::MerkleBatch(e))
         })?;
 
     // Display the Merkle payment cost

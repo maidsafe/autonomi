@@ -114,6 +114,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -180,6 +181,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -228,6 +230,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC"
             )?,
+            merkle_payments_address: None,
         })
     );
     assert_eq!(
@@ -271,6 +274,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: init_peers_config.clone(),
@@ -349,6 +353,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -431,6 +436,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -490,6 +496,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -540,6 +547,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
@@ -590,6 +598,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_format: None,
@@ -657,6 +666,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -773,6 +783,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -839,6 +850,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -906,6 +918,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -964,6 +977,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode2"),
@@ -1031,6 +1045,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1190,6 +1205,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1341,6 +1357,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1487,6 +1504,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1637,6 +1655,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1783,6 +1802,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -1930,6 +1950,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2071,6 +2092,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2210,6 +2232,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2272,6 +2295,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -2339,6 +2363,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2594,6 +2619,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2640,6 +2666,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -2716,6 +2743,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2757,6 +2785,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -2833,6 +2862,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2905,6 +2935,7 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -2982,6 +3013,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3122,6 +3154,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3254,6 +3287,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3387,6 +3421,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3637,6 +3672,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3681,6 +3717,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -3757,6 +3794,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -3799,6 +3837,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -3875,6 +3914,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4108,6 +4148,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4162,6 +4203,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -4238,6 +4280,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4280,6 +4323,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             relay: false,
             initial_peers_config: Default::default(),
@@ -4356,6 +4400,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4416,6 +4461,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -4482,6 +4528,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4540,6 +4587,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -4606,6 +4654,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4663,6 +4712,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -4729,6 +4779,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -4787,6 +4838,7 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -4853,6 +4905,7 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5047,6 +5100,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -5114,6 +5168,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5172,6 +5227,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
         log_format: None,
@@ -5238,6 +5294,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5296,6 +5353,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -5363,6 +5421,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5417,6 +5476,7 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: true,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -5484,6 +5544,7 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5614,6 +5675,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5671,6 +5733,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
             data_payments_address: RewardsAddress::from_str(
                 "0x8464135c8F25Da09e49BC8782676a84730C318bC",
             )?,
+            merkle_payments_address: None,
         }),
         relay: false,
         log_dir_path: node_logs_dir.to_path_buf().join("antnode1"),
@@ -5738,6 +5801,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",
@@ -5879,6 +5943,7 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
                 data_payments_address: RewardsAddress::from_str(
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )?,
+                merkle_payments_address: None,
             }),
             rewards_address: RewardsAddress::from_str(
                 "0x03B770D9cD32077cC0bF330c13C114a87643B124",

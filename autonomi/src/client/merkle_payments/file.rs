@@ -43,6 +43,109 @@ pub enum MerkleFilePutError {
 }
 
 impl Client {
+    /// Estimate the cost of uploading a directory of files with Merkle batch payments
+    ///
+    /// This calls the smart contract's view function (0 gas) which runs the exact same
+    /// pricing logic as the actual payment, ensuring accurate cost estimation.
+    ///
+    /// # Arguments
+    /// * `path` - The path to the directory
+    /// * `is_public` - Whether the files will be uploaded as public
+    /// * `wallet` - The EVM wallet (needed for network checking)
+    ///
+    /// # Returns
+    /// * `AttoTokens` - Estimated total cost
+    pub async fn file_cost_merkle(
+        &self,
+        path: PathBuf,
+        is_public: bool,
+        wallet: &EvmWallet,
+    ) -> Result<AttoTokens, MerkleFilePutError> {
+        debug!(
+            "merkle payment: file_cost_merkle starting for path: {path:?}, is_public: {is_public}"
+        );
+
+        // Check if the wallet uses the same network as the client
+        if wallet.network() != self.evm_network() {
+            return Err(MerkleFilePutError::MerklePayment(
+                MerklePaymentError::EvmWalletNetworkMismatch,
+            ));
+        }
+
+        // Get encryption streams to determine chunk count and addresses
+        let pay_streams: Vec<EncryptionStream> = encrypt_directory_files(path.clone(), is_public)
+            .await
+            .map_err(|e| MerkleFilePutError::Encryption(e.to_string()))?
+            .into_iter()
+            .map(|stream| stream.map_err(MerkleFilePutError::Encryption))
+            .collect::<Result<Vec<EncryptionStream>, MerkleFilePutError>>()?;
+        debug!(
+            "merkle payment: file_cost_merkle got {} encryption streams",
+            pay_streams.len()
+        );
+
+        // Collect all XorNames from streams
+        let all_xor_names = pay_streams
+            .into_iter()
+            .flat_map(collect_xor_names_from_stream)
+            .collect::<Vec<XorName>>();
+        debug!(
+            "merkle payment: file_cost_merkle total chunks: {}",
+            all_xor_names.len()
+        );
+
+        // Build Merkle tree and get candidate pools (same as actual payment)
+        use ant_evm::merkle_payments::MerkleTree;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let tree = MerkleTree::from_xornames(all_xor_names.clone())
+            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::MerkleTree(e)))?;
+        let depth = tree.depth();
+        debug!("merkle payment: file_cost_merkle built tree with depth={depth}");
+
+        let merkle_payment_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::TimestampError(e)))?
+            .as_secs();
+        let midpoint_proofs = tree
+            .reward_candidates(merkle_payment_timestamp)
+            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::MerkleTree(e)))?;
+        debug!(
+            "merkle payment: file_cost_merkle generated {} candidate pools",
+            midpoint_proofs.len()
+        );
+
+        // Query network for candidate pools with signature validation
+        let candidate_pools = self
+            .build_candidate_pools(midpoint_proofs, DataTypes::Chunk, MAX_CHUNK_SIZE)
+            .await?;
+        debug!(
+            "merkle payment: file_cost_merkle collected and validated {} pools",
+            candidate_pools.len()
+        );
+
+        // Convert to pool commitments
+        use evmlib::merkle_batch_payment::PoolCommitment;
+        let pool_commitments: Vec<PoolCommitment> = candidate_pools
+            .iter()
+            .map(|pool| pool.to_commitment())
+            .collect();
+
+        // Call wallet's estimate function which calls the contract's view function
+        let estimated_cost_raw = wallet
+            .estimate_merkle_payment_cost(depth, &pool_commitments, merkle_payment_timestamp)
+            .await
+            .map_err(|e| {
+                MerkleFilePutError::MerklePayment(MerklePaymentError::EvmWalletError(e))
+            })?;
+
+        // Convert U256 to AttoTokens
+        let estimated_cost = AttoTokens::from_atto(estimated_cost_raw);
+
+        debug!("merkle payment: file_cost_merkle estimated cost: {estimated_cost}");
+        Ok(estimated_cost)
+    }
+
     /// Pay for a directory of files with Merkle batch payments
     pub async fn file_pay_with_merkle_payment(
         &self,

@@ -271,6 +271,7 @@ mod tests {
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )
                 .unwrap(),
+                merkle_payments_address: None,
             }),
             relay: false,
             log_dir_path: PathBuf::from("/logs"),
@@ -309,6 +310,7 @@ mod tests {
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )
                 .unwrap(),
+                merkle_payments_address: None,
             }),
             relay: false,
             log_dir_path: PathBuf::from("/logs"),

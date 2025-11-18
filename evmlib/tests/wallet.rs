@@ -25,6 +25,9 @@ async fn local_testnet() -> (AnvilInstance, Network, EthereumWallet) {
     let network_token = deploy_network_token_contract(&rpc_url, &node).await;
     let payment_token_address = *network_token.contract.address();
     let data_payments = deploy_data_payments_contract(&rpc_url, &node, payment_token_address).await;
+    let merkle_payments =
+        evmlib::testnet::deploy_merkle_payments_contract(&rpc_url, &node, payment_token_address)
+            .await;
 
     (
         node,
@@ -32,6 +35,7 @@ async fn local_testnet() -> (AnvilInstance, Network, EthereumWallet) {
             rpc_url_http: rpc_url,
             payment_token_address,
             data_payments_address: *data_payments.contract.address(),
+            merkle_payments_address: Some(*merkle_payments.contract.address()),
         }),
         network_token.contract.provider().wallet().clone(),
     )

@@ -74,14 +74,14 @@ impl Client {
     /// * `merkle_payment_timestamp` - Unix timestamp for the payment
     ///
     /// # Returns
-    /// * Vector of exactly 20 MerklePaymentCandidateNode with valid signatures
+    /// * Array of exactly [`CANDIDATES_PER_POOL`] MerklePaymentCandidateNode with valid signatures
     async fn get_merkle_candidate_pool(
         &self,
         target_address: XorName,
         data_type: DataTypes,
         data_size: usize,
         merkle_payment_timestamp: u64,
-    ) -> Result<Vec<MerklePaymentCandidateNode>, MerklePaymentError> {
+    ) -> Result<[MerklePaymentCandidateNode; CANDIDATES_PER_POOL], MerklePaymentError> {
         // Get 20 closest peers to target
         let network_addr = NetworkAddress::ChunkAddress(ChunkAddress::new(target_address));
         let closest_peers = self
@@ -128,7 +128,15 @@ impl Client {
             candidates.push(result?);
         }
 
-        Ok(candidates)
+        // Convert Vec to exact-sized array (should never fail)
+        let candidates_array: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL] = candidates
+            .try_into()
+            .map_err(|v: Vec<_>| MerklePaymentError::InsufficientCandidates {
+                got: v.len(),
+                needed: CANDIDATES_PER_POOL,
+            })?;
+
+        Ok(candidates_array)
     }
 
     /// Build candidate pools for all midpoint proofs
@@ -140,7 +148,7 @@ impl Client {
     ///
     /// # Returns
     /// * Vector of MerklePaymentCandidatePool, one for each midpoint
-    async fn build_candidate_pools(
+    pub(crate) async fn build_candidate_pools(
         &self,
         midpoint_proofs: Vec<MidpointProof>,
         data_type: DataTypes,
@@ -152,10 +160,11 @@ impl Client {
             let target = midpoint_proof.address();
             let timestamp = midpoint_proof.merkle_payment_timestamp;
 
-            // Get candidates for this pool
+            // Get candidates for this pool (returns exact-sized array)
             let candidate_nodes = self
                 .get_merkle_candidate_pool(target, data_type, data_size, timestamp)
                 .await?;
+
             let pool = MerklePaymentCandidatePool {
                 midpoint_proof,
                 candidate_nodes,
@@ -234,8 +243,9 @@ impl Client {
         debug!("Waiting for wallet lock");
         let lock_guard = wallet.lock().await;
         debug!("Locked wallet");
-        let (winner_pool_hash, amount) =
-            wallet.pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)?;
+        let (winner_pool_hash, amount) = wallet
+            .pay_for_merkle_tree(depth, pool_commitments, merkle_payment_timestamp)
+            .await?;
         let amount = AttoTokens::from_atto(amount);
         drop(lock_guard);
         debug!("Unlocked wallet");

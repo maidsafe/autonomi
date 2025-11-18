@@ -12,10 +12,15 @@
 //! mock implementation of the smart contract. When the real smart contract is ready, the
 //! disk contract will be replaced with actual on-chain calls.
 
-use crate::common::{Address as RewardsAddress, Amount};
+use crate::{common::Address as RewardsAddress, quoting_metrics::QuotingMetrics};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use thiserror::Error;
+
+#[cfg(any(test, feature = "test-utils"))]
+use crate::common::Amount;
+
+#[cfg(any(test, feature = "test-utils"))]
+use std::path::PathBuf;
 
 /// Pool hash type (32 bytes) - compatible with XorName without the dependency
 pub type PoolHash = [u8; 32];
@@ -44,9 +49,18 @@ pub struct PoolCommitment {
     /// This commits to the midpoint proof and all node signatures
     pub pool_hash: PoolHash,
 
-    /// Reward addresses of candidate nodes (20 nodes per pool)
-    /// Smart contract selects winners from these addresses
-    pub candidate_addresses: Vec<RewardsAddress>,
+    /// Candidate nodes with metrics (20 nodes per pool)
+    pub candidates: [CandidateNode; CANDIDATES_PER_POOL],
+}
+
+/// Candidate node with metrics for pool commitment
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CandidateNode {
+    /// Rewards address of the candidate node
+    pub rewards_address: RewardsAddress,
+
+    /// Metrics of the candidate node
+    pub metrics: QuotingMetrics,
 }
 
 /// Errors that can occur during smart contract operations
@@ -85,14 +99,16 @@ pub struct OnChainPaymentInfo {
     pub paid_node_addresses: Vec<(RewardsAddress, usize)>,
 }
 
-/// Disk-based Merkle payment contract (temporary implementation)
+#[cfg(any(test, feature = "test-utils"))]
+/// Disk-based Merkle payment contract (mock for testing)
 ///
 /// This simulates smart contract behavior by storing payment data to disk.
-/// Replace this entire implementation with a real smart contract when ready.
+/// Only available for testing.
 pub struct DiskMerklePaymentContract {
     storage_path: PathBuf, // ~/.autonomi/merkle_payments/
 }
 
+#[cfg(any(test, feature = "test-utils"))]
 impl DiskMerklePaymentContract {
     /// Create a new contract with a specific storage path
     pub fn new_with_path(storage_path: PathBuf) -> Result<Self, SmartContractError> {
@@ -145,12 +161,12 @@ impl DiskMerklePaymentContract {
             });
         }
 
-        // Validate: each pool has exactly CANDIDATES_PER_POOL addresses
+        // Validate: each pool has exactly CANDIDATES_PER_POOL candidates
         for pool in &pool_commitments {
-            if pool.candidate_addresses.len() != CANDIDATES_PER_POOL {
+            if pool.candidates.len() != CANDIDATES_PER_POOL {
                 return Err(SmartContractError::WrongCandidateCount {
                     expected: CANDIDATES_PER_POOL,
-                    got: pool.candidate_addresses.len(),
+                    got: pool.candidates.len(),
                 });
             }
         }
@@ -172,7 +188,7 @@ impl DiskMerklePaymentContract {
         use std::collections::HashSet;
         let mut winner_node_indices = HashSet::new();
         while winner_node_indices.len() < depth as usize {
-            let idx = rand::random::<usize>() % winner_pool.candidate_addresses.len();
+            let idx = rand::random::<usize>() % winner_pool.candidates.len();
             winner_node_indices.insert(idx);
         }
         let winner_node_indices: Vec<usize> = winner_node_indices.into_iter().collect();
@@ -185,7 +201,7 @@ impl DiskMerklePaymentContract {
         // Extract paid node addresses, along with their indices
         let mut paid_node_addresses = Vec::new();
         for (i, &node_idx) in winner_node_indices.iter().enumerate() {
-            let addr = winner_pool.candidate_addresses[node_idx];
+            let addr = winner_pool.candidates[node_idx].rewards_address;
             paid_node_addresses.push((addr, node_idx));
             println!("  Node {}: {addr}", i + 1);
         }
