@@ -64,8 +64,9 @@ pub enum MerklePaymentError {
 impl Client {
     /// Get Merkle candidate nodes for a specific target address
     ///
-    /// This queries the 20 closest nodes to the target address and requests signed [`MerklePaymentCandidateNode`]
-    /// that commits to a `data_type`, `data_size` and `merkle_payment_timestamp` together with the node's reward address.
+    /// This queries nodes close to the target address and collects signed [`MerklePaymentCandidateNode`]
+    /// responses. To provide fault tolerance against unresponsive or malicious nodes, we request
+    /// quotes from 25% more peers than needed and select the [`CANDIDATES_PER_POOL`] closest successful responses.
     ///
     /// # Arguments
     /// * `target_address` - The address to find candidates for (from MidpointProof::address())
@@ -74,7 +75,8 @@ impl Client {
     /// * `merkle_payment_timestamp` - Unix timestamp for the payment
     ///
     /// # Returns
-    /// * Array of exactly [`CANDIDATES_PER_POOL`] MerklePaymentCandidateNode with valid signatures
+    /// * Array of exactly [`CANDIDATES_PER_POOL`] MerklePaymentCandidateNode with valid signatures,
+    ///   selected from the closest successful responses
     async fn get_merkle_candidate_pool(
         &self,
         target_address: XorName,
@@ -82,58 +84,111 @@ impl Client {
         data_size: usize,
         merkle_payment_timestamp: u64,
     ) -> Result<[MerklePaymentCandidateNode; CANDIDATES_PER_POOL], MerklePaymentError> {
-        // Get 20 closest peers to target
+        // Request from 25% more peers than needed to provide fault tolerance
+        // This allows up to 25% of peers to fail without blocking the payment
+        // We'll select the 20 closest successful responses to ensure we get the actual
+        // closest nodes to the target, not just any 20 that respond
+        const PEERS_TO_QUERY: usize = CANDIDATES_PER_POOL + (CANDIDATES_PER_POOL / 4);
+
         let network_addr = NetworkAddress::ChunkAddress(ChunkAddress::new(target_address));
         let closest_peers = self
             .network
-            .get_closest_peers(network_addr.clone(), Some(CANDIDATES_PER_POOL))
+            .get_closest_peers(network_addr.clone(), Some(PEERS_TO_QUERY))
             .await?;
+        let closest_peers_len = closest_peers.len();
+        debug!("Got {closest_peers_len} closest peers for target {target_address:?}");
 
-        debug!(
-            "Got {} closest peers for target {:?}",
-            closest_peers.len(),
-            target_address
-        );
-
-        if closest_peers.len() < CANDIDATES_PER_POOL {
+        if closest_peers_len < CANDIDATES_PER_POOL {
             return Err(MerklePaymentError::InsufficientCandidates {
-                got: closest_peers.len(),
+                got: closest_peers_len,
                 needed: CANDIDATES_PER_POOL,
             });
         }
 
+        // Store peer infos with their distance to target for later sorting
+        let peer_info_with_distances: Vec<_> = closest_peers
+            .iter()
+            .map(|peer_info| {
+                let peer_addr = NetworkAddress::from(peer_info.peer_id);
+                let distance = network_addr.distance(&peer_addr);
+                (peer_info.clone(), distance)
+            })
+            .collect();
+
         // Request quotes from all peers in parallel
         let mut tasks = FuturesUnordered::new();
-        for peer in closest_peers {
+        for (peer_info, _distance) in &peer_info_with_distances {
             let network = self.network.clone();
             let network_addr = network_addr.clone();
             let data_type_index = data_type.get_index();
+            let peer_info = peer_info.clone();
+            let peer_id = peer_info.peer_id;
             tasks.push(async move {
-                network
+                let result = network
                     .get_merkle_candidate_quote(
                         network_addr,
-                        peer,
+                        peer_info,
                         data_type_index,
                         data_size,
                         merkle_payment_timestamp,
                     )
-                    .await
+                    .await;
+                (peer_id, result)
             });
         }
 
-        // Collect all candidates - error out immediately if ANY request fails
-        let mut candidates = Vec::new();
+        // Collect successful responses (tolerate failures)
+        let mut successful_candidates: Vec<(libp2p::PeerId, MerklePaymentCandidateNode)> =
+            Vec::new();
         use futures::StreamExt;
-        while let Some(result) = tasks.next().await {
-            candidates.push(result?);
+        while let Some((peer_id, result)) = tasks.next().await {
+            match result {
+                Ok(candidate) => {
+                    successful_candidates.push((peer_id, candidate));
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to get quote from peer {peer_id:?} for target {target_address:?}: {e}"
+                    );
+                    // Continue to next peer instead of failing entire payment
+                }
+            }
         }
 
-        // Convert Vec to exact-sized array (should never fail)
-        let candidates_array: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL] = candidates
-            .try_into()
-            .map_err(|v: Vec<_>| MerklePaymentError::InsufficientCandidates {
-                got: v.len(),
+        debug!(
+            "Got {} successful responses out of {} queried peers for target {target_address:?}",
+            successful_candidates.len(),
+            peer_info_with_distances.len(),
+        );
+
+        // Check if we have enough successful responses
+        if successful_candidates.len() < CANDIDATES_PER_POOL {
+            return Err(MerklePaymentError::InsufficientCandidates {
+                got: successful_candidates.len(),
                 needed: CANDIDATES_PER_POOL,
+            });
+        }
+
+        // Sort successful candidates by distance to target and take the 20 closest
+        successful_candidates.sort_by_key(|(peer_id, _candidate)| {
+            let peer_addr = NetworkAddress::from(*peer_id);
+            network_addr.distance(&peer_addr)
+        });
+
+        // Take the 20 closest successful responses
+        let closest_successful: Vec<MerklePaymentCandidateNode> = successful_candidates
+            .into_iter()
+            .take(CANDIDATES_PER_POOL)
+            .map(|(_peer_id, candidate)| candidate)
+            .collect();
+
+        // Convert to exact-sized array
+        let candidates_array: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL] =
+            closest_successful.try_into().map_err(|v: Vec<_>| {
+                MerklePaymentError::InsufficientCandidates {
+                    got: v.len(),
+                    needed: CANDIDATES_PER_POOL,
+                }
             })?;
 
         Ok(candidates_array)
