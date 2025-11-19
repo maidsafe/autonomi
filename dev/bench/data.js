@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763551833834,
+  "lastUpdate": 1763551835398,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13638,6 +13638,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18973,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "57736dbd1b9d834708f000d27965057165b701ff",
+          "message": "Merge pull request #3307 from maidsafe/dependabot/npm_and_yarn/autonomi/tests-js/js-yaml-4.1.1\n\nchore(deps-dev): bump js-yaml from 4.1.0 to 4.1.1 in /autonomi/tests-js",
+          "timestamp": "2025-11-19T10:21:16Z",
+          "tree_id": "8cead08a4ef7f62d9e53a72cb8c0f6e32024213c",
+          "url": "https://github.com/maidsafe/autonomi/commit/57736dbd1b9d834708f000d27965057165b701ff"
+        },
+        "date": 1763551834940,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 7052,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 12760,
             "unit": "ms"
           },
           {
