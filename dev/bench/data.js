@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763479522557,
+  "lastUpdate": 1763551744253,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -3743,6 +3743,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.7001183589805455,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "57736dbd1b9d834708f000d27965057165b701ff",
+          "message": "Merge pull request #3307 from maidsafe/dependabot/npm_and_yarn/autonomi/tests-js/js-yaml-4.1.1\n\nchore(deps-dev): bump js-yaml from 4.1.0 to 4.1.1 in /autonomi/tests-js",
+          "timestamp": "2025-11-19T10:21:16Z",
+          "tree_id": "8cead08a4ef7f62d9e53a72cb8c0f6e32024213c",
+          "url": "https://github.com/maidsafe/autonomi/commit/57736dbd1b9d834708f000d27965057165b701ff"
+        },
+        "date": 1763551735690,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0347895423016307,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.0353489041849455,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.069439057904037,
             "unit": "MiB/s"
           }
         ]
