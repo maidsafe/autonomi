@@ -849,15 +849,22 @@ impl Node {
         // Validate timestamp before signing to prevent committing to invalid times.
         // Nodes will reject proofs with expired/future timestamps during payment verification,
         // so signing such timestamps would create useless quotes that can't be used.
+        //
+        // Allow ±24 hours tolerance to handle timezone differences and clock skew between
+        // clients and nodes. This prevents valid payments from being rejected due to minor
+        // time differences while still catching truly expired/invalid timestamps.
+        const TIMESTAMP_TOLERANCE: u64 = 24 * 60 * 60; // 24 hours
+
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
-        // Reject future timestamps
-        if merkle_payment_timestamp > now {
+        // Reject future timestamps (with 24h tolerance for clock skew)
+        let future_threshold = now + TIMESTAMP_TOLERANCE;
+        if merkle_payment_timestamp > future_threshold {
             let error_msg = format!(
-                "Rejected future timestamp {merkle_payment_timestamp} (current time: {now})"
+                "Rejected future timestamp {merkle_payment_timestamp} (current time: {now}, threshold: {future_threshold})"
             );
             warn!("{error_msg} for {key:?}");
             return QueryResponse::GetMerkleCandidateQuote(Err(
@@ -865,11 +872,12 @@ impl Node {
             ));
         }
 
-        // Reject expired timestamps
+        // Reject expired timestamps (with 24h tolerance for clock skew)
+        let expiration_threshold = MERKLE_PAYMENT_EXPIRATION + TIMESTAMP_TOLERANCE;
         let age = now.saturating_sub(merkle_payment_timestamp);
-        if age > MERKLE_PAYMENT_EXPIRATION {
+        if age > expiration_threshold {
             let error_msg = format!(
-                "Rejected expired timestamp {merkle_payment_timestamp} (age: {age}s, max: {MERKLE_PAYMENT_EXPIRATION}s)",
+                "Rejected expired timestamp {merkle_payment_timestamp} (age: {age}s, max: {expiration_threshold}s)",
             );
             warn!("{error_msg} for {key:?}");
             return QueryResponse::GetMerkleCandidateQuote(Err(

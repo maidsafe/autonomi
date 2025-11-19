@@ -497,7 +497,10 @@ mod tests {
     /// Helper to create an array of CANDIDATES_PER_POOL test nodes and return their PeerIds
     fn create_test_candidate_nodes_with_peer_ids(
         timestamp: u64,
-    ) -> ([MerklePaymentCandidateNode; CANDIDATES_PER_POOL], Vec<PeerId>) {
+    ) -> (
+        [MerklePaymentCandidateNode; CANDIDATES_PER_POOL],
+        Vec<PeerId>,
+    ) {
         let mut peer_ids = Vec::with_capacity(CANDIDATES_PER_POOL);
         let nodes = std::array::from_fn(|i| {
             let keypair = Keypair::generate_ed25519();
