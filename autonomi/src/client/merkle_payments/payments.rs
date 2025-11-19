@@ -95,19 +95,32 @@ impl Client {
             .network
             .get_closest_peers(network_addr.clone(), Some(PEERS_TO_QUERY))
             .await?;
-        let closest_peers_len = closest_peers.len();
-        debug!("Got {closest_peers_len} closest peers for target {target_address:?}");
+        debug!(
+            "Got {} closest peers for target {target_address:?}",
+            closest_peers.len()
+        );
 
-        if closest_peers_len < CANDIDATES_PER_POOL {
+        // Deduplicate peers by peer_id using HashMap (prevents duplicate candidates)
+        let unique_peers: HashMap<libp2p::PeerId, libp2p::kad::PeerInfo> = closest_peers
+            .into_iter()
+            .map(|peer_info| (peer_info.peer_id, peer_info))
+            .collect();
+
+        debug!(
+            "After deduplication: {} unique peers for target {target_address:?}",
+            unique_peers.len()
+        );
+
+        if unique_peers.len() < CANDIDATES_PER_POOL {
             return Err(MerklePaymentError::InsufficientCandidates {
-                got: closest_peers_len,
+                got: unique_peers.len(),
                 needed: CANDIDATES_PER_POOL,
             });
         }
 
         // Store peer infos with their distance to target for later sorting
-        let peer_info_with_distances: Vec<_> = closest_peers
-            .iter()
+        let peer_info_with_distances: Vec<_> = unique_peers
+            .values()
             .map(|peer_info| {
                 let peer_addr = NetworkAddress::from(peer_info.peer_id);
                 let distance = network_addr.distance(&peer_addr);
