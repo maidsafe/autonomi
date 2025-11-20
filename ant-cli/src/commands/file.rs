@@ -120,7 +120,6 @@ pub async fn upload(
     let event_receiver = client.enable_client_events();
     let (upload_summary_thread, upload_completed_tx) = collect_upload_summary(event_receiver);
 
-    println!("Uploading data to network...");
     info!(
         "Uploading {} file: {file}",
         if public { "public" } else { "private" }

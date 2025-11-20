@@ -26,10 +26,10 @@ use std::path::PathBuf;
 pub type PoolHash = [u8; 32];
 
 /// Number of candidate nodes per pool (provides redundancy)
-pub const CANDIDATES_PER_POOL: usize = 20;
+pub const CANDIDATES_PER_POOL: usize = 16;
 
 /// Maximum supported Merkle tree depth
-pub const MAX_MERKLE_DEPTH: u8 = 16;
+pub const MAX_MERKLE_DEPTH: u8 = 12;
 
 /// Calculate expected number of reward pools for a given tree depth
 ///
@@ -49,7 +49,7 @@ pub struct PoolCommitment {
     /// This commits to the midpoint proof and all node signatures
     pub pool_hash: PoolHash,
 
-    /// Candidate nodes with metrics (20 nodes per pool)
+    /// Candidate nodes with metrics
     pub candidates: [CandidateNode; CANDIDATES_PER_POOL],
 }
 
