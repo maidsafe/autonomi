@@ -355,7 +355,10 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
     let xorname_collection_batch_size: usize = std::cmp::max(32, *CHUNK_UPLOAD_BATCH_SIZE);
     let mut total = 0;
     let estimated_total = encryption_stream.total_chunks();
-    println!("Encrypting {estimated_total} chunks");
+    #[cfg(feature = "loud")]
+    let start = std::time::Instant::now();
+    #[cfg(feature = "loud")]
+    println!("Begin encrypting {estimated_total} chunks...");
     while let Some(batch) = encryption_stream.next_batch(xorname_collection_batch_size) {
         let batch_len = batch.len();
         total += batch_len;
@@ -363,7 +366,7 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
             xor_names.push(*chunk.name());
         }
         #[cfg(feature = "loud")]
-        println!("Encrypted {total}/{estimated_total}");
+        println!("Encrypted {total}/{estimated_total} chunks in {:?}", start.elapsed());
     }
     xor_names
 }
