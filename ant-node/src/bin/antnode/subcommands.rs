@@ -23,6 +23,10 @@ pub(crate) enum EvmNetworkCommand {
         /// The chunk payments contract address
         #[arg(long, short)]
         data_payments_address: String,
+
+        /// The merkle payments contract address (optional)
+        #[arg(long)]
+        merkle_payments_address: Option<String>,
     },
 }
 
@@ -36,7 +40,13 @@ impl Into<EvmNetwork> for EvmNetworkCommand {
                 rpc_url,
                 payment_token_address,
                 data_payments_address,
-            } => EvmNetwork::new_custom(&rpc_url, &payment_token_address, &data_payments_address),
+                merkle_payments_address,
+            } => EvmNetwork::new_custom(
+                &rpc_url,
+                &payment_token_address,
+                &data_payments_address,
+                merkle_payments_address.as_deref(),
+            ),
         }
     }
 }

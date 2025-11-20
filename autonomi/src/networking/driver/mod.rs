@@ -415,6 +415,37 @@ impl NetworkDriver {
                     error!("Error sending connections made response: {e:?}");
                 }
             }
+            NetworkTask::GetMerkleCandidateQuote {
+                addr,
+                peer,
+                data_type,
+                data_size,
+                merkle_payment_timestamp,
+                resp,
+            } => {
+                let req = Request::Query(Query::GetMerkleCandidateQuote {
+                    key: addr.clone(),
+                    data_type,
+                    data_size,
+                    merkle_payment_timestamp,
+                });
+
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&peer.peer_id, req, peer.addrs.clone());
+
+                self.pending_tasks.insert_query(
+                    req_id,
+                    NetworkTask::GetMerkleCandidateQuote {
+                        addr,
+                        peer,
+                        data_type,
+                        data_size,
+                        merkle_payment_timestamp,
+                        resp,
+                    },
+                );
+            }
         }
     }
 }

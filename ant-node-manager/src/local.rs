@@ -109,6 +109,11 @@ impl Launcher for LocalSafeLauncher {
             args.push(custom.payment_token_address.to_string());
             args.push("--data-payments-address".to_string());
             args.push(custom.data_payments_address.to_string());
+
+            if let Some(merkle_addr) = custom.merkle_payments_address {
+                args.push("--merkle-payments-address".to_string());
+                args.push(merkle_addr.to_string());
+            }
         }
 
         Command::new(self.antnode_bin_path.clone())
@@ -569,6 +574,7 @@ mod tests {
                     "http://localhost:61611",
                     "0x5FbDB2315678afecb367f032d93F642f64180aa3",
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                    Some("0x663F3ad617193148711d28f5334eE4Ed07016602"),
                 ))),
             )
             .times(1)
@@ -621,6 +627,7 @@ mod tests {
                     "http://localhost:61611",
                     "0x5FbDB2315678afecb367f032d93F642f64180aa3",
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+                    Some("0x663F3ad617193148711d28f5334eE4Ed07016602"),
                 )),
                 version: "0.100.12".to_string(),
             },

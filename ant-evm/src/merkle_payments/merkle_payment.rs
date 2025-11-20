@@ -10,6 +10,7 @@ use std::collections::HashSet;
 
 use super::merkle_tree::{BadMerkleProof, MerkleBranch, MidpointProof};
 use crate::RewardsAddress;
+use evmlib::merkle_batch_payment::{CandidateNode, PoolCommitment, PoolHash};
 use evmlib::quoting_metrics::QuotingMetrics;
 use libp2p::{
     PeerId,
@@ -19,13 +20,13 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xor_name::XorName;
 
-pub use super::merkle_tree::MAX_MERKLE_DEPTH;
+pub use evmlib::merkle_batch_payment::CANDIDATES_PER_POOL;
 
 /// Errors that can occur during Merkle payment verification
 #[derive(Debug, Error)]
 pub enum MerklePaymentVerificationError {
-    #[error("Winner pool hash mismatch: expected {expected}, got {got}")]
-    WinnerPoolHashMismatch { expected: XorName, got: XorName },
+    #[error("Winner pool hash mismatch: expected {expected:?}, got {got:?}")]
+    WinnerPoolHashMismatch { expected: PoolHash, got: PoolHash },
     #[error("Merkle proof verification failed: {0}")]
     MerkleProofFailed(#[from] BadMerkleProof),
     #[error(
@@ -37,8 +38,6 @@ pub enum MerklePaymentVerificationError {
     },
     #[error("Wrong number of paid addresses: expected {expected}, got {got}")]
     WrongPaidAddressCount { expected: usize, got: usize },
-    #[error("Wrong number of candidates: expected {expected}, got {got}")]
-    WrongCandidateCount { expected: usize, got: usize },
     #[error("Invalid node signature for address {address}")]
     InvalidNodeSignature { address: RewardsAddress },
     #[error("Timestamp mismatch for node {address}: expected {expected}, got {got}")]
@@ -75,9 +74,6 @@ pub enum MerklePaymentVerificationError {
         got: usize,
     },
 }
-
-/// Number of candidate nodes per pool (provides redundancy)
-pub const CANDIDATES_PER_POOL: usize = 20;
 
 /// A node's signed quote for potential reward eligibility
 ///
@@ -189,14 +185,14 @@ pub struct MerklePaymentCandidatePool {
     /// The midpoint proof from ant-evm's merkle_tree module
     pub midpoint_proof: MidpointProof,
 
-    /// Candidate nodes for this pool (should be 20 nodes)
+    /// Candidate nodes for this pool (exactly 20 nodes)
     /// Provides redundancy - only 'depth' of these will be selected as winners
-    pub candidate_nodes: Vec<MerklePaymentCandidateNode>,
+    pub candidate_nodes: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL],
 }
 
 impl MerklePaymentCandidatePool {
     /// Compute deterministic hash for on-chain storage key
-    pub fn hash(&self) -> XorName {
+    pub fn hash(&self) -> PoolHash {
         let mut bytes = Vec::new();
 
         // Hash of the intersection proof
@@ -210,19 +206,37 @@ impl MerklePaymentCandidatePool {
             bytes.extend_from_slice(&node.to_bytes());
         }
 
-        XorName::from_content(&bytes)
+        XorName::from_content(&bytes).0
     }
 
     /// Convert to minimal commitment for smart contract submission
     pub fn to_commitment(&self) -> PoolCommitment {
+        let candidates: [CandidateNode; CANDIDATES_PER_POOL] =
+            self.candidate_nodes.clone().map(|node| CandidateNode {
+                rewards_address: node.reward_address,
+                metrics: node.quoting_metrics.clone(),
+            });
+
         PoolCommitment {
             pool_hash: self.hash(),
-            candidate_addresses: self
-                .candidate_nodes
-                .iter()
-                .map(|node| node.reward_address)
-                .collect(),
+            candidates,
         }
+    }
+
+    /// Helper function for PoolCommitment verification
+    ///
+    /// This verifies that a commitment matches a pool and that the pool signatures are valid.
+    pub fn verify_commitment(
+        &self,
+        commitment: &PoolCommitment,
+        merkle_payment_timestamp: u64,
+    ) -> Result<(), MerklePaymentVerificationError> {
+        self.verify_signatures(merkle_payment_timestamp)?;
+        let expected_commitment = self.to_commitment();
+        if commitment != &expected_commitment {
+            return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
+        }
+        Ok(())
     }
 
     /// Get the addresses of the candidate nodes
@@ -236,24 +250,15 @@ impl MerklePaymentCandidatePool {
     /// Verify that the signatures in the candidate pool are valid
     ///
     /// Checks:
-    /// 1. Correct number of candidate nodes [`CANDIDATES_PER_POOL`]
-    /// 2. All node signatures are valid
-    /// 3. All timestamps match the merkle payment timestamp
-    /// 4. All nodes quote the same data_type and data_size
+    /// 1. All node signatures are valid
+    /// 2. All timestamps match the merkle payment timestamp
+    /// 3. All nodes quote the same data_type and data_size
     ///
     /// It does not verify the pool branch proof.
     pub fn verify_signatures(
         &self,
         merkle_payment_timestamp: u64,
     ) -> Result<(), MerklePaymentVerificationError> {
-        // Verify correct number of candidates
-        if self.candidate_nodes.len() != CANDIDATES_PER_POOL {
-            return Err(MerklePaymentVerificationError::WrongCandidateCount {
-                expected: CANDIDATES_PER_POOL,
-                got: self.candidate_nodes.len(),
-            });
-        }
-
         // Verify all node signatures
         for node in &self.candidate_nodes {
             if !node.verify_signature() {
@@ -303,35 +308,6 @@ impl MerklePaymentCandidatePool {
     }
 }
 
-/// Minimal pool commitment for smart contract submission
-/// Contains only what's needed on-chain, with cryptographic commitment to full off-chain data
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct PoolCommitment {
-    /// Hash of the full [MerklePaymentCandidatePool] (cryptographic commitment)
-    /// This commits to the intersection proof and all node signatures
-    pub pool_hash: XorName,
-
-    /// Reward addresses of candidate nodes (20 nodes per pool)
-    /// Smart contract selects winners from these addresses
-    pub candidate_addresses: Vec<RewardsAddress>,
-}
-
-impl PoolCommitment {
-    /// Verify that the commitment matches the pool and that the pool signatures are valid
-    pub fn verify_commitment(
-        &self,
-        pool: &MerklePaymentCandidatePool,
-        merkle_payment_timestamp: u64,
-    ) -> Result<(), MerklePaymentVerificationError> {
-        pool.verify_signatures(merkle_payment_timestamp)?;
-        let commitment = pool.to_commitment();
-        if self != &commitment {
-            return Err(MerklePaymentVerificationError::CommitmentDoesNotMatchPool);
-        }
-        Ok(())
-    }
-}
-
 /// Data package sent from client to node for data storage and payment verification
 ///
 /// Contains everything a node needs to verify:
@@ -366,7 +342,7 @@ impl MerklePaymentProof {
     }
 
     /// Get the hash of the winner pool (used to query smart contract for payment info)
-    pub fn winner_pool_hash(&self) -> XorName {
+    pub fn winner_pool_hash(&self) -> PoolHash {
         self.winner_pool.hash()
     }
 
@@ -431,7 +407,7 @@ impl MerklePaymentProof {
         &self,
         smart_contract_depth: u8,
         smart_contract_timestamp: u64,
-        smart_contract_pool_hash: &XorName,
+        smart_contract_pool_hash: &PoolHash,
         smart_contract_paid_nodes: &[(RewardsAddress, usize)],
     ) -> Result<(), MerklePaymentVerificationError> {
         // Verify the winner pool signatures and timestamps first
@@ -477,7 +453,6 @@ impl MerklePaymentProof {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::merkle_payments::disk_contract::DiskMerklePaymentContract;
     use crate::merkle_payments::merkle_tree::MerkleTree;
     use evmlib::quoting_metrics::QuotingMetrics;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -501,6 +476,46 @@ mod tests {
             network_density: Some([node_id as u8; 32]),
             network_size: Some(1000),
         }
+    }
+
+    /// Helper to create an array of CANDIDATES_PER_POOL test nodes with unique addresses
+    fn create_test_candidate_nodes(
+        timestamp: u64,
+    ) -> [MerklePaymentCandidateNode; CANDIDATES_PER_POOL] {
+        std::array::from_fn(|i| {
+            let keypair = Keypair::generate_ed25519();
+            MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node")
+        })
+    }
+
+    /// Helper to create an array of CANDIDATES_PER_POOL test nodes and return their PeerIds
+    fn create_test_candidate_nodes_with_peer_ids(
+        timestamp: u64,
+    ) -> (
+        [MerklePaymentCandidateNode; CANDIDATES_PER_POOL],
+        Vec<PeerId>,
+    ) {
+        let mut peer_ids = Vec::with_capacity(CANDIDATES_PER_POOL);
+        let nodes = std::array::from_fn(|i| {
+            let keypair = Keypair::generate_ed25519();
+            let peer_id = keypair.public().to_peer_id();
+            let node = MerklePaymentCandidateNode::new(
+                &keypair,
+                create_mock_quoting_metrics(i),
+                RewardsAddress::from([i as u8; 20]),
+                timestamp,
+            )
+            .expect("Failed to create candidate node");
+            peer_ids.push(peer_id);
+            node
+        });
+        (nodes, peer_ids)
     }
 
     #[test]
@@ -639,23 +654,12 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create candidate nodes for this pool
-        let mut candidate_nodes = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-        }
+        // Create candidate nodes array directly
+        let candidate_nodes = create_test_candidate_nodes(timestamp);
 
         let pool = MerklePaymentCandidatePool {
             midpoint_proof: reward_pool.clone(),
-            candidate_nodes: candidate_nodes.clone(),
+            candidate_nodes,
         };
 
         // Create commitment from pool
@@ -663,7 +667,7 @@ mod tests {
 
         // Verify commitment matches pool
         assert!(
-            commitment.verify_commitment(&pool, timestamp).is_ok(),
+            pool.verify_commitment(&commitment, timestamp).is_ok(),
             "Commitment should verify against original pool"
         );
 
@@ -674,28 +678,28 @@ mod tests {
             "Commitment pool_hash should match pool.hash()"
         );
 
-        // Test 2: Verify addresses match
-        let expected_addresses: Vec<RewardsAddress> = pool
-            .candidate_nodes
-            .iter()
-            .map(|node| node.reward_address)
-            .collect();
+        // Test 2: Verify candidates match
+        let expected_candidates: [CandidateNode; CANDIDATES_PER_POOL] =
+            pool.candidate_nodes.clone().map(|node| CandidateNode {
+                rewards_address: node.reward_address,
+                metrics: node.quoting_metrics.clone(),
+            });
         assert_eq!(
-            commitment.candidate_addresses, expected_addresses,
-            "Commitment addresses should match pool node addresses"
+            commitment.candidates, expected_candidates,
+            "Commitment candidates should match pool nodes"
         );
         assert_eq!(
-            commitment.candidate_addresses.len(),
+            commitment.candidates.len(),
             CANDIDATES_PER_POOL,
-            "Should have exactly {CANDIDATES_PER_POOL} candidate addresses",
+            "Should have exactly {CANDIDATES_PER_POOL} candidates",
         );
 
         // Test 3: Tamper with pool - verification should fail
         let mut tampered_pool = pool.clone();
         tampered_pool.candidate_nodes[0].reward_address = RewardsAddress::from([0xFF; 20]);
         assert!(
-            commitment
-                .verify_commitment(&tampered_pool, timestamp)
+            tampered_pool
+                .verify_commitment(&commitment, timestamp)
                 .is_err(),
             "Commitment should not verify against tampered pool"
         );
@@ -707,29 +711,20 @@ mod tests {
             "Tampered pool should have different hash"
         );
         assert_ne!(
-            commitment.candidate_addresses[0], tampered_commitment.candidate_addresses[0],
+            commitment.candidates[0].rewards_address,
+            tampered_commitment.candidates[0].rewards_address,
             "Tampered pool should have different addresses"
         );
 
-        // Test 5: Verify wrong number of candidates fails
-        let mut wrong_count_pool = pool.clone();
-        wrong_count_pool.candidate_nodes.pop();
-        assert!(
-            commitment
-                .verify_commitment(&wrong_count_pool, timestamp)
-                .is_err(),
-            "Commitment should not verify pool with wrong candidate count"
-        );
-
-        // Test 6: Verify determinism - same pool generates same commitment
+        // Test 5: Verify determinism - same pool generates same commitment
         let commitment2 = pool.to_commitment();
         assert_eq!(
             commitment.pool_hash, commitment2.pool_hash,
             "Same pool should generate same commitment hash"
         );
         assert_eq!(
-            commitment.candidate_addresses, commitment2.candidate_addresses,
-            "Same pool should generate same addresses"
+            commitment.candidates, commitment2.candidates,
+            "Same pool should generate same candidates"
         );
     }
 
@@ -746,23 +741,12 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create valid candidate nodes
-        let mut candidate_nodes = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-        }
+        // Create candidate nodes array directly
+        let candidate_nodes = create_test_candidate_nodes(timestamp);
 
         let pool = MerklePaymentCandidatePool {
             midpoint_proof: reward_pool.clone(),
-            candidate_nodes: candidate_nodes.clone(),
+            candidate_nodes,
         };
 
         // Test 1: Valid pool should verify
@@ -771,25 +755,7 @@ mod tests {
             "Valid pool should verify successfully"
         );
 
-        // Test 2: Pool with wrong number of candidates should fail
-        let mut wrong_count_pool = pool.clone();
-        wrong_count_pool.candidate_nodes.pop();
-        assert!(
-            wrong_count_pool.verify_signatures(timestamp).is_err(),
-            "Pool with wrong candidate count should fail verification"
-        );
-
-        // Test 3: Pool with too many candidates should fail
-        let mut too_many_pool = pool.clone();
-        too_many_pool
-            .candidate_nodes
-            .push(candidate_nodes[0].clone());
-        assert!(
-            too_many_pool.verify_signatures(timestamp).is_err(),
-            "Pool with too many candidates should fail verification"
-        );
-
-        // Test 4: Pool with invalid signature should fail
+        // Test 2: Pool with invalid signature should fail
         let mut invalid_sig_pool = pool.clone();
         invalid_sig_pool.candidate_nodes[0].signature = vec![0xFF; 64]; // Corrupt signature
         assert!(
@@ -797,22 +763,12 @@ mod tests {
             "Pool with invalid signature should fail verification"
         );
 
-        // Test 5: Pool with tampered node data should fail
+        // Test 3: Pool with tampered node data should fail
         let mut tampered_pool = pool.clone();
         tampered_pool.candidate_nodes[0].reward_address = RewardsAddress::from([0xFF; 20]);
         assert!(
             tampered_pool.verify_signatures(timestamp).is_err(),
             "Pool with tampered node data should fail verification (signature mismatch)"
-        );
-
-        // Test 6: Empty pool should fail
-        let empty_pool = MerklePaymentCandidatePool {
-            midpoint_proof: reward_pool.clone(),
-            candidate_nodes: vec![],
-        };
-        assert!(
-            empty_pool.verify_signatures(timestamp).is_err(),
-            "Empty pool should fail verification"
         );
     }
 
@@ -829,23 +785,12 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create candidate nodes with identical timestamps
-        let mut candidate_nodes = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-        }
+        // Create candidate nodes array directly
+        let candidate_nodes = create_test_candidate_nodes(timestamp);
 
         let pool = MerklePaymentCandidatePool {
             midpoint_proof: reward_pool.clone(),
-            candidate_nodes: candidate_nodes.clone(),
+            candidate_nodes,
         };
 
         // Valid pool with identical timestamps should verify
@@ -941,12 +886,12 @@ mod tests {
 
         let pool1 = MerklePaymentCandidatePool {
             midpoint_proof: reward_pool.clone(),
-            candidate_nodes: vec![node1.clone(); CANDIDATES_PER_POOL],
+            candidate_nodes: std::array::from_fn(|_| node1.clone()),
         };
 
         let pool2 = MerklePaymentCandidatePool {
             midpoint_proof: reward_pool.clone(),
-            candidate_nodes: vec![node2.clone(); CANDIDATES_PER_POOL],
+            candidate_nodes: std::array::from_fn(|_| node2.clone()),
         };
 
         assert_eq!(
@@ -969,22 +914,13 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create 20 candidate nodes with different addresses and PeerIds
-        let mut candidate_nodes = Vec::new();
-        let mut expected_peer_ids = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let peer_id = keypair.public().to_peer_id();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-            expected_peer_ids.push((RewardsAddress::from([i as u8; 20]), peer_id));
-        }
+        // Create candidate nodes array and track their PeerIds
+        let (candidate_nodes, peer_ids) = create_test_candidate_nodes_with_peer_ids(timestamp);
+        let expected_peer_ids: Vec<_> = peer_ids
+            .iter()
+            .enumerate()
+            .map(|(i, pid)| (RewardsAddress::from([i as u8; 20]), *pid))
+            .collect();
 
         let proof = MerklePaymentProof::new(
             addresses[0],
@@ -1033,19 +969,8 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create 20 candidate nodes
-        let mut candidate_nodes = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-        }
+        // Create candidate nodes array directly
+        let candidate_nodes = create_test_candidate_nodes(timestamp);
 
         let proof = MerklePaymentProof::new(
             addresses[0],
@@ -1087,19 +1012,8 @@ mod tests {
         let reward_candidates = tree.reward_candidates(timestamp).unwrap();
         let reward_pool = &reward_candidates[0];
 
-        // Create 20 candidate nodes
-        let mut candidate_nodes = Vec::new();
-        for i in 0..CANDIDATES_PER_POOL {
-            let keypair = Keypair::generate_ed25519();
-            let node = MerklePaymentCandidateNode::new(
-                &keypair,
-                create_mock_quoting_metrics(i),
-                RewardsAddress::from([i as u8; 20]),
-                timestamp,
-            )
-            .expect("Failed to create candidate node");
-            candidate_nodes.push(node);
-        }
+        // Create candidate nodes array directly
+        let candidate_nodes = create_test_candidate_nodes(timestamp);
 
         let proof = MerklePaymentProof::new(
             addresses[0],
@@ -1186,7 +1100,9 @@ mod tests {
             tree.generate_address_proof(0, addresses[0]).unwrap(),
             MerklePaymentCandidatePool {
                 midpoint_proof: reward_pool.clone(),
-                candidate_nodes,
+                candidate_nodes: candidate_nodes
+                    .try_into()
+                    .expect("Should have exactly CANDIDATES_PER_POOL nodes"),
             },
         );
 
@@ -1257,7 +1173,9 @@ mod tests {
             tree.generate_address_proof(0, addresses[0]).unwrap(),
             MerklePaymentCandidatePool {
                 midpoint_proof: reward_pool.clone(),
-                candidate_nodes,
+                candidate_nodes: candidate_nodes
+                    .try_into()
+                    .expect("Should have exactly CANDIDATES_PER_POOL nodes"),
             },
         );
 
@@ -1311,7 +1229,9 @@ mod tests {
             tree.generate_address_proof(0, addresses[0]).unwrap(),
             MerklePaymentCandidatePool {
                 midpoint_proof: reward_pool.clone(),
-                candidate_nodes,
+                candidate_nodes: candidate_nodes
+                    .try_into()
+                    .expect("Should have exactly CANDIDATES_PER_POOL nodes"),
             },
         );
 
@@ -1360,7 +1280,9 @@ mod tests {
             tree.generate_address_proof(0, addresses[0]).unwrap(),
             MerklePaymentCandidatePool {
                 midpoint_proof: reward_pool.clone(),
-                candidate_nodes,
+                candidate_nodes: candidate_nodes
+                    .try_into()
+                    .expect("Should have exactly CANDIDATES_PER_POOL nodes"),
             },
         );
 
@@ -1463,7 +1385,9 @@ mod tests {
 
             let pool = MerklePaymentCandidatePool {
                 midpoint_proof: reward_pool.clone(),
-                candidate_nodes,
+                candidate_nodes: candidate_nodes
+                    .try_into()
+                    .expect("Should have exactly CANDIDATES_PER_POOL nodes"),
             };
             all_candidate_pools.push(pool);
         }
@@ -1475,10 +1399,12 @@ mod tests {
             .collect();
 
         let temp_dir = TempDir::new().unwrap();
-        let contract =
-            DiskMerklePaymentContract::new_with_path(temp_dir.path().to_path_buf()).unwrap();
+        let contract = evmlib::merkle_batch_payment::DiskMerklePaymentContract::new_with_path(
+            temp_dir.path().to_path_buf(),
+        )
+        .unwrap();
 
-        let winner_pool_hash = contract
+        let (winner_pool_hash, _amount) = contract
             .pay_for_merkle_tree(depth, pool_commitments.clone(), merkle_payment_timestamp)
             .unwrap();
 
@@ -1499,8 +1425,8 @@ mod tests {
             .expect("Winner pool should be found");
 
         assert!(
-            winner_commitment
-                .verify_commitment(winner_pool, merkle_payment_timestamp)
+            winner_pool
+                .verify_commitment(winner_commitment, merkle_payment_timestamp)
                 .is_ok(),
             "Winner commitment should verify against full pool data"
         );

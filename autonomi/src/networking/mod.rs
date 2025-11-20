@@ -103,6 +103,8 @@ pub enum NetworkError {
     GetQuoteError(String),
     #[error("Invalid quote: {0}")]
     InvalidQuote(String),
+    #[error("Invalid Merkle candidate node: {0}")]
+    InvalidNodeMerkleCandidate(String),
     #[error(
         "Failed to get enough quotes: {got_quotes}/{CLOSE_GROUP_SIZE} quotes, got {record_exists_responses} record exists responses, and {errors_len} errors: {errors:?}"
     )]
@@ -478,6 +480,81 @@ impl Network {
             .await
             .map_err(|_| NetworkError::NetworkDriverOffline)?;
         rx.await?
+    }
+
+    /// Get a Merkle candidate quote from a specific peer
+    /// Used for Merkle batch payment system
+    ///
+    /// # Arguments
+    /// * `addr` - The target address (from MidpointProof::address())
+    /// * `peer` - The peer to request the quote from
+    /// * `data_type` - The data type being uploaded
+    /// * `data_size` - The data size
+    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
+    ///
+    /// # Returns
+    /// * `MerklePaymentCandidateNode` - Signed quote from the peer
+    ///
+    /// # Validation
+    /// * Verifies the signature is valid
+    /// * Verifies the timestamp matches the requested timestamp
+    /// * Verifies data_type and data_size match the requested values
+    pub async fn get_merkle_candidate_quote(
+        &self,
+        addr: NetworkAddress,
+        peer: PeerInfo,
+        data_type: u32,
+        data_size: usize,
+        merkle_payment_timestamp: u64,
+    ) -> Result<ant_evm::merkle_payments::MerklePaymentCandidateNode, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetMerkleCandidateQuote {
+            addr,
+            peer,
+            data_type,
+            data_size,
+            merkle_payment_timestamp,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        let candidate = rx.await??;
+
+        // Validate the candidate node
+        // 1. Verify signature
+        if !candidate.verify_signature() {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(
+                "Invalid signature".to_string(),
+            ));
+        }
+
+        // 2. Verify timestamp matches
+        if candidate.merkle_payment_timestamp != merkle_payment_timestamp {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Timestamp mismatch: expected {}, got {}",
+                merkle_payment_timestamp, candidate.merkle_payment_timestamp
+            )));
+        }
+
+        // 3. Verify data_type matches
+        if candidate.quoting_metrics.data_type != data_type {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Data type mismatch: expected {}, got {}",
+                data_type, candidate.quoting_metrics.data_type
+            )));
+        }
+
+        // 4. Verify data_size matches
+        if candidate.quoting_metrics.data_size != data_size {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Data size mismatch: expected {}, got {}",
+                data_size, candidate.quoting_metrics.data_size
+            )));
+        }
+
+        Ok(candidate)
     }
 
     /// Get the quotes for a Record from the closest Peers to that address on the Network

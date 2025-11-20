@@ -346,7 +346,7 @@ async fn encrypt_file_in_memory(
     let data = Bytes::from(data);
 
     if data.len() < 3 {
-        let err_msg = format!("Skipping file {file_path:?}, as it is smaller than 3 bytes");
+        let err_msg = format!("Cannot encrypt file {file_path:?}, as it is smaller than 3 bytes");
         return Err(err_msg);
     }
 
