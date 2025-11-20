@@ -49,9 +49,7 @@ pub struct StreamProgressState {
 }
 
 /// Creates a data iterator from a file path that reads the file in chunks
-fn create_file_data_iterator(
-    file_path: &str,
-) -> std::io::Result<impl Iterator<Item = Bytes>> {
+fn create_file_data_iterator(file_path: &str) -> std::io::Result<impl Iterator<Item = Bytes>> {
     use std::fs::File;
     use std::io::{BufReader, Read};
 

@@ -1267,7 +1267,7 @@ impl Node {
             }
         };
 
-        // Take only the 30 closest nodes
+        // Take only the TOPOLOGY_CHECK_NODE_COUNT closest nodes
         let closest_peers: Vec<_> = all_closest_peers
             .into_iter()
             .take(TOPOLOGY_CHECK_NODE_COUNT)

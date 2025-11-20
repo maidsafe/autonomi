@@ -361,8 +361,6 @@ async fn upload_dir_merkle(
             UploadError::PutError(PutError::MerkleBatch(e))
         })?;
 
-    // Display the Merkle payment cost
-    println!("Total cost: {amount_paid} AttoTokens");
     info!("Merkle payment cost: {amount_paid}");
 
     // Create payment option for archive uploads

@@ -12,6 +12,7 @@ use crate::Client;
 use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
 use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::files::Metadata;
+use crate::client::{ClientEvent, UploadSummary};
 use crate::self_encryption::{EncryptionStream, MAX_CHUNK_SIZE, encrypt_directory_files};
 use ant_evm::{AttoTokens, EvmWallet};
 use ant_protocol::storage::DataTypes;
@@ -300,23 +301,19 @@ impl Client {
         let mut results: Vec<(PathBuf, DataMapChunk, Metadata)> = Vec::new();
         for (file_index, file) in upload_streams.into_iter().enumerate() {
             // Extract metadata before upload
+            let file_num = file_index + 1;
             let relative_path = file.relative_path.clone();
             let metadata = file.metadata.clone();
             let file_path = file.file_path.clone();
             let file_chunk_count = *receipt.file_chunk_counts.get(&file_path).unwrap_or(&0);
 
             debug!(
-                "merkle payment: files_put uploading file {}/{total_files}: {file_path:?} ({file_chunk_count} chunks)",
-                file_index + 1
+                "merkle payment: files_put uploading file {file_num}/{total_files}: {file_path:?} ({file_chunk_count} chunks)"
             );
 
             #[cfg(feature = "loud")]
             println!(
-                "[{}/{}] Uploading {} chunks from: {}",
-                file_index + 1,
-                total_files,
-                file_chunk_count,
-                file_path
+                "[File {file_num}/{total_files}] Uploading {file_chunk_count} chunks from: {file_path}"
             );
             info!("Uploading {file_chunk_count} chunks from file: {file_path:?}");
 
@@ -335,16 +332,30 @@ impl Client {
                     receipt: receipt.clone(),
                 })?;
 
-            let file_num = file_index + 1;
             debug!("merkle payment: files_put successfully uploaded file {file_num}");
             #[cfg(feature = "loud")]
-            println!("  ✓ File {file_num}/{total_files} uploaded successfully");
+            println!("[File {file_num}/{total_files}] uploaded successfully");
             results.push((relative_path, datamap, metadata));
         }
 
         debug!("merkle payment: files_put all files uploaded successfully");
         #[cfg(feature = "loud")]
         println!("✓ All {total_files} files uploaded successfully!");
+
+        // Send upload completion event
+        let total_chunks: usize = receipt.file_chunk_counts.values().sum();
+        if let Some(sender) = &self.client_event_sender {
+            let summary = UploadSummary {
+                records_paid: total_chunks,
+                records_already_paid: 0,
+                tokens_spent: receipt.amount_paid.as_atto(),
+            };
+
+            if let Err(err) = sender.send(ClientEvent::UploadComplete(summary)).await {
+                error!("Failed to send upload completion event: {err:?}");
+            }
+        }
+
         Ok((receipt.amount_paid, results))
     }
 }
@@ -358,7 +369,7 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
     #[cfg(feature = "loud")]
     let start = std::time::Instant::now();
     #[cfg(feature = "loud")]
-    println!("Begin encrypting {estimated_total} chunks...");
+    println!("Begin encrypting ~{estimated_total} chunks...");
     while let Some(batch) = encryption_stream.next_batch(xorname_collection_batch_size) {
         let batch_len = batch.len();
         total += batch_len;
