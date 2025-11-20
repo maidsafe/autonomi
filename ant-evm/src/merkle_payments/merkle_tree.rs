@@ -12,13 +12,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use xor_name::XorName;
 
-/// Maximum tree depth (supports 65,536 addresses = 256GB)
-pub const MAX_MERKLE_DEPTH: u8 = 16;
+/// Maximum tree depth
+pub use evmlib::merkle_batch_payment::MAX_MERKLE_DEPTH;
 
 /// Minimum number of leaves (addresses) for a Merkle tree
 pub const MIN_LEAVES: usize = 2;
 
-/// Maximum number of leaves (2^16)
+/// Maximum number of leaves (2^MAX_MERKLE_DEPTH)
 pub const MAX_LEAVES: usize = 1 << MAX_MERKLE_DEPTH;
 
 /// Maximum age of a Merkle payment (one week in seconds)
@@ -1056,7 +1056,7 @@ mod tests {
 
     #[test]
     fn test_power_of_two_leaves() {
-        for power in 1..=10 {
+        for power in 1..=MAX_MERKLE_DEPTH {
             let count = 1 << power; // 2^power
             let leaves = make_test_leaves(count);
             let tree = MerkleTree::from_xornames(leaves).unwrap();

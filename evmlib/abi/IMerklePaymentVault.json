@@ -231,9 +231,9 @@
                 "type": "tuple"
               }
             ],
-            "internalType": "struct IMerklePaymentVault.CandidateNode[20]",
+            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
             "name": "candidates",
-            "type": "tuple[20]"
+            "type": "tuple[16]"
           }
         ],
         "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
@@ -343,9 +343,9 @@
                 "type": "tuple"
               }
             ],
-            "internalType": "struct IMerklePaymentVault.CandidateNode[20]",
+            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
             "name": "candidates",
-            "type": "tuple[20]"
+            "type": "tuple[16]"
           }
         ],
         "internalType": "struct IMerklePaymentVault.PoolCommitment[]",

@@ -72,6 +72,8 @@ impl Client {
             ));
         }
 
+        #[cfg(feature = "loud")]
+        println!("Encrypting files to calculate cost...");
         // Get encryption streams to determine chunk count and addresses
         let pay_streams: Vec<EncryptionStream> = encrypt_directory_files(path.clone(), is_public)
             .await
@@ -94,10 +96,15 @@ impl Client {
             all_xor_names.len()
         );
 
+        #[cfg(feature = "loud")]
+        println!("Encrypted into {} chunks", all_xor_names.len());
+
         // Build Merkle tree and get candidate pools (same as actual payment)
         use ant_evm::merkle_payments::MerkleTree;
         use std::time::{SystemTime, UNIX_EPOCH};
 
+        #[cfg(feature = "loud")]
+        println!("Building Merkle tree...");
         let tree = MerkleTree::from_xornames(all_xor_names.clone())
             .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::MerkleTree(e)))?;
         let depth = tree.depth();
@@ -115,6 +122,8 @@ impl Client {
             midpoint_proofs.len()
         );
 
+        #[cfg(feature = "loud")]
+        println!("Creating reward candidate pools...");
         // Query network for candidate pools with signature validation
         let candidate_pools = self
             .build_candidate_pools(midpoint_proofs, DataTypes::Chunk, MAX_CHUNK_SIZE)
@@ -131,6 +140,8 @@ impl Client {
             .map(|pool| pool.to_commitment())
             .collect();
 
+        #[cfg(feature = "loud")]
+        println!("Estimating cost...");
         // Call wallet's estimate function which calls the contract's view function
         let estimated_cost_raw = wallet
             .estimate_merkle_payment_cost(depth, &pool_commitments, merkle_payment_timestamp)
@@ -154,7 +165,11 @@ impl Client {
         wallet: &EvmWallet,
     ) -> Result<MerklePaymentReceipt, MerkleFilePutError> {
         debug!("merkle payment: file_pay starting for path: {path:?}, is_public: {is_public}");
+        #[cfg(feature = "loud")]
+        println!("Paying for {path:?}...");
 
+        #[cfg(feature = "loud")]
+        println!("Encrypting files for payment...");
         // Get encryption streams for payment
         let pay_streams: Vec<EncryptionStream> = encrypt_directory_files(path.clone(), is_public)
             .await
@@ -167,6 +182,8 @@ impl Client {
             pay_streams.len()
         );
 
+        #[cfg(feature = "loud")]
+        println!("Performing first encryption pass to build merkle tree...");
         // Pay for the all xornames, consuming the pay_streams
         let xor_names_for_each_file = pay_streams
             .into_iter()
@@ -193,6 +210,12 @@ impl Client {
             all_xor_names.len()
         );
 
+        #[cfg(feature = "loud")]
+        println!(
+            "Submitting payment for {} chunks in {} files...",
+            all_xor_names.len(),
+            file_chunk_counts.len()
+        );
         let mut receipt = self
             .pay_for_merkle_batch(
                 DataTypes::Chunk,
@@ -209,6 +232,8 @@ impl Client {
         // Add file chunk counts to receipt
         receipt.file_chunk_counts = file_chunk_counts;
         debug!("merkle payment: file_pay completed successfully");
+        #[cfg(feature = "loud")]
+        println!("✓ Payment successful: {} paid", receipt.amount_paid);
 
         Ok(receipt)
     }
@@ -247,12 +272,21 @@ impl Client {
                     "merkle payment: files_put using cached receipt with {} proofs",
                     receipt.proofs.len()
                 );
+                #[cfg(feature = "loud")]
+                println!(
+                    "Using cached payment receipt with {} proofs",
+                    receipt.proofs.len()
+                );
                 receipt
             }
         };
 
+        #[cfg(feature = "loud")]
+        println!("Starting upload phase...");
         // Get encryption streams for upload
         debug!("merkle payment: files_put encrypting directory files for upload");
+        #[cfg(feature = "loud")]
+        println!("Encrypting files for upload...");
         let upload_streams: Vec<EncryptionStream> = encrypt_directory_files(path, is_public)
             .await
             .map_err(|e| MerkleFilePutError::Encryption(e.to_string()))?
@@ -277,7 +311,13 @@ impl Client {
             );
 
             #[cfg(feature = "loud")]
-            println!("Uploading {file_chunk_count} chunks from file: {file_path:?}");
+            println!(
+                "[{}/{}] Uploading {} chunks from: {}",
+                file_index + 1,
+                total_files,
+                file_chunk_count,
+                file_path
+            );
             info!("Uploading {file_chunk_count} chunks from file: {file_path:?}");
 
             // Upload the chunks
@@ -297,10 +337,14 @@ impl Client {
 
             let file_num = file_index + 1;
             debug!("merkle payment: files_put successfully uploaded file {file_num}");
+            #[cfg(feature = "loud")]
+            println!("  ✓ File {file_num}/{total_files} uploaded successfully");
             results.push((relative_path, datamap, metadata));
         }
 
         debug!("merkle payment: files_put all files uploaded successfully");
+        #[cfg(feature = "loud")]
+        println!("✓ All {total_files} files uploaded successfully!");
         Ok((receipt.amount_paid, results))
     }
 }
@@ -309,10 +353,17 @@ impl Client {
 fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec<XorName> {
     let mut xor_names: Vec<XorName> = Vec::new();
     let xorname_collection_batch_size: usize = std::cmp::max(32, *CHUNK_UPLOAD_BATCH_SIZE);
+    let mut total = 0;
+    let estimated_total = encryption_stream.total_chunks();
+    println!("Encrypting {estimated_total} chunks");
     while let Some(batch) = encryption_stream.next_batch(xorname_collection_batch_size) {
+        let batch_len = batch.len();
+        total += batch_len;
         for chunk in batch {
             xor_names.push(*chunk.name());
         }
+        #[cfg(feature = "loud")]
+        println!("Encrypted {total}/{estimated_total}");
     }
     xor_names
 }

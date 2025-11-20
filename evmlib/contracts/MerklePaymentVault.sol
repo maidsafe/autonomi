@@ -37,10 +37,10 @@ contract MerklePaymentVault {
         QuotingMetrics metrics;
     }
 
-    /// Pool commitment with 20 candidates (always)
+    /// Pool commitment with CANDIDATES_PER_POOL candidates (always)
     struct PoolCommitment {
         bytes32 poolHash;           // Cryptographic commitment to full pool data
-        CandidateNode[20] candidates; // Fixed size: always 20
+        CandidateNode[16] candidates; // Fixed size: always CANDIDATES_PER_POOL
     }
 
     /// Payment information stored on-chain
@@ -53,7 +53,7 @@ contract MerklePaymentVault {
     /// Individual paid node record
     struct PaidNode {
         address rewardsAddress;
-        uint8 poolIndex;  // Index in winner pool (0-19)
+        uint8 poolIndex;  // Index in winner pool (0-15)
     }
 
     // ============ State ============
@@ -65,10 +65,10 @@ contract MerklePaymentVault {
     mapping(bytes32 => PaymentInfo) public payments;
 
     /// Maximum supported Merkle tree depth
-    uint8 public constant MAX_MERKLE_DEPTH = 16;
+    uint8 public constant MAX_MERKLE_DEPTH = 12;
 
     /// Number of candidates per pool (fixed)
-    uint8 public constant CANDIDATES_PER_POOL = 20;
+    uint8 public constant CANDIDATES_PER_POOL = 16;
 
     // ============ Events ============
 
@@ -124,7 +124,7 @@ contract MerklePaymentVault {
             revert WrongPoolCount(expectedPools, poolCommitments.length);
         }
 
-        // Validate each pool has exactly 20 candidates
+        // Validate each pool has exactly CANDIDATES_PER_POOL candidates
         for (uint256 i = 0; i < poolCommitments.length; i++) {
             if (poolCommitments[i].candidates.length != CANDIDATES_PER_POOL) {
                 revert WrongCandidateCount(
@@ -149,7 +149,7 @@ contract MerklePaymentVault {
             revert PaymentAlreadyExists(winnerPoolHash);
         }
 
-        // Calculate median price from all 20 candidates
+        // Calculate median price from all CANDIDATES_PER_POOL candidates
         uint256 medianPrice = _calculateMedianPrice(winnerPool.candidates);
         totalAmount = medianPrice * depth;
 
@@ -231,7 +231,7 @@ contract MerklePaymentVault {
             revert WrongPoolCount(expectedPools, poolCommitments.length);
         }
 
-        // Validate each pool has exactly 20 candidates
+        // Validate each pool has exactly CANDIDATES_PER_POOL candidates
         for (uint256 i = 0; i < poolCommitments.length; i++) {
             if (poolCommitments[i].candidates.length != CANDIDATES_PER_POOL) {
                 revert WrongCandidateCount(
@@ -250,7 +250,7 @@ contract MerklePaymentVault {
         );
         PoolCommitment calldata winnerPool = poolCommitments[winnerPoolIdx];
 
-        // Calculate median price from all 20 candidates
+        // Calculate median price from all CANDIDATES_PER_POOL candidates
         uint256 medianPrice = _calculateMedianPrice(winnerPool.candidates);
         totalAmount = medianPrice * depth;
 
@@ -296,23 +296,23 @@ contract MerklePaymentVault {
         return uint256(seed) % poolCount;
     }
 
-    /// Calculate median price from 20 candidate quotes
-    function _calculateMedianPrice(CandidateNode[20] calldata candidates)
+    /// Calculate median price from CANDIDATES_PER_POOL candidate quotes
+    function _calculateMedianPrice(CandidateNode[16] calldata candidates)
         internal
         pure
         returns (uint256)
     {
         // Get quote for each candidate
-        uint256[20] memory quotes;
-        for (uint256 i = 0; i < 20; i++) {
+        uint256[16] memory quotes;
+        for (uint256 i = 0; i < 16; i++) {
             quotes[i] = _getQuote(candidates[i].metrics);
         }
 
         // Sort quotes
         _sortQuotes(quotes);
 
-        // Return median (average of 10th and 11th elements, 0-indexed: [9] and [10])
-        return (quotes[9] + quotes[10]) / 2;
+        // Return median (average of 8th and 9th elements, 0-indexed: [7] and [8])
+        return (quotes[7] + quotes[8]) / 2;
     }
 
     /// Calculate quote for a single node based on metrics
@@ -376,9 +376,9 @@ contract MerklePaymentVault {
         return quote;
     }
 
-    /// Sort array of 20 quotes using insertion sort (efficient for small arrays)
-    function _sortQuotes(uint256[20] memory quotes) internal pure {
-        for (uint256 i = 1; i < 20; i++) {
+    /// Sort array of CANDIDATES_PER_POOL quotes using insertion sort (efficient for small arrays)
+    function _sortQuotes(uint256[16] memory quotes) internal pure {
+        for (uint256 i = 1; i < 16; i++) {
             uint256 key = quotes[i];
             uint256 j = i;
             while (j > 0 && quotes[j - 1] > key) {
@@ -396,7 +396,7 @@ contract MerklePaymentVault {
         uint64 timestamp
     ) internal view returns (uint8[] memory) {
         uint8[] memory winners = new uint8[](depth);
-        bool[20] memory selected;
+        bool[16] memory selected;
 
         bytes32 seed = keccak256(abi.encodePacked(
             block.prevrandao,
@@ -410,7 +410,7 @@ contract MerklePaymentVault {
         // Select unique random indices
         while (selectedCount < depth && attempts < 100) {
             seed = keccak256(abi.encodePacked(seed, attempts));
-            uint8 idx = uint8(uint256(seed) % 20);
+            uint8 idx = uint8(uint256(seed) % 16);
 
             if (!selected[idx]) {
                 selected[idx] = true;
