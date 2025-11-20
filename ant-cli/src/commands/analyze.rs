@@ -171,11 +171,10 @@ pub async fn analyze(
             }
         });
 
-        let holders_results: Vec<(String, Result<Vec<HolderStatus>>)> =
-            stream::iter(query_tasks)
-                .buffered(*autonomi::client::config::CHUNK_DOWNLOAD_BATCH_SIZE)
-                .collect()
-                .await;
+        let holders_results: Vec<(String, Result<Vec<HolderStatus>>)> = stream::iter(query_tasks)
+            .buffered(*autonomi::client::config::CHUNK_DOWNLOAD_BATCH_SIZE)
+            .collect()
+            .await;
         println!(
             "Completed querying kad::get_record holders for all {} addresses.",
             holders_results.len()
@@ -199,7 +198,8 @@ pub async fn analyze(
     }
 
     if results.len() == 1
-    && let Some((_, analysis)) = results.iter().next() {
+        && let Some((_, analysis)) = results.iter().next()
+    {
         match analysis {
             Ok(analysis) => {
                 println_if!(verbose, "Analysis successful");
@@ -292,7 +292,11 @@ fn try_other_types(addr: &str, verbose: bool) {
 /// Get holders (along query path) status for an address
 ///
 /// Returns a vector of HolderStatus for the given address
-async fn get_holders_status(client: &autonomi::Client, addr: &str, verbose: bool) -> Result<Vec<HolderStatus>> {
+async fn get_holders_status(
+    client: &autonomi::Client,
+    addr: &str,
+    verbose: bool,
+) -> Result<Vec<HolderStatus>> {
     use autonomi::PublicKey;
     use autonomi::chunk::ChunkAddress;
     use autonomi::graph::GraphEntryAddress;
@@ -330,7 +334,10 @@ async fn get_holders_status(client: &autonomi::Client, addr: &str, verbose: bool
         .map(autonomi::networking::Quorum::N)
         .expect("20 is non-zero");
 
-    let (record, holders) = match client.get_record_and_holders(network_addr.clone(), quorum).await {
+    let (record, holders) = match client
+        .get_record_and_holders(network_addr.clone(), quorum)
+        .await
+    {
         Ok((record, holders)) => (record, holders),
         Err(NetworkError::GetRecordTimeout(holders)) => {
             println_if_verbose!("Request timed out, showing partial results");
@@ -813,7 +820,7 @@ fn print_holders(holders_data: HashMap<String, Vec<HolderStatus>>) {
             (first.target_address.clone(), first.size)
         } else {
             println!("No holders of target {addr_str}");
-            continue
+            continue;
         };
 
         // Sort holders by distance to target address

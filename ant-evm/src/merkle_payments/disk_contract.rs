@@ -59,14 +59,26 @@ pub struct OnChainPaymentInfo {
     /// This is the timestamp that all nodes in the pool used for their quotes
     pub merkle_payment_timestamp: u64,
 
-    /// Addresses of the 'depth' nodes that were paid
-    pub paid_node_addresses: Vec<RewardsAddress>,
+    /// Addresses of the 'depth' nodes that were paid along with their indices in the winner pool
+    pub paid_node_addresses: Vec<(RewardsAddress, usize)>,
 }
 
 impl DiskMerklePaymentContract {
-    pub fn new(storage_path: PathBuf) -> Result<Self, SmartContractError> {
+    pub fn new_with_path(storage_path: PathBuf) -> Result<Self, SmartContractError> {
         std::fs::create_dir_all(&storage_path)?;
         Ok(Self { storage_path })
+    }
+
+    /// Create a new contract with the default storage path
+    /// Uses: DATA_DIR/autonomi/merkle_payments/
+    pub fn new() -> Result<Self, SmartContractError> {
+        let storage_path = if let Some(data_dir) = dirs_next::data_dir() {
+            data_dir.join("autonomi").join("merkle_payments")
+        } else {
+            // Fallback to current directory if data_dir is not available
+            PathBuf::from(".autonomi").join("merkle_payments")
+        };
+        Self::new_with_path(storage_path)
     }
 
     /// Submit batch payment (simulates smart contract logic)
@@ -138,22 +150,25 @@ impl DiskMerklePaymentContract {
             winner_node_indices.len()
         );
 
-        // Extract paid node addresses
-        let mut paid_addresses = Vec::new();
+        // Extract paid node addresses, along with their indices
+        let mut paid_node_addresses = Vec::new();
         for (i, &node_idx) in winner_node_indices.iter().enumerate() {
             let addr = winner_pool.candidate_addresses[node_idx];
-            paid_addresses.push(addr);
+            paid_node_addresses.push((addr, node_idx));
             println!("  Node {}: {}", i + 1, addr);
         }
 
-        println!("\nSimulating payment to {} nodes...", paid_addresses.len());
+        println!(
+            "\nSimulating payment to {} nodes...",
+            paid_node_addresses.len()
+        );
         println!("=========================\n");
 
         // Store payment info on 'blockchain' (indexed by winner_pool_hash)
         let info = OnChainPaymentInfo {
             depth,
             merkle_payment_timestamp,
-            paid_node_addresses: paid_addresses,
+            paid_node_addresses,
         };
 
         let file_path = self

@@ -94,6 +94,10 @@ pub enum Query {
         /// Client queries the 20 closest nodes to this target
         /// target = hash(intersection_hash, root, timestamp)
         key: NetworkAddress,
+        /// DataTypes as represented as its `index`
+        data_type: u32,
+        /// Data size of the record
+        data_size: usize,
         /// Merkle payment timestamp (unix seconds)
         /// Node verifies this is not expired/future, then signs its state with it
         merkle_payment_timestamp: u64,
@@ -177,11 +181,13 @@ impl std::fmt::Display for Query {
             }
             Query::GetMerkleCandidateQuote {
                 key,
+                data_type,
+                data_size,
                 merkle_payment_timestamp,
             } => {
                 write!(
                     f,
-                    "Query::GetMerkleCandidateQuote({key:?} timestamp={merkle_payment_timestamp})"
+                    "Query::GetMerkleCandidateQuote({key:?} {data_type} {data_size} timestamp={merkle_payment_timestamp})"
                 )
             }
         }

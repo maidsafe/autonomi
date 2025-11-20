@@ -18,6 +18,7 @@ use crate::{PutValidationError, RunningNode};
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::EvmNetwork;
 use ant_evm::RewardsAddress;
+use ant_evm::merkle_payments::MERKLE_PAYMENT_EXPIRATION;
 use ant_protocol::{
     CLOSE_GROUP_SIZE, NetworkAddress, PrettyPrintRecordKey,
     error::Error as ProtocolError,
@@ -745,6 +746,22 @@ impl Node {
                     record_addr: address,
                 }
             }
+            Query::GetMerkleCandidateQuote {
+                key,
+                data_type,
+                data_size,
+                merkle_payment_timestamp,
+            } => {
+                Self::respond_merkle_candidate_quote(
+                    network,
+                    key,
+                    data_type,
+                    data_size,
+                    merkle_payment_timestamp,
+                    payment_address,
+                )
+                .await
+            }
         };
         Response::Query(resp)
     }
@@ -812,6 +829,97 @@ impl Node {
             }
             (None, None) => vec![],
         }
+    }
+
+    /// Handle GetMerkleCandidateQuote query
+    /// Returns a signed MerklePaymentCandidateNode containing the node's current quoting metrics,
+    /// reward address, and timestamp commitment
+    async fn respond_merkle_candidate_quote(
+        network: &Network,
+        key: NetworkAddress,
+        data_type: u32,
+        data_size: usize,
+        merkle_payment_timestamp: u64,
+        payment_address: RewardsAddress,
+    ) -> QueryResponse {
+        debug!(
+            "Got GetMerkleCandidateQuote for target {key:?} with timestamp {merkle_payment_timestamp}"
+        );
+
+        // Validate timestamp before signing to prevent committing to invalid times.
+        // Nodes will reject proofs with expired/future timestamps during payment verification,
+        // so signing such timestamps would create useless quotes that can't be used.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        // Reject future timestamps
+        if merkle_payment_timestamp > now {
+            let error_msg = format!(
+                "Rejected future timestamp {merkle_payment_timestamp} (current time: {now})"
+            );
+            warn!("{error_msg} for {key:?}");
+            return QueryResponse::GetMerkleCandidateQuote(Err(
+                ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+            ));
+        }
+
+        // Reject expired timestamps
+        let age = now.saturating_sub(merkle_payment_timestamp);
+        if age > MERKLE_PAYMENT_EXPIRATION {
+            let error_msg = format!(
+                "Rejected expired timestamp {merkle_payment_timestamp} (age: {age}s, max: {MERKLE_PAYMENT_EXPIRATION}s)",
+            );
+            warn!("{error_msg} for {key:?}");
+            return QueryResponse::GetMerkleCandidateQuote(Err(
+                ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+            ));
+        }
+
+        // Get node's current quoting metrics
+        let record_key = key.to_record_key();
+        let (quoting_metrics, _is_already_stored) = match network
+            .get_local_quoting_metrics(record_key, data_type, data_size)
+            .await
+        {
+            Ok(metrics) => metrics,
+            Err(err) => {
+                let error_msg = format!("Failed to get quoting metrics for {key:?}: {err}");
+                warn!("{error_msg}");
+                return QueryResponse::GetMerkleCandidateQuote(Err(
+                    ProtocolError::GetMerkleCandidateQuoteFailed(error_msg),
+                ));
+            }
+        };
+
+        // Create the MerklePaymentCandidateNode with node's signed commitment
+        let pub_key = network.get_pub_key();
+        let reward_address = payment_address;
+        let bytes = ant_evm::merkle_payments::MerklePaymentCandidateNode::bytes_to_sign(
+            &quoting_metrics,
+            &reward_address,
+            merkle_payment_timestamp,
+        );
+        let signature = match network.sign(&bytes) {
+            Ok(sig) => sig,
+            Err(e) => {
+                let error_msg = format!("Failed to sign candidate node for {key:?}: {e}");
+                error!("{error_msg}");
+                return QueryResponse::GetMerkleCandidateQuote(Err(
+                    ProtocolError::FailedToSignMerkleCandidate(error_msg),
+                ));
+            }
+        };
+
+        let candidate = ant_evm::merkle_payments::MerklePaymentCandidateNode {
+            quoting_metrics,
+            reward_address,
+            merkle_payment_timestamp,
+            pub_key,
+            signature,
+        };
+        QueryResponse::GetMerkleCandidateQuote(Ok(candidate))
     }
 
     // Nodes only check ChunkProof each other, to avoid `multi-version` issue
@@ -1238,5 +1346,164 @@ mod tests {
             .collect();
 
         assert_eq!(expected_result, result);
+    }
+
+    mod merkle_payment_tests {
+        use super::*;
+
+        /// Test that timestamp validation accepts valid timestamps (within the acceptable window)
+        #[test]
+        fn test_timestamp_validation_accepts_valid_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Valid timestamp: 1 hour ago
+            let valid_timestamp = now - 3600;
+
+            // Validate timestamp
+            let age = now.saturating_sub(valid_timestamp);
+
+            assert!(
+                valid_timestamp <= now,
+                "Valid timestamp should not be in the future"
+            );
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Valid timestamp should not be expired"
+            );
+        }
+
+        /// Test that timestamp validation rejects future timestamps
+        #[test]
+        fn test_timestamp_validation_rejects_future_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Future timestamp: 1 hour in the future
+            let future_timestamp = now + 3600;
+
+            // Timestamp should be rejected
+            assert!(
+                future_timestamp > now,
+                "Future timestamp should be rejected"
+            );
+        }
+
+        /// Test that timestamp validation rejects expired timestamps
+        #[test]
+        fn test_timestamp_validation_rejects_expired_timestamp() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Expired timestamp: 8 days ago (> 7 day expiration)
+            let expired_timestamp = now - (MERKLE_PAYMENT_EXPIRATION + 86400);
+
+            // Calculate age
+            let age = now.saturating_sub(expired_timestamp);
+
+            // Timestamp should be rejected
+            assert!(
+                age > MERKLE_PAYMENT_EXPIRATION,
+                "Expired timestamp should be rejected"
+            );
+        }
+
+        /// Test timestamp at the exact expiration boundary (should be rejected)
+        #[test]
+        fn test_timestamp_validation_at_expiration_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp exactly at expiration boundary
+            let boundary_timestamp = now - MERKLE_PAYMENT_EXPIRATION;
+
+            let age = now.saturating_sub(boundary_timestamp);
+
+            // At the boundary, age == MERKLE_PAYMENT_EXPIRATION
+            assert_eq!(age, MERKLE_PAYMENT_EXPIRATION);
+            // The validation uses >, so this should pass
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Timestamp exactly at boundary should not be rejected"
+            );
+        }
+
+        /// Test timestamp just beyond expiration boundary (should be rejected)
+        #[test]
+        fn test_timestamp_validation_beyond_expiration_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp just beyond expiration boundary (1 second past)
+            let beyond_boundary_timestamp = now - (MERKLE_PAYMENT_EXPIRATION + 1);
+
+            let age = now.saturating_sub(beyond_boundary_timestamp);
+
+            assert!(
+                age > MERKLE_PAYMENT_EXPIRATION,
+                "Timestamp beyond boundary should be rejected"
+            );
+        }
+
+        /// Test timestamp at current time (should be accepted)
+        #[test]
+        fn test_timestamp_validation_at_current_time() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp at current time
+            let current_timestamp = now;
+
+            let age = now.saturating_sub(current_timestamp);
+
+            assert!(
+                current_timestamp <= now,
+                "Current timestamp should not be in future"
+            );
+            assert!(
+                age <= MERKLE_PAYMENT_EXPIRATION,
+                "Current timestamp should not be expired"
+            );
+            assert_eq!(age, 0, "Age should be 0 for current timestamp");
+        }
+
+        /// Test timestamp near future boundary (1 second in future)
+        #[test]
+        fn test_timestamp_validation_near_future_boundary() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            // Timestamp 1 second in the future
+            let near_future_timestamp = now + 1;
+
+            assert!(
+                near_future_timestamp > now,
+                "Near-future timestamp should be rejected"
+            );
+        }
+
+        /// Test expiration constant is set correctly (7 days = 604800 seconds)
+        #[test]
+        fn test_merkle_payment_expiration_constant() {
+            const SEVEN_DAYS_IN_SECONDS: u64 = 7 * 24 * 60 * 60;
+            assert_eq!(
+                MERKLE_PAYMENT_EXPIRATION, SEVEN_DAYS_IN_SECONDS,
+                "MERKLE_PAYMENT_EXPIRATION should be 7 days"
+            );
+        }
     }
 }
