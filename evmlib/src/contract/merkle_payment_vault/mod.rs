@@ -9,13 +9,14 @@
 use crate::common::{Address, Amount, Calldata};
 use crate::merkle_batch_payment::CANDIDATES_PER_POOL;
 use crate::quoting_metrics::QuotingMetrics;
-use crate::retry::send_transaction_with_retries;
+use crate::retry::{retry, send_transaction_with_retries};
 use crate::transaction_config::TransactionConfig;
 use crate::utils::http_provider;
 use alloy::network::{Network, ReceiptResponse};
 use alloy::primitives::U256;
 use alloy::providers::Provider;
 use alloy::sol;
+use std::time::Duration;
 
 pub mod implementation;
 
@@ -199,27 +200,43 @@ where
             .block_number()
             .ok_or_else(|| Error::Rpc(format!("Receipt has no block number for tx: {tx_hash}")))?;
 
-        debug!("Merkle payment transaction mined in block {block_number}, querying events...");
+        debug!("Transaction {tx_hash} confirmed in block {block_number}");
 
-        // Query events from the specific block where the transaction was mined
-        let filter = self
-            .contract
-            .MerklePaymentMade_filter()
-            .from_block(block_number)
-            .to_block(block_number);
+        // Add initial delay to allow RPC node to index events
+        tokio::time::sleep(Duration::from_millis(500)).await;
 
-        let events = filter.query().await.map_err(Error::Contract)?;
+        // Query events with retry logic - RPC nodes may need time to index events after block is mined
+        let contract_clone = &self.contract;
+        let event = retry(
+            || async {
+                // Query events from the specific block where the transaction was mined
+                let filter = contract_clone
+                    .MerklePaymentMade_filter()
+                    .from_block(block_number)
+                    .to_block(block_number);
 
-        // Find the event matching our transaction
-        let event = events
-            .into_iter()
-            .find(|(_evt, log)| log.transaction_hash == Some(tx_hash))
-            .map(|(evt, _log)| evt)
-            .ok_or_else(|| {
-                Error::Rpc(format!(
-                    "MerklePaymentMade event not found in block {block_number} for transaction {tx_hash}"
-                ))
-            })?;
+                let events = filter.query().await.map_err(Error::Contract)?;
+
+                debug!(
+                    "Found {} MerklePaymentMade event(s) in block {block_number}",
+                    events.len()
+                );
+
+                // Find the event matching our transaction
+                events
+                    .into_iter()
+                    .find(|(_evt, log)| log.transaction_hash == Some(tx_hash))
+                    .map(|(evt, _log)| evt)
+                    .ok_or_else(|| {
+                        Error::Rpc(format!(
+                            "MerklePaymentMade event not found in block {block_number} for transaction {tx_hash}"
+                        ))
+                    })
+            },
+            "querying MerklePaymentMade event",
+            Some(500), // 500ms base interval, exponential backoff with MAX_RETRIES=3
+        )
+        .await?;
 
         let winner_pool_hash: [u8; 32] = event.winnerPoolHash.into();
         let total_amount = event.totalAmount;
