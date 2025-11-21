@@ -16,9 +16,10 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
+mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
-use crate::subcommands::EvmNetworkCommand;
+use crate::subcommands::{EvmNetworkCommand, SubCmd};
 use ant_bootstrap::BootstrapConfig;
 use ant_bootstrap::InitialPeersConfig;
 use ant_bootstrap::bootstrap::Bootstrap;
@@ -26,7 +27,7 @@ use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
 use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
-use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
+use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver, RunningNode};
 use ant_protocol::{
     node_rpc::{NodeCtrl, StopResult},
     version,
@@ -36,7 +37,9 @@ use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
 use std::{
+    collections::hash_map::DefaultHasher,
     env,
+    hash::{Hash, Hasher},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     process::{Command, Stdio},
@@ -82,6 +85,15 @@ pub fn parse_log_output(val: &str) -> Result<LogOutputDestArg> {
 #[command(disable_version_flag = true)]
 #[clap(name = "antnode cli", version = env!("CARGO_PKG_VERSION"))]
 struct Opt {
+    #[command(subcommand)]
+    command: Option<SubCmd>,
+
+    #[command(flatten)]
+    node_options: NodeOptions,
+}
+
+#[derive(Parser, Debug)]
+struct NodeOptions {
     /// Set to connect to the alpha network.
     #[clap(long)]
     alpha: bool,
@@ -224,23 +236,65 @@ struct Opt {
     /// Set this to true if you want the node to write the cache files in the older formats.
     #[clap(long, default_value_t = false)]
     write_older_cache_files: bool,
+}
 
-    /// Enable automatic self-restart after specified duration (in seconds).
-    ///
-    /// When set, the node will automatically restart itself after the specified
-    /// number of seconds. This is useful for testing restart behavior.
-    /// For example, `--auto-restart-delay 120` will restart the node after 2 minutes.
-    #[clap(long, verbatim_doc_comment)]
-    auto_restart_delay: Option<u64>,
+async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
+    let peer_id = running_node.peer_id();
+    let est_network_size = running_node
+        .get_estimated_network_size()
+        .await
+        .unwrap_or(100_000);
+
+    let mut hasher = DefaultHasher::new();
+    peer_id.hash(&mut hasher);
+    let hash_value = hasher.finish();
+
+    let time_range_hours = (est_network_size / 100_000) + 1;
+    let time_range_seconds = time_range_hours * 3600;
+    let upgrade_time_seconds = (hash_value as usize) % time_range_seconds;
+
+    Duration::from_secs(upgrade_time_seconds as u64)
 }
 
 fn main() -> Result<()> {
     color_eyre::install()?;
     let opt = Opt::parse();
 
-    let network_id = if let Some(network_id) = opt.network_id {
+    if let Some(SubCmd::Upgrade) = opt.command {
+        #[cfg(not(unix))]
+        {
+            eprintln!("Error: upgrade command is only supported on Unix platforms (Linux/macOS)");
+            std::process::exit(1);
+        }
+
+        #[cfg(unix)]
+        {
+            println!("Checking for updates...");
+            let rt = Runtime::new()?;
+            return rt.block_on(async {
+                match upgrade::perform_upgrade().await {
+                    Ok(()) => {
+                        println!(
+                            "Upgrade successful! Please restart antnode to use the new version."
+                        );
+                        Ok(())
+                    }
+                    Err(e) if e.to_string().contains("Already running latest version") => {
+                        println!("Already running the latest version");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Upgrade failed: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            });
+        }
+    }
+
+    let network_id = if let Some(network_id) = opt.node_options.network_id {
         network_id
-    } else if opt.alpha {
+    } else if opt.node_options.alpha {
         2
     } else {
         1
@@ -250,7 +304,7 @@ fn main() -> Result<()> {
     let identify_protocol_str = version::IDENTIFY_PROTOCOL_STR
         .read()
         .expect("Failed to obtain read lock for IDENTIFY_PROTOCOL_STR");
-    if opt.version {
+    if opt.node_options.version {
         println!(
             "{}",
             ant_build_info::version_string(
@@ -263,29 +317,29 @@ fn main() -> Result<()> {
     }
 
     // evm config
-    let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
+    let rewards_address = RewardsAddress::from_hex(opt.node_options.rewards_address.as_ref().expect(
         "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
     ))?;
 
-    if opt.crate_version {
+    if opt.node_options.crate_version {
         println!("Crate version: {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
 
-    if opt.protocol_version {
+    if opt.node_options.protocol_version {
         println!("Network version: {identify_protocol_str}");
         return Ok(());
     }
 
     #[cfg(not(feature = "nightly"))]
-    if opt.package_version {
+    if opt.node_options.package_version {
         println!("Package version: {}", ant_build_info::package_version());
         return Ok(());
     }
 
-    let evm_network: EvmNetwork = match opt.evm_network.as_ref() {
+    let evm_network: EvmNetwork = match opt.node_options.evm_network.as_ref() {
         Some(evm_network) => Ok(evm_network.clone().into()),
-        None => match get_evm_network(opt.peers.local, Some(network_id)) {
+        None => match get_evm_network(opt.node_options.peers.local, Some(network_id)) {
             Ok(net) => Ok(net),
             Err(_) => Err(eyre!(
                 "EVM network not specified. Please specify a network using the subcommand or by setting the `EVM_NETWORK` environment variable."
@@ -295,8 +349,8 @@ fn main() -> Result<()> {
 
     println!("EVM network: {evm_network:?}");
 
-    let node_socket_addr = SocketAddr::new(opt.ip, opt.port);
-    let (root_dir, keypair) = get_root_dir_and_keypair(&opt.root_dir)?;
+    let node_socket_addr = SocketAddr::new(opt.node_options.ip, opt.node_options.port);
+    let (root_dir, keypair) = get_root_dir_and_keypair(&opt.node_options.root_dir)?;
 
     let (log_output_dest, log_reload_handle, _log_appender_guard) =
         init_logging(&opt, keypair.public().to_peer_id())?;
@@ -306,8 +360,8 @@ fn main() -> Result<()> {
     // another process with these args.
     let rt = Runtime::new()?;
 
-    let bootstrap_config = BootstrapConfig::try_from(&opt.peers)?
-        .with_backwards_compatible_writes(opt.write_older_cache_files);
+    let bootstrap_config = BootstrapConfig::try_from(&opt.node_options.peers)?
+        .with_backwards_compatible_writes(opt.node_options.write_older_cache_files);
     let bootstrap = rt.block_on(Bootstrap::new(bootstrap_config))?;
 
     let msg = format!(
@@ -323,7 +377,7 @@ fn main() -> Result<()> {
         ant_build_info::git_info()
     );
 
-    if opt.peers.local {
+    if opt.node_options.peers.local {
         rt.spawn(init_metrics(std::process::id()));
     }
     let restart_options = rt.block_on(async move {
@@ -335,15 +389,17 @@ fn main() -> Result<()> {
             node_socket_addr,
             root_dir,
         );
-        node_builder.local(opt.peers.local);
-        node_builder.no_upnp(opt.no_upnp);
-        node_builder.relay_client(opt.relay);
+        node_builder.local(opt.node_options.peers.local);
+        node_builder.no_upnp(opt.node_options.no_upnp);
+        node_builder.relay_client(opt.node_options.relay);
         #[cfg(feature = "open-metrics")]
         let mut node_builder = node_builder;
         // if enable flag is provided or only if the port is specified then enable the server by setting Some()
         #[cfg(feature = "open-metrics")]
-        let metrics_server_port = if opt.enable_metrics_server || opt.metrics_server_port != 0 {
-            Some(opt.metrics_server_port)
+        let metrics_server_port = if opt.node_options.enable_metrics_server
+            || opt.node_options.metrics_server_port != 0
+        {
+            Some(opt.node_options.metrics_server_port)
         } else {
             None
         };
@@ -351,10 +407,9 @@ fn main() -> Result<()> {
         node_builder.metrics_server_port(metrics_server_port);
         let restart_options = run_node(
             node_builder,
-            opt.rpc,
+            opt.node_options.rpc,
             &log_output_dest,
             log_reload_handle,
-            opt.auto_restart_delay,
         )
         .await?;
 
@@ -385,7 +440,6 @@ async fn run_node(
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
-    auto_restart_delay: Option<u64>,
 ) -> Result<Option<(bool, PathBuf, u16)>> {
     let started_instant = std::time::Instant::now();
 
@@ -448,24 +502,38 @@ You can check your reward balance by running:
         );
     }
 
-    // If auto-restart delay is specified, spawn a task to trigger restart after the delay
-    if let Some(delay_secs) = auto_restart_delay {
+    #[cfg(unix)]
+    {
         let ctrl_tx_restart = ctrl_tx.clone();
+        let running_node_clone = running_node.clone();
         tokio::spawn(async move {
-            let delay = Duration::from_secs(delay_secs);
-            info!("Auto-restart enabled: node will restart in {delay:?}");
-            println!("Auto-restart enabled: node will restart in {delay:?}");
-            sleep(delay).await;
-            info!("Auto-restart delay elapsed, triggering node restart");
-            println!("Auto-restart delay elapsed, triggering node restart");
-            if let Err(err) = ctrl_tx_restart
-                .send(NodeCtrl::Restart {
-                    delay: Duration::from_secs(1),
-                    retain_peer_id: true,
-                })
-                .await
-            {
-                error!("Failed to send auto-restart command: {err}");
+            sleep(Duration::from_secs(86400)).await;
+
+            loop {
+                match upgrade::perform_upgrade().await {
+                    Ok(()) => {
+                        info!("Upgrade successful. Triggering restart...");
+
+                        let delay = calculate_restart_delay(&running_node_clone).await;
+                        info!("Calculated restart delay: {delay:?}");
+
+                        if let Err(err) = ctrl_tx_restart
+                            .send(NodeCtrl::Restart {
+                                delay,
+                                retain_peer_id: true,
+                            })
+                            .await
+                        {
+                            error!("Failed to send restart command: {err}");
+                        }
+                        break;
+                    }
+                    Err(e) => {
+                        debug!("Upgrade check: {e}");
+                    }
+                }
+
+                sleep(Duration::from_secs(86400)).await;
             }
         });
     }
@@ -571,7 +639,7 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
         ("evmlib".to_string(), Level::DEBUG),
     ];
 
-    let output_dest = match &opt.log_output_dest {
+    let output_dest = match &opt.node_options.log_output_dest {
         LogOutputDestArg::Stdout => LogOutputDest::Stdout,
         LogOutputDestArg::DataDir => {
             let path = get_antnode_root_dir(peer_id)?.join("logs");
@@ -584,11 +652,11 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
     let (reload_handle, log_appender_guard) = {
         let mut log_builder = ant_logging::LogBuilder::new(logging_targets);
         log_builder.output_dest(output_dest.clone());
-        log_builder.format(opt.log_format.unwrap_or(LogFormat::Default));
-        if let Some(files) = opt.max_log_files {
+        log_builder.format(opt.node_options.log_format.unwrap_or(LogFormat::Default));
+        if let Some(files) = opt.node_options.max_log_files {
             log_builder.max_log_files(files);
         }
-        if let Some(files) = opt.max_archived_log_files {
+        if let Some(files) = opt.node_options.max_archived_log_files {
             log_builder.max_archived_log_files(files);
         }
 
@@ -602,11 +670,11 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
         let (reload_handle, log_appender_guard) = rt.block_on(async {
             let mut log_builder = ant_logging::LogBuilder::new(logging_targets);
             log_builder.output_dest(output_dest.clone());
-            log_builder.format(opt.log_format.unwrap_or(LogFormat::Default));
-            if let Some(files) = opt.max_log_files {
+            log_builder.format(opt.node_options.log_format.unwrap_or(LogFormat::Default));
+            if let Some(files) = opt.node_options.max_log_files {
                 log_builder.max_log_files(files);
             }
-            if let Some(files) = opt.max_archived_log_files {
+            if let Some(files) = opt.node_options.max_archived_log_files {
                 log_builder.max_archived_log_files(files);
             }
             log_builder.initialize()
@@ -617,11 +685,10 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
     Ok((output_dest.to_string(), reload_handle, log_appender_guard))
 }
 
-/// Starts a new process running the binary with the same args as
-/// the current process
-/// Optionally provide the node's root dir and listen port to retain it's PeerId
+/// Starts a new process running the binary with the same args as the current process.
+///
+/// Optionally provide the node's root dir and listen port to retain its PeerId.
 fn start_new_node_process(retain_peer_id: bool, root_dir: PathBuf, port: u16) {
-    // Retrieve the current executable's path
     let current_exe = env::current_exe().expect("could not get current executable path");
 
     // Retrieve the command-line arguments passed to this process
