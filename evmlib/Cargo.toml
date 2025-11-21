@@ -20,6 +20,12 @@ tracing = { version = "~0.1.26" }
 tokio = "1.43.1"
 rand = "0.8.5"
 
+# Temporary dependencies for disk-based smart contract mock
+# TODO: Remove these once real smart contract integration is implemented
+dirs-next = "~2.0"      # For default storage path
+hex = "~0.4.3"          # For hex encoding pool hashes
+serde_json = "1.0.108"  # For JSON serialization of payment info
+
 [dev-dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

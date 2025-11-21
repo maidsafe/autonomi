@@ -28,6 +28,7 @@ pub mod contract;
 pub mod cryptography;
 #[cfg(feature = "external-signer")]
 pub mod external_signer;
+pub mod merkle_batch_payment;
 pub mod quoting_metrics;
 mod retry;
 pub mod testnet;

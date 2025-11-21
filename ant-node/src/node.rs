@@ -843,7 +843,7 @@ impl Node {
         payment_address: RewardsAddress,
     ) -> QueryResponse {
         debug!(
-            "Got GetMerkleCandidateQuote for target {key:?} with timestamp {merkle_payment_timestamp}"
+            "merkle payment: GetMerkleCandidateQuote for target {key:?}, timestamp: {merkle_payment_timestamp}, data_type: {data_type}, data_size: {data_size}"
         );
 
         // Validate timestamp before signing to prevent committing to invalid times.

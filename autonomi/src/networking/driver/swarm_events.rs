@@ -178,6 +178,10 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_get_quote(request_id, quote, peer_address)?;
             }
+            Response::Query(QueryResponse::GetMerkleCandidateQuote(result)) => {
+                self.pending_tasks
+                    .update_get_merkle_candidate_quote(request_id, result)?;
+            }
             Response::Query(QueryResponse::PutRecord {
                 result,
                 peer_address: _,

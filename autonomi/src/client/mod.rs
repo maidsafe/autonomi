@@ -32,6 +32,7 @@ pub use high_level::vault;
 pub mod analyze;
 pub mod config;
 pub mod key_derivation;
+pub mod merkle_payments;
 pub mod payment;
 pub mod quote;
 
