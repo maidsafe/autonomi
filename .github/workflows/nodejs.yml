@@ -46,7 +46,7 @@ jobs:
     name: Build ${{ matrix.packages.app_name }} (${{ matrix.settings.target }})
     runs-on: ${{ matrix.settings.host }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup node
         uses: actions/setup-node@v6
@@ -118,7 +118,7 @@ jobs:
         working-directory: ${{ matrix.packages.dir }}
     runs-on: ${{ matrix.settings.host }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Setup node
         uses: actions/setup-node@v6

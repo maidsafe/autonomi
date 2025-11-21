@@ -16,7 +16,7 @@ jobs:
           - os: ubuntu-latest
           - os: macos-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -285,7 +285,7 @@ jobs:
     name: "File Upload/Download Tests (Windows)"
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
