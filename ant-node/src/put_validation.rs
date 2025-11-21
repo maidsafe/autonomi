@@ -1149,28 +1149,11 @@ impl Node {
         let pretty_key = PrettyPrintRecordKey::from(&record_key);
 
         // Verify proof address matches target address
-        let target_xorname = match target_address {
-            NetworkAddress::ChunkAddress(addr) => *addr.xorname(),
-            NetworkAddress::ScratchpadAddress(addr) => addr.xorname(),
-            NetworkAddress::GraphEntryAddress(addr) => addr.xorname(),
-            NetworkAddress::PointerAddress(addr) => addr.xorname(),
-            _ => {
-                let error_msg = format!(
-                    "Unsupported network address type for Merkle payment: {target_address:?}"
-                );
-                error!("{error_msg}");
-                return Err(PutValidationError::MerklePaymentVerificationFailed {
-                    record_key: pretty_key.clone().into_owned(),
-                    error: error_msg,
-                });
-            }
-        };
-
-        if proof.address != target_xorname {
+        if proof.address.0.to_vec() != target_address.as_bytes() {
             let error_msg = format!(
                 "Merkle proof address mismatch: proof is for {:?} but data is at {:?}. \
                  This prevents reusing a proof paid for one address to store data at another address.",
-                proof.address, target_xorname
+                hex::encode(proof.address.0), hex::encode(target_address.as_bytes())
             );
             warn!("{error_msg}");
             return Err(PutValidationError::MerklePaymentVerificationFailed {

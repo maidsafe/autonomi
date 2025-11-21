@@ -54,9 +54,9 @@ pub async fn cost(
         // Configure payment mode - default is SingleNode, only override if Standard is requested
         if use_standard_payment {
             client = client.with_payment_mode(PaymentMode::Standard);
-            println!("💳 Using standard payment mode (pays 3 nodes individually)");
+            println!("💳 Estimating cost with standard payment mode (pays 3 nodes individually)");
         } else {
-            println!("🎯 Using single node payment mode (default - saves gas fees)");
+            println!("🎯 Estimating cost with single node payment mode (default - saves gas fees)");
         }
 
         println!("Getting upload cost...");
@@ -245,6 +245,7 @@ pub async fn upload(
 /// Single files are uploaded without an archive, directories are uploaded with an archive.
 /// The no_archive argument can be used to skip the archive upload.
 /// Returns the archive address if any and the address to access the data.
+/// If more than [`MAX_ADDRESSES_TO_PRINT`] addresses are found, returns "multiple addresses" as a placeholder instead.
 async fn upload_dir_standard(
     client: &Client,
     dir_path: PathBuf,
@@ -323,6 +324,7 @@ async fn upload_dir_standard(
 /// Single files are uploaded without an archive, directories are uploaded with an archive.
 /// The no_archive argument can be used to skip the archive upload.
 /// Returns the archive address if any and the address to access the data.
+/// If more than [`MAX_ADDRESSES_TO_PRINT`] addresses are found, returns "multiple addresses" as a placeholder instead.
 async fn upload_dir_merkle(
     client: &Client,
     wallet: &autonomi::Wallet,
