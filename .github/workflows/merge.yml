@@ -132,7 +132,11 @@ jobs:
       # and passing standalone is enough.
       - name: Run node tests (except can_store_after_restart)
         timeout-minutes: 25
-        run: cargo test --release --package ant-node -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table
+        run: cargo test --release --package ant-node -- --skip can_store_after_restart --skip data_availability_during_churn --skip verify_data_location --skip verify_routing_table --skip simulate_replication
+
+      - name: Run simulate_replication test separately
+        timeout-minutes: 25
+        run: cargo test --release --package ant-node --test simulate_replication
 
       - name: Run can_store_after_restart separately
         timeout-minutes: 5
