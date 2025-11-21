@@ -34,7 +34,7 @@ jobs:
       SELF_RESTART_TEST_NODE_DATA_PATH: ${{ matrix.self_restart_path }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Check we're on the right commit
         run: git log -1 --oneline

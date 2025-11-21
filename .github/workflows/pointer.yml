@@ -20,7 +20,7 @@ jobs:
           - os: macos-latest
             ant_path: /Users/runner/Library/Application\ Support/autonomi
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
