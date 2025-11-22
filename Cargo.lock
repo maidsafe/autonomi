@@ -6680,6 +6680,7 @@ dependencies = [
  "semver 1.0.27",
  "serde",
  "serde_json",
+ "service-manager",
  "signal-hook",
  "strip-ansi-escapes",
  "strum 0.26.3",
@@ -9067,13 +9068,13 @@ dependencies = [
 [[package]]
 name = "service-manager"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2cae942acfe9cecd4450998408f52e1c1ee083145226b7b803bd0d82e1c86912"
+source = "git+https://github.com/jacderida/service-manager-rs?branch=generic_restart_policy#6ba8721d2a6660bf40ece0d2f732be0551d17931"
 dependencies = [
  "cfg-if",
  "dirs",
  "encoding-utils",
  "encoding_rs",
+ "log",
  "plist",
  "which 4.4.2",
  "xml-rs",

@@ -15,6 +15,7 @@ use ant_releases::{self, AntReleaseRepoActions, ReleaseType};
 use ant_service_management::NodeRegistryManager;
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
+use service_manager::RestartPolicy;
 use std::{path::PathBuf, str::FromStr};
 use tokio::runtime::Builder;
 use tokio::sync::mpsc::{self, UnboundedSender};
@@ -441,6 +442,7 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
         node_registry.clone(),
         config.init_peers_config.clone(),
         config.relay, // relay,
+        RestartPolicy::Never,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
@@ -683,6 +685,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         config.init_peers_config.clone(),
         config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+        RestartPolicy::Never,
         None,
         None,
         config.antnode_path.clone(),
@@ -759,6 +762,7 @@ async fn add_nodes(
             config.init_peers_config.clone(),
             config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
+            RestartPolicy::Never,
             None,
             None,
             config.antnode_path.clone(),

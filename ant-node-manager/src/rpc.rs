@@ -21,6 +21,7 @@ use color_eyre::{
     eyre::{OptionExt, eyre},
 };
 use libp2p::PeerId;
+use service_manager::RestartPolicy;
 use std::sync::Arc;
 
 pub async fn restart_node_service(
@@ -82,6 +83,8 @@ pub async fn restart_node_service(
             node_ip: current_node_clone.node_ip,
             node_port: current_node_clone.get_antnode_port(),
             no_upnp: current_node_clone.no_upnp,
+            // This setting doesn't really matter because RPC will soon be taken out of use.
+            restart_policy: RestartPolicy::Never,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             service_user: current_node_clone.user.clone(),
@@ -198,6 +201,8 @@ pub async fn restart_node_service(
             node_ip: current_node_clone.node_ip,
             node_port: None,
             no_upnp: current_node_clone.no_upnp,
+            // This setting doesn't really matter because RPC will soon be taken out of use.
+            restart_policy: RestartPolicy::Never,
             rewards_address: current_node_clone.rewards_address,
             rpc_socket_addr: current_node_clone.rpc_socket_addr,
             antnode_path: antnode_path.clone(),

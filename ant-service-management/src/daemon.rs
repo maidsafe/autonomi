@@ -77,9 +77,9 @@ impl ServiceStateActions for DaemonService {
             environment: None,
             label: self.service_data.read().await.service_name.parse()?,
             program: self.service_data.read().await.daemon_path.clone(),
+            restart_policy: service_manager::RestartPolicy::Always { delay_secs: None },
             username: None,
             working_directory: None,
-            disable_restart_on_failure: false,
         };
         Ok(install_ctx)
     }
