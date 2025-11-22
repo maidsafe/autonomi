@@ -17,6 +17,7 @@ use ant_protocol::{
     messages::{CmdResponse, Request, Response},
     storage::ValidationType,
 };
+use libp2p::kad::{KBucketDistance as Distance, U256};
 use libp2p::request_response::{self, Message};
 
 impl SwarmDriver {
@@ -339,17 +340,48 @@ impl SwarmDriver {
 
         // accept replication requests from the K_VALUE peers away,
         // giving us some margin for replication
-        let closest_k_peers = self.get_closest_k_local_peers_to_self();
-        if !closest_k_peers
+        let closest_40_peers = self.get_closest_40_local_peers_to_self();
+        if !closest_40_peers
             .iter()
             .any(|(peer_id, _)| peer_id == &holder)
             || holder == self.self_peer_id
         {
-            debug!("Holder {holder:?} is self or not in replication range.");
-            return Ok(());
+            let distance =
+                NetworkAddress::from(holder).distance(&NetworkAddress::from(self.self_peer_id));
+            info!(
+                "Holder {holder:?} is self or not within the 40 closest peers. Distance is {distance:?}({:?})",
+                distance.ilog2()
+            );
+            if !self.network_wide_replication.is_network_under_load() {
+                return Ok(());
+            }
+
+            // check if the holder is within 10x the distance to the farthest 40th peer.
+            let farthest_distance = closest_40_peers
+                .last()
+                .map(|(peer_id, _)| {
+                    NetworkAddress::from(*peer_id)
+                        .distance(&NetworkAddress::from(self.self_peer_id))
+                })
+                .unwrap_or(Distance(U256::MAX));
+            let holder_distance =
+                NetworkAddress::from(holder).distance(&NetworkAddress::from(self.self_peer_id));
+            // increases the ilog2 value by 3 to 4. check test_distance_multiplication_and_ilog2
+            let increased_distance = Distance(farthest_distance.0.saturating_mul(U256::from(10)));
+            if holder_distance.0 > increased_distance.0 {
+                debug!(
+                    "Holder {holder:?} is not within increased replication range {increased_distance:?}({:?}) during high network load",
+                    increased_distance.ilog2()
+                );
+                return Ok(());
+            }
+            info!(
+                "Holder {holder:?} is within increased replication range {increased_distance:?}({:?}) during high network load",
+                increased_distance.ilog2()
+            );
         }
 
-        // On receive a replication_list from a close_group peer, we undertake:
+        // On receive a replication_list from a close up peer, we undertake:
         //   1, For those keys that we don't have:
         //        fetch them if close enough to us
         //   2, For those GraphEntry that we have that differ in the hash, we fetch the other version
@@ -365,7 +397,7 @@ impl SwarmDriver {
             incoming_keys,
             all_keys,
             is_fresh_replicate,
-            closest_k_peers
+            closest_40_peers
                 .iter()
                 .map(|(peer_id, _addrs)| NetworkAddress::from(*peer_id))
                 .collect(),

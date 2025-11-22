@@ -10,11 +10,14 @@ pub(crate) mod behaviour;
 pub(crate) mod cmd;
 pub(crate) mod event;
 pub(crate) mod network_discovery;
+pub(crate) mod network_wide_replication;
 
 use ant_bootstrap::BootstrapCacheStore;
 use event::NodeEvent;
 use network_discovery::{NETWORK_DISCOVER_INTERVAL, NetworkDiscovery};
+use rand::Rng;
 
+use crate::networking::driver::network_wide_replication::NetworkWideReplication;
 #[cfg(feature = "open-metrics")]
 use crate::networking::metrics::NetworkMetricsRecorder;
 use crate::networking::{
@@ -69,6 +72,8 @@ const DIAL_QUEUE_CHECK_INTERVAL: Duration = Duration::from_secs(2);
 pub(crate) const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration =
     std::time::Duration::from_millis(100);
 
+pub(crate) const NETWORK_WIDE_REPLICATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
+
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
     /// The network discovery method is present at the networking layer
@@ -114,6 +119,7 @@ pub(crate) struct SwarmDriver {
     pub(crate) initial_bootstrap_trigger: InitialBootstrapTrigger,
     pub(crate) network_discovery: NetworkDiscovery,
     pub(crate) bootstrap: Bootstrap,
+    pub(crate) network_wide_replication: NetworkWideReplication,
     pub(crate) external_address_manager: Option<ExternalAddressManager>,
     pub(crate) relay_manager: Option<RelayManager>,
     /// The peers that are using our relay service.
@@ -175,6 +181,11 @@ impl SwarmDriver {
         let mut relay_manager_reservation_interval = interval(RELAY_MANAGER_RESERVATION_INTERVAL);
         let mut bootstrap_interval = Some(interval(BOOTSTRAP_CHECK_INTERVAL));
         let mut dial_queue_check_interval = interval(DIAL_QUEUE_CHECK_INTERVAL);
+        let network_wide_replication = duration_with_variance(
+            NETWORK_WIDE_REPLICATION_INTERVAL,
+            10, // 10% variance
+        );
+        let mut network_wide_replication_interval = interval(network_wide_replication);
         let _ = dial_queue_check_interval.tick().await; // first tick completes immediately
 
         let mut round_robin_index = 0;
@@ -260,6 +271,12 @@ impl SwarmDriver {
                             info!("Initial bootstrap process completed. Marking bootstrap_interval as None.");
                             bootstrap_interval = None;
                         }
+                    }
+                }
+                // runs every NETWORK_WIDE_REPLICATION_INTERVAL time
+                _ = network_wide_replication_interval.tick() => {
+                    if let Err(err) = self.network_wide_replication.execute(&mut self.swarm).await {
+                        warn!("Error during network wide replication: {err}");
                     }
                 }
                 // runs every bootstrap_interval time
@@ -390,21 +407,32 @@ impl SwarmDriver {
     /// Get K closest peers to self, from our local RoutingTable.
     /// Always includes self in.
     pub(crate) fn get_closest_k_local_peers_to_self(&mut self) -> Vec<(PeerId, Addresses)> {
-        self.get_closest_k_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true)
+        self.get_closest_local_peers_to_target(
+            &NetworkAddress::from(self.self_peer_id),
+            true,
+            K_VALUE.get(),
+        )
+    }
+
+    /// Get 40 closest peers to self, from our local RoutingTable.
+    /// Always includes self in.
+    pub(crate) fn get_closest_40_local_peers_to_self(&mut self) -> Vec<(PeerId, Addresses)> {
+        self.get_closest_local_peers_to_target(&NetworkAddress::from(self.self_peer_id), true, 40)
     }
 
     /// Get K closest peers to the target, from our local RoutingTable.
     /// Sorted for closeness to the target
     /// If requested, self will be added as the first entry.
-    pub(crate) fn get_closest_k_local_peers_to_target(
+    pub(crate) fn get_closest_local_peers_to_target(
         &mut self,
         target: &NetworkAddress,
         include_self: bool,
+        num_peers: usize,
     ) -> Vec<(PeerId, Addresses)> {
         let num_peers = if include_self {
-            K_VALUE.get() - 1
+            num_peers - 1
         } else {
-            K_VALUE.get()
+            num_peers
         };
 
         let peer_ids: Vec<_> = self
@@ -532,6 +560,18 @@ impl SwarmDriver {
     }
 }
 
+/// Returns a new duration that is within +/- variance of the provided duration.
+fn duration_with_variance(duration: Duration, variance: u32) -> Duration {
+    let variance = duration.as_secs() as f64 * (variance as f64 / 100.0);
+
+    let random_adjustment = Duration::from_secs(rand::thread_rng().gen_range(0..variance as u64));
+    if random_adjustment.as_secs().is_multiple_of(2) {
+        duration.saturating_sub(random_adjustment)
+    } else {
+        duration.saturating_add(random_adjustment)
+    }
+}
+
 /// This is used to track the conditions that are required to trigger the initial bootstrap process once.
 pub(crate) struct InitialBootstrapTrigger {
     pub(crate) upnp: bool,
@@ -563,5 +603,60 @@ impl InitialBootstrapTrigger {
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod distance_multiplication_examples {
+    use super::*;
+
+    /// Example function demonstrating how distance multiplication affects ilog2 values.
+    /// This creates distances with ilog2 values from 0 to 256 with steps of 20, then multiplies each by various factors.
+    #[test]
+    fn test_distance_multiplication_and_ilog2() {
+        println!("\n=== Distance Multiplication and ilog2 Analysis ===\n");
+
+        let multipliers = [2, 3, 5, 10, 100, 1000];
+
+        // Create distances with ilog2 values from 0 to 256 with step of 20
+        for target_ilog2 in (0..=256).step_by(20) {
+            // Create a distance that has the target ilog2 value
+            // For ilog2 = n, we need a value where 2^n is the highest bit
+            // So we use 2^n as the distance value
+            let base_value = U256::from(1u64) << target_ilog2;
+            let base_distance = Distance(base_value);
+            let base_ilog2 = base_distance.ilog2();
+
+            println!("Target ilog2: {target_ilog2}");
+            println!("  Base distance: {base_value} (actual ilog2: {base_ilog2:?})",);
+            println!("  Multiplications:");
+
+            for &multiplier in &multipliers {
+                let multiplied = Distance(base_distance.0.saturating_mul(U256::from(multiplier)));
+                let multiplied_ilog2 = multiplied.ilog2();
+
+                // Calculate the change in ilog2
+                let ilog2_change = if let (Some(base), Some(mult)) = (base_ilog2, multiplied_ilog2)
+                {
+                    format!("+{}", mult as i32 - base as i32)
+                } else {
+                    "N/A".to_string()
+                };
+
+                println!(
+                    "    × {:<4} = {} (ilog2: {:>3?}, change: {})",
+                    multiplier, multiplied.0, multiplied_ilog2, ilog2_change
+                );
+            }
+            println!();
+        }
+
+        println!("=== Summary ===");
+        println!("Key observations:");
+        println!("1. Multiplying by 2 increases ilog2 by exactly 1 (bit shift left by 1)");
+        println!("2. Multiplying by 5 increases ilog2 by 2-3 (since 2^2 < 5 < 2^3)");
+        println!("3. Multiplying by 10 increases ilog2 by 3-4 (since 2^3 < 10 < 2^4)");
+        println!("4. Multiplying by 100 increases ilog2 by 6-7 (since 2^6 < 100 < 2^7)");
+        println!("5. Multiplying by 1000 increases ilog2 by 9-10 (since 2^9 < 1000 < 2^10)");
     }
 }
