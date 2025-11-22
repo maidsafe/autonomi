@@ -887,6 +887,7 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
+ "serial_test",
  "sha256",
  "tempfile",
  "thiserror 1.0.69",
