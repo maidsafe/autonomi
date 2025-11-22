@@ -673,7 +673,7 @@ mod tests {
     use libp2p_identity::PeerId;
     use mockall::{mock, predicate::*};
     use predicates::prelude::*;
-    use service_manager::ServiceInstallCtx;
+    use service_manager::{RestartPolicy, ServiceInstallCtx};
     use std::{
         ffi::OsString,
         net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -2721,9 +2721,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -2897,9 +2897,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3073,9 +3073,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3239,9 +3239,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3413,9 +3413,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3592,9 +3592,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3766,9 +3766,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -3946,9 +3946,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4113,9 +4113,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4280,9 +4280,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4447,9 +4447,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4614,9 +4614,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4781,9 +4781,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -4948,9 +4948,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5115,9 +5115,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5282,9 +5282,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5450,9 +5450,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5621,9 +5621,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5801,9 +5801,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -5975,9 +5975,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -6146,9 +6146,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )
@@ -6707,9 +6707,9 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
+                    restart_policy: RestartPolicy::Always { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
-                    disable_restart_on_failure: true,
                 }),
                 eq(false),
             )

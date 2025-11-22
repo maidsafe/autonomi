@@ -192,11 +192,12 @@ pub async fn add_node(
 
         let install_ctx = InstallNodeServiceCtxBuilder {
             alpha: options.alpha,
+            antnode_path: service_antnode_path.clone(),
             autostart: options.auto_restart,
             data_dir_path: service_data_dir_path.clone(),
             env_variables: options.env_variables.clone(),
             evm_network: options.evm_network.clone(),
-            relay: options.relay,
+            init_peers_config: options.init_peers_config.clone(),
             log_dir_path: service_log_dir_path.clone(),
             log_format: options.log_format,
             max_archived_log_files: options.max_archived_log_files,
@@ -204,14 +205,14 @@ pub async fn add_node(
             metrics_port: metrics_free_port,
             name: service_name.clone(),
             network_id: options.network_id,
+            no_upnp: options.no_upnp,
             node_ip: options.node_ip,
             node_port,
-            init_peers_config: options.init_peers_config.clone(),
+            relay: options.relay,
+            restart_policy: options.restart_policy,
             rewards_address: options.rewards_address,
             rpc_socket_addr,
-            antnode_path: service_antnode_path.clone(),
             service_user: options.user.clone(),
-            no_upnp: options.no_upnp,
             write_older_cache_files: options.write_older_cache_files,
         }
         .build()?;
@@ -354,9 +355,9 @@ pub async fn add_daemon(
         environment: options.env_variables,
         label: DAEMON_SERVICE_NAME.parse()?,
         program: options.daemon_install_bin_path.clone(),
+        restart_policy: service_manager::RestartPolicy::Always { delay_secs: None },
         username: Some(options.user),
         working_directory: None,
-        disable_restart_on_failure: false,
     };
 
     match service_control.install(install_ctx, false) {

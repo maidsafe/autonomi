@@ -11,7 +11,7 @@ use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_logging::LogFormat;
 use ant_service_management::node::push_arguments_from_initial_peers_config;
 use color_eyre::{Result, eyre::eyre};
-use service_manager::{ServiceInstallCtx, ServiceLabel};
+use service_manager::{RestartPolicy, ServiceInstallCtx, ServiceLabel};
 use std::{
     ffi::OsString,
     net::{Ipv4Addr, SocketAddr},
@@ -76,19 +76,20 @@ pub struct InstallNodeServiceCtxBuilder {
     pub data_dir_path: PathBuf,
     pub env_variables: Option<Vec<(String, String)>>,
     pub evm_network: EvmNetwork,
+    pub init_peers_config: InitialPeersConfig,
     pub log_dir_path: PathBuf,
     pub log_format: Option<LogFormat>,
-    pub name: String,
-    pub network_id: Option<u8>,
-    pub no_upnp: bool,
     pub max_archived_log_files: Option<usize>,
     pub max_log_files: Option<usize>,
     pub metrics_port: Option<u16>,
+    pub name: String,
+    pub network_id: Option<u8>,
+    pub no_upnp: bool,
     pub node_ip: Option<Ipv4Addr>,
     pub node_port: Option<u16>,
-    pub init_peers_config: InitialPeersConfig,
-    pub rewards_address: RewardsAddress,
     pub relay: bool,
+    pub restart_policy: RestartPolicy,
+    pub rewards_address: RewardsAddress,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
     pub write_older_cache_files: bool,
@@ -172,9 +173,9 @@ impl InstallNodeServiceCtxBuilder {
             environment: self.env_variables,
             label: label.clone(),
             program: self.antnode_path.to_path_buf(),
+            restart_policy: self.restart_policy,
             username: self.service_user.clone(),
             working_directory: None,
-            disable_restart_on_failure: true,
         })
     }
 }
@@ -200,6 +201,7 @@ pub struct AddNodeServiceOptions {
     pub node_port: Option<PortRange>,
     pub no_upnp: bool,
     pub relay: bool,
+    pub restart_policy: RestartPolicy,
     pub rewards_address: RewardsAddress,
     pub rpc_address: Option<Ipv4Addr>,
     pub rpc_port: Option<PortRange>,
@@ -249,6 +251,7 @@ mod tests {
             init_peers_config: InitialPeersConfig::default(),
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
+            restart_policy: RestartPolicy::OnFailure { delay_secs: None },
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
             write_older_cache_files: false,
@@ -258,6 +261,7 @@ mod tests {
     fn create_custom_evm_network_builder() -> InstallNodeServiceCtxBuilder {
         InstallNodeServiceCtxBuilder {
             alpha: false,
+            antnode_path: PathBuf::from("/bin/antnode"),
             autostart: true,
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
@@ -272,7 +276,7 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
+            init_peers_config: InitialPeersConfig::default(),
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
             max_archived_log_files: None,
@@ -280,15 +284,15 @@ mod tests {
             metrics_port: None,
             name: "test-node".to_string(),
             network_id: None,
+            no_upnp: false,
             node_ip: None,
             node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
+            relay: false,
+            restart_policy: RestartPolicy::Always { delay_secs: None },
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
-            antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
-            no_upnp: false,
             write_older_cache_files: false,
         }
     }
@@ -296,6 +300,7 @@ mod tests {
     fn create_builder_with_all_options_enabled() -> InstallNodeServiceCtxBuilder {
         InstallNodeServiceCtxBuilder {
             alpha: true,
+            antnode_path: PathBuf::from("/bin/antnode"),
             autostart: true,
             data_dir_path: PathBuf::from("/data"),
             env_variables: None,
@@ -310,23 +315,23 @@ mod tests {
                 )
                 .unwrap(),
             }),
-            relay: false,
             log_dir_path: PathBuf::from("/logs"),
             log_format: None,
+            init_peers_config: InitialPeersConfig::default(),
             max_archived_log_files: Some(10),
             max_log_files: Some(10),
             metrics_port: None,
             name: "test-node".to_string(),
             network_id: Some(5),
+            no_upnp: false,
             node_ip: None,
             node_port: None,
-            init_peers_config: InitialPeersConfig::default(),
+            relay: false,
+            restart_policy: RestartPolicy::Always { delay_secs: None },
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
-            antnode_path: PathBuf::from("/bin/antnode"),
             service_user: None,
-            no_upnp: false,
             write_older_cache_files: false,
         }
     }
