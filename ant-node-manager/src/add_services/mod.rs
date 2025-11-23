@@ -213,6 +213,7 @@ pub async fn add_node(
             rewards_address: options.rewards_address,
             rpc_socket_addr,
             service_user: options.user.clone(),
+            stop_on_upgrade: true,
             write_older_cache_files: options.write_older_cache_files,
         }
         .build()?;

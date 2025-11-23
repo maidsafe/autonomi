@@ -232,6 +232,12 @@ struct Opt {
     /// Set this to true if you want the node to write the cache files in the older formats.
     #[clap(long, default_value_t = false)]
     write_older_cache_files: bool,
+
+    /// Stop the node instead of restarting after a successful upgrade.
+    ///
+    /// Useful when running under a service manager that handles restarts.
+    #[clap(long, default_value_t = false)]
+    stop_on_upgrade: bool,
 }
 
 fn main() -> Result<()> {
@@ -348,8 +354,14 @@ fn main() -> Result<()> {
         };
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
-        let restart_options =
-            run_node(node_builder, opt.rpc, &log_output_dest, log_reload_handle).await?;
+        let restart_options = run_node(
+            node_builder,
+            opt.rpc,
+            &log_output_dest,
+            log_reload_handle,
+            opt.stop_on_upgrade,
+        )
+        .await?;
 
         Ok::<_, eyre::Report>(restart_options)
     })?;
@@ -378,6 +390,7 @@ async fn run_node(
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
+    stop_on_upgrade: bool,
 ) -> Result<Option<(bool, PathBuf, u16)>> {
     let started_instant = std::time::Instant::now();
 
@@ -453,19 +466,27 @@ You can check your reward balance by running:
                 sleep(Duration::from_secs(delay_secs)).await;
                 match upgrade::perform_upgrade().await {
                     Ok(()) => {
-                        info!("Upgrade successful. Triggering restart...");
-
                         let delay = calculate_restart_delay(&running_node_clone).await;
-                        info!("Calculated restart delay: {delay:?}");
+                        info!("Calculated delay: {delay:?}");
 
-                        if let Err(err) = ctrl_tx_restart
-                            .send(NodeCtrl::Restart {
+                        let node_ctrl = if stop_on_upgrade {
+                            info!("Upgrade successful. Triggering stop...");
+                            NodeCtrl::Stop {
+                                delay,
+                                result: StopResult::Success(
+                                    "Upgrade completed successfully".to_string(),
+                                ),
+                            }
+                        } else {
+                            info!("Upgrade successful. Triggering restart...");
+                            NodeCtrl::Restart {
                                 delay,
                                 retain_peer_id: true,
-                            })
-                            .await
-                        {
-                            error!("Failed to send restart command: {err}");
+                            }
+                        };
+
+                        if let Err(err) = ctrl_tx_restart.send(node_ctrl).await {
+                            error!("Failed to send control command: {err}");
                         }
                         break;
                     }
