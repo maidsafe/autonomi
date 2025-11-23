@@ -92,6 +92,7 @@ pub struct InstallNodeServiceCtxBuilder {
     pub rewards_address: RewardsAddress,
     pub rpc_socket_addr: SocketAddr,
     pub service_user: Option<String>,
+    pub stop_on_upgrade: bool,
     pub write_older_cache_files: bool,
 }
 
@@ -152,6 +153,11 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from("--write-older-cache-files"));
         }
 
+        if self.stop_on_upgrade {
+            args.push(OsString::from("--stop-on-upgrade"));
+        }
+
+        // The EVM details must always be the last arguments.
         args.push(OsString::from(self.evm_network.to_string()));
         if let EvmNetwork::Custom(custom_network) = &self.evm_network {
             args.push(OsString::from("--rpc-url"));
@@ -254,6 +260,7 @@ mod tests {
             restart_policy: RestartPolicy::OnFailure { delay_secs: None },
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
+            stop_on_upgrade: true,
             write_older_cache_files: false,
         }
     }
@@ -293,6 +300,7 @@ mod tests {
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
+            stop_on_upgrade: false,
             write_older_cache_files: false,
         }
     }
@@ -332,6 +340,7 @@ mod tests {
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
             service_user: None,
+            stop_on_upgrade: true,
             write_older_cache_files: false,
         }
     }
@@ -356,6 +365,7 @@ mod tests {
             "/logs",
             "--rewards-address",
             "0x03B770D9cD32077cC0bF330c13C114a87643B124",
+            "--stop-on-upgrade",
             "evm-arbitrum-one",
         ];
         assert_eq!(
@@ -464,6 +474,7 @@ mod tests {
             "--rewards-address",
             "0x03B770D9cD32077cC0bF330c13C114a87643B124",
             "--write-older-cache-files",
+            "--stop-on-upgrade",
             "evm-custom",
             "--rpc-url",
             "http://localhost:8545/",

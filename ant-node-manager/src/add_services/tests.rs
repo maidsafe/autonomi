@@ -137,6 +137,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -520,6 +521,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -571,6 +573,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -622,6 +625,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -808,6 +812,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -1002,6 +1007,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -1148,6 +1154,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
                     OsString::from("--first"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -1301,6 +1308,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
                         "/ip4/127.0.0.1/tcp/8080/p2p/12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -1449,6 +1457,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
                     OsString::from("--local"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -1601,6 +1610,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
                     OsString::from("http://localhost:8080/contacts,http://localhost:8081/contacts"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -1749,6 +1759,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
                     OsString::from("--ignore-cache"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -1898,6 +1909,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
                     OsString::from("/path/to/bootstrap/cache"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -2041,6 +2053,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
                     OsString::from("5"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -2182,6 +2195,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
                     OsString::from(custom_ip.to_string()),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -2329,6 +2343,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -2453,6 +2468,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     OsString::from("12000"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -2512,6 +2528,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     OsString::from("12001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -2571,6 +2588,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
                     OsString::from("12002"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3109,6 +3127,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
                     OsString::from("15001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3243,6 +3262,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
                     OsString::from("20"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3378,6 +3398,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
                     OsString::from("20"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3512,6 +3533,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                     OsString::from("12000"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3571,6 +3593,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                     OsString::from("12001"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -3630,6 +3653,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
                     OsString::from("12002"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -4003,6 +4027,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                     ),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -4055,6 +4080,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                     ),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -4107,6 +4133,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
                     ),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -4504,6 +4531,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
         no_upnp: true,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -4631,6 +4659,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -4757,6 +4786,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
         no_upnp: true,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -4884,6 +4914,7 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
         no_upnp: true,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
     mock_service_control
@@ -5148,6 +5179,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -5275,6 +5307,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -5403,6 +5436,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
         no_upnp: false,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -5527,6 +5561,7 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
         no_upnp: true,
         write_older_cache_files: false,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -5643,6 +5678,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
                     ),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
@@ -5786,6 +5822,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
         no_upnp: true,
         write_older_cache_files: true,
         restart_policy,
+        stop_on_upgrade: true,
     }
     .build()?;
 
@@ -5914,6 +5951,7 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
                     OsString::from("--alpha"),
                     OsString::from("--rewards-address"),
                     OsString::from("0x03B770D9cD32077cC0bF330c13C114a87643B124"),
+                    OsString::from("--stop-on-upgrade"),
                     OsString::from("evm-custom"),
                     OsString::from("--rpc-url"),
                     OsString::from("http://localhost:8545/"),
