@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763982240514,
+  "lastUpdate": 1763982241920,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10057,6 +10057,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/cb56629bee1598c22735fbad44af3e0d957303b9"
         },
         "date": 1763657288518,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b762a2e7aa97a7ba1a6c0bb637937578aa30377b",
+          "message": "Merge pull request #3316 from jacderida/chore-new_clippy_fixes\n\nchore: upgrade `assert_cmd` reference",
+          "timestamp": "2025-11-24T09:47:13Z",
+          "tree_id": "15379df4172a3270c7e0cfb4b6fa6eb14d765245",
+          "url": "https://github.com/maidsafe/autonomi/commit/b762a2e7aa97a7ba1a6c0bb637937578aa30377b"
+        },
+        "date": 1763982241582,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
