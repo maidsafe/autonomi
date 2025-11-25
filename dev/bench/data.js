@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764082172246,
+  "lastUpdate": 1764082174771,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14202,6 +14202,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20981,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b78c0e4664e37f7f54f8206c8c897871cb2c1ed3",
+          "message": "Merge pull request #3318 from maidsafe/dependabot/npm_and_yarn/ant-node-nodejs/js-yaml-3.14.2\n\nchore(deps-dev): bump js-yaml from 3.14.1 to 3.14.2 in /ant-node-nodejs",
+          "timestamp": "2025-11-25T12:23:12Z",
+          "tree_id": "ca715a96d3b217bbed317ccde62978ca194cfec9",
+          "url": "https://github.com/maidsafe/autonomi/commit/b78c0e4664e37f7f54f8206c8c897871cb2c1ed3"
+        },
+        "date": 1764082173639,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10465,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20035,
             "unit": "ms"
           },
           {
