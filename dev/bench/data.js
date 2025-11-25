@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764096513672,
+  "lastUpdate": 1764096600323,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7112,6 +7112,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 181,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "423c8ec13b95a4c458711401399bb22866b80edb",
+          "message": "Merge pull request #3311 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/glob-10.5.0\n\nchore(deps): bump glob from 10.4.5 to 10.5.0 in /autonomi-nodejs",
+          "timestamp": "2025-11-25T17:42:26Z",
+          "tree_id": "c2bb235e28f07c383c84862824d8910bd28a91d2",
+          "url": "https://github.com/maidsafe/autonomi/commit/423c8ec13b95a4c458711401399bb22866b80edb"
+        },
+        "date": 1764096599548,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 287,
             "unit": "MB"
           }
         ]
