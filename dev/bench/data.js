@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764087225734,
+  "lastUpdate": 1764091843089,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4016,6 +4016,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 7.034939391085343,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "bc51c8f922d4de7c3667fb05bd5aa4a122eb1d30",
+          "message": "Merge pull request #3317 from maidsafe/dependabot/npm_and_yarn/ant-node-nodejs/glob-10.5.0\n\nchore(deps-dev): bump glob from 10.4.5 to 10.5.0 in /ant-node-nodejs",
+          "timestamp": "2025-11-25T16:05:59Z",
+          "tree_id": "e569380e75ce9db67e9e7af4ca561d64d39bc0a3",
+          "url": "https://github.com/maidsafe/autonomi/commit/bc51c8f922d4de7c3667fb05bd5aa4a122eb1d30"
+        },
+        "date": 1764091836003,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1297254313504086,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.121044564815879,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.023143203004309,
             "unit": "MiB/s"
           }
         ]
