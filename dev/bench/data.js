@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764082169669,
+  "lastUpdate": 1764082172246,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -10261,6 +10261,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/4217a797dbf5e5a1df1a844998897ae7743a9f8c"
         },
         "date": 1764079055376,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "b78c0e4664e37f7f54f8206c8c897871cb2c1ed3",
+          "message": "Merge pull request #3318 from maidsafe/dependabot/npm_and_yarn/ant-node-nodejs/js-yaml-3.14.2\n\nchore(deps-dev): bump js-yaml from 3.14.1 to 3.14.2 in /ant-node-nodejs",
+          "timestamp": "2025-11-25T12:23:12Z",
+          "tree_id": "ca715a96d3b217bbed317ccde62978ca194cfec9",
+          "url": "https://github.com/maidsafe/autonomi/commit/b78c0e4664e37f7f54f8206c8c897871cb2c1ed3"
+        },
+        "date": 1764082171082,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
