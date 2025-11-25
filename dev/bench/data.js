@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764087135474,
+  "lastUpdate": 1764087220545,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6976,6 +6976,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 204,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "7fbf5bc18c6cb69288fc71659c98cc773619cada",
+          "message": "Merge pull request #3312 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/js-yaml-3.14.2\n\nchore(deps): bump js-yaml from 3.14.1 to 3.14.2 in /autonomi-nodejs",
+          "timestamp": "2025-11-25T13:34:48Z",
+          "tree_id": "c6b7c0d5311b217b6808759e48dcdfa4f992ce1f",
+          "url": "https://github.com/maidsafe/autonomi/commit/7fbf5bc18c6cb69288fc71659c98cc773619cada"
+        },
+        "date": 1764087219570,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 257,
             "unit": "MB"
           }
         ]
