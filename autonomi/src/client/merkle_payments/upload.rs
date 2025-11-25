@@ -11,11 +11,10 @@ use crate::Client;
 use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
 use crate::networking::NetworkError;
 use crate::self_encryption::EncryptionStream;
+use crate::utils::process_tasks_with_max_concurrency;
 use ant_evm::merkle_payments::MerklePaymentProof;
 use ant_protocol::NetworkAddress;
 use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, RecordKind, try_serialize_record};
-use futures::StreamExt;
-use futures::stream::FuturesUnordered;
 use libp2p::kad::Record;
 use thiserror::Error;
 use xor_name::XorName;
@@ -54,8 +53,6 @@ impl Client {
     ) -> Result<EncryptionStream, MerklePutError> {
         // Stream and upload chunks with Merkle proofs
         let stream_batch_size: usize = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
-        let mut tasks = FuturesUnordered::new();
-        let mut completed = 0;
 
         // Helper to start an upload task for a chunk
         let start_upload = |chunk: Chunk| -> Result<_, MerklePutError> {
@@ -74,34 +71,22 @@ impl Client {
             })
         };
 
-        // Process chunks in streaming batches
+        // Process chunks in batches
+        let mut completed = 0;
         while let Some(batch) = upload_stream.next_batch(stream_batch_size) {
-            // Queue uploads from this batch
+            let mut tasks = vec![];
             for chunk in batch {
-                // If we've hit max concurrent, wait for one to complete first
-                while tasks.len() >= stream_batch_size {
-                    if let Some(result) = tasks.next().await {
-                        let addr = result?;
-                        completed += 1;
-                        #[cfg(feature = "loud")]
-                        println!("{completed}/{total_chunks} chunks uploaded at: {addr:?}");
-                        debug!("{completed}/{total_chunks} chunks uploaded at: {addr:?}");
-                    }
-                }
-
-                // Start upload for this chunk
                 let task = start_upload(chunk)?;
                 tasks.push(task);
             }
-        }
 
-        // Wait for all remaining uploads to complete
-        while let Some(result) = tasks.next().await {
-            let addr = result?;
-            completed += 1;
-            #[cfg(feature = "loud")]
-            println!("{completed}/{total_chunks} chunks uploaded at: {addr:?}");
-            debug!("{completed}/{total_chunks} chunks uploaded at: {addr:?}");
+            let results = process_tasks_with_max_concurrency(tasks, stream_batch_size).await;
+            for r in results {
+                completed += 1;
+                #[cfg(feature = "loud")]
+                println!("{completed}/{total_chunks} chunks uploaded at: {r:?}");
+                debug!("{completed}/{total_chunks} chunks uploaded at: {r:?}");
+            }
         }
 
         Ok(upload_stream)
