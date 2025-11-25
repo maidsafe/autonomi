@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764078969639,
+  "lastUpdate": 1764079054131,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -6772,6 +6772,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 220,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4217a797dbf5e5a1df1a844998897ae7743a9f8c",
+          "message": "Merge pull request #3282 from maidsafe/tweak_replication_criterias\n\nexpand replication range and fall-back network side replication",
+          "timestamp": "2025-11-25T13:34:10Z",
+          "tree_id": "0140d48354dee14db475b0301d301ad02b7371ea",
+          "url": "https://github.com/maidsafe/autonomi/commit/4217a797dbf5e5a1df1a844998897ae7743a9f8c"
+        },
+        "date": 1764079053297,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 224,
             "unit": "MB"
           }
         ]
