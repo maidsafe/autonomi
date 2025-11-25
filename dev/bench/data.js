@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764096602817,
+  "lastUpdate": 1764096604999,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14766,6 +14766,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18676,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "423c8ec13b95a4c458711401399bb22866b80edb",
+          "message": "Merge pull request #3311 from maidsafe/dependabot/npm_and_yarn/autonomi-nodejs/glob-10.5.0\n\nchore(deps): bump glob from 10.4.5 to 10.5.0 in /autonomi-nodejs",
+          "timestamp": "2025-11-25T17:42:26Z",
+          "tree_id": "c2bb235e28f07c383c84862824d8910bd28a91d2",
+          "url": "https://github.com/maidsafe/autonomi/commit/423c8ec13b95a4c458711401399bb22866b80edb"
+        },
+        "date": 1764096604168,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9842,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18964,
             "unit": "ms"
           },
           {
