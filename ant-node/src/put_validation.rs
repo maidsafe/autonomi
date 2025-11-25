@@ -17,8 +17,8 @@ use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
     NetworkAddress, PrettyPrintRecordKey,
     storage::{
-        Chunk, DataTypes, GraphEntryAddress, Pointer, PointerAddress, RecordHeader, RecordKind,
-        Scratchpad, ValidationType, try_deserialize_record, try_serialize_record,
+        Chunk, ChunkAddress, DataTypes, GraphEntryAddress, Pointer, PointerAddress, RecordHeader,
+        RecordKind, Scratchpad, ValidationType, try_deserialize_record, try_serialize_record,
     },
 };
 use libp2p::kad::{Record, RecordKey};
@@ -1153,7 +1153,8 @@ impl Node {
             let error_msg = format!(
                 "Merkle proof address mismatch: proof is for {:?} but data is at {:?}. \
                  This prevents reusing a proof paid for one address to store data at another address.",
-                hex::encode(proof.address.0), hex::encode(target_address.as_bytes())
+                hex::encode(proof.address.0),
+                hex::encode(target_address.as_bytes())
             );
             warn!("{error_msg}");
             return Err(PutValidationError::MerklePaymentVerificationFailed {
@@ -1235,17 +1236,17 @@ impl Node {
         debug!("Merkle proof structure verified successfully for {pretty_key:?}");
 
         // Verify network topology (>50% of paid nodes in closest)
-        // Get closest peers to the reward pool address
+        // Get closest peers to the midpoint address (same address the client used to collect candidates)
         const TOPOLOGY_CHECK_NODE_COUNT: usize = CANDIDATES_PER_POOL * 2;
-        let reward_pool_hash = proof.winner_pool_hash();
-        let reward_pool_address = NetworkAddress::from(XorName(reward_pool_hash));
+        let midpoint_address = proof.winner_pool.midpoint_proof.address();
+        let reward_pool_address = NetworkAddress::ChunkAddress(ChunkAddress::new(midpoint_address));
         let all_closest_peers = match self.network().get_closest_peers(&reward_pool_address).await {
             Ok(peers) => peers,
             Err(e) => {
                 warn!("Failed to get closest peers for topology verification: {e:?}");
                 return Err(PutValidationError::MerklePaymentVerificationFailed {
                     record_key: pretty_key.clone().into_owned(),
-                    error: format!("Failed to get closest peers to {target_address:?}: {e:?}"),
+                    error: format!("Failed to get closest peers to {midpoint_address:?}: {e:?}"),
                 });
             }
         };

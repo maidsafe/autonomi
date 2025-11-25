@@ -49,6 +49,8 @@ node_modules/
 site/
 /evmlib/tests/private.rs
 /evmlib/artifacts/
+/evmlib/cache/
+/evmlib/lib/
 
 # Some test run artifacts
 autonomi/tests/file/test_dir_fetched*

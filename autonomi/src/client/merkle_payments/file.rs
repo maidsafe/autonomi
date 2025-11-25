@@ -377,7 +377,10 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
             xor_names.push(*chunk.name());
         }
         #[cfg(feature = "loud")]
-        println!("Encrypted {total}/{estimated_total} chunks in {:?}", start.elapsed());
+        println!(
+            "Encrypted {total}/{estimated_total} chunks in {:?}",
+            start.elapsed()
+        );
     }
     xor_names
 }

@@ -1061,7 +1061,7 @@ mod tests {
             let leaves = make_test_leaves(count);
             let tree = MerkleTree::from_xornames(leaves).unwrap();
 
-            assert_eq!(tree.depth(), power as u8);
+            assert_eq!(tree.depth(), power);
             assert_eq!(tree.leaf_count(), count);
         }
     }
