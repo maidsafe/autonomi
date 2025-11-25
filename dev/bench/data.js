@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764084347025,
+  "lastUpdate": 1764084348254,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14343,6 +14343,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20035,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "fa70fdea9746deb6dd28df959089b044c1aafaca",
+          "message": "Merge pull request #3320 from jacderida/chore-revert_3301\n\nRevert \"Merge pull request #3301 from maqi/self_upgrade\"",
+          "timestamp": "2025-11-25T15:04:48Z",
+          "tree_id": "1154fd2417e144fcb546122d5e0441910a7c380c",
+          "url": "https://github.com/maidsafe/autonomi/commit/fa70fdea9746deb6dd28df959089b044c1aafaca"
+        },
+        "date": 1764084347967,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9887,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 18397,
             "unit": "ms"
           },
           {
