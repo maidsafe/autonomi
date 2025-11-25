@@ -15,7 +15,22 @@ use std::{
     net::{SocketAddr, TcpListener},
     path::Path,
 };
-use sysinfo::System;
+use sysinfo::{Pid, ProcessRefreshKind, System, UpdateKind};
+
+/// Normalizes a path by stripping common upgrade-related suffixes.
+///
+/// During in-place binary upgrades on Unix systems, the running process may show patterns like:
+/// - " (deleted)": appears when the binary has been replaced while still running
+/// - ".bak", ".old": common backup file suffixes
+///
+/// This function strips these suffixes to allow matching between the expected path and the actual
+/// running process path.
+fn normalize_path_for_comparison(path: &str) -> String {
+    path.trim_end_matches(" (deleted)")
+        .trim_end_matches(".bak")
+        .trim_end_matches(".old")
+        .to_string()
+}
 
 /// A thin wrapper around the `service_manager::ServiceManager`, which makes our own testing
 /// easier.
@@ -32,6 +47,7 @@ pub trait ServiceControl: Sync {
     fn start(&self, service_name: &str, user_mode: bool) -> Result<()>;
     fn stop(&self, service_name: &str, user_mode: bool) -> Result<()>;
     fn uninstall(&self, service_name: &str, user_mode: bool) -> Result<()>;
+    fn verify_process_by_pid(&self, pid: u32, expected_name: &str) -> Result<bool>;
     fn wait(&self, delay: u64);
 }
 
@@ -183,14 +199,29 @@ impl ServiceControl for ServiceController {
             bin_path.to_string_lossy()
         );
         let system = System::new_all();
+        let bin_path_str = bin_path.to_string_lossy();
+        let normalized_bin_path = normalize_path_for_comparison(&bin_path_str);
+
         for (pid, process) in system.processes() {
-            if let Some(path) = process.exe()
-                && bin_path == path
-            {
-                // There does not seem to be any easy way to get the process ID from the `Pid`
-                // type. Probably something to do with representing it in a cross-platform way.
-                trace!("Found process {bin_path:?} with PID: {pid}");
-                return Ok(pid.to_string().parse::<u32>()?);
+            if let Some(path) = process.exe() {
+                // Direct match (existing logic)
+                if bin_path == path {
+                    trace!("Found process {bin_path:?} with PID: {pid} (exact match)");
+                    return Ok(pid.to_string().parse::<u32>()?);
+                }
+
+                // Enhanced matching: handle upgrade-related path patterns
+                let path_str = path.to_string_lossy();
+                let normalized_path = normalize_path_for_comparison(&path_str);
+
+                if normalized_path == normalized_bin_path {
+                    debug!(
+                        "Found process with modified path: '{}' matches expected '{}' (normalized)",
+                        path_str, bin_path_str
+                    );
+                    trace!("Found process {bin_path:?} with PID: {pid}");
+                    return Ok(pid.to_string().parse::<u32>()?);
+                }
             }
         }
         error!(
@@ -200,6 +231,40 @@ impl ServiceControl for ServiceController {
         Err(Error::ServiceProcessNotFound(
             bin_path.to_string_lossy().to_string(),
         ))
+    }
+
+    fn verify_process_by_pid(&self, pid: u32, expected_name: &str) -> Result<bool> {
+        debug!("Verifying process with PID {pid}, expected name: {expected_name}");
+
+        let mut system = System::new();
+        let pid = Pid::from_u32(pid);
+
+        if !system.refresh_process_specifics(
+            pid,
+            ProcessRefreshKind::new().with_exe(UpdateKind::OnlyIfNotSet),
+        ) {
+            debug!("Process with PID {pid} does not exist");
+            return Ok(false);
+        }
+
+        if let Some(process) = system.process(pid)
+            && let Some(exe_path) = process.exe()
+        {
+            let process_name = exe_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+            // Handle " (deleted)" suffix that appears during binary replacement
+            let normalized_name = normalize_path_for_comparison(process_name);
+            let is_match =
+                normalized_name == expected_name || normalized_name.starts_with(expected_name);
+
+            debug!(
+                "Process {pid} name: '{}' (normalized: '{}'), expected: '{}', match: {}",
+                process_name, normalized_name, expected_name, is_match
+            );
+            return Ok(is_match);
+        }
+
+        Ok(false)
     }
 
     fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> Result<()> {
