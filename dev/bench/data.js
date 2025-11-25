@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764079056234,
+  "lastUpdate": 1764079058392,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14061,6 +14061,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 19648,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4217a797dbf5e5a1df1a844998897ae7743a9f8c",
+          "message": "Merge pull request #3282 from maidsafe/tweak_replication_criterias\n\nexpand replication range and fall-back network side replication",
+          "timestamp": "2025-11-25T13:34:10Z",
+          "tree_id": "0140d48354dee14db475b0301d301ad02b7371ea",
+          "url": "https://github.com/maidsafe/autonomi/commit/4217a797dbf5e5a1df1a844998897ae7743a9f8c"
+        },
+        "date": 1764079057590,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10693,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20981,
             "unit": "ms"
           },
           {
