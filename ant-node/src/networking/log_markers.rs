@@ -34,7 +34,8 @@ pub(crate) enum Marker<'a> {
     ReplicationSenderInRange {
         sender: &'a PeerId,
         keys_count: usize,
-        in_range: bool,
+        within_closest_group: bool,
+        within_extended_distance_range: bool,
         network_under_load: bool,
     },
     /// Incoming replication keys statistics

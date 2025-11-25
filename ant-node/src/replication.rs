@@ -252,11 +252,9 @@ impl Node {
     ) {
         for (key, val_type) in keys {
             #[cfg(feature = "open-metrics")]
-            let network_wide_replication_holders = if let Some(recorder) = self.metrics_recorder() {
-                Some(recorder.network_wide_replication_holders.clone())
-            } else {
-                None
-            };
+            let network_wide_replication_holders = self
+                .metrics_recorder()
+                .map(|recorder| recorder.network_wide_replication_holders.clone());
             let network = self.network().clone();
             let _handle = spawn(async move {
                 Self::network_wide_replication_per_key(
