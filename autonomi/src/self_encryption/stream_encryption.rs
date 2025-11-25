@@ -20,7 +20,7 @@ use crate::client::config::{FILE_ENCRYPT_BATCH_SIZE, IN_MEMORY_ENCRYPTION_MAX_SI
 use crate::client::data::DataAddress;
 use crate::utils::process_tasks_with_max_concurrency;
 
-const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 100;
+const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 10;
 
 pub enum EncryptionState {
     InMemory(Vec<Chunk>, DataMapChunk),

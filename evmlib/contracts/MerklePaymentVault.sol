@@ -327,8 +327,8 @@ contract MerklePaymentVault {
         pure
         returns (uint256)
     {
-        // Base price per byte (in atto tokens)
-        uint256 basePrice = 1000;
+        // Base price per byte (in atto tokens) - reduced 100x for cheaper pricing
+        uint256 basePrice = 10;
 
         // Calculate storage saturation: 0-100%
         uint256 saturation = 0;
