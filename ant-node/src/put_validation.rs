@@ -11,7 +11,8 @@ use std::collections::BTreeSet;
 use crate::error::PutValidationError;
 use crate::{Marker, Result, node::Node};
 use ant_evm::ProofOfPayment;
-use ant_evm::merkle_payments::CANDIDATES_PER_POOL;
+use ant_evm::merkle_payment_vault::get_merkle_payment_info;
+use ant_evm::merkle_payments::MerklePaymentProof;
 use ant_evm::payment_vault::verify_data_payment;
 use ant_protocol::storage::GraphEntry;
 use ant_protocol::{
@@ -22,6 +23,7 @@ use ant_protocol::{
     },
 };
 use libp2p::kad::{Record, RecordKey};
+use std::collections::HashSet;
 use xor_name::XorName;
 
 // We retry the payment verification once after waiting this many seconds to rule out the possibility of an EVM node state desync
@@ -1139,12 +1141,9 @@ impl Node {
     /// 3. Verify network topology (paid nodes among closest 20)
     async fn verify_merkle_payment(
         &self,
-        proof: &ant_evm::merkle_payments::MerklePaymentProof,
+        proof: &MerklePaymentProof,
         target_address: &NetworkAddress,
     ) -> Result<(), PutValidationError> {
-        use ant_evm::merkle_payment_vault::get_merkle_payment_info;
-        use std::collections::HashSet;
-
         let record_key = target_address.to_record_key();
         let pretty_key = PrettyPrintRecordKey::from(&record_key);
 
@@ -1237,7 +1236,6 @@ impl Node {
 
         // Verify network topology (>50% of paid nodes in closest)
         // Get closest peers to the midpoint address (same address the client used to collect candidates)
-        const TOPOLOGY_CHECK_NODE_COUNT: usize = CANDIDATES_PER_POOL * 2;
         let midpoint_address = proof.winner_pool.midpoint_proof.address();
         let reward_pool_address = NetworkAddress::ChunkAddress(ChunkAddress::new(midpoint_address));
         let all_closest_peers = match self.network().get_closest_peers(&reward_pool_address).await {
@@ -1251,11 +1249,8 @@ impl Node {
             }
         };
 
-        // Take only the TOPOLOGY_CHECK_NODE_COUNT closest nodes
-        let closest_peers: Vec<_> = all_closest_peers
-            .into_iter()
-            .take(TOPOLOGY_CHECK_NODE_COUNT)
-            .collect();
+        // Take all the closest nodes
+        let closest_peers: Vec<_> = all_closest_peers.into_iter().collect();
         let closest_peer_ids: HashSet<_> =
             closest_peers.iter().map(|(peer_id, _)| *peer_id).collect();
 
@@ -1277,13 +1272,14 @@ impl Node {
             .iter()
             .filter(|peer_id| closest_peer_ids.contains(peer_id))
             .count();
+        let closest_len = closest_peer_ids.len();
         let paid_nodes_count = payment_info.paid_node_addresses.len();
         let validity_threshold = paid_nodes_count / 2;
         let reached_validity_threshold = legitimate_paid_nodes > validity_threshold;
 
         if !reached_validity_threshold {
             let error_msg = format!(
-                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {TOPOLOGY_CHECK_NODE_COUNT} (need >50%)",
+                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {closest_len} (need >50%)",
             );
             warn!("{error_msg} for {pretty_key:?}");
             return Err(PutValidationError::MerklePaymentVerificationFailed {
@@ -1293,7 +1289,7 @@ impl Node {
         }
 
         debug!(
-            "Network topology verified: {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {TOPOLOGY_CHECK_NODE_COUNT} for {pretty_key:?}",
+            "Network topology verified: {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {closest_len} for {pretty_key:?}",
         );
 
         info!("Merkle payment verified successfully for {pretty_key:?}");

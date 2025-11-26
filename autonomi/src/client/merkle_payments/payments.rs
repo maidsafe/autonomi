@@ -86,8 +86,6 @@ impl Client {
     ) -> Result<[MerklePaymentCandidateNode; CANDIDATES_PER_POOL], MerklePaymentError> {
         // Request from 25% more peers than needed to provide fault tolerance
         // This allows up to 25% of peers to fail without blocking the payment
-        // We'll select the 20 closest successful responses to ensure we get the actual
-        // closest nodes to the target, not just any 20 that respond
         const PEERS_TO_QUERY: usize = CANDIDATES_PER_POOL + (CANDIDATES_PER_POOL / 4);
 
         let network_addr = NetworkAddress::ChunkAddress(ChunkAddress::new(target_address));
@@ -188,7 +186,7 @@ impl Client {
             network_addr.distance(&peer_addr)
         });
 
-        // Take the 20 closest successful responses
+        // Take the CANDIDATES_PER_POOL closest successful responses
         let closest_successful: Vec<MerklePaymentCandidateNode> = successful_candidates
             .into_iter()
             .take(CANDIDATES_PER_POOL)

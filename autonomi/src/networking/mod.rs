@@ -164,7 +164,7 @@ impl Network {
     /// This will start the network driver in a background thread, which is a long-running task that runs until the [`Network`] is dropped
     /// The [`Network`] is cheaply cloneable, prefer cloning over creating new instances to avoid creating multiple network drivers
     pub fn new(bootstrap: Bootstrap) -> Result<Self, NoKnownPeers> {
-        let (task_sender, task_receiver) = mpsc::channel(10);
+        let (task_sender, task_receiver) = mpsc::channel(100);
         let driver = NetworkDriver::new(bootstrap, task_receiver);
 
         // run the network driver in a background task

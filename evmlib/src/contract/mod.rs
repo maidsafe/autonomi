@@ -9,3 +9,13 @@
 pub mod merkle_payment_vault;
 pub mod network_token;
 pub mod payment_vault;
+
+pub fn data_type_conversion(data_type: u32) -> u8 {
+    match data_type {
+        0 => 2, // Chunk
+        1 => 0, // GraphEntry
+        2 => 3, // Pointer
+        3 => 1, // Scratchpad
+        _ => 4, // Does not exist
+    }
+}

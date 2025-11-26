@@ -185,7 +185,7 @@ pub struct MerklePaymentCandidatePool {
     /// The midpoint proof from ant-evm's merkle_tree module
     pub midpoint_proof: MidpointProof,
 
-    /// Candidate nodes for this pool (exactly 20 nodes)
+    /// Candidate nodes for this pool
     /// Provides redundancy - only 'depth' of these will be selected as winners
     pub candidate_nodes: [MerklePaymentCandidateNode; CANDIDATES_PER_POOL],
 }
