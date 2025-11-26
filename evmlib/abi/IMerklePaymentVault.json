@@ -373,5 +373,74 @@
     ],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "type": "error",
+    "name": "DepthTooLarge",
+    "inputs": [
+      {
+        "name": "depth",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "max",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WrongPoolCount",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "got",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WrongCandidateCount",
+    "inputs": [
+      {
+        "name": "poolIdx",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "got",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TransferFailed",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymentAlreadyExists",
+    "inputs": [
+      {
+        "name": "poolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
   }
 ]
