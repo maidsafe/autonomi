@@ -283,6 +283,11 @@ impl Network {
         self.send_local_swarm_cmd(LocalSwarmCmd::TriggerIntervalReplication)
     }
 
+    /// Add a peer to the networking blocklist.
+    pub(crate) fn add_peer_to_blocklist(&self, peer: PeerId) {
+        self.send_local_swarm_cmd(LocalSwarmCmd::AddPeerToBlockList { peer_id: peer })
+    }
+
     /// To be called when got a fresh record from client uploading.
     pub(crate) fn add_fresh_records_to_the_replication_fetcher(
         &self,
