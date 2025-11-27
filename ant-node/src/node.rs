@@ -41,7 +41,7 @@ use rand::{
     thread_rng,
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
     sync::{
@@ -1134,7 +1134,7 @@ impl Node {
             candidate_peers.len()
         );
 
-        let (successful_peers, failed_peers) = Self::fetch_record_from_peers(
+        let (successful_peers, failed_peers) = Self::fetch_record_from_peers_with_addresses(
             network.clone(),
             target_record.clone(),
             candidate_peers,
@@ -1161,20 +1161,16 @@ impl Node {
                 "Scheduling replica verification retry for {} peers on record {pretty_key:?}.",
                 failed_peers.len()
             );
-            Self::schedule_record_fetch_retry(
-                network.clone(),
-                target_record.clone(),
-                failed_peers,
-            ).await;
+            Self::schedule_record_fetch_retry(network.clone(), target_record.clone(), failed_peers).await;
         }
     }
 
     /// Fetch a replicated record from the provided peers and return the success/failure split.
-    async fn fetch_record_from_peers(
+    async fn fetch_record_from_peers_with_addresses(
         network: Network,
         record_address: NetworkAddress,
         peers: Vec<(PeerId, Addresses)>,
-    ) -> (Vec<PeerId>, Vec<(PeerId, Addresses)>) {
+    ) -> (Vec<PeerId>, Vec<PeerId>) {
         let request = Request::Query(Query::GetReplicatedRecord {
             requester: NetworkAddress::from(network.peer_id()),
             key: record_address.clone(),
@@ -1205,7 +1201,7 @@ impl Node {
 
         for res in results {
             match res {
-                (peer_id, addrs, Ok((Response::Query(QueryResponse::GetReplicatedRecord(result)), _))) => {
+                (peer_id, _addrs, Ok((Response::Query(QueryResponse::GetReplicatedRecord(result)), _))) => {
                     match result {
                         Ok((_holder, _value)) => {
                             successes.push(peer_id);
@@ -1214,21 +1210,21 @@ impl Node {
                             info!(
                                 "Peer {peer_id:?} responded with error {err:?} for replicated record {pretty_key:?}."
                             );
-                            failures.push((peer_id, addrs));
+                            failures.push(peer_id);
                         }
                     }
                 }
-                (peer_id, addrs, Ok((other_response, _))) => {
+                (peer_id, _addrs, Ok((other_response, _))) => {
                     warn!(
                         "Peer {peer_id:?} responded with unexpected message {other_response:?} for {pretty_key:?}."
                     );
-                    failures.push((peer_id, addrs));
+                    failures.push(peer_id);
                 }
-                (peer_id, addrs, Err(err)) => {
+                (peer_id, _addrs, Err(err)) => {
                     info!(
                         "Failed to reach peer {peer_id:?} for replicated record {pretty_key:?}: {err:?}"
                     );
-                    failures.push((peer_id, addrs));
+                    failures.push(peer_id);
                 }
             }
         }
@@ -1236,22 +1232,42 @@ impl Node {
         (successes, failures)
     }
 
-    /// Spawn a retry task for peers that failed to return the replicated record.
+    /// Schedule a future retry for peers that failed to return the replicated record.
     async fn schedule_record_fetch_retry(
         network: Network,
         record_address: NetworkAddress,
-        failed_peers: Vec<(PeerId, Addresses)>,
+        failed_peers: Vec<PeerId>,
     ) {
-        if failed_peers.is_empty() {
+        let retry_peers: HashSet<_> = failed_peers.into_iter().collect();
+        if retry_peers.is_empty() {
             return;
         }
+
+        let record_clone = record_address.clone();
+        let network_clone = network.clone();
+
         tokio::time::sleep(REPLICA_FETCH_RETRY_DELAY).await;
         let pretty_key =
-            PrettyPrintRecordKey::from(&record_address.to_record_key()).into_owned();
-        let (_, still_failed) = Self::fetch_record_from_peers(
-            network.clone(),
-            record_address,
-            failed_peers,
+            PrettyPrintRecordKey::from(&record_clone.to_record_key()).into_owned();
+
+        let refreshed_candidates = Self::refresh_retry_candidate_addresses(
+            &network_clone,
+            &record_clone,
+            &retry_peers,
+        )
+        .await;
+
+        if refreshed_candidates.is_empty() {
+            info!(
+                "Skipping replica retry for {pretty_key:?}; no tracked peers remain close to the record."
+            );
+            return;
+        }
+
+        let (_, still_failed) = Self::fetch_record_from_peers_with_addresses(
+            network_clone.clone(),
+            record_clone.clone(),
+            refreshed_candidates,
         )
         .await;
 
@@ -1266,9 +1282,34 @@ impl Node {
             "{} peers still failed to provide {pretty_key:?}; evicting and blacklisting.",
             still_failed.len()
         );
-        for (peer_id, _) in still_failed {
-            Self::evict_and_blacklist_peer(network.clone(), peer_id);
+        for peer_id in still_failed {
+            Self::evict_and_blacklist_peer(network_clone.clone(), peer_id);
         }
+    }
+
+    /// Get the latest address information for tracked peers via a DHT query.
+    async fn refresh_retry_candidate_addresses(
+        network: &Network,
+        record_address: &NetworkAddress,
+        retry_peers: &HashSet<PeerId>,
+    ) -> Vec<(PeerId, Addresses)> {
+        let pretty_key =
+            PrettyPrintRecordKey::from(&record_address.to_record_key()).into_owned();
+        let Ok(closest_peers) = network.get_closest_peers(record_address).await else {
+            warn!(
+                "Failed to refresh peer addresses for {pretty_key:?}; unable to retry replica fetch."
+            );
+            return Vec::new();
+        };
+
+        let closest_map: HashMap<PeerId, Addresses> = closest_peers
+            .into_iter()
+            .collect();
+
+        retry_peers
+            .iter()
+            .filter_map(|peer_id| closest_map.get(peer_id).cloned().map(|addrs| (*peer_id, addrs)))
+            .collect()
     }
 
     /// Remove the peer from the routing table and add it to the blacklist.
