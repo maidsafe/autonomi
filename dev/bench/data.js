@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764287596745,
+  "lastUpdate": 1764287689214,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7316,6 +7316,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 219,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "dfc9800a4dae391893b1f0488f9cc6e0b4a35c21",
+          "message": "Merge pull request #3328 from maidsafe/fix-bump_autonomi\n\nBump Crates",
+          "timestamp": "2025-11-27T23:31:23Z",
+          "tree_id": "ef0299a82fc77817879e4c28feab2f7a4ba7dcc6",
+          "url": "https://github.com/maidsafe/autonomi/commit/dfc9800a4dae391893b1f0488f9cc6e0b4a35c21"
+        },
+        "date": 1764287688437,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 184,
             "unit": "MB"
           }
         ]
