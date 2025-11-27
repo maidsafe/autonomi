@@ -503,16 +503,23 @@ You can check your reward balance by running:
                 // 72 hours (259200 seconds) with ±5% randomization to prevent simultaneous upgrades
                 let base_delay = 259200;
                 let variance = rand::thread_rng().gen_range(-12960..=12960);
-                let delay_secs = (base_delay + variance) as u64;
-                sleep(Duration::from_secs(delay_secs)).await;
+                let upgrade_check_delay_secs = (base_delay + variance) as u64;
+                let upgrade_check_wake_time =
+                    chrono::Utc::now() + chrono::Duration::seconds(upgrade_check_delay_secs as i64);
+                info!(
+                    "Next upgrade check scheduled for {}",
+                    upgrade_check_wake_time
+                );
+                sleep(Duration::from_secs(upgrade_check_delay_secs)).await;
+
                 match upgrade::perform_upgrade().await {
                     Ok(()) => {
-                        let delay = calculate_restart_delay(&running_node_clone).await;
-                        info!("Calculated delay: {delay:?}");
-                        sleep(delay).await;
+                        let node_restart_delay = calculate_restart_delay(&running_node_clone).await;
+                        let node_restart_wake_time = chrono::Utc::now() + node_restart_delay;
+                        info!("Node will stop/restart for upgrade at {node_restart_wake_time}");
+                        sleep(node_restart_delay).await;
 
                         let node_ctrl = if stop_on_upgrade {
-                            info!("Upgrade successful. Triggering stop...");
                             NodeCtrl::Stop {
                                 delay: Duration::from_secs(0),
                                 result: StopResult::Success(
@@ -520,7 +527,6 @@ You can check your reward balance by running:
                                 ),
                             }
                         } else {
-                            info!("Upgrade successful. Triggering restart...");
                             NodeCtrl::Restart {
                                 delay: Duration::from_secs(0),
                                 retain_peer_id: true,
@@ -533,7 +539,7 @@ You can check your reward balance by running:
                         break;
                     }
                     Err(e) => {
-                        debug!("Upgrade check: {e}");
+                        error!("Error during upgrade process: {e}");
                     }
                 }
             }
