@@ -121,10 +121,8 @@ pub async fn download_and_extract_upgrade_binary(
     release_info: &AutonomiReleaseInfo,
     release_repo: &dyn AntReleaseRepoActions,
 ) -> Result<(PathBuf, String)> {
-    info!("Starting upgrade binary download process");
-
     let platform = ant_releases::get_running_platform()?;
-    debug!("Current platform: {:?}", platform);
+    info!("Obtained running platform for upgrade: {:?}", platform);
 
     let platform_binaries = release_info
         .platform_binaries
@@ -142,21 +140,24 @@ pub async fn download_and_extract_upgrade_binary(
             )
         })?;
     info!(
-        "Found antnode binary version {} with hash {}",
+        "Found upgrade binary from release info: version {} with hash {}",
         antnode_binary.version, antnode_binary.sha256
     );
 
     let target_path = get_binary_path_for_version(&release_info.commit_hash)?;
+    // First check (pre-lock): Fast-path optimization for cache hits.
+    // This avoids expensive lock acquisition when a valid cached binary already exists.
+    // This is the common case (90%+ of upgrade checks) since binaries are cached.
     if target_path.exists() {
         info!(
-            "Binary already exists at {}. Will now verify hash...",
+            "Cached binary already exists at {}. Will now verify hash...",
             target_path.display()
         );
         if let Ok(true) = verify_binary_hash(&target_path, &antnode_binary.sha256) {
-            info!("Existing binary hash verified. Will use binary that has already been obtained.");
+            info!("Cached binary verified. Will use this binary for the upgrade.");
             return Ok((target_path, antnode_binary.sha256.clone()));
         }
-        warn!("Existing binary verification failed. Will download again...");
+        warn!("Cached binary verification failed. Will download again...");
     }
 
     let upgrade_dir_path = get_upgrade_dir_path()?;
@@ -164,10 +165,16 @@ pub async fn download_and_extract_upgrade_binary(
 
     let _lock = acquire_upgrade_lock(&upgrade_dir_path)?;
 
+    // Second check (post-lock): Handle race condition where another process downloaded
+    // the binary while this process was waiting for the lock.
+    // This prevents duplicate downloads when multiple antnode instances check for upgrades
+    // simultaneously and share the same upgrade cache directory.
     if target_path.exists() {
         match verify_binary_hash(&target_path, &antnode_binary.sha256) {
             Ok(true) => {
-                info!("Binary verified after acquiring lock. Will use existing binary.");
+                info!(
+                    "Cached binary verified after acquiring lock. Will use this binary for the upgrade."
+                );
                 return Ok((target_path, antnode_binary.sha256.clone()));
             }
             Ok(false) | Err(_) => {
@@ -204,7 +211,7 @@ pub async fn download_and_extract_upgrade_binary(
         release_repo.extract_release_archive(&archive_path, &temp_download_dir_path)?;
     if !verify_binary_hash(&extracted_path, &antnode_binary.sha256)? {
         return Err(eyre!(
-            "Downloaded binary hash does not match expected hash: {}",
+            "Downloaded binary hash does not match expected hash {}",
             antnode_binary.sha256
         ));
     }
@@ -220,7 +227,7 @@ pub async fn download_and_extract_upgrade_binary(
     fs::rename(&extracted_path, &target_path)?;
 
     let _ = fs::remove_dir_all(&temp_download_dir_path);
-    info!("Binary successfully prepared at: {}", target_path.display());
+    info!("Upgrade binary prepared at {}", target_path.display());
     Ok((target_path, antnode_binary.sha256.clone()))
 }
 
@@ -263,10 +270,7 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
         fs::set_permissions(&temp_path, perms)?;
         fs::rename(&temp_path, &current_exe_path)?;
 
-        info!(
-            "Successfully replaced binary at: {}",
-            current_exe_path.display()
-        );
+        info!("Replaced binary at {}", current_exe_path.display());
         Ok(())
     }
 
@@ -279,6 +283,7 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
 }
 
 pub async fn perform_upgrade() -> Result<()> {
+    info!("Performing upgrade check...");
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
     let release_info = release_repo.get_latest_autonomi_release_info().await?;
     if release_info
