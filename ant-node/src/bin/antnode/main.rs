@@ -468,11 +468,12 @@ You can check your reward balance by running:
                     Ok(()) => {
                         let delay = calculate_restart_delay(&running_node_clone).await;
                         info!("Calculated delay: {delay:?}");
+                        sleep(node_restart_delay).await;
 
                         let node_ctrl = if stop_on_upgrade {
                             info!("Upgrade successful. Triggering stop...");
                             NodeCtrl::Stop {
-                                delay,
+                                delay: Duration::from_secs(0),
                                 result: StopResult::Success(
                                     "Upgrade completed successfully".to_string(),
                                 ),
@@ -480,7 +481,7 @@ You can check your reward balance by running:
                         } else {
                             info!("Upgrade successful. Triggering restart...");
                             NodeCtrl::Restart {
-                                delay,
+                                delay: Duration::from_secs(0),
                                 retain_peer_id: true,
                             }
                         };
