@@ -152,7 +152,10 @@ pub async fn upload(
         println!("All chunks already exist on the network.");
     } else {
         println!("Successfully uploaded: {file}");
-        println!("At address: {local_addr}");
+        if !public {
+            println!("At local address: {local_addr}");
+        }
+        println!("At network address: {archive_addr}");
         info!("Successfully uploaded: {file} at address: {local_addr}");
         println!("Number of chunks uploaded: {}", summary.records_paid);
         println!(
