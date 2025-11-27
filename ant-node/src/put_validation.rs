@@ -22,7 +22,8 @@ use ant_protocol::{
         RecordKind, Scratchpad, ValidationType, try_deserialize_record, try_serialize_record,
     },
 };
-use libp2p::kad::{Record, RecordKey};
+use libp2p::PeerId;
+use libp2p::kad::{KBucketDistance as Distance, Record, RecordKey, U256};
 use std::collections::HashSet;
 use xor_name::XorName;
 
@@ -1267,6 +1268,17 @@ impl Node {
                 }
             })?;
 
+        // Distance validation: verify ALL paid nodes are within 10x responsible distance range
+        self.verify_paid_nodes_distance(&paid_peer_ids, &reward_pool_address)
+            .await
+            .map_err(|error| {
+                warn!("{error} for {pretty_key:?}");
+                PutValidationError::MerklePaymentVerificationFailed {
+                    record_key: pretty_key.clone().into_owned(),
+                    error,
+                }
+            })?;
+
         // Compare the two sets of peer ids: how many PAID nodes are in the closest?
         let legitimate_paid_nodes = paid_peer_ids
             .iter()
@@ -1293,6 +1305,68 @@ impl Node {
         );
 
         info!("Merkle payment verified successfully for {pretty_key:?}");
+        Ok(())
+    }
+
+    /// Verify that all paid nodes are within a reasonable distance to the target address.
+    /// Uses 10x the responsible distance range as the effective tolerance.
+    ///
+    /// Returns Ok(()) if all nodes are within range, or an error message if any are outside.
+    async fn verify_paid_nodes_distance(
+        &self,
+        paid_peer_ids: &[PeerId],
+        target_address: &NetworkAddress,
+    ) -> Result<(), String> {
+        // Get the node's responsible distance range
+        let distance_range = match self.network().get_network_density().await.ok().flatten() {
+            Some(range) => range,
+            None => {
+                // If we can't get the distance range, skip this check
+                debug!("No responsible distance range available, skipping distance validation");
+                return Ok(());
+            }
+        };
+
+        // Use 10x tolerance for the effective range
+        let effective_range = Distance(distance_range.0.saturating_mul(U256::from(10)));
+
+        // Check each paid node's distance to the target address
+        let nodes_outside_range: Vec<_> = paid_peer_ids
+            .iter()
+            .filter_map(|peer_id| {
+                let peer_addr = NetworkAddress::from(*peer_id);
+                let distance = peer_addr.distance(target_address);
+                if distance > effective_range {
+                    Some((*peer_id, distance))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Log distance check results
+        debug!(
+            "Distance check: {}/{} paid nodes within 10x range (base={:?}, effective={:?})",
+            paid_peer_ids.len() - nodes_outside_range.len(),
+            paid_peer_ids.len(),
+            distance_range.ilog2(),
+            effective_range.ilog2()
+        );
+
+        // Reject if ANY paid node is outside the 10x range
+        if !nodes_outside_range.is_empty() {
+            return Err(format!(
+                "Distance validation failed: {} paid nodes outside 10x responsible range \
+                 (effective ilog2={:?}). Nodes outside: {:?}",
+                nodes_outside_range.len(),
+                effective_range.ilog2(),
+                nodes_outside_range
+                    .iter()
+                    .map(|(p, d)| format!("{p:?}@{:?}", d.ilog2()))
+                    .collect::<Vec<_>>()
+            ));
+        }
+
         Ok(())
     }
 }
