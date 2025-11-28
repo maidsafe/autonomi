@@ -409,14 +409,14 @@ jobs:
             exit 1
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: autonomi-x86_64-pc-windows-msvc-signed
           path: artifacts/x86_64-pc-windows-msvc/release
 
       - name: Upload signing logs (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-signing-logs
           path: ${{ github.workspace }}\smctl-signing.log
