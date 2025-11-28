@@ -6,7 +6,7 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
-use crate::{NetworkAddress, messages::Nonce};
+use crate::{messages::Nonce, NetworkAddress};
 use libp2p::kad::U256;
 use serde::{Deserialize, Serialize};
 
@@ -64,7 +64,7 @@ pub enum Query {
     /// In case both of the parameters provided, `range` is preferred to be replied.
     GetClosestPeers {
         key: NetworkAddress,
-        // Shall be greater than K_VALUE, otherwise can use libp2p function directly
+        // Shall be less than K_VALUE, as using the receiver's local knowledge
         num_of_peers: Option<usize>,
         // Defines the range that replied peers shall be within
         range: Option<[u8; 32]>,

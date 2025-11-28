@@ -460,6 +460,33 @@ impl NetworkDriver {
                     },
                 );
             }
+            NetworkTask::GetClosestPeersFromPeer {
+                addr,
+                peer,
+                num_of_peers,
+                resp,
+            } => {
+                let req = Request::Query(Query::GetClosestPeers {
+                    key: addr.clone(),
+                    num_of_peers,
+                    range: None,
+                    sign_result: true,
+                });
+
+                let req_id =
+                    self.req()
+                        .send_request_with_addresses(&peer.peer_id, req, peer.addrs.clone());
+
+                self.pending_tasks.insert_query(
+                    req_id,
+                    NetworkTask::GetClosestPeersFromPeer {
+                        addr,
+                        peer,
+                        num_of_peers,
+                        resp,
+                    },
+                );
+            }
             NetworkTask::ConnectionsMade { resp } => {
                 // Send the current count of connections made
                 if let Err(e) = resp.send(Ok(self.connections_made)) {

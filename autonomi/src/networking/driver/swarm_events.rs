@@ -196,6 +196,14 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_get_record_from_peer(request_id, result)?;
             }
+            Response::Query(QueryResponse::GetClosestPeers {
+                target: _,
+                peers,
+                signature: _,
+            }) => {
+                self.pending_tasks
+                    .update_get_closest_peers_from_peer(request_id, peers)?;
+            }
             _ => {
                 info!("Other request response event({request_id:?}): {response:?}");
                 // Unrecoganized req/rsp DM indicates peer is in an incorrect version

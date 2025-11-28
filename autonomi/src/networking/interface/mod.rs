@@ -95,6 +95,14 @@ pub(super) enum NetworkTask {
             )>,
         >,
     },
+    /// Get closest peers from a specific peer using request/response
+    GetClosestPeersFromPeer {
+        addr: NetworkAddress,
+        peer: PeerInfo,
+        num_of_peers: Option<usize>,
+        #[debug(skip)]
+        resp: OneShotTaskResult<Vec<(NetworkAddress, Vec<libp2p::Multiaddr>)>>,
+    },
     /// Get information about the amount of connections made
     ConnectionsMade {
         #[debug(skip)]
