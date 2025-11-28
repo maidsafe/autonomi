@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764287693330,
+  "lastUpdate": 1764359135154,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4211,6 +4211,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.9910105240618,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "97af816ddac226a91d9b204677408264bdbedfb8",
+          "message": "Merge pull request #3332 from jacderida/chore-python_publish_fixes\n\nfix(ci): Rewrite Python publish workflow following maturin best practices",
+          "timestamp": "2025-11-28T19:24:09Z",
+          "tree_id": "df5a19b50d2e7a281902c66a86998d14f46857e7",
+          "url": "https://github.com/maidsafe/autonomi/commit/97af816ddac226a91d9b204677408264bdbedfb8"
+        },
+        "date": 1764359127331,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0857176159762558,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.2433365138631425,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 7.0359329981395105,
             "unit": "MiB/s"
           }
         ]
