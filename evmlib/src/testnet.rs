@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::common::Address;
-use crate::contract::network_token::NetworkToken;
-use crate::contract::payment_vault;
+use crate::contract::merkle_payment_vault::MerklePaymentVaultHandler;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
+use crate::contract::{merkle_payment_vault, network_token::NetworkToken, payment_vault};
 use crate::reqwest::Url;
 use crate::{CustomNetwork, Network};
 use alloy::hex::ToHexExt;
@@ -29,6 +29,7 @@ pub struct Testnet {
     rpc_url: Url,
     network_token_address: Address,
     data_payments_address: Address,
+    merkle_payments_address: Address,
 }
 
 impl Testnet {
@@ -39,12 +40,16 @@ impl Testnet {
         let network_token = deploy_network_token_contract(&rpc_url, &node).await;
         let data_payments =
             deploy_data_payments_contract(&rpc_url, &node, *network_token.contract.address()).await;
+        let merkle_payments =
+            deploy_merkle_payments_contract(&rpc_url, &node, *network_token.contract.address())
+                .await;
 
         Testnet {
             anvil: node,
             rpc_url,
             network_token_address: *network_token.contract.address(),
             data_payments_address: *data_payments.contract.address(),
+            merkle_payments_address: *merkle_payments.contract.address(),
         }
     }
 
@@ -53,6 +58,7 @@ impl Testnet {
             rpc_url_http: self.rpc_url.clone(),
             payment_token_address: self.network_token_address,
             data_payments_address: self.data_payments_address,
+            merkle_payments_address: Some(self.merkle_payments_address),
         })
     }
 
@@ -60,6 +66,10 @@ impl Testnet {
         // Fetches private key from the first default Anvil account (Alice).
         let signer: PrivateKeySigner = self.anvil.keys()[0].clone().into();
         signer.to_bytes().encode_hex_with_prefix()
+    }
+
+    pub fn merkle_payments_address(&self) -> Address {
+        self.merkle_payments_address
     }
 }
 
@@ -162,6 +172,47 @@ pub async fn deploy_data_payments_contract(
 
     // Create a handler for the deployed contract
     PaymentVaultHandler::new(payment_vault_contract_address, provider)
+}
+
+pub async fn deploy_merkle_payments_contract(
+    rpc_url: &Url,
+    anvil: &AnvilInstance,
+    token_address: Address,
+) -> MerklePaymentVaultHandler<
+    FillProvider<
+        JoinFill<
+            JoinFill<
+                JoinFill<
+                    Identity,
+                    JoinFill<
+                        GasFiller,
+                        JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>,
+                    >,
+                >,
+                NonceFiller<SimpleNonceManager>,
+            >,
+            WalletFiller<EthereumWallet>,
+        >,
+        RootProvider,
+        Ethereum,
+    >,
+    Ethereum,
+> {
+    // Set up signer from the third default Anvil account (Charlie).
+    let signer: PrivateKeySigner = anvil.keys()[2].clone().into();
+    let wallet = EthereumWallet::from(signer);
+
+    let provider = ProviderBuilder::new()
+        .with_simple_nonce_management()
+        .wallet(wallet)
+        .connect_http(rpc_url.clone());
+
+    // Deploy the contract.
+    let merkle_payment_vault_contract_address =
+        merkle_payment_vault::implementation::deploy(&provider, token_address).await;
+
+    // Create a handler for the deployed contract
+    MerklePaymentVaultHandler::new(merkle_payment_vault_contract_address, provider)
 }
 
 #[cfg(test)]

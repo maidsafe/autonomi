@@ -9,10 +9,10 @@
 mod merkle_payment;
 mod merkle_tree;
 
-// Re-export types from evmlib (disk contract and minimal types)
+// Re-export types from evmlib (minimal types)
 pub use evmlib::merkle_batch_payment::{
-    CANDIDATES_PER_POOL, DiskMerklePaymentContract, MAX_MERKLE_DEPTH, OnChainPaymentInfo,
-    PoolCommitment, SmartContractError, expected_reward_pools,
+    CANDIDATES_PER_POOL, MAX_MERKLE_DEPTH, OnChainPaymentInfo, PoolCommitment, SmartContractError,
+    expected_reward_pools,
 };
 
 // Export ant-evm specific types (nodes, pools, proofs with signatures)
