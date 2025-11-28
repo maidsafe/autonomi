@@ -203,7 +203,7 @@ jobs:
       SM_LOG_LEVEL: trace
       SM_LOG_FILE: ${{ github.workspace }}\smctl-signing.log
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/download-artifact@master
         with:
