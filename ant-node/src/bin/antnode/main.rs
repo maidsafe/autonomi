@@ -283,6 +283,7 @@ async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
 fn main() -> Result<()> {
     color_eyre::install()?;
     let opt = Opt::parse();
+    println!("Welcome to antnode");
 
     let network_id = if let Some(network_id) = opt.network_id {
         network_id
