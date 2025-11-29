@@ -9,7 +9,7 @@ license = "GPL-3.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-ant-node = { path = "../ant-node", version = "0.4.9" }
+ant-node = { path = "../ant-node", version = "0.4.10-rc.1" }
 hex = "0.4.3"
 napi = { version = "2.12.2", default-features = false, features = ["napi4", "napi6", "tokio_rt", "serde-json"] }
 napi-derive = "2.12.2"
