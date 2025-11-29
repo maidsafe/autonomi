@@ -208,6 +208,7 @@ fn init_swarm_driver(
         "Self PeerID {peer_id} is represented as kbucket_key {:?}",
         PrettyPrintKBucketKey(NetworkAddress::from(peer_id).as_kbucket_key())
     );
+    info!("Node is running on port: {}", config.listen_addr.port());
 
     #[cfg(feature = "open-metrics")]
     let mut metrics_registries = config.metrics_registries;
