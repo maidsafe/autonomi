@@ -156,6 +156,7 @@ pub(crate) struct SwarmDriver {
     pub(crate) handled_times: usize,
     pub(crate) hard_disk_write_error: usize,
     pub(crate) bad_nodes: BadNodes,
+    pub(crate) blocked_peers: HashSet<PeerId>,
     pub(crate) quotes_history: BTreeMap<PeerId, PaymentQuote>,
     pub(crate) replication_targets: BTreeMap<PeerId, Instant>,
     /// when was the last replication event
