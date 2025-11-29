@@ -25,10 +25,7 @@ where
         .buffer_unordered(batch_size)
         .collect()
         .await;
-    info!(
-        "Completed {} tasks in parallel.",
-        result.len()
-    );
+    info!("Completed {} tasks in parallel.", result.len());
     result
 }
 

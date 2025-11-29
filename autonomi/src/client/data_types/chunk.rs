@@ -140,7 +140,7 @@ impl Client {
 
     /// Helper function to fetch a record from the closest peers directly.
     /// This is useful as a fallback when normal DHT queries fail.
-    /// 
+    ///
     /// Returns the first successfully retrieved record, or None if all peers fail.
     async fn fetch_record_from_closest_peers(
         &self,
@@ -148,8 +148,12 @@ impl Client {
         num_peers: usize,
     ) -> Option<Record> {
         debug!("Querying closest {num_peers} nodes directly for {key:?}");
-        
-        let closest_peers = match self.network.get_closest_peers(key.clone(), Some(num_peers)).await {
+
+        let closest_peers = match self
+            .network
+            .get_closest_peers(key.clone(), Some(num_peers))
+            .await
+        {
             Ok(peers) => peers,
             Err(e) => {
                 error!("Failed to get closest peers for {key:?}: {e}");
@@ -157,17 +161,18 @@ impl Client {
             }
         };
 
-        debug!("Querying {} closest peers in parallel for {key:?}", closest_peers.len());
-        
+        debug!(
+            "Querying {} closest peers in parallel for {key:?}",
+            closest_peers.len()
+        );
+
         // Create query tasks for all closest peers
         let mut query_tasks = vec![];
         for peer in closest_peers.iter() {
             let network = self.network.clone();
             let key = key.clone();
             let peer = peer.clone();
-            query_tasks.push(async move {
-                network.get_record_from_peer(key, peer).await
-            });
+            query_tasks.push(async move { network.get_record_from_peer(key, peer).await });
         }
 
         // Process tasks with max concurrency of num_peers
@@ -184,7 +189,10 @@ impl Client {
             }
         }
 
-        error!("❌ All {} closest peers failed to return the record {key:?}", closest_peers.len());
+        error!(
+            "❌ All {} closest peers failed to return the record {key:?}",
+            closest_peers.len()
+        );
         None
     }
 

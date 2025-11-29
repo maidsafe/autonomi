@@ -64,7 +64,7 @@ pub(crate) enum LocalSwarmCmd {
     /// Get a map where each key is the ilog2 distance of that Kbucket
     /// and each value is a vector of peers in that bucket.
     GetKBuckets {
-        sender: oneshot::Sender<BTreeMap<u32, Vec<PeerId>>>,
+        sender: oneshot::Sender<(BTreeMap<u32, Vec<PeerId>>, usize)>,
     },
     // Get K closest peers to target from the local RoutingTable, self is included
     GetKCloseLocalPeersToTarget {

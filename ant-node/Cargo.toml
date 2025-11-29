@@ -28,6 +28,7 @@ ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.3.0", features = ["process-metrics"] }
 ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
+ant-releases = { version = "0.4.2" }
 ant-service-management = { path = "../ant-service-management", version = "0.4.17" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
@@ -41,6 +42,7 @@ custom_debug = "~0.6.1"
 dirs-next = "~2.0.0"
 eyre = "0.6.8"
 file-rotate = "0.7.3"
+fs2 = "0.4"
 futures = "~0.3.13"
 hex = "~0.4.3"
 hkdf = "0.12"
@@ -77,6 +79,7 @@ pyo3-async-runtimes = { version = "0.23", features = ["tokio-runtime"], optional
 rand = { version = "~0.8.5", features = ["small_rng"] }
 rmp-serde = "1.1.1"
 rayon = "1.8.0"
+semver = "1.0"
 sha2 = "0.10"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 strum = { version = "0.26.2", features = ["derive"] }

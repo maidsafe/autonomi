@@ -148,11 +148,18 @@ impl RunningNode {
         Ok(addresses)
     }
 
-    /// Returns a map where each key is the ilog2 distance of that Kbucket and each value is a vector of peers in that
-    /// bucket.
-    pub async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
+    /// Returns a two-element tuple, where the first element is a map where each key is the ilog2
+    /// distance of that Kbucket and each value is a vector of peers in that bucket, and the second
+    /// element is the estimated network size.
+    pub async fn get_kbuckets(&self) -> Result<(BTreeMap<u32, Vec<PeerId>>, usize)> {
         let kbuckets = self.network.get_kbuckets().await?;
         Ok(kbuckets)
+    }
+
+    /// Returns the estimated network size based on the current kbucket state.
+    pub async fn get_estimated_network_size(&self) -> Result<usize> {
+        let kbuckets = self.get_kbuckets().await?;
+        Ok(kbuckets.1)
     }
 
     /// Returns the node's reward address

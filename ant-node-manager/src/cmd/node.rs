@@ -33,6 +33,7 @@ use color_eyre::{Help, Result, eyre::eyre};
 use colored::Colorize;
 use libp2p_identity::PeerId;
 use semver::Version;
+use service_manager::RestartPolicy;
 use std::{
     cmp::Ordering, io::Write, net::Ipv4Addr, path::PathBuf, str::FromStr, sync::Arc, time::Duration,
 };
@@ -60,6 +61,7 @@ pub async fn add(
     node_registry: NodeRegistryManager,
     mut init_peers_config: InitialPeersConfig,
     relay: bool,
+    restart_policy: RestartPolicy,
     rewards_address: RewardsAddress,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,
@@ -121,6 +123,8 @@ pub async fn add(
 
     let options = AddNodeServiceOptions {
         alpha,
+        antnode_dir_path: service_data_dir_path.clone(),
+        antnode_src_path,
         auto_restart,
         auto_set_nat_flags,
         count,
@@ -128,23 +132,22 @@ pub async fn add(
         enable_metrics_server,
         evm_network: evm_network.unwrap_or(EvmNetwork::ArbitrumOne),
         env_variables,
-        relay,
+        init_peers_config,
         log_format,
         max_archived_log_files,
         max_log_files,
         metrics_port,
         network_id,
+        no_upnp,
         node_ip,
         node_port,
-        init_peers_config,
+        relay,
+        restart_policy,
         rewards_address,
         rpc_address,
         rpc_port,
-        antnode_src_path,
-        antnode_dir_path: service_data_dir_path.clone(),
         service_data_dir_path,
         service_log_dir_path,
-        no_upnp,
         user: service_user,
         user_mode,
         version,
@@ -617,6 +620,7 @@ pub async fn maintain_n_running_nodes(
     peers_args: InitialPeersConfig,
     relay: bool,
     rewards_address: RewardsAddress,
+    restart_policy: RestartPolicy,
     rpc_address: Option<Ipv4Addr>,
     rpc_port: Option<PortRange>,
     src_path: Option<PathBuf>,
@@ -731,6 +735,7 @@ pub async fn maintain_n_running_nodes(
                         node_registry.clone(),
                         peers_args.clone(),
                         relay,
+                        restart_policy,
                         rewards_address,
                         rpc_address,
                         rpc_port.clone(),

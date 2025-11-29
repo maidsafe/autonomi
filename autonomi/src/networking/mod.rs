@@ -391,7 +391,13 @@ impl Network {
         peer: PeerInfo,
         nonce: u64,
         difficulty: usize,
-    ) -> Result<Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>, NetworkError> {
+    ) -> Result<
+        Vec<(
+            NetworkAddress,
+            Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+        )>,
+        NetworkError,
+    > {
         let (tx, rx) = oneshot::channel();
         let task = NetworkTask::GetStorageProofsFromPeer {
             addr,

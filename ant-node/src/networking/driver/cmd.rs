@@ -390,7 +390,9 @@ impl SwarmDriver {
                         error!("bucket is ourself ???!!!");
                     }
                 }
-                let _ = sender.send(ilog2_kbuckets);
+
+                let status = self.get_kbuckets_status();
+                let _ = sender.send((ilog2_kbuckets, status.estimated_network_size));
             }
             LocalSwarmCmd::GetPeersWithMultiaddr { sender } => {
                 cmd_string = "GetPeersWithMultiAddr";
