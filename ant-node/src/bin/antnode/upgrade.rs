@@ -89,7 +89,12 @@ fn acquire_upgrade_lock(upgrade_dir: &Path) -> Result<File> {
     let lock_path = upgrade_dir.join(".lock");
     debug!("Acquiring lock at: {}", lock_path.display());
 
-    let lock_file = File::create(&lock_path)?;
+    let lock_file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)?;
     let start = std::time::Instant::now();
     loop {
         match lock_file.try_lock_exclusive() {
