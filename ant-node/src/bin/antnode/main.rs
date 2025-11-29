@@ -500,9 +500,12 @@ You can check your reward balance by running:
         let running_node_clone = running_node.clone();
         tokio::spawn(async move {
             loop {
+                // Temporary value for testing.
+                let base_delay = 1800;
+                let variance = rand::thread_rng().gen_range(-90..=90);
                 // 72 hours (259200 seconds) with ±5% randomization to prevent simultaneous upgrades
-                let base_delay = 259200;
-                let variance = rand::thread_rng().gen_range(-12960..=12960);
+                // let base_delay = 259200;
+                // let variance = rand::thread_rng().gen_range(-12960..=12960);
                 let upgrade_check_delay_secs = (base_delay + variance) as u64;
                 let upgrade_check_wake_time =
                     chrono::Utc::now() + chrono::Duration::seconds(upgrade_check_delay_secs as i64);

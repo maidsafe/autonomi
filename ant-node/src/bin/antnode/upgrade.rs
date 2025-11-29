@@ -290,7 +290,10 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
 pub async fn perform_upgrade() -> Result<()> {
     info!("Performing upgrade check...");
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
-    let release_info = release_repo.get_latest_autonomi_release_info().await?;
+    let release_info = release_repo
+        .get_autonomi_release_info("rc-2025.11.3.1")
+        .await?;
+    // let release_info = release_repo.get_latest_autonomi_release_info().await?;
     if release_info
         .commit_hash
         .starts_with(ant_build_info::git_sha())
