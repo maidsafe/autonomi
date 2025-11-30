@@ -24,7 +24,7 @@ ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
 ant-node-manager = { version = "0.13.4", path = "../ant-node-manager" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
-ant-releases = { version = "0.4.2" }
+ant-releases = "0.4.3"
 ant-service-management = { version = "0.4.17", path = "../ant-service-management" }
 arboard = "3.4.1"
 atty = "0.2.14"

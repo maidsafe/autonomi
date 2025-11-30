@@ -28,7 +28,7 @@ ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.3.0", features = ["process-metrics"] }
 ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
-ant-releases = { version = "0.4.2" }
+ant-releases = "0.4.3"
 ant-service-management = { path = "../ant-service-management", version = "0.4.17" }
 async-trait = "0.1"
 bls = { package = "blsttc", version = "8.0.1" }
@@ -82,6 +82,7 @@ rayon = "1.8.0"
 semver = "1.0"
 sha2 = "0.10"
 serde = { version = "1.0.133", features = ["derive", "rc"] }
+serde_json = "1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 sysinfo = { version = "0.30.8", default-features = false, optional = true }
 thiserror = "1.0.23"

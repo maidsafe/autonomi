@@ -6,6 +6,8 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+mod release_cache;
+
 use ant_releases::{AntReleaseRepoActions, AutonomiReleaseInfo};
 use color_eyre::{Result, eyre::eyre};
 use fs2::FileExt;
@@ -79,6 +81,44 @@ pub fn get_binary_path_for_version(commit_hash: &str) -> Result<PathBuf> {
     Ok(upgrade_dir.join(binary_name))
 }
 
+/// Acquire an exclusive lock on a file.
+///
+/// Returns the lock file handle that must be kept alive to maintain the lock.
+/// If the lock cannot be acquired within LOCK_TIMEOUT_SECS, a warning is logged
+/// and the file handle is returned anyway.
+pub fn acquire_exclusive_lock(lock_path: &Path, lock_name: &str) -> Result<File> {
+    debug!("Acquiring {} at: {}", lock_name, lock_path.display());
+
+    let lock_file = File::options()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(lock_path)?;
+    let start = std::time::Instant::now();
+    loop {
+        match lock_file.try_lock_exclusive() {
+            Ok(_) => {
+                info!("{} acquired", lock_name);
+                return Ok(lock_file);
+            }
+            Err(_) if start.elapsed().as_secs() < LOCK_TIMEOUT_SECS => {
+                debug!("{} busy. Retrying...", lock_name);
+                std::thread::sleep(Duration::from_millis(LOCK_RETRY_INTERVAL_MS));
+            }
+            Err(e) => {
+                warn!(
+                    "{} timeout after {} seconds: {}. Proceeding without lock...",
+                    lock_name, LOCK_TIMEOUT_SECS, e
+                );
+                // Proceed without exclusive lock: verification after operations will catch any
+                // corruption if multiple processes race.
+                return Ok(lock_file);
+            }
+        }
+    }
+}
+
 /// Acquire an exclusive lock on the upgrade directory.
 ///
 /// It's possible two or more processes could try to download and extract a new binary at the same
@@ -87,36 +127,7 @@ pub fn get_binary_path_for_version(commit_hash: &str) -> Result<PathBuf> {
 /// Returns the lock file handle that must be kept alive to maintain the lock.
 fn acquire_upgrade_lock(upgrade_dir: &Path) -> Result<File> {
     let lock_path = upgrade_dir.join(".lock");
-    debug!("Acquiring lock at: {}", lock_path.display());
-
-    let lock_file = File::options()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .open(&lock_path)?;
-    let start = std::time::Instant::now();
-    loop {
-        match lock_file.try_lock_exclusive() {
-            Ok(_) => {
-                info!("Lock acquired");
-                return Ok(lock_file);
-            }
-            Err(_) if start.elapsed().as_secs() < LOCK_TIMEOUT_SECS => {
-                debug!("Lock busy. Retrying...");
-                std::thread::sleep(Duration::from_millis(LOCK_RETRY_INTERVAL_MS));
-            }
-            Err(_) => {
-                warn!(
-                    "Lock timeout after {} seconds. Proceeding without lock...",
-                    LOCK_TIMEOUT_SECS
-                );
-                // Proceed without exclusive lock: hash verification after download will catch any
-                // corruption if multiple processes race.
-                return Ok(lock_file);
-            }
-        }
-    }
+    acquire_exclusive_lock(&lock_path, "Upgrade lock")
 }
 
 /// Download and extract the upgrade binary to the shared location.
@@ -289,8 +300,22 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
 
 pub async fn perform_upgrade() -> Result<()> {
     info!("Performing upgrade check...");
-    let release_repo = <dyn AntReleaseRepoActions>::default_config();
-    let release_info = release_repo.get_latest_autonomi_release_info().await?;
+
+    let release_info = match release_cache::read_cached_release_info(None) {
+        Ok(Some(cached)) => {
+            info!("Using cached release info");
+            cached.release_info
+        }
+        Ok(None) => {
+            info!("No valid cache, fetching from API...");
+            fetch_and_cache_release_info().await?
+        }
+        Err(e) => {
+            warn!("Error reading cache ({}), fetching from API...", e);
+            fetch_and_cache_release_info().await?
+        }
+    };
+
     if release_info
         .commit_hash
         .starts_with(ant_build_info::git_sha())
@@ -299,9 +324,22 @@ pub async fn perform_upgrade() -> Result<()> {
     }
     info!("New version detected: {}", release_info.commit_hash);
 
+    let release_repo = <dyn AntReleaseRepoActions>::default_config();
     let (new_binary_path, expected_hash) =
         download_and_extract_upgrade_binary(&release_info, release_repo.as_ref()).await?;
     replace_current_binary(&new_binary_path, &expected_hash)?;
 
     Ok(())
+}
+
+/// Fetch release info from API and cache it
+async fn fetch_and_cache_release_info() -> Result<AutonomiReleaseInfo> {
+    let release_repo = <dyn AntReleaseRepoActions>::default_config();
+    let release_info = release_repo.get_latest_autonomi_release_info().await?;
+
+    if let Err(e) = release_cache::write_cached_release_info(&release_info, None) {
+        warn!("Failed to cache release info: {}", e);
+    }
+
+    Ok(release_info)
 }

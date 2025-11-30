@@ -1138,9 +1138,9 @@ dependencies = [
 
 [[package]]
 name = "ant-releases"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cadde4a1a3d1e6e7d83bd517eb354779915e6a45ee76d66136f73fd139650e8d"
+checksum = "6094e57fe43c52e8e1be858df477611e0cfa8b659fe11ea747a31addac299c05"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1149,6 +1149,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.24",
  "semver 1.0.27",
+ "serde",
  "serde_json",
  "tar",
  "thiserror 1.0.69",
