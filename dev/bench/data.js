@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764612008547,
+  "lastUpdate": 1764612092459,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7588,6 +7588,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 180,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8d153a0ee33fa3476fa3d5cb6a38b4694cf9897c",
+          "message": "Merge pull request #3334 from maidsafe/dependabot/github_actions/actions/download-artifact-6\n\nchore(deps): bump actions/download-artifact from 4 to 6",
+          "timestamp": "2025-12-01T16:51:27Z",
+          "tree_id": "85ca9e5e771ef8bd1cfe6992ed60dc4bf008a509",
+          "url": "https://github.com/maidsafe/autonomi/commit/8d153a0ee33fa3476fa3d5cb6a38b4694cf9897c"
+        },
+        "date": 1764612091663,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 238,
             "unit": "MB"
           }
         ]
