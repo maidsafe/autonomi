@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764606610428,
+  "lastUpdate": 1764606612795,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -15471,6 +15471,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 20273,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d219d35d543ed02347a256da6302f948bdfa4f3f",
+          "message": "Merge pull request #3336 from maidsafe/dependabot/github_actions/actions/attest-build-provenance-3\n\nchore(deps): bump actions/attest-build-provenance from 1 to 3",
+          "timestamp": "2025-12-01T15:13:17Z",
+          "tree_id": "688a0bba7a5ff53f3f2166568f9ffc40aa4af9d8",
+          "url": "https://github.com/maidsafe/autonomi/commit/d219d35d543ed02347a256da6302f948bdfa4f3f"
+        },
+        "date": 1764606611796,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10519,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20115,
             "unit": "ms"
           },
           {
