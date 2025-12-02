@@ -13,13 +13,13 @@ use std::{
 
 use ant_evm::{PaymentQuote, QuotingMetrics};
 use ant_protocol::{
-    NetworkAddress, PrettyPrintRecordKey,
     storage::{DataTypes, ValidationType},
+    NetworkAddress, PrettyPrintRecordKey,
 };
 use libp2p::{
-    PeerId,
     core::Multiaddr,
     kad::{KBucketDistance as Distance, Record, RecordKey},
+    PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -103,8 +103,12 @@ pub(crate) enum LocalSwarmCmd {
     },
     /// Remove a local record from the RecordStore
     /// Typically because the disk write failure
-    /// or record indexing cache is out-of-sync with disk files
     RemoveFailedLocalRecord {
+        key: RecordKey,
+    },
+    /// Remove an entry from the RecordStore record indexing cache
+    /// Typically because record indexing cache is out-of-sync with disk files
+    RemoveOutOfSyncEntry {
         key: RecordKey,
     },
     /// Add a local record to the RecordStore's HashSet of stored records
@@ -184,6 +188,13 @@ impl Debug for LocalSwarmCmd {
                 write!(
                     f,
                     "LocalSwarmCmd::RemoveFailedLocalRecord {{ key: {:?} }}",
+                    PrettyPrintRecordKey::from(key)
+                )
+            }
+            LocalSwarmCmd::RemoveOutOfSyncEntry { key } => {
+                write!(
+                    f,
+                    "LocalSwarmCmd::RemoveOutOfSyncEntry {{ key: {:?} }}",
                     PrettyPrintRecordKey::from(key)
                 )
             }
