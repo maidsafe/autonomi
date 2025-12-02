@@ -29,7 +29,7 @@ pub type PoolHash = [u8; 32];
 pub const CANDIDATES_PER_POOL: usize = 16;
 
 /// Maximum supported Merkle tree depth
-pub const MAX_MERKLE_DEPTH: u8 = 12;
+pub const MAX_MERKLE_DEPTH: u8 = 10;
 
 /// Calculate expected number of reward pools for a given tree depth
 ///

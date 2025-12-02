@@ -10,7 +10,7 @@ use crate::{Client, networking::NetworkError};
 use ant_evm::{
     AttoTokens, EvmWallet,
     merkle_payments::{
-        CANDIDATES_PER_POOL, MerklePaymentCandidateNode, MerklePaymentCandidatePool,
+        CANDIDATES_PER_POOL, MAX_LEAVES, MerklePaymentCandidateNode, MerklePaymentCandidatePool,
         MerklePaymentProof, MerklePaymentVerificationError, MerkleTree, MidpointProof,
     },
 };
@@ -59,6 +59,23 @@ pub enum MerklePaymentError {
     TimestampError(#[from] std::time::SystemTimeError),
     #[error("Candidate pool verification failed: {0}")]
     PoolVerification(#[from] MerklePaymentVerificationError),
+}
+
+/// Merge multiple MerklePaymentReceipts into one
+fn merge_merkle_receipts(receipts: Vec<MerklePaymentReceipt>) -> MerklePaymentReceipt {
+    let mut merged_proofs = HashMap::new();
+    let mut total_atto = ant_evm::U256::ZERO;
+
+    for receipt in receipts {
+        merged_proofs.extend(receipt.proofs);
+        total_atto = total_atto.saturating_add(receipt.amount_paid.as_atto());
+    }
+
+    MerklePaymentReceipt {
+        proofs: merged_proofs,
+        file_chunk_counts: HashMap::new(),
+        amount_paid: AttoTokens::from_atto(total_atto),
+    }
 }
 
 impl Client {
@@ -247,6 +264,8 @@ impl Client {
 
     /// Pay for a batch of data addresses using Merkle payment and get the proofs
     ///
+    /// Automatically splits large batches (>4096 addresses) into multiple Merkle trees.
+    ///
     /// # Arguments
     /// * `data_type` - The data type (must be same for all items)
     /// * `content_addrs` - Iterator of XorName addresses
@@ -255,12 +274,6 @@ impl Client {
     ///
     /// # Returns
     /// * `MerklePaymentReceipt` - HashMap mapping each address to its MerklePaymentProof
-    ///
-    /// # Process
-    /// 1. Build Merkle tree from addresses
-    /// 2. Query candidate pools from network (one per midpoint)
-    /// 3. Submit payment to smart contract
-    /// 4. Generate and return proofs for each address
     pub async fn pay_for_merkle_batch(
         &self,
         data_type: DataTypes,
@@ -268,13 +281,40 @@ impl Client {
         data_size: usize,
         wallet: &EvmWallet,
     ) -> Result<MerklePaymentReceipt, MerklePaymentError> {
-        // Check if the wallet uses the same network as the client
         if wallet.network() != self.evm_network() {
             return Err(MerklePaymentError::EvmWalletNetworkMismatch);
         }
 
-        // Collect addresses
         let addresses: Vec<XorName> = content_addrs.collect();
+        let batches: Vec<Vec<XorName>> = addresses.chunks(MAX_LEAVES).map(|c| c.to_vec()).collect();
+        let batches_len = batches.len();
+        let addresses_len = addresses.len();
+        #[cfg(feature = "loud")]
+        println!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
+        info!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
+
+        let mut receipts = Vec::with_capacity(batches.len());
+        for (i, batch) in batches.into_iter().enumerate() {
+            #[cfg(feature = "loud")]
+            println!("Processing batch {}/{}", i + 1, receipts.capacity());
+            info!("Processing batch {}/{}", i + 1, receipts.capacity());
+            let receipt = self
+                .pay_for_single_merkle_batch(data_type, batch, data_size, wallet)
+                .await?;
+            receipts.push(receipt);
+        }
+
+        Ok(merge_merkle_receipts(receipts))
+    }
+
+    /// Pay for a single batch of up to MAX_LEAVES addresses
+    async fn pay_for_single_merkle_batch(
+        &self,
+        data_type: DataTypes,
+        addresses: Vec<XorName>,
+        data_size: usize,
+        wallet: &EvmWallet,
+    ) -> Result<MerklePaymentReceipt, MerklePaymentError> {
         info!(
             "Starting Merkle batch payment for {} addresses with data_type {data_type:?} and data_size {data_size}",
             addresses.len(),
