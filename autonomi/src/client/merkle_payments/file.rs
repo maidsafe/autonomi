@@ -366,10 +366,11 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
     let xorname_collection_batch_size: usize = std::cmp::max(32, *CHUNK_UPLOAD_BATCH_SIZE);
     let mut total = 0;
     let estimated_total = encryption_stream.total_chunks();
+    let file_path = &encryption_stream.file_path;
     #[cfg(feature = "loud")]
     let start = std::time::Instant::now();
     #[cfg(feature = "loud")]
-    println!("Begin encrypting ~{estimated_total} chunks...");
+    println!("Begin encrypting ~{estimated_total} chunks from {file_path}...");
     while let Some(batch) = encryption_stream.next_batch(xorname_collection_batch_size) {
         let batch_len = batch.len();
         total += batch_len;
