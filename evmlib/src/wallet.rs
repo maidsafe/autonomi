@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::common::{Address, Amount, QuoteHash, QuotePayment, TxHash, U256};
-use crate::contract::merkle_payment_vault::{
-    Error as MerkleHandlerError, MerklePaymentVaultHandler, PoolHash,
-};
+use crate::contract::merkle_payment_vault::error::Error as MerkleHandlerError;
+use crate::contract::merkle_payment_vault::handler::MerklePaymentVaultHandler;
+use crate::contract::merkle_payment_vault::interface::PoolHash;
 use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
@@ -220,22 +220,34 @@ impl Wallet {
         let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
 
         // Submit payment to smart contract
-        let (winner_pool_hash, amount) = handler
+        let _tx_hash = handler
             .pay_for_merkle_tree(
                 depth,
-                pool_commitments,
+                pool_commitments.clone(),
                 merkle_payment_timestamp,
                 &self.transaction_config,
             )
             .await
             .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
 
-        info!(
-            "Merkle payment successful, winner pool: {}, amount: {amount}",
-            hex::encode(winner_pool_hash)
-        );
+        // Find the winner pool by checking which pool now has payment info on-chain
+        let provider = http_provider(self.network.rpc_url().clone());
+        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
 
-        Ok((winner_pool_hash, amount))
+        for pool in &pool_commitments {
+            let pool_hash: [u8; 32] = pool.pool_hash;
+            if let Ok(_info) = handler.get_payment_info(pool_hash).await {
+                info!(
+                    "Merkle payment successful, winner pool: {}, amount: {estimated_amount}",
+                    hex::encode(pool_hash)
+                );
+                return Ok((pool_hash, estimated_amount));
+            }
+        }
+
+        Err(Error::MerklePayment(
+            "Payment succeeded but could not find winner pool".to_string(),
+        ))
     }
 
     /// Estimate the cost of a Merkle tree batch using smart contract
