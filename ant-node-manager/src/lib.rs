@@ -121,7 +121,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                     "Service process started for {service_name} with PID {}",
                     pid
                 );
-                self.service.on_start(Some(pid), true).await?;
+                self.service
+                    .on_start(Some(pid), true, self.service_control.as_ref())
+                    .await?;
 
                 info!("Service {service_name} has been started successfully");
             }
@@ -528,7 +530,9 @@ async fn detect_pid_using_path<'a>(
     match service_control.get_process_pid(&service.bin_path().await) {
         Ok(pid) => {
             debug!("{service_name} found via path-based detection with PID {pid}");
-            service.on_start(Some(pid), full_refresh).await?;
+            service
+                .on_start(Some(pid), full_refresh, service_control)
+                .await?;
         }
         Err(_) => {
             match service.status().await {
@@ -615,7 +619,9 @@ pub async fn refresh_node_registry(
                 Ok(info) => {
                     let pid = info.pid;
                     debug!("local node {service_name} is running with PID {pid}",);
-                    service.on_start(Some(pid), full_refresh).await?;
+                    service
+                        .on_start(Some(pid), full_refresh, service_control)
+                        .await?;
                 }
                 Err(_) => {
                     debug!("Failed to retrieve PID for local node {service_name}",);
@@ -629,7 +635,9 @@ pub async fn refresh_node_registry(
                 match service_control.verify_process_by_pid(stored_pid, "antnode") {
                     Ok(true) => {
                         debug!("{service_name} verified via stored PID {stored_pid}");
-                        service.on_start(Some(stored_pid), full_refresh).await?;
+                        service
+                            .on_start(Some(stored_pid), full_refresh, service_control)
+                            .await?;
                     }
                     Ok(false) => {
                         debug!(
@@ -756,9 +764,11 @@ mod tests {
             fn get_available_port(&self) -> ServiceControlResult<u16>;
             fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> ServiceControlResult<()>;
             fn get_process_pid(&self, bin_path: &Path) -> ServiceControlResult<u32>;
+            fn get_process_version(&self, pid: u32) -> ServiceControlResult<Option<String>>;
             fn start(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
             fn stop(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
             fn uninstall(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
+            fn verify_process_by_pid(&self, pid: u32, expected_name: &str) -> ServiceControlResult<bool>;
             fn wait(&self, delay: u64);
         }
     }
@@ -783,6 +793,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -900,6 +915,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1100,6 +1120,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1298,6 +1323,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1397,6 +1427,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
         mock_rpc_client
             .expect_is_node_connected_to_network()
             .times(1)
@@ -1890,6 +1925,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2141,6 +2181,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2607,6 +2652,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2796,6 +2846,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2972,6 +3027,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3148,6 +3208,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3314,6 +3379,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3488,6 +3558,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3667,6 +3742,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3841,6 +3921,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4021,6 +4106,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4188,6 +4278,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4355,6 +4450,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4522,6 +4622,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4689,6 +4794,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4856,6 +4966,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5023,6 +5138,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5190,6 +5310,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5357,6 +5482,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5525,6 +5655,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5696,6 +5831,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5876,6 +6016,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -6050,6 +6195,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
         mock_rpc_client
             .expect_is_node_connected_to_network()
             .times(1)
@@ -6221,6 +6371,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -6782,6 +6937,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {

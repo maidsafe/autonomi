@@ -88,7 +88,12 @@ pub trait ServiceStateActions {
     async fn name(&self) -> String;
     async fn pid(&self) -> Option<u32>;
     async fn on_remove(&self);
-    async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()>;
+    async fn on_start(
+        &self,
+        pid: Option<u32>,
+        full_refresh: bool,
+        service_control: &dyn crate::control::ServiceControl,
+    ) -> Result<()>;
     async fn on_stop(&self) -> Result<()>;
     async fn set_version(&self, version: &str);
     async fn status(&self) -> ServiceStatus;

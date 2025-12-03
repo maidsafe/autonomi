@@ -32,6 +32,41 @@ fn normalize_path_for_comparison(path: &str) -> String {
         .to_string()
 }
 
+/// Parse version string from `antnode --version` output.
+///
+/// Expected format: "Autonomi Node v0.4.9" or "Autonomi Node v0.4.10-rc.1"
+/// Nightly format: "Autonomi Node -- Nightly Release 2024.12.03"
+///
+/// Returns `None` if the version cannot be parsed.
+fn parse_version_from_output(output: &str) -> Option<String> {
+    let first_line = output.lines().next()?;
+
+    // Check for nightly format first
+    if first_line.contains("Nightly Release") {
+        return first_line
+            .split("Nightly Release")
+            .nth(1)?
+            .split_whitespace()
+            .next()
+            .map(String::from);
+    }
+
+    // Standard version format: find 'v' and extract after it
+    if let Some(v_pos) = first_line.find('v') {
+        let version = first_line[v_pos + 1..]
+            .split_whitespace()
+            .next()?
+            .to_string();
+
+        // Validate it looks like a version (has dots and numbers)
+        if version.contains('.') && version.chars().any(|c| c.is_numeric()) {
+            return Some(version);
+        }
+    }
+
+    None
+}
+
 /// A thin wrapper around the `service_manager::ServiceManager`, which makes our own testing
 /// easier.
 ///
@@ -44,6 +79,15 @@ pub trait ServiceControl: Sync {
     fn get_available_port(&self) -> Result<u16>;
     fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> Result<()>;
     fn get_process_pid(&self, path: &Path) -> Result<u32>;
+    /// Get the version of a running process by its PID.
+    ///
+    /// Attempts to extract version by executing `--version` on the process's binary.
+    /// This works even when the binary has been replaced on disk during upgrades,
+    /// by using cross-platform process information from sysinfo.
+    ///
+    /// Returns `None` if version cannot be determined (not an error condition).
+    /// Errors only on system-level failures.
+    fn get_process_version(&self, pid: u32) -> Result<Option<String>>;
     fn start(&self, service_name: &str, user_mode: bool) -> Result<()>;
     fn stop(&self, service_name: &str, user_mode: bool) -> Result<()>;
     fn uninstall(&self, service_name: &str, user_mode: bool) -> Result<()>;
@@ -267,6 +311,70 @@ impl ServiceControl for ServiceController {
         Ok(false)
     }
 
+    fn get_process_version(&self, pid: u32) -> Result<Option<String>> {
+        use std::io::Read;
+        use std::process::{Command, Stdio};
+
+        debug!("Extracting version from process with PID {pid}");
+
+        let system = System::new_all();
+        if let Some(process) = system.process(Pid::from_u32(pid))
+            && let Some(exe_path) = process.exe()
+        {
+            debug!("Found exe path for PID {pid}: {}", exe_path.display());
+
+            match Command::new(exe_path)
+                .arg("--version")
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(mut child) => {
+                    let mut output = String::new();
+                    if let Some(ref mut stdout) = child.stdout {
+                        let _ = stdout.read_to_string(&mut output);
+                    }
+
+                    // Wait with timeout (2 seconds)
+                    let timeout = std::time::Duration::from_secs(2);
+                    let start = std::time::Instant::now();
+                    loop {
+                        match child.try_wait() {
+                            Ok(Some(status)) if status.success() => {
+                                if let Some(version) = parse_version_from_output(&output) {
+                                    debug!(
+                                        "Successfully extracted version '{version}' from PID {pid}"
+                                    );
+                                    return Ok(Some(version));
+                                }
+                                break;
+                            }
+                            Ok(Some(_)) => break, // Non-zero exit
+                            Ok(None) => {
+                                if start.elapsed() > timeout {
+                                    debug!("Version extraction timed out for PID {pid}");
+                                    let _ = child.kill();
+                                    break;
+                                }
+                                std::thread::sleep(std::time::Duration::from_millis(50));
+                            }
+                            Err(e) => {
+                                debug!("Error waiting for version command: {e:?}");
+                                break;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!("Failed to spawn --version command: {e:?}");
+                }
+            }
+        }
+
+        debug!("Could not extract version from process {pid}");
+        Ok(None)
+    }
+
     fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> Result<()> {
         debug!("Installing service: {install_ctx:?}");
         let mut manager = <dyn ServiceManager>::native()
@@ -359,5 +467,50 @@ impl ServiceControl for ServiceController {
     fn wait(&self, delay: u64) {
         trace!("Waiting for {delay} milliseconds");
         std::thread::sleep(std::time::Duration::from_millis(delay));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_version_standard() {
+        let output = "Autonomi Node v0.4.9\nNetwork version: ant/1.0/1\nPackage version: 2025.11.2.1\nGit info: feat-restart_on_success / 892e58a79 / 2025-12-03";
+        assert_eq!(parse_version_from_output(output), Some("0.4.9".to_string()));
+    }
+
+    #[test]
+    fn test_parse_version_prerelease() {
+        let output = "Autonomi Node v0.4.10-rc.1\nNetwork version: ant/1.0/1";
+        assert_eq!(
+            parse_version_from_output(output),
+            Some("0.4.10-rc.1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_version_nightly() {
+        let output = "Autonomi Node -- Nightly Release 2024.12.03\nNetwork version: ant/1.0/1";
+        assert_eq!(
+            parse_version_from_output(output),
+            Some("2024.12.03".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_version_invalid() {
+        assert_eq!(parse_version_from_output("Invalid output"), None);
+    }
+
+    #[test]
+    fn test_parse_version_empty() {
+        assert_eq!(parse_version_from_output(""), None);
+    }
+
+    #[test]
+    fn test_parse_version_no_version_prefix() {
+        let output = "Autonomi Node 0.4.9";
+        assert_eq!(parse_version_from_output(output), None);
     }
 }

@@ -172,7 +172,12 @@ impl ServiceStateActions for NodeService {
         self.service_data.write().await.status = ServiceStatus::Removed;
     }
 
-    async fn on_start(&self, pid: Option<u32>, full_refresh: bool) -> Result<()> {
+    async fn on_start(
+        &self,
+        pid: Option<u32>,
+        full_refresh: bool,
+        service_control: &dyn crate::control::ServiceControl,
+    ) -> Result<()> {
         let mut service_data = self.service_data.write().await;
         let (connected_peers, pid, peer_id) = if full_refresh {
             debug!("Performing full refresh for {}", service_data.service_name);
@@ -239,9 +244,40 @@ impl ServiceStateActions for NodeService {
             )
         };
 
+        // Extract version from running process
+        let version = if let Some(pid) = pid {
+            match service_control.get_process_version(pid) {
+                Ok(Some(v)) => {
+                    debug!(
+                        "Extracted version '{}' from PID {} for {}",
+                        v, pid, service_data.service_name
+                    );
+                    v
+                }
+                Ok(None) => {
+                    debug!(
+                        "Could not extract version from PID {} for {}; keeping existing: {}",
+                        pid, service_data.service_name, service_data.version
+                    );
+                    service_data.version.clone()
+                }
+                Err(e) => {
+                    debug!(
+                        "Error extracting version from PID {}: {e:?}; keeping existing: {}",
+                        pid, service_data.version
+                    );
+                    service_data.version.clone()
+                }
+            }
+        } else {
+            // No PID - keep existing version
+            service_data.version.clone()
+        };
+
         service_data.connected_peers = connected_peers;
         service_data.peer_id = peer_id;
         service_data.pid = pid;
+        service_data.version = version;
         service_data.status = ServiceStatus::Running;
         Ok(())
     }
