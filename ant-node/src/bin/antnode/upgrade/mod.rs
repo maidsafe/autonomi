@@ -8,6 +8,7 @@
 
 mod release_cache;
 
+use ant_node::RunningNode;
 use ant_releases::{AntReleaseRepoActions, AutonomiReleaseInfo};
 use color_eyre::{Result, eyre::eyre};
 use fs2::FileExt;
@@ -21,6 +22,7 @@ use tracing::{debug, info, warn};
 
 const LOCK_TIMEOUT_SECS: u64 = 300; // 5 minutes
 const LOCK_RETRY_INTERVAL_MS: u64 = 100;
+const DEFAULT_NETWORK_SIZE: usize = 100_000;
 
 /// Calculate SHA256 hash of a file.
 pub fn calculate_sha256(path: &Path) -> Result<String> {
@@ -320,7 +322,7 @@ pub async fn perform_upgrade() -> Result<()> {
         .commit_hash
         .starts_with(ant_build_info::git_sha())
     {
-        return Err(eyre!("Already running latest version"));
+        return Err(UpgradeError::AlreadyLatest);
     }
     info!("New version detected: {}", release_info.commit_hash);
 
@@ -342,4 +344,50 @@ async fn fetch_and_cache_release_info() -> Result<AutonomiReleaseInfo> {
     }
 
     Ok(release_info)
+}
+
+/// Calculates a deterministic restart delay based on peer ID and network size.
+///
+/// This algorithm ensures that node upgrades are staggered across the network to prevent
+/// many nodes from restarting simultaneously.
+///
+/// The delay is calculated as follows:
+/// 1. Hash the node's peer ID using SHA256 to get a deterministic value unique to this node
+/// 2. Calculate a time range in hours based on network size: min(72, network_size/100_000 + 1)
+///    - Smaller networks (< 100k nodes) get 1-2 hour windows
+///    - Larger networks get progressively longer windows, capped at 72 hours (3 days)
+/// 3. Use the hash modulo the time range to assign this node a specific delay
+///
+/// This approach provides:
+/// - Deterministic delays: Same peer ID always gets the same delay for a given network size
+/// - Even distribution: Hash modulo spreads nodes uniformly across the time window
+/// - Network-aware scaling: Larger networks get longer upgrade windows
+///
+/// # Arguments
+/// * `running_node` - The node to calculate the restart delay for
+///
+/// # Returns
+/// A `Duration` representing when this node should restart for an upgrade
+pub async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
+    let peer_id = running_node.peer_id();
+    let est_network_size = running_node
+        .get_estimated_network_size()
+        .await
+        .unwrap_or(DEFAULT_NETWORK_SIZE);
+
+    let mut hasher = Sha256::new();
+    hasher.update(peer_id.to_bytes());
+    let hash_result = hasher.finalize();
+
+    // Convert first 8 bytes of hash to u64 for modulo operation
+    let hash_value = u64::from_be_bytes([
+        hash_result[0], hash_result[1], hash_result[2], hash_result[3],
+        hash_result[4], hash_result[5], hash_result[6], hash_result[7],
+    ]);
+
+    let time_range_hours = std::cmp::min(72, (est_network_size / DEFAULT_NETWORK_SIZE) + 1);
+    let time_range_seconds = time_range_hours * 3600;
+    let upgrade_time_seconds = (hash_value as usize) % time_range_seconds;
+
+    Duration::from_secs(upgrade_time_seconds as u64)
 }
