@@ -356,7 +356,7 @@ pub async fn add_daemon(
         environment: options.env_variables,
         label: DAEMON_SERVICE_NAME.parse()?,
         program: options.daemon_install_bin_path.clone(),
-        restart_policy: service_manager::RestartPolicy::Always { delay_secs: None },
+        restart_policy: service_manager::RestartPolicy::OnSuccess { delay_secs: None },
         username: Some(options.user),
         working_directory: None,
     };

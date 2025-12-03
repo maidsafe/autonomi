@@ -877,7 +877,7 @@ async fn main() -> Result<()> {
                 node_registry,
                 peers,
                 relay,
-                RestartPolicy::Always { delay_secs: None },
+                RestartPolicy::OnSuccess { delay_secs: None },
                 rewards_address,
                 rpc_address,
                 rpc_port,

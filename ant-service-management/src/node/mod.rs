@@ -142,7 +142,7 @@ impl ServiceStateActions for NodeService {
             environment: options.env_variables,
             label: label.clone(),
             program: service_data.antnode_path.to_path_buf(),
-            restart_policy: service_manager::RestartPolicy::Always { delay_secs: None },
+            restart_policy: service_manager::RestartPolicy::OnSuccess { delay_secs: None },
             username: service_data.user.clone(),
             working_directory: None,
         })

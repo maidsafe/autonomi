@@ -82,7 +82,7 @@ async fn add_genesis_node_should_use_latest_version_and_add_one_service() -> Res
     let antnode_download_path = temp_dir.child(ANTNODE_FILE_NAME);
     antnode_download_path.write_binary(b"fake antnode bin")?;
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
     let mut mock_service_control = MockServiceControl::new();
@@ -251,7 +251,7 @@ async fn add_genesis_node_should_return_an_error_if_there_is_already_a_genesis_n
     let mock_service_control = MockServiceControl::new();
 
     let latest_version = "0.96.4";
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
 
     let init_peers_config = InitialPeersConfig {
         first: true,
@@ -381,7 +381,7 @@ async fn add_genesis_node_should_return_an_error_if_count_is_greater_than_1() ->
     let node_reg_path = tmp_data_dir.child("node_reg.json");
     let mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
     let init_peers_config = InitialPeersConfig {
@@ -467,7 +467,7 @@ async fn add_node_should_use_latest_version_and_add_three_services() -> Result<(
     let mut mock_service_control = MockServiceControl::new();
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
     let node_data_dir = temp_dir.child("data");
@@ -758,7 +758,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
         ("RUST_LOG".to_owned(), "libp2p=debug".to_owned()),
     ]);
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
     let latest_version = "0.96.4";
@@ -910,7 +910,7 @@ async fn add_new_node_should_add_another_service() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let latest_version = "0.96.4";
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
@@ -1099,7 +1099,7 @@ async fn add_node_should_create_service_file_with_first_arg() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -1248,7 +1248,7 @@ async fn add_node_should_create_service_file_with_peers_args() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -1402,7 +1402,7 @@ async fn add_node_should_create_service_file_with_local_arg() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -1551,7 +1551,7 @@ async fn add_node_should_create_service_file_with_network_contacts_url_arg() -> 
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -1704,7 +1704,7 @@ async fn add_node_should_create_service_file_with_ignore_cache_arg() -> Result<(
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -1853,7 +1853,7 @@ async fn add_node_should_create_service_file_with_custom_bootstrap_cache_path() 
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2006,7 +2006,7 @@ async fn add_node_should_create_service_file_with_network_id() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2146,7 +2146,7 @@ async fn add_node_should_use_custom_ip() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2288,7 +2288,7 @@ async fn add_node_should_use_custom_ports_for_one_service() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2421,7 +2421,7 @@ async fn add_node_should_use_a_custom_port_range() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2682,7 +2682,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_is_used() -> R
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -2801,7 +2801,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_port_in_range_is_us
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -2920,7 +2920,7 @@ async fn add_node_should_return_an_error_if_port_and_node_count_do_not_match() -
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -2999,7 +2999,7 @@ async fn add_node_should_return_an_error_if_multiple_services_are_specified_with
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -3079,7 +3079,7 @@ async fn add_node_should_set_random_ports_if_enable_metrics_server_is_true() -> 
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -3214,7 +3214,7 @@ async fn add_node_should_set_max_archived_log_files() -> Result<()> {
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
@@ -3348,7 +3348,7 @@ async fn add_node_should_set_max_log_files() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
@@ -3484,7 +3484,7 @@ async fn add_node_should_use_a_custom_port_range_for_metrics_server() -> Result<
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -3745,7 +3745,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_is_use
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -3865,7 +3865,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_metrics_port_in_ran
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -3986,7 +3986,7 @@ async fn add_node_should_use_a_custom_port_range_for_the_rpc_server() -> Result<
 
     let mut mock_service_control = MockServiceControl::new();
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
 
     let latest_version = "0.96.4";
@@ -4235,7 +4235,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_is_used() 
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -4355,7 +4355,7 @@ async fn add_node_should_return_an_error_if_duplicate_custom_rpc_port_in_range_i
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
     node_registry
         .push_node(NodeServiceData {
@@ -4474,7 +4474,7 @@ async fn add_node_should_disable_upnp_and_relay_if_nat_status_is_public() -> Res
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -4602,7 +4602,7 @@ async fn add_node_should_not_set_no_upnp_if_nat_status_is_upnp() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -4730,7 +4730,7 @@ async fn add_node_should_enable_relay_if_nat_status_is_private() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -4858,7 +4858,7 @@ async fn add_node_should_set_relay_and_no_upnp_if_nat_status_is_none_but_auto_se
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -4985,7 +4985,7 @@ async fn add_daemon_should_add_a_daemon_service() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
     let daemon_install_dir = temp_dir.child("install");
@@ -5121,7 +5121,7 @@ async fn add_node_should_not_delete_the_source_binary_if_path_arg_is_used() -> R
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -5249,7 +5249,7 @@ async fn add_node_should_apply_the_relay_flag_if_it_is_used() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -5378,7 +5378,7 @@ async fn add_node_should_add_the_node_in_user_mode() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -5504,7 +5504,7 @@ async fn add_node_should_add_the_node_with_no_upnp_flag() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -5633,7 +5633,7 @@ async fn add_node_should_auto_restart() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let latest_version = "0.96.4";
     let temp_dir = assert_fs::TempDir::new()?;
     let node_data_dir = temp_dir.child("data");
@@ -5765,7 +5765,7 @@ async fn add_node_should_add_the_node_with_write_older_cache_files() -> Result<(
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
@@ -5894,7 +5894,7 @@ async fn add_node_should_create_service_file_with_alpha_arg() -> Result<()> {
     let tmp_data_dir = assert_fs::TempDir::new()?;
     let node_reg_path = tmp_data_dir.child("node_reg.json");
 
-    let restart_policy = RestartPolicy::Always { delay_secs: None };
+    let restart_policy = RestartPolicy::OnSuccess { delay_secs: None };
     let mut mock_service_control = MockServiceControl::new();
 
     let node_registry = NodeRegistryManager::empty(node_reg_path.to_path_buf());
