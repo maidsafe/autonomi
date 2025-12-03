@@ -109,10 +109,12 @@ impl Network {
             .map_err(|_e| NetworkError::InternalMsgChannelDropped)
     }
 
-    /// Returns a map where each key is the ilog2 distance of that Kbucket
-    /// and each value is a vector of peers in that bucket.
+    /// Returns a two-element tuple, where the first element is a map where each key is the ilog2
+    /// distance of that Kbucket and each value is a vector of peers in that bucket, and the second
+    /// element is the estimated network size.
+    ///
     /// Does not include self
-    pub(crate) async fn get_kbuckets(&self) -> Result<BTreeMap<u32, Vec<PeerId>>> {
+    pub(crate) async fn get_kbuckets(&self) -> Result<(BTreeMap<u32, Vec<PeerId>>, usize)> {
         let (sender, receiver) = oneshot::channel();
         self.send_local_swarm_cmd(LocalSwarmCmd::GetKBuckets { sender });
         receiver

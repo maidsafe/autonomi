@@ -34,7 +34,7 @@ ant-build-info = { path = "../ant-build-info", version = "0.1.29" }
 ant-evm = { path = "../ant-evm", version = "0.1.17" }
 ant-logging = { path = "../ant-logging", version = "0.3.0" }
 ant-protocol = { path = "../ant-protocol", version = "1.0.9" }
-ant-releases = { version = "0.4.1" }
+ant-releases = "0.4.3"
 ant-service-management = { path = "../ant-service-management", version = "0.4.17" }
 evmlib = { path = "../evmlib", version = "0.4.5" }
 chrono = "~0.4.19"
@@ -51,7 +51,7 @@ semver = "1.0.20"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-service-manager = "0.8.0"
+service-manager = { git = "https://github.com/jacderida/service-manager-rs", branch = "generic_restart_policy" }
 sysinfo = "0.30.12"
 thiserror = "1.0.23"
 tokio = { version = "1.43", features = ["full"] }

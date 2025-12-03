@@ -397,3 +397,53 @@ package-arch arch:
   fi
 
   cd ../../..
+
+build-artifact-hashes:
+  #!/usr/bin/env bash
+  set -e
+
+  architectures=(
+    "x86_64-pc-windows-msvc"
+    "x86_64-apple-darwin"
+    "aarch64-apple-darwin"
+    "x86_64-unknown-linux-musl"
+    "arm-unknown-linux-musleabi"
+    "armv7-unknown-linux-musleabihf"
+    "aarch64-unknown-linux-musl"
+  )
+
+  binaries=(
+    "nat-detection"
+    "node-launchpad"
+    "ant"
+    "antnode"
+    "antctl"
+    "antctld"
+    "antnode_rpc_client"
+    "evm-testnet"
+  )
+
+  echo "## Binary Hashes"
+  echo ""
+
+  for arch in "${architectures[@]}"; do
+    echo "### $arch"
+    echo ""
+    echo "| Binary | SHA256 Hash |"
+    echo "|--------|-------------|"
+
+    for binary in "${binaries[@]}"; do
+      if [[ "$arch" == *"windows"* ]]; then
+        binary_path="artifacts/$arch/release/${binary}.exe"
+      else
+        binary_path="artifacts/$arch/release/${binary}"
+      fi
+
+      if [[ -f "$binary_path" ]]; then
+        hash=$(sha256sum "$binary_path" | awk '{print $1}')
+        echo "| $binary | \`$hash\` |"
+      else
+        echo "| $binary | *not found* |"
+      fi
+    done
+  done

@@ -9,9 +9,9 @@
 #[cfg(feature = "open-metrics")]
 use crate::networking::MetricsRegistries;
 use libp2p::{
+    PeerId, Transport as _,
     core::{muxing::StreamMuxerBox, transport},
     identity::Keypair,
-    PeerId, Transport as _,
 };
 
 pub(crate) fn build_transport(

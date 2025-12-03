@@ -160,6 +160,7 @@ impl PyAntNode {
                 .map_err(|e| PyRuntimeError::new_err(format!("Failed to get kbuckets: {e}")))?;
 
             Ok(kbuckets
+                .0
                 .into_iter()
                 .map(|(distance, peers)| {
                     (

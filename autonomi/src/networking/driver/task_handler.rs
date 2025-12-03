@@ -50,7 +50,15 @@ pub(crate) struct TaskHandler {
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
     get_version: HashMap<OutboundRequestId, OneShotTaskResult<String>>,
     get_record_from_peer: HashMap<OutboundRequestId, OneShotTaskResult<Option<Record>>>,
-    get_storage_proofs_from_peer: HashMap<OutboundRequestId, OneShotTaskResult<Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>>>,
+    get_storage_proofs_from_peer: HashMap<
+        OutboundRequestId,
+        OneShotTaskResult<
+            Vec<(
+                NetworkAddress,
+                Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+            )>,
+        >,
+    >,
 }
 
 impl TaskHandler {
@@ -455,16 +463,22 @@ impl TaskHandler {
     pub fn update_get_storage_proofs_from_peer(
         &mut self,
         id: OutboundRequestId,
-        storage_proofs: Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>,
+        storage_proofs: Vec<(
+            NetworkAddress,
+            Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+        )>,
     ) -> Result<(), TaskHandlerError> {
-        let responder = self
-            .get_storage_proofs_from_peer
-            .remove(&id)
-            .ok_or(TaskHandlerError::UnknownQuery(format!(
-                "OutboundRequestId {id:?}"
-            )))?;
+        let responder =
+            self.get_storage_proofs_from_peer
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
 
-        trace!("OutboundRequestId({id}): got {} storage proofs", storage_proofs.len());
+        trace!(
+            "OutboundRequestId({id}): got {} storage proofs",
+            storage_proofs.len()
+        );
         responder
             .send(Ok(storage_proofs))
             .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;

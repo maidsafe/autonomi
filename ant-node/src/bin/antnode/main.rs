@@ -16,6 +16,7 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
+mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
 use crate::subcommands::EvmNetworkCommand;
@@ -35,6 +36,7 @@ use clap::{Parser, command};
 use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+use rand::Rng;
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -224,6 +226,12 @@ struct Opt {
     /// Set this to true if you want the node to write the cache files in the older formats.
     #[clap(long, default_value_t = false)]
     write_older_cache_files: bool,
+
+    /// Stop the node instead of restarting after a successful upgrade.
+    ///
+    /// Useful when running under a service manager that handles restarts.
+    #[clap(long, default_value_t = false)]
+    stop_on_upgrade: bool,
 }
 
 fn main() -> Result<()> {
@@ -254,7 +262,6 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // evm config
     let rewards_address = RewardsAddress::from_hex(opt.rewards_address.as_ref().expect(
         "the following required arguments were not provided: --rewards-address <REWARDS_ADDRESS>",
     ))?;
@@ -341,8 +348,14 @@ fn main() -> Result<()> {
         };
         #[cfg(feature = "open-metrics")]
         node_builder.metrics_server_port(metrics_server_port);
-        let restart_options =
-            run_node(node_builder, opt.rpc, &log_output_dest, log_reload_handle).await?;
+        let restart_options = run_node(
+            node_builder,
+            opt.rpc,
+            &log_output_dest,
+            log_reload_handle,
+            opt.stop_on_upgrade,
+        )
+        .await?;
 
         Ok::<_, eyre::Report>(restart_options)
     })?;
@@ -371,6 +384,7 @@ async fn run_node(
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
+    stop_on_upgrade: bool,
 ) -> Result<Option<(bool, PathBuf, u16)>> {
     let started_instant = std::time::Instant::now();
 
@@ -422,15 +436,72 @@ You can check your reward balance by running:
     });
 
     // Start up gRPC interface if enabled by user
+    let ctrl_tx_rpc = ctrl_tx.clone();
     if let Some(addr) = rpc {
         rpc_service::start_rpc_service(
             addr,
             log_output_dest,
             running_node.clone(),
-            ctrl_tx,
+            ctrl_tx_rpc,
             started_instant,
             log_reload_handle,
         );
+    }
+
+    #[cfg(unix)]
+    {
+        let ctrl_tx_restart = ctrl_tx.clone();
+        let running_node_clone = running_node.clone();
+        tokio::spawn(async move {
+            // 72 hours (259200 seconds) with ±5% randomization to prevent simultaneous upgrades
+            let base_delay = 259200;
+            let variance = rand::thread_rng().gen_range(-12960..=12960);
+            let upgrade_check_delay_secs = (base_delay + variance) as u64;
+            let upgrade_check_wake_time =
+                chrono::Utc::now() + chrono::Duration::seconds(upgrade_check_delay_secs as i64);
+            loop {
+                info!(
+                    "Next upgrade check scheduled for {}",
+                    upgrade_check_wake_time
+                );
+                sleep(Duration::from_secs(upgrade_check_delay_secs)).await;
+
+                match upgrade::perform_upgrade().await {
+                    Ok(()) => {
+                        let node_restart_delay =
+                            upgrade::calculate_restart_delay(&running_node_clone).await;
+                        let node_restart_wake_time = chrono::Utc::now() + node_restart_delay;
+                        info!("Node will stop/restart for upgrade at {node_restart_wake_time}");
+                        sleep(node_restart_delay).await;
+
+                        let node_ctrl = if stop_on_upgrade {
+                            NodeCtrl::Stop {
+                                delay: Duration::from_secs(0),
+                                result: StopResult::Success(
+                                    "Upgrade completed successfully".to_string(),
+                                ),
+                            }
+                        } else {
+                            NodeCtrl::Restart {
+                                delay: Duration::from_secs(0),
+                                retain_peer_id: true,
+                            }
+                        };
+
+                        if let Err(err) = ctrl_tx_restart.send(node_ctrl).await {
+                            error!("Failed to send control command: {err}");
+                        }
+                        break;
+                    }
+                    Err(upgrade::UpgradeError::AlreadyLatest) => {
+                        info!("Already running latest version");
+                    }
+                    Err(e) => {
+                        warn!("Error during upgrade process: {e}");
+                    }
+                }
+            }
+        });
     }
 
     // Keep the node and gRPC service (if enabled) running.
@@ -580,11 +651,10 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
     Ok((output_dest.to_string(), reload_handle, log_appender_guard))
 }
 
-/// Starts a new process running the binary with the same args as
-/// the current process
-/// Optionally provide the node's root dir and listen port to retain it's PeerId
+/// Starts a new process running the binary with the same args as the current process.
+///
+/// Optionally provide the node's root dir and listen port to retain its PeerId.
 fn start_new_node_process(retain_peer_id: bool, root_dir: PathBuf, port: u16) {
-    // Retrieve the current executable's path
     let current_exe = env::current_exe().expect("could not get current executable path");
 
     // Retrieve the command-line arguments passed to this process

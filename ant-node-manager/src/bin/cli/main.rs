@@ -22,6 +22,7 @@ use ant_service_management::NodeRegistryManager;
 use clap::{Parser, Subcommand};
 use color_eyre::{Result, eyre::eyre};
 use libp2p::Multiaddr;
+use service_manager::RestartPolicy;
 use std::{net::Ipv4Addr, path::PathBuf};
 use tracing::Level;
 
@@ -876,6 +877,7 @@ async fn main() -> Result<()> {
                 node_registry,
                 peers,
                 relay,
+                RestartPolicy::Always { delay_secs: None },
                 rewards_address,
                 rpc_address,
                 rpc_port,
