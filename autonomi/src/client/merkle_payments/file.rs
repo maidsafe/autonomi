@@ -14,6 +14,7 @@ use crate::client::data_types::chunk::DataMapChunk;
 use crate::client::files::Metadata;
 use crate::client::{ClientEvent, UploadSummary};
 use crate::self_encryption::{EncryptionStream, MAX_CHUNK_SIZE, encrypt_directory_files};
+use ant_evm::merkle_payments::MAX_LEAVES;
 use ant_evm::{AttoTokens, EvmWallet};
 use ant_protocol::storage::DataTypes;
 use std::collections::HashMap;
@@ -24,23 +25,61 @@ use xor_name::XorName;
 /// Payment option for Merkle batch uploads
 #[derive(Clone)]
 pub enum MerklePaymentOption<'a> {
-    /// Pay with a wallet - will create a new Merkle payment
+    /// Fresh upload - pays for all chunks
     Wallet(&'a EvmWallet),
-    /// Use a cached receipt from a previous payment
+    /// Upload with External Payment Flow - assumes all proofs present, fails if not
     Receipt(MerklePaymentReceipt),
+    /// Continue/Retry upload with partial payment receipt - uses existing proofs, pays for any missing chunks
+    ContinueWithReceipt(&'a EvmWallet, MerklePaymentReceipt),
+}
+
+/// Error with optional receipt attached
+/// Receipt is only present if payments were made before the error occurred
+#[derive(Debug, Error)]
+#[error("{error}")]
+pub struct MerkleUploadErrorWithReceipt {
+    /// Receipt if any payments were made before failure (None = no payment happened)
+    pub receipt: Option<MerklePaymentReceipt>,
+    /// The actual error details
+    #[source]
+    pub error: MerkleUploadError,
+}
+
+impl MerkleUploadErrorWithReceipt {
+    /// Create error, only including receipt if it contains actual payments
+    fn new(receipt: MerklePaymentReceipt, kind: MerkleUploadError) -> Self {
+        let receipt = if receipt.proofs.is_empty() {
+            None // No payments made
+        } else {
+            Some(receipt) // Real payments - include proof
+        };
+        Self {
+            receipt,
+            error: kind,
+        }
+    }
+
+    fn encryption(receipt: MerklePaymentReceipt, msg: String) -> Self {
+        Self::new(receipt, MerkleUploadError::Encryption(msg))
+    }
+
+    fn payment(receipt: MerklePaymentReceipt, err: MerklePaymentError) -> Self {
+        Self::new(receipt, MerkleUploadError::Payment(err))
+    }
+
+    fn upload(receipt: MerklePaymentReceipt, err: MerklePutError) -> Self {
+        Self::new(receipt, MerkleUploadError::Upload(err))
+    }
 }
 
 #[derive(Debug, Error)]
-pub enum MerkleFilePutError {
+pub enum MerkleUploadError {
     #[error("Encryption error: {0}")]
     Encryption(String),
-    #[error("Merkle payment error: {0}")]
-    MerklePayment(#[from] MerklePaymentError),
-    #[error("Upload error: {err}")]
-    Upload {
-        err: MerklePutError,
-        receipt: MerklePaymentReceipt,
-    },
+    #[error("Payment error: {0}")]
+    Payment(MerklePaymentError),
+    #[error("Upload error: {0}")]
+    Upload(MerklePutError),
 }
 
 impl Client {
@@ -61,182 +100,194 @@ impl Client {
         path: PathBuf,
         is_public: bool,
         wallet: &EvmWallet,
-    ) -> Result<AttoTokens, MerkleFilePutError> {
+    ) -> Result<AttoTokens, MerkleUploadError> {
         debug!(
             "merkle payment: file_cost_merkle starting for path: {path:?}, is_public: {is_public}"
         );
 
         // Check if the wallet uses the same network as the client
         if wallet.network() != self.evm_network() {
-            return Err(MerkleFilePutError::MerklePayment(
+            return Err(MerkleUploadError::Payment(
                 MerklePaymentError::EvmWalletNetworkMismatch,
             ));
         }
 
         #[cfg(feature = "loud")]
         println!("Encrypting files to calculate cost...");
-        // Get encryption streams to determine chunk count and addresses
-        let pay_streams: Vec<EncryptionStream> = encrypt_directory_files(path.clone(), is_public)
+
+        // Collect all XorNames
+        let (all_xor_names, _file_chunk_counts) = self
+            .collect_xornames_from_dir(path, is_public)
             .await
-            .map_err(|e| MerkleFilePutError::Encryption(e.to_string()))?
-            .into_iter()
-            .map(|stream| stream.map_err(MerkleFilePutError::Encryption))
-            .collect::<Result<Vec<EncryptionStream>, MerkleFilePutError>>()?;
-        debug!(
-            "merkle payment: file_cost_merkle got {} encryption streams",
-            pay_streams.len()
-        );
+            .map_err(MerkleUploadError::Encryption)?;
 
-        // Collect all XorNames from streams
-        let all_xor_names = pay_streams
-            .into_iter()
-            .flat_map(collect_xor_names_from_stream)
-            .collect::<Vec<XorName>>();
-        debug!(
-            "merkle payment: file_cost_merkle total chunks: {}",
-            all_xor_names.len()
-        );
+        let total_chunks = all_xor_names.len();
+        debug!("merkle payment: file_cost_merkle total chunks: {total_chunks}");
 
         #[cfg(feature = "loud")]
-        println!("Encrypted into {} chunks", all_xor_names.len());
+        println!("Encrypted into {total_chunks} chunks");
 
-        // Build Merkle tree and get candidate pools (same as actual payment)
-        use ant_evm::merkle_payments::MerkleTree;
-        use std::time::{SystemTime, UNIX_EPOCH};
-
-        #[cfg(feature = "loud")]
-        println!("Building Merkle tree...");
-        let tree = MerkleTree::from_xornames(all_xor_names.clone())
-            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::MerkleTree(e)))?;
-        let depth = tree.depth();
-        debug!("merkle payment: file_cost_merkle built tree with depth={depth}");
-
-        let merkle_payment_timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::TimestampError(e)))?
-            .as_secs();
-        let midpoint_proofs = tree
-            .reward_candidates(merkle_payment_timestamp)
-            .map_err(|e| MerkleFilePutError::MerklePayment(MerklePaymentError::MerkleTree(e)))?;
-        debug!(
-            "merkle payment: file_cost_merkle generated {} candidate pools",
-            midpoint_proofs.len()
-        );
-
-        #[cfg(feature = "loud")]
-        println!("Creating reward candidate pools...");
-        // Query network for candidate pools with signature validation
-        let candidate_pools = self
-            .build_candidate_pools(midpoint_proofs, DataTypes::Chunk, MAX_CHUNK_SIZE)
-            .await?;
-        debug!(
-            "merkle payment: file_cost_merkle collected and validated {} pools",
-            candidate_pools.len()
-        );
-
-        // Convert to pool commitments
-        use evmlib::merkle_batch_payment::PoolCommitment;
-        let pool_commitments: Vec<PoolCommitment> = candidate_pools
-            .iter()
-            .map(|pool| pool.to_commitment())
+        // Split into batches of MAX_LEAVES
+        let batches: Vec<Vec<XorName>> = all_xor_names
+            .chunks(MAX_LEAVES)
+            .map(|c| c.to_vec())
             .collect();
+        let num_batches = batches.len();
 
         #[cfg(feature = "loud")]
-        println!("Estimating cost...");
-        // Call wallet's estimate function which calls the contract's view function
-        let estimated_cost_raw = wallet
-            .estimate_merkle_payment_cost(depth, &pool_commitments, merkle_payment_timestamp)
-            .await
-            .map_err(|e| {
-                MerkleFilePutError::MerklePayment(MerklePaymentError::EvmWalletError(e))
-            })?;
+        println!("Estimating cost for {num_batches} batch(es)...");
 
-        // Convert U256 to AttoTokens
-        let estimated_cost = AttoTokens::from_atto(estimated_cost_raw);
+        // Estimate cost for each batch and sum
+        let mut total_cost = ant_evm::U256::ZERO;
 
-        debug!("merkle payment: file_cost_merkle estimated cost: {estimated_cost}");
+        for (batch_idx, batch_xornames) in batches.into_iter().enumerate() {
+            let batch_num = batch_idx + 1;
+            debug!("Estimating batch {batch_num}/{num_batches}");
+
+            // Prepare batch (build tree, query pools)
+            let (tree, _candidate_pools, pool_commitments, merkle_payment_timestamp) = self
+                .prepare_merkle_batch(DataTypes::Chunk, batch_xornames, MAX_CHUNK_SIZE)
+                .await
+                .map_err(MerkleUploadError::Payment)?;
+
+            // Estimate cost for this batch
+            let batch_cost = wallet
+                .estimate_merkle_payment_cost(
+                    tree.depth(),
+                    &pool_commitments,
+                    merkle_payment_timestamp,
+                )
+                .await
+                .map_err(|e| MerkleUploadError::Payment(MerklePaymentError::EvmWalletError(e)))?;
+
+            total_cost = total_cost.saturating_add(batch_cost);
+        }
+
+        let estimated_cost = AttoTokens::from_atto(total_cost);
+        debug!("merkle payment: file_cost_merkle estimated total cost: {estimated_cost}");
+
+        #[cfg(feature = "loud")]
+        println!("Total estimated cost: {estimated_cost}");
+
         Ok(estimated_cost)
     }
 
-    /// Pay for a directory of files with Merkle batch payments
-    pub async fn file_pay_with_merkle_payment(
+    /// Helper function to pay for a directory of files with Merkle batch payments
+    async fn files_put_with_merkle_payment_internal(
         &self,
         path: PathBuf,
         is_public: bool,
-        wallet: &EvmWallet,
-    ) -> Result<MerklePaymentReceipt, MerkleFilePutError> {
-        debug!("merkle payment: file_pay starting for path: {path:?}, is_public: {is_public}");
-        #[cfg(feature = "loud")]
-        println!("Paying for {path:?}...");
+        wallet: Option<&EvmWallet>,
+        mut receipt: MerklePaymentReceipt,
+    ) -> Result<(AttoTokens, Vec<(PathBuf, DataMapChunk, Metadata)>), MerkleUploadErrorWithReceipt>
+    {
+        debug!("merkle payment: starting for path: {path:?}, is_public: {is_public}");
 
-        #[cfg(feature = "loud")]
-        println!("Encrypting files for payment...");
-        // Get encryption streams for payment
-        let pay_streams: Vec<EncryptionStream> = encrypt_directory_files(path.clone(), is_public)
-            .await
-            .map_err(|e| MerkleFilePutError::Encryption(e.to_string()))?
-            .into_iter()
-            .map(|stream| stream.map_err(MerkleFilePutError::Encryption))
-            .collect::<Result<Vec<EncryptionStream>, MerkleFilePutError>>()?;
-        debug!(
-            "merkle payment: file_pay got {} encryption streams",
-            pay_streams.len()
-        );
-
-        #[cfg(feature = "loud")]
-        println!("Performing first encryption pass to build merkle tree...");
-        // Pay for the all xornames, consuming the pay_streams
-        let xor_names_for_each_file = pay_streams
-            .into_iter()
-            .map(|s| (s.file_path.clone(), collect_xor_names_from_stream(s)))
-            .collect::<HashMap<String, Vec<XorName>>>();
-        let file_chunk_counts = xor_names_for_each_file
-            .iter()
-            .map(|(path, xor_names)| (path.clone(), xor_names.len()))
-            .collect::<HashMap<String, usize>>();
-        debug!(
-            "merkle payment: file_pay collected chunks from {} files",
-            file_chunk_counts.len()
-        );
-        for (file_path, count) in &file_chunk_counts {
-            debug!("merkle payment: file_pay   - {file_path}: {count} chunks");
+        // Check wallet network (if wallet provided)
+        if let Some(w) = wallet
+            && w.network() != self.evm_network()
+        {
+            return Err(MerkleUploadErrorWithReceipt::payment(
+                receipt,
+                MerklePaymentError::EvmWalletNetworkMismatch,
+            ));
         }
 
-        let all_xor_names = xor_names_for_each_file
-            .into_iter()
-            .flat_map(|(_, xor_names)| xor_names)
-            .collect::<Vec<XorName>>();
-        debug!(
-            "merkle payment: file_pay total chunks to pay for: {}",
-            all_xor_names.len()
-        );
-
+        // Encrypt files to collect ALL XorNames
         #[cfg(feature = "loud")]
-        println!(
-            "Submitting payment for {} chunks in {} files...",
-            all_xor_names.len(),
-            file_chunk_counts.len()
-        );
-        let mut receipt = self
-            .pay_for_merkle_batch(
-                DataTypes::Chunk,
-                all_xor_names.into_iter(),
-                MAX_CHUNK_SIZE,
-                wallet,
-            )
-            .await?;
-        debug!(
-            "merkle payment: file_pay received receipt with {} proofs",
-            receipt.proofs.len()
-        );
-
-        // Add file chunk counts to receipt
+        println!("Encrypting files a first time to create the Merkle Tree...");
+        let (all_xor_names, file_chunk_counts) = self
+            .collect_xornames_from_dir(path.clone(), is_public)
+            .await
+            .map_err(|e| MerkleUploadErrorWithReceipt::encryption(receipt.clone(), e))?;
         receipt.file_chunk_counts = file_chunk_counts;
-        debug!("merkle payment: file_pay completed successfully");
-        #[cfg(feature = "loud")]
-        println!("✓ Payment successful: {} paid", receipt.amount_paid);
+        let total_files = receipt.file_chunk_counts.len();
 
-        Ok(receipt)
+        let total_chunks = all_xor_names.len();
+        info!("Collected {total_chunks} XorNames from {total_files} files");
+
+        // Split into batches of MAX_LEAVES
+        let batches: Vec<Vec<XorName>> = all_xor_names
+            .chunks(MAX_LEAVES)
+            .map(|c| c.to_vec())
+            .collect();
+        let num_batches = batches.len();
+        info!("Split into {num_batches} batch(es) of up to {MAX_LEAVES} chunks each");
+
+        // Start upload streams
+        #[cfg(feature = "loud")]
+        println!("Starting upload of {total_chunks} chunks in {num_batches} batch(es)...");
+        let mut streams: Vec<EncryptionStream> = encrypt_directory_files(path, is_public)
+            .await
+            .map_err(|e| MerkleUploadErrorWithReceipt::encryption(receipt.clone(), e.to_string()))?
+            .into_iter()
+            .map(|stream| {
+                stream.map_err(|e| MerkleUploadErrorWithReceipt::encryption(receipt.clone(), e))
+            })
+            .collect::<Result<Vec<EncryptionStream>, MerkleUploadErrorWithReceipt>>()?;
+
+        let mut results: Vec<(PathBuf, DataMapChunk, Metadata)> = Vec::new();
+
+        // Interleaved pay/upload for each batch
+        for (batch_idx, batch_xornames) in batches.into_iter().enumerate() {
+            let batch_num = batch_idx + 1;
+            let batch_size = batch_xornames.len();
+            info!("Processing batch {batch_num}/{num_batches} ({batch_size} chunks)");
+
+            // Pay for this batch if needed
+            let needs_payment = batch_xornames
+                .iter()
+                .any(|xn| !receipt.proofs.contains_key(xn));
+            if needs_payment {
+                receipt = self
+                    .pay_for_batch(
+                        wallet,
+                        batch_xornames,
+                        receipt.clone(),
+                        batch_num,
+                        num_batches,
+                    )
+                    .await
+                    .map_err(|kind| MerkleUploadErrorWithReceipt::new(receipt.clone(), kind))?;
+            }
+
+            #[cfg(feature = "loud")]
+            println!("Batch {batch_num}/{num_batches}: Uploading {batch_size} chunks...");
+
+            // Upload this batch's chunks
+            let (remaining_streams, completed_files) = self
+                .upload_batch_with_merkle(streams, &receipt, batch_size)
+                .await
+                .map_err(|err| MerkleUploadErrorWithReceipt::upload(receipt.clone(), err))?;
+
+            streams = remaining_streams;
+            results.extend(completed_files);
+
+            info!(
+                "Batch {batch_num}/{num_batches} complete, {} files finished so far",
+                results.len()
+            );
+        }
+
+        // Handle any remaining streams (should be empty if all went well)
+        for stream in streams {
+            if let Some(datamap) = stream.data_map_chunk() {
+                results.push((
+                    stream.relative_path.clone(),
+                    datamap,
+                    stream.metadata.clone(),
+                ));
+            }
+        }
+
+        debug!("merkle payment: files_put_unified all files uploaded successfully");
+        #[cfg(feature = "loud")]
+        println!("✓ All {total_chunks} chunks uploaded successfully!");
+
+        // Send upload completion event
+        self.send_upload_complete_event(&receipt).await;
+
+        Ok((receipt.amount_paid, results))
     }
 
     /// Upload a directory of files with Merkle batch payments
@@ -251,98 +302,101 @@ impl Client {
     /// * Tuple of (amount_paid, results) where:
     ///   - `amount_paid` - Total amount paid for the Merkle batch (in AttoTokens)
     ///   - `results` - Vector of (relative_path, datamap, metadata) tuples for each uploaded file
+    ///
+    /// # Errors
+    /// On error, check `error.receipt` for any payments made before the failure.
+    /// If `Some(receipt)`, payments were made and can be reused via [`MerklePaymentOption::ContinueWithReceipt`].
     pub async fn files_put_with_merkle_payment(
         &self,
         path: PathBuf,
         is_public: bool,
         payment: MerklePaymentOption<'_>,
-    ) -> Result<(AttoTokens, Vec<(PathBuf, DataMapChunk, Metadata)>), MerkleFilePutError> {
+    ) -> Result<(AttoTokens, Vec<(PathBuf, DataMapChunk, Metadata)>), MerkleUploadErrorWithReceipt>
+    {
         debug!(
             "merkle payment: files_put starting upload for path: {path:?}, is_public: {is_public}"
         );
 
-        // Get receipt based on payment option
-        let receipt = match payment {
+        match payment {
             MerklePaymentOption::Wallet(wallet) => {
-                debug!("merkle payment: files_put using wallet payment option");
-                self.file_pay_with_merkle_payment(path.clone(), is_public, wallet)
-                    .await?
+                self.files_put_with_merkle_payment_internal(
+                    path,
+                    is_public,
+                    Some(wallet),
+                    MerklePaymentReceipt::default(),
+                )
+                .await
             }
             MerklePaymentOption::Receipt(receipt) => {
-                debug!(
-                    "merkle payment: files_put using cached receipt with {} proofs",
-                    receipt.proofs.len()
-                );
-                #[cfg(feature = "loud")]
-                println!(
-                    "Using cached payment receipt with {} proofs",
-                    receipt.proofs.len()
-                );
-                receipt
+                self.files_put_with_merkle_payment_internal(path, is_public, None, receipt)
+                    .await
             }
-        };
+            MerklePaymentOption::ContinueWithReceipt(wallet, receipt) => {
+                self.files_put_with_merkle_payment_internal(path, is_public, Some(wallet), receipt)
+                    .await
+            }
+        }
+    }
 
-        #[cfg(feature = "loud")]
-        println!("Starting upload phase...");
-        // Get encryption streams for upload
-        debug!("merkle payment: files_put encrypting directory files for upload");
-        #[cfg(feature = "loud")]
-        println!("Encrypting files for upload...");
-        let upload_streams: Vec<EncryptionStream> = encrypt_directory_files(path, is_public)
+    /// Collect all XorNames from a directory, returning (all_xornames, file_chunk_counts)
+    async fn collect_xornames_from_dir(
+        &self,
+        path: PathBuf,
+        is_public: bool,
+    ) -> Result<(Vec<XorName>, HashMap<String, usize>), String> {
+        let streams: Vec<EncryptionStream> = encrypt_directory_files(path, is_public)
             .await
-            .map_err(|e| MerkleFilePutError::Encryption(e.to_string()))?
+            .map_err(|e| e.to_string())?
             .into_iter()
-            .map(|stream| stream.map_err(MerkleFilePutError::Encryption))
-            .collect::<Result<Vec<EncryptionStream>, MerkleFilePutError>>()?;
-        let total_files = upload_streams.len();
-        debug!("merkle payment: files_put got {total_files} upload streams");
+            .collect::<Result<Vec<EncryptionStream>, String>>()?;
 
-        // For each files, upload the chunks
-        let mut results: Vec<(PathBuf, DataMapChunk, Metadata)> = Vec::new();
-        for (file_index, file) in upload_streams.into_iter().enumerate() {
-            // Extract metadata before upload
-            let file_num = file_index + 1;
-            let relative_path = file.relative_path.clone();
-            let metadata = file.metadata.clone();
-            let file_path = file.file_path.clone();
-            let file_chunk_count = *receipt.file_chunk_counts.get(&file_path).unwrap_or(&0);
+        let mut all_xor_names = Vec::new();
+        let mut file_chunk_counts = HashMap::new();
 
-            debug!(
-                "merkle payment: files_put uploading file {file_num}/{total_files}: {file_path:?} ({file_chunk_count} chunks)"
-            );
-
-            #[cfg(feature = "loud")]
-            println!(
-                "[File {file_num}/{total_files}] Uploading {file_chunk_count} chunks from: {file_path}"
-            );
-            info!("Uploading {file_chunk_count} chunks from file: {file_path:?}");
-
-            // Upload the chunks
-            let exhausted_stream = self
-                .chunk_stream_put_with_merkle_receipt(file, file_chunk_count, &receipt)
-                .await
-                .map_err(|err| MerkleFilePutError::Upload {
-                    err,
-                    receipt: receipt.clone(),
-                })?;
-            let datamap = exhausted_stream
-                .data_map_chunk()
-                .ok_or(MerkleFilePutError::Upload {
-                    err: MerklePutError::StreamShouldHaveDatamap,
-                    receipt: receipt.clone(),
-                })?;
-
-            debug!("merkle payment: files_put successfully uploaded file {file_num}");
-            #[cfg(feature = "loud")]
-            println!("[File {file_num}/{total_files}] uploaded successfully");
-            results.push((relative_path, datamap, metadata));
+        for stream in streams {
+            let file_path = stream.file_path.clone();
+            let xor_names = collect_xor_names_from_stream(stream);
+            file_chunk_counts.insert(file_path, xor_names.len());
+            all_xor_names.extend(xor_names);
         }
 
-        debug!("merkle payment: files_put all files uploaded successfully");
-        #[cfg(feature = "loud")]
-        println!("✓ All {total_files} files uploaded successfully!");
+        Ok((all_xor_names, file_chunk_counts))
+    }
 
-        // Send upload completion event
+    /// Pay for a batch, returning the merged receipt
+    async fn pay_for_batch(
+        &self,
+        wallet: Option<&EvmWallet>,
+        batch_xornames: Vec<XorName>,
+        mut receipt: MerklePaymentReceipt,
+        batch_num: usize,
+        num_batches: usize,
+    ) -> Result<MerklePaymentReceipt, MerkleUploadError> {
+        // Need wallet to pay - error if Receipt variant (wallet is None)
+        let w = wallet.ok_or_else(|| {
+            let missing_xn = batch_xornames
+                .iter()
+                .find(|xn| !receipt.proofs.contains_key(xn))
+                .copied()
+                .unwrap_or_default();
+            MerkleUploadError::Upload(MerklePutError::MissingPaymentProofFor(missing_xn))
+        })?;
+
+        let batch_size = batch_xornames.len();
+        #[cfg(feature = "loud")]
+        println!("Batch {batch_num}/{num_batches}: Paying for {batch_size} chunks...");
+
+        let batch_receipt = self
+            .pay_for_single_merkle_batch(DataTypes::Chunk, batch_xornames, MAX_CHUNK_SIZE, w)
+            .await
+            .map_err(MerkleUploadError::Payment)?;
+
+        receipt.merge(batch_receipt);
+        Ok(receipt)
+    }
+
+    /// Send upload completion event
+    async fn send_upload_complete_event(&self, receipt: &MerklePaymentReceipt) {
         let total_chunks: usize = receipt.file_chunk_counts.values().sum();
         if let Some(sender) = &self.client_event_sender {
             let summary = UploadSummary {
@@ -355,8 +409,6 @@ impl Client {
                 error!("Failed to send upload completion event: {err:?}");
             }
         }
-
-        Ok((receipt.amount_paid, results))
     }
 }
 

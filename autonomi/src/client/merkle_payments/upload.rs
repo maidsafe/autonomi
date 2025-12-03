@@ -9,6 +9,8 @@
 use super::payments::MerklePaymentReceipt;
 use crate::Client;
 use crate::client::config::CHUNK_UPLOAD_BATCH_SIZE;
+use crate::client::data_types::chunk::DataMapChunk;
+use crate::client::files::Metadata;
 use crate::networking::NetworkError;
 use crate::self_encryption::EncryptionStream;
 use crate::utils::process_tasks_with_max_concurrency;
@@ -16,6 +18,7 @@ use ant_evm::merkle_payments::MerklePaymentProof;
 use ant_protocol::NetworkAddress;
 use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, RecordKind, try_serialize_record};
 use libp2p::kad::Record;
+use std::path::PathBuf;
 use thiserror::Error;
 use xor_name::XorName;
 
@@ -26,9 +29,9 @@ pub enum MerklePutError {
     #[error("Serialization error: {0}")]
     Serialization(String),
 
-    // Errors that should never happen:
+    // Errors that should not happen unless there is a bug:
     #[error(
-        "Missing payment proof for xorname: {0}. This could be caused by a change in content between the payment and the upload. Please try again but make sure to avoid changing the files while they are being uploaded."
+        "Missing payment proof for xorname: {0}. This could be caused by a change in content between the payment and the upload. Please try again but make sure the uploaded files are the same as the ones used for the payment."
     )]
     MissingPaymentProofFor(XorName),
     #[error(
@@ -38,58 +41,87 @@ pub enum MerklePutError {
 }
 
 impl Client {
-    /// Upload a stream of chunks with Merkle batch payments
+    /// Upload streams of chunks with Merkle batch payments
+    ///
+    /// Upload up to `limit` chunks from streams, returning remaining streams and completed file results
+    ///
+    /// This processes streams in order, uploading chunks until `limit` is reached or all streams exhausted.
+    /// When a stream is exhausted, its datamap is harvested and added to the results.
+    ///
     /// # Arguments
-    /// * `upload_stream` - EncryptionStream used for actual upload (will be fully consumed)
-    /// * `receipt` - Merkle payment receipt for the stream of chunks
+    /// * `streams` - Vector of encryption streams to process
+    /// * `receipt` - Merkle payment receipt containing proofs for chunks
+    /// * `limit` - Maximum number of chunks to upload in this batch
     ///
     /// # Returns
-    /// * `EncryptionStream` - The exhausted upload_stream containing the datamap
-    pub async fn chunk_stream_put_with_merkle_receipt(
+    /// * Tuple of (remaining_streams, completed_file_results)
+    pub async fn upload_batch_with_merkle(
         &self,
-        mut upload_stream: EncryptionStream,
-        total_chunks: usize,
+        mut streams: Vec<EncryptionStream>,
         receipt: &MerklePaymentReceipt,
-    ) -> Result<EncryptionStream, MerklePutError> {
-        // Stream and upload chunks with Merkle proofs
-        let stream_batch_size: usize = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
+        limit: usize,
+    ) -> Result<
+        (
+            Vec<EncryptionStream>,
+            Vec<(PathBuf, DataMapChunk, Metadata)>,
+        ),
+        MerklePutError,
+    > {
+        let mut completed_files: Vec<(PathBuf, DataMapChunk, Metadata)> = Vec::new();
+        let mut chunks_uploaded = 0;
+        let upload_batch_size = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
 
-        // Helper to start an upload task for a chunk
-        let start_upload = |chunk: Chunk| -> Result<_, MerklePutError> {
-            let xor_name = *chunk.name();
-            let proof = receipt
-                .proofs
-                .get(&xor_name)
-                .ok_or(MerklePutError::MissingPaymentProofFor(xor_name))?
-                .clone();
+        while chunks_uploaded < limit {
+            let Some(stream) = streams.first_mut() else {
+                break;
+            };
 
-            let self_clone = self.clone();
-            Ok(async move {
-                self_clone
-                    .upload_chunk_with_merkle_proof(&chunk, &proof)
-                    .await
-            })
-        };
+            // Try to get next batch of chunks from current stream
+            let remaining_in_batch = limit - chunks_uploaded;
+            let batch_size = std::cmp::min(upload_batch_size, remaining_in_batch);
 
-        // Process chunks in batches
-        let mut completed = 0;
-        while let Some(batch) = upload_stream.next_batch(stream_batch_size) {
-            let mut tasks = vec![];
-            for chunk in batch {
-                let task = start_upload(chunk)?;
-                tasks.push(task);
-            }
+            match stream.next_batch(batch_size) {
+                Some(chunks) if !chunks.is_empty() => {
+                    // Upload this batch of chunks
+                    let mut tasks = Vec::with_capacity(chunks.len());
+                    for chunk in chunks {
+                        let xor_name = *chunk.name();
+                        let proof = receipt
+                            .proofs
+                            .get(&xor_name)
+                            .ok_or(MerklePutError::MissingPaymentProofFor(xor_name))?
+                            .clone();
+                        let client = self.clone();
+                        tasks.push(async move {
+                            client.upload_chunk_with_merkle_proof(&chunk, &proof).await
+                        });
+                    }
 
-            let results = process_tasks_with_max_concurrency(tasks, stream_batch_size).await;
-            for r in results {
-                completed += 1;
-                #[cfg(feature = "loud")]
-                println!("{completed}/{total_chunks} chunks uploaded at: {r:?}");
-                debug!("{completed}/{total_chunks} chunks uploaded at: {r:?}");
+                    let results = process_tasks_with_max_concurrency(tasks, batch_size).await;
+
+                    // Check each result for errors - propagate first error encountered
+                    for result in results {
+                        let addr = result?;
+                        chunks_uploaded += 1;
+                        debug!("Uploaded chunk: {addr:?}");
+                    }
+                }
+                _ => {
+                    // Stream exhausted - harvest datamap and remove stream
+                    let exhausted_stream = streams.remove(0);
+                    let relative_path = exhausted_stream.relative_path.clone();
+                    let metadata = exhausted_stream.metadata.clone();
+                    let datamap = exhausted_stream
+                        .data_map_chunk()
+                        .ok_or(MerklePutError::StreamShouldHaveDatamap)?;
+
+                    debug!("File completed: {relative_path:?}");
+                    completed_files.push((relative_path, datamap, metadata));
+                }
             }
         }
 
-        Ok(upload_stream)
+        Ok((streams, completed_files))
     }
 
     /// Upload a single chunk with its Merkle payment proof
@@ -136,7 +168,7 @@ impl Client {
 
         let storing_nodes = self
             .network
-            .get_closest_peers(network_addr.clone(), None)
+            .get_closest_peers_with_retries(network_addr.clone(), None)
             .await?;
 
         debug!("Storing record: {record:?} to {:?}", storing_nodes);
