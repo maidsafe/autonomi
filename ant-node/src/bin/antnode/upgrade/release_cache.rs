@@ -7,8 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use ant_releases::AutonomiReleaseInfo;
-use color_eyre::Result;
 use serde::{Deserialize, Serialize};
+
+use super::Result;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read as _, Seek, SeekFrom, Write as _};
 use std::path::{Path, PathBuf};

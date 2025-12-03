@@ -493,8 +493,11 @@ You can check your reward balance by running:
                         }
                         break;
                     }
+                    Err(upgrade::UpgradeError::AlreadyLatest) => {
+                        info!("Already running latest version");
+                    }
                     Err(e) => {
-                        error!("Error during upgrade process: {e}");
+                        warn!("Error during upgrade process: {e}");
                     }
                 }
             }

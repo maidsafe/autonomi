@@ -6,11 +6,13 @@
 // KIND, either express or implied. Please review the Licences for the specific language governing
 // permissions and limitations relating to use of the SAFE Network Software.
 
+mod error;
 mod release_cache;
+
+pub use error::{Result, UpgradeError};
 
 use ant_node::RunningNode;
 use ant_releases::{AntReleaseRepoActions, AutonomiReleaseInfo};
-use color_eyre::{Result, eyre::eyre};
 use fs2::FileExt;
 use semver::Version;
 use sha2::{Digest, Sha256};
@@ -65,7 +67,10 @@ pub fn verify_binary_hash(path: &Path, expected_hash: &str) -> Result<bool> {
 /// Get the upgrade directory path in the user's data directory.
 pub fn get_upgrade_dir_path() -> Result<PathBuf> {
     let upgrade_dir_path = dirs_next::data_dir()
-        .ok_or_else(|| eyre!("Could not determine user data directory"))?
+        .ok_or_else(|| UpgradeError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Could not determine user data directory"
+        )))?
         .join("autonomi")
         .join("upgrades");
     debug!("Upgrade directory: {}", upgrade_dir_path.display());
@@ -146,16 +151,15 @@ pub async fn download_and_extract_upgrade_binary(
         .platform_binaries
         .iter()
         .find(|pb| pb.platform == platform)
-        .ok_or_else(|| eyre!("No binaries found for platform: {:?}", platform))?;
+        .ok_or_else(|| UpgradeError::PlatformBinariesNotFound(format!("{platform:?}")))?;
     let antnode_binary = platform_binaries
         .binaries
         .iter()
         .find(|b| b.name == "antnode")
         .ok_or_else(|| {
-            eyre!(
-                "antnode binary not found in release for platform: {:?}",
-                platform
-            )
+            UpgradeError::PlatformBinariesNotFound(format!(
+                "antnode binary not found in release for platform: {platform:?}"
+            ))
         })?;
     info!(
         "Found upgrade binary from release info: version {} with hash {}",
@@ -228,10 +232,7 @@ pub async fn download_and_extract_upgrade_binary(
     let extracted_path =
         release_repo.extract_release_archive(&archive_path, &temp_download_dir_path)?;
     if !verify_binary_hash(&extracted_path, &antnode_binary.sha256)? {
-        return Err(eyre!(
-            "Downloaded binary hash does not match expected hash {}",
-            antnode_binary.sha256
-        ));
+        return Err(UpgradeError::HashVerificationFailed);
     }
     info!("Binary hash verified successfully");
 
@@ -255,7 +256,7 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
         info!("Starting in-place binary replacement");
 
         if !verify_binary_hash(new_binary_path, expected_hash)? {
-            return Err(eyre!("New binary hash verification failed"));
+            return Err(UpgradeError::HashVerificationFailed);
         }
 
         let mut current_exe_path = std::env::current_exe()?;
@@ -294,8 +295,8 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
 
     #[cfg(not(unix))]
     {
-        Err(eyre!(
-            "Automatic upgrade is only supported on Unix platforms (Linux/macOS)"
+        Err(UpgradeError::BinaryReplacementFailed(
+            "Automatic upgrade is only supported on Unix platforms (Linux/macOS)".to_string()
         ))
     }
 }
