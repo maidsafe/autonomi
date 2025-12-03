@@ -11,6 +11,7 @@ use crate::contract::merkle_payment_vault::error::Error;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault::IMerklePaymentVaultInstance;
 use crate::merkle_batch_payment::PoolHash;
+use crate::retry::TransactionError;
 use crate::transaction_config::TransactionConfig;
 use alloy::network::{Network, TransactionResponse};
 use alloy::providers::Provider;
@@ -156,17 +157,10 @@ where
         let (calldata, to) =
             self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
 
-        let tx_hash = crate::retry::send_transaction_with_retries(
-            self.contract.provider(),
-            calldata,
-            to,
-            "pay for merkle tree",
-            transaction_config,
-        )
-        .await
-        .map_err(Error::from)?;
+        let tx_hash = self
+            .send_transaction_and_handle_errors(calldata, to, transaction_config)
+            .await?;
 
-        // Get the MerklePaymentMade event with retry logic
         let event = self.get_merkle_payment_event(tx_hash).await?;
 
         let winner_pool_hash = event.winnerPoolHash.0;
@@ -181,6 +175,56 @@ where
         );
 
         Ok((winner_pool_hash, total_amount))
+    }
+
+    /// Send transaction with retries and handle revert errors
+    async fn send_transaction_and_handle_errors(
+        &self,
+        calldata: Calldata,
+        to: Address,
+        transaction_config: &TransactionConfig,
+    ) -> Result<crate::common::TxHash, Error> {
+        let tx_result = crate::retry::send_transaction_with_retries(
+            self.contract.provider(),
+            calldata,
+            to,
+            "pay for merkle tree",
+            transaction_config,
+        )
+        .await;
+
+        match tx_result {
+            Ok(hash) => Ok(hash),
+            Err(TransactionError::TransactionReverted {
+                message,
+                revert_data,
+                nonce,
+            }) => {
+                let error = self.decode_revert_error(message, revert_data, nonce);
+                Err(error)
+            }
+            Err(other_err) => Err(Error::from(other_err)),
+        }
+    }
+
+    /// Decode revert data or return generic transaction error
+    fn decode_revert_error(
+        &self,
+        message: String,
+        revert_data: Option<alloy::primitives::Bytes>,
+        nonce: Option<u64>,
+    ) -> Error {
+        if let Some(revert_data_bytes) = &revert_data
+            && let Some(decoded_err) = Error::try_decode_revert(revert_data_bytes)
+        {
+            return decoded_err;
+        }
+
+        Error::Transaction(TransactionError::TransactionReverted {
+            message,
+            revert_data,
+            nonce,
+        })
     }
 
     /// Get calldata for payForMerkleTree
