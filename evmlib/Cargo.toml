@@ -20,6 +20,7 @@ thiserror = "1.0"
 tracing = { version = "~0.1.26" }
 tokio = "1.43.1"
 rand = "0.8.5"
+exponential-backoff = "2.0.0"
 
 # Temporary dependencies for disk-based smart contract mock
 # TODO: Remove these once real smart contract integration is implemented

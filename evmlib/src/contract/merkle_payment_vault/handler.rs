@@ -12,8 +12,10 @@ use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault;
 use crate::contract::merkle_payment_vault::interface::IMerklePaymentVault::IMerklePaymentVaultInstance;
 use crate::merkle_batch_payment::PoolHash;
 use crate::transaction_config::TransactionConfig;
-use alloy::network::Network;
+use alloy::network::{Network, TransactionResponse};
 use alloy::providers::Provider;
+use exponential_backoff::Backoff;
+use std::time::Duration;
 
 pub struct MerklePaymentVaultHandler<P: Provider<N>, N: Network> {
     pub contract: IMerklePaymentVaultInstance<P, N>,
@@ -36,6 +38,98 @@ where
         self.contract = IMerklePaymentVault::new(address, provider);
     }
 
+    /// Get the MerklePaymentMade event from a transaction hash with retry logic
+    ///
+    /// This function retries up to 2 times with exponential backoff if the event
+    /// is not found immediately. This handles cases where the transaction may not
+    /// be fully indexed yet.
+    ///
+    /// # Arguments
+    /// * `tx_hash` - The transaction hash to query
+    ///
+    /// # Returns
+    /// * The MerklePaymentMade event from the transaction
+    async fn get_merkle_payment_event(
+        &self,
+        tx_hash: crate::common::TxHash,
+    ) -> Result<IMerklePaymentVault::MerklePaymentMade, Error> {
+        const MAX_ATTEMPTS: u32 = 3;
+        const INITIAL_DELAY_MS: u64 = 500;
+        const MAX_DELAY_MS: u64 = 8000;
+
+        // Configure backoff with exponential delays between attempts
+        let backoff = Backoff::new(
+            MAX_ATTEMPTS,
+            Duration::from_millis(INITIAL_DELAY_MS),
+            Some(Duration::from_millis(MAX_DELAY_MS)),
+        );
+
+        let mut last_error = None;
+        let mut attempt = 1;
+
+        for duration_opt in backoff {
+            match self.try_get_merkle_payment_event(tx_hash).await {
+                Ok(event) => return Ok(event),
+                Err(e) => {
+                    last_error = Some(e);
+
+                    // Sleep before next attempt if duration is provided
+                    if let Some(duration) = duration_opt {
+                        debug!(
+                            "Failed to get MerklePaymentMade event (attempt {}/{}), retrying in {}ms",
+                            attempt,
+                            MAX_ATTEMPTS,
+                            duration.as_millis()
+                        );
+                        tokio::time::sleep(duration).await;
+                    }
+                    attempt += 1;
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            Error::Rpc("Failed to get MerklePaymentMade event after retries".to_string())
+        }))
+    }
+
+    /// Try to get the MerklePaymentMade event from a transaction hash (single attempt)
+    async fn try_get_merkle_payment_event(
+        &self,
+        tx_hash: crate::common::TxHash,
+    ) -> Result<IMerklePaymentVault::MerklePaymentMade, Error> {
+        // Get the transaction to find its block number
+        let tx = self
+            .contract
+            .provider()
+            .get_transaction_by_hash(tx_hash)
+            .await
+            .map_err(|e| Error::Rpc(format!("Failed to get transaction: {e}")))?
+            .ok_or_else(|| Error::Rpc("Transaction not found".to_string()))?;
+
+        let block_number = tx
+            .block_number()
+            .ok_or_else(|| Error::Rpc("Transaction has no block number".to_string()))?;
+
+        // Get the MerklePaymentMade event from that block
+        let events = self
+            .contract
+            .MerklePaymentMade_filter()
+            .from_block(block_number)
+            .to_block(block_number)
+            .query()
+            .await
+            .map_err(|e| Error::Rpc(format!("Failed to query MerklePaymentMade events: {e}")))?;
+
+        events
+            .into_iter()
+            .find(|(_, log)| log.transaction_hash == Some(tx_hash))
+            .map(|(event, _)| event)
+            .ok_or_else(|| {
+                Error::Rpc("MerklePaymentMade event not found in transaction".to_string())
+            })
+    }
+
     /// Pay for Merkle tree batch
     ///
     /// # Arguments
@@ -45,21 +139,24 @@ where
     /// * `transaction_config` - Transaction configuration
     ///
     /// # Returns
-    /// * Transaction hash
+    /// * Tuple of (winner pool hash, total amount paid)
     pub async fn pay_for_merkle_tree<I, T>(
         &self,
         depth: u8,
         pool_commitments: I,
         merkle_payment_timestamp: u64,
         transaction_config: &TransactionConfig,
-    ) -> Result<crate::common::TxHash, Error>
+    ) -> Result<(PoolHash, Amount), Error>
     where
         I: IntoIterator<Item = T>,
         T: Into<IMerklePaymentVault::PoolCommitment>,
     {
         debug!("Paying for Merkle tree: depth={depth}, timestamp={merkle_payment_timestamp}");
-        let (calldata, to) = self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
-        crate::retry::send_transaction_with_retries(
+
+        let (calldata, to) =
+            self.pay_for_merkle_tree_calldata(depth, pool_commitments, merkle_payment_timestamp)?;
+
+        let tx_hash = crate::retry::send_transaction_with_retries(
             self.contract.provider(),
             calldata,
             to,
@@ -67,7 +164,23 @@ where
             transaction_config,
         )
         .await
-        .map_err(Error::from)
+        .map_err(Error::from)?;
+
+        // Get the MerklePaymentMade event with retry logic
+        let event = self.get_merkle_payment_event(tx_hash).await?;
+
+        let winner_pool_hash = event.winnerPoolHash.0;
+        let total_amount = event.totalAmount;
+
+        debug!(
+            "MerklePaymentMade event: winnerPoolHash={}, depth={}, totalAmount={}, timestamp={}",
+            hex::encode(winner_pool_hash),
+            event.depth,
+            total_amount,
+            event.merklePaymentTimestamp
+        );
+
+        Ok((winner_pool_hash, total_amount))
     }
 
     /// Get calldata for payForMerkleTree

@@ -220,7 +220,7 @@ impl Wallet {
         let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
 
         // Submit payment to smart contract
-        let _tx_hash = handler
+        let (winner_pool_hash, actual_amount) = handler
             .pay_for_merkle_tree(
                 depth,
                 pool_commitments.clone(),
@@ -230,24 +230,12 @@ impl Wallet {
             .await
             .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
 
-        // Find the winner pool by checking which pool now has payment info on-chain
-        let provider = http_provider(self.network.rpc_url().clone());
-        let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
+        info!(
+            "Merkle payment successful, winner pool: {}, amount: {actual_amount}",
+            hex::encode(winner_pool_hash)
+        );
 
-        for pool in &pool_commitments {
-            let pool_hash: [u8; 32] = pool.pool_hash;
-            if let Ok(_info) = handler.get_payment_info(pool_hash).await {
-                info!(
-                    "Merkle payment successful, winner pool: {}, amount: {estimated_amount}",
-                    hex::encode(pool_hash)
-                );
-                return Ok((pool_hash, estimated_amount));
-            }
-        }
-
-        Err(Error::MerklePayment(
-            "Payment succeeded but could not find winner pool".to_string(),
-        ))
+        Ok((winner_pool_hash, actual_amount))
     }
 
     /// Estimate the cost of a Merkle tree batch using smart contract

@@ -123,27 +123,17 @@ mod tests {
 
         // Test 2: Pay for Merkle tree
         println!("\nTest 2: Paying for Merkle tree...");
-        let _tx_hash = vault_handler
+        let (winner_pool_hash, total_amount) = vault_handler
             .pay_for_merkle_tree(depth, pool_commitments.clone(), timestamp, &tx_config)
             .await
             .expect("Failed to pay for Merkle tree");
 
         println!("Payment transaction sent successfully");
 
-        // Find the winner pool by checking payment info
-        let mut winner_pool_hash = None;
-        for pool in &pool_commitments {
-            let pool_hash: [u8; 32] = pool.pool_hash.into();
-            if vault_handler.get_payment_info(pool_hash).await.is_ok() {
-                winner_pool_hash = Some(pool_hash);
-                break;
-            }
-        }
-        let winner_pool_hash = winner_pool_hash.expect("Should find winner pool");
-
         println!(
-            "Payment successful for pool: {}",
-            hex::encode(winner_pool_hash)
+            "Payment successful for pool: {}, amount: {}",
+            hex::encode(winner_pool_hash),
+            total_amount
         );
 
         // Test 3: Get payment info
