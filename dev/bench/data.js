@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764860383269,
+  "lastUpdate": 1764860385447,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -16035,6 +16035,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23383,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "974f55eac51043bba1dbc194eef0c2118780c6bd",
+          "message": "Merge pull request #3319 from maqi/client_check_close_group_among_targeted_group\n\nfeat(client): check target's close group from targeted nodes' perspective",
+          "timestamp": "2025-12-04T13:44:35Z",
+          "tree_id": "898a4432fb6f2c8fd2ddabb83de55677a49ae1c9",
+          "url": "https://github.com/maidsafe/autonomi/commit/974f55eac51043bba1dbc194eef0c2118780c6bd"
+        },
+        "date": 1764860384603,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11352,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23579,
             "unit": "ms"
           },
           {
