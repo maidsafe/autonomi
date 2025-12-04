@@ -112,22 +112,20 @@ impl Client {
                 _ => {
                     // Stream exhausted - harvest datamap and remove stream
                     let exhausted_stream = streams.remove(0);
-                    let relative_path = exhausted_stream.relative_path.clone();
+                    let path = exhausted_stream.relative_path.clone();
                     let metadata = exhausted_stream.metadata.clone();
                     let datamap = exhausted_stream
                         .data_map_chunk()
                         .ok_or(MerklePutError::StreamShouldHaveDatamap)?;
-                    completed_files.push((relative_path.clone(), datamap, metadata));
+                    completed_files.push((path.clone(), datamap, metadata));
 
                     // report progress
-                    let completed_files_count = total_files - streams.len();
-                    if let Some(public_addr) = exhausted_stream.data_address() {
+                    let f = total_files - streams.len();
+                    if let Some(a) = exhausted_stream.data_address() {
+                        debug!("[File {f}/{total_files}] ({path:?}) is now available at: {a:?}");
                         #[cfg(feature = "loud")]
-                        println!(
-                            "[File {completed_files_count}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}"
-                        );
+                        println!("[File {f}/{total_files}] ({path:?}) is now available at: {a:?}");
                     }
-                    debug!("File completed: {relative_path:?}");
                 }
             }
         }

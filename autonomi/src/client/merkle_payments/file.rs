@@ -293,11 +293,12 @@ impl Client {
 
             // report progress
             if let Some(public_addr) = stream.data_address() {
-                let relative_path = stream.relative_path.clone();
+                let path = &stream.relative_path;
+                let f = results.len();
+                debug!("[File {f}/{total_files}] ({path:?}) is now available at: {public_addr:?}");
                 #[cfg(feature = "loud")]
                 println!(
-                    "[File {}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}",
-                    results.len(),
+                    "[File {f}/{total_files}] ({path:?}) is now available at: {public_addr:?}"
                 );
             }
         }
@@ -407,6 +408,7 @@ impl Client {
         })?;
 
         let batch_size = batch_xornames.len();
+        debug!("Merkle Tree {batch_num}/{num_batches}: Paying for {batch_size} chunks...");
         #[cfg(feature = "loud")]
         println!("💸 Merkle Tree {batch_num}/{num_batches}: Paying for {batch_size} chunks...");
 
@@ -443,10 +445,10 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
     let mut total = 0;
     let estimated_total = encryption_stream.total_chunks();
     let file_path = &encryption_stream.file_path;
-    #[cfg(feature = "loud")]
     let start = std::time::Instant::now();
     #[cfg(feature = "loud")]
     println!("Begin encrypting ~{estimated_total} chunks from {file_path}...");
+    debug!("Begin encrypting ~{estimated_total} chunks from {file_path}...");
     while let Some(batch) = encryption_stream.next_batch(xorname_collection_batch_size) {
         let batch_len = batch.len();
         total += batch_len;
@@ -455,6 +457,10 @@ fn collect_xor_names_from_stream(mut encryption_stream: EncryptionStream) -> Vec
         }
         #[cfg(feature = "loud")]
         println!(
+            "Encrypted {total}/{estimated_total} chunks in {:?}",
+            start.elapsed()
+        );
+        debug!(
             "Encrypted {total}/{estimated_total} chunks in {:?}",
             start.elapsed()
         );
