@@ -1,1 +1,1132 @@
-{"abi":[{"type":"constructor","inputs":[{"name":"_antToken","type":"address","internalType":"address"}],"stateMutability":"nonpayable"},{"type":"function","name":"CANDIDATES_PER_POOL","inputs":[],"outputs":[{"name":"","type":"uint8","internalType":"uint8"}],"stateMutability":"view"},{"type":"function","name":"MAX_MERKLE_DEPTH","inputs":[],"outputs":[{"name":"","type":"uint8","internalType":"uint8"}],"stateMutability":"view"},{"type":"function","name":"antToken","inputs":[],"outputs":[{"name":"","type":"address","internalType":"contract IERC20"}],"stateMutability":"view"},{"type":"function","name":"estimateMerkleTreeCost","inputs":[{"name":"depth","type":"uint8","internalType":"uint8"},{"name":"poolCommitments","type":"tuple[]","internalType":"struct MerklePaymentVault.PoolCommitment[]","components":[{"name":"poolHash","type":"bytes32","internalType":"bytes32"},{"name":"candidates","type":"tuple[16]","internalType":"struct MerklePaymentVault.CandidateNode[16]","components":[{"name":"rewardsAddress","type":"address","internalType":"address"},{"name":"metrics","type":"tuple","internalType":"struct MerklePaymentVault.QuotingMetrics","components":[{"name":"dataType","type":"uint8","internalType":"uint8"},{"name":"dataSize","type":"uint256","internalType":"uint256"},{"name":"closeRecordsStored","type":"uint256","internalType":"uint256"},{"name":"recordsPerType","type":"tuple[]","internalType":"struct MerklePaymentVault.Record[]","components":[{"name":"dataType","type":"uint8","internalType":"uint8"},{"name":"records","type":"uint256","internalType":"uint256"}]},{"name":"maxRecords","type":"uint256","internalType":"uint256"},{"name":"receivedPaymentCount","type":"uint256","internalType":"uint256"},{"name":"liveTime","type":"uint256","internalType":"uint256"},{"name":"networkDensity","type":"uint256","internalType":"uint256"},{"name":"networkSize","type":"uint256","internalType":"uint256"}]}]}]},{"name":"merklePaymentTimestamp","type":"uint64","internalType":"uint64"}],"outputs":[{"name":"totalAmount","type":"uint256","internalType":"uint256"}],"stateMutability":"view"},{"type":"function","name":"getPaymentInfo","inputs":[{"name":"winnerPoolHash","type":"bytes32","internalType":"bytes32"}],"outputs":[{"name":"info","type":"tuple","internalType":"struct MerklePaymentVault.PaymentInfo","components":[{"name":"depth","type":"uint8","internalType":"uint8"},{"name":"merklePaymentTimestamp","type":"uint64","internalType":"uint64"},{"name":"paidNodeAddresses","type":"tuple[]","internalType":"struct MerklePaymentVault.PaidNode[]","components":[{"name":"rewardsAddress","type":"address","internalType":"address"},{"name":"poolIndex","type":"uint8","internalType":"uint8"}]}]}],"stateMutability":"view"},{"type":"function","name":"payForMerkleTree","inputs":[{"name":"depth","type":"uint8","internalType":"uint8"},{"name":"poolCommitments","type":"tuple[]","internalType":"struct MerklePaymentVault.PoolCommitment[]","components":[{"name":"poolHash","type":"bytes32","internalType":"bytes32"},{"name":"candidates","type":"tuple[16]","internalType":"struct MerklePaymentVault.CandidateNode[16]","components":[{"name":"rewardsAddress","type":"address","internalType":"address"},{"name":"metrics","type":"tuple","internalType":"struct MerklePaymentVault.QuotingMetrics","components":[{"name":"dataType","type":"uint8","internalType":"uint8"},{"name":"dataSize","type":"uint256","internalType":"uint256"},{"name":"closeRecordsStored","type":"uint256","internalType":"uint256"},{"name":"recordsPerType","type":"tuple[]","internalType":"struct MerklePaymentVault.Record[]","components":[{"name":"dataType","type":"uint8","internalType":"uint8"},{"name":"records","type":"uint256","internalType":"uint256"}]},{"name":"maxRecords","type":"uint256","internalType":"uint256"},{"name":"receivedPaymentCount","type":"uint256","internalType":"uint256"},{"name":"liveTime","type":"uint256","internalType":"uint256"},{"name":"networkDensity","type":"uint256","internalType":"uint256"},{"name":"networkSize","type":"uint256","internalType":"uint256"}]}]}]},{"name":"merklePaymentTimestamp","type":"uint64","internalType":"uint64"}],"outputs":[{"name":"winnerPoolHash","type":"bytes32","internalType":"bytes32"},{"name":"totalAmount","type":"uint256","internalType":"uint256"}],"stateMutability":"nonpayable"},{"type":"function","name":"payments","inputs":[{"name":"","type":"bytes32","internalType":"bytes32"}],"outputs":[{"name":"depth","type":"uint8","internalType":"uint8"},{"name":"merklePaymentTimestamp","type":"uint64","internalType":"uint64"}],"stateMutability":"view"},{"type":"event","name":"MerklePaymentMade","inputs":[{"name":"winnerPoolHash","type":"bytes32","indexed":true,"internalType":"bytes32"},{"name":"depth","type":"uint8","indexed":false,"internalType":"uint8"},{"name":"totalAmount","type":"uint256","indexed":false,"internalType":"uint256"},{"name":"merklePaymentTimestamp","type":"uint64","indexed":false,"internalType":"uint64"}],"anonymous":false},{"type":"error","name":"DepthTooLarge","inputs":[{"name":"depth","type":"uint8","internalType":"uint8"},{"name":"max","type":"uint8","internalType":"uint8"}]},{"type":"error","name":"InsufficientAllowance","inputs":[{"name":"have","type":"uint256","internalType":"uint256"},{"name":"need","type":"uint256","internalType":"uint256"}]},{"type":"error","name":"InsufficientBalance","inputs":[{"name":"have","type":"uint256","internalType":"uint256"},{"name":"need","type":"uint256","internalType":"uint256"}]},{"type":"error","name":"PaymentAlreadyExists","inputs":[{"name":"poolHash","type":"bytes32","internalType":"bytes32"}]},{"type":"error","name":"PaymentNotFound","inputs":[{"name":"poolHash","type":"bytes32","internalType":"bytes32"}]},{"type":"error","name":"TransferFailed","inputs":[]},{"type":"error","name":"WrongCandidateCount","inputs":[{"name":"poolIdx","type":"uint256","internalType":"uint256"},{"name":"expected","type":"uint256","internalType":"uint256"},{"name":"got","type":"uint256","internalType":"uint256"}]},{"type":"error","name":"WrongPoolCount","inputs":[{"name":"expected","type":"uint256","internalType":"uint256"},{"name":"got","type":"uint256","internalType":"uint256"}]}],"bytecode":{"object":"0x60a0346100be57601f610e6e38819003918201601f19168301916001600160401b038311848410176100c3578084926020946040528339810103126100be57516001600160a01b038116908190036100be57801561007957608052604051610d9490816100da823960805181818161029101526107a10152f35b60405162461bcd60e51b815260206004820152601560248201527f496e76616c696420746f6b656e206164647265737300000000000000000000006044820152606490fd5b600080fd5b634e487b7160e01b600052604160045260246000fdfe608080604052600436101561001357600080fd5b60003560e01c908163043b7587146108d9575080630716326d1461089a5780630f339e04146107ec578063137978c3146107d05780634ec42e8e1461078b5780635e271e17146101f25763a75e9b191461006c57600080fd5b346101ed5760203660031901126101ed5760043560606040805161008f816109ef565b60008152600060208201520152806000526000602052604060002090604051906100b8826109ef565b600183549360ff851684526001600160401b03602085019560081c168552019081546100e381610a77565b926100f16040519485610a0a565b818452602084019060005260206000206000915b8383106101b757505050506040830191825260ff835116156101a3576001600160401b038484846040519384936020855260ff6080860194511660208601525116604084015251906060808401528151809152602060a0840192019060005b818110610172575050500390f35b825180516001600160a01b0316855260209081015160ff168186015286955060409094019390920191600101610164565b63272f9fc160e01b60005260045260246000fd5b6001602081926040516101c9816109d4565b60ff8654858060a01b038116835260a01c1683820152815201920192019190610105565b600080fd5b346101ed57610200366108f3565b92919060ff831692600c84116107715761021990610a8e565b80820361075a575060005b8181106107385750906102429161023c853383610aa9565b9161097b565b9182359283600052600060205260ff6040600020541661072357602081019261027c816102776102728786610995565b610b16565b6109ab565b6040516370a0823160e01b81523360048201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031696919291906020816024818b5afa908115610632576000916106f1575b508381106106d85750604051636eb1769f60e11b81523360048201523060248201526020816044818b5afa908115610632576000916106a6575b5083811061068d575061032282610a77565b926103306040519485610a0a565b828452601f1961033f84610a77565b01366020860137604051956102006103578189610a0a565b36883760405160208101904482528460408201526001600160401b0360c01b8360c01b1660608201526048815261038f606882610a0a565b51902098600096879a5b86891080610683575b1561041f57604051602081019182528c6040820152604081526103c6606082610a0a565b5190209a600f8c168a6103d98282610b05565b51156103f1575b50506103eb90610d4f565b9a610399565b99816001610406610417946103eb969e610b05565b52610411828c610a4b565b52610d4f565b98908a6103e0565b509086918a878a0361063e576000878152602081905260409020805468ffffffffffffffffff19168917600887901b68ffffffffffffffff001617815593926104688988610a2b565b92600160009601955b8a81106104c8575060408989817f89f0ad3859fec321e325bcc553fe234bcad374789a86f7ba932067f3f05affec60608f6001600160401b038e88519283528660208401521687820152a282519182526020820152f35b60ff6104d48288610a4b565b5116906104ea826104e58786610995565b610a5f565b356001600160a01b038116908190036101ed576040516323b872dd60e01b815233600482015281602482015287604482015260208160648160008a5af1908115610632576000916105f1575b50156105e05760405190610549826109d4565b815260208101928352885492680100000000000000008410156105ca5760018401808b558410156105b4576001938a60005260206000200191848060a01b0390511682549160ff60a01b905160a01b16916affffffffffffffffffffff60a81b161717905501610471565b634e487b7160e01b600052603260045260246000fd5b634e487b7160e01b600052604160045260246000fd5b6312171d8360e31b60005260046000fd5b6020813d821161062a575b8161060960209383610a0a565b81010312610626575190811515820361062357508e610536565b80fd5b5080fd5b3d91506105fc565b6040513d6000823e3d90fd5b60405162461bcd60e51b815260206004820152601f60248201527f4661696c656420746f2073656c65637420656e6f7567682077696e6e657273006044820152606490fd5b5060648c106103a2565b839063054365bb60e31b60005260045260245260446000fd5b906020823d6020116106d0575b816106c060209383610a0a565b8101031261062357505188610310565b3d91506106b3565b839063cf47918160e01b60005260045260245260446000fd5b906020823d60201161071b575b8161070b60209383610a0a565b81010312610623575051886102d6565b3d91506106fe565b83639d8c19ed60e01b60005260045260246000fd5b80610753610749600193858761097b565b6020810190610995565b5001610224565b6347fe11b560e11b60005260045260245260446000fd5b8363164b5f0360e11b600052600452600c60245260446000fd5b346101ed5760003660031901126101ed576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346101ed5760003660031901126101ed57602060405160108152f35b346101ed576107fa366108f3565b60ff841693600c85116108805761081090610a8e565b808303610867575060005b82811061084f5760206108478661027761027261083e898961023c8a3383610aa9565b85810190610995565b604051908152f35b80610860610749600193868861097b565b500161081b565b90506347fe11b560e11b60005260045260245260446000fd5b8463164b5f0360e11b600052600452600c60245260446000fd5b346101ed5760203660031901126101ed576004356000526000602052604080600020546001600160401b0382519160ff8116835260081c166020820152f35b346101ed5760003660031901126101ed5780600c60209252f35b60606003198201126101ed5760043560ff811681036101ed57916024356001600160401b0381116101ed57826023820112156101ed578060040135926001600160401b0384116101ed5760248460051b830101116101ed5760240191906044356001600160401b03811681036101ed5790565b903590603e19813603018212156101ed570190565b908210156105b4576109929160051b810190610966565b90565b9035906101fe19813603018212156101ed570190565b818102929181159184041417156109be57565b634e487b7160e01b600052601160045260246000fd5b604081019081106001600160401b038211176105ca57604052565b606081019081106001600160401b038211176105ca57604052565b90601f801991011681019081106001600160401b038211176105ca57604052565b8115610a35570490565b634e487b7160e01b600052601260045260246000fd5b80518210156105b45760209160051b010190565b60108210156105b4576109929160051b810190610966565b6001600160401b0381116105ca5760051b60200190565b60ff600191160160ff81116109be57607f600191821c161b90565b916040519060208201924484524260408401526bffffffffffffffffffffffff199060601b1660608301526001600160401b0360c01b9060c01b166074820152605c8152610af8607c82610a0a565b5190208115610a35570690565b9060108110156105b45760051b0190565b60405190610200610b278184610a0a565b36833760005b60108110610bf257505060015b60108110610b5d575061010060e082015191015181018091116109be5760011c90565b9190610b698382610b05565b5191835b8015801580610bd3575b15610bba576000198201918083116109be57610b9e610b968487610b05565b519186610b05565b5215610b6d57634e487b7160e01b600052601160045260246000fd5b5092610bcc6001939495929585610b05565b5201610b3a565b5060001982018281116109be57610beb869186610b05565b5111610b77565b610bfc8183610a5f565b60208101359061011e19813603018212156101ed5701906000608083013580610cff575b5060640191826064116109be5760a08101356032811115610cfa575060325b606401806064116109be5760649160e0810135151580610cec575b610cb1575b6020013591600a830290838204600a14841517156109be57610277620f424093610277600198610c8e956109ab565b04908115610ca9575b50610ca28286610b05565b5201610b2d565b905038610c97565b916101008301356103e8811115610cd15750506020605a925b9050610c5f565b9080939111610ce3575b602090610cca565b605f9250610cdb565b506101008101351515610c5a565b610c3f565b90604084013590606482029180830460641490151715610d3b575090610d2491610a2b565b60648111610d33575b38610c20565b506064610d2d565b634e487b7160e01b81526011600452602490fd5b60001981146109be576001019056fea26469706673582212206a2c4cf4e4519da0f9bc7cfd56fded56fd03a6a0bc2125506edf472979f993aa64736f6c634300081c0033","sourceMap":"349:14475:0:-:0;;;;;;;;;;;;;-1:-1:-1;;349:14475:0;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;3220:23;;349:14475;;3279:28;;349:14475;;;;;;;;3279:28;349:14475;;;;;;;;;;;;;;-1:-1:-1;;;349:14475:0;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;349:14475:0;;;;;;-1:-1:-1;349:14475:0;;;;;-1:-1:-1;349:14475:0","linkReferences":{}},"deployedBytecode":{"object":"0x608080604052600436101561001357600080fd5b60003560e01c908163043b7587146108d9575080630716326d1461089a5780630f339e04146107ec578063137978c3146107d05780634ec42e8e1461078b5780635e271e17146101f25763a75e9b191461006c57600080fd5b346101ed5760203660031901126101ed5760043560606040805161008f816109ef565b60008152600060208201520152806000526000602052604060002090604051906100b8826109ef565b600183549360ff851684526001600160401b03602085019560081c168552019081546100e381610a77565b926100f16040519485610a0a565b818452602084019060005260206000206000915b8383106101b757505050506040830191825260ff835116156101a3576001600160401b038484846040519384936020855260ff6080860194511660208601525116604084015251906060808401528151809152602060a0840192019060005b818110610172575050500390f35b825180516001600160a01b0316855260209081015160ff168186015286955060409094019390920191600101610164565b63272f9fc160e01b60005260045260246000fd5b6001602081926040516101c9816109d4565b60ff8654858060a01b038116835260a01c1683820152815201920192019190610105565b600080fd5b346101ed57610200366108f3565b92919060ff831692600c84116107715761021990610a8e565b80820361075a575060005b8181106107385750906102429161023c853383610aa9565b9161097b565b9182359283600052600060205260ff6040600020541661072357602081019261027c816102776102728786610995565b610b16565b6109ab565b6040516370a0823160e01b81523360048201527f00000000000000000000000000000000000000000000000000000000000000006001600160a01b031696919291906020816024818b5afa908115610632576000916106f1575b508381106106d85750604051636eb1769f60e11b81523360048201523060248201526020816044818b5afa908115610632576000916106a6575b5083811061068d575061032282610a77565b926103306040519485610a0a565b828452601f1961033f84610a77565b01366020860137604051956102006103578189610a0a565b36883760405160208101904482528460408201526001600160401b0360c01b8360c01b1660608201526048815261038f606882610a0a565b51902098600096879a5b86891080610683575b1561041f57604051602081019182528c6040820152604081526103c6606082610a0a565b5190209a600f8c168a6103d98282610b05565b51156103f1575b50506103eb90610d4f565b9a610399565b99816001610406610417946103eb969e610b05565b52610411828c610a4b565b52610d4f565b98908a6103e0565b509086918a878a0361063e576000878152602081905260409020805468ffffffffffffffffff19168917600887901b68ffffffffffffffff001617815593926104688988610a2b565b92600160009601955b8a81106104c8575060408989817f89f0ad3859fec321e325bcc553fe234bcad374789a86f7ba932067f3f05affec60608f6001600160401b038e88519283528660208401521687820152a282519182526020820152f35b60ff6104d48288610a4b565b5116906104ea826104e58786610995565b610a5f565b356001600160a01b038116908190036101ed576040516323b872dd60e01b815233600482015281602482015287604482015260208160648160008a5af1908115610632576000916105f1575b50156105e05760405190610549826109d4565b815260208101928352885492680100000000000000008410156105ca5760018401808b558410156105b4576001938a60005260206000200191848060a01b0390511682549160ff60a01b905160a01b16916affffffffffffffffffffff60a81b161717905501610471565b634e487b7160e01b600052603260045260246000fd5b634e487b7160e01b600052604160045260246000fd5b6312171d8360e31b60005260046000fd5b6020813d821161062a575b8161060960209383610a0a565b81010312610626575190811515820361062357508e610536565b80fd5b5080fd5b3d91506105fc565b6040513d6000823e3d90fd5b60405162461bcd60e51b815260206004820152601f60248201527f4661696c656420746f2073656c65637420656e6f7567682077696e6e657273006044820152606490fd5b5060648c106103a2565b839063054365bb60e31b60005260045260245260446000fd5b906020823d6020116106d0575b816106c060209383610a0a565b8101031261062357505188610310565b3d91506106b3565b839063cf47918160e01b60005260045260245260446000fd5b906020823d60201161071b575b8161070b60209383610a0a565b81010312610623575051886102d6565b3d91506106fe565b83639d8c19ed60e01b60005260045260246000fd5b80610753610749600193858761097b565b6020810190610995565b5001610224565b6347fe11b560e11b60005260045260245260446000fd5b8363164b5f0360e11b600052600452600c60245260446000fd5b346101ed5760003660031901126101ed576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346101ed5760003660031901126101ed57602060405160108152f35b346101ed576107fa366108f3565b60ff841693600c85116108805761081090610a8e565b808303610867575060005b82811061084f5760206108478661027761027261083e898961023c8a3383610aa9565b85810190610995565b604051908152f35b80610860610749600193868861097b565b500161081b565b90506347fe11b560e11b60005260045260245260446000fd5b8463164b5f0360e11b600052600452600c60245260446000fd5b346101ed5760203660031901126101ed576004356000526000602052604080600020546001600160401b0382519160ff8116835260081c166020820152f35b346101ed5760003660031901126101ed5780600c60209252f35b60606003198201126101ed5760043560ff811681036101ed57916024356001600160401b0381116101ed57826023820112156101ed578060040135926001600160401b0384116101ed5760248460051b830101116101ed5760240191906044356001600160401b03811681036101ed5790565b903590603e19813603018212156101ed570190565b908210156105b4576109929160051b810190610966565b90565b9035906101fe19813603018212156101ed570190565b818102929181159184041417156109be57565b634e487b7160e01b600052601160045260246000fd5b604081019081106001600160401b038211176105ca57604052565b606081019081106001600160401b038211176105ca57604052565b90601f801991011681019081106001600160401b038211176105ca57604052565b8115610a35570490565b634e487b7160e01b600052601260045260246000fd5b80518210156105b45760209160051b010190565b60108210156105b4576109929160051b810190610966565b6001600160401b0381116105ca5760051b60200190565b60ff600191160160ff81116109be57607f600191821c161b90565b916040519060208201924484524260408401526bffffffffffffffffffffffff199060601b1660608301526001600160401b0360c01b9060c01b166074820152605c8152610af8607c82610a0a565b5190208115610a35570690565b9060108110156105b45760051b0190565b60405190610200610b278184610a0a565b36833760005b60108110610bf257505060015b60108110610b5d575061010060e082015191015181018091116109be5760011c90565b9190610b698382610b05565b5191835b8015801580610bd3575b15610bba576000198201918083116109be57610b9e610b968487610b05565b519186610b05565b5215610b6d57634e487b7160e01b600052601160045260246000fd5b5092610bcc6001939495929585610b05565b5201610b3a565b5060001982018281116109be57610beb869186610b05565b5111610b77565b610bfc8183610a5f565b60208101359061011e19813603018212156101ed5701906000608083013580610cff575b5060640191826064116109be5760a08101356032811115610cfa575060325b606401806064116109be5760649160e0810135151580610cec575b610cb1575b6020013591600a830290838204600a14841517156109be57610277620f424093610277600198610c8e956109ab565b04908115610ca9575b50610ca28286610b05565b5201610b2d565b905038610c97565b916101008301356103e8811115610cd15750506020605a925b9050610c5f565b9080939111610ce3575b602090610cca565b605f9250610cdb565b506101008101351515610c5a565b610c3f565b90604084013590606482029180830460641490151715610d3b575090610d2491610a2b565b60648111610d33575b38610c20565b506064610d2d565b634e487b7160e01b81526011600452602490fd5b60001981146109be576001019056fea26469706673582212206a2c4cf4e4519da0f9bc7cfd56fded56fd03a6a0bc2125506edf472979f993aa64736f6c634300081c0033","sourceMap":"349:14475:0:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8425:29;349:14475;8425:29;;;349:14475;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;349:14475:0;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;9601:15;9597:84;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;-1:-1:-1;349:14475:0;;;;;;;;;;;;;9597:84;9639:31;;;349:14475;9639:31;349:14475;;;;9639:31;349:14475;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;3980:24;2289:2;3980:24;;3976:100;;4158:27;;;:::i;:::-;4199:39;;;4195:130;;4413:13;349:14475;4428:26;;;;;;4898:10;;5001:30;4898:10;4831:123;4898:10;;4831:123;;:::i;:::-;5001:30;;:::i;:::-;349:14475;;;;;;;;4479:29;349:14475;;;;;;;5145:109;;4479:29;5382:21;;;5428:19;5382:21;5360:44;5382:21;;;;:::i;:::-;5360:44;:::i;:::-;5428:19;:::i;:::-;349:14475;;-1:-1:-1;;;5515:30:0;;4898:10;349:14475;5515:30;;349:14475;5515:8;-1:-1:-1;;;;;349:14475:0;;;;;;4479:29;349:14475;5515:30;349:14475;;5515:30;;;;;;;349:14475;5515:30;;;4408:341;5559:21;;;;5555:100;;-1:-1:-1;349:14475:0;;-1:-1:-1;;;5685:45:0;;4898:10;349:14475;5685:45;;349:14475;5724:4;5515:30;349:14475;;;4479:29;349:14475;5685:45;349:14475;5685:45;;;;;;;;349:14475;5685:45;;;4408:341;5744:23;;;;5740:106;;349:14475;;;;:::i;:::-;;;;;;;;:::i;:::-;;;;-1:-1:-1;;349:14475:0;;;:::i;:::-;;;4479:29;349:14475;;;;;;;;;;;:::i;:::-;;;;;;4479:29;14131:101;;14161:16;;349:14475;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;14131:101;;;;;;;:::i;:::-;349:14475;14121:112;;14244:25;349:14475;14279:20;;14350:364;;14357:21;;;:39;;;14350:364;14357:39;;;349:14475;;4479:29;14429:32;;349:14475;;;;;;;;;14429:32;;;349:14475;14429:32;;:::i;:::-;349:14475;14419:43;;349:14475;;;;14533:13;;;;;:::i;:::-;349:14475;;14528:152;;14350:364;14693:10;;;;;:::i;:::-;14350:364;;;14528:152;14566:20;;349:14475;14566:20;14650:15;14566:20;14693:10;14566:20;;;:::i;:::-;349:14475;14604:28;;;;:::i;:::-;349:14475;14650:15;:::i;:::-;14528:152;;;;;14357:39;;;;;;;;14732:22;349:14475;;;;;;4479:29;349:14475;;;;;;;;-1:-1:-1;;349:14475:0;;;;;;;;;;;;;;6343:19;349:14475;6343:19;;:::i;:::-;6377:13;349:14475;;6807:22;;6372:583;6392:9;;;;;;349:14475;;;;;6970:135;349:14475;;-1:-1:-1;;;;;349:14475:0;;;;;;;4479:29;349:14475;;;;;;;;6970:135;349:14475;;;;;4479:29;349:14475;;;;6403:3;349:14475;6438:16;;;;:::i;:::-;349:14475;;6493:21;:30;:21;;;;;:::i;:::-;:30;:::i;:::-;349:14475;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;6609:64;;4898:10;349:14475;6609:64;;349:14475;;5515:30;349:14475;;;;5685:45;349:14475;;;4479:29;6609:64;;;349:14475;6609:64;;;;;;;;349:14475;6609:64;;;6403:3;6691:8;;6687:70;;349:14475;;;;;;:::i;:::-;;;4479:29;6835:108;;349:14475;;;;;;;;;;;;;;;;;;;;;;;;;;;;4479:29;349:14475;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6377:13;;349:14475;;;;;;;;;5515:30;349:14475;;;;;;;;;;;5515:30;349:14475;;6687:70;6726:16;;;349:14475;6726:16;349:14475;;6726:16;6609:64;4479:29;6609:64;;;;;;;;;4479:29;6609:64;;;:::i;:::-;;;349:14475;;;;;;;;;;;;;6609:64;;;;349:14475;;;;;;;6609:64;;;-1:-1:-1;6609:64:0;;;349:14475;;;;;;;;;;;;-1:-1:-1;;;349:14475:0;;4479:29;349:14475;;;;;5515:30;349:14475;;;;5685:45;349:14475;;;;;;14357:39;14382:14;14393:3;14382:14;;14357:39;;5740:106;5790:45;;;;;349:14475;5790:45;349:14475;;5515:30;349:14475;5685:45;349:14475;5790:45;5685;;4479:29;5685:45;;4479:29;5685:45;;;;;;349:14475;5685:45;;;:::i;:::-;;;349:14475;;;;;;5685:45;;;;;;-1:-1:-1;5685:45:0;;5555:100;5603:41;;;;;349:14475;5603:41;349:14475;;5515:30;349:14475;;;5603:41;5515:30;;4479:29;5515:30;;4479:29;5515:30;;;;;;349:14475;5515:30;;;:::i;:::-;;;349:14475;;;;;;5515:30;;;;;;-1:-1:-1;5515:30:0;;5145:109;5207:36;;;;349:14475;5207:36;349:14475;;;;5207:36;4456:3;4479:18;:29;:18;349:14475;4479:18;;;;:::i;:::-;:29;;;;;:::i;:::-;;349:14475;4413:13;;4195:130;8207:53;;;349:14475;4261:53;349:14475;;;;;;4261:53;3976:100;7973:38;;;;349:14475;4027:38;349:14475;;2289:2;349:14475;;;;4027:38;349:14475;;;;;;-1:-1:-1;;349:14475:0;;;;;;2062:32;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;-1:-1:-1;;349:14475:0;;;;;;;2388:2;349:14475;;;;;;;;;;:::i;:::-;;;;7926:24;2289:2;7926:24;;7922:100;;8104:27;;;:::i;:::-;8145:39;;;8141:130;;8359:13;349:14475;8374:26;;;;;;8425:29;9185:19;8877:10;9117:44;9139:21;8980:30;8877:10;;8810:123;8877:10;;8810:123;;:::i;8980:30::-;9139:21;;;;;:::i;9185:19::-;349:14475;;;;;;8402:3;8425:18;:29;:18;349:14475;8425:18;;;;:::i;:29::-;;349:14475;8359:13;;8141:130;8207:53;;;;;349:14475;8207:53;349:14475;;;;;;8207:53;7922:100;7973:38;;;;349:14475;7973:38;349:14475;;2289:2;349:14475;;;;7973:38;349:14475;;;;;;-1:-1:-1;;349:14475:0;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;349:14475:0;;;;;2289:2;349:14475;;;;;;-1:-1:-1;;349:14475:0;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;:::i;:::-;;:::o;:::-;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;:::o;:::-;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;:::o;:::-;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;:::o;:::-;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;:::i;:::-;-1:-1:-1;;;;;349:14475:0;;;;;;;;;:::o;9834:188::-;349:14475;9946:1;9834:188;349:14475;;;;;;;;9946:1;349:14475;;;;;9834:188;:::o;10093:355::-;;349:14475;;10270:128;;;;10300:16;;349:14475;;10330:15;349:14475;;;;;;;;;;;;;;-1:-1:-1;;;;;349:14475:0;;;;;;;;;;10270:128;;;;;;;:::i;:::-;349:14475;10260:139;;349:14475;;;;;10093:355;:::o;349:14475::-;;;;;;;;;;;;:::o;10527:504::-;349:14475;;;;;;;;:::i;:::-;;;;-1:-1:-1;10762:6:0;349:14475;10762:6;;;;13527:13;;349:14475;13542:6;349:14475;13542:6;;;;349:14475;;12480:22;349:14475;;;;;;;;;;;;;;;10527:504;:::o;13550:3::-;13583:9;;;;;;:::i;:::-;349:14475;13606:13;;13633:116;13640:5;;;;:28;;;13633:116;13640:28;;;-1:-1:-1;;349:14475:0;;;;;;;;13688:25;13700:13;;;;:::i;:::-;349:14475;13688:25;;;:::i;:::-;349:14475;;13633:116;349:14475;;;;-1:-1:-1;349:14475:0;;;;;-1:-1:-1;349:14475:0;13640:28;;;13762:15;349:14475;13640:28;;;;;13762:15;;:::i;:::-;349:14475;;13527:13;;13640:28;-1:-1:-1;;;349:14475:0;;;;;;;13649:13;;;;;:::i;:::-;349:14475;13649:19;13640:28;;10770:3;10811:13;;;;:::i;:::-;:21;;;349:14475;;;;;;;;;;;;;;11631:22;-1:-1:-1;11667:18:0;;;349:14475;11667:22;11663:173;;10770:3;349:14475;11995:3;349:14475;;;11995:3;349:14475;;;12171:28;;;349:14475;12202:2;12171:33;;12202:2;;;12171:69;12202:2;12171:69;11995:3;349:14475;;11995:3;349:14475;;;11995:3;12480:22;;;;349:14475;12480:26;;:53;;;12171:69;12476:432;;12171:69;10811:21;12981:16;349:14475;;11570:2;349:14475;;;;;;11570:2;349:14475;;;;;;;12981:109;13135:9;12981:73;;349:14475;12981:73;:141;:73;;:::i;:141::-;349:14475;13227:10;;;13223:93;;12171:69;10789:44;;;;;:::i;:::-;349:14475;;10747:13;;13223:93;13253:24;;13223:93;;;12476:432;12723:19;;;;349:14475;12745:4;12723:26;;12745:4;;;12769:22;;10811:21;12789:2;12719:179;;12476:432;;;;12719:179;12816:25;;;;;12812:86;;12719:179;10811:21;12719:179;;;12812:86;12881:2;;-1:-1:-1;12812:86:0;;12480:53;12510:19;;;;349:14475;12510:23;;12480:53;;12171:69;;;11663:173;11719:26;349:14475;11719:26;;349:14475;;11995:3;349:14475;;;;;;11995:3;349:14475;;;;;;;11718:55;;;;;:::i;:::-;11995:3;11791:16;;11787:38;;11663:173;;;;11787:38;11809:16;11995:3;11787:38;;349:14475;-1:-1:-1;;;349:14475:0;;;;;;;;;-1:-1:-1;;349:14475:0;;;;;;;:::o","linkReferences":{},"immutableReferences":{"67":[{"start":657,"length":32},{"start":1953,"length":32}]}},"methodIdentifiers":{"CANDIDATES_PER_POOL()":"137978c3","MAX_MERKLE_DEPTH()":"043b7587","antToken()":"4ec42e8e","estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":"0f339e04","getPaymentInfo(bytes32)":"a75e9b19","payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":"5e271e17","payments(bytes32)":"0716326d"},"rawMetadata":"{\"compiler\":{\"version\":\"0.8.28+commit.7893614a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_antToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint8\",\"name\":\"max\",\"type\":\"uint8\"}],\"name\":\"DepthTooLarge\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"have\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"need\",\"type\":\"uint256\"}],\"name\":\"InsufficientAllowance\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"have\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"need\",\"type\":\"uint256\"}],\"name\":\"InsufficientBalance\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"}],\"name\":\"PaymentAlreadyExists\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"}],\"name\":\"PaymentNotFound\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"TransferFailed\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"poolIdx\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"expected\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"got\",\"type\":\"uint256\"}],\"name\":\"WrongCandidateCount\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"expected\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"got\",\"type\":\"uint256\"}],\"name\":\"WrongPoolCount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"MerklePaymentMade\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"CANDIDATES_PER_POOL\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"MAX_MERKLE_DEPTH\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"antToken\",\"outputs\":[{\"internalType\":\"contract IERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"uint8\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"dataSize\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"closeRecordsStored\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint8\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"records\",\"type\":\"uint256\"}],\"internalType\":\"struct MerklePaymentVault.Record[]\",\"name\":\"recordsPerType\",\"type\":\"tuple[]\"},{\"internalType\":\"uint256\",\"name\":\"maxRecords\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"receivedPaymentCount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"liveTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"networkDensity\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"networkSize\",\"type\":\"uint256\"}],\"internalType\":\"struct MerklePaymentVault.QuotingMetrics\",\"name\":\"metrics\",\"type\":\"tuple\"}],\"internalType\":\"struct MerklePaymentVault.CandidateNode[16]\",\"name\":\"candidates\",\"type\":\"tuple[16]\"}],\"internalType\":\"struct MerklePaymentVault.PoolCommitment[]\",\"name\":\"poolCommitments\",\"type\":\"tuple[]\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"estimateMerkleTreeCost\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"}],\"name\":\"getPaymentInfo\",\"outputs\":[{\"components\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"internalType\":\"uint8\",\"name\":\"poolIndex\",\"type\":\"uint8\"}],\"internalType\":\"struct MerklePaymentVault.PaidNode[]\",\"name\":\"paidNodeAddresses\",\"type\":\"tuple[]\"}],\"internalType\":\"struct MerklePaymentVault.PaymentInfo\",\"name\":\"info\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"uint8\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"dataSize\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"closeRecordsStored\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"uint8\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"records\",\"type\":\"uint256\"}],\"internalType\":\"struct MerklePaymentVault.Record[]\",\"name\":\"recordsPerType\",\"type\":\"tuple[]\"},{\"internalType\":\"uint256\",\"name\":\"maxRecords\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"receivedPaymentCount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"liveTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"networkDensity\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"networkSize\",\"type\":\"uint256\"}],\"internalType\":\"struct MerklePaymentVault.QuotingMetrics\",\"name\":\"metrics\",\"type\":\"tuple\"}],\"internalType\":\"struct MerklePaymentVault.CandidateNode[16]\",\"name\":\"candidates\",\"type\":\"tuple[16]\"}],\"internalType\":\"struct MerklePaymentVault.PoolCommitment[]\",\"name\":\"poolCommitments\",\"type\":\"tuple[]\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"payForMerkleTree\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"payments\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{\"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)\":{\"params\":{\"depth\":\"Tree depth (determines number of nodes paid)\",\"merklePaymentTimestamp\":\"Client-provided timestamp\",\"poolCommitments\":\"Array of pool commitments (2^ceil(depth/2))\"},\"returns\":{\"totalAmount\":\"Estimated total tokens that would be paid\"}},\"getPaymentInfo(bytes32)\":{\"params\":{\"winnerPoolHash\":\"Hash returned from payForMerkleTree\"},\"returns\":{\"info\":\"Payment information stored on-chain\"}},\"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)\":{\"params\":{\"depth\":\"Tree depth (determines number of nodes paid)\",\"merklePaymentTimestamp\":\"Client-provided timestamp\",\"poolCommitments\":\"Array of pool commitments (2^ceil(depth/2))\"},\"returns\":{\"totalAmount\":\"Total tokens paid to winners\",\"winnerPoolHash\":\"Hash of selected winner pool\"}}},\"version\":1},\"userdoc\":{\"events\":{\"MerklePaymentMade(bytes32,uint8,uint256,uint64)\":{\"notice\":\"Emitted when a Merkle batch payment is made\"}},\"kind\":\"user\",\"methods\":{\"CANDIDATES_PER_POOL()\":{\"notice\":\"Number of candidates per pool (fixed)\"},\"MAX_MERKLE_DEPTH()\":{\"notice\":\"Maximum supported Merkle tree depth\"},\"antToken()\":{\"notice\":\"ANT token contract\"},\"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)\":{\"notice\":\"Estimate the cost of a Merkle tree payment without executing it This is a view function (0 gas) that runs the same pricing logic as payForMerkleTree but returns only the estimated cost without executing payment.\"},\"getPaymentInfo(bytes32)\":{\"notice\":\"Get payment info by winner pool hash\"},\"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)\":{\"notice\":\"Pay for Merkle tree batch\"},\"payments(bytes32)\":{\"notice\":\"Payment info indexed by winner pool hash\"}},\"notice\":\"Merkle Batch Payment Vault Handles batch payments for Merkle tree storage where multiple data chunks are paid for in a single transaction. Uses a fair median pricing mechanism based on candidate node metrics.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/MerklePaymentVault.sol\":\"MerklePaymentVault\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/\",\":forge-std/=lib/forge-std/src/\",\":halmos-cheatcodes/=lib/openzeppelin-contracts/lib/halmos-cheatcodes/src/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/\"],\"viaIR\":true},\"sources\":{\"contracts/MerklePaymentVault.sol\":{\"keccak256\":\"0x6201a7fbec6132326d6374137aa5b11e40dff0ec4502bfb423f6d4aff6893a85\",\"license\":\"GPL-3.0\",\"urls\":[\"bzz-raw://3b0d475069f86e65860e810851af207568243f27a4df78ced93ca27cf53d30c5\",\"dweb:/ipfs/QmaRA6LeUgoNbwW3ZK6ngjYJChcG7GwqQ7hmbe7GMA3hzB\"]},\"lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol\":{\"keccak256\":\"0x74ed01eb66b923d0d0cfe3be84604ac04b76482a55f9dd655e1ef4d367f95bc2\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://5282825a626cfe924e504274b864a652b0023591fa66f06a067b25b51ba9b303\",\"dweb:/ipfs/QmeCfPykghhMc81VJTrHTC7sF6CRvaA1FXVq2pJhwYp1dV\"]}},\"version\":1}","metadata":{"compiler":{"version":"0.8.28+commit.7893614a"},"language":"Solidity","output":{"abi":[{"inputs":[{"internalType":"address","name":"_antToken","type":"address"}],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[{"internalType":"uint8","name":"depth","type":"uint8"},{"internalType":"uint8","name":"max","type":"uint8"}],"type":"error","name":"DepthTooLarge"},{"inputs":[{"internalType":"uint256","name":"have","type":"uint256"},{"internalType":"uint256","name":"need","type":"uint256"}],"type":"error","name":"InsufficientAllowance"},{"inputs":[{"internalType":"uint256","name":"have","type":"uint256"},{"internalType":"uint256","name":"need","type":"uint256"}],"type":"error","name":"InsufficientBalance"},{"inputs":[{"internalType":"bytes32","name":"poolHash","type":"bytes32"}],"type":"error","name":"PaymentAlreadyExists"},{"inputs":[{"internalType":"bytes32","name":"poolHash","type":"bytes32"}],"type":"error","name":"PaymentNotFound"},{"inputs":[],"type":"error","name":"TransferFailed"},{"inputs":[{"internalType":"uint256","name":"poolIdx","type":"uint256"},{"internalType":"uint256","name":"expected","type":"uint256"},{"internalType":"uint256","name":"got","type":"uint256"}],"type":"error","name":"WrongCandidateCount"},{"inputs":[{"internalType":"uint256","name":"expected","type":"uint256"},{"internalType":"uint256","name":"got","type":"uint256"}],"type":"error","name":"WrongPoolCount"},{"inputs":[{"internalType":"bytes32","name":"winnerPoolHash","type":"bytes32","indexed":true},{"internalType":"uint8","name":"depth","type":"uint8","indexed":false},{"internalType":"uint256","name":"totalAmount","type":"uint256","indexed":false},{"internalType":"uint64","name":"merklePaymentTimestamp","type":"uint64","indexed":false}],"type":"event","name":"MerklePaymentMade","anonymous":false},{"inputs":[],"stateMutability":"view","type":"function","name":"CANDIDATES_PER_POOL","outputs":[{"internalType":"uint8","name":"","type":"uint8"}]},{"inputs":[],"stateMutability":"view","type":"function","name":"MAX_MERKLE_DEPTH","outputs":[{"internalType":"uint8","name":"","type":"uint8"}]},{"inputs":[],"stateMutability":"view","type":"function","name":"antToken","outputs":[{"internalType":"contract IERC20","name":"","type":"address"}]},{"inputs":[{"internalType":"uint8","name":"depth","type":"uint8"},{"internalType":"struct MerklePaymentVault.PoolCommitment[]","name":"poolCommitments","type":"tuple[]","components":[{"internalType":"bytes32","name":"poolHash","type":"bytes32"},{"internalType":"struct MerklePaymentVault.CandidateNode[16]","name":"candidates","type":"tuple[16]","components":[{"internalType":"address","name":"rewardsAddress","type":"address"},{"internalType":"struct MerklePaymentVault.QuotingMetrics","name":"metrics","type":"tuple","components":[{"internalType":"uint8","name":"dataType","type":"uint8"},{"internalType":"uint256","name":"dataSize","type":"uint256"},{"internalType":"uint256","name":"closeRecordsStored","type":"uint256"},{"internalType":"struct MerklePaymentVault.Record[]","name":"recordsPerType","type":"tuple[]","components":[{"internalType":"uint8","name":"dataType","type":"uint8"},{"internalType":"uint256","name":"records","type":"uint256"}]},{"internalType":"uint256","name":"maxRecords","type":"uint256"},{"internalType":"uint256","name":"receivedPaymentCount","type":"uint256"},{"internalType":"uint256","name":"liveTime","type":"uint256"},{"internalType":"uint256","name":"networkDensity","type":"uint256"},{"internalType":"uint256","name":"networkSize","type":"uint256"}]}]}]},{"internalType":"uint64","name":"merklePaymentTimestamp","type":"uint64"}],"stateMutability":"view","type":"function","name":"estimateMerkleTreeCost","outputs":[{"internalType":"uint256","name":"totalAmount","type":"uint256"}]},{"inputs":[{"internalType":"bytes32","name":"winnerPoolHash","type":"bytes32"}],"stateMutability":"view","type":"function","name":"getPaymentInfo","outputs":[{"internalType":"struct MerklePaymentVault.PaymentInfo","name":"info","type":"tuple","components":[{"internalType":"uint8","name":"depth","type":"uint8"},{"internalType":"uint64","name":"merklePaymentTimestamp","type":"uint64"},{"internalType":"struct MerklePaymentVault.PaidNode[]","name":"paidNodeAddresses","type":"tuple[]","components":[{"internalType":"address","name":"rewardsAddress","type":"address"},{"internalType":"uint8","name":"poolIndex","type":"uint8"}]}]}]},{"inputs":[{"internalType":"uint8","name":"depth","type":"uint8"},{"internalType":"struct MerklePaymentVault.PoolCommitment[]","name":"poolCommitments","type":"tuple[]","components":[{"internalType":"bytes32","name":"poolHash","type":"bytes32"},{"internalType":"struct MerklePaymentVault.CandidateNode[16]","name":"candidates","type":"tuple[16]","components":[{"internalType":"address","name":"rewardsAddress","type":"address"},{"internalType":"struct MerklePaymentVault.QuotingMetrics","name":"metrics","type":"tuple","components":[{"internalType":"uint8","name":"dataType","type":"uint8"},{"internalType":"uint256","name":"dataSize","type":"uint256"},{"internalType":"uint256","name":"closeRecordsStored","type":"uint256"},{"internalType":"struct MerklePaymentVault.Record[]","name":"recordsPerType","type":"tuple[]","components":[{"internalType":"uint8","name":"dataType","type":"uint8"},{"internalType":"uint256","name":"records","type":"uint256"}]},{"internalType":"uint256","name":"maxRecords","type":"uint256"},{"internalType":"uint256","name":"receivedPaymentCount","type":"uint256"},{"internalType":"uint256","name":"liveTime","type":"uint256"},{"internalType":"uint256","name":"networkDensity","type":"uint256"},{"internalType":"uint256","name":"networkSize","type":"uint256"}]}]}]},{"internalType":"uint64","name":"merklePaymentTimestamp","type":"uint64"}],"stateMutability":"nonpayable","type":"function","name":"payForMerkleTree","outputs":[{"internalType":"bytes32","name":"winnerPoolHash","type":"bytes32"},{"internalType":"uint256","name":"totalAmount","type":"uint256"}]},{"inputs":[{"internalType":"bytes32","name":"","type":"bytes32"}],"stateMutability":"view","type":"function","name":"payments","outputs":[{"internalType":"uint8","name":"depth","type":"uint8"},{"internalType":"uint64","name":"merklePaymentTimestamp","type":"uint64"}]}],"devdoc":{"kind":"dev","methods":{"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":{"params":{"depth":"Tree depth (determines number of nodes paid)","merklePaymentTimestamp":"Client-provided timestamp","poolCommitments":"Array of pool commitments (2^ceil(depth/2))"},"returns":{"totalAmount":"Estimated total tokens that would be paid"}},"getPaymentInfo(bytes32)":{"params":{"winnerPoolHash":"Hash returned from payForMerkleTree"},"returns":{"info":"Payment information stored on-chain"}},"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":{"params":{"depth":"Tree depth (determines number of nodes paid)","merklePaymentTimestamp":"Client-provided timestamp","poolCommitments":"Array of pool commitments (2^ceil(depth/2))"},"returns":{"totalAmount":"Total tokens paid to winners","winnerPoolHash":"Hash of selected winner pool"}}},"version":1},"userdoc":{"kind":"user","methods":{"CANDIDATES_PER_POOL()":{"notice":"Number of candidates per pool (fixed)"},"MAX_MERKLE_DEPTH()":{"notice":"Maximum supported Merkle tree depth"},"antToken()":{"notice":"ANT token contract"},"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":{"notice":"Estimate the cost of a Merkle tree payment without executing it This is a view function (0 gas) that runs the same pricing logic as payForMerkleTree but returns only the estimated cost without executing payment."},"getPaymentInfo(bytes32)":{"notice":"Get payment info by winner pool hash"},"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,uint256,(uint8,uint256)[],uint256,uint256,uint256,uint256,uint256))[16])[],uint64)":{"notice":"Pay for Merkle tree batch"},"payments(bytes32)":{"notice":"Payment info indexed by winner pool hash"}},"version":1}},"settings":{"remappings":["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/","erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/","forge-std/=lib/forge-std/src/","halmos-cheatcodes/=lib/openzeppelin-contracts/lib/halmos-cheatcodes/src/","openzeppelin-contracts/=lib/openzeppelin-contracts/"],"optimizer":{"enabled":true,"runs":200},"metadata":{"bytecodeHash":"ipfs"},"compilationTarget":{"contracts/MerklePaymentVault.sol":"MerklePaymentVault"},"evmVersion":"paris","libraries":{},"viaIR":true},"sources":{"contracts/MerklePaymentVault.sol":{"keccak256":"0x6201a7fbec6132326d6374137aa5b11e40dff0ec4502bfb423f6d4aff6893a85","urls":["bzz-raw://3b0d475069f86e65860e810851af207568243f27a4df78ced93ca27cf53d30c5","dweb:/ipfs/QmaRA6LeUgoNbwW3ZK6ngjYJChcG7GwqQ7hmbe7GMA3hzB"],"license":"GPL-3.0"},"lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol":{"keccak256":"0x74ed01eb66b923d0d0cfe3be84604ac04b76482a55f9dd655e1ef4d367f95bc2","urls":["bzz-raw://5282825a626cfe924e504274b864a652b0023591fa66f06a067b25b51ba9b303","dweb:/ipfs/QmeCfPykghhMc81VJTrHTC7sF6CRvaA1FXVq2pJhwYp1dV"],"license":"MIT"}},"version":1},"id":0}
+{
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_antToken",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "CANDIDATES_PER_POOL",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "MAX_MERKLE_DEPTH",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "antToken",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IERC20"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "estimateMerkleTreeCost",
+      "inputs": [
+        {
+          "name": "depth",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "poolCommitments",
+          "type": "tuple[]",
+          "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
+          "components": [
+            {
+              "name": "poolHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "candidates",
+              "type": "tuple[16]",
+              "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
+              "components": [
+                {
+                  "name": "rewardsAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "metrics",
+                  "type": "tuple",
+                  "internalType": "struct IMerklePaymentVault.QuotingMetrics",
+                  "components": [
+                    {
+                      "name": "dataType",
+                      "type": "uint8",
+                      "internalType": "enum IMerklePaymentVault.DataType"
+                    },
+                    {
+                      "name": "closeRecordsStored",
+                      "type": "uint256",
+                      "internalType": "uint256"
+                    },
+                    {
+                      "name": "recordsPerType",
+                      "type": "tuple[]",
+                      "internalType": "struct IMerklePaymentVault.Record[]",
+                      "components": [
+                        {
+                          "name": "dataType",
+                          "type": "uint8",
+                          "internalType": "enum IMerklePaymentVault.DataType"
+                        },
+                        {
+                          "name": "records",
+                          "type": "uint256",
+                          "internalType": "uint256"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "merklePaymentTimestamp",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "totalAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getPaymentInfo",
+      "inputs": [
+        {
+          "name": "winnerPoolHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "info",
+          "type": "tuple",
+          "internalType": "struct IMerklePaymentVault.PaymentInfo",
+          "components": [
+            {
+              "name": "depth",
+              "type": "uint8",
+              "internalType": "uint8"
+            },
+            {
+              "name": "merklePaymentTimestamp",
+              "type": "uint64",
+              "internalType": "uint64"
+            },
+            {
+              "name": "paidNodeAddresses",
+              "type": "tuple[]",
+              "internalType": "struct IMerklePaymentVault.PaidNode[]",
+              "components": [
+                {
+                  "name": "rewardsAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "poolIndex",
+                  "type": "uint8",
+                  "internalType": "uint8"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "payForMerkleTree",
+      "inputs": [
+        {
+          "name": "depth",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "poolCommitments",
+          "type": "tuple[]",
+          "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
+          "components": [
+            {
+              "name": "poolHash",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "candidates",
+              "type": "tuple[16]",
+              "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
+              "components": [
+                {
+                  "name": "rewardsAddress",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "metrics",
+                  "type": "tuple",
+                  "internalType": "struct IMerklePaymentVault.QuotingMetrics",
+                  "components": [
+                    {
+                      "name": "dataType",
+                      "type": "uint8",
+                      "internalType": "enum IMerklePaymentVault.DataType"
+                    },
+                    {
+                      "name": "closeRecordsStored",
+                      "type": "uint256",
+                      "internalType": "uint256"
+                    },
+                    {
+                      "name": "recordsPerType",
+                      "type": "tuple[]",
+                      "internalType": "struct IMerklePaymentVault.Record[]",
+                      "components": [
+                        {
+                          "name": "dataType",
+                          "type": "uint8",
+                          "internalType": "enum IMerklePaymentVault.DataType"
+                        },
+                        {
+                          "name": "records",
+                          "type": "uint256",
+                          "internalType": "uint256"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "merklePaymentTimestamp",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "winnerPoolHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "totalAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "payments",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "depth",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "merklePaymentTimestamp",
+          "type": "uint64",
+          "internalType": "uint64"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "event",
+      "name": "DataPaymentMade",
+      "inputs": [
+        {
+          "name": "root",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "treeDepth",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "MerklePaymentMade",
+      "inputs": [
+        {
+          "name": "winnerPoolHash",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "depth",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        },
+        {
+          "name": "totalAmount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "merklePaymentTimestamp",
+          "type": "uint64",
+          "indexed": false,
+          "internalType": "uint64"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "AntTokenNull",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "BatchLimitExceeded",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "DepthTooLarge",
+      "inputs": [
+        {
+          "name": "depth",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "max",
+          "type": "uint8",
+          "internalType": "uint8"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "GracePeriodNotOver",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidAmount",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidChainlinkPrice",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidInputLength",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidQuoteHash",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidRecipientsCount",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidRoot",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidTreeDepth",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "PaymentAlreadyExists",
+      "inputs": [
+        {
+          "name": "poolHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "PaymentNotFound",
+      "inputs": [
+        {
+          "name": "poolHash",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "PriceFeedNull",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "RootAlreadyPaid",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "SequencerDown",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "WrongCandidateCount",
+      "inputs": [
+        {
+          "name": "poolIdx",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "expected",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "got",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    },
+    {
+      "type": "error",
+      "name": "WrongPoolCount",
+      "inputs": [
+        {
+          "name": "expected",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "got",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ]
+    }
+  ],
+  "bytecode": {
+    "object": "0x60a0346100be57601f610bce38819003918201601f19168301916001600160401b038311848410176100c2578084926020946040528339810103126100be57516001600160a01b038116908190036100be57801561007957608052604051610af790816100d78239608051818181610470015261070b0152f35b60405162461bcd60e51b815260206004820152601560248201527f496e76616c696420746f6b656e206164647265737300000000000000000000006044820152606490fd5b5f80fd5b634e487b7160e01b5f52604160045260245ffdfe6080806040526004361015610012575f80fd5b5f3560e01c908163043b758714610791575080630716326d14610755578063137978c31461073a5780634ec42e8e146106f6578063937c07b7146102a65780639e9dfde1146101e35763a75e9b1914610069575f80fd5b346101df5760203660031901126101df5760043560606040805161008c816108d0565b5f81525f60208201520152805f525f60205260405f2090604051906100b0826108d0565b600183549360ff851684526001600160401b03602085019560081c168552019081546100db8161090c565b926100e960405194856108eb565b81845260208401905f5260205f205f915b8383106101a957505050506040830191825260ff83511615610197576001600160401b038484846040519384936020855260ff6080860194511660208601525116604084015251906060808401528151809152602060a084019201905f5b818110610166575050500390f35b825180516001600160a01b0316855260209081015160ff168186015286955060409094019390920191600101610158565b63272f9fc160e01b5f5260045260245ffd5b6001602081926040516101bb816108b5565b60ff8654858060a01b038116835260a01c16838201528152019201920191906100fa565b5f80fd5b346101df576101f1366107aa565b60ff841693600c851161028e5761020790610923565b80830361027757505f5b82811061025557602061024d8661024861024361023a89896102348a338361093e565b91610832565b8581019061084c565b6109ab565b610862565b604051908152f35b806102706102666001938688610832565b602081019061084c565b5001610211565b90506347fe11b560e11b5f5260045260245260445ffd5b8463164b5f0360e11b5f52600452600c60245260445ffd5b346101df576102b4366107aa565b92919060ff831692600c84116106de576102cd90610923565b8082036106c957505f5b8181106106b15750906102ef9161023485338361093e565b90813591825f525f60205260ff60405f20541661069e57602081019261031c83610248610243878661084c565b926103268161090c565b9161033460405193846108eb565b818352601f196103438361090c565b013660208501376040519461020061035b81886108eb565b36873760405160208101904482528360408201526001600160401b0360c01b8a60c01b166060820152604881526103936068826108eb565b519020975f955f995b85881080610694575b1561042257604051602081019182528b6040820152604081526103c96060826108eb565b51902099600f8b16896103dc828261099a565b51156103f4575b50506103ee90610ab3565b9961039c565b9881600161040961041a946103ee969d61099a565b52610414828b610889565b52610ab3565b9790896103e3565b5085908986890361064f57855f525f60205260405f209081548868ffffffffffffffff008760081b169168ffffffffffffffffff191617178255871561063b576001909101929187860491907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316905f5b8a81106104f2575060408989817f89f0ad3859fec321e325bcc553fe234bcad374789a86f7ba932067f3f05affec60608f6001600160401b038e88519283528660208401521687820152a282519182526020820152f35b60ff6104fe8288610889565b5116906105148261050f878661084c565b61089d565b356001600160a01b038116908190036101df576040516323b872dd60e01b81523360048201528160248201528760448201526020816064815f8a5af18015610630576105fa575b5060405190610569826108b5565b815260208101928352885492680100000000000000008410156105e65760018401808b558410156105d2576001938a5f5260205f200191848060a01b0390511682549160ff60a01b905160a01b16916affffffffffffffffffffff60a81b16171790550161049b565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52604160045260245ffd5b6020813d8211610628575b81610612602093836108eb565b810103126101df5751801515811461055b575f80fd5b3d9150610605565b6040513d5f823e3d90fd5b634e487b7160e01b5f52601260045260245ffd5b60405162461bcd60e51b815260206004820152601f60248201527f4661696c656420746f2073656c65637420656e6f7567682077696e6e657273006044820152606490fd5b5060648b106103a5565b82639d8c19ed60e01b5f5260045260245ffd5b806106c26102666001938587610832565b50016102d7565b6347fe11b560e11b5f5260045260245260445ffd5b8363164b5f0360e11b5f52600452600c60245260445ffd5b346101df575f3660031901126101df576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346101df575f3660031901126101df57602060405160108152f35b346101df5760203660031901126101df576004355f525f6020526040805f20546001600160401b0382519160ff8116835260081c166020820152f35b346101df575f3660031901126101df5780600c60209252f35b60606003198201126101df5760043560ff811681036101df57916024356001600160401b0381116101df57826023820112156101df578060040135926001600160401b0384116101df5760248460051b830101116101df5760240191906044356001600160401b03811681036101df5790565b903590603e19813603018212156101df570190565b908210156105d2576108499160051b81019061081d565b90565b9035906101fe19813603018212156101df570190565b8181029291811591840414171561087557565b634e487b7160e01b5f52601160045260245ffd5b80518210156105d25760209160051b010190565b60108210156105d2576108499160051b81019061081d565b604081019081106001600160401b038211176105e657604052565b606081019081106001600160401b038211176105e657604052565b90601f801991011681019081106001600160401b038211176105e657604052565b6001600160401b0381116105e65760051b60200190565b60ff600191160160ff811161087557607f600191821c161b90565b916040519060208201924484524260408401526bffffffffffffffffffffffff199060601b1660608301526001600160401b0360c01b9060c01b166074820152605c815261098d607c826108eb565b519020811561063b570690565b9060108110156105d25760051b0190565b604051906102006109bc81846108eb565b3683375f5b60108110610a8257505060015b601081106109f1575061010060e082015191015181018091116108755760011c90565b91906109fd838261099a565b5191835b8015801580610a64575b15610a4b575f1982019180831161087557610a31610a29848761099a565b51918661099a565b5215610a0157634e487b7160e01b5f52601160045260245ffd5b5092610a5d600193949592958561099a565b52016109ce565b505f19820182811161087557610a7b86918661099a565b5111610a0b565b610a8c818361089d565b6020605e198236030191013512156101df57806001610aac81938661099a565b52016109c1565b5f198114610875576001019056fea26469706673582212205bc7bc1f6e8c8d5cfc9dfb28ef57bcff92af40d0852aba7fd77985dcda99b06764736f6c634300081c0033",
+    "sourceMap": "385:9281:1:-:0;;;;;;;;;;;;;-1:-1:-1;;385:9281:1;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;975:23;;385:9281;;1034:28;;385:9281;;;;;;;;1034:28;385:9281;;;;;;;;;;;;;;-1:-1:-1;;;385:9281:1;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;385:9281:1;;;;;;-1:-1:-1;385:9281:1;;;;;-1:-1:-1;385:9281:1",
+    "linkReferences": {}
+  },
+  "deployedBytecode": {
+    "object": "0x6080806040526004361015610012575f80fd5b5f3560e01c908163043b758714610791575080630716326d14610755578063137978c31461073a5780634ec42e8e146106f6578063937c07b7146102a65780639e9dfde1146101e35763a75e9b1914610069575f80fd5b346101df5760203660031901126101df5760043560606040805161008c816108d0565b5f81525f60208201520152805f525f60205260405f2090604051906100b0826108d0565b600183549360ff851684526001600160401b03602085019560081c168552019081546100db8161090c565b926100e960405194856108eb565b81845260208401905f5260205f205f915b8383106101a957505050506040830191825260ff83511615610197576001600160401b038484846040519384936020855260ff6080860194511660208601525116604084015251906060808401528151809152602060a084019201905f5b818110610166575050500390f35b825180516001600160a01b0316855260209081015160ff168186015286955060409094019390920191600101610158565b63272f9fc160e01b5f5260045260245ffd5b6001602081926040516101bb816108b5565b60ff8654858060a01b038116835260a01c16838201528152019201920191906100fa565b5f80fd5b346101df576101f1366107aa565b60ff841693600c851161028e5761020790610923565b80830361027757505f5b82811061025557602061024d8661024861024361023a89896102348a338361093e565b91610832565b8581019061084c565b6109ab565b610862565b604051908152f35b806102706102666001938688610832565b602081019061084c565b5001610211565b90506347fe11b560e11b5f5260045260245260445ffd5b8463164b5f0360e11b5f52600452600c60245260445ffd5b346101df576102b4366107aa565b92919060ff831692600c84116106de576102cd90610923565b8082036106c957505f5b8181106106b15750906102ef9161023485338361093e565b90813591825f525f60205260ff60405f20541661069e57602081019261031c83610248610243878661084c565b926103268161090c565b9161033460405193846108eb565b818352601f196103438361090c565b013660208501376040519461020061035b81886108eb565b36873760405160208101904482528360408201526001600160401b0360c01b8a60c01b166060820152604881526103936068826108eb565b519020975f955f995b85881080610694575b1561042257604051602081019182528b6040820152604081526103c96060826108eb565b51902099600f8b16896103dc828261099a565b51156103f4575b50506103ee90610ab3565b9961039c565b9881600161040961041a946103ee969d61099a565b52610414828b610889565b52610ab3565b9790896103e3565b5085908986890361064f57855f525f60205260405f209081548868ffffffffffffffff008760081b169168ffffffffffffffffff191617178255871561063b576001909101929187860491907f00000000000000000000000000000000000000000000000000000000000000006001600160a01b0316905f5b8a81106104f2575060408989817f89f0ad3859fec321e325bcc553fe234bcad374789a86f7ba932067f3f05affec60608f6001600160401b038e88519283528660208401521687820152a282519182526020820152f35b60ff6104fe8288610889565b5116906105148261050f878661084c565b61089d565b356001600160a01b038116908190036101df576040516323b872dd60e01b81523360048201528160248201528760448201526020816064815f8a5af18015610630576105fa575b5060405190610569826108b5565b815260208101928352885492680100000000000000008410156105e65760018401808b558410156105d2576001938a5f5260205f200191848060a01b0390511682549160ff60a01b905160a01b16916affffffffffffffffffffff60a81b16171790550161049b565b634e487b7160e01b5f52603260045260245ffd5b634e487b7160e01b5f52604160045260245ffd5b6020813d8211610628575b81610612602093836108eb565b810103126101df5751801515811461055b575f80fd5b3d9150610605565b6040513d5f823e3d90fd5b634e487b7160e01b5f52601260045260245ffd5b60405162461bcd60e51b815260206004820152601f60248201527f4661696c656420746f2073656c65637420656e6f7567682077696e6e657273006044820152606490fd5b5060648b106103a5565b82639d8c19ed60e01b5f5260045260245ffd5b806106c26102666001938587610832565b50016102d7565b6347fe11b560e11b5f5260045260245260445ffd5b8363164b5f0360e11b5f52600452600c60245260445ffd5b346101df575f3660031901126101df576040517f00000000000000000000000000000000000000000000000000000000000000006001600160a01b03168152602090f35b346101df575f3660031901126101df57602060405160108152f35b346101df5760203660031901126101df576004355f525f6020526040805f20546001600160401b0382519160ff8116835260081c166020820152f35b346101df575f3660031901126101df5780600c60209252f35b60606003198201126101df5760043560ff811681036101df57916024356001600160401b0381116101df57826023820112156101df578060040135926001600160401b0384116101df5760248460051b830101116101df5760240191906044356001600160401b03811681036101df5790565b903590603e19813603018212156101df570190565b908210156105d2576108499160051b81019061081d565b90565b9035906101fe19813603018212156101df570190565b8181029291811591840414171561087557565b634e487b7160e01b5f52601160045260245ffd5b80518210156105d25760209160051b010190565b60108210156105d2576108499160051b81019061081d565b604081019081106001600160401b038211176105e657604052565b606081019081106001600160401b038211176105e657604052565b90601f801991011681019081106001600160401b038211176105e657604052565b6001600160401b0381116105e65760051b60200190565b60ff600191160160ff811161087557607f600191821c161b90565b916040519060208201924484524260408401526bffffffffffffffffffffffff199060601b1660608301526001600160401b0360c01b9060c01b166074820152605c815261098d607c826108eb565b519020811561063b570690565b9060108110156105d25760051b0190565b604051906102006109bc81846108eb565b3683375f5b60108110610a8257505060015b601081106109f1575061010060e082015191015181018091116108755760011c90565b91906109fd838261099a565b5191835b8015801580610a64575b15610a4b575f1982019180831161087557610a31610a29848761099a565b51918661099a565b5215610a0157634e487b7160e01b5f52601160045260245ffd5b5092610a5d600193949592958561099a565b52016109ce565b505f19820182811161087557610a7b86918661099a565b5111610a0b565b610a8c818361089d565b6020605e198236030191013512156101df57806001610aac81938661099a565b52016109c1565b5f198114610875576001019056fea26469706673582212205bc7bc1f6e8c8d5cfc9dfb28ef57bcff92af40d0852aba7fd77985dcda99b06764736f6c634300081c0033",
+    "sourceMap": "385:9281:1:-:0;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;5412:29;;;385:9281;;;;;;;;;-1:-1:-1;;385:9281:1;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;6445:15;6441:84;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;-1:-1:-1;385:9281:1;;;;;;;;;;;;;6441:84;6483:31;;;385:9281;6483:31;385:9281;;;;6483:31;385:9281;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;4913:24;763:2;4913:24;;4909:100;;5091:27;;;:::i;:::-;5132:39;;;5128:130;;5346:13;385:9281;5361:26;;;;;;5412:29;6048:19;5761:10;5980:44;6002:21;5843:30;5761:10;;5719:77;5761:10;;5719:77;;:::i;:::-;5843:30;;:::i;:::-;6002:21;;;;;:::i;:::-;5980:44;:::i;:::-;6048:19;:::i;:::-;385:9281;;;;;;5389:3;5412:18;:29;:18;385:9281;5412:18;;;;:::i;:::-;:29;;;;;:::i;:::-;;385:9281;5346:13;;5128:130;2010:53;;;;;385:9281;5194:53;385:9281;;;;;;5194:53;4909:100;1776:38;;;;385:9281;4960:38;385:9281;;763:2;385:9281;;;;4960:38;385:9281;;;;;;;:::i;:::-;;;;;;;1729:24;763:2;1729:24;;1725:100;;1907:27;;;:::i;:::-;1948:39;;;1944:130;;2162:13;385:9281;2177:26;;;;;;2544:10;;2626:30;2544:10;2502:77;2544:10;;2502:77;;:::i;2626:30::-;385:9281;;;;;;;;2228:29;385:9281;;;;;;;2770:109;;2228:29;3007:21;;;3053:19;3007:21;2985:44;3007:21;;;;:::i;3053:19::-;385:9281;;;;:::i;:::-;;;;;;;;:::i;:::-;;;;-1:-1:-1;;385:9281:1;;;:::i;:::-;;;2228:29;385:9281;;;;;;;;;;;:::i;:::-;;;;;;2228:29;9019:55;;9036:16;;385:9281;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;9019:55;;;;;;;:::i;:::-;385:9281;9009:66;;9086:25;385:9281;9121:20;385:9281;9192:364;;9199:21;;;:39;;;9192:364;9199:39;;;385:9281;;2228:29;9271:32;;385:9281;;;;;;;;;9271:32;;;385:9281;9271:32;;:::i;:::-;385:9281;9261:43;;385:9281;;;;9375:13;;;;;:::i;:::-;385:9281;;9370:152;;9192:364;9535:10;;;;;:::i;:::-;9192:364;;;9370:152;9408:20;;385:9281;9408:20;9492:15;9408:20;9535:10;9408:20;;;:::i;:::-;385:9281;9446:28;;;;:::i;:::-;385:9281;9492:15;:::i;:::-;9370:152;;;;;9199:39;;;;;;;9574:22;385:9281;;;;;;2228:29;385:9281;;;;;;;;;;;;;;;;;;;;;;;;;;3890:22;;;;385:9281;;;;;-1:-1:-1;3775:8:1;-1:-1:-1;;;;;385:9281:1;;;3573:9;;;;;;385:9281;;;;;4007:77;385:9281;;-1:-1:-1;;;;;385:9281:1;;;;;;;2228:29;385:9281;;;;;;;;4007:77;385:9281;;;;;2228:29;385:9281;;;;3584:3;385:9281;3619:16;;;;:::i;:::-;385:9281;;3674:21;:30;:21;;;;;:::i;:::-;:30;:::i;:::-;385:9281;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;3775:64;;2544:10;385:9281;3775:64;;385:9281;;;;;;;;;;;2228:29;3775:64;;;385:9281;3775:64;;;;;;;;;3584:3;385:9281;;;;;;;:::i;:::-;;;2228:29;3918:62;;385:9281;;;;;;;;;;;;;;;;;;;;;;;;;;;;2228:29;385:9281;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;3558:13;;385:9281;;;;;;;;;;;;;;;;;;;;;;;;3775:64;2228:29;3775:64;;;;;;;;;2228:29;3775:64;;;:::i;:::-;;;385:9281;;;;;;;;;;3775:64;385:9281;;;;3775:64;;;-1:-1:-1;3775:64:1;;;385:9281;;;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;385:9281:1;;2228:29;385:9281;;;;;;;;;;;;;;;;;9199:39;9224:14;9235:3;9224:14;;9199:39;;2770:109;2832:36;;;;385:9281;2832:36;385:9281;;;;2832:36;2205:3;2228:18;:29;:18;385:9281;2228:18;;;;:::i;:29::-;;385:9281;2162:13;;1944:130;2010:53;;;385:9281;2010:53;385:9281;;;;;;2010:53;1725:100;1776:38;;;;385:9281;1776:38;385:9281;;763:2;385:9281;;;;1776:38;385:9281;;;;;;-1:-1:-1;;385:9281:1;;;;;;509:41;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;-1:-1:-1;;385:9281:1;;;;;;;871:2;385:9281;;;;;;;;;-1:-1:-1;;385:9281:1;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;385:9281:1;;;;;763:2;385:9281;;;;;;-1:-1:-1;;385:9281:1;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;:::i;:::-;;:::o;:::-;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;;;;;;;;;;;;;:::o;:::-;;;;;;;;;;;;;;;:::i;:::-;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;:::o;:::-;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;:::o;:::-;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;:::o;:::-;-1:-1:-1;;;;;385:9281:1;;;;;;;;;:::o;6678:188::-;385:9281;6790:1;6678:188;385:9281;;;;;;;;6790:1;385:9281;;;;;6678:188;:::o;6937:267::-;;385:9281;;7084:70;;;;7101:16;;385:9281;;7119:15;385:9281;;;;;;;;;;;;;;-1:-1:-1;;;;;385:9281:1;;;;;;;;;;7084:70;;;;;;;:::i;:::-;385:9281;7074:81;;385:9281;;;;;6937:267;:::o;385:9281::-;;;;;;;;;;;;:::o;7283:476::-;385:9281;;;;;;;;:::i;:::-;;;;-1:-1:-1;7490:6:1;385:9281;7490:6;;;;8429:13;;385:9281;8444:6;385:9281;8444:6;;;;385:9281;;;;;;;;;;;;;;;;;;7283:476;:::o;8452:3::-;8485:9;;;;;;:::i;:::-;385:9281;8508:13;;8535:116;8542:5;;;;:28;;;8535:116;8542:28;;;-1:-1:-1;;385:9281:1;;;;;;;;8590:25;8602:13;;;;:::i;:::-;385:9281;8590:25;;;:::i;:::-;385:9281;;8535:116;385:9281;;;;-1:-1:-1;385:9281:1;;;;;-1:-1:-1;385:9281:1;8542:28;;;8664:15;385:9281;8542:28;;;;;8664:15;;:::i;:::-;385:9281;;8429:13;;8542:28;-1:-1:-1;;;385:9281:1;;;;;;;8551:13;;;;;:::i;:::-;385:9281;8551:19;8542:28;;7498:3;7539:13;;;;:::i;:::-;:21;385:9281;;;;;;7539:21;;385:9281;;;;;7517:44;385:9281;7517:44;;;;;:::i;:::-;385:9281;;7475:13;;385:9281;-1:-1:-1;;385:9281:1;;;;;;;:::o",
+    "linkReferences": {},
+    "immutableReferences": {
+      "255": [
+        {
+          "start": 1136,
+          "length": 32
+        },
+        {
+          "start": 1803,
+          "length": 32
+        }
+      ]
+    }
+  },
+  "methodIdentifiers": {
+    "CANDIDATES_PER_POOL()": "137978c3",
+    "MAX_MERKLE_DEPTH()": "043b7587",
+    "antToken()": "4ec42e8e",
+    "estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": "9e9dfde1",
+    "getPaymentInfo(bytes32)": "a75e9b19",
+    "payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": "937c07b7",
+    "payments(bytes32)": "0716326d"
+  },
+  "rawMetadata": "{\"compiler\":{\"version\":\"0.8.28+commit.7893614a\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_antToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"AntTokenNull\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"BatchLimitExceeded\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint8\",\"name\":\"max\",\"type\":\"uint8\"}],\"name\":\"DepthTooLarge\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"GracePeriodNotOver\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidAmount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidChainlinkPrice\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidInputLength\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidQuoteHash\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidRecipientsCount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidRoot\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"InvalidTreeDepth\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"}],\"name\":\"PaymentAlreadyExists\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"}],\"name\":\"PaymentNotFound\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"PriceFeedNull\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"RootAlreadyPaid\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"SequencerDown\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"poolIdx\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"expected\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"got\",\"type\":\"uint256\"}],\"name\":\"WrongCandidateCount\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"expected\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"got\",\"type\":\"uint256\"}],\"name\":\"WrongPoolCount\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"treeDepth\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"DataPaymentMade\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"MerklePaymentMade\",\"type\":\"event\"},{\"inputs\":[],\"name\":\"CANDIDATES_PER_POOL\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"MAX_MERKLE_DEPTH\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"\",\"type\":\"uint8\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"antToken\",\"outputs\":[{\"internalType\":\"contract IERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"enum IMerklePaymentVault.DataType\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"closeRecordsStored\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"enum IMerklePaymentVault.DataType\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"records\",\"type\":\"uint256\"}],\"internalType\":\"struct IMerklePaymentVault.Record[]\",\"name\":\"recordsPerType\",\"type\":\"tuple[]\"}],\"internalType\":\"struct IMerklePaymentVault.QuotingMetrics\",\"name\":\"metrics\",\"type\":\"tuple\"}],\"internalType\":\"struct IMerklePaymentVault.CandidateNode[16]\",\"name\":\"candidates\",\"type\":\"tuple[16]\"}],\"internalType\":\"struct IMerklePaymentVault.PoolCommitment[]\",\"name\":\"poolCommitments\",\"type\":\"tuple[]\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"estimateMerkleTreeCost\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"}],\"name\":\"getPaymentInfo\",\"outputs\":[{\"components\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"internalType\":\"uint8\",\"name\":\"poolIndex\",\"type\":\"uint8\"}],\"internalType\":\"struct IMerklePaymentVault.PaidNode[]\",\"name\":\"paidNodeAddresses\",\"type\":\"tuple[]\"}],\"internalType\":\"struct IMerklePaymentVault.PaymentInfo\",\"name\":\"info\",\"type\":\"tuple\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"components\":[{\"internalType\":\"bytes32\",\"name\":\"poolHash\",\"type\":\"bytes32\"},{\"components\":[{\"internalType\":\"address\",\"name\":\"rewardsAddress\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"enum IMerklePaymentVault.DataType\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"closeRecordsStored\",\"type\":\"uint256\"},{\"components\":[{\"internalType\":\"enum IMerklePaymentVault.DataType\",\"name\":\"dataType\",\"type\":\"uint8\"},{\"internalType\":\"uint256\",\"name\":\"records\",\"type\":\"uint256\"}],\"internalType\":\"struct IMerklePaymentVault.Record[]\",\"name\":\"recordsPerType\",\"type\":\"tuple[]\"}],\"internalType\":\"struct IMerklePaymentVault.QuotingMetrics\",\"name\":\"metrics\",\"type\":\"tuple\"}],\"internalType\":\"struct IMerklePaymentVault.CandidateNode[16]\",\"name\":\"candidates\",\"type\":\"tuple[16]\"}],\"internalType\":\"struct IMerklePaymentVault.PoolCommitment[]\",\"name\":\"poolCommitments\",\"type\":\"tuple[]\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"name\":\"payForMerkleTree\",\"outputs\":[{\"internalType\":\"bytes32\",\"name\":\"winnerPoolHash\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"totalAmount\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"payments\",\"outputs\":[{\"internalType\":\"uint8\",\"name\":\"depth\",\"type\":\"uint8\"},{\"internalType\":\"uint64\",\"name\":\"merklePaymentTimestamp\",\"type\":\"uint64\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"events\":{\"DataPaymentMade(bytes32,uint256,uint256)\":{\"params\":{\"amount\":\"Payment amount\",\"root\":\"Merkle root\",\"treeDepth\":\"Tree depth\"}},\"MerklePaymentMade(bytes32,uint8,uint256,uint64)\":{\"params\":{\"depth\":\"Tree depth\",\"merklePaymentTimestamp\":\"Client-provided timestamp\",\"totalAmount\":\"Total tokens paid to winners\",\"winnerPoolHash\":\"Hash of the selected winner pool\"}}},\"kind\":\"dev\",\"methods\":{\"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)\":{\"params\":{\"depth\":\"Tree depth (determines number of nodes paid)\",\"merklePaymentTimestamp\":\"Client-provided timestamp\",\"poolCommitments\":\"Array of pool commitments (2^ceil(depth/2))\"},\"returns\":{\"totalAmount\":\"Estimated total tokens that would be paid\"}},\"getPaymentInfo(bytes32)\":{\"params\":{\"winnerPoolHash\":\"Hash returned from payForMerkleTree\"},\"returns\":{\"info\":\"Payment information stored on-chain\"}},\"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)\":{\"params\":{\"depth\":\"Tree depth (determines number of nodes paid)\",\"merklePaymentTimestamp\":\"Client-provided timestamp\",\"poolCommitments\":\"Array of pool commitments (2^ceil(depth/2))\"},\"returns\":{\"totalAmount\":\"Total tokens paid to winners\",\"winnerPoolHash\":\"Hash of selected winner pool\"}}},\"version\":1},\"userdoc\":{\"events\":{\"DataPaymentMade(bytes32,uint256,uint256)\":{\"notice\":\"Emitted when a data payment is made (legacy event)\"},\"MerklePaymentMade(bytes32,uint8,uint256,uint64)\":{\"notice\":\"Emitted when a Merkle batch payment is made\"}},\"kind\":\"user\",\"methods\":{\"CANDIDATES_PER_POOL()\":{\"notice\":\"Number of candidates per pool (fixed)\"},\"MAX_MERKLE_DEPTH()\":{\"notice\":\"Maximum supported Merkle tree depth\"},\"antToken()\":{\"notice\":\"ANT token contract\"},\"estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)\":{\"notice\":\"Estimate the cost of a Merkle tree payment without executing it This is a view function (0 gas) that runs the same pricing logic as payForMerkleTree but returns only the estimated cost without executing payment.\"},\"getPaymentInfo(bytes32)\":{\"notice\":\"Get payment info by winner pool hash\"},\"payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)\":{\"notice\":\"Pay for Merkle tree batch\"},\"payments(bytes32)\":{\"notice\":\"Payment info indexed by winner pool hash\"}},\"notice\":\"Merkle Batch Payment Vault Handles batch payments for Merkle tree storage where multiple data chunks are paid for in a single transaction. Uses a fair median pricing mechanism based on candidate node metrics.\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/MerklePaymentVault.sol\":\"MerklePaymentVault\"},\"evmVersion\":\"cancun\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":true,\"runs\":200},\"remappings\":[\":@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/\",\":erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/\",\":forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/\",\":halmos-cheatcodes/=lib/openzeppelin-contracts/lib/halmos-cheatcodes/src/\",\":openzeppelin-contracts/=lib/openzeppelin-contracts/\"],\"viaIR\":true},\"sources\":{\"contracts/IMerklePaymentVault.sol\":{\"keccak256\":\"0x024a743d548e8c70cac35582a882de61bdcc37ba286512aa4c6b21c56198a875\",\"license\":\"GPL-3.0\",\"urls\":[\"bzz-raw://bfc083023aca49d207386a601f2a78100c2702490be855956bbe4fef02f66f80\",\"dweb:/ipfs/QmTm3QZ11TvwKopPeSPAZhKpHigvsoy95Yb7tJ3JMD1fyd\"]},\"contracts/MerklePaymentVault.sol\":{\"keccak256\":\"0x908728d3eb99ad8882ce0f8bcae2a88b67326df920d921e0f08e1c179d91fc0a\",\"license\":\"GPL-3.0\",\"urls\":[\"bzz-raw://49dadaf11940df8f38b8e133b3a1589b5bd72320db327f84ebda7cd421b9a79a\",\"dweb:/ipfs/QmV6akj91Np17TGc5itWaTieG32CPUx738gVNyFMvSufqv\"]},\"lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol\":{\"keccak256\":\"0x74ed01eb66b923d0d0cfe3be84604ac04b76482a55f9dd655e1ef4d367f95bc2\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://5282825a626cfe924e504274b864a652b0023591fa66f06a067b25b51ba9b303\",\"dweb:/ipfs/QmeCfPykghhMc81VJTrHTC7sF6CRvaA1FXVq2pJhwYp1dV\"]}},\"version\":1}",
+  "metadata": {
+    "compiler": {
+      "version": "0.8.28+commit.7893614a"
+    },
+    "language": "Solidity",
+    "output": {
+      "abi": [
+        {
+          "inputs": [
+            {
+              "internalType": "address",
+              "name": "_antToken",
+              "type": "address"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "constructor"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "AntTokenNull"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "BatchLimitExceeded"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint8",
+              "name": "depth",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint8",
+              "name": "max",
+              "type": "uint8"
+            }
+          ],
+          "type": "error",
+          "name": "DepthTooLarge"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "GracePeriodNotOver"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidAmount"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidChainlinkPrice"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidInputLength"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidQuoteHash"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidRecipientsCount"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidRoot"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "InvalidTreeDepth"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "poolHash",
+              "type": "bytes32"
+            }
+          ],
+          "type": "error",
+          "name": "PaymentAlreadyExists"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "poolHash",
+              "type": "bytes32"
+            }
+          ],
+          "type": "error",
+          "name": "PaymentNotFound"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "PriceFeedNull"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "RootAlreadyPaid"
+        },
+        {
+          "inputs": [],
+          "type": "error",
+          "name": "SequencerDown"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "poolIdx",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "expected",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "got",
+              "type": "uint256"
+            }
+          ],
+          "type": "error",
+          "name": "WrongCandidateCount"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "expected",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "got",
+              "type": "uint256"
+            }
+          ],
+          "type": "error",
+          "name": "WrongPoolCount"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "root",
+              "type": "bytes32",
+              "indexed": true
+            },
+            {
+              "internalType": "uint256",
+              "name": "treeDepth",
+              "type": "uint256",
+              "indexed": true
+            },
+            {
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256",
+              "indexed": true
+            }
+          ],
+          "type": "event",
+          "name": "DataPaymentMade",
+          "anonymous": false
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "winnerPoolHash",
+              "type": "bytes32",
+              "indexed": true
+            },
+            {
+              "internalType": "uint8",
+              "name": "depth",
+              "type": "uint8",
+              "indexed": false
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalAmount",
+              "type": "uint256",
+              "indexed": false
+            },
+            {
+              "internalType": "uint64",
+              "name": "merklePaymentTimestamp",
+              "type": "uint64",
+              "indexed": false
+            }
+          ],
+          "type": "event",
+          "name": "MerklePaymentMade",
+          "anonymous": false
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "CANDIDATES_PER_POOL",
+          "outputs": [
+            {
+              "internalType": "uint8",
+              "name": "",
+              "type": "uint8"
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "MAX_MERKLE_DEPTH",
+          "outputs": [
+            {
+              "internalType": "uint8",
+              "name": "",
+              "type": "uint8"
+            }
+          ]
+        },
+        {
+          "inputs": [],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "antToken",
+          "outputs": [
+            {
+              "internalType": "contract IERC20",
+              "name": "",
+              "type": "address"
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint8",
+              "name": "depth",
+              "type": "uint8"
+            },
+            {
+              "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
+              "name": "poolCommitments",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "internalType": "bytes32",
+                  "name": "poolHash",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
+                  "name": "candidates",
+                  "type": "tuple[16]",
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "rewardsAddress",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "struct IMerklePaymentVault.QuotingMetrics",
+                      "name": "metrics",
+                      "type": "tuple",
+                      "components": [
+                        {
+                          "internalType": "enum IMerklePaymentVault.DataType",
+                          "name": "dataType",
+                          "type": "uint8"
+                        },
+                        {
+                          "internalType": "uint256",
+                          "name": "closeRecordsStored",
+                          "type": "uint256"
+                        },
+                        {
+                          "internalType": "struct IMerklePaymentVault.Record[]",
+                          "name": "recordsPerType",
+                          "type": "tuple[]",
+                          "components": [
+                            {
+                              "internalType": "enum IMerklePaymentVault.DataType",
+                              "name": "dataType",
+                              "type": "uint8"
+                            },
+                            {
+                              "internalType": "uint256",
+                              "name": "records",
+                              "type": "uint256"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "internalType": "uint64",
+              "name": "merklePaymentTimestamp",
+              "type": "uint64"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "estimateMerkleTreeCost",
+          "outputs": [
+            {
+              "internalType": "uint256",
+              "name": "totalAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "winnerPoolHash",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "getPaymentInfo",
+          "outputs": [
+            {
+              "internalType": "struct IMerklePaymentVault.PaymentInfo",
+              "name": "info",
+              "type": "tuple",
+              "components": [
+                {
+                  "internalType": "uint8",
+                  "name": "depth",
+                  "type": "uint8"
+                },
+                {
+                  "internalType": "uint64",
+                  "name": "merklePaymentTimestamp",
+                  "type": "uint64"
+                },
+                {
+                  "internalType": "struct IMerklePaymentVault.PaidNode[]",
+                  "name": "paidNodeAddresses",
+                  "type": "tuple[]",
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "rewardsAddress",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "uint8",
+                      "name": "poolIndex",
+                      "type": "uint8"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint8",
+              "name": "depth",
+              "type": "uint8"
+            },
+            {
+              "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
+              "name": "poolCommitments",
+              "type": "tuple[]",
+              "components": [
+                {
+                  "internalType": "bytes32",
+                  "name": "poolHash",
+                  "type": "bytes32"
+                },
+                {
+                  "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
+                  "name": "candidates",
+                  "type": "tuple[16]",
+                  "components": [
+                    {
+                      "internalType": "address",
+                      "name": "rewardsAddress",
+                      "type": "address"
+                    },
+                    {
+                      "internalType": "struct IMerklePaymentVault.QuotingMetrics",
+                      "name": "metrics",
+                      "type": "tuple",
+                      "components": [
+                        {
+                          "internalType": "enum IMerklePaymentVault.DataType",
+                          "name": "dataType",
+                          "type": "uint8"
+                        },
+                        {
+                          "internalType": "uint256",
+                          "name": "closeRecordsStored",
+                          "type": "uint256"
+                        },
+                        {
+                          "internalType": "struct IMerklePaymentVault.Record[]",
+                          "name": "recordsPerType",
+                          "type": "tuple[]",
+                          "components": [
+                            {
+                              "internalType": "enum IMerklePaymentVault.DataType",
+                              "name": "dataType",
+                              "type": "uint8"
+                            },
+                            {
+                              "internalType": "uint256",
+                              "name": "records",
+                              "type": "uint256"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "internalType": "uint64",
+              "name": "merklePaymentTimestamp",
+              "type": "uint64"
+            }
+          ],
+          "stateMutability": "nonpayable",
+          "type": "function",
+          "name": "payForMerkleTree",
+          "outputs": [
+            {
+              "internalType": "bytes32",
+              "name": "winnerPoolHash",
+              "type": "bytes32"
+            },
+            {
+              "internalType": "uint256",
+              "name": "totalAmount",
+              "type": "uint256"
+            }
+          ]
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "bytes32",
+              "name": "",
+              "type": "bytes32"
+            }
+          ],
+          "stateMutability": "view",
+          "type": "function",
+          "name": "payments",
+          "outputs": [
+            {
+              "internalType": "uint8",
+              "name": "depth",
+              "type": "uint8"
+            },
+            {
+              "internalType": "uint64",
+              "name": "merklePaymentTimestamp",
+              "type": "uint64"
+            }
+          ]
+        }
+      ],
+      "devdoc": {
+        "kind": "dev",
+        "methods": {
+          "estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": {
+            "params": {
+              "depth": "Tree depth (determines number of nodes paid)",
+              "merklePaymentTimestamp": "Client-provided timestamp",
+              "poolCommitments": "Array of pool commitments (2^ceil(depth/2))"
+            },
+            "returns": {
+              "totalAmount": "Estimated total tokens that would be paid"
+            }
+          },
+          "getPaymentInfo(bytes32)": {
+            "params": {
+              "winnerPoolHash": "Hash returned from payForMerkleTree"
+            },
+            "returns": {
+              "info": "Payment information stored on-chain"
+            }
+          },
+          "payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": {
+            "params": {
+              "depth": "Tree depth (determines number of nodes paid)",
+              "merklePaymentTimestamp": "Client-provided timestamp",
+              "poolCommitments": "Array of pool commitments (2^ceil(depth/2))"
+            },
+            "returns": {
+              "totalAmount": "Total tokens paid to winners",
+              "winnerPoolHash": "Hash of selected winner pool"
+            }
+          }
+        },
+        "version": 1
+      },
+      "userdoc": {
+        "kind": "user",
+        "methods": {
+          "CANDIDATES_PER_POOL()": {
+            "notice": "Number of candidates per pool (fixed)"
+          },
+          "MAX_MERKLE_DEPTH()": {
+            "notice": "Maximum supported Merkle tree depth"
+          },
+          "antToken()": {
+            "notice": "ANT token contract"
+          },
+          "estimateMerkleTreeCost(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": {
+            "notice": "Estimate the cost of a Merkle tree payment without executing it This is a view function (0 gas) that runs the same pricing logic as payForMerkleTree but returns only the estimated cost without executing payment."
+          },
+          "getPaymentInfo(bytes32)": {
+            "notice": "Get payment info by winner pool hash"
+          },
+          "payForMerkleTree(uint8,(bytes32,(address,(uint8,uint256,(uint8,uint256)[]))[16])[],uint64)": {
+            "notice": "Pay for Merkle tree batch"
+          },
+          "payments(bytes32)": {
+            "notice": "Payment info indexed by winner pool hash"
+          }
+        },
+        "version": 1
+      }
+    },
+    "settings": {
+      "remappings": [
+        "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+        "erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/",
+        "forge-std/=lib/openzeppelin-contracts/lib/forge-std/src/",
+        "halmos-cheatcodes/=lib/openzeppelin-contracts/lib/halmos-cheatcodes/src/",
+        "openzeppelin-contracts/=lib/openzeppelin-contracts/"
+      ],
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "metadata": {
+        "bytecodeHash": "ipfs"
+      },
+      "compilationTarget": {
+        "contracts/MerklePaymentVault.sol": "MerklePaymentVault"
+      },
+      "evmVersion": "cancun",
+      "libraries": {},
+      "viaIR": true
+    },
+    "sources": {
+      "contracts/IMerklePaymentVault.sol": {
+        "keccak256": "0x024a743d548e8c70cac35582a882de61bdcc37ba286512aa4c6b21c56198a875",
+        "urls": [
+          "bzz-raw://bfc083023aca49d207386a601f2a78100c2702490be855956bbe4fef02f66f80",
+          "dweb:/ipfs/QmTm3QZ11TvwKopPeSPAZhKpHigvsoy95Yb7tJ3JMD1fyd"
+        ],
+        "license": "GPL-3.0"
+      },
+      "contracts/MerklePaymentVault.sol": {
+        "keccak256": "0x908728d3eb99ad8882ce0f8bcae2a88b67326df920d921e0f08e1c179d91fc0a",
+        "urls": [
+          "bzz-raw://49dadaf11940df8f38b8e133b3a1589b5bd72320db327f84ebda7cd421b9a79a",
+          "dweb:/ipfs/QmV6akj91Np17TGc5itWaTieG32CPUx738gVNyFMvSufqv"
+        ],
+        "license": "GPL-3.0"
+      },
+      "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol": {
+        "keccak256": "0x74ed01eb66b923d0d0cfe3be84604ac04b76482a55f9dd655e1ef4d367f95bc2",
+        "urls": [
+          "bzz-raw://5282825a626cfe924e504274b864a652b0023591fa66f06a067b25b51ba9b303",
+          "dweb:/ipfs/QmeCfPykghhMc81VJTrHTC7sF6CRvaA1FXVq2pJhwYp1dV"
+        ],
+        "license": "MIT"
+      }
+    },
+    "version": 1
+  },
+  "id": 1
+}

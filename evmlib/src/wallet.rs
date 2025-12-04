@@ -7,9 +7,9 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::common::{Address, Amount, QuoteHash, QuotePayment, TxHash, U256};
-use crate::contract::merkle_payment_vault::{
-    Error as MerkleHandlerError, MerklePaymentVaultHandler, PoolHash,
-};
+use crate::contract::merkle_payment_vault::error::Error as MerkleHandlerError;
+use crate::contract::merkle_payment_vault::handler::MerklePaymentVaultHandler;
+use crate::contract::merkle_payment_vault::interface::PoolHash;
 use crate::contract::network_token::NetworkToken;
 use crate::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
@@ -220,10 +220,10 @@ impl Wallet {
         let handler = MerklePaymentVaultHandler::new(merkle_vault_address, provider);
 
         // Submit payment to smart contract
-        let (winner_pool_hash, amount) = handler
+        let (winner_pool_hash, actual_amount) = handler
             .pay_for_merkle_tree(
                 depth,
-                pool_commitments,
+                pool_commitments.clone(),
                 merkle_payment_timestamp,
                 &self.transaction_config,
             )
@@ -231,11 +231,11 @@ impl Wallet {
             .map_err(|e| Error::MerklePayment(format!("Payment failed: {e}")))?;
 
         info!(
-            "Merkle payment successful, winner pool: {}, amount: {amount}",
+            "Merkle payment successful, winner pool: {}, amount: {actual_amount}",
             hex::encode(winner_pool_hash)
         );
 
-        Ok((winner_pool_hash, amount))
+        Ok((winner_pool_hash, actual_amount))
     }
 
     /// Estimate the cost of a Merkle tree batch using smart contract

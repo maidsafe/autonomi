@@ -7,7 +7,7 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::common::Address;
-use crate::contract::merkle_payment_vault::MerklePaymentVaultHandler;
+use crate::contract::merkle_payment_vault::handler::MerklePaymentVaultHandler;
 use crate::contract::payment_vault::handler::PaymentVaultHandler;
 use crate::contract::{merkle_payment_vault, network_token::NetworkToken, payment_vault};
 use crate::reqwest::Url;
