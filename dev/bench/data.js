@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1764860293333,
+  "lastUpdate": 1764860381129,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -7724,6 +7724,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 234,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "974f55eac51043bba1dbc194eef0c2118780c6bd",
+          "message": "Merge pull request #3319 from maqi/client_check_close_group_among_targeted_group\n\nfeat(client): check target's close group from targeted nodes' perspective",
+          "timestamp": "2025-12-04T13:44:35Z",
+          "tree_id": "898a4432fb6f2c8fd2ddabb83de55677a49ae1c9",
+          "url": "https://github.com/maidsafe/autonomi/commit/974f55eac51043bba1dbc194eef0c2118780c6bd"
+        },
+        "date": 1764860380272,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 220,
             "unit": "MB"
           }
         ]
