@@ -163,6 +163,10 @@ impl InstallNodeServiceCtxBuilder {
             args.push(OsString::from(
                 custom_network.data_payments_address.to_string(),
             ));
+            if let Some(merkle_payments_address) = custom_network.merkle_payments_address {
+                args.push(OsString::from("--merkle-payments-address"));
+                args.push(OsString::from(merkle_payments_address.to_string()));
+            }
         }
 
         Ok(ServiceInstallCtx {
@@ -310,7 +314,9 @@ mod tests {
                     "0x8464135c8F25Da09e49BC8782676a84730C318bC",
                 )
                 .unwrap(),
-                merkle_payments_address: None,
+                merkle_payments_address: Some(
+                    RewardsAddress::from_str("0x742D35CC6634C0532925A3B844BC9E7595F0BE3A").unwrap(),
+                ),
             }),
             relay: false,
             log_dir_path: PathBuf::from("/logs"),
@@ -468,6 +474,8 @@ mod tests {
             "0x5FbDB2315678afecb367f032d93F642f64180aa3",
             "--data-payments-address",
             "0x8464135c8F25Da09e49BC8782676a84730C318bC",
+            "--merkle-payments-address",
+            "0x742d35cC6634C0532925A3b844bC9E7595F0be3A",
         ];
         assert_eq!(
             result
