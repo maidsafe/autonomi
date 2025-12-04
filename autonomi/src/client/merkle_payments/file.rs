@@ -195,7 +195,7 @@ impl Client {
 
         // Encrypt files to collect ALL XorNames
         #[cfg(feature = "loud")]
-        println!("Encrypting files a first time to create the Merkle Tree...");
+        println!("Encrypting files a first time to create the Merkle Tree(s)...");
         let (all_xor_names, file_chunk_counts) = self
             .collect_xornames_from_dir(path.clone(), is_public)
             .await
@@ -212,11 +212,11 @@ impl Client {
             .map(|c| c.to_vec())
             .collect();
         let num_batches = batches.len();
-        info!("Split into {num_batches} batch(es) of up to {MAX_LEAVES} chunks each");
+        info!("Split into {num_batches} Merkle Tree(s) of up to {MAX_LEAVES} chunks each");
 
         // Start upload streams
         #[cfg(feature = "loud")]
-        println!("Starting upload of {total_chunks} chunks in {num_batches} batch(es)...");
+        println!("🚀 Starting upload of {total_chunks} chunks in {num_batches} Merkle Tree(s)...");
         let mut streams: Vec<EncryptionStream> = encrypt_directory_files(path, is_public)
             .await
             .map_err(|e| MerkleUploadErrorWithReceipt::encryption(receipt.clone(), e.to_string()))?
@@ -240,7 +240,7 @@ impl Client {
                 .any(|xn| !receipt.proofs.contains_key(xn));
             if needs_payment {
                 receipt = self
-                    .pay_for_batch(
+                    .pay_for_merkle_tree_batch(
                         wallet,
                         batch_xornames,
                         receipt.clone(),
@@ -252,7 +252,7 @@ impl Client {
             }
 
             #[cfg(feature = "loud")]
-            println!("Batch {batch_num}/{num_batches}: Uploading {batch_size} chunks...");
+            println!("🌳 Merkle Tree {batch_num}/{num_batches}: Uploading {batch_size} chunks...");
 
             // Upload this batch's chunks
             let (remaining_streams, completed_files) = self
@@ -269,7 +269,7 @@ impl Client {
             );
         }
 
-        // Handle any remaining streams (should be empty if all went well)
+        // Handle any remaining streams
         for stream in streams {
             if let Some(datamap) = stream.data_map_chunk() {
                 results.push((
@@ -277,6 +277,15 @@ impl Client {
                     datamap,
                     stream.metadata.clone(),
                 ));
+
+                if let Some(public_addr) = stream.data_address() {
+                    let relative_path = stream.relative_path.clone();
+                    #[cfg(feature = "loud")]
+                    println!(
+                        "[File {}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}",
+                        results.len(),
+                    );
+                }
             }
         }
 
@@ -363,8 +372,8 @@ impl Client {
         Ok((all_xor_names, file_chunk_counts))
     }
 
-    /// Pay for a batch, returning the merged receipt
-    async fn pay_for_batch(
+    /// Pay for a Merkle Tree batch, returning the merged receipt
+    async fn pay_for_merkle_tree_batch(
         &self,
         wallet: Option<&EvmWallet>,
         batch_xornames: Vec<XorName>,
@@ -384,7 +393,7 @@ impl Client {
 
         let batch_size = batch_xornames.len();
         #[cfg(feature = "loud")]
-        println!("Batch {batch_num}/{num_batches}: Paying for {batch_size} chunks...");
+        println!("💸 Merkle Tree {batch_num}/{num_batches}: Paying for {batch_size} chunks...");
 
         let batch_receipt = self
             .pay_for_single_merkle_batch(DataTypes::Chunk, batch_xornames, MAX_CHUNK_SIZE, w)
