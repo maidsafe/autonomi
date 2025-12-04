@@ -69,6 +69,7 @@ impl Client {
     > {
         let mut completed_files: Vec<(PathBuf, DataMapChunk, Metadata)> = Vec::new();
         let mut chunks_uploaded = 0;
+        let total_files = receipt.file_chunk_counts.len();
         let upload_batch_size = std::cmp::max(1, *CHUNK_UPLOAD_BATCH_SIZE);
 
         while chunks_uploaded < limit {
@@ -103,7 +104,9 @@ impl Client {
                     for result in results {
                         let addr = result?;
                         chunks_uploaded += 1;
-                        debug!("Uploaded chunk: {addr:?}");
+                        debug!("Uploaded chunk {chunks_uploaded}/{limit}: {addr:?}");
+                        #[cfg(feature = "loud")]
+                        println!("({chunks_uploaded}/{limit}) Chunk stored at: {addr:?}");
                     }
                 }
                 _ => {
@@ -114,9 +117,17 @@ impl Client {
                     let datamap = exhausted_stream
                         .data_map_chunk()
                         .ok_or(MerklePutError::StreamShouldHaveDatamap)?;
+                    completed_files.push((relative_path.clone(), datamap, metadata));
 
+                    // report progress
+                    let completed_files_count = total_files - streams.len();
+                    if let Some(public_addr) = exhausted_stream.data_address() {
+                        #[cfg(feature = "loud")]
+                        println!(
+                            "[File {completed_files_count}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}"
+                        );
+                    }
                     debug!("File completed: {relative_path:?}");
-                    completed_files.push((relative_path, datamap, metadata));
                 }
             }
         }

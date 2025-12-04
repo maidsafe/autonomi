@@ -84,23 +84,6 @@ pub enum MerklePaymentError {
     PoolVerification(#[from] MerklePaymentVerificationError),
 }
 
-/// Merge multiple MerklePaymentReceipts into one
-fn merge_merkle_receipts(receipts: Vec<MerklePaymentReceipt>) -> MerklePaymentReceipt {
-    let mut merged_proofs = HashMap::new();
-    let mut total_atto = ant_evm::U256::ZERO;
-
-    for receipt in receipts {
-        merged_proofs.extend(receipt.proofs);
-        total_atto = total_atto.saturating_add(receipt.amount_paid.as_atto());
-    }
-
-    MerklePaymentReceipt {
-        proofs: merged_proofs,
-        file_chunk_counts: HashMap::new(),
-        amount_paid: AttoTokens::from_atto(total_atto),
-    }
-}
-
 impl Client {
     /// Get Merkle candidate nodes for a specific target address
     ///
@@ -316,18 +299,18 @@ impl Client {
         println!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
         info!("Paying for {addresses_len} addresses in {batches_len} batch(es)");
 
-        let mut receipts = Vec::with_capacity(batches.len());
+        let mut merged_receipt = MerklePaymentReceipt::default();
         for (i, batch) in batches.into_iter().enumerate() {
             #[cfg(feature = "loud")]
-            println!("Processing batch {}/{}", i + 1, receipts.capacity());
-            info!("Processing batch {}/{}", i + 1, receipts.capacity());
+            println!("Processing batch {}/{batches_len}", i + 1);
+            info!("Processing batch {}/{batches_len}", i + 1);
             let receipt = self
                 .pay_for_single_merkle_batch(data_type, batch, data_size, wallet)
                 .await?;
-            receipts.push(receipt);
+            merged_receipt.merge(receipt);
         }
 
-        Ok(merge_merkle_receipts(receipts))
+        Ok(merged_receipt)
     }
 
     /// Prepare a Merkle batch - builds tree, queries candidate pools
