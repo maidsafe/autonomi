@@ -270,26 +270,41 @@ impl Client {
         }
 
         // Handle any remaining streams
-        for stream in streams {
-            if let Some(datamap) = stream.data_map_chunk() {
-                results.push((
-                    stream.relative_path.clone(),
-                    datamap,
-                    stream.metadata.clone(),
-                ));
+        for mut stream in streams {
+            let datamap = if let Some(datamap) = stream.data_map_chunk() {
+                datamap
+            } else {
+                // flush the stream to force transition to StreamDone state and try again
+                let _should_be_none = stream.next_batch(1);
+                stream
+                    .data_map_chunk()
+                    .ok_or(MerkleUploadErrorWithReceipt::upload(
+                        receipt.clone(),
+                        MerklePutError::StreamShouldHaveDatamap,
+                    ))?
+            };
 
-                if let Some(public_addr) = stream.data_address() {
-                    let relative_path = stream.relative_path.clone();
-                    #[cfg(feature = "loud")]
-                    println!(
-                        "[File {}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}",
-                        results.len(),
-                    );
-                }
+            // add the datamap to the results
+            results.push((
+                stream.relative_path.clone(),
+                datamap,
+                stream.metadata.clone(),
+            ));
+
+            // report progress
+            if let Some(public_addr) = stream.data_address() {
+                let relative_path = stream.relative_path.clone();
+                #[cfg(feature = "loud")]
+                println!(
+                    "[File {}/{total_files}] ({relative_path:?}) is now available at: {public_addr:?}",
+                    results.len(),
+                );
             }
         }
 
-        debug!("merkle payment: files_put_unified all files uploaded successfully");
+        debug!(
+            "merkle payment: {total_chunks} chunks uploaded for {total_files} files successfully"
+        );
         #[cfg(feature = "loud")]
         println!("✓ All {total_chunks} chunks uploaded successfully!");
 
