@@ -175,11 +175,18 @@ impl NetworkDriver {
                 peer_address,
                 storage_proofs,
             }) => {
-                if self.pending_tasks
-                    .update_get_quote(request_id, quote, peer_address).is_err() {
-                self.pending_tasks
+                if self
+                    .pending_tasks
+                    .update_get_quote(request_id, quote, peer_address)
+                    .is_err()
+                {
+                    self.pending_tasks
                         .update_get_storage_proofs_from_peer(request_id, storage_proofs)?;
                 }
+            }
+            Response::Query(QueryResponse::GetMerkleCandidateQuote(result)) => {
+                self.pending_tasks
+                    .update_get_merkle_candidate_quote(request_id, result)?;
             }
             Response::Query(QueryResponse::PutRecord {
                 result,

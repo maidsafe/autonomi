@@ -15,12 +15,14 @@ test-utils = []
 
 [dependencies]
 custom_debug = "~0.6.1"
+dirs-next = "~2.0" # NB TODO: remove this dependency once we have the real smart contract!
 evmlib = { path = "../evmlib", version = "0.4.5" }
 hex = "~0.4.3"
 libp2p = { version = "0.56.0", features = ["identify", "kad"] }
 rand = { version = "~0.8.5", features = ["small_rng"] }
 ring = "0.17.12"
 rmp-serde = "1.1.1"
+rs_merkle = { git = "https://github.com/maidsafe/rs-merkle.git", branch = "master" }
 serde = { version = "1.0.133", features = ["derive", "rc"] }
 serde_json = "1.0.108"
 tempfile = "3.10.1"
@@ -30,6 +32,7 @@ tracing = { version = "~0.1.26" }
 xor_name = "5.0.0"
 
 [dev-dependencies]
+evmlib = { path = "../evmlib", version = "0.4.5", features = ["test-utils"] }
 tokio = { version = "1.43.1", features = ["macros", "rt"] }
 
 [lints]

@@ -32,6 +32,7 @@ pub use high_level::vault;
 pub mod analyze;
 pub mod config;
 pub mod key_derivation;
+pub mod merkle_payments;
 pub mod payment;
 pub mod quote;
 
@@ -66,6 +67,7 @@ const CLIENT_EVENT_CHANNEL_SIZE: usize = 100;
 
 // Amount of peers to confirm into our routing table before we consider the client ready.
 use crate::client::config::ClientOperatingStrategy;
+use crate::client::merkle_payments::MerkleUploadError;
 use crate::networking::{Multiaddr, Network, NetworkAddress, NetworkError, multiaddr_is_global};
 pub use ant_protocol::CLOSE_GROUP_SIZE;
 use ant_protocol::storage::RecordKind;
@@ -149,6 +151,8 @@ pub enum PutError {
     },
     #[error("Batch upload: {0}")]
     Batch(ChunkBatchUploadState),
+    #[error("Merkle batch upload: {0}")]
+    MerkleBatch(MerkleUploadError),
 }
 
 /// Errors that can occur during the get operation.

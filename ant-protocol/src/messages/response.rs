@@ -87,6 +87,17 @@ pub enum QueryResponse {
         /// Correspondent Record Address
         record_addr: NetworkAddress,
     },
+    /// Response to [`GetMerkleCandidateQuote`]
+    ///
+    /// Node's signed commitment containing:
+    /// - pub_key (can derive PeerId)
+    /// - quoting_metrics (current node state)
+    /// - reward_address (where to send payment)
+    /// - merkle_payment_timestamp (binds signature to time)
+    /// - signature (proves pub_key owns reward_address)
+    ///
+    /// [`GetMerkleCandidateQuote`]: crate::messages::Query::GetMerkleCandidateQuote
+    GetMerkleCandidateQuote(Result<ant_evm::merkle_payments::MerklePaymentCandidateNode>),
 }
 
 // Debug implementation for QueryResponse, to avoid printing Vec<u8>
@@ -152,6 +163,18 @@ impl Debug for QueryResponse {
                     "PutRecord(Record {record_addr:?} uploaded to {peer_address:?} with result {result:?})",
                 )
             }
+            QueryResponse::GetMerkleCandidateQuote(result) => match result {
+                Ok(candidate) => {
+                    write!(
+                        f,
+                        "GetMerkleCandidateQuote(Ok(reward_address: {:?}, timestamp: {}))",
+                        candidate.reward_address, candidate.merkle_payment_timestamp
+                    )
+                }
+                Err(err) => {
+                    write!(f, "GetMerkleCandidateQuote(Err({err:?}))")
+                }
+            },
         }
     }
 }

@@ -103,6 +103,8 @@ pub enum NetworkError {
     GetQuoteError(String),
     #[error("Invalid quote: {0}")]
     InvalidQuote(String),
+    #[error("Invalid Merkle candidate node: {0}")]
+    InvalidNodeMerkleCandidate(String),
     #[error(
         "Failed to get enough quotes: {got_quotes}/{CLOSE_GROUP_SIZE} quotes, got {record_exists_responses} record exists responses, and {errors_len} errors: {errors:?}"
     )]
@@ -343,7 +345,11 @@ impl Network {
         n: NonZeroUsize,
     ) -> Result<Vec<PeerInfo>, NetworkError> {
         let (tx, rx) = oneshot::channel();
-        let task = NetworkTask::GetClosestPeers { addr: addr.clone(), resp: tx, n };
+        let task = NetworkTask::GetClosestPeers {
+            addr: addr.clone(),
+            resp: tx,
+            n,
+        };
         self.task_sender
             .send(task)
             .await
@@ -352,14 +358,18 @@ impl Network {
         let candidates = match rx.await? {
             Ok(peers) => {
                 if peers.len() < n.get() {
-                    info!("Kad get_closest network query giving less candidates ({}/{})", peers.len(), n.get());
+                    info!(
+                        "Kad get_closest network query giving less candidates ({}/{})",
+                        peers.len(),
+                        n.get()
+                    );
                     return Err(NetworkError::InsufficientPeers {
                         got_peers: peers.len(),
                         expected_peers: n.get(),
                         peers,
                     });
                 }
-              
+
                 peers
             }
             Err(e) => return Err(e),
@@ -370,7 +380,10 @@ impl Network {
         for peer in &candidates {
             let peer_addr = NetworkAddress::from(peer.peer_id);
             let distance = addr.distance(&peer_addr);
-            trace!("  Candidate peer: {:?}, distance: {:?}", peer.peer_id, distance);
+            trace!(
+                "  Candidate peer: {:?}, distance: {:?}",
+                peer.peer_id, distance
+            );
         }
 
         // Verify candidates by querying them individually for their closest peers
@@ -382,7 +395,9 @@ impl Network {
             // Get some extra to ensure enough candidates can be built up
             let n_value = n.get() + 2;
             query_tasks.push(async move {
-                let result = network.get_closest_peers_from_peer(addr, peer.clone(), Some(n_value)).await;
+                let result = network
+                    .get_closest_peers_from_peer(addr, peer.clone(), Some(n_value))
+                    .await;
                 (peer.peer_id, result)
             });
         }
@@ -400,18 +415,20 @@ impl Network {
             if let Ok(peers_list) = result {
                 // Log the responder and their returned peer list
                 trace!("Closegroup to {addr:?} responded from peer {responder_peer_id:?}:");
-                
+
                 // Add the responder itself with higher weight to peer_counts since it successfully responded
                 *peer_counts.entry(*responder_peer_id).or_insert(0) += 2;
-                
+
                 // Add the responder's addresses from candidates
-                if let Some(responder_info) = candidates.iter().find(|p| p.peer_id == *responder_peer_id) {
+                if let Some(responder_info) =
+                    candidates.iter().find(|p| p.peer_id == *responder_peer_id)
+                {
                     let addr_set = peer_addrs.entry(*responder_peer_id).or_default();
                     for addr in &responder_info.addrs {
                         addr_set.insert(addr.clone());
                     }
                 }
-                
+
                 // Count appearances in the response and collect addresses
                 for (peer_addr, addrs) in peers_list {
                     if let Some(peer_id) = peer_addr.as_peer_id() {
@@ -419,7 +436,7 @@ impl Network {
                         trace!("  Reported peer: {peer_id:?}, distance: {distance:?}");
 
                         *peer_counts.entry(peer_id).or_insert(0) += 1;
-                        
+
                         // Aggregate unique addresses for this peer
                         let addr_set = peer_addrs.entry(peer_id).or_default();
                         for addr in addrs {
@@ -464,9 +481,7 @@ impl Network {
             .into_iter()
             .take(n.get())
             .map(|(peer_id, count, distance)| {
-                trace!(
-                    "Selected candidate: {peer_id:?}, count: {count}, distance: {distance:?}"
-                );
+                trace!("Selected candidate: {peer_id:?}, count: {count}, distance: {distance:?}");
 
                 // Use addresses from peer responses if available, otherwise use original
                 let addrs = if let Some(addrs_set) = peer_addrs.get(&peer_id) {
@@ -558,7 +573,13 @@ impl Network {
         peer: PeerInfo,
         nonce: u64,
         difficulty: usize,
-    ) -> Result<Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>, NetworkError> {
+    ) -> Result<
+        Vec<(
+            NetworkAddress,
+            Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+        )>,
+        NetworkError,
+    > {
         let (tx, rx) = oneshot::channel();
         let task = NetworkTask::GetStorageProofsFromPeer {
             addr,
@@ -598,6 +619,81 @@ impl Network {
             .await
             .map_err(|_| NetworkError::NetworkDriverOffline)?;
         rx.await?
+    }
+
+    /// Get a Merkle candidate quote from a specific peer
+    /// Used for Merkle batch payment system
+    ///
+    /// # Arguments
+    /// * `addr` - The target address (from MidpointProof::address())
+    /// * `peer` - The peer to request the quote from
+    /// * `data_type` - The data type being uploaded
+    /// * `data_size` - The data size
+    /// * `merkle_payment_timestamp` - Unix timestamp for the payment
+    ///
+    /// # Returns
+    /// * `MerklePaymentCandidateNode` - Signed quote from the peer
+    ///
+    /// # Validation
+    /// * Verifies the signature is valid
+    /// * Verifies the timestamp matches the requested timestamp
+    /// * Verifies data_type and data_size match the requested values
+    pub async fn get_merkle_candidate_quote(
+        &self,
+        addr: NetworkAddress,
+        peer: PeerInfo,
+        data_type: u32,
+        data_size: usize,
+        merkle_payment_timestamp: u64,
+    ) -> Result<ant_evm::merkle_payments::MerklePaymentCandidateNode, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::GetMerkleCandidateQuote {
+            addr,
+            peer,
+            data_type,
+            data_size,
+            merkle_payment_timestamp,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        let candidate = rx.await??;
+
+        // Validate the candidate node
+        // 1. Verify signature
+        if !candidate.verify_signature() {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(
+                "Invalid signature".to_string(),
+            ));
+        }
+
+        // 2. Verify timestamp matches
+        if candidate.merkle_payment_timestamp != merkle_payment_timestamp {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Timestamp mismatch: expected {}, got {}",
+                merkle_payment_timestamp, candidate.merkle_payment_timestamp
+            )));
+        }
+
+        // 3. Verify data_type matches
+        if candidate.quoting_metrics.data_type != data_type {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Data type mismatch: expected {}, got {}",
+                data_type, candidate.quoting_metrics.data_type
+            )));
+        }
+
+        // 4. Verify data_size matches
+        if candidate.quoting_metrics.data_size != data_size {
+            return Err(NetworkError::InvalidNodeMerkleCandidate(format!(
+                "Data size mismatch: expected {}, got {}",
+                data_size, candidate.quoting_metrics.data_size
+            )));
+        }
+
+        Ok(candidate)
     }
 
     /// Get the quotes for a Record from the closest Peers to that address on the Network

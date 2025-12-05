@@ -52,3 +52,39 @@ impl Debug for QuotingMetrics {
         )
     }
 }
+
+impl QuotingMetrics {
+    /// Convert to deterministic byte representation for hashing
+    ///
+    /// Uses fixed-width encoding (u64) for all numeric fields to ensure
+    /// architecture-independent serialization across 32-bit and 64-bit platforms.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(&self.data_type.to_le_bytes());
+        bytes.extend_from_slice(&(self.data_size as u64).to_le_bytes());
+        bytes.extend_from_slice(&(self.close_records_stored as u64).to_le_bytes());
+        bytes.extend_from_slice(&(self.records_per_type.len() as u32).to_le_bytes());
+        for (dtype, count) in &self.records_per_type {
+            bytes.extend_from_slice(&dtype.to_le_bytes());
+            bytes.extend_from_slice(&count.to_le_bytes());
+        }
+        bytes.extend_from_slice(&(self.max_records as u64).to_le_bytes());
+        bytes.extend_from_slice(&(self.received_payment_count as u64).to_le_bytes());
+        bytes.extend_from_slice(&self.live_time.to_le_bytes());
+        if let Some(density) = &self.network_density {
+            bytes.push(1); // Option::Some marker
+            bytes.extend_from_slice(density);
+        } else {
+            bytes.push(0); // Option::None marker
+        }
+        if let Some(size) = self.network_size {
+            bytes.push(1); // Option::Some marker
+            bytes.extend_from_slice(&size.to_le_bytes());
+        } else {
+            bytes.push(0); // Option::None marker
+        }
+
+        bytes
+    }
+}

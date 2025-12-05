@@ -23,6 +23,9 @@ pub use self::{
     response::{CmdResponse, QueryResponse},
 };
 
+// Re-export merkle types from ant-evm
+pub use ant_evm::merkle_payments;
+
 use super::NetworkAddress;
 
 use serde::{Deserialize, Serialize};

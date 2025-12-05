@@ -7,11 +7,11 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::OneShotTaskResult;
-use ant_evm::PaymentQuote;
+use ant_evm::{PaymentQuote, merkle_payments::MerklePaymentCandidateNode};
 use ant_protocol::NetworkAddress;
 use libp2p::{
-    kad::{PeerInfo, Quorum, Record},
     PeerId,
+    kad::{PeerInfo, Quorum, Record},
 };
 use std::num::NonZeroUsize;
 
@@ -107,5 +107,16 @@ pub(super) enum NetworkTask {
     ConnectionsMade {
         #[debug(skip)]
         resp: OneShotTaskResult<usize>,
+    },
+    /// Get a Merkle candidate quote from a specific peer
+    /// Used for Merkle batch payment system
+    GetMerkleCandidateQuote {
+        addr: NetworkAddress,
+        peer: PeerInfo,
+        data_type: u32,
+        data_size: usize,
+        merkle_payment_timestamp: u64,
+        #[debug(skip)]
+        resp: OneShotTaskResult<MerklePaymentCandidateNode>,
     },
 }

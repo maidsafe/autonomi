@@ -8,7 +8,7 @@
 
 use crate::networking::{Quorum, RetryStrategy, Strategy};
 pub use ant_bootstrap::{
-    error::Error as BootstrapError, Bootstrap, BootstrapConfig, InitialPeersConfig,
+    Bootstrap, BootstrapConfig, InitialPeersConfig, error::Error as BootstrapError,
 };
 use ant_evm::EvmNetwork;
 use evmlib::contract::payment_vault::MAX_TRANSFERS_PER_TRANSACTION;
@@ -83,12 +83,12 @@ pub static FILE_ENCRYPT_BATCH_SIZE: LazyLock<usize> = LazyLock::new(|| {
 /// Maximum size of a file to be encrypted in memory.
 ///
 /// Can be overridden by the [`IN_MEMORY_ENCRYPTION_MAX_SIZE`] environment variable.
-/// The default is 100MB.
+/// The default is 10MB.
 pub static IN_MEMORY_ENCRYPTION_MAX_SIZE: LazyLock<usize> = LazyLock::new(|| {
     let max_size = std::env::var("IN_MEMORY_ENCRYPTION_MAX_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(50_000_000);
+        .unwrap_or(10_000_000);
     info!(
         "IN_MEMORY_ENCRYPTION_MAX_SIZE (from that threshold, the file will be encrypted in a stream): {}",
         max_size

@@ -910,6 +910,11 @@ impl RecordStore for NodeRecordStore {
                     RecordKind::DataWithPayment(_) => {
                         debug!("Record {record_key:?} with payment shall always be processed.");
                     }
+                    RecordKind::DataWithMerklePayment(_) => {
+                        debug!(
+                            "Record {record_key:?} with Merkle payment shall always be processed."
+                        );
+                    }
                     // Shall not use wildcard, to avoid mis-match during enum update.
                     RecordKind::DataOnly(_) => {
                         // Chunk with existing key do not to be stored again.

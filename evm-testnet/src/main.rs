@@ -83,6 +83,7 @@ struct TestnetData {
     rpc_url: String,
     payment_token_address: String,
     data_payments_address: String,
+    merkle_payments_address: String,
     deployer_wallet_private_key: String,
     tokens_and_gas: Option<(Amount, Amount)>,
 }
@@ -107,6 +108,7 @@ impl TestnetData {
             rpc_url: network.rpc_url().to_string(),
             payment_token_address: network.payment_token_address().to_string(),
             data_payments_address: network.data_payments_address().to_string(),
+            merkle_payments_address: testnet.merkle_payments_address().to_string(),
             deployer_wallet_private_key: testnet.default_wallet_private_key(),
             tokens_and_gas,
         }
@@ -116,6 +118,7 @@ impl TestnetData {
         println!("RPC URL: {}", self.rpc_url);
         println!("Payment token address: {}", self.payment_token_address);
         println!("Data payments address: {}", self.data_payments_address);
+        println!("Merkle payments address: {}", self.merkle_payments_address);
         println!(
             "Deployer wallet private key: {}",
             self.deployer_wallet_private_key

@@ -28,6 +28,7 @@ pub mod contract;
 pub mod cryptography;
 #[cfg(feature = "external-signer")]
 pub mod external_signer;
+pub mod merkle_batch_payment;
 pub mod quoting_metrics;
 mod retry;
 pub mod testnet;
@@ -62,6 +63,9 @@ const ARBITRUM_ONE_DATA_PAYMENTS_ADDRESS: Address =
 const ARBITRUM_SEPOLIA_TEST_DATA_PAYMENTS_ADDRESS: Address =
     address!("7f0842a78f7d4085d975ba91d630d680f91b1295");
 
+const ARBITRUM_SEPOLIA_TEST_MERKLE_PAYMENTS_ADDRESS: Address =
+    address!("0x393F6825C248a29295A7f9Bfa03e475decb44dc0");
+
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CustomNetwork {
@@ -69,16 +73,24 @@ pub struct CustomNetwork {
     pub rpc_url_http: reqwest::Url,
     pub payment_token_address: Address,
     pub data_payments_address: Address,
+    pub merkle_payments_address: Option<Address>,
 }
 
 impl CustomNetwork {
-    pub fn new(rpc_url: &str, payment_token_addr: &str, data_payments_addr: &str) -> Self {
+    pub fn new(
+        rpc_url: &str,
+        payment_token_addr: &str,
+        data_payments_addr: &str,
+        merkle_payments_addr: Option<&str>,
+    ) -> Self {
         Self {
             rpc_url_http: reqwest::Url::parse(rpc_url).expect("Invalid RPC URL"),
             payment_token_address: Address::from_str(payment_token_addr)
                 .expect("Invalid payment token address"),
             data_payments_address: Address::from_str(data_payments_addr)
                 .expect("Invalid chunk payments address"),
+            merkle_payments_address: merkle_payments_addr
+                .map(|addr| Address::from_str(addr).expect("Invalid merkle payments address")),
         }
     }
 }
@@ -120,11 +132,17 @@ impl Network {
         })
     }
 
-    pub fn new_custom(rpc_url: &str, payment_token_addr: &str, chunk_payments_addr: &str) -> Self {
+    pub fn new_custom(
+        rpc_url: &str,
+        payment_token_addr: &str,
+        chunk_payments_addr: &str,
+        merkle_payments_addr: Option<&str>,
+    ) -> Self {
         Self::Custom(CustomNetwork::new(
             rpc_url,
             payment_token_addr,
             chunk_payments_addr,
+            merkle_payments_addr,
         ))
     }
 
@@ -157,6 +175,14 @@ impl Network {
             Network::ArbitrumOne => &ARBITRUM_ONE_DATA_PAYMENTS_ADDRESS,
             Network::ArbitrumSepoliaTest => &ARBITRUM_SEPOLIA_TEST_DATA_PAYMENTS_ADDRESS,
             Network::Custom(custom) => &custom.data_payments_address,
+        }
+    }
+
+    pub fn merkle_payments_address(&self) -> Option<&Address> {
+        match self {
+            Network::ArbitrumOne => None,
+            Network::ArbitrumSepoliaTest => Some(&ARBITRUM_SEPOLIA_TEST_MERKLE_PAYMENTS_ADDRESS),
+            Network::Custom(custom) => custom.merkle_payments_address.as_ref(),
         }
     }
 }

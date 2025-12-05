@@ -3987,7 +3987,7 @@ impl PyEVMNetwork {
     #[staticmethod]
     fn new_custom(rpc_url: &str, payment_token_addr: &str, data_payments_addr: &str) -> Self {
         Self {
-            inner: EVMNetwork::new_custom(rpc_url, payment_token_addr, data_payments_addr),
+            inner: EVMNetwork::new_custom(rpc_url, payment_token_addr, data_payments_addr, None),
         }
     }
 

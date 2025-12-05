@@ -20,6 +20,12 @@ pub enum TransactionError {
     TransactionFailedToSend(String),
     #[error("Transaction failed to confirm in time: {0}")]
     TransactionFailedToConfirm(String, Option<u64>), // Includes the nonce
+    #[error("Transaction reverted with data")]
+    TransactionReverted {
+        message: String,
+        revert_data: Option<alloy::primitives::Bytes>,
+        nonce: Option<u64>,
+    },
 }
 
 /// Execute an async closure that returns a result. Retry on failure.
@@ -108,6 +114,21 @@ where
                         warn!("Transaction failed to confirm: {reason} (nonce: {nonce:?})");
                         previous_nonce = nonce;
                     }
+                    TransactionError::TransactionReverted {
+                        ref message,
+                        ref revert_data,
+                        ref nonce,
+                    } => {
+                        warn!(
+                            "Transaction reverted: {message} (nonce: {nonce:?}, has_data: {})",
+                            revert_data.is_some()
+                        );
+                        // Don't retry on revert - the transaction will keep reverting
+                        error!(
+                            "Transaction {tx_identifier} reverted. Not retrying. Error: {message}"
+                        );
+                        break Err(err);
+                    }
                 }
 
                 retries += 1;
@@ -152,6 +173,19 @@ where
 
     if let Some(max_fee_per_gas) = max_fee_per_gas {
         transaction_request.set_max_fee_per_gas(max_fee_per_gas);
+    }
+
+    // Estimate gas and add 20% buffer to avoid out-of-gas reverts
+    // This is especially important for Arbitrum L2 where gas estimation can be tricky
+    match provider.estimate_gas(transaction_request.clone()).await {
+        Ok(estimated_gas) => {
+            let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
+            debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
+            transaction_request.set_gas_limit(gas_with_buffer);
+        }
+        Err(e) => {
+            warn!("Failed to estimate gas, proceeding without explicit limit: {e}");
+        }
     }
 
     // Retry with the same nonce to replace a stuck transaction
@@ -202,11 +236,48 @@ where
             debug!("{tx_identifier} transaction with hash {tx_hash:?} is successful");
             Ok(tx_hash)
         }
-        Err(err) => Err(TransactionError::TransactionFailedToConfirm(
-            err.to_string(),
-            nonce,
-        )),
+        Err(err) => {
+            // Try to get more details about the revert if available
+            let revert_data = extract_revert_data(&err);
+
+            if revert_data.is_some() {
+                Err(TransactionError::TransactionReverted {
+                    message: err.to_string(),
+                    revert_data,
+                    nonce,
+                })
+            } else {
+                Err(TransactionError::TransactionFailedToConfirm(
+                    err.to_string(),
+                    nonce,
+                ))
+            }
+        }
     }
+}
+
+/// Extract revert data from a PendingTransactionError
+///
+/// When a transaction reverts, we try to extract the revert reason data.
+/// This data can then be decoded by contract-specific error handlers.
+fn extract_revert_data(
+    err: &alloy::providers::PendingTransactionError,
+) -> Option<alloy::primitives::Bytes> {
+    // Try to extract from the error message/data
+    // Alloy encodes revert data in the error, we just need to find it
+    let err_str = err.to_string();
+
+    // Look for revert data in the error string
+    // Format is usually "revert: <hex data>" or contains the error signature
+    if err_str.contains("revert") || err_str.contains("0x") {
+        // Try to extract hex data from the error
+        // This is a simplified approach - in reality the data structure varies
+        debug!("Transaction reverted: {}", err_str);
+    }
+
+    // For now, we'll return None and handle this at a higher level
+    // by using eth_call to simulate the transaction when it fails
+    None
 }
 
 async fn get_max_fee_per_gas<P: Provider<N>, N: Network>(

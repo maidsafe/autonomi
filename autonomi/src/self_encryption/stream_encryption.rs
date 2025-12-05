@@ -14,13 +14,13 @@ use bytes::Bytes;
 use self_encryption::MAX_CHUNK_SIZE;
 use std::path::PathBuf;
 use std::time::Instant;
-use tokio::{sync::oneshot, task::spawn_blocking};
+use tokio::sync::oneshot;
 
 use crate::client::config::{FILE_ENCRYPT_BATCH_SIZE, IN_MEMORY_ENCRYPTION_MAX_SIZE};
 use crate::client::data::DataAddress;
 use crate::utils::process_tasks_with_max_concurrency;
 
-const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 100;
+const STREAM_CHUNK_CHANNEL_CAPACITY: usize = 10;
 
 pub enum EncryptionState {
     InMemory(Vec<Chunk>, DataMapChunk),
@@ -46,6 +46,30 @@ pub struct StreamProgressState {
     chunk_count: usize,
     /// Total number of chunks estimated to be received
     total_estimated_chunks: usize,
+}
+
+/// Creates a data iterator from a file path that reads the file in chunks
+fn create_file_data_iterator(file_path: &str) -> std::io::Result<impl Iterator<Item = Bytes>> {
+    use std::fs::File;
+    use std::io::{BufReader, Read};
+
+    let file = File::open(file_path)?;
+    let mut reader = BufReader::new(file);
+
+    Ok(std::iter::from_fn(move || {
+        let mut buffer = vec![0u8; 8192];
+        match reader.read(&mut buffer) {
+            Ok(0) => None,
+            Ok(n) => {
+                buffer.truncate(n);
+                Some(Bytes::from(buffer))
+            }
+            Err(e) => {
+                error!("Error reading file: {e}");
+                None
+            }
+        }
+    }))
 }
 
 impl EncryptionStream {
@@ -196,42 +220,65 @@ impl EncryptionStream {
         let (datamap_sender, datamap_receiver) = oneshot::channel();
         let file_path_clone = file_path.clone();
 
-        // Spawn a task to handle streaming encryption
-        spawn_blocking(move || {
-            // encrypt the file and send chunks in a chunk channel
-            let path = PathBuf::from(&file_path_clone);
-            let result = self_encryption::streaming_encrypt_from_file(&path, |_xorname, bytes| {
-                let chunk = Chunk::new(bytes);
-                chunk_sender.send(chunk).map_err(|err| {
-                    error!("Error sending chunk: {err:?}");
-                    self_encryption::Error::Io(std::io::Error::other(format!(
-                        "Channel send error in encryption stream for {file_path_clone:?}: {err}"
-                    )))
-                })?;
-                Ok(())
-            });
-
-            // once we're done, send the datamap to the datamap channel
-            match result {
-                Ok(datamap) => {
-                    // Send the DataMap result
-                    // Convert DataMap to bytes and create a chunk
-                    let datamap_bytes = rmp_serde::to_vec(&datamap)
-                        .map_err(|e| error!("Streaming encryption error serializing datamap for {file_path_clone}: {e}"))
-                        .unwrap_or_else(|_| vec![]);
-                    let datamap_chunk = DataMapChunk(Chunk::new(Bytes::from(datamap_bytes)));
-                    if let Err(err) = datamap_sender.send(datamap_chunk) {
-                        error!(
-                            "Streaming encryption error sending datamap for {file_path_clone}: {err}"
-                        );
-                    };
+        // Spawn a thread to handle streaming encryption
+        std::thread::spawn(move || {
+            // Create iterator that reads file in chunks
+            let data_iter = match create_file_data_iterator(&file_path_clone) {
+                Ok(iter) => iter,
+                Err(e) => {
+                    error!("Failed to open file {file_path_clone}: {e}");
+                    return;
                 }
-                Err(err) => {
-                    error!("Streaming encryption failed for {file_path_clone}: {err}");
+            };
+
+            // Use stream_encrypt API
+            let mut stream = match self_encryption::stream_encrypt(file_size, data_iter) {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("Failed to create encryption stream for {file_path_clone}: {e}");
+                    return;
+                }
+            };
+
+            // Process chunks from the stream
+            for chunk_result in stream.chunks() {
+                match chunk_result {
+                    Ok((_hash, content)) => {
+                        let chunk = Chunk::new(content);
+                        if let Err(e) = chunk_sender.send(chunk) {
+                            error!("Error sending chunk for {file_path_clone}: {e}");
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        error!("Error encrypting chunk for {file_path_clone}: {e}");
+                        return;
+                    }
                 }
             }
 
-            // then close the chunk sender to signal completion and datamap availability
+            // Get the datamap after all chunks are processed
+            match stream.datamap() {
+                Some(datamap) => {
+                    // Convert DataMap to bytes and create a chunk
+                    let datamap_bytes = match rmp_serde::to_vec(datamap) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            error!("Error serializing datamap for {file_path_clone}: {e}");
+                            return;
+                        }
+                    };
+                    let datamap_chunk = DataMapChunk(Chunk::new(Bytes::from(datamap_bytes)));
+                    if let Err(e) = datamap_sender.send(datamap_chunk) {
+                        error!("Error sending datamap for {file_path_clone}: {e:?}");
+                    }
+                }
+                None => {
+                    error!("DataMap not available after encryption for {file_path_clone}");
+                }
+            }
+
+            // Close the chunk sender to signal completion
             drop(chunk_sender);
         });
 
@@ -346,7 +393,7 @@ async fn encrypt_file_in_memory(
     let data = Bytes::from(data);
 
     if data.len() < 3 {
-        let err_msg = format!("Skipping file {file_path:?}, as it is smaller than 3 bytes");
+        let err_msg = format!("Cannot encrypt file {file_path:?}, as it is smaller than 3 bytes");
         return Err(err_msg);
     }
 

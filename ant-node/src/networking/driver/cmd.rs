@@ -254,6 +254,12 @@ impl SwarmDriver {
                             );
                             return Err(NetworkError::InCorrectRecordHeader);
                         }
+                        RecordKind::DataWithMerklePayment(_) => {
+                            error!(
+                                "Record {record_key:?} with Merkle payment shall not be stored locally."
+                            );
+                            return Err(NetworkError::InCorrectRecordHeader);
+                        }
                     },
                     Err(err) => {
                         error!("For record {record_key:?}, failed to parse record_header {err:?}");
