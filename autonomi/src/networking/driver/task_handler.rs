@@ -97,6 +97,7 @@ impl TaskHandler {
             || self.get_record_from_peer.contains_key(id)
             || self.get_storage_proofs_from_peer.contains_key(id)
             || self.get_closest_peers_from_peer.contains_key(id)
+            || self.get_merkle_candidate_quote.contains_key(id)
     }
 
     pub fn insert_task(&mut self, id: QueryId, task: NetworkTask) {
@@ -140,6 +141,9 @@ impl TaskHandler {
             }
             NetworkTask::GetClosestPeersFromPeer { resp, .. } => {
                 self.get_closest_peers_from_peer.insert(id, resp);
+            }
+            NetworkTask::GetMerkleCandidateQuote { resp, .. } => {
+                self.get_merkle_candidate_quote.insert(id, resp);
             }
             _ => {}
         }
