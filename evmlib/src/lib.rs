@@ -63,6 +63,9 @@ const ARBITRUM_ONE_DATA_PAYMENTS_ADDRESS: Address =
 const ARBITRUM_SEPOLIA_TEST_DATA_PAYMENTS_ADDRESS: Address =
     address!("7f0842a78f7d4085d975ba91d630d680f91b1295");
 
+const ARBITRUM_SEPOLIA_TEST_MERKLE_PAYMENTS_ADDRESS: Address =
+    address!("0x393F6825C248a29295A7f9Bfa03e475decb44dc0");
+
 #[serde_as]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct CustomNetwork {
@@ -178,7 +181,7 @@ impl Network {
     pub fn merkle_payments_address(&self) -> Option<&Address> {
         match self {
             Network::ArbitrumOne => None,
-            Network::ArbitrumSepoliaTest => None,
+            Network::ArbitrumSepoliaTest => Some(&ARBITRUM_SEPOLIA_TEST_MERKLE_PAYMENTS_ADDRESS),
             Network::Custom(custom) => custom.merkle_payments_address.as_ref(),
         }
     }

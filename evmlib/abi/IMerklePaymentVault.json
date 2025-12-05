@@ -1,378 +1,349 @@
 [
   {
-    "inputs": [
-      {
-        "internalType": "address",
-        "name": "_antToken",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "have",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "need",
-        "type": "uint256"
-      }
-    ],
-    "name": "InsufficientAllowance",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "uint256",
-        "name": "have",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "need",
-        "type": "uint256"
-      }
-    ],
-    "name": "InsufficientBalance",
-    "type": "error"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "poolHash",
-        "type": "bytes32"
-      }
-    ],
-    "name": "PaymentNotFound",
-    "type": "error"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "winnerPoolHash",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint8",
-        "name": "depth",
-        "type": "uint8"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "totalAmount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint64",
-        "name": "merklePaymentTimestamp",
-        "type": "uint64"
-      }
-    ],
-    "name": "MerklePaymentMade",
-    "type": "event"
-  },
-  {
+    "type": "function",
+    "name": "CANDIDATES_PER_POOL",
     "inputs": [],
-    "name": "antToken",
     "outputs": [
       {
-        "internalType": "contract IERC20",
         "name": "",
-        "type": "address"
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "stateMutability": "view"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "winnerPoolHash",
-        "type": "bytes32"
-      }
-    ],
-    "name": "getPaymentInfo",
+    "type": "function",
+    "name": "MAX_MERKLE_DEPTH",
+    "inputs": [],
     "outputs": [
       {
-        "components": [
-          {
-            "internalType": "uint8",
-            "name": "depth",
-            "type": "uint8"
-          },
-          {
-            "internalType": "uint64",
-            "name": "merklePaymentTimestamp",
-            "type": "uint64"
-          },
-          {
-            "components": [
-              {
-                "internalType": "address",
-                "name": "rewardsAddress",
-                "type": "address"
-              },
-              {
-                "internalType": "uint8",
-                "name": "poolIndex",
-                "type": "uint8"
-              }
-            ],
-            "internalType": "struct IMerklePaymentVault.PaidNode[]",
-            "name": "paidNodeAddresses",
-            "type": "tuple[]"
-          }
-        ],
-        "internalType": "struct IMerklePaymentVault.PaymentInfo",
-        "name": "info",
-        "type": "tuple"
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ],
-    "stateMutability": "view",
-    "type": "function"
+    "stateMutability": "view"
   },
   {
-    "inputs": [
+    "type": "function",
+    "name": "antToken",
+    "inputs": [],
+    "outputs": [
       {
-        "internalType": "uint8",
-        "name": "depth",
-        "type": "uint8"
-      },
-      {
-        "components": [
-          {
-            "internalType": "bytes32",
-            "name": "poolHash",
-            "type": "bytes32"
-          },
-          {
-            "components": [
-              {
-                "internalType": "address",
-                "name": "rewardsAddress",
-                "type": "address"
-              },
-              {
-                "components": [
-                  {
-                    "internalType": "uint8",
-                    "name": "dataType",
-                    "type": "uint8"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "dataSize",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "closeRecordsStored",
-                    "type": "uint256"
-                  },
-                  {
-                    "components": [
-                      {
-                        "internalType": "uint8",
-                        "name": "dataType",
-                        "type": "uint8"
-                      },
-                      {
-                        "internalType": "uint256",
-                        "name": "records",
-                        "type": "uint256"
-                      }
-                    ],
-                    "internalType": "struct IMerklePaymentVault.Record[]",
-                    "name": "recordsPerType",
-                    "type": "tuple[]"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "maxRecords",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "receivedPaymentCount",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "liveTime",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "networkDensity",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "networkSize",
-                    "type": "uint256"
-                  }
-                ],
-                "internalType": "struct IMerklePaymentVault.QuotingMetrics",
-                "name": "metrics",
-                "type": "tuple"
-              }
-            ],
-            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
-            "name": "candidates",
-            "type": "tuple[16]"
-          }
-        ],
-        "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
-        "name": "poolCommitments",
-        "type": "tuple[]"
-      },
-      {
-        "internalType": "uint64",
-        "name": "merklePaymentTimestamp",
-        "type": "uint64"
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20"
       }
     ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "estimateMerkleTreeCost",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "totalAmount",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
-        "internalType": "uint8",
         "name": "depth",
-        "type": "uint8"
+        "type": "uint8",
+        "internalType": "uint8"
       },
       {
+        "name": "poolCommitments",
+        "type": "tuple[]",
+        "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
         "components": [
           {
-            "internalType": "bytes32",
             "name": "poolHash",
-            "type": "bytes32"
+            "type": "bytes32",
+            "internalType": "bytes32"
           },
           {
+            "name": "candidates",
+            "type": "tuple[16]",
+            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
             "components": [
               {
-                "internalType": "address",
                 "name": "rewardsAddress",
-                "type": "address"
+                "type": "address",
+                "internalType": "address"
               },
               {
+                "name": "metrics",
+                "type": "tuple",
+                "internalType": "struct IMerklePaymentVault.QuotingMetrics",
                 "components": [
                   {
-                    "internalType": "uint8",
                     "name": "dataType",
-                    "type": "uint8"
+                    "type": "uint8",
+                    "internalType": "enum IMerklePaymentVault.DataType"
                   },
                   {
-                    "internalType": "uint256",
-                    "name": "dataSize",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
                     "name": "closeRecordsStored",
-                    "type": "uint256"
+                    "type": "uint256",
+                    "internalType": "uint256"
                   },
                   {
+                    "name": "recordsPerType",
+                    "type": "tuple[]",
+                    "internalType": "struct IMerklePaymentVault.Record[]",
                     "components": [
                       {
-                        "internalType": "uint8",
                         "name": "dataType",
-                        "type": "uint8"
+                        "type": "uint8",
+                        "internalType": "enum IMerklePaymentVault.DataType"
                       },
                       {
-                        "internalType": "uint256",
                         "name": "records",
-                        "type": "uint256"
+                        "type": "uint256",
+                        "internalType": "uint256"
                       }
-                    ],
-                    "internalType": "struct IMerklePaymentVault.Record[]",
-                    "name": "recordsPerType",
-                    "type": "tuple[]"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "maxRecords",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "receivedPaymentCount",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "liveTime",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "networkDensity",
-                    "type": "uint256"
-                  },
-                  {
-                    "internalType": "uint256",
-                    "name": "networkSize",
-                    "type": "uint256"
+                    ]
                   }
-                ],
-                "internalType": "struct IMerklePaymentVault.QuotingMetrics",
-                "name": "metrics",
-                "type": "tuple"
+                ]
               }
-            ],
-            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
-            "name": "candidates",
-            "type": "tuple[16]"
+            ]
           }
-        ],
-        "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
-        "name": "poolCommitments",
-        "type": "tuple[]"
+        ]
       },
       {
-        "internalType": "uint64",
         "name": "merklePaymentTimestamp",
-        "type": "uint64"
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
-    "name": "payForMerkleTree",
     "outputs": [
       {
-        "internalType": "bytes32",
-        "name": "winnerPoolHash",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
         "name": "totalAmount",
-        "type": "uint256"
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "function"
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPaymentInfo",
+    "inputs": [
+      {
+        "name": "winnerPoolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "info",
+        "type": "tuple",
+        "internalType": "struct IMerklePaymentVault.PaymentInfo",
+        "components": [
+          {
+            "name": "depth",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "merklePaymentTimestamp",
+            "type": "uint64",
+            "internalType": "uint64"
+          },
+          {
+            "name": "paidNodeAddresses",
+            "type": "tuple[]",
+            "internalType": "struct IMerklePaymentVault.PaidNode[]",
+            "components": [
+              {
+                "name": "rewardsAddress",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "poolIndex",
+                "type": "uint8",
+                "internalType": "uint8"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "payForMerkleTree",
+    "inputs": [
+      {
+        "name": "depth",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "poolCommitments",
+        "type": "tuple[]",
+        "internalType": "struct IMerklePaymentVault.PoolCommitment[]",
+        "components": [
+          {
+            "name": "poolHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "candidates",
+            "type": "tuple[16]",
+            "internalType": "struct IMerklePaymentVault.CandidateNode[16]",
+            "components": [
+              {
+                "name": "rewardsAddress",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "metrics",
+                "type": "tuple",
+                "internalType": "struct IMerklePaymentVault.QuotingMetrics",
+                "components": [
+                  {
+                    "name": "dataType",
+                    "type": "uint8",
+                    "internalType": "enum IMerklePaymentVault.DataType"
+                  },
+                  {
+                    "name": "closeRecordsStored",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
+                    "name": "recordsPerType",
+                    "type": "tuple[]",
+                    "internalType": "struct IMerklePaymentVault.Record[]",
+                    "components": [
+                      {
+                        "name": "dataType",
+                        "type": "uint8",
+                        "internalType": "enum IMerklePaymentVault.DataType"
+                      },
+                      {
+                        "name": "records",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "merklePaymentTimestamp",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "winnerPoolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "totalAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "payments",
+    "inputs": [
+      {
+        "name": "winnerPoolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "depth",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "merklePaymentTimestamp",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "DataPaymentMade",
+    "inputs": [
+      {
+        "name": "root",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "treeDepth",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "MerklePaymentMade",
+    "inputs": [
+      {
+        "name": "winnerPoolHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "depth",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "totalAmount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "merklePaymentTimestamp",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AntTokenNull",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BatchLimitExceeded",
+    "inputs": []
   },
   {
     "type": "error",
@@ -392,19 +363,80 @@
   },
   {
     "type": "error",
-    "name": "WrongPoolCount",
+    "name": "GracePeriodNotOver",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidChainlinkPrice",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInputLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidQuoteHash",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidRecipientsCount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidRoot",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidTreeDepth",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PaymentAlreadyExists",
     "inputs": [
       {
-        "name": "expected",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "got",
-        "type": "uint256",
-        "internalType": "uint256"
+        "name": "poolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "PaymentNotFound",
+    "inputs": [
+      {
+        "name": "poolHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PriceFeedNull",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RootAlreadyPaid",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "SequencerDown",
+    "inputs": []
   },
   {
     "type": "error",
@@ -429,17 +461,17 @@
   },
   {
     "type": "error",
-    "name": "TransferFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "PaymentAlreadyExists",
+    "name": "WrongPoolCount",
     "inputs": [
       {
-        "name": "poolHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "expected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "got",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   }
