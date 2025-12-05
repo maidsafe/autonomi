@@ -16,7 +16,7 @@ use autonomi::client::PutError;
 use autonomi::client::analyze::Analysis;
 use autonomi::client::data::DataAddress;
 use autonomi::client::files::{PrivateArchive, PublicArchive};
-use autonomi::client::merkle_payments::{MerkleFilePutError, MerklePaymentOption};
+use autonomi::client::merkle_payments::MerklePaymentOption;
 use autonomi::client::payment::PaymentOption;
 use autonomi::files::UploadError;
 use autonomi::networking::{Quorum, RetryStrategy};
@@ -343,8 +343,8 @@ async fn upload_dir_merkle(
             )))
         })? {
         Some(receipt) => {
-            println!("Using cached Merkle payment for {path_str}");
-            MerklePaymentOption::Receipt(receipt)
+            println!("Continuing upload with cached Merkle payment for {path_str}");
+            MerklePaymentOption::ContinueWithReceipt(wallet, receipt)
         }
         None => MerklePaymentOption::Wallet(wallet),
     };
@@ -354,13 +354,13 @@ async fn upload_dir_merkle(
         .files_put_with_merkle_payment(dir_path.clone(), public, payment_option)
         .await
         .map_err(|e| {
-            // If upload failed but payment succeeded, save the receipt for retry
-            if let MerkleFilePutError::Upload { ref receipt, .. } = e {
+            // Cache receipt if payments were made before failure
+            if let Some(receipt) = &e.receipt {
                 let path_str = dir_path.to_string_lossy().to_string();
                 let res = cached_merkle_payments::save_merkle_payment(&path_str, receipt);
                 println!("Cached Merkle payment to local disk for {path_str}: {res:?}");
             }
-            UploadError::PutError(PutError::MerkleBatch(e))
+            UploadError::PutError(PutError::MerkleBatch(e.error))
         })?;
 
     info!("Merkle payment cost: {amount_paid}");

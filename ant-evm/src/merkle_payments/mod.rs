@@ -21,6 +21,6 @@ pub use merkle_payment::{
     MerklePaymentVerificationError,
 };
 pub use merkle_tree::{
-    BadMerkleProof, MERKLE_PAYMENT_EXPIRATION, MerkleBranch, MerkleTree, MerkleTreeError,
-    MidpointProof, verify_merkle_proof,
+    BadMerkleProof, MAX_LEAVES, MERKLE_PAYMENT_EXPIRATION, MerkleBranch, MerkleTree,
+    MerkleTreeError, MidpointProof, verify_merkle_proof,
 };
