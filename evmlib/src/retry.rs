@@ -114,8 +114,15 @@ where
                         warn!("Transaction failed to confirm: {reason} (nonce: {nonce:?})");
                         previous_nonce = nonce;
                     }
-                    TransactionError::TransactionReverted { ref message, ref revert_data, ref nonce } => {
-                        warn!("Transaction reverted: {message} (nonce: {nonce:?}, has_data: {})", revert_data.is_some());
+                    TransactionError::TransactionReverted {
+                        ref message,
+                        ref revert_data,
+                        ref nonce,
+                    } => {
+                        warn!(
+                            "Transaction reverted: {message} (nonce: {nonce:?}, has_data: {})",
+                            revert_data.is_some()
+                        );
                         // Don't retry on revert - the transaction will keep reverting
                         error!(
                             "Transaction {tx_identifier} reverted. Not retrying. Error: {message}"
