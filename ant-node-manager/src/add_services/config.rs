@@ -295,7 +295,7 @@ mod tests {
             node_ip: None,
             node_port: None,
             relay: false,
-            restart_policy: RestartPolicy::Always { delay_secs: None },
+            restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),
@@ -335,7 +335,7 @@ mod tests {
             node_ip: None,
             node_port: None,
             relay: false,
-            restart_policy: RestartPolicy::Always { delay_secs: None },
+            restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
             rewards_address: RewardsAddress::from_str("0x03B770D9cD32077cC0bF330c13C114a87643B124")
                 .unwrap(),
             rpc_socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080),

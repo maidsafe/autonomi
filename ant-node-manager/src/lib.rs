@@ -121,7 +121,9 @@ impl<T: ServiceStateActions + Send> ServiceManager<T> {
                     "Service process started for {service_name} with PID {}",
                     pid
                 );
-                self.service.on_start(Some(pid), true).await?;
+                self.service
+                    .on_start(Some(pid), true, self.service_control.as_ref())
+                    .await?;
 
                 info!("Service {service_name} has been started successfully");
             }
@@ -511,6 +513,50 @@ pub async fn status_report(
     Ok(())
 }
 
+/// Tier 2 detection: path-based process detection.
+///
+/// This is used as a fallback when PID verification fails, or when there is no stored PID.
+///
+/// It uses the `get_process_pid` method which handles upgrade-related path patterns like "
+/// (deleted)", ".bak", and ".old" suffixes.
+async fn detect_pid_using_path<'a>(
+    service_control: &'a dyn ServiceControl,
+    service: &'a NodeService,
+    service_name: &'a str,
+    full_refresh: bool,
+) -> ant_service_management::Result<()> {
+    debug!("Tier 1 verification has failed. Now attempting to use tier 2 approach...");
+    debug!("Tier 2: using path-based detection for {service_name}");
+    match service_control.get_process_pid(&service.bin_path().await) {
+        Ok(pid) => {
+            debug!("{service_name} found via path-based detection with PID {pid}");
+            service
+                .on_start(Some(pid), full_refresh, service_control)
+                .await?;
+        }
+        Err(_) => {
+            match service.status().await {
+                ServiceStatus::Added => {
+                    // If the service is still at `Added` status, there hasn't been an attempt
+                    // to start it since it was installed. It's useful to keep this status
+                    // rather than setting it to `STOPPED`, so that the user can differentiate.
+                    debug!("{service_name} has not been started since it was installed");
+                }
+                ServiceStatus::Removed => {
+                    // In the case of the service being removed, we want to retain that state
+                    // and not have it marked `STOPPED`.
+                    debug!("{service_name} has been removed");
+                }
+                _ => {
+                    debug!("Failed to detect process for {service_name}; marking it stopped.");
+                    service.on_stop().await?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Refreshes the status of the node registry's services.
 ///
 /// The mechanism is different, depending on whether it's a service-based network or a local
@@ -553,12 +599,10 @@ pub async fn refresh_node_registry(
         None
     };
 
-    // Main processing loop
     for node in node_registry.nodes.read().await.iter() {
         // The `status` command can run before a node is started and therefore before its wallet
         // exists.
         // TODO: remove this as we have no way to know the reward balance of nodes since EVM payments!
-
         node.write().await.reward_balance = None;
 
         let mut rpc_client = RpcClient::from_socket_addr(node.read().await.rpc_socket_addr);
@@ -575,7 +619,9 @@ pub async fn refresh_node_registry(
                 Ok(info) => {
                     let pid = info.pid;
                     debug!("local node {service_name} is running with PID {pid}",);
-                    service.on_start(Some(pid), full_refresh).await?;
+                    service
+                        .on_start(Some(pid), full_refresh, service_control)
+                        .await?;
                 }
                 Err(_) => {
                     debug!("Failed to retrieve PID for local node {service_name}",);
@@ -583,30 +629,42 @@ pub async fn refresh_node_registry(
                 }
             }
         } else {
-            match service_control.get_process_pid(&service.bin_path().await) {
-                Ok(pid) => {
-                    debug!("{service_name} is running with PID {pid}",);
-                    service.on_start(Some(pid), full_refresh).await?;
-                }
-                Err(_) => {
-                    match service.status().await {
-                        ServiceStatus::Added => {
-                            // If the service is still at `Added` status, there hasn't been an attempt
-                            // to start it since it was installed. It's useful to keep this status
-                            // rather than setting it to `STOPPED`, so that the user can differentiate.
-                            debug!("{service_name} has not been started since it was installed");
-                        }
-                        ServiceStatus::Removed => {
-                            // In the case of the service being removed, we want to retain that state
-                            // and not have it marked `STOPPED`.
-                            debug!("{service_name} has been removed");
-                        }
-                        _ => {
-                            debug!("Failed to retrieve PID for {service_name}");
-                            service.on_stop().await?;
-                        }
+            debug!("Using two-tier approach to attempt to find PID for {service_name}");
+            if let Some(stored_pid) = service.pid().await {
+                debug!("Tier 1: attempting to verify stored PID {stored_pid} for {service_name}");
+                match service_control.verify_process_by_pid(stored_pid, "antnode") {
+                    Ok(true) => {
+                        debug!("{service_name} verified via stored PID {stored_pid}");
+                        service
+                            .on_start(Some(stored_pid), full_refresh, service_control)
+                            .await?;
+                    }
+                    Ok(false) => {
+                        debug!(
+                            "Stored PID {stored_pid} verification failed for {service_name} (process not found or wrong name)"
+                        );
+                        detect_pid_using_path(
+                            service_control,
+                            &service,
+                            &service_name,
+                            full_refresh,
+                        )
+                        .await?;
+                    }
+                    Err(e) => {
+                        debug!("Error verifying stored PID {stored_pid} for {service_name}: {e:?}");
+                        detect_pid_using_path(
+                            service_control,
+                            &service,
+                            &service_name,
+                            full_refresh,
+                        )
+                        .await?;
                     }
                 }
+            } else {
+                detect_pid_using_path(service_control, &service, &service_name, full_refresh)
+                    .await?;
             }
         }
 
@@ -706,9 +764,11 @@ mod tests {
             fn get_available_port(&self) -> ServiceControlResult<u16>;
             fn install(&self, install_ctx: ServiceInstallCtx, user_mode: bool) -> ServiceControlResult<()>;
             fn get_process_pid(&self, bin_path: &Path) -> ServiceControlResult<u32>;
+            fn get_process_version(&self, pid: u32) -> ServiceControlResult<Option<String>>;
             fn start(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
             fn stop(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
             fn uninstall(&self, service_name: &str, user_mode: bool) -> ServiceControlResult<()>;
+            fn verify_process_by_pid(&self, pid: u32, expected_name: &str) -> ServiceControlResult<bool>;
             fn wait(&self, delay: u64);
         }
     }
@@ -733,6 +793,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -850,6 +915,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1050,6 +1120,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1248,6 +1323,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -1347,6 +1427,11 @@ mod tests {
             .with(eq(PathBuf::from("/var/antctl/services/antnode1/antnode")))
             .times(1)
             .returning(|_| Ok(1000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(1000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
         mock_rpc_client
             .expect_is_node_connected_to_network()
             .times(1)
@@ -1840,6 +1925,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2091,6 +2181,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2557,6 +2652,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(2000));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(2000))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2721,7 +2821,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -2746,6 +2846,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -2897,7 +3002,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -2922,6 +3027,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3073,7 +3183,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3098,6 +3208,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3239,7 +3354,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3264,6 +3379,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3413,7 +3533,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3438,6 +3558,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3592,7 +3717,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3617,6 +3742,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3766,7 +3896,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3791,6 +3921,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -3946,7 +4081,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -3971,6 +4106,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4113,7 +4253,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4138,6 +4278,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4280,7 +4425,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4305,6 +4450,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4447,7 +4597,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4472,6 +4622,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4614,7 +4769,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4639,6 +4794,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4781,7 +4941,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4806,6 +4966,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -4948,7 +5113,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -4973,6 +5138,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5115,7 +5285,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5140,6 +5310,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5282,7 +5457,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5307,6 +5482,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5450,7 +5630,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5475,6 +5655,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5621,7 +5806,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5646,6 +5831,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5801,7 +5991,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -5826,6 +6016,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -5975,7 +6170,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6000,6 +6195,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
         mock_rpc_client
             .expect_is_node_connected_to_network()
             .times(1)
@@ -6146,7 +6346,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6171,6 +6371,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {
@@ -6707,7 +6912,7 @@ mod tests {
                     environment: None,
                     label: "antnode1".parse()?,
                     program: current_node_bin.to_path_buf(),
-                    restart_policy: RestartPolicy::Always { delay_secs: None },
+                    restart_policy: RestartPolicy::OnSuccess { delay_secs: None },
                     username: Some("ant".to_string()),
                     working_directory: None,
                 }),
@@ -6732,6 +6937,11 @@ mod tests {
             .with(eq(current_node_bin.to_path_buf().clone()))
             .times(1)
             .returning(|_| Ok(100));
+        mock_service_control
+            .expect_get_process_version()
+            .with(eq(100))
+            .times(1)
+            .returning(|_| Ok(Some("0.4.9".to_string())));
 
         mock_rpc_client.expect_node_info().times(1).returning(|| {
             Ok(NodeInfo {

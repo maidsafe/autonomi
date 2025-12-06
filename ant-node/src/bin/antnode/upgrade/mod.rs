@@ -67,10 +67,12 @@ pub fn verify_binary_hash(path: &Path, expected_hash: &str) -> Result<bool> {
 /// Get the upgrade directory path in the user's data directory.
 pub fn get_upgrade_dir_path() -> Result<PathBuf> {
     let upgrade_dir_path = dirs_next::data_dir()
-        .ok_or_else(|| UpgradeError::Io(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Could not determine user data directory"
-        )))?
+        .ok_or_else(|| {
+            UpgradeError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "Could not determine user data directory",
+            ))
+        })?
         .join("autonomi")
         .join("upgrades");
     debug!("Upgrade directory: {}", upgrade_dir_path.display());
@@ -296,7 +298,7 @@ pub fn replace_current_binary(new_binary_path: &Path, expected_hash: &str) -> Re
     #[cfg(not(unix))]
     {
         Err(UpgradeError::BinaryReplacementFailed(
-            "Automatic upgrade is only supported on Unix platforms (Linux/macOS)".to_string()
+            "Automatic upgrade is only supported on Unix platforms (Linux/macOS)".to_string(),
         ))
     }
 }
@@ -382,8 +384,14 @@ pub async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
 
     // Convert first 8 bytes of hash to u64 for modulo operation
     let hash_value = u64::from_be_bytes([
-        hash_result[0], hash_result[1], hash_result[2], hash_result[3],
-        hash_result[4], hash_result[5], hash_result[6], hash_result[7],
+        hash_result[0],
+        hash_result[1],
+        hash_result[2],
+        hash_result[3],
+        hash_result[4],
+        hash_result[5],
+        hash_result[6],
+        hash_result[7],
     ]);
 
     let time_range_hours = std::cmp::min(72, (est_network_size / DEFAULT_NETWORK_SIZE) + 1);

@@ -109,7 +109,12 @@ impl ServiceStateActions for DaemonService {
         self.service_data.write().await.status = ServiceStatus::Removed;
     }
 
-    async fn on_start(&self, pid: Option<u32>, _full_refresh: bool) -> Result<()> {
+    async fn on_start(
+        &self,
+        pid: Option<u32>,
+        _full_refresh: bool,
+        _service_control: &dyn crate::control::ServiceControl,
+    ) -> Result<()> {
         self.service_data.write().await.pid = pid;
         self.service_data.write().await.status = ServiceStatus::Running;
         Ok(())
