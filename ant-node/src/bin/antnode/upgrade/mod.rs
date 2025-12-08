@@ -340,7 +340,10 @@ pub async fn perform_upgrade() -> Result<()> {
 /// Fetch release info from API and cache it
 async fn fetch_and_cache_release_info() -> Result<AutonomiReleaseInfo> {
     let release_repo = <dyn AntReleaseRepoActions>::default_config();
-    let release_info = release_repo.get_latest_autonomi_release_info().await?;
+    let release_info = release_repo
+        .get_autonomi_release_info("rc-2025.11.3.1")
+        .await?;
+    // let release_info = release_repo.get_latest_autonomi_release_info().await?;
 
     if let Err(e) = release_cache::write_cached_release_info(&release_info, None) {
         warn!("Failed to cache release info: {}", e);
