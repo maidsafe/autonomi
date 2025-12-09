@@ -1290,13 +1290,17 @@ impl Node {
         let reached_validity_threshold = legitimate_paid_nodes > validity_threshold;
 
         if !reached_validity_threshold {
-            let error_msg = format!(
-                "Network topology verification failed: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {closest_len} (need >50%)",
+            warn!(
+                "Network topology verification failed for {pretty_key:?}: only {legitimate_paid_nodes}/{paid_nodes_count} paid nodes in closest {closest_len} (need >{validity_threshold})"
             );
-            warn!("{error_msg} for {pretty_key:?}");
-            return Err(PutValidationError::MerklePaymentVerificationFailed {
-                record_key: pretty_key.clone().into_owned(),
-                error: error_msg,
+
+            return Err(PutValidationError::TopologyVerificationFailed {
+                target_address: reward_pool_address.clone(),
+                valid_count: legitimate_paid_nodes,
+                total_paid: paid_nodes_count,
+                closest_count: closest_len,
+                node_peers: closest_peer_ids.into_iter().collect(),
+                paid_peers: paid_peer_ids.to_vec(),
             });
         }
 

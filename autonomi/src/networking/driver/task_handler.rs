@@ -37,7 +37,7 @@ type RecordAndHolders = (Option<Record>, Vec<PeerId>);
 pub(crate) struct TaskHandler {
     closest_peers: HashMap<QueryId, OneShotTaskResult<Vec<PeerInfo>>>,
     put_record_kad: HashMap<QueryId, OneShotTaskResult<()>>,
-    put_record_req: HashMap<OutboundRequestId, OneShotTaskResult<()>>,
+    put_record_req: HashMap<OutboundRequestId, (OneShotTaskResult<()>, PeerInfo)>,
     get_cost: HashMap<
         OutboundRequestId,
         (
@@ -127,8 +127,8 @@ impl TaskHandler {
             } => {
                 self.get_cost.insert(id, (resp, data_type, peer));
             }
-            NetworkTask::PutRecordReq { resp, .. } => {
-                self.put_record_req.insert(id, resp);
+            NetworkTask::PutRecordReq { resp, to, .. } => {
+                self.put_record_req.insert(id, (resp, to));
             }
             NetworkTask::GetVersion { resp, .. } => {
                 self.get_version.insert(id, resp);
@@ -348,12 +348,12 @@ impl TaskHandler {
         id: OutboundRequestId,
         result: Result<(), ant_protocol::error::Error>,
     ) -> Result<(), TaskHandlerError> {
-        let responder = self
-            .put_record_req
-            .remove(&id)
-            .ok_or(TaskHandlerError::UnknownQuery(format!(
-                "OutboundRequestId {id:?}"
-            )))?;
+        let (responder, peer_info) =
+            self.put_record_req
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
 
         match result {
             Ok(()) => {
@@ -369,6 +369,27 @@ impl TaskHandler {
                     .send(Err(NetworkError::OutdatedRecordRejected {
                         counter,
                         expected,
+                    }))
+                    .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
+            }
+            Err(ant_protocol::error::Error::TopologyVerificationFailed {
+                target_address,
+                valid_count,
+                total_paid,
+                closest_count,
+                node_peers,
+                paid_peers,
+            }) => {
+                trace!("OutboundRequestId({id}): put record got topology verification error");
+                responder
+                    .send(Err(NetworkError::TopologyVerificationFailed {
+                        rejecting_node: peer_info.peer_id,
+                        target_address: *target_address,
+                        valid_count,
+                        total_paid,
+                        closest_count,
+                        node_peers,
+                        paid_peers,
                     }))
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
@@ -563,7 +584,7 @@ impl TaskHandler {
             resp.send(Err(NetworkError::GetQuoteError(error.to_string())))
                 .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         // Put record case
-        } else if let Some(responder) = self.put_record_req.remove(&id) {
+        } else if let Some((responder, _peer_info)) = self.put_record_req.remove(&id) {
             trace!(
                 "OutboundRequestId({id}): put record got fatal error from peer {peer:?}: {error:?}"
             );

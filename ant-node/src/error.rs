@@ -89,6 +89,22 @@ pub enum PutValidationError {
         record_key: PrettyPrintRecordKey<'static>,
         error: String,
     },
+
+    #[error("Topology verification failed: only {valid_count}/{total_paid} paid nodes in closest {closest_count}")]
+    TopologyVerificationFailed {
+        /// Target address for distance calculations (reward pool midpoint)
+        target_address: ant_protocol::NetworkAddress,
+        /// Number of paid nodes that were in the node's closest peers
+        valid_count: usize,
+        /// Total number of nodes that were paid
+        total_paid: usize,
+        /// Number of closest peers the node has
+        closest_count: usize,
+        /// The node's view of closest peers to the target
+        node_peers: Vec<PeerId>,
+        /// The peers that were paid (client's view)
+        paid_peers: Vec<PeerId>,
+    },
 }
 
 /// Internal node error.

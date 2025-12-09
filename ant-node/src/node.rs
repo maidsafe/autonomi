@@ -743,6 +743,34 @@ impl Node {
                         ));
                         Err(ProtocolError::OutdatedRecordCounter { counter, expected })
                     }
+                    Err(PutValidationError::TopologyVerificationFailed {
+                        target_address,
+                        valid_count,
+                        total_paid,
+                        closest_count,
+                        node_peers,
+                        paid_peers,
+                    }) => {
+                        node.record_metrics(Marker::RecordRejected(
+                            &key,
+                            &PutValidationError::TopologyVerificationFailed {
+                                target_address: target_address.clone(),
+                                valid_count,
+                                total_paid,
+                                closest_count,
+                                node_peers: node_peers.clone(),
+                                paid_peers: paid_peers.clone(),
+                            },
+                        ));
+                        Err(ProtocolError::TopologyVerificationFailed {
+                            target_address: Box::new(target_address),
+                            valid_count,
+                            total_paid,
+                            closest_count,
+                            node_peers,
+                            paid_peers,
+                        })
+                    }
                     Err(err) => {
                         node.record_metrics(Marker::RecordRejected(&key, &err));
                         Err(ProtocolError::PutRecordFailed(format!("{err:?}")))

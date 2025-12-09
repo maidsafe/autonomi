@@ -55,6 +55,74 @@ pub const CLOSE_GROUP_SIZE_MAJORITY: usize = CLOSE_GROUP_SIZE / 2 + 1;
 const N_CLOSEST_PEERS: NonZeroUsize =
     NonZeroUsize::new(CLOSE_GROUP_SIZE + 2).expect("N_CLOSEST_PEERS must be > 0");
 
+/// Format topology verification error with detailed distance information
+fn format_topology_error(
+    rejecting_node: &PeerId,
+    target_address: &NetworkAddress,
+    valid_count: &usize,
+    total_paid: &usize,
+    closest_count: &usize,
+    node_peers: &[PeerId],
+    paid_peers: &[PeerId],
+) -> String {
+    use std::fmt::Write;
+
+    let mut output = String::new();
+
+    // Summary line
+    writeln!(
+        &mut output,
+        "at node {rejecting_node:?}: only {valid_count}/{total_paid} paid nodes in node's closest {closest_count} (need >50%)"
+    ).ok();
+    writeln!(&mut output, "Target address: {target_address:?}").ok();
+
+    // Node's view (sorted by distance)
+    writeln!(&mut output, "\nNode's closest peers (sorted by distance to target):").ok();
+    let mut node_with_dist: Vec<_> = node_peers
+        .iter()
+        .map(|peer| {
+            let dist = NetworkAddress::from(*peer).distance(target_address);
+            (peer, dist)
+        })
+        .collect();
+    node_with_dist.sort_by(|a, b| a.1.cmp(&b.1));
+    for (i, (peer, dist)) in node_with_dist.iter().enumerate() {
+        let is_paid = paid_peers.contains(peer);
+        writeln!(
+            &mut output,
+            "  [{:2}] {:?} distance(ilog2): {:?} {}",
+            i + 1,
+            peer,
+            dist.ilog2(),
+            if is_paid { "[PAID]" } else { "" }
+        ).ok();
+    }
+
+    // Paid peers (sorted by distance)
+    writeln!(&mut output, "\nPaid peers (sorted by distance to target):").ok();
+    let mut paid_with_dist: Vec<_> = paid_peers
+        .iter()
+        .map(|peer| {
+            let dist = NetworkAddress::from(*peer).distance(target_address);
+            (peer, dist)
+        })
+        .collect();
+    paid_with_dist.sort_by(|a, b| a.1.cmp(&b.1));
+    for (i, (peer, dist)) in paid_with_dist.iter().enumerate() {
+        let in_node_closest = node_peers.contains(peer);
+        writeln!(
+            &mut output,
+            "  [{:2}] {:?} distance(ilog2): {:?} {}",
+            i + 1,
+            peer,
+            dist.ilog2(),
+            if in_node_closest { "[IN NODE'S CLOSEST]" } else { "" }
+        ).ok();
+    }
+
+    output
+}
+
 /// Errors that can occur when interacting with the [`crate::Network`]
 #[derive(Error, Debug, Clone)]
 pub enum NetworkError {
@@ -97,6 +165,23 @@ pub enum NetworkError {
     PutRecordRejected(String),
     #[error("Outdated record rejected: with counter {counter}, expected any above {expected}")]
     OutdatedRecordRejected { counter: u64, expected: u64 },
+    #[error("Network topology verification failed: {}", format_topology_error(.rejecting_node, .target_address, .valid_count, .total_paid, .closest_count, .node_peers, .paid_peers))]
+    TopologyVerificationFailed {
+        /// The node that rejected the record due to topology mismatch
+        rejecting_node: PeerId,
+        /// The target address used for distance calculations (reward pool midpoint)
+        target_address: NetworkAddress,
+        /// Number of paid nodes that were in the node's closest peers
+        valid_count: usize,
+        /// Total number of nodes that were paid
+        total_paid: usize,
+        /// Number of closest peers the node has
+        closest_count: usize,
+        /// The node's view of closest peers to the target
+        node_peers: Vec<PeerId>,
+        /// The peers that were paid (client's view)
+        paid_peers: Vec<PeerId>,
+    },
 
     /// Error getting quote
     #[error("Failed to get quote: {0}")]
