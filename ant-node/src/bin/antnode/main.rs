@@ -40,7 +40,7 @@ use rand::Rng;
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     time::Duration,
 };
@@ -364,8 +364,8 @@ fn main() -> Result<()> {
     rt.shutdown_timeout(Duration::from_secs(2));
 
     // Restart only if we received a restart command.
-    if let Some((retain_peer_id, root_dir, port)) = restart_options {
-        start_new_node_process(retain_peer_id, root_dir, port);
+    if let Some((root_dir, port)) = restart_options {
+        start_new_node_process(root_dir, port);
         println!("A new node process has been started successfully.");
     } else {
         println!("The node process has been stopped.");
@@ -376,7 +376,7 @@ fn main() -> Result<()> {
 
 /// Start a node with the given configuration.
 /// Returns:
-/// - `Ok(Some(_))` if we receive a restart request.
+/// - `Ok(Some((root_dir, port)))` if we receive a restart request.
 /// - `Ok(None)` if we want to shutdown the node.
 /// - `Err(_)` if we want to shutdown the node with an error.
 async fn run_node(
@@ -385,7 +385,7 @@ async fn run_node(
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
     stop_on_upgrade: bool,
-) -> Result<Option<(bool, PathBuf, u16)>> {
+) -> Result<Option<(PathBuf, u16)>> {
     let started_instant = std::time::Instant::now();
 
     reset_critical_failure(log_output_dest);
@@ -510,7 +510,7 @@ You can check your reward balance by running:
         match ctrl_rx.recv().await {
             Some(NodeCtrl::Restart {
                 delay,
-                retain_peer_id,
+                retain_peer_id: _,
             }) => {
                 let root_dir = running_node.root_dir_path();
                 let node_port = running_node.get_node_listening_port().await?;
@@ -520,7 +520,7 @@ You can check your reward balance by running:
                 println!("{msg} Node path: {log_output_dest}");
                 sleep(delay).await;
 
-                return Ok(Some((retain_peer_id, root_dir, node_port)));
+                return Ok(Some((root_dir, node_port)));
             }
             Some(NodeCtrl::Stop { delay, result }) => {
                 let msg = format!("Node is stopping in {delay:?}...");
@@ -652,65 +652,68 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
 }
 
 /// Starts a new process running the binary with the same args as the current process.
-///
-/// Optionally provide the node's root dir and listen port to retain its PeerId.
-fn start_new_node_process(retain_peer_id: bool, root_dir: PathBuf, port: u16) {
-    let current_exe = env::current_exe().expect("could not get current executable path");
-
-    // Retrieve the command-line arguments passed to this process
-    let mut args: Vec<String> = env::args().collect();
-
-    info!("Original args are: {args:?}");
-    info!("Current exe is: {current_exe:?}");
-
-    // Remove `--first` argument. If node is restarted, it is not the first anymore.
-    args.retain(|arg| arg != "--first");
-
-    // Convert current exe path to string, log an error and return if it fails
-    let current_exe = match current_exe.to_str() {
-        Some(s) => {
-            // remove "(deleted)" string from current exe path
-            if s.contains(" (deleted)") {
-                warn!(
-                    "The current executable path contains ' (deleted)', which may lead to unexpected behavior. This has been removed from the exe location string"
-                );
-                s.replace(" (deleted)", "")
-            } else {
-                s.to_string()
-            }
-        }
-        None => {
-            error!("Failed to convert current executable path to string");
-            return;
-        }
+/// Injects `--root-dir` and `--port` at the beginning if they are not already present,
+/// to ensure the node retains its peer ID on restart.
+fn start_new_node_process(root_dir: PathBuf, port: u16) {
+    // The invoked path is the path the process was actually launched with. In the case where a
+    // symlink was used, this path will be different from the current exe path, which is the source
+    // of the symlink, or the canonical path. The invoked path will be preferred for the automatic
+    // upgrading process, to support the use of symlinked binaries.
+    let invoked_path = env::args().next().expect("failed to get invoked path");
+    let current_exe_path = env::current_exe().expect("could not get current executable path");
+    let executable_path = if Path::new(&invoked_path).exists() {
+        invoked_path
+    } else {
+        current_exe_path.to_string_lossy().to_string()
     };
 
-    // Create a new Command instance to run the current executable
-    let mut cmd = Command::new(current_exe);
+    let mut args: Vec<String> = env::args().collect();
+    debug!("Arguments used for the initial process: {args:?}");
 
-    // Set the arguments for the new Command
-    cmd.args(&args[1..]); // Exclude the first argument (binary path)
+    // Handle "(deleted)" suffix
+    let executable_path = if executable_path.contains(" (deleted)") {
+        warn!(
+            "The executable path contains ' (deleted)', which indicates the binary was replaced.
+             This has been removed from the exe location string"
+        );
+        executable_path.replace(" (deleted)", "")
+    } else {
+        executable_path
+    };
 
-    if retain_peer_id {
-        cmd.arg("--root-dir");
-        cmd.arg(format!("{root_dir:?}"));
-        cmd.arg("--port");
-        cmd.arg(port.to_string());
+    // Remove the --first flag: it's only valid for the initial start.
+    args.retain(|arg| arg != "--first");
+
+    let has_root_dir = args.iter().any(|arg| arg == "--root-dir");
+    let has_port = args.iter().any(|arg| arg == "--port");
+    let mut final_args = Vec::new();
+
+    // To have the restarted node retain its peer ID, inject --root-dir and --port at the beginning
+    // if they are not already present.
+    // The arguments must be at the beginning rather than appended at the end because the EVM
+    // options must be at the end.
+    if !has_root_dir {
+        final_args.push("--root-dir".to_string());
+        final_args.push(root_dir.to_string_lossy().to_string());
+    }
+    if !has_port {
+        final_args.push("--port".to_string());
+        final_args.push(port.to_string());
     }
 
-    warn!(
-        "Attempting to start a new process as node process loop has been broken: {:?}",
-        cmd
-    );
-    // Execute the command
+    final_args.extend_from_slice(&args[1..]);
+
+    let mut cmd = Command::new(&executable_path);
+    cmd.args(&final_args);
+
+    info!("A new process will be launched: {cmd:?}");
     let _handle = match cmd.spawn() {
         Ok(status) => status,
         Err(e) => {
             // Do not return an error as this isn't a critical failure.
             // The current node can continue.
-            eprintln!("Failed to execute hard-restart command: {e:?}");
-            error!("Failed to execute hard-restart command: {e:?}");
-
+            eprintln!("Failed to execute restart: {e:?}");
+            error!("Failed to execute restart: {e:?}");
             return;
         }
     };
