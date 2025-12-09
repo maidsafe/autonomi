@@ -95,14 +95,14 @@ fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGua
     let logging_targets = vec![
         // libs
         ("ant_bootstrap".to_string(), Level::INFO),
-        ("ant_build_info".to_string(), Level::TRACE),
-        ("ant_evm".to_string(), Level::TRACE),
-        ("autonomi".to_string(), Level::TRACE),
-        ("evmlib".to_string(), Level::TRACE),
-        ("ant_logging".to_string(), Level::TRACE),
-        ("ant_protocol".to_string(), Level::TRACE),
+        ("ant_build_info".to_string(), Level::INFO),
+        ("ant_evm".to_string(), Level::INFO),
+        ("autonomi".to_string(), Level::INFO),
+        ("evmlib".to_string(), Level::INFO),
+        ("ant_logging".to_string(), Level::INFO),
+        ("ant_protocol".to_string(), Level::INFO),
         // bins
-        ("ant".to_string(), Level::TRACE),
+        ("ant".to_string(), Level::INFO),
     ];
     let mute = opt
         .command

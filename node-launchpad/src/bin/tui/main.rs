@@ -150,12 +150,12 @@ pub fn get_log_builder() -> Result<LogBuilder> {
         .join(format!("launchpad_{timestamp}.log"));
 
     let logging_targets = vec![
-        ("ant_bootstrap".to_string(), Level::DEBUG),
-        ("evmlib".to_string(), Level::DEBUG),
-        ("ant_node_manager".to_string(), Level::DEBUG),
-        ("ant_service_management".to_string(), Level::DEBUG),
-        ("service-manager".to_string(), Level::DEBUG),
-        ("node_launchpad".to_string(), Level::DEBUG),
+        ("ant_bootstrap".to_string(), Level::INFO),
+        ("evmlib".to_string(), Level::INFO),
+        ("ant_node_manager".to_string(), Level::INFO),
+        ("ant_service_management".to_string(), Level::INFO),
+        ("service-manager".to_string(), Level::INFO),
+        ("node_launchpad".to_string(), Level::INFO),
     ];
     let mut log_builder = LogBuilder::new(logging_targets);
     log_builder.output_dest(ant_logging::LogOutputDest::Path(log_path));
