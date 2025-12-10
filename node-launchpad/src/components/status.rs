@@ -54,6 +54,7 @@ use throbber_widgets_tui::{self, Throbber, ThrobberState};
 use tokio::sync::mpsc::UnboundedSender;
 
 pub const NODE_STAT_UPDATE_INTERVAL: Duration = Duration::from_secs(5);
+pub const NODE_REGISTRY_UPDATE_INTERVAL: Duration = Duration::from_secs(180); // 3 minutes
 /// If nat detection fails for more than 3 times, we don't want to waste time running during every node start.
 const MAX_ERRORS_WHILE_RUNNING_NAT_DETECTION: usize = 3;
 
@@ -113,6 +114,8 @@ pub struct Status<'a> {
     storage_mountpoint: PathBuf,
     available_disk_space_gb: usize,
     error_popup: Option<ErrorPopup>,
+    // Node Registry Refresh
+    node_registry_last_update: Instant,
 }
 
 pub struct StatusConfig {
@@ -158,6 +161,7 @@ impl Status<'_> {
             storage_mountpoint: config.storage_mountpoint.clone(),
             available_disk_space_gb: (get_available_space_b(&config.storage_mountpoint)? / GB)
                 as usize,
+            node_registry_last_update: Instant::now(),
         };
 
         // Nodes registry
@@ -247,7 +251,7 @@ impl Status<'_> {
                         };
                     }
 
-                    // Update peers count
+                    item.version = node_item.version.to_string();
                     item.peers = match node_item.connected_peers {
                         Some(ref peers) => peers.len(),
                         None => 0,
@@ -350,6 +354,58 @@ impl Status<'_> {
         }
         Ok(())
     }
+
+    /// Tries to trigger a periodic refresh of the node registry if the last update was more than
+    /// `NODE_REGISTRY_UPDATE_INTERVAL` ago. This detects version changes from auto-upgraded
+    /// antnode processes. The result is sent via the StatusActions::RegistryRefreshed action.
+    fn try_update_node_registry(&mut self, force_update: bool) -> Result<()> {
+        if self.node_registry_last_update.elapsed() > NODE_REGISTRY_UPDATE_INTERVAL || force_update
+        {
+            self.node_registry_last_update = Instant::now();
+            let action_sender = self.get_actions_sender()?;
+
+            tokio::spawn(async move {
+                debug!("Starting periodic node registry refresh");
+
+                // Always reload the registry from disk to avoid using stale in-memory data
+                // This is crucial after operations like reset that modify the registry
+                let node_registry = match NodeRegistryManager::load(&get_node_registry_path().unwrap()).await {
+                    core::result::Result::Ok(registry) => registry,
+                    Err(err) => {
+                        error!("Failed to load node registry for periodic refresh: {err:?}");
+                        return;
+                    }
+                };
+
+                if let Err(err) = ant_node_manager::refresh_node_registry(
+                    node_registry.clone(),
+                    &ServiceController {},
+                    false, // full_refresh
+                    true,  // is_local_network
+                    ant_node_manager::VerbosityLevel::Minimal,
+                )
+                .await
+                {
+                    error!("Failed to refresh node registry: {err:?}");
+                    return;
+                }
+
+                if let Err(err) = node_registry.save().await {
+                    error!("Failed to save node registry after periodic refresh: {err:?}");
+                    return;
+                }
+
+                debug!("Node registry refreshed and saved successfully");
+                let _ =
+                    action_sender.send(Action::StatusActions(StatusActions::RegistryRefreshed {
+                        all_nodes_data: node_registry.get_node_service_data().await,
+                        is_nat_status_determined: node_registry.nat_status.read().await.is_some(),
+                    }));
+            });
+        }
+        Ok(())
+    }
+
     fn get_actions_sender(&self) -> Result<UnboundedSender<Action>> {
         self.action_sender
             .clone()
@@ -450,6 +506,7 @@ impl Component for Status<'_> {
         match action {
             Action::Tick => {
                 self.try_update_node_stats(false)?;
+                self.try_update_node_registry(false)?;
                 let _ = self.update_node_items(None);
             }
             Action::SwitchScene(scene) => match scene {
@@ -530,6 +587,14 @@ impl Component for Status<'_> {
             Action::StatusActions(status_action) => match status_action {
                 StatusActions::NodesStatsObtained(stats) => {
                     self.node_stats = stats;
+                }
+                StatusActions::RegistryRefreshed {
+                    all_nodes_data,
+                    is_nat_status_determined,
+                } => {
+                    debug!("Processing periodic registry refresh results");
+                    self.update_node_state(all_nodes_data, is_nat_status_determined)?;
+                    let _ = self.update_node_items(None);
                 }
                 StatusActions::StartNodesCompleted {
                     service_name,

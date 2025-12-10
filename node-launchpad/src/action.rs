@@ -117,6 +117,10 @@ pub enum StatusActions {
         raw_error: String,
     },
     NodesStatsObtained(NodeStats),
+    RegistryRefreshed {
+        all_nodes_data: Vec<NodeServiceData>,
+        is_nat_status_determined: bool,
+    },
 
     TriggerManageNodes,
     TriggerRewardsAddress,
