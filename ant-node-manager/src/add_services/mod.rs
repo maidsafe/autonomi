@@ -111,12 +111,19 @@ pub async fn add_node(
         } else {
             service_control.get_available_port()?
         };
+
         let metrics_free_port = if let Some(port) = metrics_port {
             Some(port)
         } else if options.enable_metrics_server {
             Some(service_control.get_available_port()?)
         } else {
             None
+        };
+
+        let node_free_port = if let Some(port) = node_port {
+            Some(port)
+        } else {
+            Some(service_control.get_available_port()?)
         };
 
         let rpc_socket_addr = if let Some(addr) = options.rpc_address {
@@ -207,7 +214,7 @@ pub async fn add_node(
             network_id: options.network_id,
             no_upnp: options.no_upnp,
             node_ip: options.node_ip,
-            node_port,
+            node_port: node_free_port,
             relay: options.relay,
             restart_policy: options.restart_policy,
             rewards_address: options.rewards_address,
@@ -247,7 +254,7 @@ pub async fn add_node(
                         metrics_port: metrics_free_port,
                         network_id: options.network_id,
                         node_ip: options.node_ip,
-                        node_port,
+                        node_port: node_free_port,
                         number: node_number,
                         rewards_address: options.rewards_address,
                         reward_balance: None,
