@@ -457,9 +457,9 @@ You can check your reward balance by running:
             let base_delay = 259200;
             let variance = rand::thread_rng().gen_range(-12960..=12960);
             let upgrade_check_delay_secs = (base_delay + variance) as u64;
-            let upgrade_check_wake_time =
-                chrono::Utc::now() + chrono::Duration::seconds(upgrade_check_delay_secs as i64);
             loop {
+                let upgrade_check_wake_time =
+                    chrono::Utc::now() + chrono::Duration::seconds(upgrade_check_delay_secs as i64);
                 info!(
                     "Next upgrade check scheduled for {}",
                     upgrade_check_wake_time
