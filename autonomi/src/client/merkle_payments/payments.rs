@@ -22,6 +22,7 @@ use evmlib::merkle_batch_payment::PoolCommitment;
 use futures::stream::FuturesUnordered;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::{debug, info};
 use xor_name::XorName;
 
 /// Contains the Merkle payment proofs for each XOR address and per-file chunk counts
@@ -116,21 +117,12 @@ impl Client {
             .network
             .get_closest_peers_with_retries(network_addr.clone(), Some(PEERS_TO_QUERY))
             .await?;
-        debug!(
-            "Got {} closest peers for target {target_address:?}",
-            closest_peers.len()
-        );
 
         // Deduplicate peers by peer_id using HashMap (prevents duplicate candidates)
         let unique_peers: HashMap<libp2p::PeerId, libp2p::kad::PeerInfo> = closest_peers
             .into_iter()
             .map(|peer_info| (peer_info.peer_id, peer_info))
             .collect();
-
-        debug!(
-            "After deduplication: {} unique peers for target {target_address:?}",
-            unique_peers.len()
-        );
 
         if unique_peers.len() < CANDIDATES_PER_POOL {
             return Err(MerklePaymentError::InsufficientCandidates {

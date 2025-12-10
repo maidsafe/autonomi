@@ -20,6 +20,7 @@ use ant_protocol::storage::DataTypes;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use thiserror::Error;
+use tracing::{debug, info};
 use xor_name::XorName;
 
 /// Payment option for Merkle batch uploads
