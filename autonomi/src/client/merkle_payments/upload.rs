@@ -20,6 +20,7 @@ use ant_protocol::storage::{Chunk, ChunkAddress, DataTypes, RecordKind, try_seri
 use libp2p::kad::Record;
 use std::path::PathBuf;
 use thiserror::Error;
+use tracing::debug;
 use xor_name::XorName;
 
 #[derive(Debug, Error)]
@@ -179,8 +180,6 @@ impl Client {
             .network
             .get_closest_peers_with_retries(network_addr.clone(), None)
             .await?;
-
-        debug!("Storing record: {record:?} to {:?}", storing_nodes);
 
         self.network
             .put_record_with_retries(record, storing_nodes.clone(), &self.config.chunks)
