@@ -389,7 +389,7 @@ impl Network {
         Ok(closest_peers)
     }
 
-    /// Returns the closest peers with multi-stage verification.
+    /// Returns the closest peers with multi-stage verification based on majority knowledge.
     /// This function verifies the candidates by:
     /// 1. Getting N candidates via Kademlia
     /// 2. Querying each candidate for their view of closest peers
@@ -399,7 +399,7 @@ impl Network {
     /// This is more accurate but slower than `get_closest_peers` due to the additional verification round-trips.
     /// Use this for critical operations like Merkle payment topology verification.
     #[allow(dead_code)]
-    pub(crate) async fn get_closest_peers_verified(
+    pub(crate) async fn get_closest_peers_with_majority_knowledge(
         &self,
         key: &NetworkAddress,
     ) -> Result<Vec<(PeerId, Addresses)>> {
