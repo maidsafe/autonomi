@@ -196,7 +196,7 @@ impl Client {
         // Encrypt files to collect ALL XorNames
         #[cfg(feature = "loud")]
         println!("Encrypting files a first time to create the Merkle Tree(s)...");
-        let (all_xor_names, file_chunk_counts) = self
+        let (mut all_xor_names, file_chunk_counts) = self
             .collect_xornames_from_dir(path.clone(), is_public)
             .await
             .map_err(|e| MerkleUploadErrorWithReceipt::encryption(receipt.clone(), e))?;
@@ -206,12 +206,13 @@ impl Client {
         let total_chunks = all_xor_names.len();
         info!("Collected {total_chunks} XorNames from {total_files} files");
 
-        // Split into batches of MAX_LEAVES
-        let batches: Vec<Vec<XorName>> = all_xor_names
-            .chunks(MAX_LEAVES)
-            .map(|c| c.to_vec())
-            .collect();
-        let num_batches = batches.len();
+        // Split into batches of MAX_LEAVES - using drain to avoid cloning
+        let num_batches = total_chunks.div_ceil(MAX_LEAVES);
+        let mut batches: Vec<Vec<XorName>> = Vec::with_capacity(num_batches);
+        while !all_xor_names.is_empty() {
+            let drain_count = std::cmp::min(MAX_LEAVES, all_xor_names.len());
+            batches.push(all_xor_names.drain(..drain_count).collect());
+        }
         info!("Split into {num_batches} Merkle Tree(s) of up to {MAX_LEAVES} chunks each");
 
         // Start upload streams
