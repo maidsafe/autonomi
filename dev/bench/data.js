@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765470224821,
+  "lastUpdate": 1765470226167,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11791,6 +11791,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/00412c6734cd70dd7beae6877cbf5c0ce89b61c1"
         },
         "date": 1765465902244,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "89ac72edc4493330751a762a7089f9d7676ebb1f",
+          "message": "Merge pull request #3354 from grumbach/merkle_payments_no_cli\n\nMerkle payments Infrastructure (without CLI)",
+          "timestamp": "2025-12-11T16:00:36Z",
+          "tree_id": "990ed6ee0898f0f0f5f69eb39c3f2f3bd6cde14f",
+          "url": "https://github.com/maidsafe/autonomi/commit/89ac72edc4493330751a762a7089f9d7676ebb1f"
+        },
+        "date": 1765470225831,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
