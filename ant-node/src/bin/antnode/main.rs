@@ -16,6 +16,7 @@ extern crate tracing;
 mod log;
 mod rpc_service;
 mod subcommands;
+#[cfg(unix)]
 mod upgrade;
 
 use crate::log::{reset_critical_failure, set_critical_failure};
@@ -36,6 +37,7 @@ use clap::{Parser, command};
 use color_eyre::{Result, eyre::eyre};
 use const_hex::traits::FromHex;
 use libp2p::PeerId;
+#[cfg(unix)]
 use rand::Rng;
 use std::{
     env,
@@ -384,7 +386,7 @@ async fn run_node(
     rpc: Option<SocketAddr>,
     log_output_dest: &str,
     log_reload_handle: ReloadHandle,
-    stop_on_upgrade: bool,
+    #[cfg_attr(not(unix), allow(unused_variables))] stop_on_upgrade: bool,
 ) -> Result<Option<(PathBuf, u16)>> {
     let started_instant = std::time::Instant::now();
 

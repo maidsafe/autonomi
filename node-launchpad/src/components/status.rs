@@ -369,13 +369,14 @@ impl Status<'_> {
 
                 // Always reload the registry from disk to avoid using stale in-memory data
                 // This is crucial after operations like reset that modify the registry
-                let node_registry = match NodeRegistryManager::load(&get_node_registry_path().unwrap()).await {
-                    core::result::Result::Ok(registry) => registry,
-                    Err(err) => {
-                        error!("Failed to load node registry for periodic refresh: {err:?}");
-                        return;
-                    }
-                };
+                let node_registry =
+                    match NodeRegistryManager::load(&get_node_registry_path().unwrap()).await {
+                        core::result::Result::Ok(registry) => registry,
+                        Err(err) => {
+                            error!("Failed to load node registry for periodic refresh: {err:?}");
+                            return;
+                        }
+                    };
 
                 if let Err(err) = ant_node_manager::refresh_node_registry(
                     node_registry.clone(),
