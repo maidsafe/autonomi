@@ -438,7 +438,21 @@ impl SwarmDriver {
             }
             LocalSwarmCmd::AddPeerToBlockList { peer_id } => {
                 cmd_string = "AddPeerToBlockList";
-                let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
+                // Only add to cache if not already present (avoid duplicates)
+                if !self.blocklist_cache.contains(&peer_id) {
+                    // Track blocked peer in FIFO cache; if cache is full, unblock the oldest peer first
+                    if let Some(evicted_peer) = self.blocklist_cache.push_with_eviction(peer_id) {
+                        let _ = self
+                            .swarm
+                            .behaviour_mut()
+                            .blocklist
+                            .unblock_peer(evicted_peer);
+                        trace!(
+                            "Blocklist full, unblocked oldest peer {evicted_peer:?} to make room for {peer_id:?}"
+                        );
+                    }
+                    let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
+                }
             }
             LocalSwarmCmd::RecordNodeIssue { peer_id, issue } => {
                 cmd_string = "RecordNodeIssues";

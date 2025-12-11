@@ -32,6 +32,17 @@ impl<T> CircularVec<T> {
         self.inner.push_back(item);
     }
 
+    /// Pushes an item into the CircularVec and returns the evicted item if the buffer was full.
+    pub(crate) fn push_with_eviction(&mut self, item: T) -> Option<T> {
+        let evicted = if self.inner.len() == self.inner.capacity() {
+            self.inner.pop_front()
+        } else {
+            None
+        };
+        self.inner.push_back(item);
+        evicted
+    }
+
     /// Checks if the CircularVec contains the given item.
     pub(crate) fn contains(&self, item: &T) -> bool
     where
@@ -57,6 +68,31 @@ mod tests {
         assert!(!cv.contains(&1));
         assert!(cv.contains(&2));
         assert!(cv.contains(&3));
+
+        assert!(cv.inner.len() == 2);
+    }
+
+    #[test]
+    fn test_push_with_eviction() {
+        let mut cv = CircularVec::new(2);
+
+        // No eviction when not full
+        assert_eq!(cv.push_with_eviction(1), None);
+        assert_eq!(cv.push_with_eviction(2), None);
+        assert!(cv.contains(&1));
+        assert!(cv.contains(&2));
+
+        // Eviction when full - oldest item (1) should be returned
+        assert_eq!(cv.push_with_eviction(3), Some(1));
+        assert!(!cv.contains(&1));
+        assert!(cv.contains(&2));
+        assert!(cv.contains(&3));
+
+        // Next eviction returns 2
+        assert_eq!(cv.push_with_eviction(4), Some(2));
+        assert!(!cv.contains(&2));
+        assert!(cv.contains(&3));
+        assert!(cv.contains(&4));
 
         assert!(cv.inner.len() == 2);
     }

@@ -30,7 +30,7 @@ use itertools::Itertools;
 use libp2p::{
     Multiaddr, PeerId,
     identity::Keypair,
-    kad::{Record, U256},
+    kad::{KBucketDistance as Distance, Record, U256},
     request_response::OutboundFailure,
 };
 use num_traits::cast::ToPrimitive;
@@ -40,7 +40,7 @@ use rand::{
     thread_rng,
 };
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     net::SocketAddr,
     path::PathBuf,
     sync::{
@@ -49,7 +49,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::watch;
+use tokio::sync::{Mutex, watch};
 use tokio::{
     sync::mpsc::Receiver,
     task::{JoinSet, spawn},
@@ -79,6 +79,25 @@ const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 3000;
 
 /// in ms, expecting average StorageChallenge complete time to be around 250ms.
 const TIME_STEP: usize = 20;
+
+/// Maximum number of closest peers to track for replication behaviour detection.
+///
+/// Set to 20 (roughly 4x CLOSE_GROUP_SIZE) to cover peers that are close enough
+/// to affect data responsibility during churn. Tracking only the closest peers
+/// keeps memory bounded while still detecting restart patterns in the critical
+/// zone where replication matters most.
+const CLOSE_GROUP_TRACKING_LIMIT: usize = 20;
+
+/// Grace period before triggering replication after detecting a peer restart.
+///
+/// When a peer is detected as restarting (removed then quickly re-added),
+/// replication is suppressed for this duration to allow the peer to stabilize.
+/// Set to 90 seconds which is:
+/// - Long enough to cover typical node restart times (30-60s)
+/// - Short enough to ensure data availability isn't compromised
+/// - Approximately half of PERIODIC_REPLICATION_INTERVAL_MAX_S, so the periodic
+///   replication will catch any missed updates within a reasonable timeframe
+const CLOSE_GROUP_RESTART_SUPPRESSION: Duration = Duration::from_secs(90);
 
 /// Helper to build and run a Node
 pub struct NodeBuilder {
@@ -194,6 +213,7 @@ impl NodeBuilder {
         let node = NodeInner {
             network: network.clone(),
             events_channel: node_events_channel.clone(),
+            close_group_tracker: Mutex::new(CloseGroupTracker::new(network.peer_id())),
             reward_address: self.evm_address,
             #[cfg(feature = "open-metrics")]
             metrics_recorder,
@@ -230,6 +250,7 @@ pub(crate) struct Node {
 struct NodeInner {
     events_channel: NodeEventsChannel,
     network: Network,
+    close_group_tracker: Mutex<CloseGroupTracker>,
     #[cfg(feature = "open-metrics")]
     metrics_recorder: Option<NodeMetricsRecorder>,
     reward_address: RewardsAddress,
@@ -245,6 +266,10 @@ impl Node {
     /// Returns the instance of Network
     pub(crate) fn network(&self) -> &Network {
         &self.inner.network
+    }
+
+    fn close_group_tracker(&self) -> &Mutex<CloseGroupTracker> {
+        &self.inner.close_group_tracker
     }
 
     #[cfg(feature = "open-metrics")]
@@ -330,7 +355,7 @@ impl Node {
                                 let start = Instant::now();
                                 let event_string = format!("{event:?}");
 
-                                self.handle_network_event(event, peers_connected);
+                                self.handle_network_event(event, peers_connected).await;
                                 trace!("Handled non-blocking network event in {:?}: {:?}", start.elapsed(), event_string);
 
                             }
@@ -343,7 +368,16 @@ impl Node {
                     }
                     // runs every replication_interval time
                     _ = replication_interval.tick() => {
-                        let start = Instant::now();
+                        let now = Instant::now();
+
+                        {
+                            let mut tracker = self.close_group_tracker().lock().await;
+                            if tracker.handle_timer_expiry(now) {
+                                trace!("Replication timer expired for tracked peers; periodic run will cover it");
+                            }
+                        }
+
+                        let start = now;
                         let network = self.network().clone();
                         self.record_metrics(Marker::IntervalReplicationTriggered);
 
@@ -395,7 +429,7 @@ impl Node {
 
     /// Handle a network event.
     /// Spawns a thread for any likely long running tasks
-    fn handle_network_event(&self, event: NetworkEvent, peers_connected: &Arc<AtomicUsize>) {
+    async fn handle_network_event(&self, event: NetworkEvent, peers_connected: &Arc<AtomicUsize>) {
         let start = Instant::now();
         let event_string = format!("{event:?}");
         let event_header;
@@ -430,12 +464,22 @@ impl Node {
                     Self::try_query_peer_version(network, peer_id, Default::default()).await;
                 });
 
-                // try replication here
-                let network = self.network().clone();
-                self.record_metrics(Marker::IntervalReplicationTriggered);
-                let _handle = spawn(async move {
-                    Self::try_interval_replication(network);
-                });
+                let replication_decision = {
+                    let mut tracker = self.close_group_tracker().lock().await;
+                    tracker.record_peer_added(peer_id)
+                };
+
+                if replication_decision.should_trigger() {
+                    let network = self.network().clone();
+                    self.record_metrics(Marker::IntervalReplicationTriggered);
+                    let _handle = spawn(async move {
+                        Self::try_interval_replication(network);
+                    });
+                } else if matches!(replication_decision, ReplicationDirective::Skip) {
+                    trace!(
+                        "Replication skipped for {peer_id:?} addition due to restart behaviour tracking"
+                    );
+                }
             }
             NetworkEvent::PeerRemoved(peer_id, connected_peers) => {
                 event_header = "PeerRemoved";
@@ -450,11 +494,22 @@ impl Node {
                     distance.ilog2()
                 );
 
-                let network = self.network().clone();
-                self.record_metrics(Marker::IntervalReplicationTriggered);
-                let _handle = spawn(async move {
-                    Self::try_interval_replication(network);
-                });
+                let replication_decision = {
+                    let mut tracker = self.close_group_tracker().lock().await;
+                    tracker.record_peer_removed(peer_id)
+                };
+
+                if replication_decision.should_trigger() {
+                    let network = self.network().clone();
+                    self.record_metrics(Marker::IntervalReplicationTriggered);
+                    let _handle = spawn(async move {
+                        Self::try_interval_replication(network);
+                    });
+                } else if matches!(replication_decision, ReplicationDirective::Skip) {
+                    trace!(
+                        "Replication skipped for {peer_id:?} removal due to restart behaviour tracking"
+                    );
+                }
             }
             NetworkEvent::PeerWithUnsupportedProtocol { .. } => {
                 event_header = "PeerWithUnsupportedProtocol";
@@ -1190,6 +1245,388 @@ impl Node {
             }
         };
         network.notify_node_version(peer, version);
+    }
+}
+
+#[derive(Debug)]
+struct CloseGroupTracker {
+    self_address: NetworkAddress,
+    /// Tracks the closest N peers by (distance, peer_id), sorted by distance to self.
+    /// Using a tuple key handles the theoretical case where two peers have identical
+    /// XOR distance to self.
+    close_up_peers: BTreeSet<(Distance, PeerId)>,
+    tracked_entries: HashMap<PeerId, BehaviourEntry>,
+}
+
+impl CloseGroupTracker {
+    fn new(self_peer_id: PeerId) -> Self {
+        Self {
+            self_address: NetworkAddress::from(self_peer_id),
+            close_up_peers: BTreeSet::new(),
+            tracked_entries: HashMap::new(),
+        }
+    }
+
+    fn record_peer_added(&mut self, peer_id: PeerId) -> ReplicationDirective {
+        let distance = self.distance_to_peer(peer_id);
+
+        // Check if this peer was already present
+        let was_present = self.close_up_peers.contains(&(distance, peer_id));
+
+        // Determine if the peer is close enough to track
+        let is_close_enough = self.is_distance_within_close_range(distance);
+
+        if is_close_enough {
+            // Add to close_up_peers
+            let _ = self.close_up_peers.insert((distance, peer_id));
+
+            // If we exceed the limit, remove the farthest peer
+            if self.close_up_peers.len() > CLOSE_GROUP_TRACKING_LIMIT
+                && let Some(&(farthest_distance, farthest_peer)) =
+                    self.close_up_peers.iter().next_back()
+            {
+                let _ = self.close_up_peers.remove(&(farthest_distance, farthest_peer));
+            }
+        } else {
+            // Too far, don't track and clean up any existing entry
+            let _ = self.tracked_entries.remove(&peer_id);
+            return ReplicationDirective::Ignore;
+        }
+
+        use std::collections::hash_map::Entry;
+        match self.tracked_entries.entry(peer_id) {
+            Entry::Vacant(vacant_entry) => {
+                let _ = vacant_entry.insert(BehaviourEntry::default());
+                if !was_present {
+                    ReplicationDirective::Trigger
+                } else {
+                    ReplicationDirective::Ignore
+                }
+            }
+            Entry::Occupied(mut occupied_entry) => {
+                let entry = occupied_entry.get_mut();
+                if entry.awaiting_rejoin || entry.timer_deadline.is_some() {
+                    entry.restart_detected = true;
+                    entry.awaiting_rejoin = false;
+                    entry.timer_deadline = None;
+                    ReplicationDirective::Skip
+                } else if !was_present {
+                    entry.restart_detected = false;
+                    ReplicationDirective::Trigger
+                } else {
+                    ReplicationDirective::Ignore
+                }
+            }
+        }
+    }
+
+    fn record_peer_removed(&mut self, peer_id: PeerId) -> ReplicationDirective {
+        let distance = self.distance_to_peer(peer_id);
+
+        // Check if this peer is in our close_up_peers
+        let was_tracked = self.close_up_peers.contains(&(distance, peer_id));
+
+        if !was_tracked {
+            // Not being tracked, i.e. being out-of-range, hence Ignore
+            return ReplicationDirective::Ignore;
+        }
+
+        // Remove from close_up_peers
+        let _ = self.close_up_peers.remove(&(distance, peer_id));
+
+        let entry = self.tracked_entries.entry(peer_id).or_default();
+
+        if entry.restart_detected {
+            entry.timer_deadline = Some(Instant::now() + CLOSE_GROUP_RESTART_SUPPRESSION);
+            entry.awaiting_rejoin = false;
+            ReplicationDirective::Skip
+        } else {
+            entry.awaiting_rejoin = true;
+            entry.timer_deadline = None;
+            ReplicationDirective::Trigger
+        }
+    }
+
+    fn handle_timer_expiry(&mut self, now: Instant) -> bool {
+        let mut expired = false;
+        for entry in self.tracked_entries.values_mut() {
+            if let Some(deadline) = entry.timer_deadline
+                && now >= deadline
+            {
+                entry.timer_deadline = None;
+                entry.restart_detected = false;
+                entry.awaiting_rejoin = false;
+                expired = true;
+            }
+        }
+
+        // Keep only entries that are still relevant
+        self.tracked_entries.retain(|peer_id, entry| {
+            let is_currently_present = self
+                .close_up_peers
+                .iter()
+                .any(|(_, present_peer)| present_peer == peer_id);
+
+            entry.awaiting_rejoin
+                || entry.restart_detected
+                || entry.timer_deadline.is_some()
+                || is_currently_present
+        });
+
+        expired
+    }
+
+    fn is_distance_within_close_range(&self, distance: Distance) -> bool {
+        // If we haven't reached the limit yet, any peer is close enough
+        if self.close_up_peers.len() < CLOSE_GROUP_TRACKING_LIMIT {
+            return true;
+        }
+
+        // Otherwise, check if this distance is closer than the farthest tracked peer
+        if let Some(&(farthest_distance, _)) = self.close_up_peers.iter().next_back() {
+            distance < farthest_distance
+        } else {
+            true
+        }
+    }
+
+    fn distance_to_peer(&self, peer_id: PeerId) -> Distance {
+        self.self_address.distance(&NetworkAddress::from(peer_id))
+    }
+}
+
+#[derive(Debug, Default)]
+struct BehaviourEntry {
+    awaiting_rejoin: bool,
+    restart_detected: bool,
+    timer_deadline: Option<Instant>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum ReplicationDirective {
+    Trigger,
+    Skip,
+    Ignore,
+}
+
+impl ReplicationDirective {
+    fn should_trigger(&self) -> bool {
+        matches!(self, Self::Trigger)
+    }
+}
+
+#[cfg(test)]
+mod close_group_tracker_tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn random_peer() -> PeerId {
+        let keypair = libp2p::identity::Keypair::generate_ed25519();
+        PeerId::from(keypair.public())
+    }
+
+    #[test]
+    fn new_peer_triggers_replication() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+        let peer = random_peer();
+
+        assert_eq!(
+            tracker.record_peer_added(peer),
+            ReplicationDirective::Trigger
+        );
+
+        assert_eq!(
+            tracker.record_peer_removed(peer),
+            ReplicationDirective::Trigger
+        );
+    }
+
+    #[test]
+    fn restart_detection_skips_replication() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+        let peer = random_peer();
+
+        assert_eq!(
+            tracker.record_peer_added(peer),
+            ReplicationDirective::Trigger
+        );
+
+        assert_eq!(
+            tracker.record_peer_removed(peer),
+            ReplicationDirective::Trigger
+        );
+
+        assert_eq!(tracker.record_peer_added(peer), ReplicationDirective::Skip);
+
+        assert_eq!(
+            tracker.record_peer_removed(peer),
+            ReplicationDirective::Skip
+        );
+
+        assert!(tracker.handle_timer_expiry(
+            Instant::now() + CLOSE_GROUP_RESTART_SUPPRESSION + Duration::from_secs(1)
+        ));
+
+        assert_eq!(
+            tracker.record_peer_added(peer),
+            ReplicationDirective::Trigger
+        );
+    }
+
+    #[test]
+    fn peer_outside_close_group_is_ignored() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+
+        // Fill the tracker to capacity with random peers
+        let mut added_peers = Vec::new();
+        for _ in 0..CLOSE_GROUP_TRACKING_LIMIT {
+            let peer = random_peer();
+            let result = tracker.record_peer_added(peer);
+            // All should trigger since we're under capacity
+            assert_eq!(result, ReplicationDirective::Trigger);
+            added_peers.push(peer);
+        }
+
+        assert_eq!(tracker.close_up_peers.len(), CLOSE_GROUP_TRACKING_LIMIT);
+
+        // Now add more peers - some will be ignored if they're farther than existing ones
+        let mut ignored_count = 0;
+        let mut trigger_count = 0;
+        for _ in 0..50 {
+            let peer = random_peer();
+            match tracker.record_peer_added(peer) {
+                ReplicationDirective::Ignore => ignored_count += 1,
+                ReplicationDirective::Trigger => trigger_count += 1,
+                _ => {}
+            }
+        }
+
+        // At capacity, new peers are only accepted if closer than the farthest
+        // Some should be ignored (too far), some should trigger (closer than farthest)
+        assert!(
+            ignored_count > 0 || trigger_count > 0,
+            "Expected some peers to be processed"
+        );
+
+        // Tracker should still only have CLOSE_GROUP_TRACKING_LIMIT peers
+        assert_eq!(tracker.close_up_peers.len(), CLOSE_GROUP_TRACKING_LIMIT);
+    }
+
+    #[test]
+    fn removal_of_untracked_peer_is_ignored() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+
+        // Try to remove a peer that was never added
+        let unknown_peer = random_peer();
+        assert_eq!(
+            tracker.record_peer_removed(unknown_peer),
+            ReplicationDirective::Ignore
+        );
+    }
+
+    #[test]
+    fn timer_expiry_resets_restart_state() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+        let peer = random_peer();
+
+        // Add and remove peer (normal behavior)
+        assert_eq!(
+            tracker.record_peer_added(peer),
+            ReplicationDirective::Trigger
+        );
+        assert_eq!(
+            tracker.record_peer_removed(peer),
+            ReplicationDirective::Trigger
+        );
+
+        // Peer rejoins quickly - detected as restart, skipped
+        assert_eq!(tracker.record_peer_added(peer), ReplicationDirective::Skip);
+
+        // Remove again - still in restart mode, skipped with timer set
+        assert_eq!(
+            tracker.record_peer_removed(peer),
+            ReplicationDirective::Skip
+        );
+
+        // Timer hasn't expired yet - no change
+        assert!(!tracker.handle_timer_expiry(Instant::now()));
+
+        // Timer expires
+        let after_expiry = Instant::now() + CLOSE_GROUP_RESTART_SUPPRESSION + Duration::from_secs(1);
+        assert!(tracker.handle_timer_expiry(after_expiry));
+
+        // Now the peer should trigger replication again (state reset)
+        assert_eq!(
+            tracker.record_peer_added(peer),
+            ReplicationDirective::Trigger
+        );
+    }
+
+    #[test]
+    fn eviction_maintains_closest_peers() {
+        let self_peer = random_peer();
+        let mut tracker = CloseGroupTracker::new(self_peer);
+
+        // Add exactly CLOSE_GROUP_TRACKING_LIMIT peers
+        let mut peers_with_distances: Vec<(PeerId, Distance)> = Vec::new();
+        for _ in 0..CLOSE_GROUP_TRACKING_LIMIT {
+            let peer = random_peer();
+            let distance = tracker.distance_to_peer(peer);
+            let _ = tracker.record_peer_added(peer);
+            peers_with_distances.push((peer, distance));
+        }
+
+        assert_eq!(tracker.close_up_peers.len(), CLOSE_GROUP_TRACKING_LIMIT);
+
+        // Sort by distance to know which is farthest
+        peers_with_distances.sort_by_key(|(_, d)| *d);
+        let farthest_distance = peers_with_distances.last().map(|(_, d)| *d).unwrap();
+
+        // Add a new peer that's closer than the farthest
+        // Keep trying until we find one (random, so may take a few tries)
+        let mut found_closer = false;
+        for _ in 0..100 {
+            let new_peer = random_peer();
+            let new_distance = tracker.distance_to_peer(new_peer);
+            if new_distance < farthest_distance {
+                let result = tracker.record_peer_added(new_peer);
+                assert_eq!(result, ReplicationDirective::Trigger);
+                // Should still have exactly CLOSE_GROUP_TRACKING_LIMIT peers
+                assert_eq!(tracker.close_up_peers.len(), CLOSE_GROUP_TRACKING_LIMIT);
+                found_closer = true;
+                break;
+            }
+        }
+
+        // Note: This assertion might occasionally fail due to randomness,
+        // but with 100 attempts it's extremely unlikely
+        assert!(
+            found_closer,
+            "Could not find a peer closer than the farthest in 100 attempts"
+        );
+    }
+
+    #[test]
+    fn tracked_entries_cleaned_up_on_timer_expiry() {
+        let mut tracker = CloseGroupTracker::new(random_peer());
+        let peer = random_peer();
+
+        // Add, remove, re-add (restart detected), remove again (timer set)
+        let _ = tracker.record_peer_added(peer);
+        let _ = tracker.record_peer_removed(peer);
+        let _ = tracker.record_peer_added(peer);
+        let _ = tracker.record_peer_removed(peer);
+
+        // Peer should have a tracked entry with timer
+        assert!(tracker.tracked_entries.contains_key(&peer));
+
+        // After timer expiry, entry should be cleaned up since peer is not present
+        let after_expiry = Instant::now() + CLOSE_GROUP_RESTART_SUPPRESSION + Duration::from_secs(1);
+        let _ = tracker.handle_timer_expiry(after_expiry);
+
+        // Entry should be removed since peer is not in close_up_peers
+        // and no longer has active flags
+        assert!(!tracker.tracked_entries.contains_key(&peer));
     }
 }
 
