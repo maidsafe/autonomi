@@ -29,10 +29,17 @@ use tracing_subscriber::{
 const MAX_LOG_SIZE: usize = 20 * 1024 * 1024;
 const MAX_UNCOMPRESSED_LOG_FILES: usize = 10;
 const MAX_LOG_FILES: usize = 1000;
-// Everything is logged by default
-const ALL_ANT_LOGS: &str = "all";
-// Trace at nodes, clients, debug at networking layer
-const VERBOSE_ANT_LOGS: &str = "v";
+
+// Verbosity level keywords for ANT_LOG environment variable
+// Verbose mode: TRACE/DEBUG level logging for debugging and dev testnets
+const VERBOSITY_VERBOSE: &str = "verbose";
+const VERBOSITY_VERBOSE_SHORT: &str = "v";
+// Standard mode: sets ALL crates to INFO level
+const VERBOSITY_STANDARD: &str = "standard";
+const VERBOSITY_STANDARD_SHORT: &str = "std";
+// Minimal mode: uses application's default targets (no override)
+const VERBOSITY_MINIMAL: &str = "minimal";
+const VERBOSITY_MINIMAL_SHORT: &str = "min";
 
 /// Handle that implements functions to change the log level on the fly.
 pub struct ReloadHandle(pub(crate) Handle<Box<dyn Filter<Registry> + Send + Sync>, Registry>);
@@ -264,71 +271,99 @@ impl TracingLayers {
 }
 
 /// Parses the logging targets from the env variable (ANT_LOG). The crates should be given as a CSV, for e.g.,
-/// `export ANT_LOG = libp2p=DEBUG, tokio=INFO, all, sn_client=ERROR`
-/// Custom keywords will take less precedence if the same target has been manually specified in the CSV.
-/// `sn_client=ERROR` in the above example will be used instead of the TRACE level set by "all" keyword.
+/// `export ANT_LOG = libp2p=DEBUG, tokio=INFO, verbose, autonomi=ERROR`
+///
+/// Supported verbosity keywords:
+/// - `minimal` or `min`: Uses application's default targets (no override)
+/// - `standard` or `std`: Sets ALL crates to INFO level
+/// - `verbose` or `v`: Sets ALL crates to TRACE/DEBUG level for deep debugging
+///
+/// User-specified targets (e.g., `autonomi=ERROR`) take precedence over keyword defaults.
 fn get_logging_targets(logging_env_value: &str) -> Result<Vec<(String, Level)>> {
     let mut targets = BTreeMap::new();
-    let mut contains_keyword_all_sn_logs = false;
-    let mut contains_keyword_verbose_sn_logs = false;
+    let mut contains_verbose = false;
+    let mut contains_standard = false;
+    // Note: minimal just means "use application defaults", so we only need to skip the keyword
 
     for crate_log_level in logging_env_value.split(',') {
-        // TODO: are there other default short-circuits wanted?
-        // Could we have a default set if NOT on a release commit?
-        if crate_log_level == ALL_ANT_LOGS {
-            contains_keyword_all_sn_logs = true;
+        let trimmed = crate_log_level.trim();
+        // Check for verbosity keywords
+        if trimmed == VERBOSITY_VERBOSE || trimmed == VERBOSITY_VERBOSE_SHORT {
+            contains_verbose = true;
             continue;
-        } else if crate_log_level == VERBOSE_ANT_LOGS {
-            contains_keyword_verbose_sn_logs = true;
+        } else if trimmed == VERBOSITY_STANDARD || trimmed == VERBOSITY_STANDARD_SHORT {
+            contains_standard = true;
+            continue;
+        } else if trimmed == VERBOSITY_MINIMAL || trimmed == VERBOSITY_MINIMAL_SHORT {
+            // Minimal = use application defaults, just skip this keyword
             continue;
         }
 
-        let mut split = crate_log_level.split('=');
+        let mut split = trimmed.split('=');
         let crate_name = split.next().ok_or_else(|| {
             Error::LoggingConfiguration("Could not obtain crate name in logging string".to_string())
         })?;
+        // Skip empty crate names
+        if crate_name.is_empty() {
+            continue;
+        }
         let log_level = split.next().unwrap_or("trace");
         targets.insert(crate_name.to_string(), get_log_level_from_str(log_level)?);
     }
 
-    let mut to_be_overriden_targets =
-        if contains_keyword_all_sn_logs || contains_keyword_verbose_sn_logs {
-            let mut t = BTreeMap::from_iter(vec![
-                // bins
-                ("ant".to_string(), Level::TRACE),
-                ("evm_testnet".to_string(), Level::TRACE),
-                ("antnode".to_string(), Level::TRACE),
-                ("antctl".to_string(), Level::TRACE),
-                ("node_launchpad".to_string(), Level::DEBUG),
-                // libs
-                ("ant_bootstrap".to_string(), Level::TRACE),
-                ("ant_build_info".to_string(), Level::TRACE),
-                ("ant_evm".to_string(), Level::TRACE),
-                ("ant_logging".to_string(), Level::TRACE),
-                ("ant_node_manager".to_string(), Level::TRACE),
-                ("ant_node_rpc_client".to_string(), Level::TRACE),
-                ("ant_protocol".to_string(), Level::TRACE),
-                ("ant_service_management".to_string(), Level::TRACE),
-                ("service-manager".to_string(), Level::DEBUG),
-                ("autonomi".to_string(), Level::TRACE),
-                ("evmlib".to_string(), Level::TRACE),
-            ]);
-
-            if !t.contains_key("ant_node") {
-                if contains_keyword_all_sn_logs {
-                    t.insert("ant_node".to_string(), Level::TRACE)
-                } else if contains_keyword_verbose_sn_logs {
-                    t.insert("ant_node".to_string(), Level::DEBUG)
-                } else {
-                    t.insert("ant_node".to_string(), Level::INFO)
-                };
-            }
-            t
-        } else {
-            Default::default()
-        };
-    to_be_overriden_targets.extend(targets);
-    Ok(to_be_overriden_targets.into_iter().collect())
+    let mut keyword_targets = if contains_verbose {
+        // Verbose mode: TRACE/DEBUG for all crates
+        BTreeMap::from_iter(vec![
+            // bins
+            ("ant".to_string(), Level::TRACE),
+            ("evm_testnet".to_string(), Level::TRACE),
+            ("antnode".to_string(), Level::TRACE),
+            ("antctl".to_string(), Level::TRACE),
+            ("node_launchpad".to_string(), Level::DEBUG),
+            // libs
+            ("ant_bootstrap".to_string(), Level::TRACE),
+            ("ant_build_info".to_string(), Level::TRACE),
+            ("ant_evm".to_string(), Level::TRACE),
+            ("ant_logging".to_string(), Level::TRACE),
+            ("ant_node".to_string(), Level::TRACE),
+            ("ant_node_manager".to_string(), Level::TRACE),
+            ("ant_node_rpc_client".to_string(), Level::TRACE),
+            ("ant_protocol".to_string(), Level::TRACE),
+            ("ant_service_management".to_string(), Level::TRACE),
+            ("service-manager".to_string(), Level::DEBUG),
+            ("autonomi".to_string(), Level::TRACE),
+            ("evmlib".to_string(), Level::TRACE),
+        ])
+    } else if contains_standard {
+        // Standard mode: INFO level for all crates
+        BTreeMap::from_iter(vec![
+            // bins
+            ("ant".to_string(), Level::INFO),
+            ("evm_testnet".to_string(), Level::INFO),
+            ("antnode".to_string(), Level::INFO),
+            ("antctl".to_string(), Level::INFO),
+            ("node_launchpad".to_string(), Level::INFO),
+            // libs
+            ("ant_bootstrap".to_string(), Level::INFO),
+            ("ant_build_info".to_string(), Level::INFO),
+            ("ant_evm".to_string(), Level::INFO),
+            ("ant_logging".to_string(), Level::INFO),
+            ("ant_node".to_string(), Level::INFO),
+            ("ant_node_manager".to_string(), Level::INFO),
+            ("ant_node_rpc_client".to_string(), Level::INFO),
+            ("ant_protocol".to_string(), Level::INFO),
+            ("ant_service_management".to_string(), Level::INFO),
+            ("service-manager".to_string(), Level::INFO),
+            ("autonomi".to_string(), Level::INFO),
+            ("evmlib".to_string(), Level::INFO),
+        ])
+    } else {
+        // Minimal (default): empty map, use application's default targets
+        Default::default()
+    };
+    // User-specified targets take precedence over keyword defaults
+    keyword_targets.extend(targets);
+    Ok(keyword_targets.into_iter().collect())
 }
 
 fn get_log_level_from_str(log_level: &str) -> Result<Level> {

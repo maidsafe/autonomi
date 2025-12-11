@@ -111,6 +111,51 @@ impl LogFormat {
     }
 }
 
+/// Controls the verbosity level of logging output.
+///
+/// - `Minimal`: Reduced logging for production use (~50% less logs). Demotes operational
+///   and marker logs to DEBUG level.
+/// - `Standard`: Normal INFO-level logging (default behavior).
+/// - `Verbose`: Comprehensive DEBUG/TRACE logging for development and debugging.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum VerbosityLevel {
+    Minimal,
+    #[default]
+    Standard,
+    Verbose,
+}
+
+impl VerbosityLevel {
+    /// Parse a verbosity level from a string.
+    ///
+    /// Valid values: "minimal", "min", "standard", "std", "verbose", "v", "all"
+    pub fn parse_from_str(val: &str) -> Result<Self> {
+        match val.to_lowercase().as_str() {
+            "minimal" | "min" => Ok(VerbosityLevel::Minimal),
+            "standard" | "std" => Ok(VerbosityLevel::Standard),
+            "verbose" | "v" | "all" => Ok(VerbosityLevel::Verbose),
+            _ => Err(Error::LoggingConfiguration(
+                "Valid verbosity values are: 'minimal', 'standard', or 'verbose'".to_string(),
+            )),
+        }
+    }
+
+    /// Returns the string representation of the verbosity level.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            VerbosityLevel::Minimal => "minimal",
+            VerbosityLevel::Standard => "standard",
+            VerbosityLevel::Verbose => "verbose",
+        }
+    }
+}
+
+impl std::fmt::Display for VerbosityLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 pub struct LogBuilder {
     default_logging_targets: Vec<(String, Level)>,
     output_dest: LogOutputDest,
