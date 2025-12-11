@@ -74,6 +74,9 @@ pub(crate) const BOOTSTRAP_CHECK_INTERVAL: std::time::Duration =
 
 pub(crate) const NETWORK_WIDE_REPLICATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
+/// Maximum number of peers to keep in the blocklist before evicting oldest entries
+pub(crate) const BLOCKLIST_CACHE_SIZE: usize = 1000;
+
 /// The ways in which the Get Closest queries are used.
 pub(crate) enum PendingGetClosestType {
     /// The network discovery method is present at the networking layer
@@ -165,6 +168,8 @@ pub(crate) struct SwarmDriver {
     pub(crate) last_connection_pruning_time: Instant,
     /// record versions of those peers that in the non-full-kbuckets.
     pub(crate) peers_version: HashMap<PeerId, String>,
+    /// FIFO cache to track blocked peers, allowing us to unblock the oldest when limit is reached
+    pub(crate) blocklist_cache: CircularVec<PeerId>,
 }
 
 impl SwarmDriver {

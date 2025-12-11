@@ -12,8 +12,8 @@ use crate::networking::{
     CLOSE_GROUP_SIZE, NetworkEvent,
     circular_vec::CircularVec,
     driver::{
-        InitialBootstrapTrigger, NodeBehaviour, SwarmDriver, network_discovery::NetworkDiscovery,
-        network_wide_replication::NetworkWideReplication,
+        BLOCKLIST_CACHE_SIZE, InitialBootstrapTrigger, NodeBehaviour, SwarmDriver,
+        network_discovery::NetworkDiscovery, network_wide_replication::NetworkWideReplication,
     },
     error::{NetworkError, Result},
     external_address::ExternalAddressManager,
@@ -445,6 +445,7 @@ fn init_swarm_driver(
         last_connection_pruning_time: Instant::now(),
         peers_version: Default::default(),
         dial_queue: Default::default(),
+        blocklist_cache: CircularVec::new(BLOCKLIST_CACHE_SIZE),
     };
 
     (network_event_receiver, swarm_driver)

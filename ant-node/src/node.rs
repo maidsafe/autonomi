@@ -355,14 +355,15 @@ impl Node {
                     // runs every replication_interval time
                     _ = replication_interval.tick() => {
                         let now = Instant::now();
-                        {
-                            let mut tracker = self
-                                .close_group_tracker()
-                                .lock()
-                                .expect("close group tracker poisoned");
+
+                        if let Ok(mut tracker) = self
+                            .close_group_tracker()
+                            .lock() {
                             if tracker.handle_timer_expiry(now) {
                                 trace!("Replication timer expired for tracked peers; periodic run will cover it");
                             }
+                        } else {
+                            warn!("close group tracker poisoned");
                         }
 
                         let start = now;
@@ -1274,9 +1275,10 @@ impl CloseGroupTracker {
 
             // If we exceed the limit, remove the farthest peer
             if self.close_up_peers.len() > CLOSE_GROUP_TRACKING_LIMIT
-                && let Some((&farthest_distance, _)) = self.close_up_peers.iter().next_back() {
-                    let _ = self.close_up_peers.remove(&farthest_distance);
-                }
+                && let Some((&farthest_distance, _)) = self.close_up_peers.iter().next_back()
+            {
+                let _ = self.close_up_peers.remove(&farthest_distance);
+            }
         } else {
             // Too far, don't track and clean up any existing entry
             let _ = self.tracked_entries.remove(&peer_id);
@@ -1324,10 +1326,7 @@ impl CloseGroupTracker {
         // Remove from close_up_peers
         let _ = self.close_up_peers.remove(&distance);
 
-        let entry = self
-            .tracked_entries
-            .entry(peer_id)
-            .or_default();
+        let entry = self.tracked_entries.entry(peer_id).or_default();
 
         if entry.restart_detected {
             entry.timer_deadline = Some(Instant::now() + CLOSE_GROUP_RESTART_SUPPRESSION);
@@ -1344,12 +1343,13 @@ impl CloseGroupTracker {
         let mut expired = false;
         for entry in self.tracked_entries.values_mut() {
             if let Some(deadline) = entry.timer_deadline
-                && now >= deadline {
-                    entry.timer_deadline = None;
-                    entry.restart_detected = false;
-                    entry.awaiting_rejoin = false;
-                    expired = true;
-                }
+                && now >= deadline
+            {
+                entry.timer_deadline = None;
+                entry.restart_detected = false;
+                entry.awaiting_rejoin = false;
+                expired = true;
+            }
         }
 
         // Keep only entries that are still relevant
