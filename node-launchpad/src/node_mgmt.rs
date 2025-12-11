@@ -442,7 +442,7 @@ async fn add_node(args: MaintainNodesArgs, node_registry: NodeRegistryManager) {
         node_registry.clone(),
         config.init_peers_config.clone(),
         config.relay, // relay,
-        RestartPolicy::OnSuccess { delay_secs: None },
+        get_restart_policy(),
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
         None,                        // rpc_address,
         None,                        // rpc_port,
@@ -521,6 +521,17 @@ async fn start_nodes(
 }
 
 // --- Helper functions ---
+
+/// Get the appropriate restart policy for the current platform
+#[cfg(unix)]
+fn get_restart_policy() -> RestartPolicy {
+    RestartPolicy::OnSuccess { delay_secs: None }
+}
+
+#[cfg(windows)]
+fn get_restart_policy() -> RestartPolicy {
+    RestartPolicy::Never
+}
 
 fn send_action(action_sender: UnboundedSender<Action>, action: Action) {
     if let Err(err) = action_sender.send(action) {
@@ -685,7 +696,7 @@ async fn scale_down_nodes(config: &NodeConfig, count: u16, node_registry: NodeRe
         config.init_peers_config.clone(),
         config.relay,
         RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
-        RestartPolicy::OnSuccess { delay_secs: None },
+        get_restart_policy(),
         None,
         None,
         config.antnode_path.clone(),
@@ -762,7 +773,7 @@ async fn add_nodes(
             config.init_peers_config.clone(),
             config.relay,
             RewardsAddress::from_str(config.rewards_address.as_str()).unwrap(),
-            RestartPolicy::OnSuccess { delay_secs: None },
+            get_restart_policy(),
             None,
             None,
             config.antnode_path.clone(),
