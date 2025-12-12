@@ -277,7 +277,7 @@ pub async fn reset(
     }
 
     stop(None, node_registry.clone(), vec![], vec![], verbosity).await?;
-    remove(false, vec![], node_registry, vec![], verbosity).await?;
+    remove(false, vec![], node_registry.clone(), vec![], verbosity).await?;
 
     // Due the possibility of repeated runs of the `reset` command, we need to check for the
     // existence of this file before attempting to delete it, since `remove_file` will return an
@@ -287,6 +287,8 @@ pub async fn reset(
         info!("Removing node registry file: {node_registry_path:?}");
         std::fs::remove_file(node_registry_path)?;
     }
+    info!("Resetting NodeRegistryManager in memory");
+    node_registry.reset().await;
 
     Ok(())
 }
@@ -713,6 +715,8 @@ pub async fn maintain_n_running_nodes(
                     }
                     None => vec![],
                 };
+
+                info!("Ports to use for new nodes: {:?}", ports_to_use);
 
                 for (i, port) in ports_to_use.into_iter().enumerate() {
                     let added_service = add(

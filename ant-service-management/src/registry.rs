@@ -63,6 +63,20 @@ impl NodeRegistryManager {
         }
     }
 
+    pub async fn reset(&self) {
+        let mut daemon_lock = self.daemon.write().await;
+        *daemon_lock = None;
+
+        let mut env_vars_lock = self.environment_variables.write().await;
+        *env_vars_lock = None;
+
+        let mut nat_status_lock = self.nat_status.write().await;
+        *nat_status_lock = None;
+
+        let mut nodes_lock = self.nodes.write().await;
+        nodes_lock.clear();
+    }
+
     /// Loads the node registry from the specified path.
     /// If the file does not exist, it returns a default `NodeRegistryManager` with an empty state.
     #[allow(clippy::unused_async)]

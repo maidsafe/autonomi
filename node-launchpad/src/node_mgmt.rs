@@ -12,7 +12,7 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_evm::{EvmNetwork, RewardsAddress};
 use ant_node_manager::{VerbosityLevel, add_services::config::PortRange};
 use ant_releases::{self, AntReleaseRepoActions, ReleaseType};
-use ant_service_management::NodeRegistryManager;
+use ant_service_management::{NodeRegistryManager, ServiceStatus};
 use color_eyre::Result;
 use color_eyre::eyre::eyre;
 use service_manager::RestartPolicy;
@@ -206,7 +206,14 @@ async fn maintain_n_running_nodes(args: MaintainNodesArgs, node_registry: NodeRe
     let mut used_ports = get_used_ports(&node_registry).await;
     let (mut current_port, max_port) = get_port_range(&config.custom_ports);
 
-    let nodes_to_add = args.count as i32 - node_registry.nodes.read().await.len() as i32;
+    let mut non_removed_nodes = 0;
+    for node in node_registry.nodes.read().await.iter() {
+        let node = node.read().await;
+        if node.status != ServiceStatus::Removed {
+            non_removed_nodes += 1;
+        }
+    }
+    let nodes_to_add = args.count as i32 - non_removed_nodes;
 
     if nodes_to_add <= 0 {
         debug!("Scaling down nodes to {}", nodes_to_add);
