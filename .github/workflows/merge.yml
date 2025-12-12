@@ -107,7 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Set ANT_LOG environment variable
-        run: echo "ANT_LOG=all" >> $GITHUB_ENV
+        run: echo "ANT_LOG=std" >> $GITHUB_ENV
 
       - name: Run autonomi tests
         timeout-minutes: 25
@@ -227,7 +227,7 @@ jobs:
       - name: Run autonomi --tests
         run: cargo test --package autonomi --tests -- --nocapture
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
           # only set the target dir for windows to bypass the linker issue.
           # happens if we build the node manager via testnet action
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
@@ -246,13 +246,13 @@ jobs:
       - name: Get file cost
         run: ./target/release/ant --log-output-dest=data-dir --local file cost "./resources"
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: File upload
         run: ./target/release/ant --log-output-dest=data-dir --local file upload "./resources" > ./upload_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: parse address (unix)
@@ -272,7 +272,7 @@ jobs:
       - name: File Download
         run: ./target/release/ant --log-output-dest=data-dir --local file download ${{ env.UPLOAD_ADDRESS }} ./downloaded_resources/downloaded_file2
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: Generate register signing key
@@ -281,7 +281,7 @@ jobs:
       - name: Create register (writeable by owner)
         run: ./target/release/ant --log-output-dest=data-dir --local register create baobao 123 > ./register_create_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 10
 
       - name: parse register address (unix)
@@ -301,25 +301,25 @@ jobs:
       - name: Get register
         run: ./target/release/ant --log-output-dest=data-dir --local register get ${{ env.REGISTER_ADDRESS }}
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: Edit register
         run: ./target/release/ant --log-output-dest=data-dir --local register edit ${{ env.REGISTER_ADDRESS }} 456
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 10
 
       - name: Get register (after edit)
         run: ./target/release/ant --log-output-dest=data-dir --local register get ${{ env.REGISTER_ADDRESS }}
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: Create Register
         run: ./target/release/ant --log-output-dest=data-dir --local register create bao 111 > ./register2_create_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: parse register address (unix)
@@ -339,13 +339,13 @@ jobs:
       - name: Get Register (current key is the owner)
         run: ./target/release/ant --log-output-dest=data-dir --local register get ${{ env.REGISTER2_ADDRESS }}
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: Edit Register (current key is the owner)
         run: ./target/release/ant --log-output-dest=data-dir --local register edit ${{ env.REGISTER2_ADDRESS }} 222
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 10
 
       - name: Delete current register signing key
@@ -358,43 +358,43 @@ jobs:
       - name: Get Register (new signing key is not the owner)
         run: ./target/release/ant --log-output-dest data-dir --local register get ${{ env.REGISTER2_ADDRESS }}
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: Get Register (new signing key is not the owner)
         run: ./target/release/ant --log-output-dest data-dir --local register get ${{ env.REGISTER2_ADDRESS }}
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: create local user file
         run: echo random > random.txt
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: file upload
         run: ./target/release/ant --log-output-dest data-dir --local file upload random.txt
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: create a local register
         run: ./target/release/ant --log-output-dest data-dir --local register create sample_new_register 1234
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: Estimate cost to create a vault
         run: ./target/release/ant --log-output-dest data-dir --local vault cost
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: create a vault with existing user data as above
         run: ./target/release/ant --log-output-dest data-dir --local vault create
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: add more files - linux/macos
@@ -408,7 +408,7 @@ jobs:
             ./target/release/ant --log-output-dest data-dir --local register create $i random_file_$i.bin
           done
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 25
 
       - name: add more files - windows
@@ -427,19 +427,19 @@ jobs:
               ./target/release/ant --log-output-dest data-dir --local register create $i "random_file_$i.bin"
           }
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 35
 
       - name: sync the vault
         run: ./target/release/ant --log-output-dest data-dir --local vault sync
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: load the vault from network
         run: ./target/release/ant --log-output-dest data-dir --local vault load
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: vault sync validation
@@ -485,7 +485,7 @@ jobs:
           python3 -c 'import sys; assert sys.argv[1] == sys.argv[2], f"Error: local data and vault in network dont match, Local private Files: {sys.argv[1]} and vault private files: {sys.argv[2]} are Not Equal"' $NUM_OF_PRIVATE_FILES $NUM_OF_PRIVATE_FILES_IN_VAULT
           echo "vault synced successfully!"
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: Set up variables - vault sync - windows
@@ -496,7 +496,7 @@ jobs:
           ./target/release/ant --log-output-dest data-dir --local file list > file_list.txt 2>&1
           ./target/release/ant --log-output-dest data-dir --local vault load > vault_data.txt 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: Vault sync validation
@@ -553,13 +553,13 @@ jobs:
           assert NUM_OF_PRIVATE_FILES == NUM_OF_PRIVATE_FILES_IN_VAULT, f"Error: local data and vault in network dont match, Local private Files: {NUM_OF_PRIVATE_FILES} and vault private files: {NUM_OF_PRIVATE_FILES_IN_VAULT} are Not Equal"
           print("Vault synced successfully!")
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: load an existing vault from the network
         run: ./target/release/ant --log-output-dest data-dir --local vault load
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: Time profiling for Different files
@@ -584,7 +584,7 @@ jobs:
           rm -rf random*.bin
           rm -rf ${{ matrix.ant_path }}/autonomi
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: Stop the local network and upload logs
@@ -672,7 +672,7 @@ jobs:
         env:
           TEST_DURATION_MINS: 5
           TEST_TOTAL_CHURN_CYCLES: 15
-          ANT_LOG: "all"
+          ANT_LOG: verbose
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 30
 
@@ -826,7 +826,7 @@ jobs:
         run: cargo test --release -p ant-node --test verify_data_location -- --nocapture
         env:
           CHURN_COUNT: 6
-          ANT_LOG: "all"
+          ANT_LOG: standard
           CARGO_TARGET_DIR: ${{ matrix.os == 'windows-latest' && './test-target' || '.' }}
         timeout-minutes: 25
 
@@ -974,7 +974,7 @@ jobs:
       - name: File upload
         run: ./target/release/ant --log-output-dest data-dir --local file upload "./test_data_1.tar.gz" > ./upload_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: showing the upload terminal output
@@ -992,7 +992,7 @@ jobs:
       - name: File Download Error Check
         run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} . > ./error_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
         continue-on-error: true
 
@@ -1009,7 +1009,7 @@ jobs:
       - name: File Download
         run: ./target/release/ant --log-output-dest data-dir --local file download ${{ env.UPLOAD_ADDRESS }} ./downloaded_resources/downloaded_file > ./download_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 5
 
       - name: showing the download terminal output

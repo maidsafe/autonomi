@@ -786,7 +786,7 @@ async fn add_node_should_update_the_environment_variables_inside_node_registry()
     let mut mock_service_control = MockServiceControl::new();
 
     let env_variables = Some(vec![
-        ("ANT_LOG".to_owned(), "all".to_owned()),
+        ("ANT_LOG".to_owned(), "verbose".to_owned()),
         ("RUST_LOG".to_owned(), "libp2p=debug".to_owned()),
     ]);
 
@@ -5215,7 +5215,7 @@ async fn add_daemon_should_add_a_daemon_service() -> Result<()> {
                 ],
                 autostart: true,
                 contents: None,
-                environment: Some(vec![("ANT_LOG".to_string(), "ALL".to_string())]),
+                environment: Some(vec![("ANT_LOG".to_string(), "verbose".to_string())]),
                 label: "antctld".parse()?,
                 program: daemon_install_path.to_path_buf(),
                 restart_policy,
@@ -5231,7 +5231,7 @@ async fn add_daemon_should_add_a_daemon_service() -> Result<()> {
             address: Ipv4Addr::new(127, 0, 0, 1),
             daemon_install_bin_path: daemon_install_path.to_path_buf(),
             daemon_src_bin_path: daemon_download_path.to_path_buf(),
-            env_variables: Some(vec![("ANT_LOG".to_string(), "ALL".to_string())]),
+            env_variables: Some(vec![("ANT_LOG".to_string(), "verbose".to_string())]),
             port: 8080,
             user: get_username(),
             version: latest_version.to_string(),

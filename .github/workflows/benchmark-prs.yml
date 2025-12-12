@@ -49,7 +49,7 @@ jobs:
       - name: Start a local network
         uses: maidsafe/ant-local-testnet-action@main
         env:
-          ANT_LOG: "all"
+          ANT_LOG: "verbose"
         with:
           action: start
           enable-evm-testnet: true
@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: ./target/release/ant --log-output-dest=data-dir --local file upload "./the-test-data.zip"
         env:
-          ANT_LOG: "all"
+          ANT_LOG: "verbose"
         timeout-minutes: 5
 
       - name: Cleanup uploaded_files folder to avoid pollute download benchmark
