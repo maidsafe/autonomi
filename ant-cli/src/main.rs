@@ -92,7 +92,7 @@ async fn main() -> Result<()> {
 }
 
 fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGuard>)> {
-    let logging_targets = vec![
+    let log_targets = vec![
         // libs
         ("ant_bootstrap".to_string(), Level::INFO),
         ("ant_build_info".to_string(), Level::INFO),
@@ -109,10 +109,13 @@ fn init_logging_and_metrics(opt: &Opt) -> Result<(ReloadHandle, Option<WorkerGua
         .as_ref()
         .map(|cmd| matches!(cmd, SubCmd::Analyze { .. }))
         .unwrap_or(false);
-    let mut log_builder = LogBuilder::new(logging_targets);
+    let mut log_builder = LogBuilder::new(log_targets);
     log_builder.output_dest(opt.log_output_dest.clone());
     log_builder.print_updates_to_stdout(!mute);
     log_builder.format(opt.log_format.unwrap_or(LogFormat::Default));
+    if let Some(verbosity) = opt.verbosity {
+        log_builder.verbosity(verbosity);
+    }
     let guards = log_builder.initialize()?;
     Ok(guards)
 }

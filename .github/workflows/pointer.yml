@@ -80,7 +80,7 @@ jobs:
       - name: Upload test data A
         run: ./target/release/ant --local file upload --public test_data_A.txt > ./upload_output_A 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Parse address A (unix)
@@ -100,7 +100,7 @@ jobs:
       - name: Upload test data B
         run: ./target/release/ant --local file upload --public test_data_B.txt > ./upload_output_B 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Parse address B (unix)
@@ -123,13 +123,13 @@ jobs:
       - name: Create pointer pointing to address_A
         run: ./target/release/ant --local pointer create test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_create_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Edit pointer with address_A
         run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_edit_output_1 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 1 (unix)
@@ -163,7 +163,7 @@ jobs:
       - name: Edit pointer with same address_A again
         run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_A }} --target-data-type chunk > ./pointer_edit_output_2 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 2 (unix)
@@ -197,7 +197,7 @@ jobs:
       - name: Get pointer and verify address_A
         run: ./target/release/ant --local pointer get test_pointer > ./pointer_get_output_1 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 5
 
       - name: Verify address_A (unix)
@@ -228,7 +228,7 @@ jobs:
       - name: Edit pointer with address_B
         run: ./target/release/ant --local pointer edit test_pointer ${{ env.ADDRESS_B }} --target-data-type chunk > ./pointer_edit_output_3 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 3 (unix)
@@ -262,7 +262,7 @@ jobs:
       - name: Get pointer and verify address_B
         run: ./target/release/ant --local pointer get test_pointer > ./pointer_get_output_2 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 5
 
       - name: Verify address_B (unix)

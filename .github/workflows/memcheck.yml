@@ -55,7 +55,7 @@ jobs:
             --root-dir $RESTART_TEST_NODE_DATA_PATH --log-output-dest $RESTART_TEST_NODE_DATA_PATH --local --rewards-address "0x03B770D9cD32077cC0bF330c13C114a87643B124" &
           sleep 10
         env:
-          ANT_LOG: "all"
+          ANT_LOG: verbose
 
       - name: Download 95mb file to be uploaded with the safe client
         shell: bash
@@ -68,7 +68,7 @@ jobs:
       - name: File upload
         run: ./target/release/ant --log-output-dest=data-dir --local file upload --public "./the-test-data.zip" --retry-failed 3 > ./upload_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 15
 
       - name: showing the upload terminal output
@@ -111,7 +111,7 @@ jobs:
             exit 1
           fi
         env:
-          ANT_LOG: "all"
+          ANT_LOG: verbose
         timeout-minutes: 25
 
       - name: showing the second upload terminal output
@@ -131,7 +131,7 @@ jobs:
             --rewards-address "0x03B770D9cD32077cC0bF330c13C114a87643B124" &
           sleep 10
         env:
-          ANT_LOG: "all"
+          ANT_LOG: verbose
 
       # Records are encrypted, and seeds will change after restart
       # Currently, there will be `Existing record found`, but NO `Existing record loaded`
@@ -162,7 +162,7 @@ jobs:
       - name: File Download
         run: ./target/release/ant --log-output-dest=data-dir --local file download ${{ env.UPLOAD_ADDRESS }} ./downloaded_file
         env:
-          ANT_LOG: "v"
+          ANT_LOG: verbose
         timeout-minutes: 2
 
       - name: Check nodes running
