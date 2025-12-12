@@ -31,7 +31,7 @@ jobs:
         uses: astral-sh/setup-uv@v7
 
       - name: Cache Cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -42,7 +42,7 @@ jobs:
             ${{ runner.os }}-cargo-
 
       - name: Cache uv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/uv

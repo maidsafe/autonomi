@@ -56,7 +56,7 @@ jobs:
       - name: Get npm cache directory
         id: npm-cache-dir
         run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
@@ -69,7 +69,7 @@ jobs:
           toolchain: stable
           targets: ${{ matrix.settings.target }}
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry/index/
@@ -130,7 +130,7 @@ jobs:
         id: npm-cache-dir
         shell: bash
         run: echo "dir=$(npm config get cache)" >> ${GITHUB_OUTPUT}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: ${{ steps.npm-cache-dir.outputs.dir }}
           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
