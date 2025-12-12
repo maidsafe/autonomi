@@ -359,6 +359,11 @@ impl SwarmDriver {
                     });
                 }
             }
+            LocalSwarmCmd::RemoveOutOfSyncEntry { key } => {
+                info!("Pruning out-of-sync Record {key:?}");
+                cmd_string = "RemoveOutOfSyncEntry";
+                self.swarm.behaviour_mut().kademlia.store_mut().pruning_indexing_cache(&key);
+            }
             LocalSwarmCmd::RecordStoreHasKey { key, sender } => {
                 cmd_string = "RecordStoreHasKey";
                 let has_key = self
@@ -438,6 +443,7 @@ impl SwarmDriver {
             }
             LocalSwarmCmd::AddPeerToBlockList { peer_id } => {
                 cmd_string = "AddPeerToBlockList";
+                self.record_metrics(Marker::PeerConsideredAsBad { bad_peer: &peer_id });
                 let _ = self.swarm.behaviour_mut().blocklist.block_peer(peer_id);
             }
             LocalSwarmCmd::RecordNodeIssue { peer_id, issue } => {

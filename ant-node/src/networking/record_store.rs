@@ -604,6 +604,14 @@ impl NodeRecordStore {
         self.records.contains_key(key)
     }
 
+    /// Pruning out-of-sync entry from the indexing cache
+    pub(crate) fn pruning_indexing_cache(&mut self, k: &Key) {
+        if let Some((addr, _, _)) = self.records.remove(k) {
+            let distance = self.local_address.distance(&addr);
+            let _ = self.records_by_distance.remove(&distance);
+        }
+    }
+
     /// Returns the set of `NetworkAddress::RecordKey` held by the store
     /// Use `record_addresses_ref` to get a borrowed type
     pub(crate) fn record_addresses(&self) -> HashMap<NetworkAddress, ValidationType> {
@@ -883,7 +891,7 @@ impl RecordStore for NodeRecordStore {
 
             // The pruning has to be undertaken in an async way.
             let cloned_cmd_sender = self.local_swarm_cmd_sender.clone();
-            let cmd = LocalSwarmCmd::RemoveFailedLocalRecord { key: k.clone() };
+            let cmd = LocalSwarmCmd::RemoveOutOfSyncEntry { key: k.clone() };
 
             send_local_swarm_cmd(cloned_cmd_sender, cmd);
         }

@@ -23,9 +23,10 @@ use ant_protocol::{
     CLOSE_GROUP_SIZE, NetworkAddress, PrettyPrintRecordKey,
     error::Error as ProtocolError,
     messages::{ChunkProof, CmdResponse, Nonce, Query, QueryResponse, Request, Response},
-    storage::ValidationType,
+    storage::{try_deserialize_record, Chunk, ValidationType},
 };
 use bytes::Bytes;
+use futures::stream::{self, StreamExt};
 use itertools::Itertools;
 use libp2p::{
     Multiaddr, PeerId,
@@ -37,10 +38,11 @@ use num_traits::cast::ToPrimitive;
 use rand::{
     Rng, SeedableRng,
     rngs::{OsRng, StdRng},
+    seq::SliceRandom,
     thread_rng,
 };
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
     sync::{
@@ -79,6 +81,18 @@ const MIN_ACCEPTABLE_HEALTHY_SCORE: usize = 3000;
 
 /// in ms, expecting average StorageChallenge complete time to be around 250ms.
 const TIME_STEP: usize = 20;
+
+/// Delay before retrying a failed replicated record fetch.
+const REPLICA_FETCH_RETRY_DELAY: Duration = Duration::from_secs(15 * 60);
+
+/// Number of peers to query for a replicated record health check.
+const REPLICA_FETCH_PEER_COUNT: usize = 5;
+
+/// Minimum number of successful replicas required to consider the record healthy.
+const MIN_HEALTHY_REPLICA_COUNT: usize = 3;
+
+/// Index (0-based, including self) used to derive the distance threshold for nearby records.
+const CLOSE_NEIGHBOUR_DISTANCE_INDEX: usize = 7;
 
 /// Helper to build and run a Node
 pub struct NodeBuilder {
@@ -1150,10 +1164,310 @@ impl Node {
             network.notify_peer_scores(peer_scores);
         }
 
+        Self::verify_local_replication_health(network.clone()).await;
+
         info!(
             "Completed node StorageChallenge against neighbours in {:?}!",
             start.elapsed()
         );
+    }
+
+    /// Perform a direct replicated record fetch from nearby peers to verify replication health.
+    async fn verify_local_replication_health(network: Network) {
+        let closest_peers = match network
+            .get_k_closest_local_peers_to_the_target(None)
+            .await
+        {
+            Ok(peers) => peers,
+            Err(err) => {
+                warn!("Cannot fetch closest peers for replica verification: {err:?}");
+                return;
+            }
+        };
+
+        if closest_peers.len() <= CLOSE_NEIGHBOUR_DISTANCE_INDEX {
+            debug!(
+                "Skipping replica verification as we only know {} neighbours (need > {}).",
+                closest_peers.len(),
+                CLOSE_NEIGHBOUR_DISTANCE_INDEX
+            );
+            return;
+        }
+
+        let self_address = NetworkAddress::from(network.peer_id());
+        let Some((threshold_peer, _)) = closest_peers.get(CLOSE_NEIGHBOUR_DISTANCE_INDEX) else {
+            debug!("Unable to determine distance threshold for replica verification.");
+            return;
+        };
+
+        let threshold_distance =
+            self_address.distance(&NetworkAddress::from(*threshold_peer));
+        let Some(threshold_ilog2) = threshold_distance.ilog2() else {
+            debug!("Threshold distance lacks ilog2; cannot proceed with replica verification.");
+            return;
+        };
+
+        let local_records = match network.get_all_local_record_addresses().await {
+            Ok(records) => records,
+            Err(err) => {
+                warn!("Failed to list local records for replica verification: {err:?}");
+                return;
+            }
+        };
+
+        let mut nearby_records: Vec<NetworkAddress> = local_records
+            .into_iter()
+            .filter_map(|(address, record_type)| {
+                if record_type != ValidationType::Chunk {
+                    return None;
+                }
+                let distance = self_address.distance(&address);
+                distance
+                    .ilog2()
+                    .and_then(|record_ilog2| {
+                        if record_ilog2 <= threshold_ilog2 {
+                            Some(address)
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .collect();
+
+        nearby_records.shuffle(&mut thread_rng());
+        let target_record = if let Some(entry) = nearby_records.first().cloned() {
+            entry
+        } else {
+            debug!("No nearby chunk records available for replica verification.");
+            return;
+        };
+
+        let pretty_key =
+            PrettyPrintRecordKey::from(&target_record.to_record_key()).into_owned();
+
+        let candidate_peers = match network
+            .get_k_closest_local_peers_to_the_target(Some(target_record.clone()))
+            .await
+        {
+            Ok(peers) => peers
+                .into_iter()
+                .filter(|(peer_id, _)| peer_id != &network.peer_id())
+                .take(REPLICA_FETCH_PEER_COUNT)
+                .collect::<Vec<_>>(),
+            Err(err) => {
+                warn!(
+                    "Cannot fetch record-specific closest peers for replica verification: {err:?}"
+                );
+                return;
+            }
+        };
+
+        if candidate_peers.len() < REPLICA_FETCH_PEER_COUNT {
+            debug!(
+                "Only {} peers available for replica verification (need at least {}).",
+                candidate_peers.len(),
+                REPLICA_FETCH_PEER_COUNT
+            );
+            return;
+        }
+
+        debug!(
+            "Verifying replicated record {pretty_key:?} against {} closest peers.",
+            candidate_peers.len()
+        );
+
+        let (successful_peers, failed_peers) = Self::fetch_record_from_peers_with_addresses(
+            network.clone(),
+            target_record.clone(),
+            candidate_peers,
+        )
+        .await;
+
+        if failed_peers.is_empty() {
+            debug!(
+                "All peers returned record {pretty_key:?} during replica verification."
+            );
+            return;
+        }
+
+        if successful_peers.len() < MIN_HEALTHY_REPLICA_COUNT {
+            warn!(
+                "Replica verification fetched only {} copies of {pretty_key:?}. Record is unhealthy; skipping peer classification.",
+                successful_peers.len()
+            );
+            return;
+        }
+
+        if !failed_peers.is_empty() {
+            info!(
+                "Scheduling replica verification retry for {} peers on record {pretty_key:?}.",
+                failed_peers.len()
+            );
+            Self::schedule_record_fetch_retry(network.clone(), target_record.clone(), failed_peers).await;
+        }
+    }
+
+    /// Fetch a replicated record from the provided peers and return the success/failure split.
+    async fn fetch_record_from_peers_with_addresses(
+        network: Network,
+        record_address: NetworkAddress,
+        peers: Vec<(PeerId, Addresses)>,
+    ) -> (Vec<PeerId>, Vec<PeerId>) {
+        let request = Request::Query(Query::GetReplicatedRecord {
+            requester: NetworkAddress::from(network.peer_id()),
+            key: record_address.clone(),
+        });
+        let expected_key = record_address.to_record_key();
+        let pretty_key = PrettyPrintRecordKey::from(&expected_key).into_owned();
+
+        let mut successes = Vec::new();
+        let mut failures = Vec::new();
+        let concurrency = peers.len();
+        let results = stream::iter(
+            peers
+                .into_iter()
+                .map(|(peer_id, addrs)| {
+                    let network_clone = network.clone();
+                    let request_clone = request.clone();
+                    async move {
+                        let result = network_clone
+                            .send_request(request_clone, peer_id, addrs.clone())
+                            .await;
+                        (peer_id, addrs, result)
+                    }
+                }),
+        )
+        .buffer_unordered(concurrency)
+        .collect::<Vec<_>>()
+        .await;
+
+        for res in results {
+            match res {
+                (peer_id, _addrs, Ok((Response::Query(QueryResponse::GetReplicatedRecord(result)), _))) => {
+                    match result {
+                        Ok((_holder, value)) => {
+                            // Try to deserialize the record and ensure the Chunk content matches
+                            let record = Record::new(record_address.to_record_key(), value.to_vec());
+                            if let Ok(chunk) = try_deserialize_record::<Chunk>(&record) 
+                            && chunk.network_address().to_record_key() == expected_key {
+                                successes.push(peer_id);
+                            } else {
+                                warn!(
+                                    "Peer {peer_id:?} responded with an incorrect chunk copy of {pretty_key:?}."
+                                );
+                                failures.push(peer_id);
+                            }
+                        }
+                        Err(err) => {
+                            info!(
+                                "Peer {peer_id:?} responded with error {err:?} for replicated record {pretty_key:?}."
+                            );
+                            failures.push(peer_id);
+                        }
+                    }
+                }
+                (peer_id, _addrs, Ok((other_response, _))) => {
+                    warn!(
+                        "Peer {peer_id:?} responded with unexpected message {other_response:?} for {pretty_key:?}."
+                    );
+                    failures.push(peer_id);
+                }
+                (peer_id, _addrs, Err(err)) => {
+                    info!(
+                        "Failed to reach peer {peer_id:?} for replicated record {pretty_key:?}: {err:?}"
+                    );
+                    failures.push(peer_id);
+                }
+            }
+        }
+
+        (successes, failures)
+    }
+
+    /// Schedule a future retry for peers that failed to return the replicated record.
+    async fn schedule_record_fetch_retry(
+        network: Network,
+        record_address: NetworkAddress,
+        failed_peers: Vec<PeerId>,
+    ) {
+        let retry_peers: HashSet<_> = failed_peers.into_iter().collect();
+        if retry_peers.is_empty() {
+            return;
+        }
+
+        let record_clone = record_address.clone();
+        let network_clone = network.clone();
+
+        tokio::time::sleep(REPLICA_FETCH_RETRY_DELAY).await;
+        let pretty_key =
+            PrettyPrintRecordKey::from(&record_clone.to_record_key()).into_owned();
+
+        let refreshed_candidates = Self::refresh_retry_candidate_addresses(
+            &network_clone,
+            &record_clone,
+            &retry_peers,
+        )
+        .await;
+
+        if refreshed_candidates.is_empty() {
+            info!(
+                "Skipping replica retry for {pretty_key:?}; no tracked peers remain close to the record."
+            );
+            return;
+        }
+
+        let (_, still_failed) = Self::fetch_record_from_peers_with_addresses(
+            network_clone.clone(),
+            record_clone.clone(),
+            refreshed_candidates,
+        )
+        .await;
+
+        if still_failed.is_empty() {
+            info!(
+                "All peers successfully returned {pretty_key:?} during replica retry."
+            );
+            return;
+        }
+
+        warn!(
+            "{} peers still failed to provide {pretty_key:?}; evicting and blacklisting.",
+            still_failed.len()
+        );
+        for peer_id in still_failed {
+            Self::evict_and_blacklist_peer(network_clone.clone(), peer_id);
+        }
+    }
+
+    /// Get the latest address information for tracked peers via a DHT query.
+    async fn refresh_retry_candidate_addresses(
+        network: &Network,
+        record_address: &NetworkAddress,
+        retry_peers: &HashSet<PeerId>,
+    ) -> Vec<(PeerId, Addresses)> {
+        let pretty_key =
+            PrettyPrintRecordKey::from(&record_address.to_record_key()).into_owned();
+        let Ok(closest_peers) = network.get_closest_peers(record_address).await else {
+            warn!(
+                "Failed to refresh peer addresses for {pretty_key:?}; unable to retry replica fetch."
+            );
+            return Vec::new();
+        };
+
+        let closest_map: HashMap<PeerId, Addresses> = closest_peers
+            .into_iter()
+            .collect();
+
+        retry_peers
+            .iter()
+            .filter_map(|peer_id| closest_map.get(peer_id).cloned().map(|addrs| (*peer_id, addrs)))
+            .collect()
+    }
+
+    /// Remove the peer from the routing table and add it to the blacklist.
+    fn evict_and_blacklist_peer(network: Network, peer_id: PeerId) {
+        network.remove_peer(peer_id);
+        network.add_peer_to_blocklist(peer_id);
     }
 
     /// Query peers' versions and update local knowledge.
