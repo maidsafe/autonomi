@@ -139,7 +139,7 @@ async fn spawn_node(
 
     let bootstrap_config = bootstrap_config.unwrap_or_default();
     let local = bootstrap_config.local;
-    let bootstrap = Bootstrap::new(bootstrap_config).await?;
+    let bootstrap = Bootstrap::new(bootstrap_config)?;
 
     let mut node_builder = NodeBuilder::new(
         keypair,
