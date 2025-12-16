@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765889676024,
+  "lastUpdate": 1765891945747,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4601,6 +4601,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.631961551616834,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8a8fcbb907291483f486c317874df7ebdb7e717c",
+          "message": "Merge pull request #3322 from maqi/node_remove_closeup_bad_peer_from_RT\n\nfeat(node): carry out fetch check among closeup peers and block bad ones",
+          "timestamp": "2025-12-16T13:11:38Z",
+          "tree_id": "5fc2b624c64aac4ca9567ab22baab6cabcd5eec9",
+          "url": "https://github.com/maidsafe/autonomi/commit/8a8fcbb907291483f486c317874df7ebdb7e717c"
+        },
+        "date": 1765891938468,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0268765637331507,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.9628577676595205,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.65056495860978,
             "unit": "MiB/s"
           }
         ]
