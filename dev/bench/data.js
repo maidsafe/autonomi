@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765929171426,
+  "lastUpdate": 1765929173018,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17450,6 +17450,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0f41a5a091167ca2caf8c15d83a3743a6ca26c38",
+          "message": "Merge pull request #3346 from maqi/delay_replication_during_churn\n\nfeat(node): skip replication once closeup peer restart pattern detected",
+          "timestamp": "2025-12-16T22:34:35Z",
+          "tree_id": "7968cbe3bae3596139f836e289bc402c40326f9c",
+          "url": "https://github.com/maidsafe/autonomi/commit/0f41a5a091167ca2caf8c15d83a3743a6ca26c38"
+        },
+        "date": 1765929172520,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 11391,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 23673,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
             "unit": "ms"
           }
         ]
