@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765891984149,
+  "lastUpdate": 1765892033905,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8103,6 +8103,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 201,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "8a8fcbb907291483f486c317874df7ebdb7e717c",
+          "message": "Merge pull request #3322 from maqi/node_remove_closeup_bad_peer_from_RT\n\nfeat(node): carry out fetch check among closeup peers and block bad ones",
+          "timestamp": "2025-12-16T13:11:38Z",
+          "tree_id": "5fc2b624c64aac4ca9567ab22baab6cabcd5eec9",
+          "url": "https://github.com/maidsafe/autonomi/commit/8a8fcbb907291483f486c317874df7ebdb7e717c"
+        },
+        "date": 1765892033513,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 203,
             "unit": "MB"
           }
         ]
