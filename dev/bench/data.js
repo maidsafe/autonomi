@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765889672719,
+  "lastUpdate": 1765889674327,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -11995,6 +11995,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/c15af5a0ed3e0923beea90fe4d77e23f9c10ea54"
         },
         "date": 1765493004301,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "2e71058f8c19d64cb522daadfbe61b4e31a8bc14",
+          "message": "Merge pull request #3363 from vphongph/fix-ci-github-runner\n\nfix(ci): put latest mac intel runner",
+          "timestamp": "2025-12-16T12:32:15Z",
+          "tree_id": "f603b28ddd984999a521e63d1b50e64706f72f4b",
+          "url": "https://github.com/maidsafe/autonomi/commit/2e71058f8c19d64cb522daadfbe61b4e31a8bc14"
+        },
+        "date": 1765889673831,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
