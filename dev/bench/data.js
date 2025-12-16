@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765892162901,
+  "lastUpdate": 1765918371742,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4757,6 +4757,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.693574111384539,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e5f357f50e621927759226c1243d6de294f81d7",
+          "message": "Merge pull request #3365 from maqi/same_quoting_range_shall_be_used_for_mutabledata_reupload\n\nfix(client): during mutable data reupload, shall use same quoting range",
+          "timestamp": "2025-12-16T19:50:03Z",
+          "tree_id": "2aad8150302f7646efd9d35381060c1fac3a9da8",
+          "url": "https://github.com/maidsafe/autonomi/commit/4e5f357f50e621927759226c1243d6de294f81d7"
+        },
+        "date": 1765918364356,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0541644026204293,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.65799004650708,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.701523725279836,
             "unit": "MiB/s"
           }
         ]
