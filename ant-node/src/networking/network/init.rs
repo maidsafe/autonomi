@@ -70,7 +70,7 @@ const RESEND_IDENTIFY_INVERVAL: Duration = Duration::from_secs(3600);
 const NETWORKING_CHANNEL_SIZE: usize = 10_000;
 
 /// Time before a Kad query times out if no response is received
-const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(10);
+const KAD_QUERY_TIMEOUT_S: Duration = Duration::from_secs(120);
 
 #[derive(Debug)]
 pub(crate) struct NetworkConfig {
