@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765918458844,
+  "lastUpdate": 1765918460433,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12505,6 +12505,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/13f0d7f53693e57261f8b06e8d8774f4d15178c5"
         },
         "date": 1765892161192,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4e5f357f50e621927759226c1243d6de294f81d7",
+          "message": "Merge pull request #3365 from maqi/same_quoting_range_shall_be_used_for_mutabledata_reupload\n\nfix(client): during mutable data reupload, shall use same quoting range",
+          "timestamp": "2025-12-16T19:50:03Z",
+          "tree_id": "2aad8150302f7646efd9d35381060c1fac3a9da8",
+          "url": "https://github.com/maidsafe/autonomi/commit/4e5f357f50e621927759226c1243d6de294f81d7"
+        },
+        "date": 1765918459925,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
