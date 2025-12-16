@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765892160214,
+  "lastUpdate": 1765892161557,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12403,6 +12403,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/f3aaa3d889f29eff38c84b19ae9a77e23d16f0c1"
         },
         "date": 1765892139089,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "13f0d7f53693e57261f8b06e8d8774f4d15178c5",
+          "message": "Merge pull request #3362 from maidsafe/dependabot/github_actions/actions/upload-artifact-6\n\nchore(deps): bump actions/upload-artifact from 5 to 6",
+          "timestamp": "2025-12-16T13:13:45Z",
+          "tree_id": "c565a6fd30de1cb93deee421701b6316d7af816c",
+          "url": "https://github.com/maidsafe/autonomi/commit/13f0d7f53693e57261f8b06e8d8774f4d15178c5"
+        },
+        "date": 1765892161192,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
