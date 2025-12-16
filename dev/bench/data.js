@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765929169869,
+  "lastUpdate": 1765929171426,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12607,6 +12607,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/4e5f357f50e621927759226c1243d6de294f81d7"
         },
         "date": 1765918459925,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0f41a5a091167ca2caf8c15d83a3743a6ca26c38",
+          "message": "Merge pull request #3346 from maqi/delay_replication_during_churn\n\nfeat(node): skip replication once closeup peer restart pattern detected",
+          "timestamp": "2025-12-16T22:34:35Z",
+          "tree_id": "7968cbe3bae3596139f836e289bc402c40326f9c",
+          "url": "https://github.com/maidsafe/autonomi/commit/0f41a5a091167ca2caf8c15d83a3743a6ca26c38"
+        },
+        "date": 1765929170905,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
