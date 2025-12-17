@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765988300625,
+  "lastUpdate": 1765988301978,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17586,6 +17586,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23673,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e7349d43b40d29c4aa3ead987a6a930243aef704",
+          "message": "Merge pull request #3372 from mickvandijke/refactor-node-merkle-topology-verification\n\nRefactor node merkle topology verification",
+          "timestamp": "2025-12-17T15:02:45Z",
+          "tree_id": "83dc91ab4cc48857e0d7365fed2ec2c6f54d97c8",
+          "url": "https://github.com/maidsafe/autonomi/commit/e7349d43b40d29c4aa3ead987a6a930243aef704"
+        },
+        "date": 1765988301686,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9763,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19879,
             "unit": "ms"
           },
           {
