@@ -508,3 +508,108 @@ pub async fn calculate_restart_delay(running_node: &RunningNode) -> Duration {
 
     Duration::from_secs(upgrade_time_seconds as u64)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ant_releases::AntReleaseRepoActions;
+    use tempfile::TempDir;
+
+    /// Test downloading and extracting binaries from all platform URLs
+    #[tokio::test]
+    async fn test_download_and_extract_all_platforms() {
+        let platforms = [
+            Platform::LinuxMusl,
+            Platform::LinuxMuslAarch64,
+            Platform::LinuxMuslArm,
+            Platform::LinuxMuslArmV7,
+            Platform::MacOs,
+            Platform::MacOsAarch64,
+            Platform::Windows,
+        ];
+
+        for platform in platforms {
+            println!("\n=== Testing platform: {platform:?} ===");
+
+            let temp_dir = TempDir::new().expect("Failed to create temp dir");
+            let dest_dir = temp_dir.path();
+
+            // Use a no-op callback for tests
+            let callback: Box<dyn Fn(u64, u64) + Send + Sync> = Box::new(|_, _| {});
+
+            // Use our download function directly
+            let archive_path = download_from_autonomi_url(&platform, dest_dir, &callback)
+                .await
+                .unwrap_or_else(|_| panic!("Failed to download for platform {platform:?}"));
+
+            // Verify the archive file exists
+            assert!(
+                archive_path.exists(),
+                "Archive file does not exist: {}",
+                archive_path.display()
+            );
+
+            // Verify filename has valid archive extension
+            let filename = archive_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .expect("Could not get filename");
+            assert!(
+                filename.ends_with(".zip") || filename.ends_with(".tar.gz"),
+                "Invalid archive extension for {platform:?}: {filename}"
+            );
+
+            // Verify file was downloaded and has reasonable size (at least 1MB for a binary)
+            let metadata = std::fs::metadata(&archive_path).expect("Failed to get file metadata");
+            let file_len = metadata.len();
+            assert!(
+                file_len > 1_000_000,
+                "Downloaded file for {platform:?} is too small: {file_len} bytes"
+            );
+
+            println!(
+                "Platform: {platform:?} - Downloaded {file_len} bytes to {}",
+                archive_path.display()
+            );
+
+            // Test extraction using release_repo
+            let release_repo = <dyn AntReleaseRepoActions>::default_config();
+            let extracted_path = release_repo
+                .extract_release_archive(&archive_path, dest_dir)
+                .unwrap_or_else(|_| panic!("Failed to extract archive for {platform:?}"));
+
+            // Verify extracted file exists
+            assert!(
+                extracted_path.exists(),
+                "Extracted file does not exist for {platform:?}: {}",
+                extracted_path.display()
+            );
+
+            // Verify extracted file has reasonable size
+            let extracted_metadata =
+                std::fs::metadata(&extracted_path).expect("Failed to get extracted file metadata");
+            let extracted_len = extracted_metadata.len();
+            assert!(
+                extracted_len > 1_000_000,
+                "Extracted file for {platform:?} is too small: {extracted_len} bytes"
+            );
+
+            println!(
+                "Platform: {platform:?} - Extracted to {} ({extracted_len} bytes)",
+                extracted_path.display()
+            );
+
+            // On Unix, verify the file is executable or can be made executable
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = extracted_metadata.permissions();
+                perms.set_mode(0o755);
+                std::fs::set_permissions(&extracted_path, perms)
+                    .expect("Failed to set executable permissions");
+            }
+
+            println!("Platform: {platform:?} - SUCCESS");
+        }
+    }
+}
