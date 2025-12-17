@@ -593,10 +593,7 @@ impl Network {
         };
 
         // Find the farthest popular peer distance (if any popular peers exist)
-        let farthest_popular_distance = popular_peer_ids
-            .iter()
-            .map(get_distance)
-            .max();
+        let farthest_popular_distance = popular_peer_ids.iter().map(get_distance).max();
 
         let mut verified_candidates: Vec<PeerInfo> = Vec::with_capacity(n.get());
         let mut selected_peer_ids: HashSet<PeerId> = HashSet::new();
@@ -632,7 +629,8 @@ impl Network {
         // Step 3: Tier 2 - Pick candidates farther than the farthest popular peer
         // Use addresses from candidates
         if verified_candidates.len() < n.get()
-            && let Some(farthest_popular) = farthest_popular_distance {
+            && let Some(farthest_popular) = farthest_popular_distance
+        {
             let mut tier2_peers: Vec<_> = candidates
                 .iter()
                 .filter(|c| {
@@ -932,7 +930,7 @@ impl Network {
 
             if quotes.len() >= minimum_quotes && (no_need_to_pay.is_empty() || tasks.is_empty()) {
                 // if we have enough quotes AND no sign of enough existing copies,
-                // return with collected quotes. 
+                // return with collected quotes.
                 let peer_ids = quotes.iter().map(|(p, _)| p.peer_id).collect::<Vec<_>>();
                 debug!("Get quotes for {addr}: got enough quotes from peers: {peer_ids:?}");
                 return Ok(Some(quotes.into_iter().take(minimum_quotes).collect()));

@@ -528,13 +528,11 @@ impl Network {
         };
 
         // Find the farthest popular peer distance (if any popular peers exist)
-        let farthest_popular_distance = popular_peer_ids
-            .iter()
-            .map(get_distance)
-            .max();
+        let farthest_popular_distance = popular_peer_ids.iter().map(get_distance).max();
 
         let mut verified_candidates: Vec<(PeerId, Addresses)> = Vec::with_capacity(n);
-        let mut selected_peer_ids: std::collections::HashSet<PeerId> = std::collections::HashSet::new();
+        let mut selected_peer_ids: std::collections::HashSet<PeerId> =
+            std::collections::HashSet::new();
 
         // Step 2: Tier 1 - Pick peers in BOTH candidates AND popular_peer_ids
         let mut tier1_peers: Vec<_> = candidates
@@ -570,8 +568,7 @@ impl Network {
             let mut tier2_peers: Vec<_> = candidates
                 .iter()
                 .filter(|(peer_id, _)| {
-                    !selected_peer_ids.contains(peer_id)
-                        && get_distance(peer_id) > farthest_popular
+                    !selected_peer_ids.contains(peer_id) && get_distance(peer_id) > farthest_popular
                 })
                 .collect();
             // Sort by distance (closest first among those beyond popular range)
