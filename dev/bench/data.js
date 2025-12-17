@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765988301978,
+  "lastUpdate": 1765991550078,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4874,6 +4874,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.694959337919987,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "657fa976183f04a808cf08d3beb1553a44f24a29",
+          "message": "Merge pull request #3373 from maqi/make_get_storage_proofs_from_peer_return_PaymentQuote_for_release\n\nchore(client): make get_storage_proofs_from_peer return PaymentQuote",
+          "timestamp": "2025-12-17T16:05:29Z",
+          "tree_id": "46d2986dffb96061b7220ca0ceb575f96473dfd7",
+          "url": "https://github.com/maidsafe/autonomi/commit/657fa976183f04a808cf08d3beb1553a44f24a29"
+        },
+        "date": 1765991541993,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0574400570850302,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.087534190064691,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.659588453586723,
             "unit": "MiB/s"
           }
         ]
