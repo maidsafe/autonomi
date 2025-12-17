@@ -98,6 +98,22 @@ pub enum QueryResponse {
     ///
     /// [`GetMerkleCandidateQuote`]: crate::messages::Query::GetMerkleCandidateQuote
     GetMerkleCandidateQuote(Result<ant_evm::merkle_payments::MerklePaymentCandidateNode>),
+    // ===== DevGetClosestPeersFromNetwork =====
+    //
+    /// Response to [`DevGetClosestPeersFromNetwork`]
+    /// Returns closest peers from a network query (not just local routing table).
+    /// Only available when the `developer` feature is enabled.
+    ///
+    /// [`DevGetClosestPeersFromNetwork`]: crate::messages::Query::DevGetClosestPeersFromNetwork
+    #[cfg(feature = "developer")]
+    DevGetClosestPeersFromNetwork {
+        /// The target address that the original request is about.
+        target: NetworkAddress,
+        /// The node that performed the query (the queried node's peer address)
+        queried_node: NetworkAddress,
+        /// Closest peers from the network query, with their multiaddresses.
+        peers: Vec<(NetworkAddress, Vec<Multiaddr>)>,
+    },
 }
 
 // Debug implementation for QueryResponse, to avoid printing Vec<u8>
@@ -175,6 +191,19 @@ impl Debug for QueryResponse {
                     write!(f, "GetMerkleCandidateQuote(Err({err:?}))")
                 }
             },
+            #[cfg(feature = "developer")]
+            QueryResponse::DevGetClosestPeersFromNetwork {
+                target,
+                queried_node,
+                peers,
+            } => {
+                let addresses: Vec<_> = peers.iter().map(|(addr, _)| addr.clone()).collect();
+                write!(
+                    f,
+                    "DevGetClosestPeersFromNetwork target {target:?} from {queried_node:?} found {} close peers {addresses:?}",
+                    peers.len()
+                )
+            }
         }
     }
 }

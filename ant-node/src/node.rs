@@ -867,6 +867,13 @@ impl Node {
                 )
                 .await
             }
+            #[cfg(feature = "developer")]
+            Query::DevGetClosestPeersFromNetwork { key, num_of_peers } => {
+                debug!(
+                    "Got DevGetClosestPeersFromNetwork targeting {key:?} with {num_of_peers:?} peers"
+                );
+                Self::respond_dev_get_closest_peers_from_network(network, key, num_of_peers).await
+            }
         };
         Response::Query(resp)
     }
@@ -897,6 +904,62 @@ impl Node {
             target,
             peers,
             signature,
+        }
+    }
+
+    /// Handle DevGetClosestPeersFromNetwork query
+    /// Unlike respond_get_closest_peers which returns local routing table peers,
+    /// this method actively queries the Kademlia network for closest peers.
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    async fn respond_dev_get_closest_peers_from_network(
+        network: &Network,
+        target: NetworkAddress,
+        num_of_peers: Option<usize>,
+    ) -> QueryResponse {
+        use ant_protocol::messages::QueryResponse;
+
+        let queried_node = NetworkAddress::from(network.peer_id());
+        debug!(
+            "DevGetClosestPeersFromNetwork: node {queried_node:?} querying network for closest peers to {target:?}"
+        );
+
+        // Query the network for closest peers (this performs an actual Kademlia lookup)
+        let result = network.get_closest_peers(&target).await;
+
+        let peers = match result {
+            Ok(peers) => {
+                let mut converted: Vec<(NetworkAddress, Vec<Multiaddr>)> = peers
+                    .into_iter()
+                    .map(|(peer_id, addrs)| {
+                        (NetworkAddress::from(peer_id), addrs.0)
+                    })
+                    .collect();
+
+                // If num_of_peers is specified, limit the results
+                if let Some(n) = num_of_peers {
+                    converted.sort_by_key(|(addr, _)| target.distance(addr));
+                    converted.truncate(n);
+                }
+
+                debug!(
+                    "DevGetClosestPeersFromNetwork: found {} peers closest to {target:?}",
+                    converted.len()
+                );
+                converted
+            }
+            Err(err) => {
+                warn!(
+                    "DevGetClosestPeersFromNetwork: failed to query network for {target:?}: {err:?}"
+                );
+                vec![]
+            }
+        };
+
+        QueryResponse::DevGetClosestPeersFromNetwork {
+            target,
+            queried_node,
+            peers,
         }
     }
 

@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [features]
 default = ["metrics"]
+developer = ["autonomi/developer", "ant-protocol/developer"]
 metrics = ["ant-logging/process-metrics"]
 nightly = []
 
