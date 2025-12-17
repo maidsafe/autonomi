@@ -12,7 +12,9 @@ mod release_cache;
 pub use error::{Result, UpgradeError};
 
 use ant_node::RunningNode;
-use ant_releases::{AntReleaseRepoActions, AutonomiReleaseInfo};
+use ant_releases::{
+    AntReleaseRepoActions, ArchiveType, AutonomiReleaseInfo, Platform, ReleaseType,
+};
 use fs2::FileExt;
 use semver::Version;
 use sha2::{Digest, Sha256};
@@ -20,11 +22,99 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use tokio::io::AsyncWriteExt;
 use tracing::{debug, info, warn};
 
 const LOCK_TIMEOUT_SECS: u64 = 300; // 5 minutes
 const LOCK_RETRY_INTERVAL_MS: u64 = 100;
 const DEFAULT_NETWORK_SIZE: usize = 100_000;
+
+/// Get the autonomi.com download URL for a given platform.
+///
+/// These URLs redirect to the actual binary download location.
+fn get_autonomi_download_url(platform: &Platform) -> &'static str {
+    match platform {
+        Platform::LinuxMusl => "https://autonomi.com/download/node/linux-x64",
+        Platform::LinuxMuslAarch64 => "https://autonomi.com/download/node/linux-arm64",
+        Platform::LinuxMuslArm => "https://autonomi.com/download/node/linux-arm",
+        Platform::LinuxMuslArmV7 => "https://autonomi.com/download/node/linux-armv7",
+        Platform::MacOs => "https://autonomi.com/download/node/mac-intel",
+        Platform::MacOsAarch64 => "https://autonomi.com/download/node/mac-apple-silicon",
+        Platform::Windows => "https://autonomi.com/download/node/windows",
+    }
+}
+
+/// Download a file from a URL that may redirect to the actual binary.
+///
+/// Returns the path to the downloaded archive file.
+async fn download_from_autonomi_url(
+    platform: &Platform,
+    dest_dir: &Path,
+    callback: &(dyn Fn(u64, u64) + Send + Sync),
+) -> Result<PathBuf> {
+    let url = get_autonomi_download_url(platform);
+    info!("Downloading from autonomi.com URL: {}", url);
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(10))
+        .build()
+        .map_err(|e| UpgradeError::DownloadFailed(format!("Failed to create HTTP client: {e}")))?;
+
+    let response = client
+        .get(url)
+        .send()
+        .await
+        .map_err(|e| UpgradeError::DownloadFailed(format!("HTTP request failed: {e}")))?;
+
+    if !response.status().is_success() {
+        return Err(UpgradeError::DownloadFailed(format!(
+            "HTTP request failed with status: {}",
+            response.status()
+        )));
+    }
+
+    // Get the final URL after redirects to extract the filename
+    let final_url = response.url().to_string();
+    debug!("Final download URL after redirects: {}", final_url);
+
+    // Extract filename from the final URL
+    let filename = final_url
+        .split('/')
+        .next_back()
+        .ok_or_else(|| {
+            UpgradeError::DownloadFailed("Could not extract filename from URL".to_string())
+        })?
+        .to_string();
+
+    let total_size = response
+        .headers()
+        .get("content-length")
+        .and_then(|ct_len| ct_len.to_str().ok())
+        .and_then(|ct_len| ct_len.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    let dest_path = dest_dir.join(&filename);
+    let mut out_file = tokio::fs::File::create(&dest_path)
+        .await
+        .map_err(UpgradeError::Io)?;
+
+    let mut downloaded: u64 = 0;
+    let mut stream = response.bytes_stream();
+
+    use futures::StreamExt;
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result
+            .map_err(|e| UpgradeError::DownloadFailed(format!("Failed to read chunk: {e}")))?;
+        downloaded += chunk.len() as u64;
+        out_file.write_all(&chunk).await.map_err(UpgradeError::Io)?;
+        callback(downloaded, total_size);
+    }
+
+    out_file.flush().await.map_err(UpgradeError::Io)?;
+    info!("Downloaded {} bytes to {}", downloaded, dest_path.display());
+
+    Ok(dest_path)
+}
 
 /// Calculate SHA256 hash of a file.
 pub fn calculate_sha256(path: &Path) -> Result<String> {
@@ -141,6 +231,7 @@ fn acquire_upgrade_lock(upgrade_dir: &Path) -> Result<File> {
 
 /// Download and extract the upgrade binary to the shared location.
 ///
+/// Downloads from autonomi.com URLs which redirect to the actual binary location.
 /// If the binary already exists with the correct hash, returns immediately.
 pub async fn download_and_extract_upgrade_binary(
     release_info: &AutonomiReleaseInfo,
@@ -211,24 +302,41 @@ pub async fn download_and_extract_upgrade_binary(
     let temp_download_dir_path = upgrade_dir_path.join("tmp");
     fs::create_dir_all(&temp_download_dir_path)?;
 
-    let version = Version::parse(&antnode_binary.version)?;
-    let archive_type = ant_releases::ArchiveType::TarGz;
     let callback: Box<dyn Fn(u64, u64) + Send + Sync> = Box::new(|downloaded, total| {
         if total > 0 && downloaded % (total / 10).max(1) == 0 {
             debug!("Download progress: {}/{} bytes", downloaded, total);
         }
     });
 
-    let archive_path = release_repo
-        .download_release_from_s3(
-            &ant_releases::ReleaseType::AntNode,
-            &version,
-            &platform,
-            &archive_type,
-            &temp_download_dir_path,
-            &callback,
-        )
-        .await?;
+    // Try downloading from autonomi.com first, fall back to S3 if it fails
+    let archive_path =
+        match download_from_autonomi_url(&platform, &temp_download_dir_path, &callback).await {
+            Ok(path) => {
+                info!("Successfully downloaded from autonomi.com");
+                path
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to download from autonomi.com: {}. Falling back to S3...",
+                    e
+                );
+                let version = Version::parse(&antnode_binary.version)?;
+                let archive_type = ArchiveType::TarGz;
+                release_repo
+                    .download_release_from_s3(
+                        &ReleaseType::AntNode,
+                        &version,
+                        &platform,
+                        &archive_type,
+                        &temp_download_dir_path,
+                        &callback,
+                    )
+                    .await
+                    .map_err(|e| {
+                        UpgradeError::DownloadFailed(format!("S3 fallback download failed: {e}"))
+                    })?
+            }
+        };
     info!("Download complete. Extracting archive...");
 
     let extracted_path =
