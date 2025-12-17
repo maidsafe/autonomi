@@ -15,6 +15,7 @@ path = "src/bin/antnode/main.rs"
 
 [features]
 default = ["open-metrics"]
+developer = ["ant-protocol/developer"]
 extension-module = ["pyo3/extension-module", "pyo3-async-runtimes"]
 loud = [] # loud mode: print important messages to console
 nightly = []

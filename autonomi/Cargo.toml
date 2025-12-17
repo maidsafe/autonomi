@@ -21,6 +21,7 @@ name = "put_and_dir_upload"
 
 [features]
 default = []
+developer = ["ant-protocol/developer"]
 external-signer = ["ant-evm/external-signer"]
 extension-module = ["pyo3/extension-module", "pyo3-async-runtimes"]
 loud = []

@@ -11,6 +11,7 @@ version = "1.0.10"
 
 [features]
 default = []
+developer = []
 rpc = ["tonic", "prost"]
 
 [dependencies]
