@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765929173018,
+  "lastUpdate": 1765988211035,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4835,6 +4835,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.96787436965465,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "e7349d43b40d29c4aa3ead987a6a930243aef704",
+          "message": "Merge pull request #3372 from mickvandijke/refactor-node-merkle-topology-verification\n\nRefactor node merkle topology verification",
+          "timestamp": "2025-12-17T15:02:45Z",
+          "tree_id": "83dc91ab4cc48857e0d7365fed2ec2c6f54d97c8",
+          "url": "https://github.com/maidsafe/autonomi/commit/e7349d43b40d29c4aa3ead987a6a930243aef704"
+        },
+        "date": 1765988203674,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.1143196902846748,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 6.092564381273904,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.694959337919987,
             "unit": "MiB/s"
           }
         ]
