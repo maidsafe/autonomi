@@ -89,14 +89,18 @@ impl SwarmDriver {
         connection_id: libp2p::swarm::ConnectionId,
     ) {
         debug!("identify: received info from {peer_id:?} on {connection_id:?}. Info: {info:?}");
-        if self.swarm.behaviour_mut().blocklist.blocked_peers().contains(&peer_id) {
-            warn!(
-                "identify: rejecting {peer_id:?} since it is already present in our blacklist."
-            );
+        if self
+            .swarm
+            .behaviour_mut()
+            .blocklist
+            .blocked_peers()
+            .contains(&peer_id)
+        {
+            warn!("identify: rejecting {peer_id:?} since it is already present in our blacklist.");
             let _ = self.swarm.disconnect_peer_id(peer_id);
             return;
         }
-        
+
         // If the peer dials us with a different addr, we would add it to our RT via update_pre_existing_peer
         let Some((_, addr_fom_connection, _)) = self.live_connected_peers.get(&connection_id)
         else {
