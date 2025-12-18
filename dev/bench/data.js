@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766063884250,
+  "lastUpdate": 1766063886401,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -12952,6 +12952,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/657fa976183f04a808cf08d3beb1553a44f24a29"
         },
         "date": 1765991641875,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c51a142569c1843ad528f5c2271848c7e279870a",
+          "message": "Merge pull request #3374 from jacderida/fix-service_stop_on_macos\n\nfix: macos services stop on `anctl stop`",
+          "timestamp": "2025-12-18T12:55:25Z",
+          "tree_id": "24ec70f8e62b5d1ac749bee191535613983e25ce",
+          "url": "https://github.com/maidsafe/autonomi/commit/c51a142569c1843ad528f5c2271848c7e279870a"
+        },
+        "date": 1766063885529,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
