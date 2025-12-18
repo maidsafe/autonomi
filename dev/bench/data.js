@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766067183552,
+  "lastUpdate": 1766067186058,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13117,6 +13117,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/4b0d134b51c0859a1081395435a8dcec3d172603"
         },
         "date": 1766063942502,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "95d52b895e1bc1afb27c975369190af058f74f3d",
+          "message": "Merge pull request #3375 from maqi/fix_test_verify_max_parallel_fetches\n\nfix(test): refactor verify_max_parallel_fetches test setup",
+          "timestamp": "2025-12-18T12:58:23Z",
+          "tree_id": "3ecb8a39e168869954ea76119de513942cb60d6d",
+          "url": "https://github.com/maidsafe/autonomi/commit/95d52b895e1bc1afb27c975369190af058f74f3d"
+        },
+        "date": 1766067184986,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
