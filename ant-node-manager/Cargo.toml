@@ -20,6 +20,7 @@ path = "src/bin/daemon/main.rs"
 [features]
 chaos = []
 default = ["quic"]
+developer = []
 nightly = []
 open-metrics = []
 otlp = []
