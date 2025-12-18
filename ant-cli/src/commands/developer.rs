@@ -63,14 +63,14 @@ pub async fn closest_peers(
         println!("  No peers found.");
     } else {
         println!(
-            "  {:<4} {:<52} {:<20} Multiaddrs",
+            "  {:<4} {:<54} {:<15} Multiaddrs",
             "#", "PeerId", "Distance"
         );
-        println!("  {}", "-".repeat(120));
+        println!("  {}", "-".repeat(130));
 
         for (i, (peer_addr, multiaddrs)) in response.peers.iter().enumerate() {
             let distance = target_addr.distance(peer_addr);
-            let distance_hex = format!("0x{:016x}...", distance.0.leading_zeros());
+            let distance_ilog2 = distance.ilog2().unwrap_or(0);
 
             let multiaddr_str = if multiaddrs.is_empty() {
                 "N/A".to_string()
@@ -82,19 +82,18 @@ pub async fn closest_peers(
                     .join(", ")
             };
 
-            // Truncate peer address for display
-            let peer_str = peer_addr.to_string();
-            let peer_display = if peer_str.len() > 50 {
-                format!("{}...", &peer_str[..47])
+            // Extract PeerId from NetworkAddress, or fall back to string representation
+            let peer_display = if let Some(peer_id) = peer_addr.as_peer_id() {
+                peer_id.to_string()
             } else {
-                peer_str
+                peer_addr.to_string()
             };
 
             println!(
-                "  {:<4} {:<52} {:<20} {}",
+                "  {:<4} {:<54} {:<15} {}",
                 i + 1,
                 peer_display,
-                distance_hex,
+                distance_ilog2,
                 multiaddr_str
             );
         }
