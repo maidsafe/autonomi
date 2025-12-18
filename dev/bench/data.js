@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766063886401,
+  "lastUpdate": 1766063888589,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -17907,6 +17907,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 18566,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c51a142569c1843ad528f5c2271848c7e279870a",
+          "message": "Merge pull request #3374 from jacderida/fix-service_stop_on_macos\n\nfix: macos services stop on `anctl stop`",
+          "timestamp": "2025-12-18T12:55:25Z",
+          "tree_id": "24ec70f8e62b5d1ac749bee191535613983e25ce",
+          "url": "https://github.com/maidsafe/autonomi/commit/c51a142569c1843ad528f5c2271848c7e279870a"
+        },
+        "date": 1766063887764,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10327,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19769,
             "unit": "ms"
           },
           {
