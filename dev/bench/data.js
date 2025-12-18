@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766063888589,
+  "lastUpdate": 1766063941390,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8676,6 +8676,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 199,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4b0d134b51c0859a1081395435a8dcec3d172603",
+          "message": "Merge pull request #3358 from RolandSherwin/fix_lp_reset\n\nfeat: clear NodeRegistryManager during reset op",
+          "timestamp": "2025-12-18T12:56:14Z",
+          "tree_id": "b0f0180b41cbedbbe93bf6cc718ada37b4ffbed8",
+          "url": "https://github.com/maidsafe/autonomi/commit/4b0d134b51c0859a1081395435a8dcec3d172603"
+        },
+        "date": 1766063940807,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 187,
             "unit": "MB"
           }
         ]
