@@ -15,6 +15,9 @@
 use crate::actions::{NetworkContext, connect_to_network};
 use ant_protocol::NetworkAddress;
 use autonomi::Client;
+use autonomi::client::data_types::chunk::ChunkAddress;
+use autonomi::client::data_types::graph::GraphEntryAddress;
+use autonomi::PublicKey;
 use autonomi::networking::{Multiaddr, PeerId, PeerInfo};
 use color_eyre::{Result, eyre::eyre};
 
@@ -166,10 +169,37 @@ fn extract_peer_id(addr: &Multiaddr) -> Option<PeerId> {
     peer_id_str.parse().ok()
 }
 
-/// Parse a target address from a hex string
+/// Parse a target address from various formats.
+///
+/// Accepts:
+/// - ChunkAddress (hex)
+/// - PublicKey (hex) - for GraphEntry, Pointer, or Scratchpad addresses
+/// - Raw 32-byte hex (XorName)
+/// - PeerId
+/// - NetworkAddress debug format (e.g., `NetworkAddress::RecordKey("...")`)
 fn parse_target_address(target: &str) -> Result<NetworkAddress> {
-    // Remove 0x prefix if present
     let hex_str = target.strip_prefix("0x").unwrap_or(target);
+
+    // Try parsing as ChunkAddress first
+    if let Ok(chunk_addr) = ChunkAddress::from_hex(target) {
+        return Ok(NetworkAddress::from(chunk_addr));
+    }
+
+    // Try parsing as PublicKey (could be GraphEntry, Pointer, or Scratchpad)
+    if let Ok(public_key) = PublicKey::from_hex(hex_str) {
+        return Ok(NetworkAddress::from(GraphEntryAddress::new(public_key)));
+    }
+
+    // Try parsing from NetworkAddress debug format:
+    // NetworkAddress::RecordKey("e9d7b3208bcb7ef566102027ca9a7f3ced7c0f8abf87c9bb0ef9130b625572f2") - (...)
+    if let Some(start) = target.find('"')
+        && let Some(end) = target[start + 1..].find('"')
+    {
+        let extracted_hex = &target[start + 1..start + 1 + end];
+        if let Ok(chunk_addr) = ChunkAddress::from_hex(extracted_hex) {
+            return Ok(NetworkAddress::from(chunk_addr));
+        }
+    }
 
     // Try to parse as raw hex bytes (xor_name)
     if let Ok(bytes) = hex::decode(hex_str)
@@ -186,6 +216,6 @@ fn parse_target_address(target: &str) -> Result<NetworkAddress> {
     }
 
     Err(eyre!(
-        "Invalid target address. Expected 32-byte hex string or peer ID. Got: {target}"
+        "Invalid target address. Expected ChunkAddress, PublicKey, 32-byte hex, PeerId, or NetworkAddress debug format. Got: {target}"
     ))
 }
