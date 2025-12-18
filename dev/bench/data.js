@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766063792943,
+  "lastUpdate": 1766063848219,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4952,6 +4952,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.663162690865282,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4b0d134b51c0859a1081395435a8dcec3d172603",
+          "message": "Merge pull request #3358 from RolandSherwin/fix_lp_reset\n\nfeat: clear NodeRegistryManager during reset op",
+          "timestamp": "2025-12-18T12:56:14Z",
+          "tree_id": "b0f0180b41cbedbbe93bf6cc718ada37b4ffbed8",
+          "url": "https://github.com/maidsafe/autonomi/commit/4b0d134b51c0859a1081395435a8dcec3d172603"
+        },
+        "date": 1766063840757,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0797383035272068,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.6599698392738444,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.599707962674276,
             "unit": "MiB/s"
           }
         ]
