@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766063944732,
+  "lastUpdate": 1766067092400,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4991,6 +4991,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.599707962674276,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "95d52b895e1bc1afb27c975369190af058f74f3d",
+          "message": "Merge pull request #3375 from maqi/fix_test_verify_max_parallel_fetches\n\nfix(test): refactor verify_max_parallel_fetches test setup",
+          "timestamp": "2025-12-18T12:58:23Z",
+          "tree_id": "3ecb8a39e168869954ea76119de513942cb60d6d",
+          "url": "https://github.com/maidsafe/autonomi/commit/95d52b895e1bc1afb27c975369190af058f74f3d"
+        },
+        "date": 1766067084289,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.095160255194948,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.743380169520583,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.604712315014174,
             "unit": "MiB/s"
           }
         ]
