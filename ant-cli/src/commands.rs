@@ -476,11 +476,16 @@ pub enum DeveloperCmd {
     /// (not just return its local routing table) and returns the results from
     /// that node's network perspective.
     ClosestPeers {
-        /// Multiaddr of the node to query.
-        /// Example: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        /// Node to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
         #[arg(name = "node")]
         node_addr: String,
-        /// Target address to find closest peers for (hex string).
+        /// Target address to find closest peers for (hex string or PeerId).
         #[arg(name = "target")]
         target: String,
         /// Number of peers to return (default: uses K_VALUE, typically 20).

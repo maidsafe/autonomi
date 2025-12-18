@@ -14,6 +14,7 @@
 
 use crate::actions::{NetworkContext, connect_to_network};
 use ant_protocol::NetworkAddress;
+use autonomi::Client;
 use autonomi::networking::{Multiaddr, PeerId, PeerInfo};
 use color_eyre::{Result, eyre::eyre};
 
@@ -27,15 +28,6 @@ pub async fn closest_peers(
     num_peers: Option<usize>,
     network_context: NetworkContext,
 ) -> Result<()> {
-    // Parse the node multiaddr
-    let multiaddr: Multiaddr = node_addr
-        .parse()
-        .map_err(|e| eyre!("Invalid node multiaddr: {e}"))?;
-
-    // Extract PeerId from multiaddr
-    let peer_id = extract_peer_id(&multiaddr)
-        .ok_or_else(|| eyre!("Node multiaddr must contain a peer ID (p2p component)"))?;
-
     // Parse the target address (hex string)
     let target_addr = parse_target_address(target)?;
 
@@ -44,14 +36,12 @@ pub async fn closest_peers(
         .await
         .map_err(|(err, _exit_code)| err)?;
 
+    // Try to resolve the node - either from multiaddr or by discovering PeerId
+    let node_info = resolve_node(&client, node_addr).await?;
+    let peer_id = node_info.peer_id;
+
     println!("Querying node {peer_id} for closest peers to {target}...");
     println!();
-
-    // Create PeerInfo for the target node
-    let node_info = PeerInfo {
-        peer_id,
-        addrs: vec![multiaddr],
-    };
 
     // Perform the developer query
     let response = client
@@ -111,6 +101,59 @@ pub async fn closest_peers(
     println!("Total: {} peers", response.peers.len());
 
     Ok(())
+}
+
+/// Resolve a node identifier to PeerInfo.
+///
+/// Accepts either:
+/// - A full multiaddr (e.g., /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...)
+/// - Just a PeerId (e.g., 12D3KooW...)
+///
+/// When only a PeerId is provided, the network is queried to discover the peer's addresses.
+async fn resolve_node(client: &Client, node_addr: &str) -> Result<PeerInfo> {
+    // First, try to parse as a PeerId directly
+    if let Ok(peer_id) = node_addr.parse::<PeerId>() {
+        println!("Discovering addresses for peer {peer_id}...");
+
+        // Query the network to find this peer's addresses
+        let peer_network_addr = NetworkAddress::from(peer_id);
+        let closest_peers = client
+            .network()
+            .get_closest_peers(peer_network_addr, Some(20))
+            .await
+            .map_err(|e| eyre!("Failed to discover peer addresses: {e}"))?;
+
+        // Look for our target peer in the results
+        for peer_info in closest_peers {
+            if peer_info.peer_id == peer_id {
+                if peer_info.addrs.is_empty() {
+                    return Err(eyre!(
+                        "Found peer {peer_id} but no addresses are known. Try using a full multiaddr."
+                    ));
+                }
+                println!("Found peer at: {}", peer_info.addrs[0]);
+                return Ok(peer_info);
+            }
+        }
+
+        return Err(eyre!(
+            "Could not find peer {peer_id} in the network. Make sure the node is online and try using a full multiaddr."
+        ));
+    }
+
+    // Try to parse as a multiaddr
+    let multiaddr: Multiaddr = node_addr
+        .parse()
+        .map_err(|e| eyre!("Invalid node address. Expected PeerId or multiaddr: {e}"))?;
+
+    // Extract PeerId from multiaddr
+    let peer_id = extract_peer_id(&multiaddr)
+        .ok_or_else(|| eyre!("Multiaddr must contain a peer ID (p2p component)"))?;
+
+    Ok(PeerInfo {
+        peer_id,
+        addrs: vec![multiaddr],
+    })
 }
 
 /// Extract PeerId from a Multiaddr

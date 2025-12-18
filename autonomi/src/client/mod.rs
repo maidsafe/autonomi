@@ -360,6 +360,11 @@ impl Client {
     pub fn evm_network(&self) -> &EvmNetwork {
         &self.evm_network
     }
+
+    /// Get a reference to the underlying network.
+    pub fn network(&self) -> &Network {
+        &self.network
+    }
 }
 
 /// Events that can be sent by the client.
@@ -377,6 +382,41 @@ pub struct UploadSummary {
     pub records_already_paid: usize,
     /// Total cost of the upload
     pub tokens_spent: Amount,
+}
+
+/// Developer analytics methods for the Client.
+/// Only available when the `developer` feature is enabled.
+#[cfg(feature = "developer")]
+impl Client {
+    /// Get closest peers by asking a specific node to query its network.
+    ///
+    /// Unlike methods that return a peer's local routing table,
+    /// this asks the target node to perform an actual Kademlia network lookup
+    /// and return the results from its network perspective.
+    ///
+    /// # Arguments
+    /// * `node` - The node to ask (will perform the network query)
+    /// * `target` - The target address to find closest peers for
+    /// * `num_of_peers` - Optional limit on number of peers to return
+    ///
+    /// # Returns
+    /// * `DevGetClosestPeersFromNetworkResponse` containing:
+    ///   - The target address
+    ///   - The queried node's address
+    ///   - The closest peers found by that node's network query
+    pub async fn dev_get_closest_peers_from_node(
+        &self,
+        node: libp2p::kad::PeerInfo,
+        target: ant_protocol::NetworkAddress,
+        num_of_peers: Option<usize>,
+    ) -> Result<
+        crate::networking::DevGetClosestPeersFromNetworkResponse,
+        crate::networking::NetworkError,
+    > {
+        self.network
+            .dev_get_closest_peers_from_node(node, target, num_of_peers)
+            .await
+    }
 }
 
 #[cfg(test)]
@@ -411,38 +451,5 @@ mod tests {
                 panic!("Expected `ConnectError::TimedOut`, but got `{err:?}`")
             }
         }
-    }
-}
-
-/// Developer analytics methods for the Client.
-/// Only available when the `developer` feature is enabled.
-#[cfg(feature = "developer")]
-impl Client {
-    /// Get closest peers by asking a specific node to query its network.
-    ///
-    /// Unlike methods that return a peer's local routing table,
-    /// this asks the target node to perform an actual Kademlia network lookup
-    /// and return the results from its network perspective.
-    ///
-    /// # Arguments
-    /// * `node` - The node to ask (will perform the network query)
-    /// * `target` - The target address to find closest peers for
-    /// * `num_of_peers` - Optional limit on number of peers to return
-    ///
-    /// # Returns
-    /// * `DevGetClosestPeersFromNetworkResponse` containing:
-    ///   - The target address
-    ///   - The queried node's address
-    ///   - The closest peers found by that node's network query
-    pub async fn dev_get_closest_peers_from_node(
-        &self,
-        node: libp2p::kad::PeerInfo,
-        target: ant_protocol::NetworkAddress,
-        num_of_peers: Option<usize>,
-    ) -> Result<crate::networking::DevGetClosestPeersFromNetworkResponse, crate::networking::NetworkError>
-    {
-        self.network
-            .dev_get_closest_peers_from_node(node, target, num_of_peers)
-            .await
     }
 }
