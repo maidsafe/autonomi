@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1765991644869,
+  "lastUpdate": 1766063792943,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -4913,6 +4913,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.659588453586723,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c51a142569c1843ad528f5c2271848c7e279870a",
+          "message": "Merge pull request #3374 from jacderida/fix-service_stop_on_macos\n\nfix: macos services stop on `anctl stop`",
+          "timestamp": "2025-12-18T12:55:25Z",
+          "tree_id": "24ec70f8e62b5d1ac749bee191535613983e25ce",
+          "url": "https://github.com/maidsafe/autonomi/commit/c51a142569c1843ad528f5c2271848c7e279870a"
+        },
+        "date": 1766063784429,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.057915049524035,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.804456208102115,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.663162690865282,
             "unit": "MiB/s"
           }
         ]
