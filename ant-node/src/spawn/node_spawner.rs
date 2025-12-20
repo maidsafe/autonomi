@@ -26,12 +26,25 @@ pub struct NodeSpawner {
     bootstrap_config: Option<BootstrapConfig>,
     /// A boolean indicating whether UPnP should be disabled.
     no_upnp: bool,
+    /// A boolean indicating whether relay client mode should be enabled.
+    /// Enable this for nodes behind NAT that cannot use UPnP.
+    relay_client: bool,
     /// An optional `PathBuf` representing the root directory for the node.
     root_dir: Option<PathBuf>,
 }
 
 impl NodeSpawner {
     /// Create a new instance of `NodeSpawner` with default values.
+    ///
+    /// # Default Values
+    ///
+    /// - `socket_addr`: `0.0.0.0:0` (all interfaces, OS-assigned port)
+    /// - `evm_network`: `EvmNetwork::default()` (ArbitrumOne mainnet)
+    /// - `rewards_address`: `RewardsAddress::default()` (**zero address - rewards burned!**)
+    /// - `bootstrap_config`: `None`
+    /// - `no_upnp`: `false`
+    /// - `relay_client`: `false`
+    /// - `root_dir`: `None`
     pub fn new() -> Self {
         Self {
             socket_addr: SocketAddr::new(IpAddr::from(Ipv4Addr::UNSPECIFIED), 0),
@@ -39,6 +52,7 @@ impl NodeSpawner {
             rewards_address: Default::default(),
             bootstrap_config: None,
             no_upnp: false,
+            relay_client: false,
             root_dir: None,
         }
     }
@@ -93,6 +107,19 @@ impl NodeSpawner {
         self
     }
 
+    /// Enable relay client mode for nodes behind NAT.
+    ///
+    /// When enabled, the node will connect to the network via relay servers.
+    /// This is necessary for nodes behind NAT that cannot use UPnP.
+    ///
+    /// # Arguments
+    ///
+    /// * `relay_client` - A boolean indicating whether relay client mode should be enabled.
+    pub fn with_relay_client(mut self, relay_client: bool) -> Self {
+        self.relay_client = relay_client;
+        self
+    }
+
     /// Set the root directory for the node.
     ///
     /// # Arguments
@@ -115,6 +142,7 @@ impl NodeSpawner {
             self.rewards_address,
             self.bootstrap_config,
             self.no_upnp,
+            self.relay_client,
             &self.root_dir,
         )
         .await
@@ -133,8 +161,18 @@ async fn spawn_node(
     rewards_address: RewardsAddress,
     bootstrap_config: Option<BootstrapConfig>,
     no_upnp: bool,
+    relay_client: bool,
     root_dir: &Option<PathBuf>,
 ) -> eyre::Result<RunningNode> {
+    // Warn if using the zero address (default) - rewards would be lost
+    if rewards_address == RewardsAddress::default() {
+        warn!(
+            "Using zero address (0x0...0) for rewards. \
+             Any node rewards will be burned! \
+             Use .with_rewards_address() to set your wallet address."
+        );
+    }
+
     let (root_dir, keypair) = get_root_dir_and_keypair(root_dir)?;
 
     let bootstrap_config = bootstrap_config.unwrap_or_default();
@@ -151,6 +189,7 @@ async fn spawn_node(
     );
     node_builder.local(local);
     node_builder.no_upnp(no_upnp);
+    node_builder.relay_client(relay_client);
 
     let running_node = node_builder.build_and_run()?;
 
