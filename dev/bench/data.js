@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766094732340,
+  "lastUpdate": 1766410812829,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5069,6 +5069,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.8660003097144875,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "84e19e7488b4ddbccc921510be05a19d740c30d6",
+          "message": "Merge pull request #3377 from maqi/avoid_pruning_irrelevant_records_too_much\n\nfix(node): avoid pruning irrelevant_records too aggressively",
+          "timestamp": "2025-12-22T12:26:38Z",
+          "tree_id": "d82980e0194828a514e91401b30a73f1caa6d445",
+          "url": "https://github.com/maidsafe/autonomi/commit/84e19e7488b4ddbccc921510be05a19d740c30d6"
+        },
+        "date": 1766410804842,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0533705355091594,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.365255077742681,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.649078589614258,
             "unit": "MiB/s"
           }
         ]
