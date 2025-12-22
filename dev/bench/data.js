@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766414065565,
+  "lastUpdate": 1766414067150,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18578,6 +18578,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0c5a10896f10f4c1ad4a39225710f570e0386471",
+          "message": "Merge pull request #3383 from maqi/make_verify_max_parallel_fetches_test_deterministic\n\nfix(test): make verify_max_parallel_fetches test deterministic",
+          "timestamp": "2025-12-22T13:19:39Z",
+          "tree_id": "88bbb632bdad30c4c3987f4fd3d53967fa4d004a",
+          "url": "https://github.com/maidsafe/autonomi/commit/0c5a10896f10f4c1ad4a39225710f570e0386471"
+        },
+        "date": 1766414066660,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10254,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 20112,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
