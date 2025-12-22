@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766410906336,
+  "lastUpdate": 1766410908526,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18432,6 +18432,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 25031,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "david.irvine@maidsafe.net",
+            "name": "David Irvine",
+            "username": "dirvine"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "84e19e7488b4ddbccc921510be05a19d740c30d6",
+          "message": "Merge pull request #3377 from maqi/avoid_pruning_irrelevant_records_too_much\n\nfix(node): avoid pruning irrelevant_records too aggressively",
+          "timestamp": "2025-12-22T12:26:38Z",
+          "tree_id": "d82980e0194828a514e91401b30a73f1caa6d445",
+          "url": "https://github.com/maidsafe/autonomi/commit/84e19e7488b4ddbccc921510be05a19d740c30d6"
+        },
+        "date": 1766410907618,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10243,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 22000,
             "unit": "ms"
           },
           {
