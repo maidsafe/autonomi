@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766413975753,
+  "lastUpdate": 1766414063996,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -8948,6 +8948,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 183,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "0c5a10896f10f4c1ad4a39225710f570e0386471",
+          "message": "Merge pull request #3383 from maqi/make_verify_max_parallel_fetches_test_deterministic\n\nfix(test): make verify_max_parallel_fetches test deterministic",
+          "timestamp": "2025-12-22T13:19:39Z",
+          "tree_id": "88bbb632bdad30c4c3987f4fd3d53967fa4d004a",
+          "url": "https://github.com/maidsafe/autonomi/commit/0c5a10896f10f4c1ad4a39225710f570e0386471"
+        },
+        "date": 1766414063519,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 208,
             "unit": "MB"
           }
         ]
