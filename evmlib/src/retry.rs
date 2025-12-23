@@ -178,16 +178,13 @@ where
 
     // Estimate gas and add 20% buffer to avoid out-of-gas reverts
     // This is especially important for Arbitrum L2 where gas estimation can be tricky
-    match provider.estimate_gas(transaction_request.clone()).await {
-        Ok(estimated_gas) => {
-            let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
-            debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
-            transaction_request.set_gas_limit(gas_with_buffer);
-        }
-        Err(e) => {
-            warn!("Failed to estimate gas, proceeding without explicit limit: {e}");
-        }
-    }
+    let estimated_gas = provider
+        .estimate_gas(transaction_request.clone())
+        .await
+        .map_err(|e| TransactionError::TransactionFailedToSend(format!("gas estimation failed: {e}")))?;
+    let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
+    debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
+    transaction_request.set_gas_limit(gas_with_buffer);
 
     // Retry with the same nonce to replace a stuck transaction
     if let Some(nonce) = nonce {
