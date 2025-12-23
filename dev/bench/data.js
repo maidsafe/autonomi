@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766514440270,
+  "lastUpdate": 1766514444683,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13525,6 +13525,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/0c5a10896f10f4c1ad4a39225710f570e0386471"
         },
         "date": 1766414065058,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f1fd472042f36fbf2c6625c296eae932f1a3e307",
+          "message": "Merge pull request #3380 from dirvine/fix/python-arm-cross-compilation\n\nfix(ci): resolve ring crate ARM cross-compilation failure",
+          "timestamp": "2025-12-23T18:04:26Z",
+          "tree_id": "6032a0b869f6818532f63887b5036241b4e1d537",
+          "url": "https://github.com/maidsafe/autonomi/commit/f1fd472042f36fbf2c6625c296eae932f1a3e307"
+        },
+        "date": 1766514441229,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
