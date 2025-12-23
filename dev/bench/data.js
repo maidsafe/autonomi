@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766515738940,
+  "lastUpdate": 1766515741033,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -18860,6 +18860,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "06cc7f9ed19603bf33180c9eb00809acab47f2d3",
+          "message": "Merge pull request #3381 from maidsafe/merkle_payment_client\n\nMerkle payment Client (CLI)",
+          "timestamp": "2025-12-23T18:33:04Z",
+          "tree_id": "22f36f0982c24afaf8992727b5649bdeea2d3af1",
+          "url": "https://github.com/maidsafe/autonomi/commit/06cc7f9ed19603bf33180c9eb00809acab47f2d3"
+        },
+        "date": 1766515740224,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 9144,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 17588,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
