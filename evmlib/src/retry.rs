@@ -291,6 +291,7 @@ async fn get_eip1559_fees<P: Provider<N>, N: Network>(
 ) -> Result<Option<Eip1559Fees>, TransactionError> {
     match transaction_config.max_fee_per_gas {
         MaxFeePerGas::Auto => {
+            debug!("Using Auto mode for gas fees");
             // Use EIP-1559 fee estimation which includes a buffer for base fee fluctuation
             let eip1559_fees = provider
                 .estimate_eip1559_fees()
@@ -302,6 +303,7 @@ async fn get_eip1559_fees<P: Provider<N>, N: Network>(
             }))
         }
         MaxFeePerGas::LimitedAuto(limit) => {
+            debug!("Using LimitedAuto mode for gas fees with limit: {limit}");
             // Use EIP-1559 fee estimation for better accuracy
             let eip1559_fees = provider
                 .estimate_eip1559_fees()
@@ -309,6 +311,10 @@ async fn get_eip1559_fees<P: Provider<N>, N: Network>(
                 .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string()))?;
 
             if eip1559_fees.max_fee_per_gas > limit {
+                warn!(
+                    "Estimated max_fee_per_gas ({}) exceeds limit ({})",
+                    eip1559_fees.max_fee_per_gas, limit
+                );
                 Err(TransactionError::GasPriceAboveLimit(limit))
             } else {
                 Ok(Some(Eip1559Fees {
@@ -318,16 +324,28 @@ async fn get_eip1559_fees<P: Provider<N>, N: Network>(
             }
         }
         MaxFeePerGas::Custom(max_fee) => {
+            debug!("Using Custom mode for gas fees with max_fee: {max_fee}");
             // Use custom max fee with estimated priority fee
             let eip1559_fees = provider
                 .estimate_eip1559_fees()
                 .await
                 .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string()))?;
+
+            if max_fee < eip1559_fees.max_fee_per_gas {
+                warn!(
+                    "Custom max_fee_per_gas ({}) is below estimated fee ({}). Transaction may be slow or fail.",
+                    max_fee, eip1559_fees.max_fee_per_gas
+                );
+            }
+
             Ok(Some(Eip1559Fees {
                 max_fee_per_gas: max_fee,
                 max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
             }))
         }
-        MaxFeePerGas::Unlimited => Ok(None),
+        MaxFeePerGas::Unlimited => {
+            debug!("Using Unlimited mode for gas fees (no fee parameters will be set)");
+            Ok(None)
+        }
     }
 }
