@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766515736902,
+  "lastUpdate": 1766515738940,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13627,6 +13627,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/f1fd472042f36fbf2c6625c296eae932f1a3e307"
         },
         "date": 1766514441229,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "06cc7f9ed19603bf33180c9eb00809acab47f2d3",
+          "message": "Merge pull request #3381 from maidsafe/merkle_payment_client\n\nMerkle payment Client (CLI)",
+          "timestamp": "2025-12-23T18:33:04Z",
+          "tree_id": "22f36f0982c24afaf8992727b5649bdeea2d3af1",
+          "url": "https://github.com/maidsafe/autonomi/commit/06cc7f9ed19603bf33180c9eb00809acab47f2d3"
+        },
+        "date": 1766515738134,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
