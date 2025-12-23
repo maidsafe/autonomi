@@ -7,12 +7,12 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::networking::{OneShotTaskResult, PeerQuoteWithStorageProof};
-use ant_evm::{merkle_payments::MerklePaymentCandidateNode, PaymentQuote};
-use ant_protocol::storage::DataTypes;
+use ant_evm::{PaymentQuote, merkle_payments::MerklePaymentCandidateNode};
 use ant_protocol::NetworkAddress;
+use ant_protocol::storage::DataTypes;
 use libp2p::{
-    kad::{PeerInfo, Quorum, Record},
     PeerId,
+    kad::{PeerInfo, Quorum, Record},
 };
 use std::num::NonZeroUsize;
 

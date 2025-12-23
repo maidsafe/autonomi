@@ -368,7 +368,11 @@ impl SwarmDriver {
             LocalSwarmCmd::RemoveOutOfSyncEntry { key } => {
                 info!("Pruning out-of-sync Record {key:?}");
                 cmd_string = "RemoveOutOfSyncEntry";
-                self.swarm.behaviour_mut().kademlia.store_mut().pruning_indexing_cache(&key);
+                self.swarm
+                    .behaviour_mut()
+                    .kademlia
+                    .store_mut()
+                    .pruning_indexing_cache(&key);
             }
             LocalSwarmCmd::RecordStoreHasKey { key, sender } => {
                 cmd_string = "RecordStoreHasKey";

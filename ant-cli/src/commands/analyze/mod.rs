@@ -13,13 +13,13 @@ pub use error::{AnalysisErrorDisplay, NetworkErrorDisplay};
 
 use crate::actions::NetworkContext;
 use crate::wallet::load_wallet;
+use ant_protocol::storage::DataTypes;
 use autonomi::PublicKey;
 use autonomi::chunk::ChunkAddress;
 use autonomi::client::analyze::{Analysis, AnalysisError};
 use autonomi::client::config::CHUNK_DOWNLOAD_BATCH_SIZE;
 use autonomi::client::payment::PaymentOption;
 use autonomi::graph::GraphEntryAddress;
-use ant_protocol::storage::DataTypes;
 use autonomi::{
     Multiaddr, RewardsAddress, SecretKey, Wallet,
     networking::{NetworkAddress, NetworkError, PeerId, PeerQuoteWithStorageProof, Record},
@@ -1616,7 +1616,14 @@ async fn perform_network_scan_round(
 
         async move {
             let result = client
-                .get_storage_proofs_from_peer(peer_target_addr, peer_clone, nonce, difficulty, DataTypes::Chunk, 0)
+                .get_storage_proofs_from_peer(
+                    peer_target_addr,
+                    peer_clone,
+                    nonce,
+                    difficulty,
+                    DataTypes::Chunk,
+                    0,
+                )
                 .await;
             (peer_id, result)
         }
@@ -2335,7 +2342,14 @@ async fn print_nodes_health(
 
         // Query the peer directly for storage proofs
         match client
-            .get_storage_proofs_from_peer(target_addr.clone(), peer.clone(), nonce, difficulty, DataTypes::Chunk, 0)
+            .get_storage_proofs_from_peer(
+                target_addr.clone(),
+                peer.clone(),
+                nonce,
+                difficulty,
+                DataTypes::Chunk,
+                0,
+            )
             .await
         {
             Ok((_quote, storage_proofs)) => {

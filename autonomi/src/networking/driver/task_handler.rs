@@ -51,10 +51,8 @@ pub(crate) struct TaskHandler {
     get_record_accumulator: HashMap<QueryId, HashMap<PeerId, Record>>,
     get_version: HashMap<OutboundRequestId, OneShotTaskResult<String>>,
     get_record_from_peer: HashMap<OutboundRequestId, OneShotTaskResult<Option<Record>>>,
-    get_storage_proofs_from_peer: HashMap<
-        OutboundRequestId,
-        OneShotTaskResult<PeerQuoteWithStorageProof>,
-    >,
+    get_storage_proofs_from_peer:
+        HashMap<OutboundRequestId, OneShotTaskResult<PeerQuoteWithStorageProof>>,
     get_closest_peers_from_peer: HashMap<
         OutboundRequestId,
         OneShotTaskResult<Vec<(NetworkAddress, Vec<libp2p::Multiaddr>)>>,
@@ -497,7 +495,10 @@ impl TaskHandler {
         &mut self,
         id: OutboundRequestId,
         quote: Option<PaymentQuote>,
-        storage_proofs: Vec<(NetworkAddress, Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>)>,
+        storage_proofs: Vec<(
+            NetworkAddress,
+            Result<ant_protocol::messages::ChunkProof, ant_protocol::error::Error>,
+        )>,
     ) -> Result<(), TaskHandlerError> {
         let responder =
             self.get_storage_proofs_from_peer
