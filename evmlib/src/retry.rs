@@ -162,31 +162,29 @@ where
     P: Provider<N>,
     N: Network,
 {
-    let max_fee_per_gas = get_max_fee_per_gas(provider, transaction_config).await?;
+    let eip1559_fees = get_eip1559_fees(provider, transaction_config).await?;
 
-    debug!("max fee per gas: {max_fee_per_gas:?}");
+    debug!("eip1559 fees: {eip1559_fees:?}");
 
     let mut transaction_request = provider
         .transaction_request()
         .with_to(to)
         .with_input(calldata.clone());
 
-    if let Some(max_fee_per_gas) = max_fee_per_gas {
-        transaction_request.set_max_fee_per_gas(max_fee_per_gas);
+    if let Some(fees) = eip1559_fees {
+        transaction_request.set_max_fee_per_gas(fees.max_fee_per_gas);
+        transaction_request.set_max_priority_fee_per_gas(fees.max_priority_fee_per_gas);
     }
 
     // Estimate gas and add 20% buffer to avoid out-of-gas reverts
     // This is especially important for Arbitrum L2 where gas estimation can be tricky
-    match provider.estimate_gas(transaction_request.clone()).await {
-        Ok(estimated_gas) => {
-            let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
-            debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
-            transaction_request.set_gas_limit(gas_with_buffer);
-        }
-        Err(e) => {
-            warn!("Failed to estimate gas, proceeding without explicit limit: {e}");
-        }
-    }
+    let estimated_gas = provider
+        .estimate_gas(transaction_request.clone())
+        .await
+        .map_err(|e| TransactionError::TransactionFailedToSend(format!("gas estimation failed: {e}")))?;
+    let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
+    debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
+    transaction_request.set_gas_limit(gas_with_buffer);
 
     // Retry with the same nonce to replace a stuck transaction
     if let Some(nonce) = nonce {
@@ -280,29 +278,74 @@ fn extract_revert_data(
     None
 }
 
-async fn get_max_fee_per_gas<P: Provider<N>, N: Network>(
+/// EIP-1559 fee parameters for a transaction.
+#[derive(Debug, Clone, Copy)]
+struct Eip1559Fees {
+    max_fee_per_gas: u128,
+    max_priority_fee_per_gas: u128,
+}
+
+async fn get_eip1559_fees<P: Provider<N>, N: Network>(
     provider: &P,
     transaction_config: &TransactionConfig,
-) -> Result<Option<u128>, TransactionError> {
+) -> Result<Option<Eip1559Fees>, TransactionError> {
     match transaction_config.max_fee_per_gas {
-        MaxFeePerGas::Auto => provider
-            .get_gas_price()
-            .await
-            .map(Some)
-            .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string())),
+        MaxFeePerGas::Auto => {
+            debug!("Using Auto mode for gas fees");
+            // Use EIP-1559 fee estimation which includes a buffer for base fee fluctuation
+            let eip1559_fees = provider
+                .estimate_eip1559_fees()
+                .await
+                .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string()))?;
+            Ok(Some(Eip1559Fees {
+                max_fee_per_gas: eip1559_fees.max_fee_per_gas,
+                max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
+            }))
+        }
         MaxFeePerGas::LimitedAuto(limit) => {
-            let gas_price = provider
-                .get_gas_price()
+            debug!("Using LimitedAuto mode for gas fees with limit: {limit}");
+            // Use EIP-1559 fee estimation for better accuracy
+            let eip1559_fees = provider
+                .estimate_eip1559_fees()
                 .await
                 .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string()))?;
 
-            if gas_price > limit {
+            if eip1559_fees.max_fee_per_gas > limit {
+                warn!(
+                    "Estimated max_fee_per_gas ({}) exceeds limit ({})",
+                    eip1559_fees.max_fee_per_gas, limit
+                );
                 Err(TransactionError::GasPriceAboveLimit(limit))
             } else {
-                Ok(Some(gas_price))
+                Ok(Some(Eip1559Fees {
+                    max_fee_per_gas: eip1559_fees.max_fee_per_gas,
+                    max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
+                }))
             }
         }
-        MaxFeePerGas::Custom(wei) => Ok(Some(wei)),
-        MaxFeePerGas::Unlimited => Ok(None),
+        MaxFeePerGas::Custom(max_fee) => {
+            debug!("Using Custom mode for gas fees with max_fee: {max_fee}");
+            // Use custom max fee with estimated priority fee
+            let eip1559_fees = provider
+                .estimate_eip1559_fees()
+                .await
+                .map_err(|err| TransactionError::CouldNotGetGasPrice(err.to_string()))?;
+
+            if max_fee < eip1559_fees.max_fee_per_gas {
+                warn!(
+                    "Custom max_fee_per_gas ({}) is below estimated fee ({}). Transaction may be slow or fail.",
+                    max_fee, eip1559_fees.max_fee_per_gas
+                );
+            }
+
+            Ok(Some(Eip1559Fees {
+                max_fee_per_gas: max_fee,
+                max_priority_fee_per_gas: eip1559_fees.max_priority_fee_per_gas,
+            }))
+        }
+        MaxFeePerGas::Unlimited => {
+            debug!("Using Unlimited mode for gas fees (no fee parameters will be set)");
+            Ok(None)
+        }
     }
 }
