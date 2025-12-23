@@ -492,6 +492,20 @@ pub enum DeveloperCmd {
         #[arg(short = 'n', long)]
         num_peers: Option<usize>,
     },
+    /// Get the version of a node.
+    ///
+    /// Queries a specific node to retrieve its software version.
+    NodeVersion {
+        /// Node to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "node")]
+        node_addr: String,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -740,6 +754,9 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 target,
                 num_peers,
             } => developer::closest_peers(&node_addr, &target, num_peers, network_context).await,
+            DeveloperCmd::NodeVersion { node_addr } => {
+                developer::node_version(&node_addr, network_context).await
+            }
         },
         None => {
             // If no subcommand is given, default to clap's error behaviour.

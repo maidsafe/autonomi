@@ -21,6 +21,34 @@ use autonomi::PublicKey;
 use autonomi::networking::{Multiaddr, PeerId, PeerInfo};
 use color_eyre::{Result, eyre::eyre};
 
+/// Get the version of a node.
+///
+/// This command queries a specific node to retrieve its software version.
+pub async fn node_version(node_addr: &str, network_context: NetworkContext) -> Result<()> {
+    println!("Connecting to network...");
+    let client = connect_to_network(network_context)
+        .await
+        .map_err(|(err, _exit_code)| err)?;
+
+    // Resolve the node - either from multiaddr or by discovering PeerId
+    let node_info = resolve_node(&client, node_addr).await?;
+    let peer_id = node_info.peer_id;
+
+    println!("Querying node {peer_id} for version...");
+    println!();
+
+    // Query the node for its version
+    let version = client
+        .get_node_version(node_info)
+        .await
+        .map_err(|e| eyre!("Failed to query node version: {e}"))?;
+
+    println!("Node {peer_id}");
+    println!("  Version: {version}");
+
+    Ok(())
+}
+
 /// Query a specific node to get its network view of closest peers to a target address.
 ///
 /// This command asks the specified node to perform an actual Kademlia network lookup
