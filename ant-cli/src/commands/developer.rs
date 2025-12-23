@@ -29,6 +29,7 @@ pub async fn closest_peers(
     node_addr: &str,
     target: &str,
     num_peers: Option<usize>,
+    compare: bool,
     network_context: NetworkContext,
 ) -> Result<()> {
     // Parse the target address (hex string)
@@ -44,7 +45,6 @@ pub async fn closest_peers(
     let peer_id = node_info.peer_id;
 
     println!("Querying node {peer_id} for closest peers to {target}...");
-    println!();
 
     // Perform the developer query
     let response = client
@@ -52,7 +52,32 @@ pub async fn closest_peers(
         .await
         .map_err(|e| eyre!("Failed to query node: {e}"))?;
 
-    // Display results
+    if compare {
+        println!("Querying client's perspective...");
+        println!();
+
+        // Get the client's view of closest peers
+        let client_peers = client
+            .network()
+            .get_closest_peers(target_addr.clone(), num_peers)
+            .await
+            .map_err(|e| eyre!("Failed to get client's closest peers: {e}"))?;
+
+        display_comparison(&response, &client_peers, &target_addr, target, peer_id);
+    } else {
+        println!();
+        display_node_results(&response, &target_addr, target);
+    }
+
+    Ok(())
+}
+
+/// Display results for the standard (non-comparison) mode.
+fn display_node_results(
+    response: &autonomi::networking::DevGetClosestPeersFromNetworkResponse,
+    target_addr: &NetworkAddress,
+    target: &str,
+) {
     println!(
         "Closest peers to {} from node {}:",
         target, response.queried_node
@@ -82,7 +107,6 @@ pub async fn closest_peers(
                     .join(", ")
             };
 
-            // Extract PeerId from NetworkAddress, or fall back to string representation
             let peer_display = if let Some(peer_id) = peer_addr.as_peer_id() {
                 peer_id.to_string()
             } else {
@@ -101,8 +125,156 @@ pub async fn closest_peers(
 
     println!();
     println!("Total: {} peers", response.peers.len());
+}
 
-    Ok(())
+/// Display comparison between node's view and client's view.
+fn display_comparison(
+    node_response: &autonomi::networking::DevGetClosestPeersFromNetworkResponse,
+    client_peers: &[PeerInfo],
+    target_addr: &NetworkAddress,
+    target: &str,
+    queried_peer_id: PeerId,
+) {
+    use std::collections::HashSet;
+
+    // Build sets of peer IDs for comparison
+    let node_peer_ids: HashSet<PeerId> = node_response
+        .peers
+        .iter()
+        .filter_map(|(addr, _)| addr.as_peer_id())
+        .collect();
+
+    let client_peer_ids: HashSet<PeerId> = client_peers.iter().map(|p| p.peer_id).collect();
+
+    let common: HashSet<PeerId> = node_peer_ids.intersection(&client_peer_ids).copied().collect();
+    let node_only: HashSet<PeerId> = node_peer_ids.difference(&client_peer_ids).copied().collect();
+    let client_only: HashSet<PeerId> = client_peer_ids.difference(&node_peer_ids).copied().collect();
+
+    println!("Comparison of closest peers to {target}");
+    println!("{}", "=".repeat(100));
+    println!();
+
+    // Summary
+    println!("Summary:");
+    println!("  Node's view:   {} peers", node_response.peers.len());
+    println!("  Client's view: {} peers", client_peers.len());
+    println!("  In common:     {} peers", common.len());
+    println!("  Node only:     {} peers", node_only.len());
+    println!("  Client only:   {} peers", client_only.len());
+    println!();
+    println!("  Note: Client's results include the queried node itself.");
+    println!("        Nodes don't include themselves in their own results.");
+    println!();
+
+    // Node's perspective
+    println!(
+        "NODE'S PERSPECTIVE (from {}):",
+        node_response.queried_node
+    );
+    println!(
+        "  {:<4} {:<54} {:<10} Status",
+        "#", "PeerId", "Distance"
+    );
+    println!("  {}", "-".repeat(80));
+
+    for (i, (peer_addr, _)) in node_response.peers.iter().enumerate() {
+        let distance = target_addr.distance(peer_addr);
+        let distance_ilog2 = distance.ilog2().unwrap_or(0);
+
+        let peer_display = if let Some(peer_id) = peer_addr.as_peer_id() {
+            peer_id.to_string()
+        } else {
+            peer_addr.to_string()
+        };
+
+        let status = if let Some(peer_id) = peer_addr.as_peer_id() {
+            if common.contains(&peer_id) {
+                "common"
+            } else {
+                "node-only"
+            }
+        } else {
+            "unknown"
+        };
+
+        println!(
+            "  {:<4} {:<54} {:<10} {}",
+            i + 1,
+            peer_display,
+            distance_ilog2,
+            status
+        );
+    }
+
+    println!();
+
+    // Client's perspective
+    println!("CLIENT'S PERSPECTIVE:");
+    println!(
+        "  {:<4} {:<54} {:<10} Status",
+        "#", "PeerId", "Distance"
+    );
+    println!("  {}", "-".repeat(85));
+
+    // Sort client peers by distance
+    let mut sorted_client_peers: Vec<_> = client_peers.iter().collect();
+    sorted_client_peers.sort_by_key(|p| {
+        let addr = NetworkAddress::from(p.peer_id);
+        target_addr.distance(&addr)
+    });
+
+    for (i, peer_info) in sorted_client_peers.iter().enumerate() {
+        let peer_addr = NetworkAddress::from(peer_info.peer_id);
+        let distance = target_addr.distance(&peer_addr);
+        let distance_ilog2 = distance.ilog2().unwrap_or(0);
+
+        let status = if peer_info.peer_id == queried_peer_id {
+            "queried-node*"
+        } else if common.contains(&peer_info.peer_id) {
+            "common"
+        } else {
+            "client-only"
+        };
+
+        println!(
+            "  {:<4} {:<54} {:<10} {}",
+            i + 1,
+            peer_info.peer_id,
+            distance_ilog2,
+            status
+        );
+    }
+
+    println!();
+
+    // Peers only in node's view
+    if !node_only.is_empty() {
+        println!("PEERS ONLY IN NODE'S VIEW:");
+        for peer_id in &node_only {
+            let peer_addr = NetworkAddress::from(*peer_id);
+            let distance = target_addr.distance(&peer_addr);
+            let distance_ilog2 = distance.ilog2().unwrap_or(0);
+            println!("  {peer_id} (distance: {distance_ilog2})");
+        }
+        println!();
+    }
+
+    // Peers only in client's view
+    if !client_only.is_empty() {
+        println!("PEERS ONLY IN CLIENT'S VIEW:");
+        for peer_id in &client_only {
+            let peer_addr = NetworkAddress::from(*peer_id);
+            let distance = target_addr.distance(&peer_addr);
+            let distance_ilog2 = distance.ilog2().unwrap_or(0);
+            if *peer_id == queried_peer_id {
+                println!(
+                    "  {peer_id} (distance: {distance_ilog2}) <- queried node (nodes don't include themselves)"
+                );
+            } else {
+                println!("  {peer_id} (distance: {distance_ilog2})");
+            }
+        }
+    }
 }
 
 /// Resolve a node identifier to PeerInfo.

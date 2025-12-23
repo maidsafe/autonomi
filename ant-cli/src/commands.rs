@@ -491,6 +491,9 @@ pub enum DeveloperCmd {
         /// Number of peers to return (default: uses K_VALUE, typically 20).
         #[arg(short = 'n', long)]
         num_peers: Option<usize>,
+        /// Compare the node's perspective with the client's perspective.
+        #[arg(long)]
+        compare: bool,
     },
 }
 
@@ -739,7 +742,11 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
                 node_addr,
                 target,
                 num_peers,
-            } => developer::closest_peers(&node_addr, &target, num_peers, network_context).await,
+                compare,
+            } => {
+                developer::closest_peers(&node_addr, &target, num_peers, compare, network_context)
+                    .await
+            }
         },
         None => {
             // If no subcommand is given, default to clap's error behaviour.
