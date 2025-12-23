@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766414067150,
+  "lastUpdate": 1766514351474,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5147,6 +5147,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.690383055887051,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "f1fd472042f36fbf2c6625c296eae932f1a3e307",
+          "message": "Merge pull request #3380 from dirvine/fix/python-arm-cross-compilation\n\nfix(ci): resolve ring crate ARM cross-compilation failure",
+          "timestamp": "2025-12-23T18:04:26Z",
+          "tree_id": "6032a0b869f6818532f63887b5036241b4e1d537",
+          "url": "https://github.com/maidsafe/autonomi/commit/f1fd472042f36fbf2c6625c296eae932f1a3e307"
+        },
+        "date": 1766514344173,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.023714093956783,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.735108937895321,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.979410264594452,
             "unit": "MiB/s"
           }
         ]
