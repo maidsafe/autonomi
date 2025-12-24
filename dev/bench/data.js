@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766537954021,
+  "lastUpdate": 1766537956229,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -19137,6 +19137,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver long handling total_time",
             "value": 23103,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7fe852c8660e8560a40062bf7b3e14e9cce5d35",
+          "message": "Merge pull request #3384 from maqi/mutable_data_fall_back_DM_fetch\n\nfeat(client): using req/rsp DM as a fallback during mutable_data fetch",
+          "timestamp": "2025-12-23T23:27:20Z",
+          "tree_id": "2200bf0658f414052964b6eaebebc5095fd6aaed",
+          "url": "https://github.com/maidsafe/autonomi/commit/d7fe852c8660e8560a40062bf7b3e14e9cce5d35"
+        },
+        "date": 1766537955340,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 7186,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 16133,
             "unit": "ms"
           },
           {
