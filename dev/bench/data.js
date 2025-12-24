@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766515741033,
+  "lastUpdate": 1766534495050,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5225,6 +5225,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.707592155958074,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "distinct": true,
+          "id": "ad303e78f03674501957186f64272b5e4f292607",
+          "message": "Merge branch 'rc-2025.12.3'",
+          "timestamp": "2025-12-23T23:40:25Z",
+          "tree_id": "e6ea048d69766c0c9587ebd4b8a4c06a4585afb5",
+          "url": "https://github.com/maidsafe/autonomi/commit/ad303e78f03674501957186f64272b5e4f292607"
+        },
+        "date": 1766534487057,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0389168149437273,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.72737504395639,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.681509470594894,
             "unit": "MiB/s"
           }
         ]
