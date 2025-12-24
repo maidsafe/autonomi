@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766534592359,
+  "lastUpdate": 1766537855060,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5264,6 +5264,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.681509470594894,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "d7fe852c8660e8560a40062bf7b3e14e9cce5d35",
+          "message": "Merge pull request #3384 from maqi/mutable_data_fall_back_DM_fetch\n\nfeat(client): using req/rsp DM as a fallback during mutable_data fetch",
+          "timestamp": "2025-12-23T23:27:20Z",
+          "tree_id": "2200bf0658f414052964b6eaebebc5095fd6aaed",
+          "url": "https://github.com/maidsafe/autonomi/commit/d7fe852c8660e8560a40062bf7b3e14e9cce5d35"
+        },
+        "date": 1766537845562,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 0.9944118897564824,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.392388048906189,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.691207438324374,
             "unit": "MiB/s"
           }
         ]
