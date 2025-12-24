@@ -214,6 +214,23 @@ impl NetworkDriver {
                 self.pending_tasks
                     .update_get_closest_peers_from_peer(request_id, peers)?;
             }
+            #[cfg(feature = "developer")]
+            Response::Query(QueryResponse::DevGetClosestPeersFromNetwork {
+                target,
+                queried_node,
+                peers,
+            }) => {
+                use crate::networking::interface::DevGetClosestPeersFromNetworkResponse;
+                self.pending_tasks
+                    .update_dev_get_closest_peers_from_network(
+                        request_id,
+                        DevGetClosestPeersFromNetworkResponse {
+                            target,
+                            queried_node,
+                            peers,
+                        },
+                    )?;
+            }
             _ => {
                 info!("Other request response event({request_id:?}): {response:?}");
                 // Unrecoganized req/rsp DM indicates peer is in an incorrect version
