@@ -188,6 +188,10 @@ fn build_binary(bin_type: &ReleaseType) -> Result<PathBuf> {
     if cfg!(feature = "open-metrics") {
         args.extend(["--features", "open-metrics"]);
     }
+    if cfg!(feature = "developer") {
+        println!("*** Building with DEVELOPER features enabled. ***");
+        args.extend(["--features", "developer"]);
+    }
 
     print_banner(&format!("Building {bin_name} binary"));
 

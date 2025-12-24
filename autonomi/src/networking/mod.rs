@@ -29,6 +29,8 @@ pub use libp2p::{
     Multiaddr, PeerId,
     kad::{Quorum, Record},
 };
+#[cfg(feature = "developer")]
+pub use interface::DevGetClosestPeersFromNetworkResponse;
 
 // internal needs
 use crate::networking::version::PackageVersion;
@@ -892,6 +894,46 @@ impl Network {
         }
 
         Ok(candidate)
+    }
+
+    /// Developer analytics: Get closest peers by asking a specific node to query its network.
+    ///
+    /// Unlike `get_closest_peers_from_peer` which returns the peer's local routing table,
+    /// this method asks the target node to perform an actual Kademlia network lookup
+    /// and return the results from its network perspective.
+    ///
+    /// # Arguments
+    /// * `node` - The node to ask (will perform the network query)
+    /// * `target` - The target address to find closest peers for
+    /// * `num_of_peers` - Optional limit on number of peers to return
+    ///
+    /// # Returns
+    /// * `DevGetClosestPeersFromNetworkResponse` containing:
+    ///   - The target address
+    ///   - The queried node's address
+    ///   - The closest peers found by that node's network query
+    ///
+    /// # Feature
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    pub async fn dev_get_closest_peers_from_node(
+        &self,
+        node: PeerInfo,
+        target: NetworkAddress,
+        num_of_peers: Option<usize>,
+    ) -> Result<interface::DevGetClosestPeersFromNetworkResponse, NetworkError> {
+        let (tx, rx) = oneshot::channel();
+        let task = NetworkTask::DevGetClosestPeersFromNetwork {
+            addr: target,
+            peer: node,
+            num_of_peers,
+            resp: tx,
+        };
+        self.task_sender
+            .send(task)
+            .await
+            .map_err(|_| NetworkError::NetworkDriverOffline)?;
+        rx.await?
     }
 
     /// Get the quotes for a Record from the closest Peers to that address on the Network

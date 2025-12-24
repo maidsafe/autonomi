@@ -10,6 +10,8 @@ use crate::networking::NetworkError;
 use crate::networking::OneShotTaskResult;
 use crate::networking::PeerQuoteWithStorageProof;
 use crate::networking::interface::NetworkTask;
+#[cfg(feature = "developer")]
+use crate::networking::interface::DevGetClosestPeersFromNetworkResponse;
 use crate::networking::utils::get_quorum_amount;
 use ant_evm::{PaymentQuote, merkle_payments::MerklePaymentCandidateNode};
 use ant_protocol::{NetworkAddress, PrettyPrintRecordKey};
@@ -59,6 +61,9 @@ pub(crate) struct TaskHandler {
     >,
     get_merkle_candidate_quote:
         HashMap<OutboundRequestId, OneShotTaskResult<MerklePaymentCandidateNode>>,
+    #[cfg(feature = "developer")]
+    dev_get_closest_peers_from_network:
+        HashMap<OutboundRequestId, OneShotTaskResult<DevGetClosestPeersFromNetworkResponse>>,
 }
 
 impl TaskHandler {
@@ -75,6 +80,8 @@ impl TaskHandler {
             get_storage_proofs_from_peer: Default::default(),
             get_closest_peers_from_peer: Default::default(),
             get_merkle_candidate_quote: Default::default(),
+            #[cfg(feature = "developer")]
+            dev_get_closest_peers_from_network: Default::default(),
         }
     }
 
@@ -85,13 +92,16 @@ impl TaskHandler {
     }
 
     pub fn contains_query(&self, id: &OutboundRequestId) -> bool {
-        self.get_cost.contains_key(id)
+        let base = self.get_cost.contains_key(id)
             || self.put_record_req.contains_key(id)
             || self.get_version.contains_key(id)
             || self.get_record_from_peer.contains_key(id)
             || self.get_storage_proofs_from_peer.contains_key(id)
             || self.get_closest_peers_from_peer.contains_key(id)
-            || self.get_merkle_candidate_quote.contains_key(id)
+            || self.get_merkle_candidate_quote.contains_key(id);
+        #[cfg(feature = "developer")]
+        let base = base || self.dev_get_closest_peers_from_network.contains_key(id);
+        base
     }
 
     pub fn insert_task(&mut self, id: QueryId, task: NetworkTask) {
@@ -138,6 +148,10 @@ impl TaskHandler {
             }
             NetworkTask::GetMerkleCandidateQuote { resp, .. } => {
                 self.get_merkle_candidate_quote.insert(id, resp);
+            }
+            #[cfg(feature = "developer")]
+            NetworkTask::DevGetClosestPeersFromNetwork { resp, .. } => {
+                self.dev_get_closest_peers_from_network.insert(id, resp);
             }
             _ => {}
         }
@@ -562,6 +576,31 @@ impl TaskHandler {
                     .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
             }
         }
+        Ok(())
+    }
+
+    /// Update the DevGetClosestPeersFromNetwork task with the response.
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    pub fn update_dev_get_closest_peers_from_network(
+        &mut self,
+        id: OutboundRequestId,
+        response: DevGetClosestPeersFromNetworkResponse,
+    ) -> Result<(), TaskHandlerError> {
+        let responder =
+            self.dev_get_closest_peers_from_network
+                .remove(&id)
+                .ok_or(TaskHandlerError::UnknownQuery(format!(
+                    "OutboundRequestId {id:?}"
+                )))?;
+
+        trace!(
+            "OutboundRequestId({id}): got {} closest peers from network query",
+            response.peers.len()
+        );
+        responder
+            .send(Ok(response))
+            .map_err(|_| TaskHandlerError::NetworkClientDropped(format!("{id:?}")))?;
         Ok(())
     }
 

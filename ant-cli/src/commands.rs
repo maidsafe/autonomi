@@ -7,6 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 mod analyze;
+#[cfg(feature = "developer")]
+mod developer;
 mod file;
 mod pointer;
 mod register;
@@ -97,6 +99,14 @@ pub enum SubCmd {
         /// If path is a directory, enables file rotations (50MB max per file, 10 files max).
         #[arg(long)]
         json: Option<PathBuf>,
+    },
+
+    /// Developer and analytics tools for network diagnostics.
+    /// Requires the `developer` feature to be enabled on both client and node.
+    #[cfg(feature = "developer")]
+    Developer {
+        #[command(subcommand)]
+        command: DeveloperCmd,
     },
 }
 
@@ -465,6 +475,38 @@ pub enum WalletCmd {
     Balance,
 }
 
+/// Developer and analytics tools for network diagnostics.
+/// Only available when the `developer` feature is enabled.
+#[cfg(feature = "developer")]
+#[derive(Subcommand, Debug)]
+pub enum DeveloperCmd {
+    /// Query a node to get its network view of closest peers to a target address.
+    ///
+    /// This asks the specified node to perform an actual Kademlia network lookup
+    /// (not just return its local routing table) and returns the results from
+    /// that node's network perspective.
+    ClosestPeers {
+        /// Node to query: either a PeerId or full multiaddr.
+        ///
+        /// Examples:
+        ///   - PeerId: 12D3KooWRBhwfeP2Y4TCx1SM6s9rUoHhR5STiGwxBhgFRcw3UERE
+        ///   - Multiaddr: /ip4/127.0.0.1/udp/12000/quic-v1/p2p/12D3KooW...
+        ///
+        /// When only a PeerId is provided, the peer's address is discovered via the network.
+        #[arg(name = "node")]
+        node_addr: String,
+        /// Target address to find closest peers for (hex string or PeerId).
+        #[arg(name = "target")]
+        target: String,
+        /// Number of peers to return (default: uses K_VALUE, typically 20).
+        #[arg(short = 'n', long)]
+        num_peers: Option<usize>,
+        /// Compare the node's perspective with the client's perspective.
+        #[arg(long)]
+        compare: bool,
+    },
+}
+
 #[derive(Args, Debug)]
 pub(crate) struct TransactionOpt {
     /// Max fee per gas / gas price bid.
@@ -707,6 +749,18 @@ pub async fn handle_subcommand(opt: Opt) -> Result<()> {
             )
             .await
         }
+        #[cfg(feature = "developer")]
+        Some(SubCmd::Developer { command }) => match command {
+            DeveloperCmd::ClosestPeers {
+                node_addr,
+                target,
+                num_peers,
+                compare,
+            } => {
+                developer::closest_peers(&node_addr, &target, num_peers, compare, network_context)
+                    .await
+            }
+        },
         None => {
             // If no subcommand is given, default to clap's error behaviour.
             Opt::command()

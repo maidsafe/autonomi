@@ -117,4 +117,32 @@ pub(super) enum NetworkTask {
         #[debug(skip)]
         resp: OneShotTaskResult<MerklePaymentCandidateNode>,
     },
+    /// Developer analytics: Get closest peers by asking a node to query its network.
+    /// Unlike GetClosestPeersFromPeer which returns the peer's local routing table,
+    /// this triggers the peer to perform an actual Kademlia network lookup.
+    /// Only available when the `developer` feature is enabled.
+    #[cfg(feature = "developer")]
+    DevGetClosestPeersFromNetwork {
+        /// Target address to find closest peers for
+        addr: NetworkAddress,
+        /// The node to ask (will perform the network query)
+        peer: PeerInfo,
+        /// Number of peers to return (optional)
+        num_of_peers: Option<usize>,
+        #[debug(skip)]
+        resp: OneShotTaskResult<DevGetClosestPeersFromNetworkResponse>,
+    },
+}
+
+/// Response from DevGetClosestPeersFromNetwork
+/// Contains the query results and metadata about which node performed the query
+#[cfg(feature = "developer")]
+#[derive(Debug, Clone)]
+pub struct DevGetClosestPeersFromNetworkResponse {
+    /// The target address that was queried
+    pub target: NetworkAddress,
+    /// The node that performed the network query
+    pub queried_node: NetworkAddress,
+    /// The closest peers found by that node's network query
+    pub peers: Vec<(NetworkAddress, Vec<libp2p::Multiaddr>)>,
 }
