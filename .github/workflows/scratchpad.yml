@@ -76,13 +76,13 @@ jobs:
       - name: Create scratchpad
         run: ./target/release/ant --local scratchpad create test_scratchpad "content_A" > ./scratchpad_create_output 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Edit scratchpad with content_A
         run: ./target/release/ant --local scratchpad edit test_scratchpad "content_A" > ./scratchpad_edit_output_1 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 1 (unix)
@@ -116,7 +116,7 @@ jobs:
       - name: Edit scratchpad with same content_A again
         run: ./target/release/ant --local scratchpad edit test_scratchpad "content_A" > ./scratchpad_edit_output_2 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 2 (unix)
@@ -150,7 +150,7 @@ jobs:
       - name: Get scratchpad and verify content_A
         run: ./target/release/ant --local scratchpad get test_scratchpad > ./scratchpad_get_output_1 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 5
 
       - name: Verify content_A (unix)
@@ -181,7 +181,7 @@ jobs:
       - name: Edit scratchpad with content_B
         run: ./target/release/ant --local scratchpad edit test_scratchpad "content_B" > ./scratchpad_edit_output_3 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 10
 
       - name: Verify counter 3 (unix)
@@ -215,7 +215,7 @@ jobs:
       - name: Get scratchpad and verify content_B
         run: ./target/release/ant --local scratchpad get test_scratchpad > ./scratchpad_get_output_2 2>&1
         env:
-          ANT_LOG: "v"
+          ANT_LOG: "verbose"
         timeout-minutes: 5
 
       - name: Verify content_B (unix)

@@ -26,7 +26,7 @@ use ant_bootstrap::InitialPeersConfig;
 use ant_bootstrap::bootstrap::Bootstrap;
 use ant_evm::{EvmNetwork, RewardsAddress, get_evm_network};
 use ant_logging::metrics::init_metrics;
-use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle};
+use ant_logging::{Level, LogFormat, LogOutputDest, ReloadHandle, VerbosityLevel};
 use ant_node::utils::{get_antnode_root_dir, get_root_dir_and_keypair};
 use ant_node::{Marker, NodeBuilder, NodeEvent, NodeEventsReceiver};
 use ant_protocol::{
@@ -139,6 +139,18 @@ struct Opt {
     /// If the argument is not used, the default format will be applied.
     #[clap(long, value_parser = LogFormat::parse_from_str, verbatim_doc_comment)]
     log_format: Option<LogFormat>,
+
+    /// Set the logging verbosity level.
+    ///
+    /// Valid values are "minimal", "standard", or "verbose".
+    ///
+    /// - minimal: Uses application default log levels (least logging)
+    /// - standard: Sets all crates to INFO level
+    /// - verbose: Sets all crates to TRACE/DEBUG level (most logging)
+    ///
+    /// If not specified, uses application defaults (minimal).
+    #[clap(long, value_parser = VerbosityLevel::parse_from_str, verbatim_doc_comment)]
+    verbosity: Option<VerbosityLevel>,
 
     /// Specify the maximum number of uncompressed log files to store.
     ///
@@ -598,13 +610,13 @@ fn monitor_node_events(mut node_events_rx: NodeEventsReceiver, ctrl_tx: mpsc::Se
 fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Option<WorkerGuard>)> {
     let logging_targets = vec![
         ("ant_bootstrap".to_string(), Level::INFO),
-        ("ant_build_info".to_string(), Level::DEBUG),
-        ("ant_evm".to_string(), Level::DEBUG),
-        ("ant_logging".to_string(), Level::DEBUG),
+        ("ant_build_info".to_string(), Level::INFO),
+        ("ant_evm".to_string(), Level::INFO),
+        ("ant_logging".to_string(), Level::INFO),
         ("ant_node".to_string(), Level::INFO),
-        ("ant_protocol".to_string(), Level::DEBUG),
+        ("ant_protocol".to_string(), Level::INFO),
         ("antnode".to_string(), Level::INFO),
-        ("evmlib".to_string(), Level::DEBUG),
+        ("evmlib".to_string(), Level::INFO),
     ];
 
     let output_dest = match &opt.log_output_dest {
@@ -627,6 +639,9 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
         if let Some(files) = opt.max_archived_log_files {
             log_builder.max_archived_log_files(files);
         }
+        if let Some(verbosity) = opt.verbosity {
+            log_builder.verbosity(verbosity);
+        }
 
         log_builder.initialize()?
     };
@@ -644,6 +659,9 @@ fn init_logging(opt: &Opt, peer_id: PeerId) -> Result<(String, ReloadHandle, Opt
             }
             if let Some(files) = opt.max_archived_log_files {
                 log_builder.max_archived_log_files(files);
+            }
+            if let Some(verbosity) = opt.verbosity {
+                log_builder.verbosity(verbosity);
             }
             log_builder.initialize()
         })?;
