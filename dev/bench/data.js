@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766534588122,
+  "lastUpdate": 1766534590176,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -13729,6 +13729,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/06cc7f9ed19603bf33180c9eb00809acab47f2d3"
         },
         "date": 1766515738134,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "committer": {
+            "email": "chriso83@protonmail.com",
+            "name": "Chris O'Neil",
+            "username": "jacderida"
+          },
+          "distinct": true,
+          "id": "ad303e78f03674501957186f64272b5e4f292607",
+          "message": "Merge branch 'rc-2025.12.3'",
+          "timestamp": "2025-12-23T23:40:25Z",
+          "tree_id": "e6ea048d69766c0c9587ebd4b8a4c06a4585afb5",
+          "url": "https://github.com/maidsafe/autonomi/commit/ad303e78f03674501957186f64272b5e4f292607"
+        },
+        "date": 1766534589332,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
