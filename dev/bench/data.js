@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767613804344,
+  "lastUpdate": 1767613899227,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9288,6 +9288,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 224,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f",
+          "message": "Merge pull request #3388 from mickvandijke/refactor-gas-estimation\n\nrefactor(evmlib): gas estimation",
+          "timestamp": "2026-01-05T10:32:23Z",
+          "tree_id": "5cd23baf3aba5c5659f31af69a4f730ce7717626",
+          "url": "https://github.com/maidsafe/autonomi/commit/468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f"
+        },
+        "date": 1767613898939,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 222,
             "unit": "MB"
           }
         ]
