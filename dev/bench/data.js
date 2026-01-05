@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1766537956229,
+  "lastUpdate": 1767613804344,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5303,6 +5303,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.691207438324374,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f",
+          "message": "Merge pull request #3388 from mickvandijke/refactor-gas-estimation\n\nrefactor(evmlib): gas estimation",
+          "timestamp": "2026-01-05T10:32:23Z",
+          "tree_id": "5cd23baf3aba5c5659f31af69a4f730ce7717626",
+          "url": "https://github.com/maidsafe/autonomi/commit/468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f"
+        },
+        "date": 1767613797124,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0523317769904263,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.669664910232174,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.678848951500964,
             "unit": "MiB/s"
           }
         ]
