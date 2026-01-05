@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767614185221,
+  "lastUpdate": 1767618535579,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -5381,6 +5381,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "ant files download",
             "value": 6.662926803616343,
+            "unit": "MiB/s"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "c313bd7383dde6473c2207fec8dd7fa05b099f80",
+          "message": "Merge pull request #3390 from maidsafe/dependabot/npm_and_yarn/autonomi/tests-js/qs-6.14.1\n\nchore(deps-dev): bump qs from 6.13.0 to 6.14.1 in /autonomi/tests-js",
+          "timestamp": "2026-01-05T11:52:56Z",
+          "tree_id": "719d854d81810b5d861ba33b2e3f5e675bf0a956",
+          "url": "https://github.com/maidsafe/autonomi/commit/c313bd7383dde6473c2207fec8dd7fa05b099f80"
+        },
+        "date": 1767618528200,
+        "tool": "customBiggerIsBetter",
+        "benches": [
+          {
+            "name": "ant files upload 1mb",
+            "value": 1.0769851814475397,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files upload 10mb",
+            "value": 5.875838858159592,
+            "unit": "MiB/s"
+          },
+          {
+            "name": "ant files download",
+            "value": 6.660771097526323,
             "unit": "MiB/s"
           }
         ]
