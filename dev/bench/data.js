@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767613900411,
+  "lastUpdate": 1767613901634,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -19283,6 +19283,45 @@ window.BENCHMARK_DATA = {
           {
             "name": "swarm_driver average long handling time",
             "value": 2,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f",
+          "message": "Merge pull request #3388 from mickvandijke/refactor-gas-estimation\n\nrefactor(evmlib): gas estimation",
+          "timestamp": "2026-01-05T10:32:23Z",
+          "tree_id": "5cd23baf3aba5c5659f31af69a4f730ce7717626",
+          "url": "https://github.com/maidsafe/autonomi/commit/468a2cdbf03da1052e5d1d35fe8c3801ca3fe07f"
+        },
+        "date": 1767613901346,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "swarm_driver long handling times",
+            "value": 10263,
+            "unit": "hits"
+          },
+          {
+            "name": "swarm_driver long handling total_time",
+            "value": 19668,
+            "unit": "ms"
+          },
+          {
+            "name": "swarm_driver average long handling time",
+            "value": 1,
             "unit": "ms"
           }
         ]
