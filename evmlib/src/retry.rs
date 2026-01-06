@@ -181,7 +181,9 @@ where
     let estimated_gas = provider
         .estimate_gas(transaction_request.clone())
         .await
-        .map_err(|e| TransactionError::TransactionFailedToSend(format!("gas estimation failed: {e}")))?;
+        .map_err(|e| {
+            TransactionError::TransactionFailedToSend(format!("gas estimation failed: {e}"))
+        })?;
     let gas_with_buffer = estimated_gas.saturating_mul(120) / 100;
     debug!("Estimated gas: {estimated_gas}, with 20% buffer: {gas_with_buffer}");
     transaction_request.set_gas_limit(gas_with_buffer);

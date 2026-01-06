@@ -7,8 +7,8 @@
 // permissions and limitations relating to use of the SAFE Network Software.
 
 use crate::Client;
-use crate::networking::{NetworkError, PeerQuoteWithStorageProof};
 use crate::networking::version::PackageVersion;
+use crate::networking::{NetworkError, PeerQuoteWithStorageProof};
 use crate::utils::process_tasks_with_max_concurrency;
 use ant_protocol::NetworkAddress;
 use ant_protocol::storage::DataTypes;
