@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767796027919,
+  "lastUpdate": 1767796124981,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -9560,6 +9560,35 @@ window.BENCHMARK_DATA = {
           {
             "name": "Peak memory w/ `safe` benchmarks",
             "value": 326,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "qi.ma@maidsafe.net",
+            "name": "maqi",
+            "username": "maqi"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "1a4f46658ee2ec941e21d68baa6a90fe6e4318c4",
+          "message": "Merge pull request #3376 from mickvandijke/feat-analytical-tools\n\nfeat: add developer query `closest-peers`",
+          "timestamp": "2026-01-07T13:10:23Z",
+          "tree_id": "a378e2fe33a70f13be8d887cc3d47c7a4f950e9b",
+          "url": "https://github.com/maidsafe/autonomi/commit/1a4f46658ee2ec941e21d68baa6a90fe6e4318c4"
+        },
+        "date": 1767796124323,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory w/ `safe` benchmarks",
+            "value": 223,
             "unit": "MB"
           }
         ]
