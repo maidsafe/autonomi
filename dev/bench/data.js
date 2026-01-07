@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1767812674359,
+  "lastUpdate": 1767812675823,
   "repoUrl": "https://github.com/maidsafe/autonomi",
   "entries": {
     "`safe files` benchmarks": [
@@ -14443,6 +14443,40 @@ window.BENCHMARK_DATA = {
           "url": "https://github.com/maidsafe/autonomi/commit/1a4f46658ee2ec941e21d68baa6a90fe6e4318c4"
         },
         "date": 1767796126586,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Peak memory usage w/ upload",
+            "value": 15,
+            "unit": "MB"
+          },
+          {
+            "name": "Average memory usage w/ upload",
+            "value": 14,
+            "unit": "MB"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "mickvd99@gmail.com",
+            "name": "Mick van Dijke",
+            "username": "mickvandijke"
+          },
+          "committer": {
+            "email": "noreply@github.com",
+            "name": "GitHub",
+            "username": "web-flow"
+          },
+          "distinct": true,
+          "id": "4925c254aebed4faf2aa725b348300ef89fb59e7",
+          "message": "Merge pull request #3385 from mickvandijke/feat-analytical-tools-node-version\n\nfeat(ant): add `developer node-version` command",
+          "timestamp": "2026-01-07T17:42:06Z",
+          "tree_id": "10f77f924ea2b2fd379d770aeaedb779105999a9",
+          "url": "https://github.com/maidsafe/autonomi/commit/4925c254aebed4faf2aa725b348300ef89fb59e7"
+        },
+        "date": 1767812675431,
         "tool": "customSmallerIsBetter",
         "benches": [
           {
