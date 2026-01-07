@@ -13,15 +13,12 @@
 //! feature to be enabled on both the client (ant-cli) and the target node.
 
 use crate::actions::{NetworkContext, connect_to_network};
+use crate::utils::parse_network_address;
 use ant_protocol::NetworkAddress;
 use ant_protocol::storage::DataTypes;
 use autonomi::Client;
-use autonomi::PublicKey;
-use autonomi::client::data_types::chunk::ChunkAddress;
-use autonomi::client::data_types::graph::GraphEntryAddress;
 use autonomi::networking::{Multiaddr, PaymentQuote, PeerId, PeerInfo};
 use color_eyre::{Result, eyre::eyre};
-use xor_name::XorName;
 
 /// Query a specific node to get its network view of closest peers to a target address.
 ///
@@ -35,7 +32,7 @@ pub async fn closest_peers(
     network_context: NetworkContext,
 ) -> Result<()> {
     // Parse the target address (hex string)
-    let target_addr = parse_target_address(target)?;
+    let target_addr = parse_network_address(target)?;
 
     println!("Connecting to network...");
     let client = connect_to_network(network_context)
@@ -85,21 +82,18 @@ pub async fn get_quote(
     network_context: NetworkContext,
 ) -> Result<()> {
     // Parse the target address to XorName
-    let xorname = parse_address_to_xorname(address)?;
+    let target_addr = parse_network_address(address)?;
+    let xorname = target_addr
+        .xorname()
+        .ok_or_else(|| eyre!("Could not extract XorName from address: {address}"))?;
 
     // Convert data_type index to DataTypes enum
-    let data_type_enum = match data_type {
-        0 => DataTypes::Chunk,
-        1 => DataTypes::GraphEntry,
-        2 => DataTypes::Pointer,
-        3 => DataTypes::Scratchpad,
-        _ => {
-            return Err(eyre!(
-                "Invalid data type index: {}. Valid values: 0 (Chunk), 1 (GraphEntry), 2 (Pointer), 3 (Scratchpad)",
-                data_type
-            ));
-        }
-    };
+    let data_type_enum = DataTypes::from_index(data_type).ok_or_else(|| {
+        eyre!(
+            "Invalid data type index: {}. Valid values: 0 (Chunk), 1 (GraphEntry), 2 (Pointer), 3 (Scratchpad)",
+            data_type
+        )
+    })?;
 
     println!("Connecting to network...");
     let client = connect_to_network(network_context)
@@ -138,39 +132,6 @@ pub async fn get_quote(
     Ok(())
 }
 
-/// Parse an address string to XorName.
-fn parse_address_to_xorname(address: &str) -> Result<XorName> {
-    let hex_str = address.strip_prefix("0x").unwrap_or(address);
-
-    // Try parsing as ChunkAddress first
-    if let Ok(chunk_addr) = ChunkAddress::from_hex(address) {
-        return Ok(*chunk_addr.xorname());
-    }
-
-    // Try parsing from NetworkAddress debug format
-    if let Some(start) = address.find('"')
-        && let Some(end) = address[start + 1..].find('"')
-    {
-        let extracted_hex = &address[start + 1..start + 1 + end];
-        if let Ok(chunk_addr) = ChunkAddress::from_hex(extracted_hex) {
-            return Ok(*chunk_addr.xorname());
-        }
-    }
-
-    // Try to parse as raw hex bytes (xor_name)
-    if let Ok(bytes) = hex::decode(hex_str)
-        && bytes.len() == 32
-    {
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes);
-        return Ok(XorName(arr));
-    }
-
-    Err(eyre!(
-        "Invalid address. Expected ChunkAddress, 32-byte hex XorName, or NetworkAddress debug format. Got: {address}"
-    ))
-}
-
 /// Display a quote's information.
 fn display_quote(peer_id: &PeerId, addrs: &[Multiaddr], quote: &PaymentQuote) {
     use std::time::UNIX_EPOCH;
@@ -203,11 +164,10 @@ fn display_quote(peer_id: &PeerId, addrs: &[Multiaddr], quote: &PaymentQuote) {
     // Quoting metrics
     let metrics = &quote.quoting_metrics;
     println!("Quoting Metrics:");
-    println!(
-        "  Data Type:             {} ({:?})",
-        metrics.data_type,
-        data_type_name(metrics.data_type)
-    );
+    let dt_name = DataTypes::from_index(metrics.data_type)
+        .map(|dt| format!("{dt:?}"))
+        .unwrap_or_else(|| "Unknown".to_string());
+    println!("  Data Type:             {} ({dt_name})", metrics.data_type);
     println!("  Data Size:             {} bytes", metrics.data_size);
     println!("  Close Records Stored:  {}", metrics.close_records_stored);
     println!("  Max Records:           {}", metrics.max_records);
@@ -221,7 +181,10 @@ fn display_quote(peer_id: &PeerId, addrs: &[Multiaddr], quote: &PaymentQuote) {
     if !metrics.records_per_type.is_empty() {
         println!("  Records Per Type:");
         for (dtype, count) in &metrics.records_per_type {
-            println!("    {:?}: {}", data_type_name(*dtype), count);
+            let type_name = DataTypes::from_index(*dtype)
+                .map(|dt| format!("{dt:?}"))
+                .unwrap_or_else(|| "Unknown".to_string());
+            println!("    {type_name}: {count}");
         }
     }
 
@@ -231,17 +194,6 @@ fn display_quote(peer_id: &PeerId, addrs: &[Multiaddr], quote: &PaymentQuote) {
     }
     if let Some(density) = &metrics.network_density {
         println!("  Network Density:       {}", hex::encode(density));
-    }
-}
-
-/// Convert data type index to name.
-fn data_type_name(index: u32) -> &'static str {
-    match index {
-        0 => "Chunk",
-        1 => "GraphEntry",
-        2 => "Pointer",
-        3 => "Scratchpad",
-        _ => "Unknown",
     }
 }
 
@@ -511,55 +463,4 @@ fn extract_peer_id(addr: &Multiaddr) -> Option<PeerId> {
     let p2p_idx = addr_str.find("/p2p/")?;
     let peer_id_str = &addr_str[p2p_idx + 5..];
     peer_id_str.parse().ok()
-}
-
-/// Parse a target address from various formats.
-///
-/// Accepts:
-/// - ChunkAddress (hex)
-/// - PublicKey (hex) - for GraphEntry, Pointer, or Scratchpad addresses
-/// - Raw 32-byte hex (XorName)
-/// - PeerId
-/// - NetworkAddress debug format (e.g., `NetworkAddress::RecordKey("...")`)
-fn parse_target_address(target: &str) -> Result<NetworkAddress> {
-    let hex_str = target.strip_prefix("0x").unwrap_or(target);
-
-    // Try parsing as ChunkAddress first
-    if let Ok(chunk_addr) = ChunkAddress::from_hex(target) {
-        return Ok(NetworkAddress::from(chunk_addr));
-    }
-
-    // Try parsing as PublicKey (could be GraphEntry, Pointer, or Scratchpad)
-    if let Ok(public_key) = PublicKey::from_hex(hex_str) {
-        return Ok(NetworkAddress::from(GraphEntryAddress::new(public_key)));
-    }
-
-    // Try parsing from NetworkAddress debug format:
-    // NetworkAddress::RecordKey("e9d7b3208bcb7ef566102027ca9a7f3ced7c0f8abf87c9bb0ef9130b625572f2") - (...)
-    if let Some(start) = target.find('"')
-        && let Some(end) = target[start + 1..].find('"')
-    {
-        let extracted_hex = &target[start + 1..start + 1 + end];
-        if let Ok(chunk_addr) = ChunkAddress::from_hex(extracted_hex) {
-            return Ok(NetworkAddress::from(chunk_addr));
-        }
-    }
-
-    // Try to parse as raw hex bytes (xor_name)
-    if let Ok(bytes) = hex::decode(hex_str)
-        && bytes.len() == 32
-    {
-        let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes);
-        return Ok(NetworkAddress::from(xor_name::XorName(arr)));
-    }
-
-    // Try to parse as a PeerId
-    if let Ok(peer_id) = target.parse::<PeerId>() {
-        return Ok(NetworkAddress::from(peer_id));
-    }
-
-    Err(eyre!(
-        "Invalid target address. Expected ChunkAddress, PublicKey, 32-byte hex, PeerId, or NetworkAddress debug format. Got: {target}"
-    ))
 }
